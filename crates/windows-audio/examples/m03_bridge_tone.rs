@@ -17,7 +17,7 @@ use std::io::{Seek, SeekFrom, Write};
 
 const USAGE: &str = "usage: m03_bridge_tone [--seconds N] [--rate 44100|48000|96000] \
 [--channels 1-8] [--frames N] [--capture-bus cable-b] [--render-bus cable-a] \
-[--out PATH.wav] [--wav64] [--stall-ms N] [--device PATH]";
+[--out PATH.wav] [--wav64] [--stall-ms N] [--passthrough] [--device PATH]";
 
 #[derive(Clone, Debug, PartialEq)]
 struct Options {
@@ -31,6 +31,9 @@ struct Options {
     out: std::path::PathBuf,
     wav64: bool,
     stall_ms: u32,
+    /// Republish render-source blocks into the capture sink instead of the
+    /// tone (an AudioRouter cable-route proxy for latency measurement).
+    passthrough: bool,
 }
 
 impl Default for Options {
@@ -46,6 +49,7 @@ impl Default for Options {
             out: std::path::PathBuf::from("render-source.wav"),
             wav64: false,
             stall_ms: 0,
+            passthrough: false,
         }
     }
 }
@@ -75,6 +79,7 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
             "--out" => options.out = std::path::PathBuf::from(value()?),
             "--wav64" => options.wav64 = true,
             "--stall-ms" => options.stall_ms = number(&value()?, 0, 60_000)?,
+            "--passthrough" => options.passthrough = true,
             "--help" | "-h" => return Err(USAGE.to_owned()),
             other => return Err(format!("unknown option {other}\n{USAGE}")),
         }
@@ -328,7 +333,10 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
     ));
     let samples = usize::from(options.frames) * usize::from(options.channels);
     let mut tone = vec![0.0; samples];
-    fill_tone_block(&mut tone, options.channels, 0, options.rate);
+    if !options.passthrough {
+        // A pass-through starts from silence until render-source audio arrives.
+        fill_tone_block(&mut tone, options.channels, 0, options.rate);
+    }
     let mut prepared_capture = Prepared(Some(
         NativeBridgeSession::create_primed(
             &capture_path,
@@ -364,6 +372,14 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
     let state = workers::Shared::new(samples, 64);
     let _timer = TimerResolution::acquire()?;
     println!("isolated capture/render workers; 64 preallocated recording blocks; {} seconds; intentional stall {} ms", options.seconds, options.stall_ms);
+    if options.passthrough {
+        println!(
+            "pass-through: {} -> {} ({} preallocated relay blocks); the capture sink carries render-source audio, not the tone",
+            options.render_bus,
+            options.capture_bus,
+            workers::RELAY_BLOCKS
+        );
+    }
 
     std::thread::scope(|scope| -> Result<(), (i32, String)> {
         // Declared before spawning: every early return wakes waiting workers.
@@ -657,6 +673,14 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             println!("leases deactivated at {elapsed_ms} ms; maximum control loop gap: {control_gap_us} us");
         }
         println!("interval progress snapshots: {}", progress_path.display());
+        if options.passthrough {
+            println!(
+                "pass-through relay: forwarded={} silence={} dropped={}",
+                state.relay_forwarded.load(Ordering::Acquire),
+                state.relay_silence.load(Ordering::Acquire),
+                state.relay_dropped.load(Ordering::Acquire)
+            );
+        }
         println!(
             "capture-sink blocks written: {}",
             state.capture_blocks.load(Ordering::Acquire)
@@ -768,6 +792,12 @@ mod tests {
             ("cable-h", "cable-c")
         );
         assert!(parsed.wav64 && parsed.stall_ms == 500);
+        assert!(!parsed.passthrough && !Options::default().passthrough);
+        assert!(
+            parse_options(&args("--passthrough --frames 128"))
+                .unwrap()
+                .passthrough
+        );
         for bad in [
             "--channels 9",
             "--rate 22050",

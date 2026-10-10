@@ -45,7 +45,19 @@ pub(super) struct Shared {
     pub free: ArrayQueue<Packet>,
     pub recorded: ArrayQueue<Packet>,
     pub renderer_done: AtomicBool,
+    // Diagnostic pass-through (`--passthrough`): render-source blocks are
+    // republished into the capture sink, like an AudioRouter cable route.
+    // Preallocated buffers; the audio workers never allocate.
+    pub relay_free: ArrayQueue<Vec<f64>>,
+    pub relay_ready: ArrayQueue<Vec<f64>>,
+    pub relay_forwarded: AtomicU64,
+    pub relay_silence: AtomicU64,
+    pub relay_dropped: AtomicU64,
 }
+
+/// Relay depth: enough to absorb one late capture poll, small enough to keep
+/// the pass-through delay bounded (the oldest block is dropped beyond it).
+pub(super) const RELAY_BLOCKS: usize = 3;
 
 impl Shared {
     pub fn new(samples: usize, capacity: usize) -> Arc<Self> {
@@ -68,7 +80,15 @@ impl Shared {
             free: ArrayQueue::new(capacity),
             recorded: ArrayQueue::new(capacity),
             renderer_done: AtomicBool::new(false),
+            relay_free: ArrayQueue::new(RELAY_BLOCKS),
+            relay_ready: ArrayQueue::new(RELAY_BLOCKS),
+            relay_forwarded: AtomicU64::new(0),
+            relay_silence: AtomicU64::new(0),
+            relay_dropped: AtomicU64::new(0),
         });
+        for _ in 0..RELAY_BLOCKS {
+            assert!(state.relay_free.push(vec![0.0; samples]).is_ok());
+        }
         for _ in 0..capacity {
             assert!(state
                 .free
@@ -99,6 +119,51 @@ pub(super) fn observe_max(value: &AtomicU64, elapsed: Duration) {
         elapsed.as_micros().min(u128::from(u64::MAX)) as u64,
         Ordering::Relaxed,
     );
+}
+
+/// Render side of the pass-through: copy one received block into the relay,
+/// dropping the oldest queued block when all relay buffers are in use.
+pub(super) fn relay_forward(state: &Shared, samples: &[f64]) {
+    let mut buffer = match state.relay_free.pop() {
+        Some(buffer) => buffer,
+        None => match state.relay_ready.pop() {
+            Some(oldest) => {
+                state.relay_dropped.fetch_add(1, Ordering::Relaxed);
+                oldest
+            }
+            // Both queues are momentarily empty only while the capture worker
+            // holds a buffer; count the block as dropped rather than block.
+            None => {
+                state.relay_dropped.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+        },
+    };
+    let count = samples.len().min(buffer.len());
+    buffer[..count].copy_from_slice(&samples[..count]);
+    buffer[count..].fill(0.0);
+    if let Err(buffer) = state.relay_ready.push(buffer) {
+        let _ = state.relay_free.push(buffer);
+        state.relay_dropped.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// Capture side of the pass-through: the next block to publish, or silence
+/// (counted) when nothing has arrived from the render source yet.
+pub(super) fn relay_take(state: &Shared, block: &mut [f64]) {
+    match state.relay_ready.pop() {
+        Some(buffer) => {
+            let count = block.len().min(buffer.len());
+            block[..count].copy_from_slice(&buffer[..count]);
+            block[count..].fill(0.0);
+            let _ = state.relay_free.push(buffer);
+            state.relay_forwarded.fetch_add(1, Ordering::Relaxed);
+        }
+        None => {
+            block.fill(0.0);
+            state.relay_silence.fetch_add(1, Ordering::Relaxed);
+        }
+    }
 }
 
 fn is_expected_mapping_retirement(retiring: bool, error: &NativeBridgeRegionError) -> bool {
@@ -200,12 +265,16 @@ pub(super) fn capture(
             break;
         }
         if region.consumer_sequence() >= sequence {
-            fill_tone_block(
-                tone,
-                options.channels,
-                sequence * u64::from(options.frames),
-                options.rate,
-            );
+            if options.passthrough {
+                relay_take(state, tone);
+            } else {
+                fill_tone_block(
+                    tone,
+                    options.channels,
+                    sequence * u64::from(options.frames),
+                    options.rate,
+                );
+            }
             sequence = sequence
                 .checked_add(1)
                 .ok_or("capture sequence exhausted")?;
@@ -273,6 +342,9 @@ pub(super) fn render(
                 }
                 sequence = header.sequence;
                 packet.count = usize::from(header.frames) * usize::from(header.channels);
+                if options.passthrough {
+                    relay_forward(state, &packet.samples[..packet.count]);
+                }
                 state
                     .recorded
                     .push(packet)
@@ -467,6 +539,118 @@ mod tests {
             );
         }
         std::fs::remove_file(wav_path).unwrap();
+    }
+
+    #[test]
+    fn relay_preserves_order_counts_silence_and_bounds_its_depth() {
+        let state = Shared::new(4, 2);
+        let mut block = [9.0; 4];
+        relay_take(&state, &mut block);
+        assert_eq!(block, [0.0; 4], "empty relay publishes silence");
+        assert_eq!(state.relay_silence.load(Ordering::Relaxed), 1);
+        for value in 1..=2 {
+            relay_forward(&state, &[f64::from(value); 4]);
+        }
+        for value in 1..=2 {
+            relay_take(&state, &mut block);
+            assert_eq!(block, [f64::from(value); 4], "FIFO order");
+        }
+        assert_eq!(state.relay_forwarded.load(Ordering::Relaxed), 2);
+        // More blocks than relay buffers: the oldest are dropped, never the
+        // newest, so the pass-through delay stays bounded.
+        for value in 1..=5 {
+            relay_forward(&state, &[f64::from(value); 4]);
+        }
+        assert_eq!(state.relay_dropped.load(Ordering::Relaxed), 2);
+        for value in 3..=5 {
+            relay_take(&state, &mut block);
+            assert_eq!(block, [f64::from(value); 4]);
+        }
+        relay_take(&state, &mut block);
+        assert_eq!(block, [0.0; 4]);
+        assert_eq!(
+            state.relay_free.len(),
+            RELAY_BLOCKS,
+            "every buffer returned"
+        );
+        // A shorter source block is zero-padded, never mixed with stale data.
+        relay_forward(&state, &[7.0; 2]);
+        relay_take(&state, &mut block);
+        assert_eq!(block, [7.0, 7.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn passthrough_republishes_render_source_blocks_into_the_capture_sink_in_order() {
+        let capture_map = Mapping::new();
+        let render_map = Mapping::new();
+        let capture_view = capture_map.view();
+        let render_view = render_map.view();
+        // The tool primes the capture sink with silence in pass-through mode.
+        let mut block = vec![0.0; 960];
+        capture_map
+            .region
+            .as_ref()
+            .unwrap()
+            .write_f64(1, 1, &block)
+            .unwrap();
+        let state = Shared::new(960, 64);
+        let options = Options {
+            passthrough: true,
+            ..Options::default()
+        };
+        std::thread::scope(|scope| {
+            let _stop = Stop(&state);
+            let capture = scope.spawn(|| capture(&capture_view, &state, &options, 1, &mut block));
+            let render = scope.spawn(|| {
+                let result = render(&render_view, &state, &options, 1);
+                state.renderer_done.store(true, Ordering::Release);
+                result
+            });
+            let disk = scope.spawn(|| record(&state, |_| Ok(())));
+            state.start.set(Instant::now()).unwrap();
+            // Peer stands in for the driver: it publishes render-source block
+            // n (value n) and then consumes capture-sink blocks, acknowledging
+            // each one as the capture callback would.
+            let mut received = Vec::new();
+            let mut got = vec![0.0; 960];
+            let mut capture_sequence = 0;
+            for sequence in 1..=40u64 {
+                render_map
+                    .region
+                    .as_ref()
+                    .unwrap()
+                    .write_f64(1, sequence, &vec![sequence as f64; 960])
+                    .unwrap();
+                until(|| render_map.region.as_ref().unwrap().consumer_sequence() == sequence);
+                until(|| {
+                    capture_map
+                        .region
+                        .as_ref()
+                        .unwrap()
+                        .read_into_f64_after(1, capture_sequence, &mut got)
+                        .map(|header| capture_sequence = header.sequence)
+                        .is_ok()
+                });
+                assert!(
+                    got.iter().all(|sample| *sample == got[0]),
+                    "whole block, no mixing"
+                );
+                received.push(got[0]);
+            }
+            state.stop.store(true, Ordering::Release);
+            capture.join().unwrap().unwrap();
+            render.join().unwrap().unwrap();
+            disk.join().unwrap().unwrap();
+            // After the primed/silent start, the capture sink carries exactly
+            // the render-source blocks, in order, each once.
+            let forwarded: Vec<f64> = received.into_iter().filter(|value| *value != 0.0).collect();
+            assert!(forwarded.len() >= 35, "{forwarded:?}");
+            for pair in forwarded.windows(2) {
+                assert_eq!(pair[1], pair[0] + 1.0, "{forwarded:?}");
+            }
+        });
+        assert_eq!(state.relay_dropped.load(Ordering::Relaxed), 0);
+        assert!(state.relay_forwarded.load(Ordering::Relaxed) >= 35);
     }
 
     #[test]

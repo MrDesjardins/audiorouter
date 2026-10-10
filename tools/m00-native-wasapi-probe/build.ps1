@@ -1,6 +1,9 @@
 param(
     [string]$Output = (Join-Path $PSScriptRoot 'main.exe'),
-    [string]$Object = ''
+    [string]$Object = '',
+    # Link the C runtime statically (/MT) for the clean test VM, which has no
+    # Visual C++ redistributable (validated lesson 2026-10-09).
+    [switch]$StaticRuntime
 )
 
 $ErrorActionPreference = 'Stop'
@@ -47,7 +50,8 @@ foreach ($path in @($cl, $vcInclude, $vcLib, "$include\um\Windows.h", "$include\
     }
 }
 
-& $cl /nologo /EHsc /std:c++20 `
+$runtime = @(if ($StaticRuntime) { '/MT' })
+& $cl /nologo /EHsc /std:c++20 @runtime `
     "/I$vcInclude" "/I$include\shared" "/I$include\um" "/I$include\ucrt" "/I$include\winrt" `
     $source /Fo:$object /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" `
     ole32.lib uuid.lib avrt.lib Mmdevapi.lib

@@ -1041,6 +1041,331 @@ static int impulse_loopback_probe(UINT render_index, UINT capture_index, DWORD i
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// Cable impulse latency (VCAB-25 preparation). A bit-exact float cable path
+// lets each impulse carry its own identity: impulse k has the exact float32
+// amplitude (1 + k % 16) / 32 on every channel. Arrivals are matched to the
+// impulse that produced them, so a lost impulse cannot shift later pairs (the
+// impulse-loopback mode above pairs by arrival order, which is correct only
+// for a lossless physical loopback). Identity is unambiguous for latencies
+// below 15.5 impulse intervals (155 ms at the 10 ms cadence).
+static constexpr UINT32 kCableImpulseIds = 16;
+
+static float cable_impulse_amplitude(UINT64 impulse) {
+    return static_cast<float>(1 + impulse % kCableImpulseIds) / 32.0f;
+}
+
+static bool render_cable_impulses(BYTE* data, UINT32 frames, const WAVEFORMATEX* format,
+                                  UINT64& sample_index) {
+    if (!data || !format || format->nChannels == 0 || format->nSamplesPerSec < 100 ||
+        format->wBitsPerSample != 32) return false;
+    const UINT32 interval = format->nSamplesPerSec / 100;
+    std::memset(data, 0, static_cast<size_t>(frames) * format->nBlockAlign);
+    auto* samples = reinterpret_cast<float*>(data);
+    for (UINT32 frame = 0; frame < frames; ++frame, ++sample_index) {
+        if (sample_index % interval == 0) {
+            const float amplitude = cable_impulse_amplitude(sample_index / interval);
+            for (UINT channel = 0; channel < format->nChannels; ++channel)
+                samples[static_cast<size_t>(frame) * format->nChannels + channel] = amplitude;
+        }
+    }
+    return true;
+}
+
+struct CableArrival { double qpc_100ns; float amplitude; };
+struct CableLatencyReport {
+    UINT64 emitted = 0, matched = 0, lost = 0, corrupted = 0, duplicates = 0, out_of_window = 0;
+    std::vector<double> latencies_ms;  // sorted
+    double percentile(double p) const {
+        if (latencies_ms.empty()) return 0.0;
+        const size_t index = static_cast<size_t>(std::min<double>(
+            static_cast<double>(latencies_ms.size() - 1), std::floor(p * latencies_ms.size())));
+        return latencies_ms[index];
+    }
+};
+
+// Pure pairing: emission k occurs at anchor + k * period. An arrival with
+// decoded identity j belongs to the unique k = j (mod 16) whose latency lies
+// in [-period / 2, 15.5 * period). Undecodable amplitudes count as corrupted.
+static CableLatencyReport pair_cable_impulses(const std::vector<CableArrival>& arrivals,
+                                              double anchor_100ns, double period_100ns,
+                                              UINT64 emitted) {
+    CableLatencyReport report;
+    report.emitted = emitted;
+    std::vector<bool> used(static_cast<size_t>(emitted), false);
+    for (const auto& arrival : arrivals) {
+        const double scaled = static_cast<double>(arrival.amplitude) * 32.0;
+        const double rounded = std::round(scaled);
+        if (std::fabs(scaled - rounded) > 1e-4 || rounded < 1.0 || rounded > kCableImpulseIds) {
+            ++report.corrupted;
+            continue;
+        }
+        const INT64 id = static_cast<INT64>(rounded) - 1;
+        const double offset = (arrival.qpc_100ns - anchor_100ns) / period_100ns;  // in impulses
+        // Largest k = id (mod 16) with k <= offset + 0.5.
+        INT64 k = static_cast<INT64>(std::floor(offset + 0.5));
+        k -= ((k - id) % static_cast<INT64>(kCableImpulseIds) + kCableImpulseIds) % kCableImpulseIds;
+        const double latency = arrival.qpc_100ns - (anchor_100ns + static_cast<double>(k) * period_100ns);
+        if (k < 0 || static_cast<UINT64>(k) >= emitted || latency < -period_100ns / 2 ||
+            latency >= (kCableImpulseIds - 0.5) * period_100ns) {
+            ++report.out_of_window;
+            continue;
+        }
+        if (used[static_cast<size_t>(k)]) { ++report.duplicates; continue; }
+        used[static_cast<size_t>(k)] = true;
+        ++report.matched;
+        report.latencies_ms.push_back(latency / 10000.0);
+    }
+    report.lost = emitted - report.matched;
+    std::sort(report.latencies_ms.begin(), report.latencies_ms.end());
+    return report;
+}
+
+static void print_cable_report(const CableLatencyReport& report) {
+    std::cout << "cable_impulses_emitted=" << report.emitted << " cable_impulses_matched=" << report.matched
+              << " cable_impulses_lost=" << report.lost << " cable_impulses_corrupted=" << report.corrupted
+              << " cable_impulses_duplicate=" << report.duplicates
+              << " cable_impulses_out_of_window=" << report.out_of_window << '\n';
+    if (report.latencies_ms.empty()) { std::cout << "cable_latency_unavailable=1\n"; return; }
+    const double mean = std::accumulate(report.latencies_ms.begin(), report.latencies_ms.end(), 0.0) /
+                        static_cast<double>(report.latencies_ms.size());
+    std::cout << std::fixed << std::setprecision(3)
+              << "cable_latency_min_ms=" << report.latencies_ms.front()
+              << " cable_latency_p1_ms=" << report.percentile(0.01)
+              << " cable_latency_p50_ms=" << report.percentile(0.50)
+              << " cable_latency_p95_ms=" << report.percentile(0.95)
+              << " cable_latency_p99_ms=" << report.percentile(0.99)
+              << " cable_latency_max_ms=" << report.latencies_ms.back()
+              << " cable_latency_mean_ms=" << mean
+              << " cable_jitter_p99_minus_p1_ms=" << (report.percentile(0.99) - report.percentile(0.01)) << '\n';
+    std::cout.unsetf(std::ios::floatfield);
+    std::cout.precision(6);
+}
+
+static int cable_impulse_self_test() {
+    unsigned checks = 0;
+#define CABLE_CHECK(condition) do { if (!(condition)) { std::cerr << "cable self-test failed line " << __LINE__ << '\n'; return 1; } ++checks; } while (0)
+    for (UINT64 k = 0; k < 64; ++k) {
+        const float amplitude = cable_impulse_amplitude(k);
+        CABLE_CHECK(amplitude * 32.0f == static_cast<float>(1 + k % 16));  // exact in float32
+        CABLE_CHECK(amplitude > 0.03f && amplitude <= 0.5f);
+    }
+    const double period = 100000.0;  // 10 ms in 100 ns units
+    const double anchor = 5.0e9;
+    auto arrival = [&](UINT64 k, double latency_ms) {
+        return CableArrival{anchor + static_cast<double>(k) * period + latency_ms * 10000.0, cable_impulse_amplitude(k)};
+    };
+    // Lossless, constant 23.4 ms (longer than two impulse periods).
+    std::vector<CableArrival> arrivals;
+    for (UINT64 k = 0; k < 1000; ++k) arrivals.push_back(arrival(k, 23.4));
+    auto report = pair_cable_impulses(arrivals, anchor, period, 1000);
+    CABLE_CHECK(report.matched == 1000 && report.lost == 0 && report.corrupted == 0 && report.duplicates == 0);
+    CABLE_CHECK(std::fabs(report.percentile(0.5) - 23.4) < 1e-6 && std::fabs(report.percentile(0.99) - report.percentile(0.01)) < 1e-6);
+    // Losses must not shift later pairs (the order-pairing failure mode).
+    arrivals.clear();
+    for (UINT64 k = 0; k < 1000; ++k) if (k % 7 != 3 && (k < 400 || k > 450)) arrivals.push_back(arrival(k, 31.0));
+    report = pair_cable_impulses(arrivals, anchor, period, 1000);
+    CABLE_CHECK(report.lost == 1000 - arrivals.size() && report.matched == arrivals.size());
+    CABLE_CHECK(std::fabs(report.latencies_ms.front() - 31.0) < 1e-6 && std::fabs(report.latencies_ms.back() - 31.0) < 1e-6);
+    // Jitter and percentiles: latencies 20 + (k % 5) ms.
+    arrivals.clear();
+    for (UINT64 k = 0; k < 500; ++k) arrivals.push_back(arrival(k, 20.0 + static_cast<double>(k % 5)));
+    report = pair_cable_impulses(arrivals, anchor, period, 500);
+    CABLE_CHECK(report.matched == 500 && std::fabs(report.percentile(0.01) - 20.0) < 1e-6 &&
+                std::fabs(report.percentile(0.99) - 24.0) < 1e-6);
+    // Corrupted (non-coded) amplitude, duplicates, early and too-late arrivals.
+    arrivals = {arrival(0, 10.0), arrival(0, 10.0), arrival(1, 200.0), arrival(2, -9.0),
+                CableArrival{anchor + 3 * period + 100000.0, 0.11f}};
+    report = pair_cable_impulses(arrivals, anchor, period, 5);
+    CABLE_CHECK(report.matched == 1 && report.duplicates == 1 && report.corrupted == 1);
+    CABLE_CHECK(report.lost == 4);
+    // A too-late arrival (200 ms > 155 ms window) must not alias onto k + 16.
+    CABLE_CHECK(report.out_of_window + report.matched + report.duplicates + report.corrupted == arrivals.size());
+    // Arrivals after the last emission never index past it.
+    arrivals = {arrival(10, 5.0)};
+    report = pair_cable_impulses(arrivals, anchor, period, 5);
+    CABLE_CHECK(report.matched == 0 && report.out_of_window == 1 && report.lost == 5);
+    // Identity wraps every 16 impulses with latency up to just below 155 ms.
+    arrivals.clear();
+    for (UINT64 k = 0; k < 200; ++k) arrivals.push_back(arrival(k, 154.0));
+    report = pair_cable_impulses(arrivals, anchor, period, 200);
+    CABLE_CHECK(report.matched == 200 && std::fabs(report.percentile(0.5) - 154.0) < 1e-6);
+#undef CABLE_CHECK
+    std::cout << checks << " cable impulse pairing checks pass\n";
+    return 0;
+}
+
+// Cable A Input -> (bridge pass-through) -> Cable B Output impulse latency.
+// Same stream setup, event-driven threads and end-of-run render anchor as
+// impulse_loopback_probe; only the impulse coding and pairing differ.
+static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impulse_count, bool low_latency) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("cable_enumerator", hr); return 1; }
+    LoopbackStreamState render_state;
+    LoopbackStreamState capture_state;
+    bool ok = activate_shared_stream(enumerator, eRender, render_index, render_state, "cable_render",
+                                     true, 0, low_latency);
+    if (ok) ok = activate_shared_stream(enumerator, eCapture, capture_index, capture_state, "cable_capture",
+                                        true, 0, low_latency);
+    enumerator->Release();
+    if (!ok) { render_state.release(); capture_state.release(); return 1; }
+    auto is_float32 = [](const WAVEFORMATEX* format) {
+        return format->wBitsPerSample == 32 &&
+            (format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+             (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+              format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
+              reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+    };
+    if (!is_float32(render_state.format) || !is_float32(capture_state.format) ||
+        render_state.format->nSamplesPerSec != capture_state.format->nSamplesPerSec) {
+        std::cout << "cable_requires_matching_float32_mix_formats=1\n";
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+    IAudioRenderClient* render_service = nullptr;
+    hr = render_state.client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render_service));
+    print_hr("cable_render_get_service", hr);
+    IAudioCaptureClient* capture_service = nullptr;
+    if (SUCCEEDED(hr)) {
+        hr = capture_state.client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture_service));
+        print_hr("cable_capture_get_service", hr);
+    }
+    if (FAILED(hr)) {
+        if (render_service) render_service->Release();
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+    UINT32 render_buffer_size = 0, capture_buffer_size = 0;
+    render_state.client->GetBufferSize(&render_buffer_size);
+    capture_state.client->GetBufferSize(&capture_buffer_size);
+    REFERENCE_TIME render_default_period = 0, render_minimum_period = 0;
+    render_state.client->GetDevicePeriod(&render_default_period, &render_minimum_period);
+    std::cout << "cable_mode=" << (low_latency ? "low-latency" : "default")
+              << " cable_render_buffer_frames=" << render_buffer_size
+              << " cable_capture_buffer_frames=" << capture_buffer_size
+              << " cable_render_default_period_100ns=" << render_default_period
+              << " cable_render_minimum_period_100ns=" << render_minimum_period << '\n';
+
+    const UINT32 interval = render_state.format->nSamplesPerSec / 100;
+    const DWORD capture_duration_ms = static_cast<DWORD>(impulse_count) * 10 + 1000;
+    UINT64 impulse_sample_index = 0;
+    std::atomic<UINT64> render_frames_submitted{0};
+    UINT64 capture_frames_received = 0, capture_dropped_frames = 0, capture_flagged_packets = 0;
+    std::vector<CableArrival> arrivals;
+    arrivals.reserve(static_cast<size_t>(impulse_count) + 64);
+    const UINT32 channels = capture_state.format->nChannels;
+    const double capture_rate = static_cast<double>(capture_state.format->nSamplesPerSec);
+    std::atomic<bool> stop_requested{false};
+    std::atomic<bool> render_stop_emitting{false};
+    const UINT64 render_frame_limit = static_cast<UINT64>(impulse_count) * interval;
+
+    std::thread render_thread([&] {
+        while (!stop_requested.load(std::memory_order_relaxed)) {
+            const DWORD wait = WaitForSingleObject(render_state.ready_event, 100);
+            if (wait == WAIT_FAILED) break;
+            if (wait == WAIT_TIMEOUT) continue;
+            UINT32 padding = 0;
+            if (FAILED(render_state.client->GetCurrentPadding(&padding))) continue;
+            const UINT32 available = render_buffer_size - padding;
+            if (available == 0) continue;
+            BYTE* data = nullptr;
+            if (FAILED(render_service->GetBuffer(available, &data))) continue;
+            if (!render_stop_emitting.load(std::memory_order_relaxed)) {
+                render_cable_impulses(data, available, render_state.format, impulse_sample_index);
+                if (impulse_sample_index >= render_frame_limit) render_stop_emitting.store(true);
+                render_service->ReleaseBuffer(available, 0);
+            } else {
+                render_service->ReleaseBuffer(available, AUDCLNT_BUFFERFLAGS_SILENT);
+            }
+            render_frames_submitted.fetch_add(available, std::memory_order_relaxed);
+        }
+    });
+    std::thread capture_thread([&] {
+        bool have_position = false;
+        UINT64 expected = 0;
+        INT64 last_hit = -1000000;
+        while (!stop_requested.load(std::memory_order_relaxed)) {
+            const DWORD wait = WaitForSingleObject(capture_state.ready_event, 100);
+            if (wait == WAIT_FAILED) break;
+            if (wait == WAIT_TIMEOUT) continue;
+            for (;;) {
+                UINT32 frames = 0;
+                if (FAILED(capture_service->GetNextPacketSize(&frames)) || frames == 0) break;
+                BYTE* data = nullptr;
+                DWORD flags = 0;
+                UINT64 position = 0, timestamp = 0;
+                if (FAILED(capture_service->GetBuffer(&data, &frames, &flags, &position, &timestamp))) break;
+                if (have_position && position > expected) capture_dropped_frames += position - expected;
+                if (flags & (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY | AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)) ++capture_flagged_packets;
+                have_position = true;
+                expected = position + frames;
+                capture_frames_received += frames;
+                if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) == 0 && data) {
+                    const auto* samples = reinterpret_cast<const float*>(data);
+                    for (UINT32 frame = 0; frame < frames; ++frame) {
+                        float peak = 0.0f;
+                        for (UINT32 channel = 0; channel < channels; ++channel) {
+                            const float sample = std::fabs(samples[static_cast<size_t>(frame) * channels + channel]);
+                            if (sample > peak) peak = sample;
+                        }
+                        const INT64 device_frame = static_cast<INT64>(position) + frame;
+                        if (peak > 0.01f && device_frame > last_hit + 8) {
+                            arrivals.push_back({static_cast<double>(timestamp) +
+                                (static_cast<double>(frame) / capture_rate) * 1.0e7, peak});
+                            last_hit = device_frame;
+                        }
+                    }
+                }
+                capture_service->ReleaseBuffer(frames);
+            }
+        }
+    });
+    hr = capture_state.client->Start();
+    print_hr("cable_capture_start", hr);
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    if (SUCCEEDED(hr)) hr = render_state.client->Start();
+    print_hr("cable_render_start", hr);
+    if (SUCCEEDED(hr)) std::this_thread::sleep_for(std::chrono::milliseconds(capture_duration_ms));
+    stop_requested.store(true, std::memory_order_relaxed);
+    SetEvent(render_state.ready_event);
+    SetEvent(capture_state.ready_event);
+    render_thread.join();
+    capture_thread.join();
+    // End-of-run anchor (see impulse_loopback_probe: the start sample is
+    // biased by the render clock's warm-up).
+    double render_anchor = 0.0;
+    const bool anchored = clock_anchor_100ns(render_state.clock, render_state.clock_frequency, render_anchor);
+    print_hr("cable_render_stop", render_state.client->Stop());
+    print_hr("cable_capture_stop", capture_state.client->Stop());
+    render_state.client->Reset();
+    capture_state.client->Reset();
+    render_service->Release();
+    capture_service->Release();
+    const UINT64 emitted = std::min<UINT64>(impulse_count, (impulse_sample_index + interval - 1) / interval);
+    std::cout << "cable_render_frames_submitted=" << render_frames_submitted.load()
+              << " cable_capture_frames=" << capture_frames_received
+              << " cable_capture_dropped_frames=" << capture_dropped_frames
+              << " cable_capture_flagged_packets=" << capture_flagged_packets
+              << " cable_arrivals=" << arrivals.size() << '\n';
+    if (!anchored || render_state.clock_frequency == 0) {
+        std::cout << "cable_render_anchor_unavailable=1\n";
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+    const double period_100ns = static_cast<double>(interval) * render_state.format->nBlockAlign /
+                                static_cast<double>(render_state.clock_frequency) * 1.0e7;
+    const CableLatencyReport report = pair_cable_impulses(arrivals, render_anchor, period_100ns, emitted);
+    print_cable_report(report);
+    std::cout << "Scope: Cable A Input render-write to Cable B Output capture-read through the "
+                 "driver bridge and the diagnostic pass-through relay (an AudioRouter route "
+                 "proxy), timed on the shared QPC timeline; not product engine latency.\n";
+    render_state.release();
+    capture_state.release();
+    return report.matched == 0 ? 1 : 0;
+}
+
 // Captures a stream's own impulse-arrival timestamps: a persistent worker
 // thread that drains packets from `service`, peak-detects impulses using
 // each packet's own device position and QPC timestamp (immune to render
@@ -1612,6 +1937,21 @@ int main(int argc, char** argv) {
         UINT render_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         bool low_latency = argc > 3 && std::strcmp(argv[3], "low-latency") == 0;
         int result = render_clock_ramp_probe(render_index, low_latency);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "cable-impulse-selftest") == 0) {
+        int result = cable_impulse_self_test();
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "cable-impulse") == 0) {
+        DWORD impulse_count = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 1000;
+        UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
+        bool low_latency = argc > 5 && std::strcmp(argv[5], "low-latency") == 0;
+        if (impulse_count < 10 || impulse_count > 6000) { std::cout << "cable_impulse_count_out_of_range=1\n"; CoUninitialize(); return 2; }
+        int result = cable_impulse_probe(render_index, capture_index, impulse_count, low_latency);
         CoUninitialize();
         return result;
     }
