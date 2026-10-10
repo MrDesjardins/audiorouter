@@ -91,6 +91,27 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-10 — Derive render validity from what the OS has written, and model OS timing first.**
+  Evidence: [repair record, r3 regression and slot-provenance fix](docs/plans/active/evidence/2026-10-10-m03-render-commit-validity.md),
+  `renderTimingModelChecks` in the driver unit suite. Scope: WaveRT packet-mode
+  render (`SetWritePacket`) and any rule that silences or replays DMA.
+  Consequence: tagging a packet only after an on-time admission silenced
+  ~15 % of written audio in the VM while every unit test passed. Windows
+  writes the slot before the call; record per-slot provenance before progress
+  and keep the documented return codes separate. Before a VM run, check a rule
+  against an OS timing model (late, boundary, jitter, skipped packets, each
+  OS recovery style) for both stale replay and silenced written audio.
+
+- **2026-10-10 — Under VirtualBox NEM, attribute sustained-run loss with a trace before touching the driver.**
+  Evidence: [traced 300-second run](docs/plans/active/evidence/2026-10-10-m03-render-commit-validity.md#traced-300-second-run-2026-10-10-failed-cause-attributed),
+  `tools/m03-scheduler-trace --silences`. Scope: long VM audio runs while WSL
+  keeps the Windows hypervisor on. Consequence: losses coincided with all-CPU
+  guest silences and with ~47 ms late timer delivery to every audio thread
+  during guest Defender/Windows Update bursts; the driver counted every loss.
+  Use `run-direct-audio.ps1 -TraceScheduling`, scan for system-wide silences
+  and wait-before-ready delays, and qualify VCAB-24 only on native VT-x or
+  bare metal (user-run, reversible session runbook).
+
 - **2026-10-09 — Check VM tool imports; a host startup is not guest portability evidence.**
   Evidence: [direct recorder startup failure and repair](docs/plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#first-guest-attempt-and-startup-repair-2026-10-09).
   Scope: user-mode executables copied into the clean driver-test VM.

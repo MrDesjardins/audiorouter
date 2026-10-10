@@ -1,5 +1,36 @@
 # Claude / next-agent handoff: stabilize the virtual cable driver
 
+## Current state (2026-10-10 evening) — read this first
+
+This section supersedes sections 4–9 below, which describe the earlier
+`28b989f5` candidate and remain as history. Details and hashes are in the
+[repair record](evidence/2026-10-10-m03-render-commit-validity.md).
+
+- **Installed in the VM:** candidate `492d8ca8` (slot provenance + packet
+  outcome counters), bundle `C:\VMs\ar-share\repair-20261010-slot-provenance`.
+  Two clean smokes, install/status and a 30-second direct run passed with
+  zero error counters, 3,000 packets accepted on time and exact waveforms.
+- **Why `28b989f5` failed (r3):** it silenced late-written render packets;
+  the replacement records per-slot provenance before progress. A host timing
+  model (`renderTimingModelChecks`, 738 driver checks) reproduces both the r3
+  loss and the original stale replay and checks the fix.
+- **Sustained runs fail from the VM, not the driver:** 300-second runs lose
+  audio only during VM-wide events: all-CPU guest silences (2026-10-09 trace)
+  and ~47 ms late timer delivery to every audio thread during guest
+  Defender/Windows Update bursts (2026-10-10 trace). VirtualBox runs through
+  NEM because WSL keeps the hypervisor on. Tools: `m03-scheduler-trace
+  --silences`, `run-direct-audio.ps1 -Seconds 300 -TraceScheduling`.
+- **User decisions pending:** quiet the guest (pause Windows Update,
+  Defender exclusion) and/or a reversible
+  [native VT-x session](../../operations/virtual-cable-native-vtx-session.md)
+  or a bare-metal test PC for VCAB-24. Never change host settings yourself.
+- **Prepared, not yet run:** [cable latency diagnostic](../../operations/virtual-cable-latency.md)
+  (`C:\VMs\ar-share\diagnostics-20261010-cable-latency`, VCAB-25 proxy).
+  Next guest action when the user returns: that one command on the installed
+  driver, then review `latency-<run>.zip`.
+- The user prefers host-side verification first and one combined, fail-fast
+  guest block per step.
+
 Prepared 2026-10-10 at the user's explicit request. This is the resumption
 entry point for the driver investigation. Read it before suggesting another
 test. It records current state and existing authorization; it does not grant
