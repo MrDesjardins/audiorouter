@@ -54,3 +54,23 @@ starved below the guest OS), not a guest thread or driver callback. Example:
 Validated on the saved 2026-10-09 five-minute guest trace: 3,420,580 events,
 none lost; three silences ≥ 20 ms (35.173, 27.954, 24.161 ms) of which the
 two largest align with that run's two recorded loss events.
+
+`--activity input.etl output.csv bucket_ms a.exe,b.exe` writes one row per
+time bucket: each CPU's non-idle share, the top five processes by CPU time
+(names from the kernel process/thread rundown and start events, so no
+`tracerpt` export is needed), and for the named processes' **periodic
+real-time threads** (priority 16 or higher and at least 50 switch-ins per
+second over the trace, found in a first pass) the longest wait before
+becoming ready and the longest ready-to-running delay. A long wait before
+readiness on every audio thread at once means late timer delivery; a long
+ready-to-running delay means CPU contention. Example:
+
+```powershell
+.\target\m03-scheduler-trace.exe --activity 'C:\path\scheduling.etl' 'C:\path\new-activity.csv' 1000 'audiodg.exe,m03_bridge_tone.exe,m03_direct_audio.exe'
+```
+
+Validated 2026-10-10 on both saved guest traces: every bucket with
+audio-thread waits well above the run's baseline coincides with a recorded
+loss and with a guest background burst (Windows Update `MoUsoCoreWorker`,
+`svchost` netsvcs, Microsoft Defender `MsMpEng`, background tasks), while
+ready-to-running stayed below 3 ms.
