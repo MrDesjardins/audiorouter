@@ -1605,13 +1605,27 @@ before that pause, so the result also fails even when the long gap is set
 aside.
 
 The host's available `VBox.log.1` is an older session (opened
-2026-10-09T03:51:36Z); the current `VBox.log` is empty. Neither covers the
-tone run, so the host log does not yet establish why the workers stopped.
-Next: do not rerun tone yet. Collect Windows System and
-Power-Troubleshooter events for 2026-10-09 17:10–17:35 from the guest. If
-those do not explain the 14m55s gap, retrieve the VirtualBox log for the exact
-VM session used by this run and check whether the host slept or the VM was
-paused/starved. Review VM/host power and scheduling settings before another
-continuity attempt. Do not reinstall the unchanged driver. Acceptance remains
-zero driver error counters and zero harness sequence gaps; rollback is the
-existing clean VM snapshot and previously installed driver.
+`2026-10-09T03:51:36Z`); the current `VBox.log` is empty. The guest query
+produced no matching System or Power-Troubleshooter events. Reading the live
+log for registered VM `AR-DriverTest` with VBoxManage supplied the relevant
+host-side record: VirtualBox is using NEM's “Snail execution mode” because the
+Windows Hyper-V hypervisor is active. The log records a separate 44-second
+guest heartbeat gap early in the VM session. At relative 00:55:15 it reports
+a 895,139,986,951 ns catch-up lag and a guest heartbeat absent for 896
+seconds, then reports the guest alive again. The VM session start and these
+relative timestamps align with the test's 14m55s worker gap. The host System
+log had no matching Kernel-Power, boot, shutdown or power-troubleshooter
+event. This confirms a VirtualBox guest execution stall, not a 14m55s
+driver-side audio loop. It does not establish what paused or starved the VM.
+The earlier 37 ms capture underrun and 47 ms render overrun at 178.536
+seconds, followed by additional errors at 269.828 seconds, remain separate
+continuity failures.
+
+Next: do not rerun tone yet. Review the host's Hyper-V/NEM configuration and
+VM scheduling/power conditions; do not disable Hyper-V, VBS, WSL or other host
+features without an explicit user decision. Then decide whether to qualify
+this VM under its current compatibility backend or use a host configuration
+where VirtualBox can use native hardware virtualization. Do not reinstall the
+unchanged driver. Acceptance remains zero driver error counters and zero
+harness sequence gaps; rollback is the existing clean VM snapshot and
+previously installed driver.

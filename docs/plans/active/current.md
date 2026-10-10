@@ -52,8 +52,9 @@ render-publication repair. The [review record](evidence/2026-10-09-m03-render-pu
 and [virtual cable execution plan](virtual-cable.md) record the guest's passing
 smoke cycles, four-endpoint format inventory, and 30-second tone run. The
 first 10-minute attempt failed with earlier audio counter errors and a
-14m55s worker gap; its cause is under investigation before another run. No test
-driver has been installed on the host.
+14m55s VirtualBox guest-execution stall. VirtualBox reports NEM “Snail” mode
+under the active Hyper-V hypervisor; review the host/VM configuration before
+another run. No test driver has been installed on the host.
 
 AudioRouter will ship its own signed virtual cable so users do not need
 VB-Cable; VB-Cable/Voicemeeter stay supported. Lowest-cost signing
