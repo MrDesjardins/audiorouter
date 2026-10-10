@@ -5,27 +5,30 @@ execution delay. This is preparation for VCAB-24/27 analysis, not continuity
 qualification. It changes no driver/audio binaries, VM configuration, power,
 security or WSL/Hyper-V settings. Recorder probes launch no audio test.
 
-## Current next step: two-second host probe only
+## Current next step: paired two-second probe
+
+The host probe is reviewed: its archive hash matches, independent decoding
+finds 717,343 events with zero lost, and the offline switch reader matches
+232,406 context switches / 141,391 readiness events with zero rejected.
+Start/save succeed, the intended profile matches, and WPR is idle afterward.
+Follow the paired steps below with audio still off. Review both traces and
+clock brackets before any audio phase.
+
+## Completed two-second host probe
 
 The agent cannot start WPR because its Windows token is not an administrator.
 The script refuses before recording. Sandbox permission does not grant Windows
-administrator rights. Real host start/save remains unverified. Use this step
-before attempting a paired probe; keep Media Player stopped and Cable B's
-listener disabled.
-
-1. **On the main PC, outside the VM**, open Start and type **PowerShell**.
-2. Right-click **Windows PowerShell → Run as administrator**. Accept Windows'
-   prompt.
-3. Paste the whole command:
+administrator rights. The user ran the following command in Administrator
+PowerShell on the main PC; real host start/save is now verified. It is retained
+as reproduction of the completed step and need not be repeated:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\VMs\ar-share\diagnostics-20261010-paired-probe\run-paired-scheduling-host.ps1' -Phase HostProbe
 ```
 
-4. Wait for **HostProbe passed. No audio test was run.** Measurement is two
-   seconds; recorder save can take up to two minutes. ZIP/hash follows.
-5. Send the final output. Stop here even if it passes: inspect the saved host
-   ETL for event coverage/loss before the paired probe.
+Result: **HostProbe passed. No audio test was run.** Measurement was two
+seconds; save took 10.498 s. Archive identity and decoding are in the review
+record. No host audio/driver operation occurred.
 
 Host recording contains system process/image names and scheduling/DPC/ISR
 metadata, not microphone/speaker audio. Evidence stays locally under the
@@ -35,10 +38,10 @@ refused; no global cancellation occurs. Ctrl+C permits cleanup while this
 PowerShell process remains alive; forcibly closing/killing it can prevent
 cleanup. Preserve files if stop/cancel fails and send the exact output.
 
-## Prepared next stage: paired probe (wait for host review)
+## Paired probe: follow these steps now
 
-These steps are recorded for the next stage, not authorized progression from
-an unreviewed host probe. They launch no tone/audio/driver executable. Leave
+The host probe has passed review. These steps launch no tone/audio/driver
+executable. Leave
 the VM running with `Z:` connected; audio loop/listener remain off.
 
 First, inside the VM, open **Administrator Windows PowerShell** and copy:

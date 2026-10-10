@@ -653,3 +653,38 @@ scripts are the only bundle additions. MANIFEST SHA256
 No dependency build/repair or Windows/VM setting changed. Next user step remains
 HostProbe in Administrator PowerShell on the main PC; no paired/audio success
 is claimed. Real host recording was not bypassed after the administrator refusal.
+
+## Host recorder probe reviewed — 2026-10-09 20:45 local
+
+User ran HostProbe in Administrator PowerShell on the main PC. Archive
+`C:\VMs\ar-share\diagnostics-20261010-paired-probe\paired-6ac9b6ced68f41dc89c99d1861642218-host.zip`
+independently matches SHA256
+`89ACCA58C665D234621A8A20955F2FDC0FB0BE471E993767B38D29B4AEC9316A`.
+Run result Passed true; trace Started/Saved true, no run/cleanup failure.
+Start exit 0 in **0.8701411 s**, stop/save exit 0 in **10.4983717 s**; no
+timeout. Profile hash matches
+`CB4DE1288C25F900705D28D6E13A589221661B4BA916783936B0624F0548433C`.
+ETL length **72,351,744 bytes**. Collector reports the seven intended keywords,
+zero dropped and zero events lost. No audio or driver operation was launched.
+
+Extracted only ETL/profile/result/summary to ignored
+`target/host-probe-review-6ac9b6ce`. Approved read-only host metadata decoding:
+`tracerpt.exe scheduling.etl -o events.csv -of CSV -summary summary.txt -report
+report.xml -y` exits 0; **717,343 events**, **zero lost**, three-second trace
+span surrounding the two-second callback. Observed **232,406** version-5
+context switches, **141,391** ReadyThread, **25,390** DPC, **8,019** ISR,
+**7,286** ISR-MSI, **428** TimerDPC, plus process/thread/image/priority records
+and recorder metadata/rundown. The file contains useful event families;
+do not treat total event count as exclusively the minimal live keywords.
+
+`target\m03-scheduler-trace.exe scheduling.etl switches-qpc.csv --raw` on this
+saved host ETL reports `ProcessTrace=0 CloseTrace=0 CSwitch=232406
+ReadyThread=141391 Rejected=0 EventsLost=0`, matching independent counts.
+Read-only `wpr.exe -status` reports **WPR is not recording** after the user
+run. This verifies real host recorder compatibility and event coverage,
+not host/guest clock alignment or audio continuity. Raw trace stays local.
+
+Next: one paired two-second probe, loop/listener still off. Copy the guest
+bundle first; start host PairProbe, then guest join within two minutes. Review
+both saved traces, before/after clock brackets and their uncertainty before
+preparing a 300-second audio phase. No new bundle or driver change needed.

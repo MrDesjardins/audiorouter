@@ -1978,3 +1978,12 @@ Copy-only share bundle published from clean `88f6e808`, prepared 03:44:25Z:
 passes all 35 hashes; all 32 base files unchanged. Manifest identity is in the
 review record. Next user action: HostProbe only in Administrator PowerShell
 on the main PC; review the local archive's coverage/loss before PairProbe.
+
+User HostProbe reviewed: archive `paired-6ac9b6ced68f41dc89c99d1861642218-host.zip`
+SHA256 `89ACCA58C665D234621A8A20955F2FDC0FB0BE471E993767B38D29B4AEC9316A`
+matches. Real host start/save exit 0, profile matches, decoder processes 717,343
+events with zero lost. Offline reader matches 232,406 switches / 141,391 ready
+events, zero rejected. WPR read-only status is idle. Next: paired two-second
+probe with Media Player/listener off; copy guest bundle before starting host
+PairProbe, then join from guest within two minutes. Review both traces and
+clock uncertainty before any audio phase. Driver/continuity gates stay open.

@@ -70,8 +70,10 @@ timer versus host/VirtualBox attribution remains open. Next: prepare paired
 host/guest timing diagnostics before another audio run; do not repeat the
 unchanged guest-only test or alter buffers/counters/WSL based on correlation.
 Paired recorder/clock probe scripts are prepared and local checks pass. Real
-host recording is blocked by the agent's non-administrator Windows token;
-the next user task is the two-second host probe in
+host recording remains unavailable to the agent's non-administrator Windows
+token. The user has now run that host probe successfully: saved event coverage and
+zero-lost counts pass review, and WPR is idle afterward. Next is the paired
+two-second no-audio recorder/clock probe in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the
 [packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md) and active
