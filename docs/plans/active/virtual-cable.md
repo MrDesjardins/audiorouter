@@ -1747,3 +1747,37 @@ Maximum worker gaps were 7.523 ms capture / 7.467 ms render. Next action:
 300-second Tone phase in the same guest session with loop playback/listening
 kept active. This short result does not close the sustained, eight-cable,
 waveform, DPC-duration or hardware latency gates.
+
+### 2026-10-09: five-minute harness exceeded its deadline
+
+Archive `evidence-20261009-191454.zip`, independently verified SHA256
+`B576C55519311EF2E7DC00D89AF5B2304C0F6077B0E90801D500C4D2AC1C30C5`,
+shows synchronous progress output blocked 2,310,481,790 us. The control
+thread could not service heartbeats or stop leases, while audio workers
+continued beyond the requested 300 seconds (2,530.98 seconds recorded).
+Output blocking is measured; its console/environment trigger is unknown.
+There was also earlier real loss: around 56 seconds, both worker gaps reached
+53 ms and counters rose to 1,584 capture underrun / 2,016 render overrun frames.
+Thus repairing the report hang alone cannot establish sustained continuity.
+
+Objective (VCAB-24, VDEV-12; VCAB-27/28 remain open): make duration independent
+of output and preserve failures. Ordered implementation: (1) buffer bounded
+progress snapshots in memory while leases are active; (2) enforce the control
+deadline independently of worker completion; (3) stop/join/close before
+writing reports; (4) redirect native tone output to evidence files and add a
+process timeout; (5) host-only regressions, formatting/Clippy and docs review.
+No driver or host hypervisor change is planned from this evidence. Preserve
+zero-counter acceptance and all prior archives. Rollback: retain the previous
+bundle and revert the harness changes. Next action: implement and verify these
+repairs before requesting another guest run; sustained audio loss stays open.
+
+Reporting repair implemented: deferred bounded snapshots, independent control
+deadline, lease shutdown/WAV worker join before reporting, control-loop timing,
+native file redirection and owned-child watchdog. Host verification: 17 Rust
+tone tests, 11 fake-process regressions, workspace/shell Clippy/format,
+PowerShell syntax, and docs (138 Markdown / 747 local links) pass. The process
+regression caught and corrected Windows PowerShell 5.1 losing the native exit
+code unless its handle is retained. No VM/driver/hypervisor operation was run.
+Next: build and independently hash-verify the separate bounded-tone update,
+then hand off its 30-second command. Earlier real audio loss is not repaired
+or waived by these host results; preserve the failed sustained gate.

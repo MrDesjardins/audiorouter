@@ -1,4 +1,4 @@
-# Pure helpers: no native calls, inventory or mutation when imported.
+# Helpers: no native calls, inventory or mutation when imported.
 function Assert-DriverTestVmIdentity {
     param([string] $ComputerName, [bool] $MarkerPresent)
     if ($ComputerName -ne 'AR-DriverTest' -and -not $MarkerPresent) {
@@ -48,4 +48,56 @@ function Select-CableEndpoints {
         $result += $found[0]
     }
     return $result
+}
+
+# Explicit invocation only; importing this file never starts a process.
+function ConvertTo-DriverProcessArgument {
+    param([AllowEmptyString()][string] $Value)
+    # Windows argv quoting: double backslashes before quotes and at the end
+    # of a quoted argument. Never use a shell or Invoke-Expression.
+    $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    return '"' + $escaped + '"'
+}
+
+function Invoke-DriverVmProcess {
+    param(
+        [Parameter(Mandatory = $true)][string] $Executable,
+        [string[]] $Arguments,
+        [Parameter(Mandatory = $true)][string] $Stdout,
+        [Parameter(Mandatory = $true)][string] $Stderr,
+        [Parameter(Mandatory = $true)][ValidateRange(1, 3720)][int] $TimeoutSeconds
+    )
+    if ([IO.Path]::GetFullPath($Stdout) -ieq [IO.Path]::GetFullPath($Stderr)) {
+        throw 'Process stdout and stderr need separate files.'
+    }
+    $quoted = @($Arguments | ForEach-Object { ConvertTo-DriverProcessArgument $_ }) -join ' '
+    $process = $null
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    try {
+        $process = Start-Process -FilePath $Executable -ArgumentList $quoted -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $Stdout -RedirectStandardError $Stderr
+        # Retain the native handle before waiting. Windows PowerShell 5.1's
+        # Start-Process object can otherwise lose its exit code on completion.
+        $null = $process.Handle
+        $finished = $process.WaitForExit($TimeoutSeconds * 1000)
+        if (-not $finished) {
+            # Only this child is owned here. Never stop another tone instance,
+            # the VM, audio services, or any process on the host.
+            if (-not $process.HasExited) { $process.Kill() }
+            if (-not $process.WaitForExit(5000)) { throw 'Timed-out child did not terminate; preserve evidence.' }
+            return [pscustomobject]@{ Code = 124; TimedOut = $true; ProcessId = $process.Id; ElapsedSeconds = $watch.Elapsed.TotalSeconds }
+        }
+        return [pscustomobject]@{ Code = $process.ExitCode; TimedOut = $false; ProcessId = $process.Id; ElapsedSeconds = $watch.Elapsed.TotalSeconds }
+    } finally {
+        if ($process) {
+            # Cancellation must not leave our child holding bridge leases.
+            try {
+                if (-not $process.HasExited) {
+                    $process.Kill()
+                    [void]$process.WaitForExit(5000)
+                }
+            } finally { $process.Dispose() }
+        }
+    }
 }

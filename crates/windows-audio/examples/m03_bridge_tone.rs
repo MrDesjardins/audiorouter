@@ -104,6 +104,39 @@ fn cable(text: &str) -> Result<String, String> {
     }
 }
 
+/// Bounded control-thread snapshots. No output operation is possible during
+/// collection: console and disk backpressure must not delay lease heartbeats
+/// or the run deadline. Flush only after leases and audio workers stop.
+struct ProgressLog {
+    lines: Vec<String>,
+    limit: usize,
+}
+
+impl ProgressLog {
+    fn new(seconds: u32, stall_ms: u32) -> Self {
+        let limit = (seconds.min(3_600) + stall_ms.min(60_000).div_ceil(1_000) + 1) as usize;
+        Self {
+            lines: Vec::with_capacity(limit),
+            limit,
+        }
+    }
+
+    fn record(&mut self, line: String) -> Result<(), &'static str> {
+        if self.lines.len() == self.limit {
+            return Err("progress snapshot capacity exhausted");
+        }
+        self.lines.push(line);
+        Ok(())
+    }
+
+    fn write_to(&self, output: &mut impl Write) -> std::io::Result<()> {
+        for line in &self.lines {
+            writeln!(output, "{line}")?;
+        }
+        Ok(())
+    }
+}
+
 /// Fill one interleaved block: 997 Hz on even channels, 47 Hz on odd ones,
 /// at -12 dBFS. Phase is derived from the absolute frame index so blocks
 /// join without discontinuities.
@@ -435,6 +468,8 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         // Activation errors still stop/join audio and finalize the WAV.
         let mut render_controller: Option<NativeBridgeController> = None;
         let mut capture_controller: Option<NativeBridgeController> = None;
+        let mut progress_log = ProgressLog::new(options.seconds, options.stall_ms);
+        let mut final_report = None;
         let operation = (|| -> Result<(), (i32, String)> {
             let start = Instant::now();
             state
@@ -473,8 +508,21 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             let mut progress = start;
             let mut control_us = 0;
             let mut report_us = 0;
+            let mut last_control = Instant::now();
+            let mut control_gap_us = 0;
+            let mut interval_control_gap_us = 0;
+            let run_for = Duration::from_secs(u64::from(options.seconds))
+                + Duration::from_millis(u64::from(options.stall_ms));
             let service = (|| -> Result<(), (i32, String)> {
-                while !state.done.load(Ordering::Acquire) && !state.failed.load(Ordering::Acquire) {
+                while start.elapsed() < run_for
+                    && !state.done.load(Ordering::Acquire)
+                    && !state.failed.load(Ordering::Acquire)
+                {
+                    let now = Instant::now();
+                    let gap = now.duration_since(last_control).as_micros();
+                    last_control = now;
+                    control_gap_us = control_gap_us.max(gap);
+                    interval_control_gap_us = interval_control_gap_us.max(gap);
                     if heartbeat.elapsed() >= Duration::from_millis(250) {
                         let before = Instant::now();
                         capture_controller
@@ -492,18 +540,20 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                     }
                     if progress.elapsed() >= Duration::from_secs(1) {
                         let before = Instant::now();
-                        println!(
-                            "progress {} ms: written={} read={} ack={} interval_capture_gap_us={} interval_render_gap_us={} capture={:?} render={:?}",
+                        progress_log.record(format!(
+                            "progress {} ms: written={} read={} ack={} interval_capture_gap_us={} interval_render_gap_us={} interval_control_gap_us={} capture={:?} render={:?}",
                             start.elapsed().as_millis(),
                             state.capture_blocks.load(Ordering::Acquire),
                             state.render_blocks.load(Ordering::Acquire),
                             capture_controller.as_ref().unwrap().consumer_sequence(),
                             state.capture_interval_gap_us.swap(0, Ordering::Relaxed),
                             state.render_interval_gap_us.swap(0, Ordering::Relaxed),
+                            interval_control_gap_us,
                             capture_controller.as_ref().unwrap().counters(),
                             render_controller.as_ref().unwrap().counters()
-                        );
+                        )).map_err(|error| (1, error.to_owned()))?;
                         report_us = report_us.max(before.elapsed().as_micros());
+                        interval_control_gap_us = 0;
                         progress = Instant::now();
                     }
                     std::thread::sleep(Duration::from_millis(5));
@@ -528,15 +578,15 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 .map_or(Ok(()), |controller| controller.deactivate().map_err(fail));
             let close_us = close_start.elapsed().as_micros();
             state.stop.store(true, Ordering::Release);
-            println!(
-                "capture-sink counters ({}): {capture_counters:?}",
-                options.capture_bus
-            );
-            println!(
-                "render-source counters ({}): {render_counters:?}",
-                options.render_bus
-            );
-            println!("maximum control heartbeat: {control_us} us; progress output: {report_us} us; lease close: {close_us} us");
+            final_report = Some((
+                capture_counters,
+                render_counters,
+                control_us,
+                report_us,
+                close_us,
+                control_gap_us,
+                start.elapsed().as_millis(),
+            ));
             service.and(capture_close).and(render_close)
         })();
         state.stop.store(true, Ordering::Release);
@@ -562,6 +612,34 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         let render_cleanup = render_controller
             .take()
             .map_or(Ok(()), |controller| controller.close().map_err(fail));
+        // Every lease is deactivated and every audio/disk worker is joined.
+        // Preserve snapshots on disk before any potentially blocked stdout.
+        let progress_path = options.out.with_extension("progress.txt");
+        let progress_result = std::fs::File::create(&progress_path)
+            .and_then(|mut file| progress_log.write_to(&mut file))
+            .map_err(|error| (1, format!("progress report: {error}")));
+        if let Some((
+            capture_counters,
+            render_counters,
+            control_us,
+            report_us,
+            close_us,
+            control_gap_us,
+            elapsed_ms,
+        )) = final_report
+        {
+            println!(
+                "capture-sink counters ({}): {capture_counters:?}",
+                options.capture_bus
+            );
+            println!(
+                "render-source counters ({}): {render_counters:?}",
+                options.render_bus
+            );
+            println!("maximum control heartbeat: {control_us} us; progress snapshot: {report_us} us; lease close: {close_us} us");
+            println!("leases deactivated at {elapsed_ms} ms; maximum control loop gap: {control_gap_us} us");
+        }
+        println!("interval progress snapshots: {}", progress_path.display());
         println!(
             "capture-sink blocks written: {}",
             state.capture_blocks.load(Ordering::Acquire)
@@ -588,6 +666,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             .and(render_cleanup)
             .and(capture_result)
             .and(render_result)
+            .and(progress_result)
             .and(disk_result.map(|_| ()))?;
         if state.capture_blocks.load(Ordering::Acquire) == 1 {
             return Err((
@@ -618,6 +697,45 @@ mod tests {
 
     fn args(text: &str) -> Vec<String> {
         text.split_whitespace().map(str::to_owned).collect()
+    }
+
+    #[test]
+    fn progress_collection_is_bounded_and_does_not_write() {
+        let mut log = ProgressLog::new(1, 0);
+        let capacity = log.lines.capacity();
+        assert_eq!(log.limit, 2);
+        log.record("first".to_owned()).unwrap();
+        log.record("last".to_owned()).unwrap();
+        assert!(log.record("overflow".to_owned()).is_err());
+        assert_eq!(log.lines.capacity(), capacity);
+        let mut output = Vec::new();
+        // The output sink is introduced only after collection has finished.
+        log.write_to(&mut output).unwrap();
+        assert_eq!(output, b"first\nlast\n");
+        assert_eq!(ProgressLog::new(u32::MAX, u32::MAX).limit, 3_661);
+    }
+
+    #[test]
+    fn active_lease_service_has_deadline_and_no_output_calls() {
+        // Guard the production wiring, not just the collector: active lease
+        // service must have its own duration check and no console/file I/O.
+        let source = include_str!("m03_bridge_tone.rs");
+        let service = source.split("let service = (||").nth(1).unwrap();
+        let live = service
+            .split("// Deactivate both native leases")
+            .next()
+            .unwrap();
+        assert!(live.contains("start.elapsed() < run_for"));
+        assert!(live.contains("progress_log.record(format!("));
+        for io in ["println!", "write_to", "File::create"] {
+            assert!(!live.contains(io), "live lease service calls {io}");
+        }
+        let cleanup = service.split("let render_cleanup =").nth(1).unwrap();
+        assert!(cleanup.find("progress_log.write_to").unwrap() < cleanup.find("println!").unwrap());
+        assert!(
+            service.find("disk_worker\n            .join()").unwrap()
+                < service.find("progress_log.write_to").unwrap()
+        );
     }
 
     #[test]

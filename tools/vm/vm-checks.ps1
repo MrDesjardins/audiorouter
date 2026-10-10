@@ -36,7 +36,7 @@ param(
         'verifier-on', 'fuzz', 'verifier-off', 'remove', 'collect')]
     [string] $Step,
     [int] $FuzzSeconds = 1800,
-    [int] $ToneSeconds = 600
+    [ValidateRange(1, 3600)][int] $ToneSeconds = 600
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
@@ -98,18 +98,23 @@ function Invoke-Inventory([int] $Cables, [string] $Name) {
     return [pscustomobject]@{ Code = $code; Json = $json; Text = $text }
 }
 function Invoke-ToneTool([string[]] $Arguments, [string] $Wav) {
-    $previousPreference = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = 'Continue'
-        $text = & $tone @Arguments --out $Wav 2>&1 | ForEach-Object {
-            Write-Host $_
-            $_
-        } | Out-String
-        $code = $LASTEXITCODE
-    } finally {
-        $ErrorActionPreference = $previousPreference
-    }
-    return [pscustomobject]@{ Text = $text; Code = $code }
+    $secondsIndex = [Array]::IndexOf($Arguments, '--seconds')
+    if ($secondsIndex -lt 0 -or $secondsIndex + 1 -ge $Arguments.Count) { throw 'Tone duration is required.' }
+    $duration = [int]$Arguments[$secondsIndex + 1]
+    $stallIndex = [Array]::IndexOf($Arguments, '--stall-ms')
+    $stall = if ($stallIndex -ge 0) { [int]$Arguments[$stallIndex + 1] } else { 0 }
+    $timeout = $duration + [int][Math]::Ceiling($stall / 1000.0) + 60
+    $stdout = Join-Path $evidence 'tone-stdout.txt'
+    $stderr = Join-Path $evidence 'tone-stderr.txt'
+    # Native output goes straight to files. Console selection/output cannot
+    # backpressure the tool, its heartbeats, or its deadline.
+    Write-Host "Tone runs for ${duration}s; output is saved to files. Watchdog limit: ${timeout}s. Final results follow."
+    $run = Invoke-DriverVmProcess -Executable $tone -Arguments (@($Arguments) + @('--out', $Wav)) `
+        -Stdout $stdout -Stderr $stderr -TimeoutSeconds $timeout
+    $run | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'tone-process.json') -Encoding UTF8
+    $text = (Get-Content -LiteralPath $stdout -Raw) + "`r`n" + (Get-Content -LiteralPath $stderr -Raw)
+    if ($run.TimedOut) { $text += "`r`nerror: tone process exceeded ${timeout}s watchdog; terminated. This run is invalid." }
+    return [pscustomobject]@{ Text = $text; Code = $run.Code }
 }
 function Get-CableIds($Inventory, [string[]] $Letters) {
     $map = @{}

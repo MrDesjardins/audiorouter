@@ -24,6 +24,11 @@ and updating), then 15–60 minutes per test session.
 
 For the current 2026-10-09 candidate, follow the
 [packet-clock repair retest](virtual-cable-packet-clock-retest.md).
+
+The latest five-minute attempt exposed a blocked progress-output call in the
+test tool. Use the bounded-tone harness update in that procedure; it saves
+reports to files and applies a process watchdog. Its reporting repair does
+not waive the remaining audio-loss gate.
 It has complete copy-paste commands and collects evidence automatically.
 
 - [Part 0: Words used in this guide](#part-0-words-used-in-this-guide)

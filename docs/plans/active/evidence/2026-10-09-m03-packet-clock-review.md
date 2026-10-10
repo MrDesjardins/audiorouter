@@ -141,3 +141,72 @@ timings, not kernel DPC or hardware latency measurements. No waveform
 discontinuity analysis or long-run qualification is claimed from this check.
 Next: keep the same loop/listener active and run the bounded 300-second Tone
 phase. Preserve zero-counter and zero-sequence-gap acceptance.
+
+## Failed five-minute attempt and reporting repair — 2026-10-09
+
+Archive `C:\VMs\ar-share\evidence-20261009-191454.zip`, independently verified
+SHA256 `B576C55519311EF2E7DC00D89AF5B2304C0F6077B0E90801D500C4D2AC1C30C5`.
+Requested 300 seconds; final tool exit 1. Capture underrun 296,496 frames;
+render overrun 344,640 frames; other driver error counters and harness sequence
+gaps zero. The final run is invalid as a five-minute qualification.
+
+Two distinct findings:
+
+1. At progress **56,162 ms**, capture/render interval gaps are **53,439 /
+   53,385 us**, and counters first rise to **1,584 / 2,016** frames. Loss
+   therefore predates the later report hang. These observations correlate
+   delayed workers and loss but do not identify the scheduler/kernel cause.
+2. Last emitted progress is **227,675 ms**. The measured maximum synchronous
+   progress output call is **2,310,481,790 us** (38m30s). Active control printed
+   into a PowerShell pipeline that relayed output to the console. While that
+   call blocked, the control thread could not heartbeat or observe completion;
+   workers kept supplying/recording until lease shutdown. The WAV contains
+   **121,487,040 frames / 2,530.98 seconds**. Its RIFF/WAVE header, 48-kHz
+   stereo float32 layout and data/file lengths (971,896,320 / 971,896,364 bytes)
+   were checked on the host. No waveform continuity result is claimed.
+
+The console/environment trigger of blocking is unknown. The reported
+HRESULT `0x80070016` maps in the existing client to `LeaseNotActive`, consistent
+with missing heartbeats; that is an inference, not a separately traced expiry.
+No new long whole-VM pause was established from this report.
+
+Repair: control buffers at most 3,661 once-per-second progress snapshots,
+enforces elapsed duration independently of worker completion, deactivates
+leases and joins workers before writing `render-source.progress.txt` or console
+output. Reports include control-loop interval/lifetime gaps and lease stop
+time. The guest runner redirects native stdout/stderr to separate evidence
+files, records process duration/exit status, and applies duration + intentional
+stall + 60 seconds as a watchdog. Timeout kills only its owned child, records
+exit 124 and fails the run; it never turns partial counters into a pass.
+Windows PowerShell 5.1 needs the process handle retained to preserve the exit
+code; the host regression caught this and the implementation was corrected.
+
+The driver, ABI, buffer sizes, host security and Hyper-V/WSL are unchanged.
+Sustained VCAB-24 continuity remains failed; VCAB-25/27/28 remain open. No new
+VM run should use the old streaming-output harness.
+
+Host verification of reporting repair (Windows x64, Rust 1.96.0; no audio or
+driver opened):
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Tone regressions / production source guard | `cargo test --locked -p audiorouter-windows-audio --example m03_bridge_tone` | 17 pass; bounded collector and no-I/O/deadline wiring included |
+| Process runner | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/m03-vm-process.ps1` | 11 pass; `target/vm-process-tests-37d41a4680e94aa8b5f593bc99af7a7c` |
+| Clippy | workspace and shell all-targets/all-features, locked, `-D warnings` | both pass; incremental hard-link cache warnings only |
+| Formatting | both workspace/shell format and `-- --check` | pass |
+| PowerShell syntax | `Parser.ParseFile` on changed runner/support/update/test scripts | pass |
+| Documentation | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/acceptance/docs.ps1` | 138 Markdown / 747 local links pass |
+| Diff whitespace | `git diff --check` | pass |
+
+The process regressions use a fake PowerShell child: preserve exit 7 and stderr,
+round-trip spaces/quotes/trailing backslash, drain 10,001 lines without console
+forwarding, kill a sleeping child after a one-second timeout, verify that it
+exited, and retain partial output. They do not exercise a real bridge lease or
+prove scheduler continuity. Local Jev remains disabled by user request.
+
+Build a separate `repair-20261009-bounded-tone` bundle with
+`tools/vm/prepare-tone-report-update.ps1`, using the verified r2 bundle as its
+base. Rebuild only the static-runtime tone example; verify each original hash
+before copying and generate a new manifest. Preserve identical driver bytes
+and the installed guest driver. Next guest task: only the updated 30-second
+Tone phase, then review its reports before considering a longer run.

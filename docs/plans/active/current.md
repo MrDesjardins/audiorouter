@@ -48,7 +48,13 @@ advises against it for software. Chosen: `GPL-3.0-only` for versions after
 ## Decision (2026-10-05, user): ship AudioRouter's own virtual cable (DEC-18)
 
 Current driver task (2026-10-09): qualify sustained tone continuity after the
-render-publication repair. The [review record](evidence/2026-10-09-m03-render-publication-review.md)
+render-publication repair. Latest packet-clock r2: preparation and 30 seconds
+pass, but the five-minute attempt failed and exposed a 38.5-minute synchronous
+reporting block that extended active recording past its deadline. The harness
+now needs bounded deferred reporting and a process watchdog before another
+guest run. Earlier 53 ms worker gaps/audio loss remain unresolved; see the
+[packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md) and active
+virtual cable plan. The [earlier review record](evidence/2026-10-09-m03-render-publication-review.md)
 and [virtual cable execution plan](virtual-cable.md) record the guest's passing
 smoke cycles, four-endpoint format inventory, and 30-second tone run. The
 first 10-minute attempt failed with earlier audio counter errors and a
