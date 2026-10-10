@@ -26,7 +26,7 @@ Assert ((ConvertTo-DirectExitHex -1073741515) -eq '0xC0000135') 'signed loader e
 $body = $ast.Find({ param($node) $node -is [Management.Automation.Language.TryStatementAst] -and $node.Extent.Text.Contains('Automatic $Seconds-second test:') }, $true)
 $execution = [scriptblock]::Create($body.Extent.Text)
 
-function Test-Orchestration([string] $Case, [int] $Seconds = 30) {
+function Test-Orchestration([string] $Case, [int] $Seconds = 30, [switch] $TraceScheduling) {
     $evidence = Join-Path $root $Case
     $capture = Join-Path $evidence 'capture'
     $bundle = Join-Path $evidence 'bundle'
@@ -59,7 +59,10 @@ function Test-Orchestration([string] $Case, [int] $Seconds = 30) {
         if ($Arguments -contains 'startup-check') { return @{Code=$(if ($Case -eq 'loader-failure') {-1073741515} else {0})} }
         if ($Arguments -contains 'status') { return @{Code=$(if ($Case -eq 'status-failure') {1} else {0})} }
         if ($Arguments -contains 'tone') {
-            Assert ($TimeoutSeconds -eq ($Seconds + 60) -and $Arguments[-1] -eq [string]$Seconds) 'requested tone length with a 60-second watchdog margin'
+            $traced = $Arguments -contains '-TraceScheduling'
+            Assert ($traced -eq [bool]$TraceScheduling) 'scheduling trace requested only when asked'
+            Assert ($TimeoutSeconds -eq ($Seconds + 60 + $(if ($traced) { 180 } else { 0 }))) 'tone watchdog covers the run and any trace save'
+            Assert ($Arguments[$Arguments.IndexOf('-ToneSeconds') + 1] -eq [string]$Seconds) 'requested tone length'
             if ($Case -eq 'tone-exception') { throw 'fake native boundary failure' }
             return @{Code=$(if ($Case -eq 'tone-failure') {1} else {0})}
         }
@@ -91,7 +94,7 @@ function Test-Orchestration([string] $Case, [int] $Seconds = 30) {
         if ($Case -ne 'early-exit') { Assert (Test-Path -LiteralPath (Join-Path $capture 'stop')) "$Case recorder stop requested" }
         Assert (Test-Path -LiteralPath (Join-Path $evidence 'recorder-process.json')) "$Case recorder exit saved"
     }
-    if ($Case -in @('pass','pass-300','tone-failure','signal-failure','packet-error','short-signal-packet-error')) {
+    if ($Case -in @('pass','pass-300','pass-300-trace','tone-failure','signal-failure','packet-error','short-signal-packet-error')) {
         Assert ($script:calls.Count -eq 5) "$Case both recorded paths analyzed"
     }
     if ($Case -eq 'short-signal-packet-error') { Assert ([string]$failure -match 'in-signal discontinuity') 'short-duration failure still checks packet evidence' }
@@ -101,6 +104,7 @@ function Test-Orchestration([string] $Case, [int] $Seconds = 30) {
 }
 foreach ($case in @('pass','status-failure','loader-failure','early-exit','recorder-failure','tone-failure','signal-failure','packet-error','short-signal-packet-error','tone-exception')) { Test-Orchestration $case }
 Test-Orchestration 'pass-300' 300
+Test-Orchestration 'pass-300-trace' 300 -TraceScheduling
 $binary = Join-Path $workspace 'target\vm-direct-audio\release\examples\m03_direct_audio.exe'
 $dynamicBinary = Join-Path $workspace 'target\release\examples\m03_direct_audio.exe'
 if (Test-Path -LiteralPath $dynamicBinary) {

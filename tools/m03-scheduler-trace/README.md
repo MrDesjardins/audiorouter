@@ -37,3 +37,20 @@ do not infer a 1-ms request from ETW alone. The worker source supplies that
 requested wait. Priorities, state and reason are raw kernel event fields.
 Cross-check switch/ready counts against independent `tracerpt` summary and
 require zero rejected/lost events before using a complete-run attribution.
+
+`--silences input.etl output.csv threshold_ms` lists every system-wide interval
+of at least the threshold in which **no event of any kind** (switch, ready,
+DPC, ISR, timer, process/image; the logfile header excluded) was recorded on
+any CPU, plus each CPU's longest gap. Timestamps are raw QPC; a trace whose
+clock is not QPC is refused. While audio workers request 1 ms waits, a guest
+that executes at all records events every few milliseconds; an all-CPU
+silence therefore indicates that the guest was not executing (paused or
+starved below the guest OS), not a guest thread or driver callback. Example:
+
+```powershell
+.\target\m03-scheduler-trace.exe --silences 'C:\path\scheduling.etl' 'C:\path\new-silences.csv' 20
+```
+
+Validated on the saved 2026-10-09 five-minute guest trace: 3,420,580 events,
+none lost; three silences ≥ 20 ms (35.173, 27.954, 24.161 ms) of which the
+two largest align with that run's two recorded loss events.

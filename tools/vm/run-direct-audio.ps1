@@ -1,6 +1,6 @@
 <# One bounded, automatic guest diagnostic on the already installed driver. #>
 [CmdletBinding()]
-param([ValidateSet(30, 300)][int] $Seconds = 30)
+param([ValidateSet(30, 300)][int] $Seconds = 30, [switch] $TraceScheduling)
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') { throw 'Run inside AR-DriverTest from the copied bundle under C:\ar.' }
@@ -51,8 +51,8 @@ try {
     if ($process.HasExited) { throw 'Direct recorder ended before native tone started.' }
     $before = @(Get-ChildItem -LiteralPath 'C:\ar\evidence' -Directory -Filter '*-tone' | Select-Object -ExpandProperty FullName)
     try {
-        $tone = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','tone','-ToneSeconds',[string]$Seconds) `
-            -Stdout (Join-Path $evidence 'tone.txt') -Stderr (Join-Path $evidence 'tone-stderr.txt') -TimeoutSeconds ($Seconds + 60)
+        $tone = Invoke-DriverVmProcess -Executable $powershell -Arguments (@('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','tone','-ToneSeconds',[string]$Seconds) + @(if ($TraceScheduling) { '-TraceScheduling' })) `
+            -Stdout (Join-Path $evidence 'tone.txt') -Stderr (Join-Path $evidence 'tone-stderr.txt') -TimeoutSeconds ($Seconds + 60 + $(if ($TraceScheduling) { 180 } else { 0 }))
         $codes.Tone = $tone.Code
         $tone | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $evidence 'tone-process.json') -Encoding UTF8
     } finally {
