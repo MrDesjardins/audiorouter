@@ -9,6 +9,53 @@ shared pause need separate investigation. See the
 [waveform review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
 The procedure below is retained for reproducibility, not a new retry request.
 
+## Current next step: supported-format speaker reference
+
+User also hears hiss while replaying the saved WAV through Media Player →
+Speakers. Speakers only offers 16-bit 16/22.05/44.1 kHz. Keep Speakers at
+**16 bit, 44,100 Hz** and Cable B at **32 bit, 48,000 Hz**. Do not force an
+unsupported speaker format or run another bridge tone. The bit-depth
+difference alone is not a defect: the Windows audio engine can process float
+samples while a device uses PCM ([Microsoft device formats](https://learn.microsoft.com/en-us/windows/win32/coreaudio/device-formats)).
+
+The new reference file is synthesized offline, stereo PCM16 at 44.1 kHz,
+matching the supported speaker format. It carries no driver recording,
+dropout or sample-rate conversion from 48 kHz. Keep Media Player's output
+set to **Speakers (High Definition Audio Device)**, then paste inside the VM:
+
+```powershell
+& {
+    $source = 'Z:\playback-reference-20261009\reference-44100.wav'
+    $target = 'C:\ar\speaker-reference-44100.wav'
+    $hash = 'C9652D3C629C45FE7BAC8AB0C332A6668F7BD584E3A55323BA0CE9F54842D6A7'
+    if (Test-Path -LiteralPath $target) {
+        if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $hash) {
+            throw 'An unrelated file already uses the target name. Stop here.'
+        }
+    } else {
+        Copy-Item -LiteralPath $source -Destination $target
+    }
+    if ((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $hash) {
+        throw 'Reference copy failed verification. Stop here.'
+    }
+    Invoke-Item -LiteralPath $target
+}
+```
+
+Playback lasts **17 seconds**. There is one second of silence between parts:
+
+1. **0–5 s:** high tone on the left, low tone on the right (997/47 Hz).
+2. **6–11 s:** high tone on both channels (997 Hz).
+3. **12–17 s:** low tone on both channels (47 Hz).
+
+Report which parts have continuous hiss. This isolates supported-format
+playback and tone content; it does not clear the driver's failed continuity
+gate. A separately prepared 48-kHz reference is retained for a later
+comparison only after this result is reviewed. No driver or host setting
+change is involved. Stop file playback to roll back.
+
+## Previous direct-recording procedure
+
 Use the **r2 bundle** below. The first helper was accidentally built with a
 dynamic Visual C++ runtime dependency and exited before readiness in the
 guest. The repaired helper includes that runtime; packaging checks its PE

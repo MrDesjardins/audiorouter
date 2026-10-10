@@ -2150,3 +2150,33 @@ retains their 29.71-second fitted intervals, phase breaks and packet bounds.
 See [direct r2 waveform evidence](evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
 Next: locate the downstream Listen/speaker hiss separately from the measured
 shared pause. No new VM audio run is requested by this reporting repair.
+
+### Speaker-format investigation — 2026-10-09
+
+User confirms continuous hiss when replaying the saved Cable B WAV through
+Media Player → Speakers, independently of the live bridge tone. Speakers
+offers only 16-bit 16/22.05/44.1 kHz; its current setting is 44.1 kHz. Cable B
+is stereo 32-bit/48 kHz. Preserve those supported settings; do not force
+48 kHz or alter the virtual cable. A five-second clean recorded section
+(file seconds 2–7) differs from a generated 997/47-Hz float32 reference by at
+most one float32 step (1.49e-8); all 480,000 samples quantize identically to
+PCM16. This excludes added continuous digital noise in that section, but
+does not identify the playback defect or excuse the separate lost frames.
+
+Next ordered task (VCAB-12/20/24/29): generate offline PCM16 reference files
+at 44.1 and 48 kHz, each with both tones, high-only, then low-only sections.
+Use a fixed -12-dBFS peak with brief boundary fades; no AudioRouter device,
+recording, live host playback or Windows setting change. Regress WAV header,
+duration, amplitude, phase/frequency and fade boundaries; publish checksummed
+files in a new share folder. User first plays the 44.1-kHz file through the
+same VM Speakers. Review which section has hiss before requesting the
+48-kHz comparison. Rollback: stop file playback; all driver artifacts and
+settings remain unchanged. This is playback triage, not driver qualification.
+
+Reference preparation complete: standard-library generator and three offline
+regressions pass for both supported reference rates; initial sandbox temporary
+path failure corrected to workspace-owned test storage. New share folder
+`C:\VMs\ar-share\playback-reference-20261009` contains both files and verified
+checksums. Next: play only reference-44100.wav in the VM and identify which
+of the three sections has hiss; no driver test or new setting is requested.
+Exact copy/paste procedure is in the direct audio runbook above.

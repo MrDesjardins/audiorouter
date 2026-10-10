@@ -248,3 +248,53 @@ host settings, WSL and all guest bundles are unchanged. No new share bundle
 or guest retry is needed to review these existing recordings. Next task:
 isolate the downstream listening path and attribute the shared stall; hold
 long/stall runs and all unresolved VCAB-12/20/24/29 and VDEV-12 gates.
+
+## Saved-file replay and supported speaker formats (2026-10-09)
+
+User confirms hiss while replaying the saved Cable B WAV through Media
+Player → Speakers. This does not require the live bridge process. User
+reports Speakers at PCM16/44.1 kHz, with only 16/22.05/44.1 kHz available;
+Cable B is stereo 32-bit/48 kHz. The proposed 48-kHz speaker setting is
+unavailable and is withdrawn. Preserve the supported setting and the cable.
+Windows distinguishes the float engine mix from a PCM device format
+([Microsoft device formats](https://learn.microsoft.com/en-us/windows/win32/coreaudio/device-formats));
+the depth difference alone is not proof of a defect. Neither the rate
+conversion nor the WAV container is yet proved responsible for the hiss.
+
+Additional offline comparison: Cable B file seconds 2–7 versus independently
+generated 997/47-Hz float32 samples, aligned to the first generated frame
+(55,728). Maximum absolute difference 1.4901161e-8; zero mismatches among
+480,000 quantized PCM16 samples. Original bytes remain untouched. This
+confirms that this section carries the intended tones, not added broadband
+noise. It does not make the full recording or driver pass.
+
+[Offline reference generator](../../../../tools/vm/prepare-playback-reference.py)
+uses only the Python standard library, creates new files and opens no audio
+endpoint. Produces stereo PCM16 references at 44.1 and 48 kHz: 17 seconds,
+amplitude 0.25, both 997/47-Hz tones for five seconds, 997-Hz only for five,
+47-Hz only for five, one-second silent separators and 20-ms boundary fades.
+Each file has a standard PCM WAV header and checksummed metadata.
+
+Host verification:
+
+- `python tests/acceptance/test_playback_reference.py`: 3 tests pass for both
+  rates, WAV headers, frame counts, amplitude, frequency/sample values within
+  0.5 PCM16 step, boundary silence, unsupported-rate rejection and no
+  overwriting. The initial temporary directory check hit sandbox access denial;
+  it now uses an explicitly checked directory under workspace target.
+- `python tools/vm/prepare-playback-reference.py --destination target/playback-reference-20261009`:
+  files generated offline. Independent hashing of the copied share files
+  matches the metadata. No audio playback or driver operation by the agent.
+
+Published new folder: `C:\VMs\ar-share\playback-reference-20261009`.
+
+| Reference | SHA-256 |
+| --- | --- |
+| reference-44100.wav | `C9652D3C629C45FE7BAC8AB0C332A6668F7BD584E3A55323BA0CE9F54842D6A7` |
+| reference-48000.wav | `D227E7F42268B2F390D919BFE683275B15511AB7BEA79B050967E1CAC559578C` |
+
+Next: user plays only the 44.1-kHz reference through the same VM Speakers
+and reports which section has hiss. It is a supported-format playback
+comparison, not an AudioRouter driver run. Review before the 48-kHz file or
+any live/long/stall test. Rollback is to stop playback; WSL, host configuration,
+driver binaries and all prior bundles remain unchanged.

@@ -98,6 +98,13 @@ pass criteria; both saved WAVs still fail. Hold further guest runs while
 reviewing these separate failures. See the
 [direct waveform evidence](evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
 Sustained continuity, audible quality and exact cause remain unresolved.
+User also hears hiss on saved-file replay through Speakers; that device only
+offers PCM16 at 16/22.05/44.1 kHz. Keep its supported 44.1-kHz setting and
+Cable B at 48 kHz. The clean recorded section quantizes identically to a
+generated reference. New offline PCM16 reference files are published;
+next user action is the 17-second **44.1-kHz** speaker reference in the
+[direct audio runbook](../../operations/virtual-cable-direct-audio.md#current-next-step-supported-format-speaker-reference).
+Review that result before the 48-kHz comparison or another driver run.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the
