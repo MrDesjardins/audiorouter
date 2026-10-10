@@ -585,3 +585,59 @@ with matching counts and zero rejected/lost. Documentation acceptance passes
 changes, so their formatting/Clippy suites were not rerun. Local Jev remains
 disabled by the user's repository instruction. Diagnostic source and reviewed
 findings are committed; raw traces/CSVs/audio and scratch analysis stay ignored.
+
+## Paired recorder/clock probes prepared — 2026-10-10
+
+User asks for the next step after stopping loop playback/listening. Prepare
+recorder compatibility and clock alignment before another audio run. New
+`run-paired-scheduling-host.ps1` supports HostProbe / PairProbe;
+`run-paired-scheduling-guest.ps1` supports only the no-audio paired probe.
+Neither launches any driver/audio/VM executable. Existing minimal WPRP and
+owned-recorder cleanup are reused; driver/audio bytes are copied unchanged.
+
+Protocol: atomic, non-overwriting messages and a unique pair ID; one offer
+refuses concurrent/stale pairs, cleanup removes only the matching offer.
+Bounded peer waits, identity checks and peer-failure markers. Eight UTC/QPC
+request/reply brackets before and eight after the two-second guest trace keep
+whole round-trip offset bounds. No symmetric-latency assumption, no clock
+adjustment. Host wall-clock jumps are rejected; guest UTC around QPC read is
+recorded. Alignment quality still requires real cross-machine evidence. Host
+recording waits until guest join, then surrounds guest recording. A 45-second
+guest measurement deadline can reject a slow save; failed evidence remains.
+Host storage stop thresholds are sampled (1 GB evidence / 2 GB remaining,
+4 GB required at startup); they are not a hard file-size cap. Only current
+probe evidence is zipped; previous large audio history is excluded.
+
+Host checks (Windows PowerShell 5.1, no real recorder):
+
+- `tests/acceptance/m03-paired-trace.ps1`: **52** checks pass; atomic publish,
+  no-overwrite, identity, timeout/peer errors, size guard, sixteen real
+  same-machine request/reply brackets, syntax and production callback under
+  recorder parameter scope. Evidence
+  `target/paired-protocol-220f7907a9fe413bbc295439c8feeab5`.
+  First sandbox job couldn't use its process IPC; the approved local fake
+  checks succeeded unsandboxed. Same-machine brackets do not qualify guest
+  clock alignment. Callback review caught and corrected caller `$run` /
+  `$directory` collisions with recorder parameters before handoff.
+- `tests/acceptance/m03-vm-scheduling-trace.ps1`: **128** existing fake
+  recorder/lifecycle/integration checks pass. Evidence
+  `target/vm-trace-tests-351fee58709445f19192abc4b996ac7e`.
+- Copy-only preparation verifies all base hashes and candidate manifest;
+  no build/tool repair, certificate/driver operation or audio run.
+- Real candidate HostProbe invocation refuses at the administrator guard:
+  the agent's Windows token is not Administrator, even with sandbox approval.
+  **No real host recording started.** WPR read-only status had reported idle;
+  availability/listing is not start/save evidence. Administrator PowerShell
+  on the main PC is the next required user action, not another VM tone run.
+- Documentation acceptance: **139 Markdown / 753 local links**, diff check
+  clean. No Rust/UI changes; their suites not rerun. Local Jev disabled by
+  user instruction. Raw host traces can contain process/image metadata;
+  preserve locally and exclude from source control.
+
+Next: publish/verify the copy-only `diagnostics-20261010-paired-probe` bundle.
+User runs **HostProbe only**, then review ETL coverage/loss. Only after that
+review should PairProbe run on both machines with audio still off. Do not
+add a 300-second audio phase before reviewing real pair clocks/recordings.
+The [step-by-step runbook](../../../operations/virtual-cable-paired-trace.md)
+keeps host/guest commands distinct. VCAB-24/27 and other gates remain open.
+Rollback omits the optional probe scripts; there are no setting changes.

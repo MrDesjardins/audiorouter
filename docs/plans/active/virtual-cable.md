@@ -1939,3 +1939,36 @@ Do not start another unchanged guest-only run, install host drivers/tools,
 change host features, waive counters, or claim VCAB-24/27 closed. User can stop
 loop/listener between measurements. Full timings and verification commands are
 in the packet-clock review; diagnostic reader rollback removes only its source.
+
+### Paired timing preparation (2026-10-10, user asks for next step)
+
+Objective: correlate host VirtualBox thread execution with the guest's late
+worker readiness (VCAB-24/27 diagnostic; VDEV-12 recorder ownership). Ordered
+work: (1) prepare an owned, bounded host recorder using the already narrowed
+profile and local evidence; (2) verify idle recorder/free space and a two-second
+start/save probe before any paired audio; (3) add shared-folder request/reply
+clock brackets before and after measurements, preserving clock uncertainty;
+(4) coordinate paired recorder lifetimes with explicit timeout/failure markers;
+(5) hand off one small paired probe before a reviewed 300-second audio run.
+No changes to driver/audio binaries, host security, power, WSL or VM settings.
+No new dependency installation. Host trace contains system process/image and
+scheduling metadata, stays in the private evidence share and is not committed.
+Bound recording duration/disk use; preserve temporary logs on failed save and
+stop only the uniquely owned instance. Fake checks validate protocol logic;
+real start/save and clock brackets require both machines, not mocks. Rollback:
+omit paired collection and retain all prior bundles; do not repeat unpaired
+audio. Next action: implement and verify the host recorder probe.
+
+Prepared copy-only probes: HostProbe (two seconds) and PairProbe (no audio),
+with sixteen before/after clock brackets, atomic unique messages, peer timeout/
+failure propagation, storage stop thresholds and the existing named-recorder
+cleanup. Local Windows PowerShell 5.1 checks: 52 protocol/production-callback
+checks and 128 fake-recorder lifecycle checks pass. Initial background-job
+check needed unsandboxed process IPC; approved fake checks run successfully.
+Review corrected a dynamic-scope collision before handoff. HostProbe candidate
+invocation refused because the Windows token is not Administrator, before any
+real recorder call. No real host or paired trace success is claimed.
+Next: commit/push, prepare the source-identified copy-only share update and
+independently verify it, then user runs HostProbe in Administrator PowerShell.
+Inspect its saved event coverage/loss before any paired probe. No audio test
+is requested yet. Exact procedure: virtual-cable-paired-trace runbook.

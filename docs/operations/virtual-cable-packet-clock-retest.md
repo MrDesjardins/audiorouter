@@ -18,9 +18,9 @@ distinguish guest timer behavior from host/VirtualBox scheduling.
 `evidence-20261009-201122.zip`. You can stop Media Player and disable the
 Cable B listener now; no measurement is running. Keep WSL/Hyper-V enabled.
 
-The next development task is paired host/guest timing collection with a short
-recorder probe and a reviewed, bounded procedure. No replacement driver or new
-VM test is ready from this analysis. The
+The next step is the [two-second host recorder probe](virtual-cable-paired-trace.md).
+Paired clock/recorder scripts are prepared, but real host start/save still
+requires Administrator PowerShell and review before any paired/audio run. The
 [review record](../plans/active/evidence/2026-10-09-m03-packet-clock-review.md)
 contains the evidence and remaining limits. All commands below are retained
 as the completed experiment's reproduction, not the current next step.
