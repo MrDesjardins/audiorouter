@@ -2102,3 +2102,11 @@ Regress a missing-runtime exit with empty stderr and verify the shipped
 helper's dependency table, host refusal and offline command. Do not install a
 redistributable or rebuild/install the driver. Publish a new immutable bundle;
 keep this failure and prior artifacts. Requirements/sustained gates unchanged.
+
+Repair complete and pushed as `0e854d7e`. Static build and independent PE
+inspection confirm no Visual C++ runtime DLL import. Nine Rust regressions,
+103 PowerShell checks (including loader/early-exit failures), formatting,
+workspace/shell Clippy and documentation checks pass. R2 is published under
+`C:\VMs\ar-share\diagnostics-20261010-direct-audio-r2`; all 37 file hashes
+verify, all 35 paired-tone base files unchanged. Next: the automatic guest
+procedure with r2; actual direct recording and hiss cause remain pending.

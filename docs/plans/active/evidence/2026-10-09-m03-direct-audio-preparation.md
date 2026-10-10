@@ -144,3 +144,20 @@ Jev remains disabled. The fixed executable's first guest run is pending;
 hiss and sustained continuity are still unresolved. The old bundle/archive
 are preserved; a new r2 bundle uses the original paired-tone base and copies
 all driver files unchanged. Use the updated direct-audio procedure above.
+
+Published r2 at `2026-10-10 05:12:54Z` from clean pushed source
+`0e854d7e69077f0230bd9fc02c0f60e4dbb86f86`:
+`C:\VMs\ar-share\diagnostics-20261010-direct-audio-r2`.
+Independent hashes verify all 37 entries and all 35 unchanged base files.
+
+| R2 artifact | SHA-256 |
+| --- | --- |
+| MANIFEST.txt | `B3B80D1A89DDB810994AB5FEB15194AB7F17799B29B307D29814343ACAA78897` |
+| Static m03_direct_audio.exe | `95E8E4117991F6657DF7205D96660CA807402084D13883FA889E5A43EFE1C9A2` |
+| Unchanged driver SYS | `23F741CD5D4D455840898D0A614E39BFA588B96BE8CB2C1CF5E7AD5CAF0D34B3` |
+
+Documentation validation after this repair: 141 Markdown files, 768 local
+links pass; diff checks pass. Next action is the bounded automatic guest
+diagnostic using r2, with Media Player stopped and the existing listener
+retained. Neither the packaging repair nor its host checks clears the hiss
+or sustained continuity gate.
