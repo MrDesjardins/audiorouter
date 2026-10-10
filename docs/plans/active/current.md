@@ -69,7 +69,8 @@ milliseconds of headroom; absorbing a 163 ms pause would require comparable
 buffer headroom and transient latency, conflicting with the virtual-cable
 latency target. The deeper review subsequently found packet-count drift,
 unbounded capture catch-up, a one-packet timestamp error and fractional carry
-retained across STOP. These are repaired in the
+retained across STOP, plus long-uptime timestamp conversion overflow.
+These are repaired in the
 [packet-clock review](evidence/2026-10-09-m03-packet-clock-review.md).
 Host regressions/builds pass; fresh VM continuity is still pending. Next:
 use the [bounded retest procedure](../../operations/virtual-cable-packet-clock-retest.md).

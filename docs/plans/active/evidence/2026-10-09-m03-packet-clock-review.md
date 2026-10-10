@@ -85,8 +85,23 @@ Local Jev remains disabled by the user's earlier request.
 
 ## Next test and rollback
 
-Build one identified test-signed x64 candidate and verify its catalog, SYS,
-INF and file manifest. Run only in AR-DriverTest after restoring the clean
+Final candidate prepared and verified:
+
+- Host bundle: `C:\VMs\ar-share\repair-20261009-packet-clock-r2`.
+- Source commit: `97b393d5e25cd0e114bf0a8078627b14ab97b13b`, clean tree;
+  driver built at `2026-10-10T01:19:22.9790918Z` (2026-10-09 local).
+- Driver SHA256:
+  `23F741CD5D4D455840898D0A614E39BFA588B96BE8CB2C1CF5E7AD5CAF0D34B3`.
+- `prepare-vm-share.ps1` completed all six stages; package verification:
+  33 checks pass. All 30 manifest file hashes independently verified.
+- Test certificate thumbprint unchanged:
+  `FF6876FBE50A74DC0B69077C11DC28A1A9FAAD40`. The host intentionally does
+  not trust this test root; signature verification records that expected
+  condition. No host certificate trust or driver installation was performed.
+- The earlier `repair-20261009-packet-clock` bundle is superseded; use r2.
+
+The identified candidate includes verified catalog, SYS, INF and manifest.
+Run only in AR-DriverTest after restoring the clean
 test-signing snapshot. Follow the [retest procedure](../../../operations/virtual-cable-packet-clock-retest.md):
 preflight/smoke/install/status, 30-second tone, then 300 seconds if the short
 run passes. Evidence is collected and copied even after an ordinary failure.

@@ -1727,4 +1727,7 @@ scaling; regress 100-day timestamps and representable/overflow boundaries.
 Use the `repair-20261009-packet-clock-r2` bundle including this follow-up,
 not the earlier packet-clock candidate. Both WDK targets and all 578 C++
 checks pass again after this follow-up. Next: verify the rebuilt test-signed
-bundle and hand off the bounded procedure.
+bundle and hand off the bounded procedure. Completed: r2 built from clean
+source `97b393d5`, package integrity 33/33 and all 30 manifest hashes pass.
+Driver SHA256 is recorded in the review evidence. Next action is the guest
+procedure; no VM run was performed during this review.
