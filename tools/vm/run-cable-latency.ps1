@@ -1,6 +1,7 @@
-<# Bounded guest cable latency diagnostic (VCAB-25 preparation) on the already installed driver.
-   Cable A Input -> driver bridge -> pass-through relay (an AudioRouter route proxy)
-   -> Cable B Output, timed by the native impulse probe. Not product-engine latency. #>
+<# Bounded guest cable latency (VCAB-25) and bit-exactness (VCAB-20) diagnostic
+   on the already installed driver. Cable A Input -> driver bridge -> pass-through
+   relay (an AudioRouter route proxy) -> Cable B Output, measured by the native
+   probe. Not product-engine latency or qualification. #>
 [CmdletBinding()]
 param([ValidateRange(100, 3000)][int] $Impulses = 1000)
 $ErrorActionPreference = 'Stop'
@@ -29,6 +30,7 @@ $configurations = @(
     @{ Name = 'low-latency-128'; Frames = 128; Mode = 'low-latency'; TargetP95Ms = 20.0 }
 )
 $results = @()
+$bitExact = $null
 $failure = $null
 $active = $null
 function Get-ProbeValue([string] $Text, [string] $Name) {
@@ -101,7 +103,44 @@ try {
         if ($result.Relay) { Write-Host "  $($result.Relay)" }
         $result.Counters | ForEach-Object { Write-Host "  $_" }
     }
-    if (@($results | Where-Object { $_.ProbeCode -ne 0 -or $_.ToneCode -ne 0 }).Count -gt 0) { throw 'A probe or pass-through process failed; see the reports.' }
+    # Bit-exactness through the same 480-frame pass-through: 10 s of seeded
+    # noise then 0.5 s of silence; every sample must match, silence must be +0.0.
+    $name = 'bitexact-480'
+    $toneOut = Join-Path $evidence "$name-tone.txt"
+    $toneArguments = @('--passthrough','--frames','480','--seconds','20','--out',(Join-Path $evidence "$name-cable-a.wav")) |
+        ForEach-Object { ConvertTo-DriverProcessArgument $_ }
+    $active = Start-Process -FilePath $tone -ArgumentList ($toneArguments -join ' ') -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput $toneOut -RedirectStandardError (Join-Path $evidence "$name-tone-stderr.txt")
+    $null = $active.Handle
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    while (-not ((Test-Path -LiteralPath $toneOut) -and ((Get-Content -LiteralPath $toneOut -Raw) -match 'render worker polling before lease activation'))) {
+        if ($active.HasExited) { throw "$name pass-through exited before its leases were active (exit $($active.ExitCode)); see $name-tone-stderr.txt." }
+        if ($watch.Elapsed.TotalSeconds -ge 15) { throw "$name pass-through readiness timed out." }
+        Start-Sleep -Milliseconds 50
+    }
+    Start-Sleep -Milliseconds 1500
+    if ($active.HasExited) { throw "$name pass-through ended before the probe started (exit $($active.ExitCode))." }
+    $measured = Invoke-DriverVmProcess -Executable $probe -Arguments @('cable-bitexact','10',$renderIndex,$captureIndex) `
+        -Stdout (Join-Path $evidence "$name-probe.txt") -Stderr (Join-Path $evidence "$name-probe-stderr.txt") -TimeoutSeconds 45
+    if (-not $active.WaitForExit(50000)) { throw "$name pass-through did not finish within its watchdog." }
+    $toneCode = $active.ExitCode
+    $active.Dispose()
+    $active = $null
+    $probeText = Get-Content -LiteralPath (Join-Path $evidence "$name-probe.txt") -Raw
+    $bitExact = [pscustomobject][ordered]@{
+        Name = $name; ProbeCode = $measured.Code; ToneCode = $toneCode
+        Passed = ($measured.Code -eq 0 -and (Get-ProbeValue $probeText 'bitexact_pass') -eq 1)
+        Aligned = Get-ProbeValue $probeText 'bitexact_aligned'; ComparedFrames = Get-ProbeValue $probeText 'bitexact_compared_frames'
+        MismatchedSamples = Get-ProbeValue $probeText 'bitexact_mismatched_samples'; MaxAbsDiff = Get-ProbeValue $probeText 'bitexact_max_abs_diff'
+        SilenceNonzero = Get-ProbeValue $probeText 'bitexact_silence_nonzero_samples'
+        Relay = ([regex]::Match((Get-Content -LiteralPath $toneOut -Raw), '(?m)^pass-through relay: .*$')).Value
+    }
+    Write-Host ("{0}: {1}; compared {2} frames, mismatched samples {3}, max diff {4}, non-zero silence samples {5}; probe exit {6}, pass-through exit {7}" -f `
+        $name, $(if ($bitExact.Passed) { 'bit-exact' } else { 'NOT bit-exact' }), $bitExact.ComparedFrames, $bitExact.MismatchedSamples,
+        $bitExact.MaxAbsDiff, $bitExact.SilenceNonzero, $measured.Code, $toneCode)
+    if (@($results | Where-Object { $_.ProbeCode -ne 0 -or $_.ToneCode -ne 0 }).Count -gt 0 -or $bitExact.ProbeCode -ne 0 -or $bitExact.ToneCode -ne 0) {
+        throw 'A probe or pass-through process failed; see the reports.'
+    }
 } catch { $failure = $_ } finally {
     if ($active) {
         try {
@@ -111,7 +150,7 @@ try {
         } finally { $active.Dispose() }
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Passed = (-not [bool]$failure); Error = [string]$failure
-        Results = $results; Qualification = $false
+        Results = $results; BitExact = $bitExact; Qualification = $false
         Scope = 'Cable A -> driver bridge -> diagnostic pass-through relay -> Cable B; AudioRouter route proxy, not product-engine latency or VB-Cable comparison' }
     $zip = Join-Path $bundle "$run.zip"
     Compress-Archive -LiteralPath $evidence -DestinationPath $zip
@@ -121,7 +160,10 @@ try {
 }
 if ($failure) { throw $failure }
 if (@($results | Where-Object { -not $_.MeetsTargets }).Count -gt 0) {
-    Write-Host 'Latency measured; at least one configuration misses a VCAB-25 target (see above). Send the output.'
+    Write-Host 'Latency measured; at least one configuration misses a VCAB-25 target (see above).'
 } else {
-    Write-Host 'Latency measured; both configurations meet the VCAB-25 p95/jitter targets for this proxy route. Send the output.'
+    Write-Host 'Latency measured; both configurations meet the VCAB-25 p95/jitter targets for this proxy route.'
 }
+if ($bitExact.Passed) { Write-Host 'Bit-exact through the proxy route (VCAB-20 check at the endpoint format).' }
+else { Write-Host 'NOT bit-exact through the proxy route (see above).' }
+Write-Host 'Send the output.'

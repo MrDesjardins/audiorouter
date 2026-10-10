@@ -75,6 +75,15 @@ function Test-Latency([string] $Case) {
             Set-Content -LiteralPath $Stdout -Value ($lines -join "`n")
             return @{ Code = 0 }
         }
+        if ($Arguments[0] -eq 'cable-bitexact') {
+            Assert ($Arguments[1] -eq '10' -and $Arguments[2] -eq '2' -and $Arguments[3] -eq '1' -and $TimeoutSeconds -ge 30) 'bit-exact probe on the exact endpoints with a watchdog'
+            $script:probeCalls += 'bitexact'
+            $exact = $Case -ne 'not-exact'
+            Set-Content -LiteralPath $Stdout -Value ("bitexact_aligned=1 bitexact_align_frame=4410 bitexact_noise_frames=480000 bitexact_compared_frames=480000 bitexact_mismatched_samples=$(if ($exact) { 0 } else { 12 }) bitexact_first_mismatch_frame=0 bitexact_max_abs_diff=$(if ($exact) { 0 } else { 3e-8 })
+bitexact_silence_frames_expected=24000 bitexact_silence_frames_checked=24000 bitexact_silence_nonzero_samples=0
+bitexact_pass=$(if ($exact) { 1 } else { 0 })")
+            return @{ Code = 0 }
+        }
         Assert ($Arguments[0] -eq 'cable-impulse' -and $Arguments[1] -eq '1000' -and $Arguments[2] -eq '2' -and $Arguments[3] -eq '1') 'probe uses the exact Cable A Input / Cable B Output indices'
         Assert ($TimeoutSeconds -ge 30) 'bounded probe watchdog'
         $mode = if ($Arguments -contains 'low-latency') { 'low-latency' } else { 'default' }
@@ -92,34 +101,39 @@ function Test-Latency([string] $Case) {
     $saved = Read-PairedTraceJson (Join-Path $evidence 'result.json')
     Assert ($saved.Qualification -eq $false) "$Case never claims qualification"
     switch ($Case) {
-        { $_ -in 'pass','slow','lost' } {
+        { $_ -in 'pass','slow','lost','not-exact' } {
             Assert (-not $failure) "$Case completes"
-            Assert ($script:started.Count -eq 2 -and $script:started[0] -match '"--frames" "480"' -and $script:started[1] -match '"--frames" "128"') 'two configurations with 480 and 128 frame relays'
+            Assert ($script:started.Count -eq 3 -and $script:started[0] -match '"--frames" "480"' -and $script:started[1] -match '"--frames" "128"' -and $script:started[2] -match '"--frames" "480"') 'latency at 480 and 128 frames, then bit-exactness at 480'
             Assert (@($script:started | Where-Object { $_ -notmatch '"--passthrough"' }).Count -eq 0) 'pass-through mode always selected'
             $seconds = [int]([regex]::Match($script:started[0], '"--seconds" "(\d+)"').Groups[1].Value)
             Assert ($seconds -ge 18) 'pass-through outlives the probe'
-            Assert (($script:probeCalls -join ',') -eq 'default,low-latency') 'default then low-latency probe'
+            Assert (($script:probeCalls -join ',') -eq 'default,low-latency,bitexact') 'default, low-latency, then bit-exact probe'
+            Assert ($saved.BitExact.Passed -eq ($Case -ne 'not-exact')) 'bit-exact verdict recorded from the probe'
+            Assert ($bitExact.Relay -match 'forwarded=') 'bit-exact relay statistics recorded'
             Assert ($results.Count -eq 2 -and $results[0].Relay -match 'forwarded=1500' -and @($results[0].Counters).Count -eq 3) 'relay statistics and driver counters recorded'
             Assert ($results[0].P95Ms -eq 23.5 -and $results[0].JitterMs -eq 1.4) 'probe values parsed'
         }
         'pass' { Assert ($results[0].MeetsTargets -and $results[1].MeetsTargets) 'targets met' }
+        'not-exact' { Assert (-not $bitExact.Passed -and $bitExact.MismatchedSamples -eq 12) 'a mismatch is reported, not hidden' }
         'slow' { Assert ($results[0].MeetsTargets -and -not $results[1].MeetsTargets) 'a missed low-latency target is reported, not hidden' }
         'lost' { Assert (-not $results[0].MeetsTargets -and -not $results[1].MeetsTargets) 'lost impulses fail the targets' }
         { $_ -in 'status-failure','duplicate' } {
             Assert ([bool]$failure -and $script:started.Count -eq 0 -and $script:probeCalls.Count -eq 0) "$Case starts no audio"
         }
         'early-exit' { Assert ([bool]$failure -and $script:probeCalls.Count -eq 0 -and [string]$failure -match 'before its leases') 'early pass-through exit stops before the probe' }
-        'probe-failure' { Assert ([bool]$failure -and $results.Count -eq 2) 'probe failure reported after both configurations' }
+        'probe-failure' { Assert ([bool]$failure -and $results.Count -eq 2 -and $null -ne $bitExact) 'probe failure reported after every measurement' }
         'tone-hang' { Assert ([bool]$failure -and $script:killed -eq 1 -and $script:disposed -ge 1) 'hung pass-through is killed and disposed' }
     }
 }
-foreach ($case in @('pass','slow','lost','status-failure','duplicate','early-exit','probe-failure','tone-hang')) { Test-Latency $case }
+foreach ($case in @('pass','slow','lost','not-exact','status-failure','duplicate','early-exit','probe-failure','tone-hang')) { Test-Latency $case }
 
 $probeBinary = Join-Path $workspace 'target\m00-probe-cable\m00-probe.exe'
 $imports = @(Assert-PortableVmTool $probeBinary)
 Assert (@($imports | Where-Object { $_ -match 'vcruntime|msvcp' }).Count -eq 0) 'static probe has no redistributable imports'
 $selfTest = Invoke-DriverVmProcess -Executable $probeBinary -Arguments @('cable-impulse-selftest') -Stdout (Join-Path $root 'selftest.txt') -Stderr (Join-Path $root 'selftest-stderr.txt') -TimeoutSeconds 20
 Assert ($selfTest.Code -eq 0 -and (Get-Content -LiteralPath (Join-Path $root 'selftest.txt') -Raw) -match '\d+ cable impulse pairing checks pass') 'real probe pairing self-test (offline, no endpoint)'
+$selfTest = Invoke-DriverVmProcess -Executable $probeBinary -Arguments @('cable-bitexact-selftest') -Stdout (Join-Path $root 'bitexact-selftest.txt') -Stderr (Join-Path $root 'bitexact-selftest-stderr.txt') -TimeoutSeconds 20
+Assert ($selfTest.Code -eq 0 -and (Get-Content -LiteralPath (Join-Path $root 'bitexact-selftest.txt') -Raw) -match '\d+ cable bit-exact checks pass') 'real probe bit-exact self-test (offline, no endpoint)'
 if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
     $guard = Invoke-DriverVmProcess -Executable (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
         -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$runner) `

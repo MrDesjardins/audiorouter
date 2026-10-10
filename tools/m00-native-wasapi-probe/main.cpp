@@ -1366,6 +1366,262 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     return report.matched == 0 ? 1 : 0;
 }
 
+// ---------------------------------------------------------------------------
+// Cable bit-exactness (VCAB-20 preparation): seeded float noise then silence
+// into Cable A Input, Cable B Output recorded. Noise values are k / 2^24 with
+// |value| <= 0.5 (exact in float32, below Windows' render limiter), different
+// per channel. The capture is aligned on an exact 32-frame match of the
+// first noise frames, then every sample is compared; the silence that follows
+// must be exact digital zero.
+struct NoiseSource {
+    UINT32 state;
+    explicit NoiseSource(UINT32 seed) : state(seed ? seed : 1u) {}
+    float Next() {
+        state ^= state << 13; state ^= state >> 17; state ^= state << 5;
+        const INT32 centered = static_cast<INT32>(state >> 8) - (1 << 23);  // [-2^23, 2^23)
+        return static_cast<float>(centered) / static_cast<float>(1 << 24);  // [-0.5, 0.5)
+    }
+};
+
+struct BitExactReport {
+    bool aligned = false;
+    UINT64 alignFrame = 0, noiseFrames = 0, compared = 0, mismatches = 0, firstMismatch = 0;
+    double maxAbsDiff = 0.0;
+    UINT64 silenceChecked = 0, silenceNonzero = 0;
+};
+
+// rendered: noiseFrames frames of noise (interleaved). captured: interleaved.
+// silenceFrames: how many captured frames after the noise must be zero.
+static BitExactReport compare_bitexact(const std::vector<float>& rendered, const std::vector<float>& captured,
+                                       UINT32 channels, UINT64 silenceFrames) {
+    BitExactReport report;
+    if (channels == 0) return report;
+    const UINT64 noiseFrames = rendered.size() / channels;
+    const UINT64 capturedFrames = captured.size() / channels;
+    report.noiseFrames = noiseFrames;
+    constexpr UINT64 kAlign = 32;
+    if (noiseFrames < kAlign || capturedFrames < kAlign) return report;
+    for (UINT64 start = 0; start + kAlign <= capturedFrames && !report.aligned; ++start) {
+        if (std::memcmp(&captured[start * channels], &rendered[0], kAlign * channels * sizeof(float)) == 0) {
+            report.aligned = true;
+            report.alignFrame = start;
+        }
+    }
+    if (!report.aligned) return report;
+    const UINT64 available = capturedFrames - report.alignFrame;
+    const UINT64 count = std::min<UINT64>(noiseFrames, available);
+    for (UINT64 frame = 0; frame < count; ++frame) {
+        for (UINT32 channel = 0; channel < channels; ++channel) {
+            const float expected = rendered[frame * channels + channel];
+            const float got = captured[(report.alignFrame + frame) * channels + channel];
+            if (std::memcmp(&expected, &got, sizeof(float)) != 0) {
+                if (report.mismatches == 0) report.firstMismatch = frame;
+                ++report.mismatches;
+                report.maxAbsDiff = std::max(report.maxAbsDiff, std::fabs(static_cast<double>(expected) - got));
+            }
+        }
+    }
+    report.compared = count;
+    // Frames missing at the end (capture stopped early) count as mismatches.
+    if (count < noiseFrames) report.mismatches += (noiseFrames - count) * channels;
+    const UINT64 silenceStart = report.alignFrame + noiseFrames;
+    for (UINT64 frame = 0; frame < silenceFrames && silenceStart + frame < capturedFrames; ++frame) {
+        for (UINT32 channel = 0; channel < channels; ++channel) {
+            const float value = captured[(silenceStart + frame) * channels + channel];
+            UINT32 bits;
+            std::memcpy(&bits, &value, sizeof(bits));
+            if (bits != 0) ++report.silenceNonzero;  // +0.0 only: no DC, dither or -0.0
+        }
+        ++report.silenceChecked;
+    }
+    return report;
+}
+
+static void print_bitexact_report(const BitExactReport& report, UINT64 silenceFrames) {
+    std::cout << "bitexact_aligned=" << (report.aligned ? 1 : 0) << " bitexact_align_frame=" << report.alignFrame
+              << " bitexact_noise_frames=" << report.noiseFrames << " bitexact_compared_frames=" << report.compared
+              << " bitexact_mismatched_samples=" << report.mismatches << " bitexact_first_mismatch_frame=" << report.firstMismatch
+              << " bitexact_max_abs_diff=" << report.maxAbsDiff << '\n';
+    std::cout << "bitexact_silence_frames_expected=" << silenceFrames << " bitexact_silence_frames_checked=" << report.silenceChecked
+              << " bitexact_silence_nonzero_samples=" << report.silenceNonzero << '\n';
+    const bool pass = report.aligned && report.mismatches == 0 && report.compared == report.noiseFrames &&
+                      report.silenceChecked == silenceFrames && report.silenceNonzero == 0;
+    std::cout << "bitexact_pass=" << (pass ? 1 : 0) << '\n';
+}
+
+static std::vector<float> make_noise(UINT64 frames, UINT32 channels, UINT32 seed) {
+    std::vector<NoiseSource> sources;
+    for (UINT32 channel = 0; channel < channels; ++channel) sources.emplace_back(seed + 0x9e3779b9u * (channel + 1));
+    std::vector<float> samples(static_cast<size_t>(frames * channels));
+    for (UINT64 frame = 0; frame < frames; ++frame)
+        for (UINT32 channel = 0; channel < channels; ++channel)
+            samples[static_cast<size_t>(frame * channels + channel)] = sources[channel].Next();
+    return samples;
+}
+
+static int cable_bitexact_self_test() {
+    unsigned checks = 0;
+#define BITEXACT_CHECK(condition) do { if (!(condition)) { std::cerr << "bitexact self-test failed line " << __LINE__ << '\n'; return 1; } ++checks; } while (0)
+    const UINT32 channels = 2;
+    const auto noise = make_noise(48000, channels, 12345);
+    bool bounded = true, exactGrid = true, varied = false;
+    for (float value : noise) {
+        bounded = bounded && value >= -0.5f && value < 0.5f;
+        exactGrid = exactGrid && static_cast<double>(value) * (1 << 24) == std::floor(static_cast<double>(value) * (1 << 24));
+        varied = varied || value != noise[0];
+    }
+    BITEXACT_CHECK(bounded && exactGrid && varied);
+    BITEXACT_CHECK(noise[0] != noise[1]);  // channels differ (detects swaps)
+    auto build = [&](UINT64 lead, UINT64 silence) {
+        std::vector<float> captured(static_cast<size_t>(lead * channels), 0.0f);
+        captured.insert(captured.end(), noise.begin(), noise.end());
+        captured.insert(captured.end(), static_cast<size_t>(silence * channels), 0.0f);
+        return captured;
+    };
+    auto report = compare_bitexact(noise, build(777, 4800), channels, 4800);
+    BITEXACT_CHECK(report.aligned && report.alignFrame == 777 && report.mismatches == 0 && report.compared == 48000);
+    BITEXACT_CHECK(report.silenceChecked == 4800 && report.silenceNonzero == 0);
+    // One least-significant-bit change is found and located.
+    auto captured = build(100, 4800);
+    UINT32 bits; std::memcpy(&bits, &captured[(100 + 30000) * channels + 1], 4); bits ^= 1u;
+    std::memcpy(&captured[(100 + 30000) * channels + 1], &bits, 4);
+    report = compare_bitexact(noise, captured, channels, 4800);
+    BITEXACT_CHECK(report.mismatches == 1 && report.firstMismatch == 30000 && report.maxAbsDiff > 0 && report.maxAbsDiff < 1e-6);
+    // A dropped 480-frame block shifts everything after it.
+    captured = build(100, 4800);
+    captured.erase(captured.begin() + (100 + 20000) * channels, captured.begin() + (100 + 20480) * channels);
+    report = compare_bitexact(noise, captured, channels, 4800);
+    BITEXACT_CHECK(report.mismatches > 1000 && report.firstMismatch == 20000);
+    // Swapped channels never align.
+    captured = build(10, 100);
+    for (size_t i = 0; i + 1 < captured.size(); i += 2) std::swap(captured[i], captured[i + 1]);
+    BITEXACT_CHECK(!compare_bitexact(noise, captured, channels, 100).aligned);
+    // DC, dither or negative zero in the silence are reported.
+    captured = build(10, 100);
+    captured[(10 + 48000 + 50) * channels] = -0.0f;
+    report = compare_bitexact(noise, captured, channels, 100);
+    BITEXACT_CHECK(report.mismatches == 0 && report.silenceNonzero == 1);
+    // Capture that stops early is a failure, not a shorter pass.
+    captured = build(10, 0);
+    captured.resize(captured.size() - 960 * channels);
+    report = compare_bitexact(noise, captured, channels, 100);
+    BITEXACT_CHECK(report.compared == 48000 - 960 && report.mismatches == 960ull * channels && report.silenceChecked == 0);
+    // Gain change (0.5 x) is not exact.
+    captured = build(10, 100);
+    for (auto& value : captured) value *= 0.5f;
+    BITEXACT_CHECK(!compare_bitexact(noise, captured, channels, 100).aligned);
+#undef BITEXACT_CHECK
+    std::cout << checks << " cable bit-exact checks pass\n";
+    return 0;
+}
+
+// Plays seeded noise then silence into render_index and records capture_index.
+static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noise_seconds) {
+    IMMDeviceEnumerator* enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
+                                  __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
+    if (FAILED(hr)) { print_hr("bitexact_enumerator", hr); return 1; }
+    LoopbackStreamState render_state;
+    LoopbackStreamState capture_state;
+    bool ok = activate_shared_stream(enumerator, eRender, render_index, render_state, "bitexact_render", true, 0, false);
+    if (ok) ok = activate_shared_stream(enumerator, eCapture, capture_index, capture_state, "bitexact_capture", true, 0, false);
+    enumerator->Release();
+    if (!ok) { render_state.release(); capture_state.release(); return 1; }
+    const WAVEFORMATEX* rf = render_state.format;
+    const WAVEFORMATEX* cf = capture_state.format;
+    if (rf->wBitsPerSample != 32 || cf->wBitsPerSample != 32 || rf->nChannels != cf->nChannels ||
+        rf->nSamplesPerSec != cf->nSamplesPerSec) {
+        std::cout << "bitexact_requires_matching_float32_formats=1\n";
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+    IAudioRenderClient* render_service = nullptr;
+    IAudioCaptureClient* capture_service = nullptr;
+    hr = render_state.client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render_service));
+    if (SUCCEEDED(hr)) hr = capture_state.client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture_service));
+    print_hr("bitexact_services", hr);
+    if (FAILED(hr)) {
+        if (render_service) render_service->Release();
+        render_state.release(); capture_state.release();
+        return 1;
+    }
+    const UINT32 channels = rf->nChannels;
+    const UINT64 rate = rf->nSamplesPerSec;
+    const UINT64 noise_frames = static_cast<UINT64>(noise_seconds) * rate;
+    const UINT64 silence_frames = rate / 2;
+    const auto noise = make_noise(noise_frames, channels, 20261010u);
+    std::vector<float> captured;
+    captured.reserve(static_cast<size_t>((noise_frames + silence_frames + 3 * rate) * channels));
+    UINT32 render_buffer = 0;
+    render_state.client->GetBufferSize(&render_buffer);
+    std::atomic<bool> stop{false};
+    UINT64 rendered = 0, capture_dropped = 0, capture_flagged = 0, capture_overflow = 0;
+    std::thread render_thread([&] {
+        while (!stop.load()) {
+            if (WaitForSingleObject(render_state.ready_event, 100) != WAIT_OBJECT_0) continue;
+            UINT32 padding = 0;
+            if (FAILED(render_state.client->GetCurrentPadding(&padding))) continue;
+            const UINT32 available = render_buffer - padding;
+            if (available == 0) continue;
+            BYTE* data = nullptr;
+            if (FAILED(render_service->GetBuffer(available, &data))) continue;
+            auto* out = reinterpret_cast<float*>(data);
+            for (UINT32 frame = 0; frame < available; ++frame, ++rendered) {
+                for (UINT32 channel = 0; channel < channels; ++channel)
+                    out[static_cast<size_t>(frame) * channels + channel] =
+                        rendered < noise_frames ? noise[static_cast<size_t>(rendered * channels + channel)] : 0.0f;
+            }
+            render_service->ReleaseBuffer(available, 0);
+        }
+    });
+    std::thread capture_thread([&] {
+        bool have = false; UINT64 expected = 0;
+        while (!stop.load()) {
+            if (WaitForSingleObject(capture_state.ready_event, 100) != WAIT_OBJECT_0) continue;
+            for (;;) {
+                UINT32 frames = 0;
+                if (FAILED(capture_service->GetNextPacketSize(&frames)) || frames == 0) break;
+                BYTE* data = nullptr; DWORD flags = 0; UINT64 position = 0, qpc = 0;
+                if (FAILED(capture_service->GetBuffer(&data, &frames, &flags, &position, &qpc))) break;
+                if (have && position > expected) capture_dropped += position - expected;
+                if (flags & (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY | AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)) ++capture_flagged;
+                have = true; expected = position + frames;
+                const size_t samples = static_cast<size_t>(frames) * channels;
+                if (captured.size() + samples > captured.capacity()) { ++capture_overflow; }
+                else if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) || !data) { captured.insert(captured.end(), samples, 0.0f); }
+                else { const auto* in = reinterpret_cast<const float*>(data); captured.insert(captured.end(), in, in + samples); }
+                capture_service->ReleaseBuffer(frames);
+            }
+        }
+    });
+    hr = capture_state.client->Start();
+    print_hr("bitexact_capture_start", hr);
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    if (SUCCEEDED(hr)) hr = render_state.client->Start();
+    print_hr("bitexact_render_start", hr);
+    if (SUCCEEDED(hr)) std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<DWORD>(noise_seconds) * 1000 + 2000));
+    stop.store(true);
+    SetEvent(render_state.ready_event);
+    SetEvent(capture_state.ready_event);
+    render_thread.join();
+    capture_thread.join();
+    print_hr("bitexact_render_stop", render_state.client->Stop());
+    print_hr("bitexact_capture_stop", capture_state.client->Stop());
+    render_service->Release();
+    capture_service->Release();
+    std::cout << "bitexact_channels=" << channels << " bitexact_rate=" << rate << " bitexact_rendered_frames=" << rendered
+              << " bitexact_captured_frames=" << captured.size() / channels << " bitexact_capture_dropped_frames=" << capture_dropped
+              << " bitexact_capture_flagged_packets=" << capture_flagged << " bitexact_capture_overflow_packets=" << capture_overflow << '\n';
+    const BitExactReport report = compare_bitexact(noise, captured, channels, silence_frames);
+    print_bitexact_report(report, silence_frames);
+    std::cout << "Scope: Cable A Input render to Cable B Output capture through the driver bridge and the "
+                 "diagnostic pass-through relay at the endpoints' shared float32 mix format; an AudioRouter "
+                 "route proxy, not the product engine.\n";
+    render_state.release();
+    capture_state.release();
+    return 0;
+}
+
 // Captures a stream's own impulse-arrival timestamps: a persistent worker
 // thread that drains packets from `service`, peak-detects impulses using
 // each packet's own device position and QPC timestamp (immune to render
@@ -1937,6 +2193,20 @@ int main(int argc, char** argv) {
         UINT render_index = argc > 2 ? static_cast<UINT>(std::strtoul(argv[2], nullptr, 10)) : 0;
         bool low_latency = argc > 3 && std::strcmp(argv[3], "low-latency") == 0;
         int result = render_clock_ramp_probe(render_index, low_latency);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "cable-bitexact-selftest") == 0) {
+        int result = cable_bitexact_self_test();
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "cable-bitexact") == 0) {
+        DWORD seconds = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 10;
+        UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
+        if (seconds < 1 || seconds > 120) { std::cout << "bitexact_seconds_out_of_range=1\n"; CoUninitialize(); return 2; }
+        int result = cable_bitexact_probe(render_index, capture_index, seconds);
         CoUninitialize();
         return result;
     }
