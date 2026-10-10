@@ -688,3 +688,83 @@ Next: one paired two-second probe, loop/listener still off. Copy the guest
 bundle first; start host PairProbe, then guest join within two minutes. Review
 both saved traces, before/after clock brackets and their uncertainty before
 preparing a 300-second audio phase. No new bundle or driver change needed.
+
+## Paired probe reviewed; short audio phase prepared — 2026-10-10
+
+Pair `02d977908cf14e5cbfd31f33eb5103ae` is reviewed from the local share.
+Both ZIP SHA256 values independently match:
+
+- Host: `8E4EC210BCF60B9BAEC0185DF3469B5ADF11FCE930171EDCF150706E29A63428`.
+- Guest: `A51355595B883CCAD31BEB75BFF58D2F8D4006604C6DA4537E98CB06C9DF449E`.
+
+Both results Passed true, Started/Saved true, no run/cleanup failures. Host
+start/save exit 0 in 0.2425024/9.4529072 s; guest in 0.1603831/2.12579 s.
+Both profile hashes match
+`CB4DE1288C25F900705D28D6E13A589221661B4BA916783936B0624F0548433C`.
+Host ETL 84,934,656 bytes; guest 12,582,912. Intended collector keywords,
+zero dropped/lost. No audio was launched.
+
+Selected entries extracted into ignored `target/pair-probe-review-02d97790`.
+Read-only `tracerpt.exe scheduling.etl -o events.csv -of CSV -summary
+summary.txt -report report.xml -y` exits 0 for both files: 1,090,583 host
+events, 94,301 guest, zero lost. Offline `target\m03-scheduler-trace.exe
+scheduling.etl switches-qpc.csv --raw` and converted mode both match
+independent context-switch/readiness counts:
+
+| Trace | Context switches | ReadyThread | Rejected | Lost |
+| --- | ---: | ---: | ---: | ---: |
+| Host | 459,738 | 267,316 | 0 | 0 |
+| Guest | 6,855 | 3,921 | 0 | 0 |
+
+Both headers identify QPC clock type and 10,000,000-Hz frequency. Raw first/last
+event spans are 5.9997261 s host and 2.3507886 s guest; converted spans match.
+Guest wall-clock header/report duration differs from raw QPC elapsed time.
+
+Clock finding: guest UTC is about 19.7 s behind host before, 21.1 s afterward.
+Tightest before/after round trips are 30.6668/30.0645 ms. Between their guest
+samples UTC advances 3.8900716 s while QPC advances 5.3119743 s: a
+1.4219027-s discrepancy, much larger than round-trip uncertainty. UTC offset
+intervals are incompatible even within stages. UTC-only alignment is invalid;
+this does not establish the cause of audio loss. Do not adjust either clock.
+
+Normalized QPC offset bounds in ms are
+`(guestQpc/guestFrequency - hostEndQpc/hostFrequency)*1000` through
+`(guestQpc/guestFrequency - hostStartQpc/hostFrequency)*1000`. All sixteen
+samples have a compatible interval `[-88295933.49521, -88295911.0389] ms`,
+width **22.45631 ms**. Absolute offset reflects different counter origins.
+This is short-probe compatibility, not sub-millisecond synchronization or
+proof of a stable offset over 300 s. Use raw ETW QPC, check before/after
+overlap again and retain uncertainty for every new run.
+
+Implementation (VCAB-24/27 diagnostic; VDEV-12 ownership): support exports
+normalized QPC bounds. Explicit matching Tone phases coordinate a bounded
+30/300-second guest run using unchanged traced VM checks/native watchdog and
+zero-counter gate. Guest status before joining is read-only. Failed audio
+acceptance still gets after-clock samples and both trace saves, then both
+scripts report failure. Only the uniquely identified new guest tone directory
+is archived. Large host ETL stays separate from small metadata ZIP. Host
+budgets: 16 GB initial/8 GB reserve/6 GB sampled evidence stop; save can add
+bytes. No host audio/driver call, build, repair, install, VM control or setting
+change occurred.
+
+Host Windows PowerShell 5.1 checks (fake native/recorder boundaries):
+
+- `tests/acceptance/m03-paired-trace.ps1`: **88** checks pass, evidence
+  `target/paired-protocol-2d7aa87675f74fb18f59bd4a28e2917e`. Actual production
+  callbacks under recorder parameter scope, both tone durations, process
+  watchdog/arguments, failed status/acceptance, current evidence only,
+  phase/duration/identity refusal, sixteen same-machine clock brackets.
+  Same-machine checks do not qualify cross-machine alignment or real Tone.
+- `tests/acceptance/m03-vm-scheduling-trace.ps1`: **128** fake lifecycle checks
+  pass, evidence `target/vm-trace-tests-03ecc5c063dc4c0bb921b8472d6d9467`.
+- Documentation acceptance passes **139 Markdown / 754 local links**; syntax
+  and diff checks pass. No Rust/UI changes; their suites not rerun.
+  Local Jev disabled by user repository instruction.
+
+Next: commit/push and prepare/verify separate copy-only
+`diagnostics-20261010-paired-tone` from the 32-file base. User runs **30 seconds
+only** with loop/listener already running; review both traces and clock quality
+before any longer run. [Current steps](../../../operations/virtual-cable-paired-trace.md)
+separate host and guest. No paired Tone has run yet. Continuity, latency,
+hardware, signing and other unqualified gates stay open. Rollback: keep the
+probe-only bundle and omit optional paired Tone scripts.

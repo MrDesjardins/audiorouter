@@ -26,7 +26,7 @@ foreach ($name in @('paired-trace-support.ps1','run-paired-scheduling-host.ps1',
 $commit = (& git -C $workspace rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Cannot identify source commit.' }
 $dirty = [bool](& git -C $workspace status --porcelain)
-$manifest = @('AudioRouter paired recorder probe; no audio or driver operation', "base: $base",
+$manifest = @('AudioRouter paired scheduling diagnostics; host recorder only, guest explicit phase', "base: $base",
     "script source: $commit$(if ($dirty) { ' (working tree dirty)' })", "prepared: $([DateTime]::UtcNow.ToString('u'))", '')
 foreach ($file in Get-ChildItem -LiteralPath $targetBundle -Recurse -File | Sort-Object FullName) {
     if ($file.Name -ne 'MANIFEST.txt') {
@@ -35,4 +35,4 @@ foreach ($file in Get-ChildItem -LiteralPath $targetBundle -Recurse -File | Sort
 }
 $manifest | Set-Content -LiteralPath (Join-Path $targetBundle 'MANIFEST.txt') -Encoding UTF8
 Assert-PairedTraceBundle $targetBundle
-Write-Host "Copy-only probe bundle ready: $targetBundle"
+Write-Host "Copy-only diagnostics bundle ready: $targetBundle"

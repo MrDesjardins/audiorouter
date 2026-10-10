@@ -18,9 +18,10 @@ distinguish guest timer behavior from host/VirtualBox scheduling.
 `evidence-20261009-201122.zip`. You can stop Media Player and disable the
 Cable B listener now; no measurement is running. Keep WSL/Hyper-V enabled.
 
-The next step is the [paired two-second recorder probe](virtual-cable-paired-trace.md).
-Real host start/save and saved event coverage pass review. Paired clocks and
-simultaneous recordings still require the next no-audio probe before an audio run. The
+The next step is the [paired 30-second diagnostic](virtual-cable-paired-trace.md).
+Real host and paired probe start/save and event coverage pass review. Guest UTC
+drifts relative to QPC; paired attribution must use raw QPC and retain measured
+uncertainty. A separate copy-only update adds the explicit short audio phase. The
 [review record](../plans/active/evidence/2026-10-09-m03-packet-clock-review.md)
 contains the evidence and remaining limits. All commands below are retained
 as the completed experiment's reproduction, not the current next step.

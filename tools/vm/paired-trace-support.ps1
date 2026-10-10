@@ -82,6 +82,8 @@ function Save-PairedTraceClockSamples {
             GuestMinusHostLowerMs = ([long]$reply.UtcTicks - $endTicks) / 10000.0
             GuestMinusHostUpperMs = ([long]$reply.UtcTicks - $startTicks) / 10000.0
             RoundTripMs = ($endTicks - $startTicks) / 10000.0
+            GuestMinusHostQpcLowerMs = (([decimal]$reply.Qpc / [decimal]$reply.QpcFrequency) - ([decimal]$endQpc / [decimal][Diagnostics.Stopwatch]::Frequency)) * 1000
+            GuestMinusHostQpcUpperMs = (([decimal]$reply.Qpc / [decimal]$reply.QpcFrequency) - ([decimal]$startQpc / [decimal][Diagnostics.Stopwatch]::Frequency)) * 1000
         }
     }
     $samples | Export-Csv -LiteralPath (Join-Path $Evidence "$Stage-clock.csv") -NoTypeInformation -Encoding UTF8
@@ -103,9 +105,9 @@ function Reply-PairedTraceClockSamples {
 }
 
 function Assert-PairedTraceBudget {
-    param([string] $Evidence)
+    param([string] $Evidence, [long] $MaxBytes = 1GB, [long] $MinFreeBytes = 2GB)
     $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($Evidence))
     $bytes = (Get-ChildItem -LiteralPath $Evidence -Recurse -File | Measure-Object -Property Length -Sum).Sum
     # A sampled stop threshold, not an exact file-size cap. Save can add bytes.
-    if ($drive.AvailableFreeSpace -lt 2GB -or $bytes -gt 1GB) { throw 'Trace storage threshold reached; stopping the owned recorder.' }
+    if ($drive.AvailableFreeSpace -lt $MinFreeBytes -or $bytes -gt $MaxBytes) { throw 'Trace storage threshold reached; stopping the owned recorder.' }
 }

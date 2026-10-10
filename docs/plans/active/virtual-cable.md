@@ -1987,3 +1987,32 @@ events, zero rejected. WPR read-only status is idle. Next: paired two-second
 probe with Media Player/listener off; copy guest bundle before starting host
 PairProbe, then join from guest within two minutes. Review both traces and
 clock uncertainty before any audio phase. Driver/continuity gates stay open.
+
+Paired probe `02d977908cf14e5cbfd31f33eb5103ae` reviewed: both archive hashes
+match, host/guest traces decode with zero lost/rejected. Sixteen QPC clock
+brackets have a compatible 22.45631-ms offset interval. Guest UTC progresses
+3.8900716 s while guest QPC progresses 5.3119743 s between the two tightest
+round trips; UTC-only alignment is invalid. This is an observed clock anomaly,
+not proof of the audio-loss cause. Do not synchronize/change guest or host
+clocks/settings from it. ETW raw QPC is required for paired timing attribution.
+
+Next ordered work (VCAB-24/27 diagnostic): export normalized QPC bounds in
+future clock CSVs; extend the paired coordinator with explicit Tone phase,
+matching 30/300-second offers and read-only guest status before joining;
+retain VM identity guards and the existing native watchdog/zero-counter gate;
+save current guest run only, keep large host ETL separate from metadata ZIP;
+scale host free-space/stop thresholds for 300 seconds; check actual production
+callbacks and argument paths, prepare a separate copy-only update. Hand off
+30 seconds first with both recorders, then review clock quality/loss before
+300 seconds. No driver/audio binary or timer behavior changes. Rollback: use
+retained probe-only bundle; paired traces add overhead and are not qualification.
+
+Paired Tone implemented and reviewed: phase/duration matching, read-only
+status before join, unchanged zero-counter/native watchdog gate, normalized
+QPC bounds, failure-preserving after clocks/trace saves, current guest evidence
+only and separate host ETL. Host budgets: 16 GB initial/8 GB reserve/6 GB
+sampled stop. Windows PowerShell 5.1: 88 paired production-boundary checks
+and 128 fake recorder checks pass; evidence in packet-clock review. No real
+paired audio, build or setting change occurred. Next: commit/push, verify
+separate copy-only paired-tone bundle and hand off 30 seconds. Review before
+any longer run; remaining gates stay open.
