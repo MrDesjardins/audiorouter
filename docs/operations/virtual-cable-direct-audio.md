@@ -83,6 +83,93 @@ The helper refuses the host before enumeration and has fixed native/control/
 parent deadlines. Rollback: stop reference playback; the wrapper stops only
 its owned recorder. All previous bundles and driver binaries remain unchanged.
 
+### Prepared next step: VirtualBox playback backend comparison
+
+The installed version is **7.2.20r175154**. Its official source confirms that
+selecting DirectSound alone can silently select Windows Audio instead. A
+VM-specific override is needed for a real comparison. Verified against the
+[Oracle source archive and checksums](https://download.virtualbox.org/virtualbox/7.2.20/),
+`ConsoleImplConfigCommon.cpp:3755–3787` and
+`VBoxManageModifyVM.cpp:2783–2806`. Source archive SHA-256:
+`5c2138213b72f36c129b92c2c267f2a40e9c98513f4c86a584327f09f9be706d`.
+
+This compares two VirtualBox playback implementations. It keeps HDA, the
+guest driver/formats and the host output unchanged. DirectSound still uses
+Windows audio services; a difference cannot prove the exact defective layer
+or resolve the separate bridge stalls. No driver or long test runs here.
+
+**Step 1 — inside the VM:** stop playback and use Windows **Start → Power →
+Shut down**. Wait until VirtualBox says **Powered Off**. Do not save state
+or restore a snapshot. Keep Listen off.
+
+**Step 2 — on the main PC**, in PowerShell under the same Windows user who
+opened VirtualBox, paste this complete block. It refuses running/saved VMs
+or changed baseline settings, and saves the original XML for reference.
+Never restore by copying XML over VirtualBox's live configuration.
+
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    $vbox = 'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe'
+    $machinePath = 'C:\VMs\AR-DriverTest\AR-DriverTest.vbox'
+    $info = & $vbox showvminfo 'AR-DriverTest' --machinereadable
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read VM state; nothing changed.' }
+    if ($info -notcontains 'VMState="poweroff"') { throw 'Shut down guest Windows normally first; nothing changed.' }
+    [xml]$machine = Get-Content -LiteralPath $machinePath -Raw
+    [xml]$globalConfig = Get-Content -LiteralPath "$env:USERPROFILE\.VirtualBox\VirtualBox.xml" -Raw
+    $audio = $machine.VirtualBox.Machine.Hardware.AudioAdapter
+    if ($machine.VirtualBox.Machine.name -ne 'AR-DriverTest' -or $audio.useDefault -ne 'true' -or $audio.driver -ne 'WAS') {
+        throw 'Audio baseline differs; stop and send the output. Nothing changed.'
+    }
+    $selector = "//*[local-name()='ExtraDataItem' and @name='VBoxInternal2/Audio/WindowsDrv']"
+    if ($machine.SelectNodes($selector).Count -ne 0 -or $globalConfig.SelectNodes($selector).Count -ne 0) {
+        throw 'An audio override already exists; nothing changed.'
+    }
+    $backup = 'C:\VMs\ar-share\vbox-audio-before-' + [Guid]::NewGuid().ToString('N') + '.xml'
+    Copy-Item -LiteralPath $machinePath -Destination $backup
+    Write-Host "Original configuration saved: $backup"
+    & $vbox setextradata 'AR-DriverTest' 'VBoxInternal2/Audio/WindowsDrv' 'dsound'
+    if ($LASTEXITCODE -ne 0) { throw 'Override command failed; stop and send the output.' }
+    & $vbox modifyvm 'AR-DriverTest' --audio-driver dsound
+    if ($LASTEXITCODE -ne 0) {
+        & $vbox setextradata 'AR-DriverTest' 'VBoxInternal2/Audio/WindowsDrv'
+        if ($LASTEXITCODE -ne 0) { throw 'Backend and cleanup commands failed; keep VM off and send the output.' }
+        throw 'Backend command failed; override removed. Keep VM off and send the output.'
+    }
+    Write-Host 'DirectSound comparison configured. Start the VM normally and send this output before playing audio.'
+}
+```
+
+**Step 3 — start the VM normally**, then send Step 2's output. The agent
+checks the current startup log for `DSoundAudio` before giving the playback
+command. Do not rerun the speaker capture or a cable tone yet. An unreadable
+log or wrong backend blocks the comparison, not independent offline work.
+
+**Rollback — main PC, only with the VM Powered Off:**
+
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    $vbox = 'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe'
+    $info = & $vbox showvminfo 'AR-DriverTest' --machinereadable
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read VM state; nothing changed.' }
+    if ($info -notcontains 'VMState="poweroff"') { throw 'Shut down guest Windows normally first.' }
+    & $vbox modifyvm 'AR-DriverTest' --audio-driver default
+    if ($LASTEXITCODE -ne 0) { throw 'Backend restore failed; keep VM off and send the output.' }
+    & $vbox setextradata 'AR-DriverTest' 'VBoxInternal2/Audio/WindowsDrv'
+    if ($LASTEXITCODE -ne 0) { throw 'Override removal failed; keep VM off and send the output.' }
+    [xml]$machine = Get-Content -LiteralPath 'C:\VMs\AR-DriverTest\AR-DriverTest.vbox' -Raw
+    if ($machine.VirtualBox.Machine.Hardware.AudioAdapter.useDefault -ne 'true' -or
+        $machine.SelectNodes("//*[local-name()='ExtraDataItem' and @name='VBoxInternal2/Audio/WindowsDrv']").Count -ne 0) {
+        throw 'Rollback verification failed; keep VM off and send the output.'
+    }
+    Write-Host 'Original default Windows Audio selection restored. Start the VM normally.'
+}
+```
+
+Preparation is source/XML/log review and offline PowerShell parsing only.
+The agent has not applied these commands or tested DirectSound playback.
+
 ### Completed comparison inside the VM: disable the concurrent listener
 
 1. Stop Media Player playback and leave all tone scripts stopped.

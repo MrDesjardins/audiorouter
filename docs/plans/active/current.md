@@ -119,8 +119,13 @@ position gaps/flags are retained, not silently waived. No whole-recording
 or driver pass is claimed. Next is read-only VirtualBox playback/backend
 review before preparing a reversible comparison, as documented in the
 [direct audio runbook](../../operations/virtual-cable-direct-audio.md#current-next-step-supported-format-speaker-reference).
-No new driver/audio run or settings change is requested. Preserve WSL and
-the separate measured scheduling/loss failures.
+Installed-version source review now confirms a VM-specific DirectSound
+comparison requires both backend selection and an override to avoid silent
+WAS substitution. The powered-off guard, saved baseline, startup-log check
+and exact rollback are prepared in the runbook. Next: user shuts down the
+VM normally, then applies the reviewed host block and boots; inspect the new
+backend log before any audio. No change has been applied by the agent.
+Preserve WSL and the separate measured scheduling/loss failures.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).
 See the

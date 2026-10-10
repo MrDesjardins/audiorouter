@@ -479,3 +479,51 @@ Rollback: documentation only; all bundles and installed driver are unchanged.
 Review verification: `node tools/docs/validate.mjs` passes 141 Markdown files
 and 775 local links; `git diff --check` passes. Code tests/builds are not
 rerun for this documentation-only change.
+
+## Installed VirtualBox backend selection reviewed (2026-10-09)
+
+Installed `VBoxManage --version`: `7.2.20r175154`, exit 0. Its COM-dependent
+help/state queries still fail with E_ACCESSDENIED in the agent environment;
+no failed query is treated as state confirmation. Read-only current machine
+XML: HDA, `useDefault=true`, stored driver WAS, input/output enabled.
+Machine/global XML have no `VBoxInternal2/Audio/WindowsDrv` override.
+Existing startup log names HostAudioWas.
+
+Downloaded the exact official
+[VirtualBox 7.2.20 source](https://download.virtualbox.org/virtualbox/7.2.20/VirtualBox-7.2.20.tar.bz2)
+for offline inspection. SHA-256 matches
+[Oracle's checksums](https://download.virtualbox.org/virtualbox/7.2.20/SHA256SUMS):
+`5c2138213b72f36c129b92c2c267f2a40e9c98513f4c86a584327f09f9be706d`.
+Read only four named regular files into checked workspace target paths;
+no archive code was built or executed. Offline scratch:
+`target\vbox-playback-review-20261009`.
+
+`ConsoleImplConfigCommon.cpp:3755–3787`: DirectSound selection normally
+falls through to HostAudioWas on this Windows platform. Machine override
+`VBoxInternal2/Audio/WindowsDrv=dsound` prevents that substitution when
+DirectSound is selected, yielding DSoundAudio. Setting only the override
+while leaving default/WAS selected would not switch the implementation.
+`VBoxManageModifyVM.cpp:2783–2806` confirms `--audio-driver dsound` and
+`--audio-driver default`. The DirectSound implementation is present in the
+source archive; its actual startup must still be verified in the new VM log.
+
+Prepared one comparison, with exact host/guest steps and rollback in the
+[direct audio runbook](../../../operations/virtual-cable-direct-audio.md#prepared-next-step-virtualbox-playback-backend-comparison).
+Host block checks powered-off state, expected baseline and absent overrides,
+saves original XML, changes only the VM backend and override, and handles
+second-command failure by removing the override. User boots normally, then
+agent reads current log before any bounded reference playback/capture.
+Rollback restores default selection and removes the machine override with
+VM off. No raw XML restore, global override, controller/format/driver, host
+default endpoint, WSL/Hyper-V or security change.
+
+Verification: all seven PowerShell blocks in the runbook parse without syntax
+errors through `System.Management.Automation.Language.Parser`; none was
+executed. Baseline XML attribute access was checked read-only.
+`node tools/docs/validate.mjs`: 141 Markdown files / 777 local links pass.
+`git diff --check` passes. No code build/test or DirectSound audio run.
+
+This is a playback-path hypothesis comparison, not a proven fix or driver
+qualification. DirectSound still uses Windows audio services. All measured
+bridge-loss/phase-break/sustained-continuity failures remain open. Next:
+user shuts down guest Windows normally before the guarded host block.

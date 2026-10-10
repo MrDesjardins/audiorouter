@@ -2298,3 +2298,36 @@ with original settings and rollback recorded before a user run. The initial
 and logs have been read successfully. No configuration change was attempted.
 Leave Listen off; do not request another driver/long/stall run now. Preserve
 WSL/Hyper-V and host settings. Rollback for this review is documentation only.
+
+### Prepared playback backend comparison (2026-10-09)
+
+Read-only review is complete. Official VirtualBox 7.2.20 source archive
+matches Oracle's SHA-256 `5c2138213b72f36c129b92c2c267f2a40e9c98513f4c86a584327f09f9be706d`.
+`ConsoleImplConfigCommon.cpp:3755–3787` selects HostAudioWas even for
+DirectSound on modern Windows unless the `VBoxInternal2/Audio/WindowsDrv`
+override prevents that substitution. `VBoxManageModifyVM.cpp:2783–2806`
+confirms `--audio-driver dsound` and `default` syntax. Installed binary reports
+7.2.20r175154. Current machine XML uses HDA, default driver/WAS, input/output
+enabled; machine/global XML have no audio override. Current log confirms
+HostAudioWas. COM-dependent agent queries still fail; version query succeeds.
+Source files were read only, not built or executed.
+
+Objective (VCAB-12/20/24/29, VDEV-12): compare the same independent reference
+through VirtualBox's DirectSound implementation, keeping the guest HDA,
+formats, driver and host output unchanged. This tests a playback hypothesis,
+not driver qualification. DirectSound still uses Windows audio services;
+success would implicate differences between VirtualBox backend paths, not
+prove a Windows/Focusrite/driver cause or cure the independent bridge loss.
+
+Ordered tasks: user shuts down guest Windows normally (no saved state or
+snapshot restore); guarded host block checks powered-off state and expected
+current XML, saves its configuration and sets only this VM's backend plus
+override. On failure after the override, remove it; retain saved settings.
+User boots normally; agent verifies current log selects DSoundAudio before
+requesting a bounded replay/capture. Keep Listen off and no cable tests.
+Record subjective crackles and raw waveform metadata; preserve failed gates.
+Rollback, with VM off: restore driver `default` and remove the machine
+override. Original default/WAS state is checked before and after. No global
+override, host endpoint, WSL/Hyper-V, security, power or controller change.
+Exact commands and source links are in the
+[backend comparison runbook](../../operations/virtual-cable-direct-audio.md#prepared-next-step-virtualbox-playback-backend-comparison).
