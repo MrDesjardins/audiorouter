@@ -9,7 +9,22 @@ shared pause need separate investigation. See the
 [waveform review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#direct-r2-recordings-and-reporting-repair-2026-10-09).
 The procedure below is retained for reproducibility, not a new retry request.
 
-## Current next step: supported-format speaker reference
+## Current action: stop playback and restore the baseline
+
+The DirectSound comparison is complete. With the recorder stopped, the user
+still hears variable scratching: some plays have about six to eight scratches,
+with more scratching as playback continues. This supersedes the provisional
+capture-only explanation. DirectSound has not provided reliably clean playback.
+Stop reference playback and hold all recorder, bridge and longer tests.
+
+Shut down guest Windows normally, then use the guarded **Rollback** block below
+on the main PC. Do not restore a snapshot or change speaker formats. WSL and
+host settings remain unchanged. The rollback is prepared, not yet performed.
+Next engineering task: review virtual audio clock recovery against the saved
+timing evidence before preparing another candidate. See the
+[capture-off and clock review](../plans/active/evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
+
+## Completed supported-format speaker reference
 
 **Result received:** all three sections have continuous static. The independently
 synthesized file matches the supported speaker format and contains the intended
@@ -83,7 +98,7 @@ The helper refuses the host before enumeration and has fixed native/control/
 parent deadlines. Rollback: stop reference playback; the wrapper stops only
 its owned recorder. All previous bundles and driver binaries remain unchanged.
 
-### Prepared next step: VirtualBox playback backend comparison
+### Completed VirtualBox playback backend comparison
 
 The installed version is **7.2.20r175154**. Its official source confirms that
 selecting DirectSound alone can silently select Windows Audio instead. A
@@ -198,6 +213,12 @@ recording unchanged. Full evidence is in the
 
 **Step 5 — one playback with the recorder stopped, inside the VM:**
 
+**Completed; do not repeat.** The user reports variable scratching with the
+recorder stopped, sometimes about six to eight scratches and increasing noise
+as playback continues. This is a subjective observation without a new capture;
+it does not measure drift or identify a defective function. The earlier clean
+tail was not a stable result. Use the powered-off rollback below.
+
 1. Stop current playback. Keep Cable B Listen off, Media Player routed to
    Speakers, prior formats/volume and DirectSound selection unchanged.
 2. Turn Media Player's **Repeat off**. The reference should end after
@@ -248,8 +269,10 @@ recording unchanged. Full evidence is in the
 }
 ```
 
-Preparation is source/XML/log review and offline PowerShell parsing only.
-The agent has not applied these commands or tested DirectSound playback.
+The user applied the comparison and performed the playback/capture steps.
+The agent reviewed source, XML, logs and saved samples; it opened no host audio
+endpoint. Restoring the baseline ends this unsuccessful comparison, without
+claiming that the original backend is clean or that the driver has qualified.
 
 ### Completed comparison inside the VM: disable the concurrent listener
 

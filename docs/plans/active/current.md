@@ -118,7 +118,7 @@ capture boundary; the exact downstream component is unproved. The final
 position gaps/flags are retained, not silently waived. No whole-recording
 or driver pass is claimed. Next is read-only VirtualBox playback/backend
 review before preparing a reversible comparison, as documented in the
-[direct audio runbook](../../operations/virtual-cable-direct-audio.md#current-next-step-supported-format-speaker-reference).
+[direct audio runbook](../../operations/virtual-cable-direct-audio.md#completed-supported-format-speaker-reference).
 Installed-version source review now confirms a VM-specific DirectSound
 comparison requires both backend selection and an override to avoid silent
 WAS substitution. The powered-off guard, saved baseline, startup-log check
@@ -127,11 +127,20 @@ host block and booted normally. Fresh startup log confirms DSoundAudio.
 The guest recorder now stops at 25.111494 s after receiving 34.996825 nominal
 seconds of samples and reaching its storage limit. Its first 16.990023 s of
 samples remain exactly equal to the reference. User reports quiet separators,
-scratching during capture and clean sound after capture ends. Next: one
-17-second DirectSound reference playback with the recorder stopped, to
-confirm every section in that condition. Hold further recorder/bridge runs;
-sample/timing discrepancy and capture interaction need review. No change has
-been applied by the agent.
+scratching during capture and clean sound after capture ends. The subsequent
+capture-off playback also scratches variably, sometimes six to eight times,
+with more scratching as playback continues. This supersedes the provisional
+capture-only explanation; DirectSound is not a demonstrated improvement.
+The current boot log also reports a 248.755-second virtual-clock catch-up
+failure and a 249-second guest heartbeat gap. Installed-version source shows
+HDA uses the synchronous virtual clock, whose recovery can accelerate DMA.
+This is a concrete timing hypothesis, not aligned proof of the audible cause.
+Host power-event inspection was denied; no sleep or host cause is established.
+Next: stop playback, restore the original default backend with the guarded
+powered-off rollback, and review clock recovery against saved timing data.
+Hold further recorder/bridge runs. No driver or host setting is changed by
+the agent, and rollback has not yet been performed. See the
+[clock review](evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
 Preserve WSL and the separate measured scheduling/loss failures.
 Commands are in
 [Administrator PowerShell](../../operations/virtual-cable-paired-trace.md).

@@ -2330,7 +2330,7 @@ Rollback, with VM off: restore driver `default` and remove the machine
 override. Original default/WAS state is checked before and after. No global
 override, host endpoint, WSL/Hyper-V, security, power or controller change.
 Exact commands and source links are in the
-[backend comparison runbook](../../operations/virtual-cable-direct-audio.md#prepared-next-step-virtualbox-playback-backend-comparison).
+[backend comparison runbook](../../operations/virtual-cable-direct-audio.md#completed-virtualbox-playback-backend-comparison).
 
 User applied the guarded host block successfully. Original configuration:
 `C:\VMs\ar-share\vbox-audio-before-336a68538bfa437aa8167432a0de8729.xml`.
@@ -2373,3 +2373,28 @@ covers the full capture-off condition once; send audible section results.
 No recording/collect, longer run or driver test. Review timing/source paths
 before any further recorder variant. Exact block is Step 5 in the runbook.
 Rollback remains the powered-off default-backend restoration above.
+
+### Capture-off playback still scratches; review clock recovery (2026-10-10)
+
+User reports scratching with the recorder stopped, variably about six to eight
+events on some plays, with more scratching as playback continues. This
+supersedes the provisional capture-only interpretation and the pending
+comparison above. DirectSound has not produced reliably clean playback.
+The subjective count is not a drift measurement; no new capture exists.
+
+Current boot log reports a 248.755-second virtual-clock catch-up failure and
+249-second guest heartbeat gap. Verified installed-version source shows HDA
+timers use the synchronous virtual clock and that recovery can accelerate
+guest DMA. Both audio backends share that path. This provides a supported
+timing hypothesis; event overlap and the actual catch-up percentage are not
+established. Host power-event queries were denied; do not infer sleep or blame
+Hyper-V/WSL. Details and source/log hashes are in the
+[clock review](evidence/2026-10-09-m03-direct-audio-preparation.md#directsound-playback-with-capture-off-and-clock-review-2026-10-10).
+
+Next ordered work: stop playback, restore the default backend with the
+powered-off rollback, then review clock recovery against retained paired
+timing evidence before proposing a candidate. Rollback is not yet performed.
+No additional playback/recorder/bridge/long test is requested. No owning
+AudioRouter defect was proved by this inspection, so no speculative driver
+patch, buffer increase, timer/security/WSL change or waived gate. Requirements
+VCAB-12/20/24/29 and VDEV-12 retain their failed/unverified evidence.

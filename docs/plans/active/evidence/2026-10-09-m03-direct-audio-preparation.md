@@ -508,7 +508,7 @@ while leaving default/WAS selected would not switch the implementation.
 source archive; its actual startup must still be verified in the new VM log.
 
 Prepared one comparison, with exact host/guest steps and rollback in the
-[direct audio runbook](../../../operations/virtual-cable-direct-audio.md#prepared-next-step-virtualbox-playback-backend-comparison).
+[direct audio runbook](../../../operations/virtual-cable-direct-audio.md#completed-virtualbox-playback-backend-comparison).
 Host block checks powered-off state, expected baseline and absent overrides,
 saves original XML, changes only the VM backend and override, and handles
 second-command failure by removing the override. User boots normally, then
@@ -596,3 +596,69 @@ Rollback is the documented powered-off default-backend restoration.
 Documentation verification: all 10 PowerShell blocks parse without execution;
 141 Markdown files / 778 local links and `git diff --check` pass. No code
 build/test or native audio operation was run by the agent for this review.
+
+## DirectSound playback with capture off and clock review (2026-10-10)
+
+User completed playback with the recorder stopped and reports inconsistent
+scratching, about six to eight scratches on some plays, with more scratching
+as playback continues. No new recording accompanies this report. Supersede
+the provisional capture-only explanation above: the clean post-capture tail
+did not establish stable playback. Both tested backends reproduce audible
+problems; DirectSound is not a proven improvement. Increasing noise by ear
+does not measure clock drift or establish a code defect.
+
+Read-only review of the current DirectSound boot log finds:
+
+- At log elapsed `00:02:49.080835`, a 59-second guest heartbeat gap.
+- At `00:10:59.758904`, virtual-clock catch-up gives up with
+  `248 755 386 920 ns` lag; the next line reports a 249-second heartbeat gap.
+- No aligned playback marker or audible-event timestamp exists for this
+  listening comparison. These events cannot be assigned to individual
+  scratches. They do not prove that either the guest or host slept.
+
+The reviewed log was preserved in ignored workspace storage at
+`target/vbox-playback-review-20261009/VBox-DirectSound-observation.log`,
+SHA-256 `BA0D2364FF417D00C7CAB551C3990CD2452A9895A159F45DA9A7D23CF30EF45C`.
+Host System power-event queries for this boot interval fail with
+`Attempted to perform an unauthorized operation`; no power-state conclusion
+is drawn from the unavailable events.
+
+Further read-only inspection uses the previously checksummed official
+[VirtualBox 7.2.20 source archive](https://download.virtualbox.org/virtualbox/7.2.20/VirtualBox-7.2.20.tar.bz2).
+Only named regular source files were copied into ignored workspace storage;
+no VirtualBox code was compiled or executed:
+
+| File | SHA-256 |
+| --- | --- |
+| DevHda.cpp | `7e74ee9ff6678e971806e283d1fbf3409c756256602a2e7dd3bf20fcf9f4cc12` |
+| DevHdaStream.cpp | `5348daa69bf24c8b0ae463f385ce2eda80a7b4c220242688e33d0e832babf34e` |
+| TMAllVirtual.cpp | `3209ff31f2612aa1aa2e95c2aedc9a7f13cd5adc2d48d808c249d467d35d3f7d` |
+| DrvAudio.cpp | `8c16e256421f54ce5740c1ed74a6c97d6f5e761e9004894fef684eea8cef3562` |
+| AudioMixer.cpp | `4a0a9caf3a44e23b6dc1d0137c159fbbcab75949c15d9400a87bf26faebbdb95` |
+
+`DevHda.cpp:5149–5164` creates HDA timers on `TMCLOCK_VIRTUAL_SYNC`.
+`TMAllVirtual.cpp:440–469` reduces that clock's offset during catch-up.
+`DrvAudio.cpp:1212–1215` explicitly accounts for guest DMA delays and
+subsequent acceleration during clock recovery. Both audio backends share
+this device/clock path. `AudioMixer.cpp:53–65` describes guest/host pacing
+independence; `DrvHostAudioDSound.cpp:2091–2096` can reposition its software
+write cursor without a normal release-log warning. Absence of an underrun
+message in VBox.log therefore cannot qualify playback.
+
+Inference: virtual-device clock recovery is a supported candidate for the
+sample/elapsed-time disagreement and uneven playback. The active catch-up
+percentage and its overlap with the recording/listening intervals are not
+recorded, so attribution remains open. No justified AudioRouter driver patch
+has been identified by this source review. Do not modify VM timer settings,
+disable Hyper-V/WSL, increase buffers/storage or relax acceptance criteria.
+
+Decision and next action: end the unsuccessful DirectSound comparison. Stop
+playback; user shuts down guest Windows normally and uses the existing guarded
+default-backend rollback. Rollback is not yet performed. Review clock recovery
+against saved paired timing data before another candidate/test. VCAB-12/20/24/29
+and VDEV-12 measured loss, phase breaks and qualification gates remain open.
+
+Verification for this documentation-only update: `node tools/docs/validate.mjs`
+passes (141 Markdown files / 781 local links); all 10 runbook PowerShell blocks
+parse without execution; `git diff --check` passes. No code build, new audio
+test, driver installation or VM setting change was performed by the agent.
