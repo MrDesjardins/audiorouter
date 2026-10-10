@@ -1655,6 +1655,23 @@ guest tone evidence is `20261009-174917-tone/tone.txt` in the archive.
 
 Next: do not repeat the unchanged long test. Review VM/host scheduling and
 diagnostic instrumentation, preserving WSL and leaving Hyper-V settings
-untouched. The continuity gate remains failed; do not claim sustained runtime
-qualification or install the test driver on the host. Preserve the clean VM
-snapshot and unchanged driver package.
+untouched. Source review of this trace found no proven driver defect:
+`WriteBytes`' capture-side queue holds at most two 480-frame blocks (20 ms at
+48 kHz), while `ReadBytes`' render-side queue is capped at four blocks (40 ms
+at 48 kHz); the shared bridge slot adds at most one block. A worker scheduling
+gap of 163 ms is therefore far outside available buffering. Absorbing it
+would require buffer headroom on the order of 160 ms or more and introduce
+comparable transient latency, conflicting with VCAB-25's 20 ms low-latency
+target, while masking a stalled VM rather than repairing a demonstrated
+product bug. The tone recorder's 64 preallocated
+10-ms packets provide 640 ms of disk backpressure, and its maximum WAV append
+time was 56.2 ms; the writer did not run out of packets. It read 29,960 blocks
+(14,380,800 frames) versus 30,000 expected for 300 seconds, a 40-block / 400-ms
+shortfall. That closely matches the 19,152-frame / 399-ms render overrun
+counter, confirming actual audio loss rather than a counter-only failure.
+No code change is justified from this evidence alone. Next: obtain ETW CPU,
+context-switch, DPC/ISR and VirtualBox scheduling traces during a bounded run,
+or qualify on a host where VirtualBox uses native hardware virtualization.
+Keep the continuity gate failed; do not claim sustained runtime qualification
+or install the test driver on the host. Preserve the clean VM snapshot and
+unchanged driver package.

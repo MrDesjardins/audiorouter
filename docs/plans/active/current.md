@@ -62,7 +62,14 @@ overrun frames / 399 ms; maximum pump gaps about 163 ms). The user confirms
 the VM did not sleep and no screen saver ran. This rules out those proposed
 causes, but does not identify why the VM was intermittently descheduled. Keep
 the continuity gate failed; review the run evidence and scheduling diagnostics
-before any further long run. No test driver has been installed on the host.
+before any further long run. Source review confirms the counters track actual
+loss: the recorded WAV is short by 40 ten-millisecond blocks, closely matching
+the render-overrun total. The driver's bounded queues provide only tens of
+milliseconds of headroom; absorbing a 163 ms pause would require comparable
+buffer headroom and transient latency, conflicting with the virtual-cable
+latency target. No safe code fix is established by this run. Next: capture
+scheduling evidence (ETW) or qualify on a host where VirtualBox uses native
+hardware virtualization. No test driver has been installed on the host.
 
 AudioRouter will ship its own signed virtual cable so users do not need
 VB-Cable; VB-Cable/Voicemeeter stay supported. Lowest-cost signing
