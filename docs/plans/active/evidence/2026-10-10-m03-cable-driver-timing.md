@@ -876,6 +876,16 @@ waived: the gate stays open, and the one-hour r18 run remains a VM
 deviation diagnostic. Work continues on everything that does not need that
 environment.
 
+**Decision (user, 2026-10-11): skip it and move on.** The user directed
+the work to continue past VCAB-24/25 continuity qualification. This
+documents the deviation; it does not waive the gate. VCAB-24/25 stay **not
+qualified** (the r18 hour and r20 10-minute runs are VM deviation
+diagnostics only). The virtual cable must not be described as continuity-
+or latency-qualified, and WP-12/WP-14 still require that evidence before
+any release of the cable. Next in the single-PC path: the approved latency
+recovery (spec 17 §5.4), starting with locating where the standing delay
+is held.
+
 ## Repair r20 — lock the notification list (2026-10-11)
 
 Defect (pre-existing, found in the r18 review): `RegisterNotificationEvent`

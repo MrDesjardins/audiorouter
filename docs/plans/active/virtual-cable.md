@@ -326,6 +326,36 @@ deltas, then locate the standing delay using the r11 raw data/counters before
 designing latency recovery (spec 17). Do not repeat the unchanged hour-long
 run or infer a root cause from the VM-wide classifier alone.
 
+**Step 4 — latency recovery: locate the standing delay (2026-10-11).**
+The user skipped VCAB-24/25 qualification (deviation recorded in the
+[driver timing evidence](evidence/2026-10-10-m03-cable-driver-timing.md#native-timer-qualification-unavailable-2026-10-11-user);
+not waived). Host analysis of the r18 hour (A→B), with the probe's
+in-run-median dating replicated per impulse
+(`python -I -B tools/vm/review-latency-steps.py <extracted continuity run dir>
+A-to-B`): latency starts at 38.5 ms and rises in about 10 ms
+(one 480-frame block) steps to 50, 65 and up to 71 ms, and returns only
+partly (ends at 59.7 ms). Most steps coincide with disturbances (render
+underrun/overrun, capture underrun, late writes, 25–120 ms gaps). Some
+(t = 30 s, 540 s) have no counter change. The counters cannot say which
+stage holds the extra blocks.
+
+Ordered tasks:
+1. User runs one guest block: `run-cable-latency-starts.ps1 -Route engine
+   -TraceRoute -PeriodMode default -Starts 10 -Impulses 1000` from the r20
+   bundle (no new build; trace ≤60 s, 480-frame stereo).
+2. Host: for every sustained step (> 4 ms), split the delay per impulse
+   into emission → route input (render stage observation), route input →
+   sink publication, and publication → probe arrival. This needs the
+   r13 stage join (`target/r13-stage-review/inspect.py` method) plus
+   render-clock dating. The stage whose interval grows owns the standing
+   delay.
+3. Then design the bounded drop in that layer (spec 17 latency recovery),
+   with host timing-model tests first (validated lesson 2026-10-10: model
+   OS timing before a VM run).
+Validation: the step must be attributed in at least one traced start;
+otherwise rerun with more starts, not a different repair. Rollback:
+analysis only; no driver/route change until task 3 is reviewed.
+
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
 supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
