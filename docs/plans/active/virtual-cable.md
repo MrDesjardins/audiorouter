@@ -440,6 +440,17 @@ real step (write → arrival) returns to its starting level within about
 one window, with `trimmed=` equal to the extra silence inserts, 0
 corrupted, and no step in write → arrival without a matching trim.
 
+r21 bundle ready: source `73c9090a`, `target/r21-driver-73c9090a`
+(0.1.4.0 test-signed, timing diagnostics compiled in, clean tree; same
+driver source as r20, so the guest's installed 0.1.4.0 is not reinstalled;
+33 package checks pass), SYS SHA-256
+`F9CD1F381725AB452EC2D0931325FF892BF9791C93BB713F26CF10D655740050`. Bundle
+`C:\VMsr-share\diagnostics-20261011-latency-trim-r21`, MANIFEST
+SHA-256 `D964632B6DED1F8D5EEF48F5616840C55175E51DF393F048D7831E91A98FB497`,
+41/41 entries verified; its tone tool prints `trimmed=`. Guest command:
+`run-cable-latency-starts.ps1 -Route engine -TraceRoute -PeriodMode default
+-Starts 10 -Impulses 1000` from that bundle (copy from Z: first).
+
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
 supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
