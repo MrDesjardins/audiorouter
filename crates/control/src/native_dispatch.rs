@@ -631,6 +631,14 @@ impl ControlPlane {
         let generation = self.requested_or_next_generation(&params, &session_id)?;
         let session = audiorouter_engine::prune_inactive_upstream(self.get_session(&session_id)?)
             .into_owned();
+        // A cable-to-cable route needs no endpoint: its leases open at start.
+        // Any earlier cable preparation is replaced by this one.
+        if self.cable_route_session() == Some(&session_id) && !self.cable_route_running() {
+            self.cable_route_prepared = None;
+        }
+        if let Some(shape) = cable_route_shape(&session) {
+            return self.prepare_cable_route(&session_id, generation, &shape?);
+        }
         let endpoints =
             audiorouter_windows_audio::enumerate_active_endpoints().map_err(audio_control_error)?;
         let endpoint_for = |node: &audiorouter_domain::Node, direction| {

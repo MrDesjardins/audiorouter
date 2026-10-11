@@ -80,6 +80,10 @@ impl ControlPlane {
         {
             return "running";
         }
+        #[cfg(windows)]
+        if self.cable_route_running() {
+            return "running";
+        }
         if self.native_endpoint_worker.is_some() || self.native_endpoint_worker_secondary.is_some()
         {
             return "configured-stopped";
@@ -94,6 +98,10 @@ impl ControlPlane {
         }
         #[cfg(windows)]
         if self.native_multi_input_worker.is_some() {
+            return "configured-stopped";
+        }
+        #[cfg(windows)]
+        if self.cable_route_session().is_some() {
             return "configured-stopped";
         }
         "implemented-not-activated"
@@ -119,6 +127,10 @@ impl ControlPlane {
         if self.native_multi_input_worker.is_some() {
             return self.native_multi_input_worker_session.as_ref();
         }
+        #[cfg(windows)]
+        if let Some(session) = self.cable_route_session() {
+            return Some(session);
+        }
         None
     }
 
@@ -142,6 +154,14 @@ impl ControlPlane {
                 flags_only,
             )?;
             return Ok(Some(self.native_adapter_kind().unwrap_or("endpoint")));
+        }
+        // The cable route compiles its graph once at start; the edit is saved
+        // and applies at the next Play.
+        #[cfg(windows)]
+        if self.cable_route_running() && self.cable_route_session() == Some(session_id) {
+            return Err(ControlError::InvalidRequest(
+                "changes to a cable-to-cable route apply after Stop and Play".into(),
+            ));
         }
         #[cfg(windows)]
         if self.native_multi_input_worker_session.as_ref() == Some(session_id)
@@ -383,6 +403,10 @@ impl ControlPlane {
         if self.native_multi_input_worker.is_some() {
             return Some("multi-input");
         }
+        #[cfg(windows)]
+        if self.cable_route_session().is_some() {
+            return Some("cable-route");
+        }
         None
     }
 
@@ -410,6 +434,9 @@ impl ControlPlane {
                     Some("multi-input") => {
                         "native multi-input audio is running"
                     }
+                    Some("cable-route") => {
+                        "cable-to-cable audio is running"
+                    }
                     _ => "native endpoint audio is running",
                 },
             ),
@@ -427,6 +454,9 @@ impl ControlPlane {
                     }
                     Some("multi-input") => {
                         "native multi-input worker is prepared but stopped; start a session explicitly"
+                    }
+                    Some("cable-route") => {
+                        "the cable-to-cable route is prepared but stopped; start the session"
                     }
                     _ => "native endpoint worker is prepared but stopped; start a session explicitly",
                 },

@@ -1494,7 +1494,33 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                 "additionalProperties": false
             },
             "nativeAdapter": { "enum": ["implemented-not-activated", "configured-stopped", "running"] },
-            "nativeAdapterKind": { "enum": ["endpoint", "process-loopback", "duplex", "render-source", "multi-input", null] },
+            "nativeAdapterKind": { "enum": ["endpoint", "process-loopback", "duplex", "render-source", "multi-input", "cable-route", null] },
+            "cableRoute": {
+                "oneOf": [
+                    { "const": null },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                            "generation": { "type": "integer", "minimum": 0 },
+                            "renderBus": { "type": "string", "pattern": "^cable-[a-h]$" },
+                            "captureBus": { "type": "string", "pattern": "^cable-[a-h]$" },
+                            "state": { "enum": ["running", "stopped", "failed"] },
+                            "failure": { "type": ["string", "null"] },
+                            "renderBlocks": { "type": "integer", "minimum": 0 },
+                            "renderSequenceGaps": { "type": "integer", "minimum": 0 },
+                            "captureBlocks": { "type": "integer", "minimum": 0 },
+                            "forwarded": { "type": "integer", "minimum": 0 },
+                            "silence": { "type": "integer", "minimum": 0 },
+                            "dropped": { "type": "integer", "minimum": 0 },
+                            "trimmed": { "type": "integer", "minimum": 0 },
+                            "engineSilentQuanta": { "type": "integer", "minimum": 0 }
+                        },
+                        "required": ["sessionId", "generation", "renderBus", "captureBus", "state", "failure", "renderBlocks", "renderSequenceGaps", "captureBlocks", "forwarded", "silence", "dropped", "trimmed", "engineSilentQuanta"],
+                        "additionalProperties": false
+                    }
+                ]
+            },
             "applicationCaptureStates": {
                 "type": "array",
                 "maxItems": audiorouter_engine::MAX_MIXER_INPUTS,

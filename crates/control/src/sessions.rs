@@ -178,6 +178,8 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        #[cfg(windows)]
+        let _ = self.stop_cable_route(id);
         self.deactivate_virtual_route_bridges(id);
         // A stopped worker is part of the deleted session's transient
         // ownership, not durable session state. Retain it through the
@@ -358,7 +360,8 @@ impl ControlPlane {
                 || native_multi_input_attached
                 || native_duplex_attached
                 || (self.native_render_source_worker_session.as_ref() == Some(id)
-                    && self.native_render_source_worker.is_some());
+                    && self.native_render_source_worker.is_some())
+                || self.cable_route_prepared_for(id);
         }
         if has_enabled_plugin && !native_graph_attached {
             return Err(ControlError::InvalidRequest(
@@ -434,6 +437,18 @@ impl ControlPlane {
                 self.deactivate_virtual_route_bridges(id);
                 self.native_endpoint_taps = None;
                 self.native_render_source_taps = None;
+                return Err(error);
+            }
+        }
+
+        // A cable-to-cable route opens its two leases now; a failure leaves
+        // nothing open and the session stopped.
+        #[cfg(windows)]
+        if self.cable_route_prepared_for(id) {
+            if let Err(error) = self.start_cable_route(id, &session, generation) {
+                if let Some(runtime) = self.runtimes.get_mut(id) {
+                    runtime.stop();
+                }
                 return Err(error);
             }
         }
@@ -708,8 +723,9 @@ impl ControlPlane {
         let native_attached = self.native_endpoint_session_is_attached(id) || {
             #[cfg(windows)]
             {
-                self.native_multi_input_worker_session.as_ref() == Some(id)
-                    && self.native_multi_input_worker.is_some()
+                (self.native_multi_input_worker_session.as_ref() == Some(id)
+                    && self.native_multi_input_worker.is_some())
+                    || self.cable_route_session() == Some(id)
             }
             #[cfg(not(windows))]
             {
@@ -744,6 +760,8 @@ impl ControlPlane {
         } else {
             None
         };
+        #[cfg(windows)]
+        let cable_route_stop_error = self.stop_cable_route(id);
         self.deactivate_virtual_route_bridges(id);
         let revision = self.get_session(id)?.revision;
         if let Some(runtime) = self.runtimes.get_mut(id) {
@@ -814,6 +832,10 @@ impl ControlPlane {
             return Err(ControlError::InvalidRequest(format!(
                 "native multi-input worker stop failed: {error:?}"
             )));
+        }
+        #[cfg(windows)]
+        if let Some(error) = cable_route_stop_error {
+            return Err(error);
         }
         Ok(json!({
             "sessionId": id,

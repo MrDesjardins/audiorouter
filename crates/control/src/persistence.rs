@@ -339,6 +339,10 @@ impl ControlPlane {
             #[cfg(windows)]
             native_render_source_taps: None,
             #[cfg(windows)]
+            cable_route_prepared: None,
+            #[cfg(windows)]
+            cable_route: None,
+            #[cfg(windows)]
             managed_software_devices:
                 audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
         };

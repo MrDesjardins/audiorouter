@@ -55,13 +55,16 @@ function Test-Starts([string] $Case, [string] $Route) {
     $PeriodMode = if ($Case -eq 'low-only') { 'low-latency' } else { 'both' }
     $TraceRoute = $Case -like 'trace-*'
     $powershell = 'fake-powershell'; $probe = 'fake-probe'; $tone = 'fake-tone'
+    $cableSession = Join-Path $bundle 'm03_cable_session.exe'
+    if ($Case -ne 'product-missing-tool') { Set-Content -LiteralPath $cableSession -Value 'fake' }
     foreach ($assignment in $assignments) { . ([scriptblock]::Create($assignment.Extent.Text)) }
     $results = @(); $summary = @(); $failure = $null; $active = $null
     $script:started = @(); $script:probeCalls = @(); $script:killed = 0; $script:disposed = 0
     function Start-Sleep { param($Milliseconds) }
     function Start-Process {
         param($FilePath,$ArgumentList,$WindowStyle,[switch]$PassThru,$RedirectStandardOutput,$RedirectStandardError)
-        Assert ($FilePath -eq $tone -and $WindowStyle -eq 'Hidden') 'only the owned route tool is started, hidden'
+        $expectedTool = if ($Route -eq 'product') { $cableSession } else { $tone }
+        Assert ($FilePath -eq $expectedTool -and $WindowStyle -eq 'Hidden') 'only the owned route tool is started, hidden'
         $script:started += [string]$ArgumentList
         Assert (($ArgumentList -match '"--trace-route"') -eq $TraceRoute) 'route trace switch follows request'
         if ($TraceRoute -and $Case -ne 'trace-missing') {
@@ -69,7 +72,12 @@ function Test-Starts([string] $Case, [string] $Route) {
             Set-Content -LiteralPath $tracePath -Value "# observation QPC; missed=0`nstage,qpc_100ns`nrender,123"
         }
         $ready = $Case -ne 'early-exit'
+        if ($Route -eq 'product') {
+            Assert ($ArgumentList -match '^"--seconds" "\d+"$') 'product route gets only its bounded run time'
+            Set-Content -LiteralPath $RedirectStandardOutput -Value "prepared: {}`nstarted: {}`ncable route running: cable-a -> cable-b for 14 s`nfinal cableRoute={`"state`":`"running`",`"trimmed`":0}`nstopped: {}"
+        } else {
         Set-Content -LiteralPath $RedirectStandardOutput -Value $(if ($ready) { "driver: info`nrender worker polling before lease activation`ncapture-sink counters (cable-b): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source counters (cable-a): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source packet writes (cable-a): NativeBridgePacketCounters { accepted: 600, late: 0, overrun: 0 }`nengine route quanta: processed=2200 silent=0" } else { 'driver: info' })
+        }
         Set-Content -LiteralPath $RedirectStandardError -Value ''
         $fake = [pscustomobject]@{ Handle = 1; HasExited = (-not $ready); ExitCode = $(if ($ready) { 0 } else { 3 }) }
         $fake | Add-Member ScriptMethod WaitForExit { param($Milliseconds) if ($Case -eq 'tone-hang') { return $false }; $this.HasExited = $true; return $true }
@@ -118,7 +126,7 @@ function Test-Starts([string] $Case, [string] $Route) {
     $saved = Read-PairedTraceJson (Join-Path $evidence 'result.json')
     Assert ($saved.Qualification -eq $false -and $saved.Route -eq $Route) "$Case records its route and never claims qualification"
     switch ($Case) {
-        { $_ -in 'engine-pass', 'vbcable-pass', 'stall', 'trace-pass' } {
+        { $_ -in 'engine-pass', 'vbcable-pass', 'stall', 'trace-pass', 'product-pass' } {
             Assert (-not $failure) "$Case completes"
             Assert (($script:probeCalls -join ',') -eq 'default,low-latency,default,low-latency,default,low-latency') 'each start measures both period modes'
             Assert ($results.Count -eq 6 -and $summary.Count -eq 2) 'six measurements and two mode summaries'
@@ -133,6 +141,11 @@ function Test-Starts([string] $Case, [string] $Route) {
             Assert ($results[0].Engine -match 'silent=0' -and @($results[0].Counters).Count -eq 3) 'engine quanta and driver counters recorded'
             Assert ($saved.Scope -match 'AudioRouter engine') 'engine scope recorded'
         }
+        'product-pass' {
+            Assert ($script:started.Count -eq 6) 'a fresh product route for every measurement'
+            Assert ($results[0].CableRoute -match '^final cableRoute=' -and $saved.Scope -match 'control plane cable route') 'product counters and scope recorded'
+        }
+        'product-missing-tool' { Assert ([bool]$failure -and [string]$failure -match 'no m03_cable_session' -and $script:probeCalls.Count -eq 0) 'a bundle without the product tool starts no audio' }
         'vbcable-pass' {
             Assert ($script:started.Count -eq 0) 'VB-Cable needs no AudioRouter process'
             Assert ($saved.Scope -match 'VB-Cable' -and $saved.Scope -match 'no route') 'VB-Cable scope recorded'
@@ -160,6 +173,8 @@ Test-Starts 'trace-pass' 'engine'
 Test-Starts 'trace-missing' 'engine'
 Test-Starts 'trace-capture-missing' 'engine'
 Test-Starts 'trace-capture-overflow' 'engine'
+Test-Starts 'product-pass' 'product'
+Test-Starts 'product-missing-tool' 'product'
 Test-Starts 'vbcable-pass' 'vbcable'
 Test-Starts 'stall' 'vbcable'
 Test-Starts 'vbcable-missing' 'vbcable'

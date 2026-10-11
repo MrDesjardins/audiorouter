@@ -755,7 +755,24 @@ export interface DiagnosticsSnapshot {
   storage: "memory" | "sqlite";
   audio: { state: "available" | "unavailable"; reason: string };
   nativeAdapter: "implemented-not-activated" | "configured-stopped" | "running";
-  nativeAdapterKind: "endpoint" | "process-loopback" | "duplex" | "render-source" | "multi-input" | null;
+  nativeAdapterKind: "endpoint" | "process-loopback" | "duplex" | "render-source" | "multi-input" | "cable-route" | null;
+  /** Cable-to-cable route counters (spec 17 §7.3); absent from older backends. */
+  cableRoute?: {
+    sessionId: EntityId;
+    generation: number;
+    renderBus: string;
+    captureBus: string;
+    state: "running" | "stopped" | "failed";
+    failure: string | null;
+    renderBlocks: number;
+    renderSequenceGaps: number;
+    captureBlocks: number;
+    forwarded: number;
+    silence: number;
+    dropped: number;
+    trimmed: number;
+    engineSilentQuanta: number;
+  } | null;
   nativeSessionId: EntityId | null;
   schedulerTelemetry: {
     activeGeneration: number | null;

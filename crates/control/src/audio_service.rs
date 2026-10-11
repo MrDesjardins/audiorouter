@@ -132,6 +132,9 @@ impl ControlPlane {
                 let _ = self.pump_native_render_source_worker(&session, generation, budget);
                 serviced += 1;
             }
+            if self.service_cable_route(now) {
+                serviced += 1;
+            }
         }
         #[cfg(not(windows))]
         let _ = running;

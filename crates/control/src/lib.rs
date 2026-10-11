@@ -51,6 +51,7 @@ mod api_schema;
 mod audio_media;
 mod audio_service;
 mod authorization;
+mod cable_routes;
 mod catalog;
 mod graph;
 mod native_application;
@@ -76,6 +77,7 @@ pub use api_schema::*;
 use audio_media::*;
 pub use audio_service::*;
 pub use authorization::*;
+use cable_routes::*;
 use catalog::*;
 use graph::*;
 pub use native_application::*;
@@ -394,6 +396,11 @@ pub struct ControlPlane {
     native_render_source_worker_generation: Option<u64>,
     #[cfg(windows)]
     native_render_source_taps: Option<AudioTapSet>,
+    /// Cable-only route recorded by `nativePaths.prepare` (session, generation).
+    #[cfg(windows)]
+    cable_route_prepared: Option<(EntityId, u64)>,
+    #[cfg(windows)]
+    cable_route: Option<cable_routes::ActiveCableRoute>,
     #[cfg(windows)]
     managed_software_devices: audiorouter_windows_audio::ManagedSoftwareDeviceInventory,
 }
@@ -524,6 +531,10 @@ impl ControlPlane {
             #[cfg(windows)]
             native_render_source_taps: None,
             #[cfg(windows)]
+            cable_route_prepared: None,
+            #[cfg(windows)]
+            cable_route: None,
+            #[cfg(windows)]
             managed_software_devices:
                 audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
         }
@@ -577,6 +588,7 @@ impl ControlPlane {
                             "reason": audio_reason
                         },
                         "nativeAdapter": self.native_adapter_state(),
+                        "cableRoute": self.cable_route_diagnostics(),
                         "nativeAdapterKind": self.native_adapter_kind(),
                         "nativeSessionId": self.native_session_id().map(EntityId::as_str),
                         "schedulerTelemetry": self.native_scheduler_telemetry(),

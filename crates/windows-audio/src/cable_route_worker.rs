@@ -70,6 +70,8 @@ struct Shared {
     stop: AtomicBool,
     retiring: AtomicBool,
     armed: AtomicBool,
+    /// Privacy mute (safety latch): the capture sink receives silence.
+    muted: AtomicBool,
     failed: AtomicBool,
     failure: OnceLock<String>,
     relay_free: ArrayQueue<Vec<f64>>,
@@ -181,6 +183,7 @@ impl CableRouteWorker {
             stop: AtomicBool::new(false),
             retiring: AtomicBool::new(false),
             armed: AtomicBool::new(false),
+            muted: AtomicBool::new(false),
             failed: AtomicBool::new(false),
             failure: OnceLock::new(),
             relay_free,
@@ -252,6 +255,13 @@ impl CableRouteWorker {
         true
     }
 
+    /// Privacy mute: from the next published block the capture sink carries
+    /// silence. The relay keeps running so unmuting resumes without a gap
+    /// in timing.
+    pub fn set_privacy_muted(&self, muted: bool) {
+        self.shared.muted.store(muted, Ordering::Release);
+    }
+
     /// Call before deactivating either lease: deactivation clears the
     /// driver's mapping header, which the threads then treat as a normal
     /// stop instead of a failure.
@@ -286,13 +296,21 @@ impl CableRouteWorker {
 
     /// Stop and join both threads; returns the final counters, or the first
     /// worker failure.
-    pub fn stop(mut self) -> Result<CableRouteCounters, CableRouteWorkerError> {
-        self.join();
-        let counters = self.counters();
-        match self.failure() {
-            Some(message) => Err(CableRouteWorkerError::Worker(message.to_owned())),
-            None => Ok(counters),
+    pub fn stop(self) -> Result<CableRouteCounters, CableRouteWorkerError> {
+        match self.stop_with_counters() {
+            (counters, None) => Ok(counters),
+            (_, Some(error)) => Err(error),
         }
+    }
+
+    /// Stop and join both threads; the counters are read after the join, so
+    /// they are final even when a worker failed.
+    pub fn stop_with_counters(mut self) -> (CableRouteCounters, Option<CableRouteWorkerError>) {
+        self.join();
+        let failure = self
+            .failure()
+            .map(|message| CableRouteWorkerError::Worker(message.to_owned()));
+        (self.counters(), failure)
     }
 
     fn join(&mut self) {
@@ -318,8 +336,11 @@ fn guarded(shared: &Shared, body: impl FnOnce() -> Result<(), String>) {
     }
 }
 
-fn is_retirement(shared: &Shared, error: &NativeBridgeRegionError) -> bool {
-    shared.retiring.load(Ordering::Acquire) && *error == NativeBridgeRegionError::SampleSizeMismatch
+/// While the caller retires the leases, the driver clears the whole mapped
+/// view at CLOSE; any header error it causes is the expected stop signal,
+/// not only the first one seen (`SampleSizeMismatch`).
+fn is_retirement(shared: &Shared, _error: &NativeBridgeRegionError) -> bool {
+    shared.retiring.load(Ordering::Acquire)
 }
 
 fn render_loop(
@@ -385,6 +406,9 @@ fn capture_loop(
         // Never overwrite a block the reader has not acknowledged.
         if region.consumer_sequence() >= sequence {
             shared.relay_take(&mut trim, &mut block);
+            if shared.muted.load(Ordering::Acquire) {
+                block.fill(0.0);
+            }
             sequence = sequence
                 .checked_add(1)
                 .ok_or_else(|| "cable route capture sequence exhausted".to_owned())?;
@@ -602,5 +626,33 @@ mod tests {
             },
         )
         .is_err());
+    }
+
+    #[test]
+    fn cable_route_worker_privacy_mute_publishes_silence() {
+        let (render, capture) = (Mapping::new(), Mapping::new());
+        let worker = start(&render, &capture);
+        worker.set_privacy_muted(true);
+        let mut got = vec![1.0; BLOCK];
+        let mut capture_sequence = 0;
+        let mut published_audio = false;
+        for block in 1..=20_u64 {
+            render.peer().write_f64(1, block, &noise(block)).unwrap();
+            until(|| render.peer().consumer_sequence() == block);
+            until(|| {
+                capture
+                    .peer()
+                    .read_into_f64_after(2, capture_sequence, &mut got)
+                    .map(|header| capture_sequence = header.sequence)
+                    .is_ok()
+            });
+            published_audio |= got.iter().any(|sample| *sample != 0.0);
+        }
+        let counters = worker.stop().unwrap();
+        assert!(!published_audio, "muted route published audio");
+        assert!(
+            counters.forwarded > 0,
+            "the relay kept running: {counters:?}"
+        );
     }
 }

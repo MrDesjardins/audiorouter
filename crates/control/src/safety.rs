@@ -128,6 +128,10 @@ impl ControlPlane {
                 self.native_endpoint_session_secondary = None;
                 self.native_endpoint_taps_secondary = None;
             }
+            #[cfg(windows)]
+            if let Some(error) = self.stop_cable_route(&session_id) {
+                native_recovery_error.get_or_insert(error);
+            }
         }
         #[cfg(windows)]
         if self
@@ -494,6 +498,8 @@ impl ControlPlane {
         if let Some(worker) = self.native_duplex_worker.as_ref() {
             worker.set_privacy_muted(muted);
         }
+        #[cfg(windows)]
+        self.set_cable_route_privacy_muted(muted);
         self.events.append(
             0,
             None,

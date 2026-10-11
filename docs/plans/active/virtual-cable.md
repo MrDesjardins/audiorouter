@@ -1437,6 +1437,68 @@ Not covered: multi-source layouts (Mixer, keyed Duck, connected Mixers)
 between cables. Those need the multi-path compiler and are outside slice
 3's one-source scope; the multi-path tool suite keeps physical layouts.
 
+Slice 3 implemented and reviewed (2026-10-11): `crates/control/src/cable_routes.rs`.
+- `cable_route_shape` accepts exactly one enabled `VirtualRenderSource` and
+  one `VirtualCaptureSink` on different cables (`cable-a`…`cable-h`, stereo),
+  with only built-in one-in/one-out tools between. Any other enabled node
+  (physical device, Mixer, plugin, recorder, network…) is refused with a
+  plain reason.
+- `nativePaths.prepare` records the route; no OS resource is opened.
+  `session.start` queries the driver (installed, compatible, both cables
+  enabled), compiles the graph at 48 kHz, creates both mappings (capture
+  primed with silence), starts `CableRouteWorker`, waits for it to arm,
+  then activates render and capture leases on
+  `\.\AudioRouterVirtualBridge`. A failure rolls back the runtime and
+  leaves nothing open.
+- The backend service pass heartbeats both leases every 500 ms (LeaseMs/4)
+  and tears the route down on a worker or heartbeat failure. The capture
+  lease closes, so the cable goes silent (DEC-10). Session stop retires,
+  deactivates, joins and closes; backend exit does the same through `Drop`.
+- Live edits while playing return `restartRequired` ("apply after Stop and
+  Play"); the edit is saved.
+- Status: adapter kind `cable-route`. `system.diagnostics.cableRoute`
+  carries state, failure and worker counters (schema and
+  `contracts/src/index.ts` updated; optional for older backends).
+
+Host checks: shape tests and a no-driver test (prepare records the route;
+Start fails with "the AudioRouter cable driver is not available"; the
+session stays stopped; no mapping file left). Control suite 238 passed,
+9 ignored. Contract drift check and UI typecheck pass. Workspace and
+`src-tauri` Clippy and fmt are clean.
+
+Slice 4 preparation: `crates/control/examples/m03_cable_session.rs` runs the
+product route through the real dispatcher (`nativePaths.prepare`,
+`session.start`, the backend service pass every 1 ms, `system.diagnostics`
+each second, `session.stop`). `run-cable-latency-starts.ps1 -Route
+product` uses it (acceptance: 332 checks, including product pass and a
+missing tool). `prepare-cable-latency-update.ps1` builds it with the
+static CRT (imports only system DLLs) and bundles it.
+
+Independent review (fresh-context agent, read-only), worker `2bc7cc53`
+and slice 3. The realtime loops, flow control, schema and contract are
+correct. All findings fixed:
+- **Blocking:** a failed start kept the cable preparation. A later
+  physical-device Play could then fail in `start_cable_route` and leave
+  the multi-input worker running. Fixed: a failed start clears it,
+  `nativePaths.prepare` replaces a stale one, and `prepare_cable_route`
+  refuses next to any attached native worker.
+- **Blocking:** privacy mute did not reach cable routes. Fixed:
+  `CableRouteWorker::set_privacy_muted` makes the capture thread publish
+  silence while the relay keeps its timing. It is applied at start and by
+  `safety.setPrivacyMute` (new worker test).
+- Activation failure deleted mapped files before joining the worker.
+  Fixed: the worker is joined first, then the files are removed.
+- Any header error while retiring is now a normal stop (the driver zeroes
+  the whole view at CLOSE), not only `SampleSizeMismatch`.
+- A failed route now stops its runtime and emits `runtime.stopped`.
+- Crash recovery and session delete stop the cable route.
+- Final counters are read after the join (`stop_with_counters`).
+Not changed (pre-existing): the bridge region reads header and payload
+through `&[u8]` while the driver may write them; the seqlock state guards
+it in practice, but in Rust's model it is a data race. Rechecks: control
+239 passed, 9 ignored; windows-audio lib 136 passed, 3 ignored; worker
+tests 10/10 repeats; workspace and `src-tauri` Clippy and fmt clean.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC

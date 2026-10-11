@@ -27,13 +27,17 @@ try {
     $env:RUSTFLAGS = '-C target-feature=+crt-static'
     & cargo build --locked --release --target-dir $vmTarget -p audiorouter-windows-audio --example m03_bridge_tone
     if ($LASTEXITCODE -ne 0) { throw 'Static tone tool build failed.' }
+    # Product cable route through the real control plane (WP-09).
+    & cargo build --locked --release --target-dir $vmTarget -p audiorouter-control --example m03_cable_session
+    if ($LASTEXITCODE -ne 0) { throw 'Static cable session tool build failed.' }
 } finally { $env:RUSTFLAGS = $previousFlags }
 $toneTool = Join-Path $vmTarget 'release\examples\m03_bridge_tone.exe'
+$cableSessionTool = Join-Path $vmTarget 'release\examples\m03_cable_session.exe'
 $probe = Join-Path $workspace 'target\m00-probe-cable\m00-probe.exe'
 New-Item -ItemType Directory -Path (Split-Path -Parent $probe) -Force | Out-Null
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tools\m00-native-wasapi-probe\build.ps1') -Output $probe -StaticRuntime
 if ($LASTEXITCODE -ne 0) { throw 'Static impulse probe build failed.' }
-foreach ($tool in @($toneTool, $probe)) { $null = Assert-PortableVmTool $tool }
+foreach ($tool in @($toneTool, $cableSessionTool, $probe)) { $null = Assert-PortableVmTool $tool }
 $selfTest = & $probe cable-impulse-selftest
 if ($LASTEXITCODE -ne 0) { throw "Probe pairing self-test failed: $selfTest" }
 
@@ -41,7 +45,7 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $entries = @(Get-Content -LiteralPath (Join-Path $base 'MANIFEST.txt') | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
 foreach ($entry in $entries) {
     $relative = $entry.Substring(66)
-    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe')) { throw 'Base already contains latency or continuity tools; use a standard candidate base.' }
+    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe', 'tools\m03_cable_session.exe')) { throw 'Base already contains latency or continuity tools; use a standard candidate base.' }
     $file = [IO.Path]::GetFullPath((Join-Path $output $relative))
     if (-not $file.StartsWith($output + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest path escapes output.' }
     New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
@@ -51,6 +55,7 @@ foreach ($entry in $entries) {
 # including the signed driver package, stays byte-identical to the base.
 Copy-Item -LiteralPath $toneTool -Destination (Join-Path $output 'tools\m03_bridge_tone.exe') -Force
 Copy-Item -LiteralPath $probe -Destination (Join-Path $output 'tools\m00-probe.exe')
+Copy-Item -LiteralPath $cableSessionTool -Destination (Join-Path $output 'tools\m03_cable_session.exe')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency-starts.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-continuity.ps1') -Destination $output
