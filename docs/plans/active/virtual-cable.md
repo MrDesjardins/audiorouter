@@ -1632,7 +1632,11 @@ runs 997 Hz, then 47 Hz, 10 minutes each by default, with endpoint IDs
 from the probe inventory. Verdict per tone: Cable B 0 glitches and 0 silent
 runs with the tone present is a pass; a disturbed reference is
 inconclusive. `tests/acceptance/m03-cable-tone.ps1`: 7 checks. The bundle
-preparer ships the runner.
+preparer ships the runner. r25 bundle
+`C:\VMsr-share\diagnostics-20261011-cable-tone-r25` (source `6c818005`,
+same driver source; 33 package checks pass), MANIFEST SHA-256
+`A4397C62C6DDDF0A368BA3731E5856ADACA4A3B733E8300E50DA73D2AB1FE00E`, 44/44
+verified. Guest command: `run-cable-tone.ps1` (about 21 minutes).
 
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
