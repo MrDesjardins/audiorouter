@@ -1741,6 +1741,31 @@ Ordered tasks:
    formats.
 Rollback: per-task commits; stereo routes are unchanged (engine path).
 
+Tasks 1–3 done (2026-10-11).
+- Task 1 (`032aae0d`): domain cable ports 1–8 channels and matrices up
+  to 64 coefficients; session schema and catalog follow the constants.
+  Finding: after widening, the single-graph engine *accepted* an
+  8-channel cable graph it cannot process. Every engine compile entry now
+  goes through `validate_for_engine`, which refuses a node wider than 2
+  channels with `UnsupportedPath` (test
+  `engine_refuses_multichannel_cable_graphs_cleanly`).
+- Task 2: `CableMatrixRoute` (identity rows copy bit-exact, including
+  −0.0; zero rows give silence; others sum). `CableRouteStage::{Engine,
+  Matrix}`, with separate render and capture block sizes checked against
+  the stage at start. Tests: 8-channel identity bit-exact (noise, ±0,
+  ±1); 7.1 → stereo values; stereo → 8; channel swap; partial block;
+  refusals. Worker over mappings: 8 → 8 bit-exact, whole blocks in order
+  (no re-blocking delay); 8 → 2 downmix values.
+- Task 3: `cable_route_shape` reports each cable's channels. Stereo on
+  both sides keeps the engine path with tools. Otherwise it needs no
+  tools and one direct edge, whose matrix becomes the mapping, and
+  refuses with a plain reason. Leases, mappings and blocks use each
+  side's channel count. Diagnostics report `renderChannels` and
+  `captureChannels` (schema and contract updated).
+Checks: windows-audio lib 141 passed, control 241 passed, worker tests
+10/10 repeats, workspace and `src-tauri` Clippy, fmt and the contract
+typecheck clean. Next: task 4 (VM, 8-channel formats).
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC

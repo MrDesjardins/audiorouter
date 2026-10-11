@@ -23,7 +23,8 @@
 //! and deactivation belong to the caller's control thread.
 
 use crate::cable_route::{
-    CableRouteProcessor, SilenceHoldoff, StandingDelayTrim, STANDING_DELAY_WINDOW_BLOCKS,
+    CableMatrixRoute, CableRouteProcessor, SilenceHoldoff, StandingDelayTrim,
+    STANDING_DELAY_WINDOW_BLOCKS,
 };
 use crate::{AudioServiceThreadGuard, NativeBridgeRegion, NativeBridgeRegionError};
 use crossbeam_queue::ArrayQueue;
@@ -154,12 +155,24 @@ impl Shared {
 pub struct CableRouteWorkerConfig {
     pub render_generation: u64,
     pub capture_generation: u64,
-    /// Interleaved samples per bridge block (frames × channels).
-    pub block_samples: usize,
+    /// Interleaved samples per render-source block (frames × the source
+    /// cable's channels).
+    pub render_block_samples: usize,
+    /// Interleaved samples per capture-sink block (frames × the destination
+    /// cable's channels); equal to the render size for the engine stage.
+    pub capture_block_samples: usize,
     /// How long the capture side waits for a late block after the reader
     /// acknowledged, before it publishes silence ([`SilenceHoldoff`]); half
     /// a block period.
     pub silence_holdoff_us: u64,
+}
+
+/// What the render thread runs between the two cables.
+pub enum CableRouteStage {
+    /// The compiled stereo engine graph (built-in tools), re-blocked.
+    Engine(Box<CableRouteProcessor>),
+    /// A direct multichannel mapping, one output block per input block.
+    Matrix(CableMatrixRoute),
 }
 
 /// Running cable route. Dropping it stops and joins both threads.
@@ -175,15 +188,24 @@ impl CableRouteWorker {
     pub fn start(
         render_source: NativeBridgeRegion,
         capture_sink: NativeBridgeRegion,
-        processor: CableRouteProcessor,
+        stage: CableRouteStage,
         config: CableRouteWorkerConfig,
     ) -> Result<Self, CableRouteWorkerError> {
-        if config.block_samples == 0 {
+        let shape_matches = match &stage {
+            CableRouteStage::Engine(_) => {
+                config.render_block_samples == config.capture_block_samples
+            }
+            CableRouteStage::Matrix(matrix) => {
+                matrix.input_samples() == config.render_block_samples
+                    && matrix.output_samples() == config.capture_block_samples
+            }
+        };
+        if config.render_block_samples == 0 || config.capture_block_samples == 0 || !shape_matches {
             return Err(CableRouteWorkerError::InvalidBlock);
         }
         let relay_free = ArrayQueue::new(CABLE_ROUTE_RELAY_BLOCKS);
         for _ in 0..CABLE_ROUTE_RELAY_BLOCKS {
-            let _ = relay_free.push(vec![0.0; config.block_samples]);
+            let _ = relay_free.push(vec![0.0; config.capture_block_samples]);
         }
         let shared = Arc::new(Shared {
             stop: AtomicBool::new(false),
@@ -209,7 +231,7 @@ impl CableRouteWorker {
             threads: Vec::with_capacity(2),
         };
         let capture_shared = Arc::clone(&shared);
-        let capture_buffer = vec![0.0; config.block_samples];
+        let capture_buffer = vec![0.0; config.capture_block_samples];
         worker.threads.push(
             std::thread::Builder::new()
                 .name("cable-route-capture".to_owned())
@@ -228,7 +250,8 @@ impl CableRouteWorker {
                 .map_err(|error| CableRouteWorkerError::Spawn(error.to_string()))?,
         );
         let render_shared = Arc::clone(&shared);
-        let render_buffer = vec![0.0; config.block_samples];
+        let render_buffer = vec![0.0; config.render_block_samples];
+        let mapped_buffer = vec![0.0; config.capture_block_samples];
         worker.threads.push(
             std::thread::Builder::new()
                 .name("cable-route-render".to_owned())
@@ -239,8 +262,9 @@ impl CableRouteWorker {
                             &render_source,
                             &render_shared,
                             config.render_generation,
-                            processor,
+                            stage,
                             render_buffer,
+                            mapped_buffer,
                         )
                     });
                 })
@@ -354,8 +378,9 @@ fn render_loop(
     region: &NativeBridgeRegion,
     shared: &Shared,
     generation: u64,
-    mut processor: CableRouteProcessor,
+    mut stage: CableRouteStage,
     mut block: Vec<f64>,
+    mut mapped: Vec<f64>,
 ) -> Result<(), String> {
     let mut sequence = 0_u64;
     loop {
@@ -371,13 +396,22 @@ fn render_loop(
                 sequence = header.sequence;
                 let count =
                     (usize::from(header.frames) * usize::from(header.channels)).min(block.len());
-                processor.push_block(&block[..count], |output| shared.relay_forward(output));
-                shared
-                    .engine_processed
-                    .store(processor.processed_quanta(), Ordering::Release);
-                shared
-                    .engine_silent
-                    .store(processor.silent_quanta(), Ordering::Release);
+                match &mut stage {
+                    CableRouteStage::Engine(processor) => {
+                        processor
+                            .push_block(&block[..count], |output| shared.relay_forward(output));
+                        shared
+                            .engine_processed
+                            .store(processor.processed_quanta(), Ordering::Release);
+                        shared
+                            .engine_silent
+                            .store(processor.silent_quanta(), Ordering::Release);
+                    }
+                    CableRouteStage::Matrix(matrix) => {
+                        matrix.process(&block[..count], &mut mapped);
+                        shared.relay_forward(&mapped);
+                    }
+                }
                 shared.render_blocks.fetch_add(1, Ordering::Release);
                 // Drain a just-published successor at once: Windows can
                 // publish adjacent quanta in a burst.
@@ -452,20 +486,26 @@ mod tests {
     /// A temporary bridge mapping; the test side stands in for the driver.
     struct Mapping {
         path: PathBuf,
+        channels: u16,
         region: Option<NativeBridgeRegion>,
     }
 
     impl Mapping {
         fn new() -> Self {
+            Self::with_channels(CHANNELS)
+        }
+
+        fn with_channels(channels: u16) -> Self {
             static NEXT: AtomicU64 = AtomicU64::new(0);
             let path = std::env::temp_dir().join(format!(
                 "cable-route-worker-{}-{}.slot",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-            let region = NativeBridgeRegion::create(&path, CHANNELS, FRAMES).unwrap();
+            let region = NativeBridgeRegion::create(&path, channels, FRAMES).unwrap();
             Self {
                 path,
+                channels,
                 region: Some(region),
             }
         }
@@ -475,7 +515,7 @@ mod tests {
         }
 
         fn view(&self) -> NativeBridgeRegion {
-            NativeBridgeRegion::open(&self.path, CHANNELS, FRAMES).unwrap()
+            NativeBridgeRegion::open(&self.path, self.channels, FRAMES).unwrap()
         }
     }
 
@@ -510,11 +550,12 @@ mod tests {
         let worker = CableRouteWorker::start(
             render.view(),
             capture.view(),
-            processor(),
+            CableRouteStage::Engine(Box::new(processor())),
             CableRouteWorkerConfig {
                 render_generation: 1,
                 capture_generation: 2,
-                block_samples: BLOCK,
+                render_block_samples: BLOCK,
+                capture_block_samples: BLOCK,
                 silence_holdoff_us: 5_000,
             },
         )
@@ -633,11 +674,12 @@ mod tests {
         assert!(CableRouteWorker::start(
             render.view(),
             capture.view(),
-            processor(),
+            CableRouteStage::Engine(Box::new(processor())),
             CableRouteWorkerConfig {
                 render_generation: 1,
                 capture_generation: 2,
-                block_samples: 0,
+                render_block_samples: 0,
+                capture_block_samples: 0,
                 silence_holdoff_us: 5_000,
             },
         )
@@ -670,5 +712,123 @@ mod tests {
             counters.forwarded > 0,
             "the relay kept running: {counters:?}"
         );
+    }
+
+    /// Run `blocks` render blocks of `inputs` channels through a matrix
+    /// route into `outputs` channels; returns the non-silent capture blocks.
+    fn run_matrix(
+        inputs: u16,
+        outputs: u16,
+        matrix: &[f32],
+        blocks: u64,
+    ) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
+        let (render, capture) = (
+            Mapping::with_channels(inputs),
+            Mapping::with_channels(outputs),
+        );
+        let (input_samples, output_samples) = (
+            usize::from(FRAMES) * usize::from(inputs),
+            usize::from(FRAMES) * usize::from(outputs),
+        );
+        capture
+            .peer()
+            .write_f64(2, 1, &vec![0.0; output_samples])
+            .unwrap();
+        let route = CableMatrixRoute::new(
+            usize::from(inputs),
+            usize::from(outputs),
+            usize::from(FRAMES),
+            matrix,
+        )
+        .unwrap();
+        let worker = CableRouteWorker::start(
+            render.view(),
+            capture.view(),
+            CableRouteStage::Matrix(route),
+            CableRouteWorkerConfig {
+                render_generation: 1,
+                capture_generation: 2,
+                render_block_samples: input_samples,
+                capture_block_samples: output_samples,
+                silence_holdoff_us: 5_000,
+            },
+        )
+        .unwrap();
+        assert!(worker.wait_armed(Duration::from_secs(5)));
+        let (mut sent, mut received) = (Vec::new(), Vec::new());
+        let mut got = vec![0.0; output_samples];
+        let mut capture_sequence = 0;
+        for block in 1..=blocks {
+            let samples: Vec<f64> = noise(block)
+                .into_iter()
+                .cycle()
+                .take(input_samples)
+                .collect();
+            render.peer().write_f64(1, block, &samples).unwrap();
+            sent.push(samples);
+            until(|| render.peer().consumer_sequence() == block);
+            until(|| {
+                capture
+                    .peer()
+                    .read_into_f64_after(2, capture_sequence, &mut got)
+                    .map(|header| capture_sequence = header.sequence)
+                    .is_ok()
+            });
+            if got.iter().any(|sample| *sample != 0.0) {
+                received.push(got.clone());
+            }
+        }
+        for _ in 0..3 {
+            until(|| {
+                capture
+                    .peer()
+                    .read_into_f64_after(2, capture_sequence, &mut got)
+                    .map(|header| capture_sequence = header.sequence)
+                    .is_ok()
+            });
+            if got.iter().any(|sample| *sample != 0.0) {
+                received.push(got.clone());
+            }
+        }
+        let counters = worker.stop().unwrap();
+        assert_eq!(
+            (
+                counters.dropped,
+                counters.trimmed,
+                counters.engine_processed
+            ),
+            (0, 0, 0)
+        );
+        (sent, received)
+    }
+
+    #[test]
+    fn cable_route_worker_carries_eight_channels_bit_exact() {
+        let identity: Vec<f32> = (0..64).map(|i| f32::from(u8::from(i % 9 == 0))).collect();
+        let (sent, received) = run_matrix(8, 8, &identity, 30);
+        // No re-blocking delay: every block arrives whole, in order, exact.
+        assert_eq!(received.len(), sent.len());
+        for (a, b) in sent.iter().zip(&received) {
+            assert!(a.iter().zip(b).all(|(x, y)| x.to_bits() == y.to_bits()));
+        }
+    }
+
+    #[test]
+    fn cable_route_worker_downmixes_eight_channels_to_stereo() {
+        // Left takes channels 0, 2, 4, 6 at 0.25; right takes the odd ones.
+        let mut down = vec![0.0_f32; 16];
+        for input in 0..8 {
+            down[(input % 2) * 8 + input] = 0.25;
+        }
+        let (sent, received) = run_matrix(8, 2, &down, 20);
+        assert_eq!(received.len(), sent.len());
+        for (input, output) in sent.iter().zip(&received) {
+            for (frame, pair) in output.chunks_exact(2).enumerate() {
+                let source = &input[frame * 8..frame * 8 + 8];
+                let left: f64 = (0..8).step_by(2).map(|c| source[c] * 0.25).sum();
+                let right: f64 = (1..8).step_by(2).map(|c| source[c] * 0.25).sum();
+                assert!((pair[0] - left).abs() < 1e-12 && (pair[1] - right).abs() < 1e-12);
+            }
+        }
     }
 }

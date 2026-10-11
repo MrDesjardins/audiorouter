@@ -59,10 +59,17 @@ const CABLE_ROUTE_TOOLS: &[NodeKind] = &[
     NodeKind::Duck,
 ];
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CableRouteShape {
     pub render_bus: String,
     pub capture_bus: String,
+    /// Channels of the source cable (its render source) and of the
+    /// destination cable (its capture sink).
+    pub render_channels: u16,
+    pub capture_channels: u16,
+    /// A multichannel route (WP-09 slice 5): the direct edge's matrix,
+    /// mapped without the engine. `None`: the stereo engine graph.
+    pub direct_matrix: Option<Vec<f32>>,
 }
 
 fn cable_bus(node: &Node) -> Option<String> {
@@ -123,18 +130,55 @@ pub(crate) fn cable_route_shape(
             cable_label(&render_bus)
         ));
     }
-    let stereo = |node: &Node, direction| {
+    let channels = |node: &Node, direction| {
         node.ports
             .iter()
-            .filter(|port| port.direction == direction)
-            .all(|port| port.channels == CABLE_ROUTE_CHANNELS as u8)
+            .find(|port| port.direction == direction)
+            .map(|port| u16::from(port.channels))
     };
-    if !stereo(source, PortDirection::Output) || !stereo(sink, PortDirection::Input) {
-        return refuse("cable routes are stereo; set both cable nodes to 2 channels".into());
+    let (Some(render_channels), Some(capture_channels)) = (
+        channels(source, PortDirection::Output),
+        channels(sink, PortDirection::Input),
+    ) else {
+        return refuse("each cable node needs its audio port".into());
+    };
+    if render_channels == CABLE_ROUTE_CHANNELS && capture_channels == CABLE_ROUTE_CHANNELS {
+        return Some(Ok(CableRouteShape {
+            render_bus,
+            capture_bus,
+            render_channels,
+            capture_channels,
+            direct_matrix: None,
+        }));
+    }
+    // Multichannel: the cables are connected directly and the edge's matrix
+    // maps the channels (pass-through, up- or downmix); tools are stereo.
+    if session.nodes.iter().any(|node| {
+        node.enabled
+            && !matches!(
+                node.kind,
+                NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink
+            )
+    }) {
+        return refuse(format!(
+            "tools work on stereo cable routes only; connect the {}-channel and {}-channel cables directly, or set both to 2 channels",
+            render_channels, capture_channels
+        ));
+    }
+    let links: Vec<&audiorouter_domain::Edge> =
+        session.edges.iter().filter(|edge| edge.enabled).collect();
+    let [link] = links.as_slice() else {
+        return refuse("connect the two cables with one direct connection".into());
+    };
+    if link.source_node != source.id || link.destination_node != sink.id {
+        return refuse("connect the two cables with one direct connection".into());
     }
     Some(Ok(CableRouteShape {
         render_bus,
         capture_bus,
+        render_channels,
+        capture_channels,
+        direct_matrix: Some(link.matrix.clone()),
     }))
 }
 
@@ -206,6 +250,8 @@ impl ActiveCableRoute {
             "renderBus": self.shape.render_bus,
             "captureBus": self.shape.capture_bus,
             "blockFrames": self.block_frames,
+            "renderChannels": self.shape.render_channels,
+            "captureChannels": self.shape.capture_channels,
             "state": if self.is_running() { "running" } else if self.failure.is_some() { "failed" } else { "stopped" },
             "failure": self.failure,
             "renderBlocks": counters.render_blocks,
@@ -305,9 +351,9 @@ impl ControlPlane {
     ) -> Result<(), ControlError> {
         use audiorouter_protocol::{AudioBridgeDirection, AudioBridgeHello};
         use audiorouter_windows_audio::{
-            CableRouteProcessor, CableRouteWorker, CableRouteWorkerConfig,
-            NativeBridgeControlClient, NativeBridgeController, NativeBridgeRegion,
-            NativeBridgeSession,
+            CableMatrixRoute, CableRouteProcessor, CableRouteStage, CableRouteWorker,
+            CableRouteWorkerConfig, NativeBridgeControlClient, NativeBridgeController,
+            NativeBridgeRegion, NativeBridgeSession,
         };
         let session = audiorouter_engine::prune_inactive_upstream(session).into_owned();
         let shape = cable_route_shape(&session).unwrap_or_else(|| {
@@ -352,18 +398,33 @@ impl ControlPlane {
             }
         }
         let frames = cable_route_block_frames(info.default_period_frames);
-        let graph = audiorouter_engine::compile_session_at_sample_rate(
-            &session,
-            audiorouter_engine::RuntimeGeneration::new(generation),
-            CABLE_ROUTE_RATE_HZ,
-        )
-        .map_err(|error| bridge_error("cable route compile", &error))?;
-        let processor = CableRouteProcessor::new(
-            usize::from(CABLE_ROUTE_CHANNELS),
-            usize::from(frames),
-            graph,
-        )
-        .map_err(|error| bridge_error("cable route", &error))?;
+        let stage = match &shape.direct_matrix {
+            Some(matrix) => CableRouteStage::Matrix(
+                CableMatrixRoute::new(
+                    usize::from(shape.render_channels),
+                    usize::from(shape.capture_channels),
+                    usize::from(frames),
+                    matrix,
+                )
+                .map_err(|error| bridge_error("cable channel mapping", &error))?,
+            ),
+            None => {
+                let graph = audiorouter_engine::compile_session_at_sample_rate(
+                    &session,
+                    audiorouter_engine::RuntimeGeneration::new(generation),
+                    CABLE_ROUTE_RATE_HZ,
+                )
+                .map_err(|error| bridge_error("cable route compile", &error))?;
+                CableRouteStage::Engine(Box::new(
+                    CableRouteProcessor::new(
+                        usize::from(CABLE_ROUTE_CHANNELS),
+                        usize::from(frames),
+                        graph,
+                    )
+                    .map_err(|error| bridge_error("cable route", &error))?,
+                ))
+            }
+        };
         // A fresh lease generation per start: a stale mapping of an earlier
         // run can never be mistaken for this one.
         let lease_generation = std::time::SystemTime::now()
@@ -371,14 +432,14 @@ impl ControlPlane {
             .map(|elapsed| elapsed.as_millis() as u64)
             .unwrap_or(generation)
             .max(1);
-        let hello = |bus: &str, direction| AudioBridgeHello {
+        let hello = |bus: &str, direction, channels: u16| AudioBridgeHello {
             protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
             protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
             bus_id: bus.to_owned(),
             direction,
             generation: lease_generation,
             sample_rate_hz: CABLE_ROUTE_RATE_HZ,
-            channels: CABLE_ROUTE_CHANNELS,
+            channels,
             frames_per_quantum: frames,
             lease_ms: CABLE_ROUTE_LEASE_MS,
         };
@@ -390,18 +451,27 @@ impl ControlPlane {
         };
         let render_path = mapping(&shape.render_bus, "render");
         let capture_path = mapping(&shape.capture_bus, "capture");
-        let block_samples = usize::from(frames) * usize::from(CABLE_ROUTE_CHANNELS);
+        let render_block_samples = usize::from(frames) * usize::from(shape.render_channels);
+        let capture_block_samples = usize::from(frames) * usize::from(shape.capture_channels);
         let render_session = NativeBridgeSession::create(
             &render_path,
-            hello(&shape.render_bus, AudioBridgeDirection::RenderSource),
+            hello(
+                &shape.render_bus,
+                AudioBridgeDirection::RenderSource,
+                shape.render_channels,
+            ),
         )
         .map_err(|error| bridge_error("cable input preparation failed", &error))?;
         // From here every early return drops what exists; sessions and
         // controllers remove their own mapping files.
         let capture_session = match NativeBridgeSession::create_primed(
             &capture_path,
-            hello(&shape.capture_bus, AudioBridgeDirection::CaptureSink),
-            &vec![0.0; block_samples],
+            hello(
+                &shape.capture_bus,
+                AudioBridgeDirection::CaptureSink,
+                shape.capture_channels,
+            ),
+            &vec![0.0; capture_block_samples],
         ) {
             Ok(session) => session,
             Err(error) => {
@@ -409,9 +479,9 @@ impl ControlPlane {
                 return Err(bridge_error("cable output preparation failed", &error));
             }
         };
-        let views = NativeBridgeRegion::open(&render_path, CABLE_ROUTE_CHANNELS, frames).and_then(
+        let views = NativeBridgeRegion::open(&render_path, shape.render_channels, frames).and_then(
             |render| {
-                NativeBridgeRegion::open(&capture_path, CABLE_ROUTE_CHANNELS, frames)
+                NativeBridgeRegion::open(&capture_path, shape.capture_channels, frames)
                     .map(|capture| (render, capture))
             },
         );
@@ -438,11 +508,12 @@ impl ControlPlane {
         let worker = CableRouteWorker::start(
             render_view,
             capture_view,
-            processor,
+            stage,
             CableRouteWorkerConfig {
                 render_generation: lease_generation,
                 capture_generation: lease_generation,
-                block_samples,
+                render_block_samples,
+                capture_block_samples,
                 // Half a block period (5 ms at 480 frames, 48 kHz).
                 silence_holdoff_us: u64::from(frames) * 1_000_000
                     / u64::from(CABLE_ROUTE_RATE_HZ)
@@ -681,7 +752,10 @@ mod tests {
             cable_route_shape(&session(nodes.clone())).unwrap().unwrap(),
             CableRouteShape {
                 render_bus: "cable-a".into(),
-                capture_bus: "cable-h".into()
+                capture_bus: "cable-h".into(),
+                render_channels: 2,
+                capture_channels: 2,
+                direct_matrix: None,
             }
         );
         // A disabled extra source is ignored.
@@ -741,11 +815,62 @@ mod tests {
             cable("out", NodeKind::VirtualCaptureSink, "cable-i", 2)
         ]))
         .contains("choose the cable"));
+        // Not stereo: needs one direct connection and no tools.
         assert!(reason(&session(vec![
             a(),
             cable("out", NodeKind::VirtualCaptureSink, "cable-b", 1)
         ]))
-        .contains("stereo"));
+        .contains("one direct connection"));
+        assert!(reason(&session(vec![
+            cable("in", NodeKind::VirtualRenderSource, "cable-a", 8),
+            b(),
+            tool(NodeKind::Compressor)
+        ]))
+        .contains("tools work on stereo cable routes only"));
+    }
+
+    fn link(matrix: Vec<f32>) -> audiorouter_domain::Edge {
+        audiorouter_domain::Edge {
+            id: EntityId::new("in-out"),
+            source_node: EntityId::new("in"),
+            source_port: "out".into(),
+            destination_node: EntityId::new("out"),
+            destination_port: "in".into(),
+            matrix,
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn cable_route_shape_maps_multichannel_cables_directly() {
+        let identity: Vec<f32> = (0..64).map(|i| f32::from(u8::from(i % 9 == 0))).collect();
+        let mut route = session(vec![
+            cable("in", NodeKind::VirtualRenderSource, "cable-a", 8),
+            cable("out", NodeKind::VirtualCaptureSink, "cable-b", 8),
+        ]);
+        route.edges.push(link(identity.clone()));
+        let shape = cable_route_shape(&route).unwrap().unwrap();
+        assert_eq!((shape.render_channels, shape.capture_channels), (8, 8));
+        assert_eq!(shape.direct_matrix, Some(identity));
+        // 7.1 down to stereo keeps the edge's matrix.
+        let mut down = session(vec![
+            cable("in", NodeKind::VirtualRenderSource, "cable-a", 8),
+            cable("out", NodeKind::VirtualCaptureSink, "cable-b", 2),
+        ]);
+        down.edges.push(link(vec![0.5; 16]));
+        let shape = cable_route_shape(&down).unwrap().unwrap();
+        assert_eq!((shape.render_channels, shape.capture_channels), (8, 2));
+        assert_eq!(shape.direct_matrix.unwrap().len(), 16);
+        // A stereo route keeps the engine path, even when connected directly.
+        let mut stereo = session(vec![
+            cable("in", NodeKind::VirtualRenderSource, "cable-a", 2),
+            cable("out", NodeKind::VirtualCaptureSink, "cable-b", 2),
+        ]);
+        stereo.edges.push(link(vec![1.0, 0.0, 0.0, 1.0]));
+        assert_eq!(
+            cable_route_shape(&stereo).unwrap().unwrap().direct_matrix,
+            None
+        );
     }
     /// The control path on a PC without the AudioRouter driver: preparation
     /// records the route, Start fails with a clear message, and nothing is

@@ -1506,6 +1506,8 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                             "renderBus": { "type": "string", "pattern": "^cable-[a-h]$" },
                             "captureBus": { "type": "string", "pattern": "^cable-[a-h]$" },
                             "blockFrames": { "type": "integer", "minimum": 128, "maximum": 960 },
+                            "renderChannels": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::MAX_CABLE_CHANNELS },
+                            "captureChannels": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::MAX_CABLE_CHANNELS },
                             "state": { "enum": ["running", "stopped", "failed"] },
                             "failure": { "type": ["string", "null"] },
                             "renderBlocks": { "type": "integer", "minimum": 0 },
@@ -1517,7 +1519,7 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                             "trimmed": { "type": "integer", "minimum": 0 },
                             "engineSilentQuanta": { "type": "integer", "minimum": 0 }
                         },
-                        "required": ["sessionId", "generation", "renderBus", "captureBus", "blockFrames", "state", "failure", "renderBlocks", "renderSequenceGaps", "captureBlocks", "forwarded", "silence", "dropped", "trimmed", "engineSilentQuanta"],
+                        "required": ["sessionId", "generation", "renderBus", "captureBus", "blockFrames", "renderChannels", "captureChannels", "state", "failure", "renderBlocks", "renderSequenceGaps", "captureBlocks", "forwarded", "silence", "dropped", "trimmed", "engineSilentQuanta"],
                         "additionalProperties": false
                     }
                 ]

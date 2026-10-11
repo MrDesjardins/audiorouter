@@ -764,6 +764,9 @@ export interface DiagnosticsSnapshot {
     captureBus: string;
     /** Bridge block in frames: the driver's preferred period (128–960). */
     blockFrames: number;
+    /** Channels of the source and destination cables (1-8). */
+    renderChannels: number;
+    captureChannels: number;
     state: "running" | "stopped" | "failed";
     failure: string | null;
     renderBlocks: number;

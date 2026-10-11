@@ -24,6 +24,112 @@ pub enum CableRouteError {
     UnsupportedChannels,
     /// Bridge block size of zero frames.
     InvalidBlockFrames,
+    /// A channel matrix whose size is not output × input channels, or with a
+    /// non-finite coefficient.
+    InvalidMatrix,
+}
+
+/// Most channels a cable carries (the driver's `AR_BRIDGE_MAX_CHANNELS`).
+pub const MAX_CABLE_ROUTE_CHANNELS: usize = 8;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum MatrixRow {
+    /// Exactly one coefficient, 1.0: the sample is copied (bit-exact,
+    /// including −0.0).
+    Copy(usize),
+    /// All coefficients zero.
+    Silent,
+    /// Any other mix: the sum of the products.
+    Mix,
+}
+
+/// Direct multichannel cable route (WP-09 slice 5): maps each interleaved
+/// float64 block of `inputs` channels to `outputs` channels through an edge
+/// matrix (row-major: one row per output channel, one coefficient per input
+/// channel), without the engine. Identity rows copy, so 8-channel
+/// pass-through is bit-exact (VCAB-20); other rows up- or downmix. Prepared
+/// once; `process` never allocates.
+#[derive(Clone, Debug)]
+pub struct CableMatrixRoute {
+    inputs: usize,
+    outputs: usize,
+    frames: usize,
+    matrix: Vec<f64>,
+    rows: Vec<MatrixRow>,
+}
+
+impl CableMatrixRoute {
+    pub fn new(
+        inputs: usize,
+        outputs: usize,
+        frames: usize,
+        matrix: &[f32],
+    ) -> Result<Self, CableRouteError> {
+        if !(1..=MAX_CABLE_ROUTE_CHANNELS).contains(&inputs)
+            || !(1..=MAX_CABLE_ROUTE_CHANNELS).contains(&outputs)
+        {
+            return Err(CableRouteError::UnsupportedChannels);
+        }
+        if frames == 0 {
+            return Err(CableRouteError::InvalidBlockFrames);
+        }
+        if matrix.len() != inputs * outputs || matrix.iter().any(|value| !value.is_finite()) {
+            return Err(CableRouteError::InvalidMatrix);
+        }
+        let rows = matrix
+            .chunks_exact(inputs)
+            .map(|row| {
+                let mut nonzero = (0..inputs).filter(|&input| row[input] != 0.0);
+                match (nonzero.next(), nonzero.next()) {
+                    (None, _) => MatrixRow::Silent,
+                    (Some(input), None) if row[input] == 1.0 => MatrixRow::Copy(input),
+                    _ => MatrixRow::Mix,
+                }
+            })
+            .collect();
+        Ok(Self {
+            inputs,
+            outputs,
+            frames,
+            matrix: matrix.iter().map(|&value| f64::from(value)).collect(),
+            rows,
+        })
+    }
+
+    pub fn input_samples(&self) -> usize {
+        self.frames * self.inputs
+    }
+
+    pub fn output_samples(&self) -> usize {
+        self.frames * self.outputs
+    }
+
+    /// Map one block. A shorter input (a final partial block) maps only its
+    /// whole frames; the rest of `output` becomes silence.
+    pub fn process(&self, input: &[f64], output: &mut [f64]) {
+        let frames = (input.len() / self.inputs)
+            .min(output.len() / self.outputs)
+            .min(self.frames);
+        for frame in 0..frames {
+            let source = &input[frame * self.inputs..(frame + 1) * self.inputs];
+            let destination = &mut output[frame * self.outputs..(frame + 1) * self.outputs];
+            for (channel, (sample, row)) in destination.iter_mut().zip(&self.rows).enumerate() {
+                *sample = match *row {
+                    MatrixRow::Copy(input) => source[input],
+                    MatrixRow::Silent => 0.0,
+                    MatrixRow::Mix => {
+                        let coefficients =
+                            &self.matrix[channel * self.inputs..(channel + 1) * self.inputs];
+                        source
+                            .iter()
+                            .zip(coefficients)
+                            .fold(0.0, |sum, (value, coefficient)| sum + value * coefficient)
+                    }
+                };
+            }
+        }
+        output[frames * self.outputs..].fill(0.0);
+    }
 }
 
 /// Session for a plain cable route: `render_bus`'s render source feeds
@@ -682,6 +788,81 @@ mod tests {
         assert!(
             !holdoff.publish_now(5_300, false),
             "the next wait starts afresh"
+        );
+    }
+
+    #[test]
+    fn matrix_route_passes_eight_channels_bit_exact() {
+        let identity: Vec<f32> = (0..64).map(|i| f32::from(u8::from(i % 9 == 0))).collect();
+        let route = CableMatrixRoute::new(8, 8, 480, &identity).unwrap();
+        // float32-grid noise plus signed zeros and the extremes.
+        let mut input: Vec<f64> = (0..480_u64 * 8)
+            .map(|i| {
+                let grid = (i.wrapping_mul(2_654_435_761) % (1 << 24)) as f64;
+                (grid - f64::from(1 << 23)) / f64::from(1 << 24)
+            })
+            .collect();
+        input[..4].copy_from_slice(&[-0.0, 0.0, 1.0, -1.0]);
+        let mut output = vec![9.0; 480 * 8];
+        route.process(&input, &mut output);
+        assert!(input
+            .iter()
+            .zip(&output)
+            .all(|(a, b)| a.to_bits() == b.to_bits()));
+        assert_eq!(
+            (route.input_samples(), route.output_samples()),
+            (3_840, 3_840)
+        );
+    }
+
+    #[test]
+    fn matrix_route_down_and_up_mixes_and_swaps() {
+        // 7.1 (L R C LFE Ls Rs Lb Rb) down to stereo: each side gets its
+        // front, side and back channel plus half the centre.
+        let mut down = vec![0.0_f32; 16];
+        for (output, inputs) in [(0, [0, 4, 6]), (1, [1, 5, 7])] {
+            for input in inputs {
+                down[output * 8 + input] = 1.0;
+            }
+            down[output * 8 + 2] = 0.5;
+        }
+        let route = CableMatrixRoute::new(8, 2, 1, &down).unwrap();
+        let mut output = [0.0; 2];
+        route.process(&[0.1, 0.2, 0.4, 0.9, 0.01, 0.02, 0.001, 0.002], &mut output);
+        assert!((output[0] - (0.1 + 0.2 + 0.01 + 0.001)).abs() < 1e-12);
+        assert!((output[1] - (0.2 + 0.2 + 0.02 + 0.002)).abs() < 1e-12);
+        // Stereo up to 8 (front pair only) and a left/right swap.
+        let mut up = vec![0.0_f32; 16];
+        up[0] = 1.0;
+        up[3] = 1.0;
+        let route = CableMatrixRoute::new(2, 8, 1, &up).unwrap();
+        let mut wide = [7.0; 8];
+        route.process(&[0.25, -0.5], &mut wide);
+        assert_eq!(wide, [0.25, -0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        let route = CableMatrixRoute::new(2, 2, 1, &[0.0, 1.0, 1.0, 0.0]).unwrap();
+        let mut swapped = [0.0; 2];
+        route.process(&[0.25, -0.5], &mut swapped);
+        assert_eq!(swapped, [-0.5, 0.25]);
+        // A short final block leaves the rest silent; bad shapes are refused.
+        let route = CableMatrixRoute::new(2, 2, 4, &[1.0, 0.0, 0.0, 1.0]).unwrap();
+        let mut partial = [5.0; 8];
+        route.process(&[0.5, 0.5], &mut partial);
+        assert_eq!(partial, [0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(
+            CableMatrixRoute::new(9, 2, 1, &[0.0; 18]).err(),
+            Some(CableRouteError::UnsupportedChannels)
+        );
+        assert_eq!(
+            CableMatrixRoute::new(2, 2, 1, &[1.0; 3]).err(),
+            Some(CableRouteError::InvalidMatrix)
+        );
+        assert_eq!(
+            CableMatrixRoute::new(1, 1, 1, &[f32::NAN]).err(),
+            Some(CableRouteError::InvalidMatrix)
+        );
+        assert_eq!(
+            CableMatrixRoute::new(1, 1, 0, &[1.0]).err(),
+            Some(CableRouteError::InvalidBlockFrames)
         );
     }
 }
