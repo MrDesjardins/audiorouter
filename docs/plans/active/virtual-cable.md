@@ -1702,6 +1702,45 @@ end (r23), latency recovery, A7 kill test (r24), continuity at the
 route level (r26). Remaining WP-09 work: 8 channels and multi-cable
 layouts (engine processing width), then WP-10 UI.
 
+### WP-09 slice 5 — multichannel cable routes (2026-10-11)
+
+**Decision (user, 2026-10-11): cable pass-through and mixing; tools stay
+stereo.** A cable route may carry 1–8 channels per cable when it connects
+the two cables directly, with the edge's channel matrix (rows: destination
+channels; columns: source channels): identity for bit-exact pass-through
+(VCAB-20 8-channel), or any up- or downmix (for example 7.1 game audio to
+stereo). A route with tools stays stereo. A multichannel route with tools is
+refused with a plain reason. Full engine widening (about 250 stereo-specific
+spots: matrix, mixer, meters, telemetry, recorder, plugin buses) is not in
+scope.
+
+Ordered tasks:
+1. Domain (`crates/domain`): ports of `VirtualRenderSource` /
+   `VirtualCaptureSink` allow 1–8 channels (`MAX_CABLE_CHANNELS`); every
+   other port stays 1–2. `MAX_CHANNEL_MATRIX_COEFFICIENTS` 4 → 64 (8×8);
+   the matrix length still equals destination × source channels. Schema,
+   catalog and contract follow the constants. The engine compilers keep
+   refusing more than 2 channels with an error, never a panic (test).
+2. `crates/windows-audio`: `CableMatrixRoute`, a preallocated f64 block
+   mapper. A row with a single 1.0 coefficient copies the sample (exact,
+   including −0.0); other rows sum their products. The worker takes either
+   stage (engine or matrix), with separate render and capture block sizes.
+   Tests: 8-channel identity is bit-exact with float32-grid noise and
+   signed zeros; 8→2 downmix values; 2→8 upmix; a channel swap.
+3. `crates/control`: `cable_route_shape` returns the channel counts and the
+   matrix. Any port other than 2 channels requires a direct cable→cable
+   edge and no tools. Leases open with each cable's channel count, and
+   diagnostics report `renderChannels` and `captureChannels`. The node's
+   channel count must match the cable's Windows format; otherwise the
+   driver counts `FormatMismatches` and outputs silence (by design;
+   WP-08/WP-10 will fill it from the endpoint).
+4. VM: the user sets Cable A Input and Cable B Output to an 8-channel
+   48 kHz default format in Sound settings. The product route runs 8→8
+   identity under an 8-channel bit-exact probe (`cable-bitexact`, if it
+   supports 8 channels; otherwise a tool extension), then restores the
+   formats.
+Rollback: per-task commits; stereo routes are unchanged (engine path).
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
