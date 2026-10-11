@@ -40,12 +40,19 @@ fresh-install gate is deferred while the user uses AudioRouter for game audio;
 do not stop it. No `AUDIOROUTER_ALLOW_DEVICE_ADMIN` override, host driver
 installation or host setting change occurred.
 
-**Next:** continue Task 2: prepare the r12 continuity bundle, verify the SYS
-hash is unchanged, and give the user the one-hour VM command. After the user
-returns the guest zip, review and record it, then locate the standing delay
-before designing recovery (spec 17). When the user is done using AudioRouter,
-ask them to close it and run the exact packaged fresh-install gate. Resolve the
-workspace pipe-test environment issue. Then ask before pushing the tag or
+Task 2 host preparation is complete: `7802c9b2` adds the runner to the bundle
+preparer and documents the procedure. All 153 host acceptance checks pass.
+The r12 bundle is ready at
+`C:\VMs\ar-share\diagnostics-20261010-cable-continuity-r12`; its 38-file
+manifest verifies, and SYS SHA-256 is unchanged. The one-hour inside-VM
+command is in the virtual-cable latency runbook and will be provided to the
+user. After the user returns the guest zip, review and record it, then locate
+the standing delay before designing recovery (spec 17).
+
+For release 0.0.15, fresh-install qualification remains deferred while the
+user uses AudioRouter for game audio. When they are done, ask them to close it
+and run the exact packaged fresh-install gate. Resolve the Windows workspace
+pipe-test environment issue. Then ask before pushing the tag or
 creating/publishing a GitHub release. Rollback: keep 0.0.14 and compatible
 configuration/recording backups; the local release tag is unpushed.
 

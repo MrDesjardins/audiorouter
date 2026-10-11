@@ -490,3 +490,53 @@ audio as written (the r3/slot-provenance rule), so the delay persisted for
 the rest of the run. Whether a cable should later shed such standing delay
 (dropping audio to recover latency) is a design decision against
 VCAB-24/25, not a defect fix; recorded for the latency-recovery decision.
+
+## Bundle r12 — eight-cable sustained continuity preparation (2026-10-10)
+
+Purpose: VCAB-24 step 3 deviation run on this one-PC VirtualBox NEM setup.
+It runs four simultaneous AudioRouter engine routes (A→B, C→D, E→F, G→H)
+and one identity-coded impulse train per route for 60 minutes. It is not
+VCAB-24 qualification. The user decision in spec 17 remains: after this run,
+first locate where the r11 standing delay is held, then design bounded,
+counted latency recovery.
+
+Source/implementation:
+
+- Host runner `tools/vm/run-cable-continuity.ps1` and its host acceptance
+  test were already committed in `24ab269a`.
+- `7802c9b2` adds the runner to
+  `tools/vm/prepare-cable-latency-update.ps1`, rejects a base bundle that
+  already has it, documents the one-block guest procedure in
+  `docs/operations/virtual-cable-latency.md`, and updates
+  `docs/plans/active/virtual-cable.md`.
+- Host command: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+  tests/acceptance/m03-cable-continuity.ps1`. Result: **153 checks passed**;
+  no audio stream, helper or driver tool opened. This exercises fake process
+  boundaries, the real probe self-test and host refusal, not VM audio.
+- `node tools/docs/validate.mjs`: passed, 147 Markdown files and 823 local
+  links.
+
+Bundle preparation, host PC, 2026-10-10:
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/vm/prepare-cable-latency-update.ps1 -BaseBundle C:\VMs\ar-share\repair-20261010-slot-provenance -Destination C:\VMs\ar-share\diagnostics-20261010-cable-continuity-r12
+```
+
+Prepared at `C:\VMs\ar-share\diagnostics-20261010-cable-continuity-r12`
+from clean source `7802c9b202b3a09c704757fa9d3dd5bac3057b92`. The bundle
+manifest verifies 38 files, including `run-cable-continuity.ps1` and
+`repo\tests\acceptance\m03-driver-vm-support.ps1`; manifest SHA-256:
+`9318755a5c09837de1eaa491b347c159df273ceb5cd46acaa9c52709d96d644b`.
+The static probe pairing self-test passed during preparation. The base and
+new bundle `driver\audioroutervirtual.sys` hashes are identical:
+`10cf8e879de85e3a924cdcc0dba2987d00cb8328dab9cba870b997f3ef952381`.
+No driver was installed or loaded on the host, and no host setting changed.
+
+Guest run is **pending user execution**. In Administrator PowerShell inside
+AR-DriverTest, use the one-hour block in
+[`virtual-cable-latency.md`](../../../operations/virtual-cable-latency.md#eight-cable-sustained-continuity-vcab-24-step-3-deviation-run).
+It takes about 62 minutes and copies one `continuity-*.zip` to the shared
+folder. After the user provides the zip, verify its hash, inspect all four
+probe/raw/progress/counter reports, attribute a loss/counter event as VM-wide
+only when all four routes report a nearby ≥20 ms gap, and append the observed
+results here. Do not infer a clean run from the host acceptance test.

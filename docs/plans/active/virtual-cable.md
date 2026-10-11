@@ -109,9 +109,14 @@ check again. Next: step 3, the traced one-hour 8-cable deviation run, then
 the latency-recovery design.
 
 Step 3 preparation (2026-10-10): the host runner and 153-check acceptance
-test are committed in `24ab269a`. The r12 bundle is being assembled from
-`C:\VMs\ar-share\repair-20261010-slot-provenance`; it adds the runner without
-changing the test-signed SYS. The guest run is a one-hour NEM deviation
+test are committed in `24ab269a`; host acceptance passes all 153 checks. The
+r12 bundle is prepared at
+`C:\VMs\ar-share\diagnostics-20261010-cable-continuity-r12` from clean source
+`7802c9b2`, based on
+`C:\VMs\ar-share\repair-20261010-slot-provenance`. Its 38-file manifest
+verifies and the test-signed SYS hash is unchanged (`10CF8E87…52381`); see
+[preparation evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r12-eight-cable-sustained-continuity-preparation-2026-10-10).
+The guest run is a one-hour NEM deviation
 measurement of four simultaneous AudioRouter engine routes with eight cables,
 not VCAB-24 qualification. After the user returns its `continuity-*.zip`,
 review every route's impulse loss, packet/counter data and progress gaps,
