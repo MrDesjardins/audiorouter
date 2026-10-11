@@ -61,10 +61,16 @@ the engine step is the library `CableRouteProcessor`); bundle r7 built
 VM r7 (engine route): bit-exact and isolation pass; default latency
 jittered by one block (10 ms) because re-blocking emitted 0/1/1/2 blocks
 per input block. Repaired with a constant re-blocking delay and one block
-out per block in (evidence, third VM run). Provisional lesson until a VM
-run confirms it: test re-blocking for a constant emission count per
-input block, not only sample continuity. Next: bundle r8, same guest
-command, expect default jitter near the proxy's 0.002 ms.
+out per block in (evidence, third VM run). VM r8 confirmed the repair:
+bit-exact and isolation pass; default latency is flat within each steady
+stretch (25.272 ms before a ~51 ms VM-wide stall, 50.273–50.275 ms after);
+the stall's +25 ms sits in endpoint buffering outside the route (route
+queue depth unchanged). Lesson recorded in AGENTS.md. **Step 1 done** for
+the stereo engine processing path; 8 channels wait for engine width.
+
+Next (step 2): a repeated-start latency mode that reports a steady level
+per start and marks stall-shifted segments, then the same measurement on
+VB-Cable installed in the VM (user-run install inside the VM only).
 
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
