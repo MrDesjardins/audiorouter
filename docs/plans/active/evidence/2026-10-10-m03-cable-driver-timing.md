@@ -953,6 +953,32 @@ expected and not comparable: Verifier's standard checks slow the VM.
 legal IRQL. It does not prove the race is gone, because the race was
 never reproduced.
 
+**r20 Block 3, first attempt (2026-10-11) — invalid: Driver Verifier still
+running.** Archive `continuity-bc0376b5feb24d61b154cec9ffce9504.zip`, SHA-256
+`B46BF696BFDDD5D14813C12E43628BC32D329C21B952527E2FD03B76E81B5732` (matches
+the guest). Bridge `driver_version: [0, 1, 4, 0]`, 0 corrupted, cable count
+restored. The runner failed its own guard ("Lost-run report is incomplete"):
+each route lost about 7.5 % of impulses (A→B 4,140 / 55,878; C→D 4,363;
+E→F 4,313; G→H 4,179). The probe prints at most 256 of its 2,091–2,439 loss
+runs, so the runner rejected the attribution. A→B render packet writes
+were late 1,889 times in 10 minutes (r18 hour: 41). Render-source underrun
+was 2.79 M frames (r18 hour: 36,672). There were few whole-guest gaps: one
+≥20 ms interval per minute or fewer after minute 0. This is steady
+per-stream overhead, matching Block 2 under Verifier (6–8 % lost at low
+latency), not VM stalls.
+
+Cause: the guest was not restarted after `verifier-off`, so Verifier stayed
+active in the kernel. Pairing the archive's guest wall-clock entry times
+with the boot-relative QPC gives a boot time of about 10:53:32 for Block 2
+(10:54:34 ↔ 61.8 s; 10:56:42 ↔ 189.7 s). For Block 3 it gives about
+10:54:01 (11:15:24 ↔ 1,282.7 s): the same boot, before `verifier-off` at
+10:56:49. The block's guard used `verifier /querysettings`, which reports
+next-boot settings, not the running state, so it could not detect this.
+Repair: the rerun block requires `LastBootUpTime` later than the newest
+`*-verifier-off` evidence folder. Block 3 also restored SysMain, so the
+rerun disables it again for comparability with r18. No conclusion about
+r20 continuity is drawn from this run.
+
 Guest procedure (user, three blocks, two restarts): copy + install +
 `verifier-on`, restart; status (0.1.4.0) + repeated-start engine run under
 Verifier + `verifier-off`, restart; status + 10-minute continuity, then
