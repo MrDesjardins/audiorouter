@@ -92,9 +92,17 @@ function Wait-QuietCpu([int] $Seconds) {
     $calm = 0
     $watch = [Diagnostics.Stopwatch]::StartNew()
     while ($watch.Elapsed.TotalSeconds -lt $Seconds) {
-        $sample = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 5 -MaxSamples 1).CounterSamples[0].CookedValue
-        $calm = if ($sample -lt 10) { $calm + 5 } else { 0 }
-        Write-Host ("  CPU {0,5:N1} %  quiet for {1,2} s" -f $sample, $calm)
+        # The performance counter can fail a sample ("negative denominator")
+        # in a VM; treat that sample as not quiet and keep waiting.
+        try {
+            $sample = (Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 5 -MaxSamples 1 -ErrorAction Stop).CounterSamples[0].CookedValue
+        } catch {
+            $sample = $null
+            Start-Sleep -Seconds 5
+        }
+        $calm = if ($null -ne $sample -and $sample -lt 10) { $calm + 5 } else { 0 }
+        if ($null -eq $sample) { Write-Host '  CPU sample unavailable; retrying' }
+        else { Write-Host ("  CPU {0,5:N1} %  quiet for {1,2} s" -f $sample, $calm) }
         if ($calm -ge 60) { return $true }
     }
     return $false

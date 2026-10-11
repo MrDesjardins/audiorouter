@@ -25,7 +25,7 @@ This section supersedes sections 4–9 below, which describe the earlier
   [native VT-x session](../../operations/virtual-cable-native-vtx-session.md)
   or a bare-metal test PC for VCAB-24. Never change host settings yourself.
 - **Prepared, not yet run:** [cable latency diagnostic](../../operations/virtual-cable-latency.md)
-  (`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r4`, VCAB-25 proxy).
+  (`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r5`, VCAB-25 proxy).
   Next guest action when the user returns: that one command on the installed
   driver, then review `latency-<run>.zip`.
 - The user prefers host-side verification first and one combined, fail-fast

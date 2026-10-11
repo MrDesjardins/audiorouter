@@ -101,3 +101,12 @@ case; mutation ignoring the probe's isolation verdict is caught). Bundle
 `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r4`: source `9717d2b1`,
 driver `492d8ca8` (SYS SHA-256 unchanged), 36 entries, manifest SHA-256
 `6B81F23A9E735B50EC13F4ED04B94D2FE2766665B8873FF69D2DEF15C7F925CC`. Use r4.
+
+## Bundle r5 (guest-quieting fix)
+
+In the guest, `quiet-guest.ps1 -Apply` stopped at its CPU-settle wait with
+"A counter with a negative denominator value was detected" after applying
+and recording every setting. Commit 6f3fcb5a retries failed samples (48 host
+checks). Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r5`,
+source 6f3fcb5a, driver `492d8ca8` unchanged, manifest SHA-256
+``. Use r5.

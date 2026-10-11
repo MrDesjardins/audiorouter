@@ -84,12 +84,17 @@ Assert (($script:paths -join ',') -eq 'C:\ar,D:\other' -and ($script:processes -
 
 # 3. Settle wait: quiet after a burst returns true; a busy guest times out.
 $script:samples = [Collections.Generic.Queue[double]]::new()
-@(55, 40, 12) + @(1..12 | ForEach-Object { 3 }) | ForEach-Object { $script:samples.Enqueue($_) }
-function Get-Counter { param($Counter, $SampleInterval, $MaxSamples)
+@(-1, 55, 40, -1, 12) + @(1..12 | ForEach-Object { 3 }) | ForEach-Object { $script:samples.Enqueue($_) }
+function Start-Sleep { param($Seconds, $Milliseconds) $script:retrySleeps++ }
+$script:retrySleeps = 0
+function Get-Counter { param($Counter, $SampleInterval, $MaxSamples, $ErrorAction)
     $value = if ($script:samples.Count) { $script:samples.Dequeue() } else { 90 }
+    # -1 stands for the VM's intermittent counter failure.
+    if ($value -eq -1) { throw 'A counter with a negative denominator value was detected.' }
     [pscustomobject]@{ CounterSamples = @([pscustomobject]@{ CookedValue = $value }) } }
 Assert (Wait-QuietCpu 30) 'sixty quiet seconds after a burst are accepted'
 Assert ($script:samples.Count -eq 0) 'quiet detection needs twelve consecutive quiet samples'
+Assert ($script:retrySleeps -eq 2) 'a failed counter sample is retried, not fatal'
 Assert (-not (Wait-QuietCpu 1)) 'a guest that never settles times out'
 Assert (Wait-QuietCpu 0) 'settling can be skipped explicitly'
 
