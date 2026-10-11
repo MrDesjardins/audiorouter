@@ -1514,6 +1514,21 @@ median steady 36.2 ms), counters in `final cableRoute`, and a clean
 stop. Still open after it: the A7 kill test, the 10-minute 997/47 Hz
 continuity test, 8 channels (engine width) and multi-cable layouts.
 
+r22 guest attempt (2026-10-11), archive
+`starts-product-1f3a231e0443486e918ebdbc4eae6a87.zip`, SHA-256
+`6A90A7843D6805D50EBEEF4BACE8709FAF0A981B0D9D6838F1268C353EE0A4CA`: the
+product route prepared and started on the real driver (`session.start` →
+`runtime: native`, `state: running`, Cable A → Cable B). Then the VM
+tool's own `system.diagnostics` call sent null params ("method params must
+be an object") and exited 1, so no measurement ran. It was a tool bug, not
+a route bug: on the host, Start fails before that line, so the host run
+never reached it. Fixed in `7d03168e`: the calls send `{}`, and the new
+`--check` mode runs every request except `session.start` (verified on the
+host). Bundling now runs it. r23 bundle:
+`C:\VMsr-share\diagnostics-20261011-product-route-r23`, MANIFEST SHA-256
+`B5C31B2B867A2E305DEB4FE0F016FF123A4DA907B4DC365BFE4C1D039FFBBD80`, 42/42
+verified; same driver source. Same guest command from the r23 bundle.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
