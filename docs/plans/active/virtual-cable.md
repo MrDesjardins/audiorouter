@@ -1529,6 +1529,37 @@ host). Bundling now runs it. r23 bundle:
 `B5C31B2B867A2E305DEB4FE0F016FF123A4DA907B4DC365BFE4C1D039FFBBD80`, 42/42
 verified; same driver source. Same guest command from the r23 bundle.
 
+**Slice 4 result, r23 (2026-10-11) — the product route works end to end.**
+Archive `C:\VMsr-share\diagnostics-20261011-product-route-r23\starts-product-527100dd28314c8383022a5387596b09.zip`,
+SHA-256 `97530B886E2FF929D2A6BE9975D52A84D2FCC20BBE4E214648AEA9F5F36B3DC9`
+(matches the guest). `Passed=true`. All ten route processes and probes
+exited 0: the route prepared, started, was serviced, reported counters and
+stopped through the control plane. 0 corrupted impulses, 0 render
+sequence gaps, 0 engine-silent quanta in every start.
+
+| Mode | Median steady | Steady range | Clean starts | Lost / 5,000 | Relay trims / drops |
+|---|---|---|---|---|---|
+| default | 42.1 ms | 35.1–45.1 ms | 3 of 5 | 8 | trims 3 (start 1) |
+| low latency | 44.0 ms | 41.9–49.7 ms | 0 of 5 | 188 | trims 4 + 2, drops 1 + 2 |
+
+Default mode is in the tool route's range (r20/r21 steady 34.7–43.5 ms).
+Low-latency loss (3.8 %) is in the same regime as the tool route's
+low-latency loss in this VM (r13 about 4.5 %: the known capture timing
+issue), but latency is 44 ms instead of about 17 ms. The product route
+always uses 480-frame bridge blocks, while the tool used 128-frame blocks
+in low-latency mode.
+
+**Open decision (next):** the product route's bridge block size. Options:
+(a) always 128 frames (lowest latency, about 4× the wake-ups); (b) follow
+the driver's configured default period (`DefaultPeriodFrames`, 480 now);
+(c) a per-route setting. Low latency is a product goal (VCAB-25, ≤ 5 ms
+worse than VB-Cable), so (b) with the driver default lowered when the user
+picks low latency is the likely fit. To be decided before WP-10 exposes
+it. Remaining slice 4 work: the A7 kill test (Cable B silent within
+500 ms after the backend dies, no old audio after restart), the 10-minute
+997/47 Hz continuity test, and 8 channels / multi-cable layouts (engine
+width).
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
