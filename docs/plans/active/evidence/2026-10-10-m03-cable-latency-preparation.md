@@ -440,3 +440,49 @@ single run 220.
 Bundle r11: `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r11`, source
 `cc36d285`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
 `BFCA9B0837F1D14AE958551FF89A12217BF42DDD423F321DA8D5CEF4781C7C45`.
+## Repeated starts, both routes (bundle r11) — 2026-10-10, NEM VM, guest quieted
+
+Archives (SHA-256 verified on the host):
+`starts-engine-ee54eaca00e1479b9587955163371eb9.zip`
+`0353F8DF78EA212E3B1759429EE9C72C48F9B06DD8AA74B1613580EA410852E2`,
+`starts-vbcable-ceb869418f6a425b9d66857abb3fe9c2.zip`
+`37CE6778F05C9396CAC5B78190E0554981D59EEA47EAF2B77AD74C10990E53C6`;
+extracted to `target/starts-engine-ee54eaca` and `target/starts-vbcable-ceb86941`,
+with raw clock/arrival files for every measurement. All probes and routes
+exited 0; engine silent quanta 0; corrupted impulses 0 everywhere.
+
+Per-start p50 (ms, in-run median dating; end-anchor in brackets):
+
+| Start | Engine, default | VB-Cable, default | Engine, low-latency | VB-Cable, low-latency |
+| --- | --- | --- | --- | --- |
+| 1 | **39.10** clean (38.89) | **46.20** clean (46.05) | 16.62, 26 lost (145.88) | 45.50, 3 steps (44.73) |
+| 2 | 64.00: 34.38 then 64.45 from impulse 148, 2 lost (60.08) | **56.25** clean (56.10) | 16.73, 27 lost (136.00) | 62.81, 16 steps (25.40) |
+| 3 | **43.98** clean (44.19) | **61.46** clean (61.27) | 18.22, 19 lost (135.53) | 59.60, 22 steps (39.81) |
+| 4 | **38.04** clean (37.83) | **54.02** clean (54.02) | 17.34, 23 lost (81.13) | 56.67, 9 steps (49.19) |
+| 5 | **36.42** clean (36.77) | **54.57** clean (53.54) | 18.13, 22 lost (3.23) | 59.15, 23 steps (31.70) |
+
+Default periods (clean starts): engine route 36.4–44.0 ms, median of four
+38.6 ms (38.04 lower middle); VB-Cable Input → Output 46.2–61.5 ms, median
+54.6 ms. The AudioRouter route is about 16 ms faster than VB-Cable alone and
+its median is within the 40 ms default target. The median-offset dating
+fixed the r10 problem: all five default VB-Cable starts are clean, and on
+clean starts in-run and end-anchor dating agree within about 1 ms.
+
+Low-latency periods: the engine route's in-run p50 is 16.6–18.2 ms on every
+start (target ≤ 20 ms), but no start is clean (19–27 lost impulses, capture
+frames dropped, render steps) under NEM. The end-anchor values (3–146 ms)
+are dating artefacts, so the earlier "low-latency p95 ≈ 137–150 ms"
+readings (r5–r8) were mostly misdated, not route latency. VB-Cable's
+low-latency render position shows real steps (3–69 ms in total per start),
+so none of its starts is clean either; its p50 is 45–63 ms.
+
+Open finding (engine start 2): the latency stepped up by 30 ms at impulse
+148 and stayed there. The probe's render side was continuous (no render
+step); the route counters show one late `SetWritePacket` and 1,440 extra
+render-source underrun frames (30 ms) at the driver, and the probe dropped
+480 capture frames. The Windows audio engine delivered render audio 30 ms
+late; the driver played silence for that time and then played the late
+audio as written (the r3/slot-provenance rule), so the delay persisted for
+the rest of the run. Whether a cable should later shed such standing delay
+(dropping audio to recover latency) is a design decision against
+VCAB-24/25, not a defect fix; recorded for the latency-recovery decision.

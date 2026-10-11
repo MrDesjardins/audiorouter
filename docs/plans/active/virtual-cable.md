@@ -91,6 +91,14 @@ and raw data saved per run (bundle r11, `cc36d285`). Next: the user reruns
 both routes; later method changes are checked on the saved raw data on the
 host first.
 
+r11 (indicative, NEM): default periods, clean starts: engine route median
+38.6 ms (36.4–44.0) vs VB-Cable 54.6 ms (46.2–61.5); low-latency engine p50
+16.6–18.2 ms but no clean start (losses). Earlier ~150 ms low-latency values
+were dating artefacts. **Step 2 done.** Open decision: a cable keeps a
+standing +30 ms after late OS render delivery (engine start 2); whether to
+shed standing delay is a latency-recovery design decision. Next: step 3,
+the traced one-hour 8-cable deviation run.
+
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
 supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
