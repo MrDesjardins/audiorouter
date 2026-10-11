@@ -111,6 +111,17 @@ Suspend-BitLocker -MountPoint 'C:' -RebootCount 1   # only if BitLocker protecti
 Also turn **Memory integrity** back on (Windows Security → Device security →
 Core isolation) before that restart. Verify afterwards as described above
 (`HypervisorPresent True`, VBS status 2, `SecurityServicesRunning {2}`, WSL).
+
+**Outcome (2026-10-10 18:05):** even with `hypervisorlaunchtype Off`,
+Memory integrity off and `EnableVirtualizationBasedSecurity=0`, VBS kept
+running (status 2, no services), the hypervisor stayed present and VirtualBox
+still fell back to NEM. Remaining VBS users found read-only: Windows Hello
+Enhanced Sign-in Security (`Scenarios\WindowsHello Enabled=1`), a `KeyGuard`
+scenario key, and LSA protection (`RunAsPPL=2`). Disabling Enhanced Sign-in
+Security typically requires removing Windows Hello biometric enrollment, which
+is out of proportion for a test session. **Conclusion: native VT-x is not
+practical on this PC; restore it fully (steps above) and qualify sustained
+runs on a separate test PC.**
 Then run only the long tests the agent gives you.
 
 ## Restore the hypervisor (bring WSL and Memory Integrity back)
