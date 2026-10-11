@@ -26,9 +26,11 @@ and immutable bundle `diagnostics-20261011-cable-capture-read-r17`
 (41/41 hashes). r17 guest result (0.1.2 verified loaded): 0 intact skips,
 but still 119 skips and 118 flagged capture packets. The audio engine
 ignores MoreData 136/150 times and waits for the next notification, so it
-stays one packet behind and the loss moves. Gate not met. Next: decide on
-r18 (re-signal the notification event on MoreData) and/or boundary-aligned
-notifications. See
+stays one packet behind and the loss moves. Gate not met. r18 (re-signal
+the notification event on MoreData) implemented and reviewed (no blocker;
+findings applied; pre-existing unlocked list registration recorded).
+Next: clean test-signed 0.1.3 package and bundle, guest install and restart,
+traced comparison against the same criteria. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 

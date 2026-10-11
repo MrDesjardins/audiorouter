@@ -31,6 +31,62 @@ def select(ms, last_read):
     return packet, packet < newest
 
 
+def simulate(policy, seconds=20, seed=17, fetch_delay=0.15, rewake=0.05,
+             rewake_jitter=0.0, honor=0.0):
+    """Engine model from r17 guest data: one GetReadPacket per wake, MoreData
+    honoured immediately with probability `honor` (r17: 14/150), otherwise
+    the engine waits for the next notification; fetch about 0.15 ms after a
+    notification. The timer fires at jittered intervals (r16/r17 p50 about
+    1.6 ms, p95 about 2.6 ms). An r18 re-signal wakes the engine after
+    `rewake` plus up to `rewake_jitter` ms.
+    policy: 'newest' (r16), 'oldest' (r17), 'oldest+resignal' (r18).
+    Returns (returned, skipped, returned_with_reuse, zero_margin_returns)."""
+    import random
+    rng = random.Random(seed)
+    loop_rng = random.Random(seed + 1)
+    end = seconds * 1000
+    t, last_notified, last_read = 0.0, 0, -1
+    wakes = []
+    returned = skipped = reused = zero_margin = 0
+
+    def fetch(w):
+        nonlocal last_read, returned, skipped, reused, zero_margin
+        newest = latest(w)
+        if newest < 0 or newest <= last_read:
+            return None
+        if policy == "newest":
+            packet, more = newest, False
+        else:
+            packet, more = select(w, last_read)
+        skipped += packet - last_read - 1
+        last_read = packet
+        returned += 1
+        if not retained_packet(w, packet):
+            reused += 1
+        if position(w) == (packet + 2) * 128 and more:
+            zero_margin += 1
+        return more
+
+    while t < end:
+        r = rng.random()
+        t += 1.0 + (rng.random() * 1.6 if r < 0.95 else 1.6 + rng.random() * 2.0)
+        while wakes and wakes[0] <= t:
+            w = wakes.pop(0)
+            more = fetch(w)
+            if more and policy == "oldest+resignal":
+                wakes.append(w + rewake + loop_rng.random() * rewake_jitter)
+                wakes.sort()
+            elif more and policy == "oldest" and loop_rng.random() < honor:
+                wakes.append(w + 0.02)
+                wakes.sort()
+        count = position(t) // 128
+        if count > last_notified:
+            last_notified = count
+            wakes.append(t + fetch_delay)
+            wakes.sort()
+    return returned, skipped, reused, zero_margin
+
+
 def checks():
     assert latest(Fraction(8, 3)) == -1  # 1 ms progress quantum, not a second clock
     assert latest(3) == 0
@@ -95,6 +151,21 @@ def checks():
             assert retained_packet(t, packet)
             assert all(not retained_packet(t, p) for p in range(last + 1, packet))
             assert more == (packet < latest(t))
+    # r18: an engine that ignores MoreData stays one packet behind under r17,
+    # so the next fetch finds that slot reused; re-signalling the
+    # notification event on MoreData lets it catch up. No policy ever returns
+    # a reused slot.
+    for seed in (1, 17, 99):
+        newest = simulate("newest", seed=seed)
+        oldest = simulate("oldest", seed=seed, honor=14 / 150)
+        resignal = simulate("oldest+resignal", seed=seed)
+        late = simulate("oldest+resignal", seed=seed, rewake=1.0, rewake_jitter=1.0)
+        assert resignal[1] < 0.5 * newest[1] and resignal[1] < oldest[1] < newest[1]
+        # A slow response to the re-signal (1-2 ms) must not be worse than r17.
+        assert late[1] < oldest[1]
+        # Every rescued packet is returned at exactly zero margin; r18 rescues
+        # at least as many as r17 (each is a former flagged drop).
+        assert newest[3] == 0 and resignal[3] >= oldest[3] > 0
     print("Capture timing model passed: boundaries, slot reuse, delayed notification/fetch, reader retention.")
     print("r17 selection returns the oldest intact unread packet; only overwritten packets are skipped.")
     print("128 frames = 2.667 ms; 1 ms notification quantization leaves less than one period for OS fetch.")

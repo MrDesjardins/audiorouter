@@ -535,6 +535,81 @@ first, and review. Alternative or complementary: reduce notification
 lateness (p50 1.287 ms) with frame-granular positions and boundary-aligned
 timer due times.
 
+## Repair r18 — re-signal the notification event on MoreData (2026-10-11)
+
+User approved r18 after the r17 result. Requirement IDs: VCAB-24/25/28,
+VDEV-07.
+
+**Scope.** When `GetReadPacket` returns with `MoreData`, after updating
+`m_ulLastOsReadPacket`, it takes `m_PositionSpinLock`. If the stream is in
+RUN, it calls `KeSetEvent` on every registered notification event, the same
+walk `TimerNotifyRT` does. Diagnostic builds add one `AR_TIMING_RESIGNAL`
+(7) record per call. `m_llLastNotifiedPacketCounter`, the timer, periods,
+buffers, the bridge and the render path are unchanged.
+
+**Model** (`simulate()` in `model-cable-capture-timing.py`). The engine does
+one fetch per wake, follows `MoreData` 14/150 of the time and fetches
+0.15 ms after a notification; the timer is jittered. Skipped packets per
+20 s, seeds 1/17/99:
+
+| Policy | Seed 1 | Seed 17 | Seed 99 |
+|---|---|---|---|
+| r16 newest | 465 | 417 | 402 |
+| r17 oldest intact | 355 | 308 | 305 |
+| r18 with prompt re-signal | 175 | 139 | 138 |
+| r18 with 1–2 ms re-signal response | 175 | 139 | 138 |
+
+A response of up to about 2 ms is equivalent, because the unread packet
+stays intact for one packet period. Every rescued packet is returned at
+exactly 0 margin (264–290 per run), so the r17 residual risk applies to
+more packets. The model's timer is harsher than the guest's (in r16, 115 of
+119 real skips were intact), so it does not predict the guest percentage.
+
+**Independent WP-04 review** (fresh-context Claude agent, read-only, same
+process as r17). Verdict: **no blocking defect**. It confirmed:
+- The re-signal is bounded: it needs a newer completed packet, and each call
+  advances the last-read number.
+- GetReadPacket is capture-only, and end-of-stream handling is render-only.
+- PAUSE is excluded by the RUN check.
+- Reusing `oldIrql` is correct.
+- The exporter passes event 7 through unchanged.
+- An extra wake costs at most one `STATUS_DEVICE_NOT_READY` poll.
+
+Findings:
+1. **Pre-existing, not fixed.** Register/Unregister change
+   `m_NotificationList` without the position lock, and the list is now
+   walked from two places. A client that unregisters while a fetch is in
+   flight could make the walk read freed memory, which bugchecks. The audio
+   engine stops before unregistering, and PortCls cannot close the pin while
+   a property call is in flight. Proper fix (separate change): insert and
+   remove under the lock in non-paged code, and free after release.
+2. Fixed: one diagnostic record per call; README updated.
+3. Fixed: the model now covers a late re-signal response (1–2 ms) and the
+   engine's occasional own `MoreData` follow-up (14/150); assertions added.
+4. Fixed: removed an assertion that was always true; added zero-margin
+   assertions.
+5. Not added: a host test for the inline re-signal condition, which is just
+   `MoreData` plus RUN. The guest event-7 count checks it.
+6. Fixed: the review tool's docstring now states which driver versions it
+   expects.
+
+**Host verification after the fixes.** `build-tests.ps1`: 88,167 checks
+pass. `tests/acceptance/m03-cable-driver-timing.ps1`: 58 checks pass. Model
+passes. Normal and diagnostic `build.ps1 -Version 0.1.3`: 0 warnings
+(`target/r18-build-normal2.log`, `target/r18-build-diagnostic2.log`). No
+signing, installation or audio on the host.
+
+**Guest pass criteria, unchanged from r17:**
+- 0 intact-slot skips;
+- probe flagged capture packets at least 80 % below 119;
+- 0 corrupted impulses.
+
+Also check that event 7 records appear, that `MoreData` follow-ups mostly
+arrive within 0.2 ms, and that the bridge reports
+`driver_version: [0, 1, 3, 0]`. The guest must restart after the install;
+the block checks boot time. Rollback: the r17 bundle (0.1.2) or the r16
+bundle (0.1.1) via `vm-checks.ps1 -Step install`, then restart the guest.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)

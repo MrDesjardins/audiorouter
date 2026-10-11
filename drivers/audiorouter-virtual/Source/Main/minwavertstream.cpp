@@ -980,6 +980,36 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     // Update the last packet read by the OS
     m_ulLastOsReadPacket = availablePacketNumber;
 
+    // r17 guest data: the audio engine fetched again after MoreData only
+    // 14 of 150 times; otherwise it waited for the next notification, stayed
+    // one packet behind, and lost that packet when the writer reached its
+    // slot. Signal the registered events now so it catches up at once. The
+    // list is walked under the position lock exactly as TimerNotifyRT does;
+    // an extra wake at most yields one STATUS_DEVICE_NOT_READY poll. The
+    // timer's notified-packet count is unchanged.
+    if (selection.MoreData)
+    {
+        KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+        if (m_KsState == KSSTATE_RUN)
+        {
+            PLIST_ENTRY leCurrent = m_NotificationList.Flink;
+            while (leCurrent != &m_NotificationList)
+            {
+                NotificationListEntry* nleCurrent = CONTAINING_RECORD(leCurrent, NotificationListEntry, ListEntry);
+                KeSetEvent(nleCurrent->NotificationEvent, 0, FALSE);
+                leCurrent = leCurrent->Flink;
+            }
+#if defined(AR_TIMING_DIAGNOSTICS)
+            // One record per re-signalling call, not per registered event.
+            RecordTiming(AR_TIMING_RESIGNAL,
+                static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart),
+                static_cast<ULONGLONG>(m_llPacketCounter), m_ullLinearPosition,
+                availablePacketNumber, STATUS_SUCCESS, selection.Packet);
+#endif
+        }
+        KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+    }
+
     return STATUS_SUCCESS;
 #if defined(AR_TIMING_DIAGNOSTICS)
     };

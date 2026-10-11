@@ -37,6 +37,7 @@ sort by QPC and stream ID for timing analysis. Events:
 | 4 | GetReadPacket entry before lock; pre-update snapshot under lock | Lock-acquired QPC |
 | 5 | GetReadPacket return, post-update snapshot | Entry QPC, for call pairing |
 | 6 | Stream enters RUN | Rate in high 32 bits; packet bytes in low 32 bits |
+| 7 | GetReadPacket returned with MoreData and re-signalled the notification events (r18; one record per call) | Returned 64-bit packet |
 
 Event 6 LinearBytes is block alignment and PacketNumber is notifications per
 buffer. Other events' LinearBytes is the DMA byte position. Event 4 is emitted

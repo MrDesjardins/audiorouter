@@ -1,4 +1,7 @@
-"""Offline review of an r16 driver-timing.csv (host only; reads a saved CSV).
+"""Offline review of a driver-timing.csv from the r16+ diagnostic drivers
+(host only; reads a saved CSV). The MoreData follow-up line is meaningful
+only for r17+ drivers (oldest-intact selection; r16 never set MoreData);
+re-signal records (event 7) exist only from r18.
 
 Usage: review-driver-timing.py driver-timing.csv [skip_ms]
 
@@ -124,6 +127,25 @@ def main(path, start_skip_ms=0.0):
             print(f"  skipped packets: {intact + reused} (slot intact {intact}, partly reused {reused}: "
                   f"{within_packet} by under one packet, max {max(reused_bytes, default=0)} B)")
             print(f"  returned packets whose slot reuse had begun: {reused_into}")
+            # MoreData follow-up: did the next fetch come within 0.2 ms, and
+            # was it woken by a boundary notification or not (r17/r18)?
+            ordered = [r for r in rs if r["event"] in (3, 5, 7)]
+            more_returns = quick = after_note = resignals = 0
+            pending, note = None, False
+            for r in ordered:
+                if r["event"] == 7:
+                    resignals += 1
+                elif r["event"] == 3:
+                    note = True
+                elif r["status"] == 0:
+                    if pending is not None:
+                        quick += ms(r["qpc"]) - pending < 0.2
+                        after_note += note
+                    more = r["packet_count"] - 1 > r["packet_number"]
+                    more_returns += more
+                    pending, note = (ms(r["qpc"]) if more else None), False
+            print(f"  MoreData returns: {more_returns}; next fetch within 0.2 ms: {quick}; "
+                  f"after a boundary notification: {after_note}; re-signals (event 7): {resignals}")
             worst.sort(reverse=True)
             print("  largest fetch delays (ms, packet, notify at ms):",
                   [(round(d, 3), p, round(t, 1)) for d, p, t in worst[:8]])

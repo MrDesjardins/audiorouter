@@ -14,6 +14,7 @@
 #define AR_TIMING_FETCH_ENTRY 4
 #define AR_TIMING_FETCH_RETURN 5
 #define AR_TIMING_FORMAT 6
+#define AR_TIMING_RESIGNAL 7
 
 struct AR_TIMING_REQUEST { ULONG Action; ULONG Offset; ULONG Reserved[2]; };
 struct AR_TIMING_RECORD {
