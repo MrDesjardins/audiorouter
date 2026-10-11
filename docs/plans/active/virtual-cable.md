@@ -85,6 +85,7 @@ found: the probe dates impulses from one end-of-run anchor, so levels
 before a render-side disturbance are unreliable (VB-Cable −3.9 ms; the r8
 reading is withdrawn). Next: probe dates impulses from in-run render-clock
 samples and reports render discontinuities; then rerun both routes.
+Done on the host (bundle r10, `a5ebd0f9`); next: the user reruns both routes.
 
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease

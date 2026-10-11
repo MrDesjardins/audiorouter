@@ -370,3 +370,23 @@ Clean single-level starts are unaffected. Next measurement repair: date
 impulses from render-clock samples taken during the run (position and QPC
 per period) and report render-side discontinuities, so a level step can be
 attributed to the probe or to the route.
+## Bundle r10 (in-run impulse dating)
+
+Commit `a5ebd0f9`. The render thread samples `IAudioClock::GetPosition`
+(stream frames and QPC) after every buffer into a preallocated vector; each
+impulse is dated between the samples around its own frame
+(`date_render_frame`), with the end anchor only outside the sampled range
+(counted). Render stalls or skips over 2 ms are reported
+(`cable_render_discontinuities`, at which impulse, how many ms), and the
+old single-anchor median is printed for comparison. Pairing takes per-impulse
+emission times (`pair_cable_impulses_dated`). Self-test 1,151 checks,
+including the r8 shape with a true constant 50 ms and a 25 ms render
+stall: the end anchor yields 25/50 ms levels, the in-run dating one 50 ms
+level plus the stall report. The repeated-start runner marks clean starts
+(no loss, no dropped capture frames, no render discontinuity) and reports
+the median of their p50 values; acceptance 119 checks; the single-run
+latency acceptance still passes 220.
+
+Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r10`, source
+`a5ebd0f9`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
+`CCFADBF4D0A227313775D972CE13FEC142512BCCAF74C1A3E28F2E6E1922A394`.
