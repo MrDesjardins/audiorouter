@@ -137,6 +137,16 @@ lasting 50 impulses is the start's steady level. A VM stall shows as a
 second segment instead of jitter. The runner prints the steady level of
 every start, the median per mode and how many starts shifted mid-run.
 
+Each impulse is dated from render-clock readings (stream position and QPC)
+taken after every render buffer, not from one end-of-run reference: with a
+single reference, a mid-run render stall misdated every earlier impulse
+(r9: an impossible −3.9 ms VB-Cable level). The probe also reports render
+stalls or skips over 2 ms (`cable_render_discontinuities`) and the old
+single-reference median (`cable_end_anchor_p50_ms`) for comparison. A start
+is **clean** when nothing was lost or dropped and the render stream never
+stalled; the comparison uses the median of the clean starts' p50 values,
+because VB-Cable's latency alternates by about 1 ms within a level.
+
 ### Install VB-Cable inside the VM only
 
 Never on the host for this test. Optional first: in VirtualBox, take a
@@ -159,9 +169,9 @@ needed):
 
 ```powershell
 & {
-    robocopy.exe 'Z:\diagnostics-20261010-cable-latency-r9' 'C:\ar\diagnostics-20261010-cable-latency-r9' /E /R:1 /W:1 /XF latency-*.zip starts-*.zip | Out-Null
+    robocopy.exe 'Z:\diagnostics-20261010-cable-latency-r10' 'C:\ar\diagnostics-20261010-cable-latency-r10' /E /R:1 /W:1 /XF latency-*.zip starts-*.zip | Out-Null
     if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r9\run-cable-latency-starts.ps1' -Route engine
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r10\run-cable-latency-starts.ps1' -Route engine
     if ($LASTEXITCODE -ne 0) { throw 'Repeated-start run failed. Evidence was preserved; send the output.' }
 }
 ```
@@ -169,7 +179,7 @@ needed):
 After VB-Cable is installed and the VM restarted:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r9\run-cable-latency-starts.ps1' -Route vbcable
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r10\run-cable-latency-starts.ps1' -Route vbcable
 ```
 
 The engine run takes about 3 minutes and the VB-Cable run about 1.5. Each

@@ -36,9 +36,12 @@ function Get-FakeProbe([string] $Case, [int] $Call, [string] $Mode) {
     $shift = $Case -eq 'stall' -and $Call -eq 2
     return @"
 cable_mode=$Mode cable_render_buffer_frames=$(if ($Mode -eq 'low-latency') { 280 } else { 1056 })
+cable_render_frames_submitted=1 cable_capture_frames=1 cable_capture_dropped_frames=$(if ($shift) { 960 } else { 0 }) cable_capture_flagged_packets=1 cable_arrivals=400
+cable_dating=in-run cable_render_clock_samples=500 cable_render_clock_overflow=0 cable_anchor_dated_impulses=0 cable_render_discontinuities=$(if ($shift) { 1 } else { 0 }) cable_render_discontinuity_ms=$(if ($shift) { 25.0 } else { 0.0 })
 cable_impulses_emitted=400 cable_impulses_matched=$(if ($shift) { 396 } else { 400 }) cable_impulses_lost=$(if ($shift) { 4 } else { 0 }) cable_impulses_corrupted=0 cable_impulses_duplicate=0 cable_impulses_out_of_window=0
 cable_latency_min_ms=$level cable_latency_p1_ms=$level cable_latency_p50_ms=$level cable_latency_p95_ms=$(if ($shift) { $level + 25 } else { $level }) cable_latency_p99_ms=$level cable_latency_max_ms=$level cable_latency_mean_ms=$level cable_jitter_p99_minus_p1_ms=0.003
 cable_segments=$(if ($shift) { 2 } else { 1 }) cable_steady_level_ms=$level cable_steady_first_impulse=0 cable_steady_impulses=$(if ($shift) { 120 } else { 400 }) cable_steady_spread_ms=0.003
+cable_end_anchor_p50_ms=$level cable_end_anchor_segments=1
 "@
 }
 
@@ -105,6 +108,8 @@ function Test-Starts([string] $Case, [string] $Route) {
             Assert ($results.Count -eq 6 -and $summary.Count -eq 2) 'six measurements and two mode summaries'
             $default = $summary | Where-Object { $_.Mode -eq 'default' }
             Assert ((@($default.SteadyLevelsMs) -join ',') -eq '26.25,28.25,30.25' -and $default.MedianSteadyMs -eq 28.25 -and $default.MaxSteadyMs -eq 30.25) 'steady level per start, median and maximum'
+            Assert ($default.CleanStarts -eq 3 -and (@($default.CleanP50sMs) -join ',') -eq '26.25,28.25,30.25' -and $default.MedianCleanP50Ms -eq 28.25) 'clean starts enter the comparison median'
+            Assert ($results[0].EndAnchorP50Ms -eq 26.25 -and $results[0].RenderDiscontinuities -eq 0) 'in-run dating fields recorded'
         }
         'engine-pass' {
             Assert ($script:started.Count -eq 6 -and @($script:started | Where-Object { $_ -notmatch '"--engine"' -or $_ -match '"--passthrough"' }).Count -eq 0) 'a fresh engine route for every measurement'
@@ -117,7 +122,9 @@ function Test-Starts([string] $Case, [string] $Route) {
             Assert ($saved.Scope -match 'VB-Cable' -and $saved.Scope -match 'no route') 'VB-Cable scope recorded'
         }
         'stall' {
-            Assert (($summary | Where-Object { $_.Mode -eq 'low-latency' }).StartsWithShift -eq 1 -and ($summary | Where-Object { $_.Mode -eq 'low-latency' }).LostTotal -eq 4) 'a mid-run level shift is counted, not pooled'
+            $low = $summary | Where-Object { $_.Mode -eq 'low-latency' }
+            Assert ($low.StartsWithShift -eq 1 -and $low.LostTotal -eq 4) 'a mid-run level shift is counted, not pooled'
+            Assert ($low.CleanStarts -eq 2 -and -not $results[1].Clean -and $results[1].RenderDiscontinuityMs -eq 25.0) 'a start with a render stall or loss is excluded from the comparison'
         }
         'vbcable-missing' { Assert ([bool]$failure -and [string]$failure -match 'Install VB-Cable' -and $script:probeCalls.Count -eq 0) 'missing VB-Cable starts no audio' }
         'status-failure' { Assert ([bool]$failure -and $script:started.Count -eq 0 -and $script:probeCalls.Count -eq 0) 'driver status failure starts no audio' }

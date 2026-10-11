@@ -106,30 +106,41 @@ try {
                 JitterMs = Get-ProbeValue $probeText 'cable_jitter_p99_minus_p1_ms'
                 Lost = Get-ProbeValue $probeText 'cable_impulses_lost'; Corrupted = Get-ProbeValue $probeText 'cable_impulses_corrupted'
                 BufferFrames = Get-ProbeValue $probeText 'cable_render_buffer_frames'
+                CaptureDropped = Get-ProbeValue $probeText 'cable_capture_dropped_frames'
+                RenderDiscontinuities = Get-ProbeValue $probeText 'cable_render_discontinuities'
+                RenderDiscontinuityMs = Get-ProbeValue $probeText 'cable_render_discontinuity_ms'
+                EndAnchorP50Ms = Get-ProbeValue $probeText 'cable_end_anchor_p50_ms'
                 Engine = ([regex]::Match($toneText, '(?m)^engine route quanta: .*$')).Value
                 Counters = @([regex]::Matches($toneText, '(?m)^(capture-sink|render-source) (counters|packet writes) \(.*$') | ForEach-Object { $_.Value.TrimEnd() })
             }
+            # Clean: nothing lost or dropped and the render stream never stalled
+            # or skipped; only clean starts enter the comparison median.
+            $result | Add-Member NoteProperty Clean ($measured.Code -eq 0 -and $result.Lost -eq 0 -and $result.CaptureDropped -eq 0 -and
+                $result.RenderDiscontinuities -eq 0 -and $null -ne $result.P50Ms)
             $results += $result
-            Write-Host ("{0}: steady {1} ms (spread {2} ms, from impulse {3}), segments {4}, p95 {5} ms, lost {6}, corrupted {7}; probe exit {8}{9}" -f `
-                $name, $result.SteadyLevelMs, $result.SteadySpreadMs, $result.SteadyFirstImpulse, $result.Segments, $result.P95Ms,
-                $result.Lost, $result.Corrupted, $measured.Code, $(if ($null -ne $toneCode) { ", route exit $toneCode" } else { '' }))
+            Write-Host ("{0}: steady {1} ms (spread {2} ms, from impulse {3}), segments {4}, p50 {5} ms, p95 {6} ms, lost {7}, dropped {8}, render stalls {9} ({10} ms){11}; probe exit {12}{13}" -f `
+                $name, $result.SteadyLevelMs, $result.SteadySpreadMs, $result.SteadyFirstImpulse, $result.Segments, $result.P50Ms, $result.P95Ms,
+                $result.Lost, $result.CaptureDropped, $result.RenderDiscontinuities, $result.RenderDiscontinuityMs, $(if ($result.Clean) { ', clean' } else { '' }), $measured.Code, $(if ($null -ne $toneCode) { ", route exit $toneCode" } else { '' }))
             if ($result.Engine) { Write-Host "  $($result.Engine)" }
         }
     }
     foreach ($mode in $modes) {
         $runs = @($results | Where-Object { $_.Mode -eq $mode.Name })
         $levels = @($runs | Where-Object { $null -ne $_.SteadyLevelMs } | ForEach-Object { [double]$_.SteadyLevelMs })
+        $cleanMedians = @($runs | Where-Object { $_.Clean } | ForEach-Object { [double]$_.P50Ms })
         $entry = [pscustomobject][ordered]@{
             Mode = $mode.Name; Starts = $runs.Count; StartsWithSteadyLevel = $levels.Count
             SteadyLevelsMs = $levels; MedianSteadyMs = Get-Median $levels
             MinSteadyMs = $(if ($levels.Count) { ($levels | Measure-Object -Minimum).Minimum }); MaxSteadyMs = $(if ($levels.Count) { ($levels | Measure-Object -Maximum).Maximum })
             StartsWithShift = @($runs | Where-Object { $_.Segments -gt 1 }).Count
+            CleanStarts = $cleanMedians.Count; CleanP50sMs = $cleanMedians; MedianCleanP50Ms = Get-Median $cleanMedians
             LostTotal = ($runs | Measure-Object -Property Lost -Sum).Sum; CorruptedTotal = ($runs | Measure-Object -Property Corrupted -Sum).Sum
             TargetP95Ms = $mode.TargetP95Ms
         }
         $summary += $entry
-        Write-Host ("{0} periods: steady levels {1} ms; median {2} ms (VCAB-25 target <= {3}); {4} of {5} starts shifted level mid-run; lost {6}, corrupted {7}" -f `
-            $mode.Name, ($levels -join ', '), $entry.MedianSteadyMs, $mode.TargetP95Ms, $entry.StartsWithShift, $entry.Starts, $entry.LostTotal, $entry.CorruptedTotal)
+        Write-Host ("{0} periods: clean starts {1} of {2}, their p50s {3} ms, median {4} ms (VCAB-25 target <= {5}); steady levels {6} ms; {7} starts shifted level mid-run; lost {8}, corrupted {9}" -f `
+            $mode.Name, $entry.CleanStarts, $entry.Starts, ($cleanMedians -join ', '), $entry.MedianCleanP50Ms, $mode.TargetP95Ms,
+            ($levels -join ', '), $entry.StartsWithShift, $entry.LostTotal, $entry.CorruptedTotal)
     }
     if (@($results | Where-Object { $_.ProbeCode -ne 0 -or ($null -ne $_.ToneCode -and $_.ToneCode -ne 0) }).Count -gt 0) {
         throw 'A probe or route process failed; see the reports.'
