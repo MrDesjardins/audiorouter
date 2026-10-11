@@ -346,4 +346,9 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ItemDefinitionGroup Condition="'$(ArTimingDiagnostics)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>%(PreprocessorDefinitions);AR_TIMING_DIAGNOSTICS</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
 </Project>

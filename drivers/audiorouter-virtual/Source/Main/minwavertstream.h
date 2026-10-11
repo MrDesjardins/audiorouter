@@ -18,6 +18,9 @@ Abstract:
 #include "capturequeue.h"
 #include "renderqueue.h"
 #include "streamtiming.h"
+#if defined(AR_TIMING_DIAGNOSTICS)
+#include "timingtrace.h"
+#endif
 
 //
 // Structure to store notifications events in a protected list
@@ -101,6 +104,11 @@ protected:
     ULONG                       m_ulLastOsWritePacket;
     AudioRouterRenderCommits     m_RenderCommits;
     LONGLONG                    m_llPacketCounter;
+#if defined(AR_TIMING_DIAGNOSTICS)
+    ULONGLONG                   m_TimingStreamId;
+    void RecordTiming(USHORT Event, ULONGLONG Qpc, ULONGLONG Packets,
+        ULONGLONG Linear, ULONG Packet, NTSTATUS Status, ULONGLONG Extra);
+#endif
     ULONGLONG                   m_ullDmaTimeStamp;
     LARGE_INTEGER               m_ullPerformanceCounterFrequency;
     ULONGLONG                   m_hnsElapsedTimeCarryForward;

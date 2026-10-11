@@ -37,6 +37,26 @@ def checks():
     # A 264-frame WASAPI ring can retain two complete 128-frame packets, but
     # not three. A delayed reader is a distinct loss path after OS fetch.
     assert 2 * 128 <= 264 < 3 * 128
+    assert 2 * 128 <= 280 < 3 * 128  # r15 actual client buffers
+    # r16 observations distinguish timer delivery from fetch delay. Same
+    # returned packet 1, but different timer/notification histories.
+    late_timer = {"timer_entry": 6, "notification": 6, "fetch_entry": 6}
+    late_fetch = {"timer_entry": 3, "notification": 3, "fetch_entry": 6}
+    assert latest(late_timer["fetch_entry"]) == latest(late_fetch["fetch_entry"]) == 1
+    assert late_timer["fetch_entry"] - late_timer["notification"] == 0
+    assert late_fetch["fetch_entry"] - late_fetch["notification"] == 3
+    # Timely OS fetch followed by late user read is different again; kernel
+    # returns 0 then 1, while the client can skip once its ring overflows.
+    assert [latest(t) for t in (3, 6)] == [0, 1]
+    # Coalesced notification explicitly records progress >1 packet. Returning
+    # the newest packet does not authorize replay from a reused older slot.
+    assert latest(9) - latest(3) == 2
+    assert not retained_packet(9, 0) and not retained_packet(9, 1)
+    assert retained_packet(9, 2)
+    # Entry and lock-acquired timestamps distinguish waiting on position
+    # serialization from a late OS call. Return time is never sample time.
+    entry, locked, returned = Fraction(6), Fraction(8), Fraction(81, 10)
+    assert locked - entry == 2 and returned > locked
     # Sweep every microsecond around slot reuse; no partially overwritten
     # packet is reported safe by the model.
     for us in range(5000, 10001):

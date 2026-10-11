@@ -7,7 +7,8 @@ param(
     [string] $Version = '0.1.0',
     [string] $Output,
     [switch] $KeepOutput,
-    [switch] $TestSign
+    [switch] $TestSign,
+    [switch] $TimingDiagnostics
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,6 +74,7 @@ $buildArguments = @(
     '/t:Rebuild',
     '/m:1',
     '/nr:false',
+    '/p:PreferredToolArchitecture=x64',
     "/p:Configuration=$Configuration",
     "/p:Platform=$Platform",
     '/p:SkipPackageVerification=true',
@@ -88,6 +90,7 @@ $buildArguments = @(
     "/flp:LogFile=$log;Verbosity=normal"
 )
 Write-Host "Build-only AudioRouter virtual driver qualification"
+if ($TimingDiagnostics) { $buildArguments += '/p:ArTimingDiagnostics=true' }
 Write-Host "MSBuild: $msbuild"
 Write-Host "WDK target: $($wdkTargets[0].FullName)"
 # Normalize duplicate Path/PATH in this build process only. Invoke MSBuild with
@@ -118,6 +121,8 @@ Copy-Item -LiteralPath (Join-Path $driverRoot 'LICENSE-MS-PL.txt') -Destination 
 $git = Invoke-DriverTool 'git.exe' @('-C', $driverRoot, 'rev-parse', 'HEAD') ''
 $dirty = Invoke-DriverTool 'git.exe' @('-C', $driverRoot, 'status', '--porcelain') ''
 $metadata = [ordered]@{ version = $Version; driverVersion = $driverVersion; builtAt = [DateTime]::UtcNow.ToString('o'); gitCommit = $git.Output.Trim(); dirty = [bool]$dirty.Output; platform = $Platform; configuration = $Configuration; signed = 'unsigned' }
+Write-DriverPackageMetadata $output $metadata
+$metadata['timingDiagnostics'] = [bool]$TimingDiagnostics
 Write-DriverPackageMetadata $output $metadata
 if ($TestSign) {
     & (Join-Path $driverRoot 'sign-test.ps1') -Package $output

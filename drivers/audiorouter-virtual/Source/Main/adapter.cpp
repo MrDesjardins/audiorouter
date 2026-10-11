@@ -23,6 +23,10 @@ Abstract:
 #include "bridgeio.h"
 #include "endpoints.h"
 #include "minipairs.h"
+#if defined(AR_TIMING_DIAGNOSTICS)
+#include "timingtracebuffer.h"
+extern "C" NTKERNELAPI BOOLEAN SeSinglePrivilegeCheck(LUID PrivilegeValue, KPROCESSOR_MODE PreviousMode);
+#endif
 
 typedef void (*fnPcDriverUnload) (PDRIVER_OBJECT);
 fnPcDriverUnload gPCDriverUnloadRoutine = NULL;
@@ -59,6 +63,83 @@ struct BridgeControlGuard {
     BridgeControlGuard() { ExAcquirePushLockExclusive(&g_BridgeControlLock); }
     ~BridgeControlGuard() { ExReleasePushLockExclusive(&g_BridgeControlLock); }
 };
+
+#if defined(AR_TIMING_DIAGNOSTICS)
+// Diagnostic build only: 8 MiB fixed resident storage, no audio samples.
+static AudioRouterTimingBuffer g_Timing = { 0x80000000LL };
+static PFILE_OBJECT g_TimingOwner;
+static volatile LONG64 g_TimingNextStream;
+static ULONGLONG g_TimingFrequency;
+ULONGLONG AudioRouterTimingStreamId() {
+    return static_cast<ULONGLONG>(InterlockedIncrement64(&g_TimingNextStream));
+}
+void AudioRouterTimingRecord(ULONGLONG Qpc, ULONGLONG StreamId,
+    ULONGLONG PacketCount, ULONGLONG LinearBytes, ULONG PacketNumber,
+    NTSTATUS Status, USHORT Bus, USHORT Direction, USHORT Event, ULONGLONG Extra) {
+    AR_TIMING_RECORD record = {};
+    record.Qpc = Qpc; record.StreamId = StreamId;
+    record.PacketCount = PacketCount; record.LinearBytes = LinearBytes;
+    record.PacketNumber = PacketNumber; record.Status = Status;
+    record.Bus = Bus; record.Direction = Direction; record.Event = Event;
+    record.Extra = Extra;
+    g_Timing.Append(record);
+}
+// PASSIVE_LEVEL control only, serialized by BridgeControlGuard. Writers
+// retain no stream pointers and finish bounded scalar copies independently.
+static void StopTiming() {
+    g_Timing.Close();
+    LARGE_INTEGER pause; pause.QuadPart = -10000;
+    while (!g_Timing.Drained()) KeDelayExecutionThread(KernelMode, FALSE, &pause);
+}
+static void ReleaseTiming(PFILE_OBJECT file) {
+    if (g_TimingOwner == file) {
+        StopTiming(); g_Timing.Reset(); g_TimingOwner = NULL;
+    }
+}
+static NTSTATUS HandleTiming(PIRP irp, ULONG_PTR* information) {
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(irp);
+    if (irp->RequestorMode != UserMode || irp->AssociatedIrp.SystemBuffer == NULL ||
+        stack->Parameters.DeviceIoControl.InputBufferLength != sizeof(AR_TIMING_REQUEST) ||
+        stack->Parameters.DeviceIoControl.OutputBufferLength != sizeof(AR_TIMING_RESPONSE))
+        return STATUS_INVALID_PARAMETER;
+    // SeSinglePrivilegeCheck checks the effective requestor subject, including
+    // impersonation. IU device access does not authorize diagnostic control.
+    LUID privilege = {}; privilege.LowPart = SE_LOAD_DRIVER_PRIVILEGE;
+    if (!SeSinglePrivilegeCheck(privilege, UserMode))
+        return STATUS_ACCESS_DENIED;
+    AR_TIMING_REQUEST request;
+    RtlCopyMemory(&request, irp->AssociatedIrp.SystemBuffer, sizeof(request));
+    if (!AudioRouterTimingValidRequest(request)) return STATUS_INVALID_PARAMETER;
+    if (request.Action == AR_TIMING_START) {
+        if (g_TimingOwner != NULL) return STATUS_SHARING_VIOLATION;
+        StopTiming(); g_Timing.Reset();
+        LARGE_INTEGER frequency; LARGE_INTEGER now = KeQueryPerformanceCounter(&frequency);
+        g_TimingFrequency = static_cast<ULONGLONG>(frequency.QuadPart);
+        if (!g_Timing.Open(static_cast<ULONGLONG>(now.QuadPart))) return STATUS_INTEGER_OVERFLOW;
+        g_TimingOwner = stack->FileObject;
+    } else {
+        if (g_TimingOwner != stack->FileObject) return STATUS_ACCESS_DENIED;
+        if (request.Action == AR_TIMING_STOP) StopTiming();
+        else if (!g_Timing.Closed() || !g_Timing.Drained())
+            return STATUS_DEVICE_BUSY;
+    }
+    AR_TIMING_RESPONSE* response = static_cast<AR_TIMING_RESPONSE*>(irp->AssociatedIrp.SystemBuffer);
+    RtlZeroMemory(response, sizeof(*response));
+    response->Version = 1; response->Capacity = AR_TIMING_CAPACITY;
+    response->QpcFrequency = g_TimingFrequency;
+    response->Total = static_cast<ULONG>(InterlockedCompareExchange64(&g_Timing.Count, 0, 0));
+    response->Dropped = static_cast<ULONGLONG>(InterlockedCompareExchange64(&g_Timing.Dropped, 0, 0)) +
+        static_cast<ULONGLONG>(InterlockedCompareExchange64(&g_Timing.AdmissionDropped, 0, 0));
+    response->Exhausted = static_cast<ULONGLONG>(InterlockedCompareExchange64(&g_Timing.Exhausted, 0, 0));
+    if (request.Action == AR_TIMING_READ) {
+        if (request.Offset > response->Total) return STATUS_INVALID_PARAMETER;
+        response->Count = min(AR_TIMING_CHUNK, response->Total - request.Offset);
+        RtlCopyMemory(response->Records, &g_Timing.Records[request.Offset], response->Count * sizeof(AR_TIMING_RECORD));
+    }
+    *information = sizeof(*response);
+    return STATUS_SUCCESS;
+}
+#endif
 
 static NTSTATUS PinBridgeView(PVOID View, ULONG Bytes, PMDL* LockedMdl)
 {
@@ -392,6 +473,9 @@ static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject)
     }
     BridgeControlGuard controlGuard;
 
+#if defined(AR_TIMING_DIAGNOSTICS)
+    ReleaseTiming(FileObject);
+#endif
     for (ULONG index = 0; index < AR_BRIDGE_LEASE_SLOTS; ++index) {
         AR_BRIDGE_LEASE_STATE* lease = &g_BridgeLeases[index];
         PVOID sectionObject = NULL;
@@ -671,6 +755,9 @@ static NTSTATUS HandleBridgeControlRequest(
     ULONG code = stack->Parameters.DeviceIoControl.IoControlCode;
     NTSTATUS status = STATUS_INVALID_DEVICE_REQUEST;
 
+#if defined(AR_TIMING_DIAGNOSTICS)
+    if (code == AR_TIMING_IOCTL) return HandleTiming(Irp, Information);
+#endif
     if (code == IOCTL_AUDIOROUTER_BRIDGE_QUERY) {
         // Read-only capability report for status/repair. METHOD_BUFFERED:
         // the I/O manager copies exactly the validated output length back.
@@ -1050,6 +1137,9 @@ NTSTATUS CreateBridgeControlDevice(_In_ PDRIVER_OBJECT DriverObject)
 void DeleteBridgeControlDevice()
 {
     BridgeControlGuard controlGuard;
+#if defined(AR_TIMING_DIAGNOSTICS)
+    StopTiming(); g_Timing.Reset(); g_TimingOwner = NULL;
+#endif
     UNICODE_STRING dosName;
     RtlInitUnicodeString(&dosName, AUDIOROUTER_BRIDGE_DOS_NAME);
 

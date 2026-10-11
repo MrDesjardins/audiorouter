@@ -2,6 +2,16 @@
 
 ## Current state (2026-10-10 evening) — read this first
 
+**r16 implemented:** private diagnostic IOCTL and fixed-size nonpaged QPC
+records, excluded from normal builds; short disabled/enabled comparison.
+Fresh GPT-6 Luna High WP-04 source review finds no blocker. Host model,
+concurrency/stop/restart/exhaustion, 738 driver checks, 58 wrapper checks and
+normal/diagnostic WDK x64 builds pass. Next: clean-source test-sign/package
+and immutable manifest verification, then the linked short guest block.
+No repair or runtime qualification yet; no hour run. See
+[r16 record](evidence/2026-10-10-m03-cable-driver-timing.md).
+This supersedes the r15 next agent task below.
+
 **r15 completed:** archive checksum matches; ETW lost/rejected events zero.
 84/1,000 impulses lost (29 before observed input, one input-to-publication,
 54 after publication); p95 19.076 ms, jitter 7.390 ms. Probe capture waits

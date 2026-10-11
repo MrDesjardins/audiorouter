@@ -341,6 +341,20 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
 
 ### 5.4 Real-time rules and performance in the driver
 
+**Opt-in timing investigation (2026-10-10, user authorized).** A diagnostic
+build may include fixed 8 MiB nonpaged observation storage for timer entry,
+notification and capture packet-fetch QPC/scalar snapshots. This is excluded
+from normal builds and is not an audio buffer or a qualified driver repair.
+The private diagnostic IOCTL uses METHOD_BUFFERED, exact bounded lengths,
+enabled administrator-only SeLoadDriverPrivilege and FILE_OBJECT ownership.
+STOP closes admission and drains writers before chunked export; cleanup and
+unload scrub observations. No audio samples, user pointers or kernel addresses
+are exported. Callback publication is bounded and allocation/wait/log free;
+exhaustion/contention invalidates the trace and never alters the audio path.
+The [diagnostic contract](../../tools/m03-timing-trace/README.md) records
+event semantics, lifetime admission-drop accounting and measurement limits.
+Existing bridge ABI and VCAB acceptance criteria remain unchanged.
+
 - WaveRT position/DMA callbacks run at DISPATCH_LEVEL: no allocation, no
   paged memory, no waits, no logging beyond `DPF` compiled out in Release.
 - **Clock.** Stream position is computed from `KeQueryPerformanceCounter`

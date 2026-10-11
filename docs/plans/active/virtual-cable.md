@@ -28,6 +28,29 @@ host's Hyper-V/WSL capability preserved.
 
 ### Execution queue after r12 — 2026-10-10
 
+Implementation completed: r16 opt-in diagnostic, model and short comparison
+wrapper. Fresh GPT-6 Luna High WP-04 source review finds no blocker; 738
+driver checks, concurrency/stop/exhaustion, 58 wrapper checks and normal/
+diagnostic WDK x64 builds pass. Next is clean-source test-sign/package
+verification, then user-run short comparison. No continuity repair or
+hour qualification claim. The [r16 record](evidence/2026-10-10-m03-cable-driver-timing.md)
+supersedes r15 next-action and pending implementation notes below.
+
+Authorized r16 preparation (2026-10-10): diagnostic-only compile flag;
+fixed append-only nonpaged records for timer entry/advance/notification and
+GetReadPacket entry/return, monotonic stream IDs and raw QPC ticks. Export
+only after STOP drains admitted writers, through an exact-length bounded
+METHOD_BUFFERED IOCTL restricted by admin privilege and FILE_OBJECT owner.
+Normal builds exclude declarations, storage and calls. Record exhaustion
+and contention explicitly; neither changes audio behavior. Check late timer,
+late fetch, coalescing, slot reuse, bounds and cleanup, obtain independent
+WP-04 review, build normal/diagnostic x64, test-sign only the diagnostic
+package and verify a new immutable bundle. Guest runner owns only its
+diagnostic handle and one short audio child; archives failure evidence and
+never installs on the host. Rollback uses retained 492d8ca8 guest package.
+Hour-long/native qualification waits for a measured meaningful repair;
+r16 instrumentation alone cannot pass VCAB-24/25.
+
 Latest result: r15 scheduler archive is complete, hash verified and reviewed.
 84/1,000 impulses lost; p95 19.076 ms, jitter 7.390 ms. ETW lost/rejected
 events zero. Capture probe and associated audiodg threads have long waits

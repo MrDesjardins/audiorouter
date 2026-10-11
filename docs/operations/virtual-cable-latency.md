@@ -296,6 +296,47 @@ GetReadPacket invocation or prove the driver notified on time. Trace overhead
 and VirtualBox NEM remain limitations. Rollback: stop only the owned recording
 if save failed, and use r14. Retain all prior failed qualification evidence.
 
+## Driver notification/fetch comparison after r15 — r16
+
+r15 proved that capture waits occur before thread readiness, but did not
+directly timestamp the driver notification or Windows packet fetch. r16
+adds opt-in fixed-size diagnostic records; it contains no audio repair.
+The wrapper runs one 1,000-impulse disabled baseline, then one identical
+enabled run on the same diagnostic build. It writes the kernel CSV after
+the child stops and rejects drops/exhaustion. No WPR runs in this comparison;
+compare the two r16 observations first, with r15 as prior context.
+
+Use Administrator PowerShell **inside AR-DriverTest**, with Media Player
+closed and Cable B Listen off. This block upgrades the guest driver to the
+test-signed diagnostic version 0.1.1, then records about one minute of short
+comparisons. It must never run on the host. If install requests a restart
+from the helper, restart the guest normally and run only the last measurement
+command. Other install errors stop the block; send its output.
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-cable-driver-timing-r16' 'C:\ar\diagnostics-20261010-cable-driver-timing-r16' /E /R:1 /W:1 /XF driver-timing-*.zip starts-engine-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-driver-timing-r16\vm-checks.ps1' -Step install
+    if ($LASTEXITCODE -ne 0) { throw 'Install did not complete; stop and send its output (restart guest if requested).' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-driver-timing-r16\run-cable-driver-timing.ps1'
+    if ($LASTEXITCODE -ne 0) { throw 'Comparison failed; evidence was preserved. Send the output.' }
+}
+```
+
+Send the output; the current archive is copied to the matching Z: directory.
+It contains both measurement ZIPs, raw kernel timestamps and failure evidence.
+Kernel CSV has raw QPC ticks; the printed frequency is authoritative. It
+contains metadata only. See the [event contract](../../tools/m03-timing-trace/README.md).
+The helper mirrors the VM marker guard and owns one process job and trace
+handle; no global recorder cancellation, host settings or driver operation.
+
+Rollback inside the guest: use the retained
+`C:\ar\repair-20261010-slot-provenance\vm-checks.ps1 -Step install` to
+restore 0.1.0/492d8ca8; follow any guest restart request. All long/native,
+Verifier, signing and release gates remain open. Do not repeat the hour run
+until a meaningful repair is supported and passes a short comparison.
+
 ## Eight-cable sustained continuity (VCAB-24 step 3 deviation run)
 
 This one-hour guest run checks four concurrent AudioRouter engine routes

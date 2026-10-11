@@ -2,6 +2,15 @@
 
 ## Release 0.0.15 — 2026-10-10 (in progress)
 
+Driver r16 preparation: bounded opt-in timer/notification/fetch records,
+timing model and disabled/enabled short guest wrapper implemented. Independent
+fresh GPT-6 Luna High WP-04 source review finds no blocker. Host models,
+concurrency, 738 driver checks, 58 wrapper checks and normal/diagnostic WDK
+builds pass. No audio repair or qualification claimed. Next: clean source
+test-sign/package verification, then the short guest block. See
+[r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
+This supersedes the r15 next-task/pending preparation below.
+
 Latest driver evidence: r15 focused scheduler archive verified and reviewed.
 Zero ETW lost events; 84/1,000 impulses lost, p95 19.076 ms but jitter
 7.390 ms. Probe capture waits up to 8.083 ms before readiness and only

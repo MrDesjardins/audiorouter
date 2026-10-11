@@ -240,6 +240,9 @@ Return Value:
     m_pNotificationTimer = NULL;
     m_pDpc = NULL;
     m_llPacketCounter = 0;
+#if defined(AR_TIMING_DIAGNOSTICS)
+    m_TimingStreamId = AudioRouterTimingStreamId();
+#endif
     m_ullPlayPosition = 0;
     m_ullWritePosition = 0;
     m_ullDmaTimeStamp = 0;
@@ -848,6 +851,11 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     _Out_ BOOL* MoreData
 )
 {
+#if defined(AR_TIMING_DIAGNOSTICS)
+    const ULONGLONG entryQpc = static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart);
+    ULONGLONG tracePackets = 0, traceLinear = 0;
+    auto fetch = [&]() -> NTSTATUS {
+#endif
     if (PacketNumber == NULL || Flags == NULL ||
         PerformanceCounterValue == NULL || MoreData == NULL)
     {
@@ -875,6 +883,12 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
 
+#if defined(AR_TIMING_DIAGNOSTICS)
+    RecordTiming(AR_TIMING_FETCH_ENTRY, entryQpc,
+        static_cast<ULONGLONG>(m_llPacketCounter), m_ullLinearPosition,
+        m_ulLastOsReadPacket, STATUS_SUCCESS,
+        static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart));
+#endif
     if (m_KsState == KSSTATE_RUN) {
         UpdatePosition(KeQueryPerformanceCounter(NULL));
     }
@@ -882,6 +896,10 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     ULONGLONG ullLinearPosition = m_ullLinearPosition;
     ULONGLONG hnsElapsedTimeCarryForward = m_hnsElapsedTimeCarryForward;
     ULONGLONG ullDmaTimeStamp = m_ullDmaTimeStamp;
+#if defined(AR_TIMING_DIAGNOSTICS)
+    tracePackets = static_cast<ULONGLONG>(packetCounter);
+    traceLinear = ullLinearPosition;
+#endif
 
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
@@ -972,7 +990,28 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     m_ulLastOsReadPacket = availablePacketNumber;
 
     return STATUS_SUCCESS;
+#if defined(AR_TIMING_DIAGNOSTICS)
+    };
+    const NTSTATUS result = fetch();
+    RecordTiming(AR_TIMING_FETCH_RETURN,
+        static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart),
+        tracePackets, traceLinear, NT_SUCCESS(result) ? *PacketNumber : 0,
+        result, entryQpc);
+    return result;
+#endif
 }
+
+#if defined(AR_TIMING_DIAGNOSTICS)
+// Stream lifetime belongs to the active PortCls call/timer. Only immutable
+// identity and scalar snapshots taken under PositionSpinLock enter storage.
+void CMiniportWaveRTStream::RecordTiming(USHORT Event, ULONGLONG Qpc,
+    ULONGLONG Packets, ULONGLONG Linear, ULONG Packet, NTSTATUS Status, ULONGLONG Extra) {
+    AudioRouterTimingRecord(Qpc, m_TimingStreamId, Packets, Linear, Packet,
+        Status, static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
+        m_bCapture ? AR_BRIDGE_DIRECTION_CAPTURE_SINK : AR_BRIDGE_DIRECTION_RENDER_SOURCE,
+        Event, Extra);
+}
+#endif
 
 #pragma code_seg()
 _IRQL_requires_max_(PASSIVE_LEVEL)
@@ -1348,6 +1387,16 @@ NTSTATUS CMiniportWaveRTStream::SetState
 
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
     m_KsState = State_;
+#if defined(AR_TIMING_DIAGNOSTICS)
+    if (State_ == KSSTATE_RUN && m_ulNotificationsPerBuffer != 0) {
+        RecordTiming(AR_TIMING_FORMAT,
+            static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart),
+            static_cast<ULONGLONG>(m_llPacketCounter), m_pWfExt->Format.nBlockAlign,
+            m_ulNotificationsPerBuffer, STATUS_SUCCESS,
+            (static_cast<ULONGLONG>(m_pWfExt->Format.nSamplesPerSec) << 32) |
+            (m_ulDmaBufferSize / m_ulNotificationsPerBuffer));
+    }
+#endif
     if (m_pNotificationTimer != NULL && m_hnsNotificationInterval > 0) {
         if (State_ == KSSTATE_RUN ||
             (State_ == KSSTATE_PAUSE && !m_bCapture && m_RenderQueue.Count != 0)) {
@@ -2038,8 +2087,16 @@ TimerNotifyRT
         return;
     }
 
+#if defined(AR_TIMING_DIAGNOSTICS)
+    const ULONGLONG timingEntry = static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart);
+#endif
     KIRQL oldIrql;
     KeAcquireSpinLock(&_this->m_PositionSpinLock, &oldIrql);
+#if defined(AR_TIMING_DIAGNOSTICS)
+    _this->RecordTiming(AR_TIMING_TIMER, timingEntry,
+        static_cast<ULONGLONG>(_this->m_llPacketCounter), _this->m_ullLinearPosition,
+        0, STATUS_SUCCESS, static_cast<ULONGLONG>(_this->m_llLastNotifiedPacketCounter));
+#endif
 
     if (_this->m_KsState != KSSTATE_RUN) {
         if (_this->m_KsState == KSSTATE_PAUSE && !_this->m_bCapture) {
@@ -2068,6 +2125,12 @@ TimerNotifyRT
     // Service both bridge directions each tick, including pending render
     // blocks when DMA displacement is zero. Notifications retain their cadence.
     _this->UpdatePosition(qpc);
+#if defined(AR_TIMING_DIAGNOSTICS)
+    _this->RecordTiming(AR_TIMING_ADVANCE,
+        static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart),
+        static_cast<ULONGLONG>(_this->m_llPacketCounter), _this->m_ullLinearPosition,
+        0, STATUS_SUCCESS, static_cast<ULONGLONG>(qpc.QuadPart));
+#endif
     bufferCompleted = _this->m_llPacketCounter > _this->m_llLastNotifiedPacketCounter;
 
     // Do not tell PortCls the final packet is complete while valid tail audio
@@ -2126,6 +2189,12 @@ TimerNotifyRT
         {
             NotificationListEntry* nleCurrent = CONTAINING_RECORD( leCurrent, NotificationListEntry, ListEntry);
             KeSetEvent(nleCurrent->NotificationEvent, 0, 0);
+#if defined(AR_TIMING_DIAGNOSTICS)
+            _this->RecordTiming(AR_TIMING_NOTIFY,
+                static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart),
+                static_cast<ULONGLONG>(_this->m_llPacketCounter), _this->m_ullLinearPosition,
+                0, STATUS_SUCCESS, static_cast<ULONGLONG>(_this->m_llLastNotifiedPacketCounter));
+#endif
 
             leCurrent = leCurrent->Flink;
         }

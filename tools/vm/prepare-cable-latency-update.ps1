@@ -3,7 +3,8 @@
    runners added. Never starts audio or installs/loads a driver. #>
 [CmdletBinding()]
 param([Parameter(Mandatory = $true)][string] $BaseBundle,
-    [Parameter(Mandatory = $true)][string] $Destination)
+    [Parameter(Mandatory = $true)][string] $Destination,
+    [string] $TimingDriverPackage)
 $ErrorActionPreference = 'Stop'
 $workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 . (Join-Path $PSScriptRoot 'paired-trace-support.ps1')
@@ -54,6 +55,25 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency.ps1') -Destin
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency-starts.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-continuity.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-scheduling.ps1') -Destination $output
+if ($TimingDriverPackage) {
+    $timingPackage = Get-Content -LiteralPath (Join-Path $TimingDriverPackage 'package.json') -Raw | ConvertFrom-Json
+    if (-not $timingPackage.timingDiagnostics -or $timingPackage.signed -ne 'test' -or
+        $timingPackage.dirty -or $timingPackage.gitCommit -ne $commit) { throw 'Timing package must be test-signed from this clean source commit.' }
+    $driverOutput = [IO.Path]::GetFullPath((Join-Path $output 'driver'))
+    if ($driverOutput -ine ($output + '\driver') -or -not $driverOutput.StartsWith($output + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Driver output escapes bundle.' }
+    Remove-Item -LiteralPath $driverOutput -Recurse -Force
+    Copy-Item -LiteralPath $TimingDriverPackage -Destination $driverOutput -Recurse
+    $timingTool = Join-Path $workspace 'target\m03-timing-trace\m03-timing-trace.exe'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $timingTool) -Force | Out-Null
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tools\m03-timing-trace\build.ps1') -Output $timingTool -StaticRuntime
+    if ($LASTEXITCODE -ne 0) { throw 'Timing tool build failed.' }
+    $null = Assert-PortableVmTool $timingTool
+    & $timingTool selftest
+    if ($LASTEXITCODE -ne 0) { throw 'Timing tool offline checks failed.' }
+    Copy-Item -LiteralPath $timingTool -Destination (Join-Path $output 'tools\m03-timing-trace.exe')
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-driver-timing.ps1') -Destination $output
+    $driver = $timingPackage
+}
 # Optional, reversible guest quieting before long diagnostics.
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'quiet-guest.ps1') -Destination $output
 $support = Join-Path $output 'paired-trace-support.ps1'
