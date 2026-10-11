@@ -4,8 +4,14 @@
 //! negotiated bridge size (480 frames by default), while the engine processes
 //! fixed [`PROCESSING_QUANTUM_FRAMES`] quanta. [`CableRouteProcessor`]
 //! re-blocks between the two with preallocated FIFOs, so the realtime thread
-//! that owns it never allocates, locks or waits. Re-blocking delays audio by
-//! less than one engine quantum.
+//! that owns it never allocates, locks or waits.
+//!
+//! Every full input block yields exactly one output block, at a constant
+//! delay of [`reblock_delay_frames`]. Emitting whenever a block happened to
+//! be complete instead gave 0, 1, 1, 2 blocks per 480-frame input; the
+//! downstream capture sink takes one block per period, so its queue depth,
+//! and the route's latency, toggled by a whole block (10 ms jitter in the
+//! 2026-10-10 VM run r7).
 
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
 use audiorouter_engine::{
@@ -77,6 +83,22 @@ pub fn cable_route_session(render_bus: &str, capture_bus: &str, channels: u8) ->
     }
 }
 
+/// Silence the output starts with so that an output block is ready after
+/// every full input block of `block_frames`: the largest input residue
+/// re-blocking can leave, `quantum - gcd(block, quantum)`, or zero when the
+/// block is a multiple of the quantum.
+pub fn reblock_delay_frames(block_frames: usize) -> usize {
+    let quantum = PROCESSING_QUANTUM_FRAMES;
+    if block_frames == 0 || block_frames % quantum == 0 {
+        return 0;
+    }
+    let (mut a, mut b) = (block_frames, quantum);
+    while b != 0 {
+        (a, b) = (b, a % b);
+    }
+    quantum - a
+}
+
 /// Runs a published engine graph on bridge blocks, re-blocked to engine
 /// quanta. Owned by exactly one realtime thread.
 pub struct CableRouteProcessor {
@@ -117,14 +139,19 @@ impl CableRouteProcessor {
             // Input residue stays below one quantum before a block arrives.
             input: vec![0.0; (block_frames + quantum) * channels],
             input_frames: 0,
-            // Output residue stays below one block; one push adds at most
-            // block + quantum - 1 frames.
+            // Before emission the output holds at most the delay plus one
+            // block (below block + quantum frames).
             output: vec![0.0; (2 * block_frames + quantum) * channels],
-            output_frames: 0,
+            output_frames: reblock_delay_frames(block_frames),
             quantum: vec![0.0; quantum * channels],
             processed_quanta: 0,
             silent_quanta: 0,
         })
+    }
+
+    /// Constant route delay added by re-blocking, in frames.
+    pub fn delay_frames(&self) -> usize {
+        reblock_delay_frames(self.block_frames)
     }
 
     /// Engine quanta processed so far.
@@ -138,8 +165,10 @@ impl CableRouteProcessor {
         self.silent_quanta
     }
 
-    /// Process one bridge block (interleaved, `block_frames` frames or
-    /// fewer) and hand every completed output block to `emit`, oldest first.
+    /// Process one bridge block (interleaved, `block_frames` frames) and
+    /// hand the completed output block to `emit`: exactly one for every
+    /// full block. A shorter block (not produced by the bridge) is
+    /// processed too, but then shifts the emission phase.
     pub fn push_block(&mut self, samples: &[f64], mut emit: impl FnMut(&[f64])) {
         let channels = self.channels;
         let frames = (samples.len() / channels).min(self.block_frames);
@@ -164,14 +193,15 @@ impl CableRouteProcessor {
         self.input_frames -= consumed;
 
         let block = self.block_frames * channels;
-        let mut emitted = 0;
-        while self.output_frames * channels - emitted >= block {
-            emit(&self.output[emitted..emitted + block]);
-            emitted += block;
+        // At most one block per push: with blocks shorter than a quantum one
+        // quantum completes several blocks at once; the rest wait for the
+        // following pushes. The delay guarantees one is always ready.
+        if self.output_frames * channels >= block {
+            emit(&self.output[..block]);
+            self.output
+                .copy_within(block..self.output_frames * channels, 0);
+            self.output_frames -= self.block_frames;
         }
-        self.output
-            .copy_within(emitted..self.output_frames * channels, 0);
-        self.output_frames -= emitted / channels;
     }
 
     fn process_quantum(&mut self, range: std::ops::Range<usize>) {
@@ -259,16 +289,22 @@ mod tests {
         let mut received = Vec::new();
         for block in 0..blocks {
             let input = ramp(block * block_frames, block_frames, channels_usize);
+            let mut emitted = 0;
             route.push_block(&input, |out| {
                 assert_eq!(out.len(), block_frames * channels_usize);
                 received.extend_from_slice(out);
+                emitted += 1;
             });
+            // Lockstep: a varying count would vary the downstream latency.
+            assert_eq!(emitted, 1, "block {block} of {block_frames} frames");
         }
+        // Constant delay: the leading silence, then every sample in order.
+        let delay = route.delay_frames() * channels_usize;
+        assert!(received[..delay].iter().all(|sample| *sample == 0.0));
+        let received = &received[delay..];
         let sent = ramp(0, blocks * block_frames, channels_usize);
-        // Output trails input by less than one engine quantum.
-        let missing = sent.len() - received.len();
-        assert!(missing < (PROCESSING_QUANTUM_FRAMES + block_frames) * channels_usize);
-        for (index, (expected, actual)) in sent.iter().zip(&received).enumerate() {
+        assert_eq!(received.len() + delay, sent.len());
+        for (index, (expected, actual)) in sent.iter().zip(received).enumerate() {
             // -0.0 arrives as +0.0 by engine design; ramp values are exact.
             assert_eq!(
                 (*expected as f32).to_bits(),
@@ -282,6 +318,22 @@ mod tests {
             route.processed_quanta() as usize,
             blocks * block_frames / PROCESSING_QUANTUM_FRAMES
         );
+    }
+
+    #[test]
+    fn reblock_delay_is_the_largest_input_residue() {
+        for (block, delay) in [
+            (480, 96),
+            (128, 0),
+            (256, 0),
+            (4_096, 0),
+            (144, 112),
+            (16, 112),
+            (441, 127),
+            (0, 0),
+        ] {
+            assert_eq!(reblock_delay_frames(block), delay, "{block}-frame blocks");
+        }
     }
 
     #[test]

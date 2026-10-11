@@ -58,7 +58,13 @@ Ordered tasks:
 Status 2026-10-10: tasks 1–4 done on the host (relay stayed in the tool;
 the engine step is the library `CableRouteProcessor`); bundle r7 built
 ([evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r7-engine-route-step-1-of-the-single-pc-path)).
-Next: the user's guest run with `-Route engine`, then record it.
+VM r7 (engine route): bit-exact and isolation pass; default latency
+jittered by one block (10 ms) because re-blocking emitted 0/1/1/2 blocks
+per input block. Repaired with a constant re-blocking delay and one block
+out per block in (evidence, third VM run). Provisional lesson until a VM
+run confirms it: test re-blocking for a constant emission count per
+input block, not only sample continuity. Next: bundle r8, same guest
+command, expect default jitter near the proxy's 0.002 ms.
 
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease

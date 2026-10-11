@@ -12,7 +12,9 @@ use std::sync::Arc;
 use windows_core::Interface;
 
 mod cable_route;
-pub use cable_route::{cable_route_session, CableRouteError, CableRouteProcessor};
+pub use cable_route::{
+    cable_route_session, reblock_delay_frames, CableRouteError, CableRouteProcessor,
+};
 mod network_audio;
 pub use network_audio::*;
 mod service_thread;

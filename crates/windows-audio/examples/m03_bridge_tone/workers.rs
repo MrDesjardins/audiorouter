@@ -747,6 +747,10 @@ mod tests {
             render.join().unwrap().unwrap();
             disk.join().unwrap().unwrap();
         });
+        // The route starts with its constant re-blocking delay of silence.
+        let delay = audiorouter_windows_audio::reblock_delay_frames(480) * 2;
+        assert!(received[..delay].iter().all(|sample| *sample == 0.0));
+        let received = &received[delay..];
         assert!(received.len() >= 30 * 960, "{} samples", received.len());
         for (index, sample) in received.iter().enumerate() {
             assert_eq!(*sample, (index as f64 + 1.0) * step, "sample {index}");

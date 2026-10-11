@@ -214,3 +214,33 @@ Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r7`, source
 unchanged), manifest SHA-256
 `83DF4E23FED3E842CFA8C6DC77B81EB14B59D892D54B306669C379B8B38F9647`.
 Guest command: the runbook block with `-Route engine`.
+## Third VM run (bundle r7, engine route) — 2026-10-10, NEM VM, guest quieted
+
+Run `latency-d89ce8d3cb604e28b5353b5b9c505004`, archive
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r7\latency-d89ce8d3cb604e28b5353b5b9c505004.zip`,
+SHA-256 `7CD9B22764FB1028B9D4E2CE68986F5988F585EA5CB1295FD731517A7F6D65C9`
+(verified on the host), extracted to `target/latency-d89ce8d3`.
+`-Route engine`, source `31f8feec`, driver `492d8ca8`.
+
+| Check | Result |
+| --- | --- |
+| Bit-exact (VCAB-20, engine route, 480 frames) | **Pass**: 480,000 frames, 0 mismatched samples, max difference 0, silence exact; engine quanta processed 4,507, silent 0; relay dropped 0 |
+| Isolation (VCAB-26) | **Pass** on both paths with Cable B active (239,999+ and 240,480 active frames); 0 nonzero samples |
+| Latency, 480 frames, default periods | p1 41.654, p50 51.653, p95 51.654, p99 51.654 ms; **jitter 10.0 ms**; 1,000/1,000 matched, 0 lost, 0 corrupted; packet writes 1,101 accepted, 0 late; engine silent 0 |
+| Latency, 128 frames, low-latency periods | p50 97.2, p95 137.5 ms, jitter 159 ms; 96 lost; packet writes 164 late, 54 overrun (NEM timing, as with the proxy) |
+
+Reading: the engine route carries audio unchanged and isolated. The default
+latency is bimodal, exactly one 480-frame block (10 ms) apart, where the
+proxy route had 0.002 ms jitter. Cause (route defect, not the VM): the
+re-blocking processor emitted 0, 1, 1, 2 output blocks per 480-frame input
+block (a model reproduces the cycle); the capture sink takes one block per
+period, so the relay depth, and the latency, toggled by a block.
+
+Repair (host, same day): the output starts with a constant delay of
+`quantum - gcd(block, quantum)` frames of silence (96 frames, 2 ms, at 480;
+0 at 128) and emits at most one block per input block, so every full input
+block yields exactly one output block at a constant delay. Unit tests now
+assert one emission per push at 16, 128, 144, 480 and 4,096 frames, the
+leading delay, and an unchanged sample stream; `reblock_delay_frames`
+values are pinned. Low-latency (128-frame) blocks never had the defect;
+their failure is the VM timing seen on the proxy route.
