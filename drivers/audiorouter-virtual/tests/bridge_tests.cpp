@@ -165,6 +165,61 @@ static void renderBurstChecks() {
     require(invalid.Capacity == 0, "missing lease invalidates queue");
 }
 
+static void readSelectionChecks() {
+    const ULONG packetBytes = 1024; // 128 frames x 8 bytes, as in the r16 guest
+    const ULONG bufferBytes = 2 * packetBytes;
+    AudioRouterReadSelection s = {};
+    require(AudioRouterSelectReadPacket(1, ULONG_MAX, 1152, packetBytes, bufferBytes, &s) &&
+        s.Packet == 0 && !s.MoreData && s.Skipped == 0, "first capture read returns packet zero");
+    require(!AudioRouterSelectReadPacket(1, 0, 1536, packetBytes, bufferBytes, &s), "no new capture packet is not ready");
+    // r16 packet 55: the fetch's own update reaches the start of packet 57
+    // (exact reuse boundary of packet 55's slot); the sample returned 56.
+    require(AudioRouterSelectReadPacket(57, 54, 57 * 1024, packetBytes, bufferBytes, &s) &&
+        s.Packet == 55 && s.MoreData && s.Skipped == 0, "intact older packet at exact reuse boundary is returned with MoreData");
+    require(AudioRouterSelectReadPacket(57, 55, 57 * 1024, packetBytes, bufferBytes, &s) &&
+        s.Packet == 56 && !s.MoreData, "MoreData follow-up returns the newest packet");
+    require(AudioRouterSelectReadPacket(57, 54, 57 * 1024 + 128, packetBytes, bufferBytes, &s) &&
+        s.Packet == 56 && s.Skipped == 1 && !s.MoreData, "partly overwritten packet is skipped, never returned");
+    require(AudioRouterSelectReadPacket(1000, 10, 1000 * 1024 + 384, packetBytes, bufferBytes, &s) &&
+        s.Packet == 999 && s.Skipped == 988, "long pause resynchronizes to the newest intact packet in constant work");
+    require(AudioRouterSelectReadPacket(0x100000001ULL, 0xfffffffeUL, 0x100000001ULL * packetBytes, packetBytes, bufferBytes, &s) &&
+        s.Packet == 0xffffffffULL && s.MoreData, "packet identity survives the 32-bit wire wrap");
+    require(AudioRouterSelectReadPacket(0x100000001ULL, ULONG_MAX, 0x100000001ULL * packetBytes, packetBytes, bufferBytes, &s) &&
+        s.Packet == 0x100000000ULL && !s.MoreData, "wire packet 0xffffffff read before the wrap continues at the next packet");
+    require(AudioRouterSelectReadPacket(5, 2, 5 * 1024, packetBytes, packetBytes, &s) &&
+        s.Packet == 4 && s.Skipped == 1, "single-notification buffer keeps only the newest packet");
+    require(!AudioRouterSelectReadPacket(0, ULONG_MAX, 0, packetBytes, bufferBytes, &s) &&
+        !AudioRouterSelectReadPacket(3, 0, 3 * 1024, 0, bufferBytes, &s) &&
+        !AudioRouterSelectReadPacket(3, 0, 3 * 1024, packetBytes, packetBytes - 1, &s), "invalid packet geometry is not ready");
+    require(AudioRouterSelectReadPacket(10, 20, 10 * 1024, packetBytes, bufferBytes, &s) &&
+        s.Packet == 9 && !s.MoreData, "last read ahead of the counter resynchronizes to newest, never replays");
+    // Brute force against the slot definition for every byte position and
+    // previous read across several packets, at frame granularity, for both
+    // notification counts AllocateBufferWithNotification accepts.
+    for (ULONG notifications = 1; notifications <= 2; ++notifications) {
+        const ULONG sweepBuffer = notifications * packetBytes;
+        for (ULONGLONG linear = 0; linear <= 12 * 1024; linear += 8) {
+            const ULONGLONG completed = linear / packetBytes;
+            if (completed == 0) { continue; }
+            for (ULONGLONG last = 0; last <= completed; ++last) {
+                const ULONG lastRead = last == 0 ? ULONG_MAX : static_cast<ULONG>(last - 1);
+                const ULONGLONG next = last;
+                const bool ready = AudioRouterSelectReadPacket(completed, lastRead, linear, packetBytes, sweepBuffer, &s);
+                if (next > completed - 1) { require(!ready, "sweep: nothing unread is not ready"); continue; }
+                ULONGLONG expected = next;
+                while (expected < completed - 1 && linear > expected * packetBytes + sweepBuffer) { ++expected; }
+                require(ready && s.Packet == expected, "sweep: oldest intact unread packet is selected");
+                require(s.Packet == completed - 1 || linear <= s.Packet * packetBytes + sweepBuffer, "sweep: returned older slot has no overwritten byte");
+                require(s.MoreData == (s.Packet < completed - 1) && s.Skipped == s.Packet - next, "sweep: MoreData and skip count agree");
+                // Pin the documented residual risk: with whole-packet slots,
+                // every rescued older packet sits exactly at the reuse boundary.
+                require(!s.MoreData || linear == s.Packet * packetBytes + sweepBuffer, "sweep: rescued packet has exactly zero bytes of margin");
+                require(notifications == 2 || !s.MoreData, "sweep: one-slot buffer never returns an older packet");
+            }
+        }
+    }
+}
+
 static void packetClockChecks() {
     const ULONG frameBytes = 8;
     const ULONG packetBytes = 480 * frameBytes;
@@ -531,6 +586,7 @@ int main() {
     renderCommitChecks();
     renderTimingModelChecks();
     packetClockChecks();
+    readSelectionChecks();
     renderBurstChecks();
     const ULONG clockRates[] = { 44100, 48000, 96000 };
     const USHORT frameSizes[] = { 2, 4, 8, 12, 16, 24, 32 };

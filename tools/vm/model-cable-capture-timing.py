@@ -19,6 +19,18 @@ def retained_packet(ms, packet):
     return (packet + 1) * 128 <= end <= (packet + 2) * 128
 
 
+def select(ms, last_read):
+    # r17 GetReadPacket: the oldest unread packet whose slot is intact, else
+    # the oldest intact one; MoreData when a newer packet is complete.
+    newest = latest(ms)
+    if newest < 0 or last_read >= newest:
+        return None
+    packet = last_read + 1
+    while packet < newest and not retained_packet(ms, packet):
+        packet += 1
+    return packet, packet < newest
+
+
 def checks():
     assert latest(Fraction(8, 3)) == -1  # 1 ms progress quantum, not a second clock
     assert latest(3) == 0
@@ -66,7 +78,25 @@ def checks():
             safe = retained_packet(t, packet)
             if end > (packet + 2) * 128:
                 assert not safe
+    # r17 selection. r16 packet 55 pattern in this model: last read 0; the
+    # fetch's own update reaches 8 ms = 384 frames = start of packet 3, the
+    # exact reuse boundary of packet 1's slot, so packet 1 is still intact.
+    assert select(8, 0) == (1, True)       # sample returned 2 and dropped intact 1
+    assert select(8, 1) == (2, False)      # MoreData follow-up
+    assert select(9, 0) == (2, False)      # packet 1's slot partly reused: skipped
+    assert select(3, -1) == (0, False)     # first read
+    assert select(5, 0) is None            # nothing new
+    # Every returned packet is intact at the fetch time; only overwritten
+    # packets are passed over, at microsecond resolution.
+    for us in range(2667, 20001):
+        t = Fraction(us, 1000)
+        for last in range(-1, latest(t)):
+            packet, more = select(t, last)
+            assert retained_packet(t, packet)
+            assert all(not retained_packet(t, p) for p in range(last + 1, packet))
+            assert more == (packet < latest(t))
     print("Capture timing model passed: boundaries, slot reuse, delayed notification/fetch, reader retention.")
+    print("r17 selection returns the oldest intact unread packet; only overwritten packets are skipped.")
     print("128 frames = 2.667 ms; 1 ms notification quantization leaves less than one period for OS fetch.")
     print("Capture rows alone cannot distinguish a late notification from a late OS fetch; correlate scheduler readiness.")
 

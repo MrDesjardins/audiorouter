@@ -81,6 +81,50 @@ __forceinline ULONGLONG AudioRouterCompletedPacketStart(
     return (CompletedPackets - 1) * PacketBytes;
 }
 
+// Packet-mode capture read selection. Packet q occupies linear bytes
+// [q * PacketBytes, (q + 1) * PacketBytes) and its DMA bytes stay intact until
+// the writer reaches q * PacketBytes + BufferBytes, i.e. while
+// LinearBytes <= q * PacketBytes + BufferBytes (the exact reuse boundary has
+// written no byte of the later lap yet). Return the oldest unread packet whose
+// slot is intact, so a fetch that arrives as one more packet completes does
+// not drop an intact packet; skip only packets whose slot was overwritten.
+// LastRead is the 32-bit wire number of the previous returned packet
+// (ULONG_MAX before the first read); the small modulo distance to the newest
+// completed packet recovers the 64-bit identity. Returns false when no new
+// packet exists. Caller validates the 64-bit start-byte range of Completed.
+struct AudioRouterReadSelection {
+    ULONGLONG Packet;    // 64-bit packet to return
+    ULONGLONG Skipped;   // overwritten packets passed over
+    bool MoreData;       // a newer completed packet is also available
+};
+
+__forceinline bool AudioRouterSelectReadPacket(
+    ULONGLONG Completed, ULONG LastRead, ULONGLONG LinearBytes,
+    ULONG PacketBytes, ULONG BufferBytes, AudioRouterReadSelection* Selection)
+{
+    if (Completed == 0 || PacketBytes == 0 || BufferBytes < PacketBytes) { return false; }
+    const ULONGLONG newest = Completed - 1;
+    const ULONG unread = static_cast<ULONG>(newest) - LastRead;
+    if (unread == 0) { return false; }
+    // A LastRead ahead of the counter is unreachable (both reset together
+    // at STOP); if it ever occurs, resynchronize to the newest packet rather
+    // than replaying an old one.
+    const ULONGLONG next = static_cast<ULONGLONG>(unread) - 1 > newest
+        ? newest : newest - (static_cast<ULONGLONG>(unread) - 1);
+    // Oldest intact packet: q * PacketBytes >= LinearBytes - BufferBytes.
+    ULONGLONG firstIntact = 0;
+    if (LinearBytes > BufferBytes) {
+        const ULONGLONG reused = LinearBytes - BufferBytes;
+        firstIntact = reused / PacketBytes + (reused % PacketBytes != 0 ? 1 : 0);
+    }
+    ULONGLONG packet = next > firstIntact ? next : firstIntact;
+    if (packet > newest) { packet = newest; }
+    Selection->Packet = packet;
+    Selection->Skipped = packet - next;
+    Selection->MoreData = packet < newest;
+    return true;
+}
+
 struct AudioRouterDmaWindow {
     ULONG Offset;
     ULONG Bytes;

@@ -160,6 +160,278 @@ independently recomputed with Get-FileHash and matches. Bundle is immutable.
 The returned r12 result reports `CablesBefore=2`, `CableCountRestored=true`,
 consistent with the existing install wrapper's four-endpoint check.
 
+## First guest attempt (2026-10-10) — install passed, comparison not started
+
+User-run in AR-DriverTest. `vm-checks.ps1 -Step install` passed 3 checks
+(helper exit 0, four AudioRouter endpoints, idempotent second install),
+evidence `C:\ar\evidence\20261010-231326-install`. The earlier exit-5
+report did not recur, so no guest restart was needed.
+
+`run-cable-driver-timing.ps1` then threw `Run only inside AR-DriverTest
+from C:\ar.` at its first line, twice, before creating any evidence. The
+driver was not exercised. Unlike the earlier run scripts, which check only
+the computer name and the `C:\ar\*` bundle path, this wrapper also requires
+the `C:\ar\IS_TEST_VM` marker. The documented guest setup creates that
+marker only when the computer name is different
+([testing guide](../../../operations/virtual-cable-testing.md)). The r15
+scripts passed the name and path checks in this guest, so the missing marker
+is the likely cause. The guard stays unchanged. Next: inside the guest only,
+confirm the name, create the marker if it is absent, then run the comparison.
+No timing data exists yet.
+
+## Second guest attempt (2026-10-10) — invalid, guest-wide pause
+
+The user created the marker in the guest and ran the comparison. Archive:
+`Z:\diagnostics-20261010-cable-driver-timing-r16\driver-timing-e24cc619429a4511bc14bc6658b3b794.zip`
+(inner measurement archives `starts-engine-acb1d737…` disabled,
+`starts-engine-afca290b…` enabled). The wrapper failed as designed:
+`Passed=false`, enabled child exit 1.
+
+| | Disabled baseline | Enabled diagnostic | r15 (reference) |
+|---|---|---|---|
+| Route | exit 0, 20 s, 4,150 quanta, 0 silent | exit 1 after ~7.7 s, 294 quanta | — |
+| Lost impulses | 61/1,000 | 521 (run cut short) | 84 |
+| p95 / jitter | 19.314 / 8.296 ms | 19.616 / 12.863 ms (20 segments) | 19.076 / 7.390 ms |
+| Max pump/control gap | 23.8 ms | 4,786 ms | — |
+| Packet writes accepted/late/overrun | 3,832 / 187 / 43 | 255 / 24 / 6 | — |
+
+Timing records: 23,377, `dropped_including_lifetime_admission=0`,
+`exhausted=0`; the record set itself is complete.
+
+Cause of the enabled failure: at about 2.9 s into the route, the capture worker,
+render worker and control loop all stopped for 4.77 s. The kernel records
+show the same gap at the driver's own timer (event 1) and contain no record
+from any stream between QPC 3283865561 and 3331580903. An earlier 338 ms gap
+of the same kind occurs at QPC 3280174455. The timing helper only waits on
+its child during capture, and record writers are bounded CAS operations,
+so neither explains a pause of the whole guest, including kernel timers.
+This matches the validated NEM lesson (all-CPU guest silences). The pause
+exceeded the bridge heartbeat, the driver expired the lease (designed
+behavior) and the next bridge call returned `STATUS_INVALID_DEVICE_STATE`,
+which user mode reported as `0x80070016` ("The device does not recognize the
+command") in `start1-low-latency-tone-stderr.txt`.
+
+Conclusion: the enabled run is invalid for comparison; no repair can be
+chosen from it, and the instrumentation's effect on continuity remains
+unmeasured. The disabled baseline is valid and consistent with r15. The
+records before the pause are too short and include a 338 ms pause, so they
+were not analysed further. Next: quiet the guest (`quiet-guest.ps1
+-Status`, `-Apply` if not active, which waits 900 s to settle), then repeat
+the same comparison once. If a guest-wide pause recurs while quieted,
+add the scheduler trace instead of repeating.
+
+**Correction (same day):** `quiet-guest.ps1 -Status` showed the guest was
+already quieted during this run (Windows Update paused until
+2026-10-18T01:19:20Z, maintenance disabled, Defender exclusions 1/1 paths and
+4/4 processes); `-Apply` refused because it was already applied. So the
+pause happened in a quieted guest. Earlier traced runs found whole-guest
+silences of at most 19.1 ms inside a run and 163.7 ms anywhere in an ETL.
+This run had 338 ms and 4,770 ms, and only in the enabled half. One run
+cannot attribute that. A VM suspension and something in the diagnostic
+build that holds every CPU both remain possible, so the earlier "not caused
+by the instrumentation" reasoning is withdrawn until a trace decides it.
+Next: one run of the same comparison inside the bundle's existing
+`Invoke-DriverVmSchedulingRun` (WPR `AudioRouterScheduling.Light`, all files
+covered by the bundle MANIFEST). No new bundle is needed. If ETW shows CPUs
+active (DPC/ISR or a spinning thread) during a pause, investigate the record
+path; if every CPU is silent including clock interrupts, treat it as a host
+suspension.
+
+Guest block (Administrator PowerShell, AR-DriverTest only, no reinstall):
+
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    if ($env:COMPUTERNAME -ine 'AR-DriverTest') { throw 'Run only inside AR-DriverTest.' }
+    # This console only; the guest's machine policy is unchanged.
+    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+    $b = 'C:\ar\diagnostics-20261010-cable-driver-timing-r16'
+    . "$b\repo\tests\acceptance\m03-driver-vm-support.ps1"
+    . "$b\vm-scheduling-trace.ps1"
+    $e = Join-Path 'C:\ar\evidence' ('driver-timing-traced-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $e | Out-Null
+    $ps = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+    try {
+        Invoke-DriverVmSchedulingRun -Recorder "$env:SystemRoot\System32\wpr.exe" -Directory "$e\trace" -ProfilePath "$b\AudioRouterScheduling.wprp" -Run {
+            $r = Invoke-DriverVmProcess -Executable $ps -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',"$b\run-cable-driver-timing.ps1") -Stdout "$e\comparison.txt" -Stderr "$e\comparison-stderr.txt" -TimeoutSeconds 330
+            $r | ConvertTo-Json | Set-Content -LiteralPath "$e\comparison-process.json"
+        }
+    } finally {
+        Compress-Archive -LiteralPath $e -DestinationPath "$e.zip"
+        Copy-Item -LiteralPath "$e.zip" -Destination "Z:\diagnostics-20261010-cable-driver-timing-r16\"
+        Get-Content -LiteralPath "$e\comparison.txt", "$e\comparison-stderr.txt" -ErrorAction SilentlyContinue
+        Write-Host "Copied to Z:\diagnostics-20261010-cable-driver-timing-r16\$(Split-Path -Leaf $e).zip"
+    }
+}
+```
+
+## Third guest attempt (2026-10-10) — valid, traced; capture skip identified
+
+User-run with the console-only execution policy and WPR wrapper above.
+Archives on the share: `driver-timing-traced-76ee37c5842248f1b37491b315d2015b.zip`
+(ETL plus wrapper logs) containing comparison
+`driver-timing-0e9a16913a984dedbe492a0f629e8311.zip` (`Passed=true`, both
+children exit 0, about 22 s each). WPR: 648,094 events, 0 lost, 47.0 s.
+Timing records 41,403, dropped 0, exhausted 0. The guide's IS_TEST_VM marker now exists in the guest.
+
+| | Disabled baseline | Enabled diagnostic |
+|---|---|---|
+| Route | exit 0, 4,148 quanta, 0 silent | exit 0, 4,145 quanta, 0 silent |
+| Lost impulses | 70 | 41 |
+| p50 / p95 / jitter | 16.771 / 19.099 / 11.398 ms | 18.277 / 19.727 / 10.284 ms |
+| Probe capture dropped frames | 27,136 | 15,232 (119 flagged packets) |
+| Render discontinuities | 95 (148.8 ms) | 73 (62.1 ms) |
+| Packet writes accepted/late/overrun | 3,852 / 166 / 52 | 3,978 / 105 / 38 |
+| Max control loop gap | 24.3 ms | 24.4 ms |
+
+Instrumentation did not worsen continuity in this pair. The 4.77 s pause did
+not recur.
+
+**Whole-guest silences** (`m03-scheduler-trace --silences`, 5 ms): 192 in
+the ETL, but all except four lie between the measurements while
+PowerShell starts processes and the 1 ms timer resolution is not active. Inside the enabled
+probe window (ETL 26.2–37.4 s) there is one, 13.5 ms at probe stop.
+`--activity` (1 s buckets, audiodg/m03_bridge_tone/m00-probe): steady
+audio-thread maximum wait before readiness 4.6–6.1 ms, ready-to-running
+at most 1.65 ms, CPUs 0–7 % busy. This run's losses are not VM
+pauses or CPU contention.
+
+**Kernel timing** (`tools/vm/review-driver-timing.py`, enabled run):
+
+| Capture stream 192 (Cable B, probe) | min | p50 | p95 | p99 | max |
+|---|---|---|---|---|---|
+| Driver timer interval | 0.911 | 1.625 | 2.597 | 2.700 | 4.064 ms |
+| Notification after true packet boundary | 0.002 | 1.217 | 2.332 | 2.636 | 3.282 ms |
+| Notification → GetReadPacket return | — | 0.133 | 0.248 | 0.353 | 0.888 ms |
+| True boundary → fetch return | 0.001 | 1.322 | 2.403 | 2.694 | 3.120 ms |
+
+Position is exactly `floor(ms since RUN) × 384 B` for every update (0
+deviations), so a 128-frame (1,024 B, 2.667 ms) packet is detected only at
+the next whole-millisecond step taken by a timer that fires every 1.6 ms
+median. Windows fetches promptly after each notification. The 102
+non-success fetch returns are `STATUS_DEVICE_NOT_READY` polls.
+
+**Capture loss mechanism.** The probe's 119 flagged capture packets
+(15,232 frames = 119 × 128) equal exactly the 119 packet numbers the
+driver skipped in `GetReadPacket`. That routine, unchanged from the
+Microsoft sample, always returns the *newest* completed packet
+(`packetCounter − 1`) and hardcodes `MoreData = FALSE`. With two packets
+per WaveRT buffer, packet p stays intact until the DMA writer
+(`WriteBytes`, under the position lock) reaches the start of packet p + 2.
+Of the 119 skipped packets, **115 were intact** at the fetch that skipped
+them, all with exactly 0 bytes left. Only 4 had begun reuse, by 128–384 B. No returned packet had begun reuse.
+Example, packet 55: boundary 149.33 ms; the 149.874 ms timer update's
+floored position 57,216 B stays below the boundary at 57,344 B; next timer at 151.983 ms
+notifies; Windows fetches at 152.047 ms, its own update reaches 58,368 B
+(start of packet 57), the counter reads 57, and packet 56 is returned
+while intact packet 55 is dropped. Earlier invalid run: of 1,992
+skips, about 1,800 fall in the 4.77 s pause; the rest show the same
+pattern, plus late fetches.
+
+This explains the capture side of the probe's loss. It does not cover the
+render-side underruns, late packet writes or the r15 8 ms probe waits.
+Those remain separate.
+
+## Repair r17 — return the oldest intact unread capture packet (planned)
+
+Requirement IDs: VCAB-24/25/28, VDEV-07. Scope: `GetReadPacket` only
+(capture packet selection, timestamp and `MoreData`). Timer cadence,
+periods, the ms-quantized position, buffering, bridge, render path and
+counters are unchanged.
+
+Rule: let `next = lastRead + 1` (wrapping 32-bit packet numbers),
+`newest = packetCounter − 1` and N = notifications per buffer. If no new
+packet, `STATUS_DEVICE_NOT_READY` as now. Return `next` when its slot is
+intact (`linear ≤ (next + N) × packetSize`, so no byte of packet next + N
+is written). Its timestamp is the QPC of its own first frame, and
+`MoreData = (next < newest)`. In general return the oldest intact packet
+`q = min(newest, max(next, ceil(linear / packetSize) − N))`. When `next`'s
+slot was really reused, that skips only the overwritten packets, and in the
+worst case it is today's `newest`. Use 64-bit linear-packet arithmetic
+so packet-number wrap stays correct.
+
+Known residual risk (sharpened by review): with two whole-packet slots,
+**every** rescued older packet is returned with exactly 0 bytes of
+margin. An older packet is intact only at `linear == (q + 2) × packetSize`,
+the same point at which the counter completes. The next whole-millisecond
+update, from a timer DPC on any CPU, writes 384 B of packet q + 2 into its
+slot. Windows copies after return, outside the driver lock, so a copy still
+in progress then is partly overwritten without a flag. The reviewer
+estimates the chance per rescued packet at copy latency divided by 1 ms,
+plausibly a few percent and worse under VM timer delays. No margin is
+possible without losing the rescue. It is still a better trade than a
+certain 2.667 ms flagged drop. The guest comparison must count corrupted
+impulses as well as lost ones; a unit sweep pins the 0-byte property.
+
+Validation: host timing model cases (on-time, late-by-one at 0 bytes,
+partly reused, multiple behind, wrap, MoreData chain, startup) in
+`model-cable-capture-timing.py` and driver unit checks for the selection
+helper; normal and diagnostic WDK builds; independent WP-04 review of the
+diff; clean test-signed diagnostic package 0.1.2; short guest comparison
+with the r16 wrapper. Pass criteria: intact-slot skips 0 in the timing
+CSV, probe flagged capture packets reduced by at least 80 % versus this run
+(119), corrupted impulses still 0, and no new failures. Rollback: reinstall the r16
+0.1.1 bundle or the retained 492d8ca8/0.1.0 package with its install
+step. No hour-long run until the short comparison passes.
+
+### r17 implementation and host verification (2026-10-10, uncommitted)
+
+`AudioRouterSelectReadPacket` (`Source/Inc/streamtiming.h`) implements the
+rule as constant-work 64-bit arithmetic. `GetReadPacket` uses it for packet,
+timestamp and `MoreData`, and still records `m_ulLastOsReadPacket` as the
+32-bit number returned. Lock usage, the diagnostics hooks and all other
+paths are unchanged. `tools/vm/review-driver-timing.py` reproduces the
+r16 tables above from a saved CSV.
+
+| Command/check | Result | Evidence |
+|---|---|---|
+| `drivers/audiorouter-virtual/tests/build-tests.ps1` | 27,537 checks pass (new `readSelectionChecks`: r16 packet-55 case, MoreData follow-up, partial reuse, long pause, 32-bit wrap incl. wire 0xffffffff, one-slot buffer, invalid geometry, frame-granular brute-force sweep) | console output |
+| `model-cable-capture-timing.py` | Passes, including `select()` cases and a microsecond sweep: every returned packet intact; only overwritten packets skipped | console output |
+| `build.ps1 -Version 0.1.2` (normal, unsigned) | Pass, 0 warnings | `target/r17-build-normal.log`, `target/r17-driver-normal` |
+| `build.ps1 -Version 0.1.2 -TimingDiagnostics` (unsigned) | Pass | `target/r17-build-diagnostic.log`, `target/r17-driver-diagnostic` |
+
+Host only: no signing, installation or audio.
+
+### r17 independent WP-04 review (2026-10-10)
+
+User-requested ("You do it"). A fresh-context Claude review agent with
+read-only scope reran the driver tests (27,537 pass) and the model. Verdict:
+**no blocking defect**. It confirmed:
+- `AllocateBufferWithNotification` (`minwavertstream.cpp:458-460`) rounds
+  the buffer to `nBlockAlign × N` with N ∈ {1, 2}, so writer and OS slot
+  mapping agree.
+- `WriteBytes` runs before the linear position advances, and
+  `AudioRouterSurvivingDmaWindow` writes only the last lap, so the
+  intactness test is exact.
+- `ULONG_MAX` and the counter reset together only at construction and STOP;
+  PAUSE/RUN keep both. Wrap is correct.
+- No new reachable timestamp failure return.
+- `MoreData` matches the `IMiniportWaveRTInputStream::GetReadPacket`
+  contract; later notifications become the existing
+  `STATUS_DEVICE_NOT_READY` path.
+- No new race, allocation or blocking.
+- The diagnostic lambda records the returned packet.
+
+Non-blocking findings and resolution:
+1. Residual risk understated. Wording corrected above, and a sweep now
+   asserts every `MoreData` return has exactly 0 bytes of margin. A
+   zero-margin flag in the timing record was not added: the record format is
+   reviewed r16 ABI, and `review-driver-timing.py` can derive the margin
+   from the existing linear position.
+2. Test gaps. Added an N = 1 sweep, the 0-byte assertion and a
+   last-read-ahead case. No host test covers the inline `GetReadPacket`
+   timestamp arithmetic; the reviewer found it correct by inspection
+   (deferred).
+3. A last-read number ahead of the counter (unreachable) replayed packet 0.
+   It now resynchronizes to the newest packet; tested.
+4. The timestamp ignores a sub-frame carry (informational, unchanged).
+
+After the fixes: `build-tests.ps1` reports 88,167 checks passed, and the
+normal 0.1.2 build passes (`target/r17-build-normal2.log`).
+
+Next: commit, clean test-signed 0.1.2 diagnostic package and bundle, then
+the short guest comparison.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)

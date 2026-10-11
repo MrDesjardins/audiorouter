@@ -863,7 +863,6 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     }
 
     ULONG availablePacketNumber;
-    ULONG droppedPackets;
 
     // The call must be from event driven mode
     if (m_ulNotificationsPerBuffer == 0 ||
@@ -903,45 +902,37 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
 
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
-    if (packetCounter == 0) { return STATUS_DEVICE_NOT_READY; }
+    if (packetCounter <= 0) { return STATUS_DEVICE_NOT_READY; }
 
-    // The 0-based number of the last completed packet
-    // FUTURE-2014/10/27 Update to allow different numbers of packets per WaveRT buffer
-    // Startup is handled above. The low-word subtraction remains well-defined
-    // at the packet-number wrap boundary without signed counter arithmetic.
-    availablePacketNumber = LODWORD(packetCounter) - 1;
-
-    // If no new packets are available...
-    if (availablePacketNumber == m_ulLastOsReadPacket)
-    {
-        return STATUS_DEVICE_NOT_READY;
-    }
-
-    // If more than one packet has transferred since the last packet read by
-    // the OS, then those were dropped. That is, a glitch occurred.
-    droppedPackets = availablePacketNumber - m_ulLastOsReadPacket - 1;
-    if (droppedPackets > 0)
-    {
-        // Trace a glitch
-    }
-
-    // Return next packet number to be read
-    *PacketNumber = availablePacketNumber;
-
-    // Compute and return timestamp corresponding to the first sample of the available packet. In a real hardware
-    // driver, the timestamp would be computed in a driver and hardware specific manner. In this sample
-    // driver, it is extrapolated from the sample driver's internal simulated position correlation
-    // [m_ullLinearPosition @ m_ullDmaTimeStamp] and the sample's internal 64-bit packet counter, subtracting
-    // 1 from the packet counter to compute the time at the start of that last completed packet.
     ULONG packetSize = m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
-    if (packetSize == 0 || packetCounter <= 0 ||
+    if (packetSize == 0 ||
         static_cast<ULONGLONG>(packetCounter) >
             MAXULONGLONG / packetSize)
     {
         return STATUS_INTEGER_OVERFLOW;
     }
+
+    // Return the oldest unread packet whose DMA slot is still intact. The
+    // sample returned only the newest completed packet, which dropped an
+    // intact older packet whenever this call's own position update completed
+    // one more packet (r16 guest timing: 115 of 119 capture skips). Packets
+    // whose slot was already overwritten are still skipped (a glitch).
+    AudioRouterReadSelection selection = {};
+    if (!AudioRouterSelectReadPacket(static_cast<ULONGLONG>(packetCounter),
+        m_ulLastOsReadPacket, ullLinearPosition, packetSize, m_ulDmaBufferSize,
+        &selection))
+    {
+        return STATUS_DEVICE_NOT_READY;
+    }
+    availablePacketNumber = LODWORD(selection.Packet);
+    *PacketNumber = availablePacketNumber;
+
+    // Compute and return timestamp corresponding to the first sample of the returned packet. In a real hardware
+    // driver, the timestamp would be computed in a driver and hardware specific manner. In this sample
+    // driver, it is extrapolated from the sample driver's internal simulated position correlation
+    // [m_ullLinearPosition @ m_ullDmaTimeStamp] back to the start of the selected packet.
     ULONGLONG linearPositionOfAvailablePacket =
-        AudioRouterCompletedPacketStart(static_cast<ULONGLONG>(packetCounter), packetSize);
+        AudioRouterCompletedPacketStart(selection.Packet + 1, packetSize);
     // Need to divide by (1000 * 10000 because m_ulDmaMovementRate is average bytes per sec
     if (hnsElapsedTimeCarryForward >
         MAXULONGLONG / m_ulDmaMovementRate)
@@ -982,9 +973,9 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     // No flags are defined yet
     *Flags = 0;
 
-    // This sample does not internally buffer data so there is never more data
-    // than revealed by the results from this routine.
-    *MoreData = FALSE;
+    // A newer completed packet is already readable; the OS may fetch it
+    // without waiting for another notification.
+    *MoreData = selection.MoreData ? TRUE : FALSE;
 
     // Update the last packet read by the OS
     m_ulLastOsReadPacket = availablePacketNumber;

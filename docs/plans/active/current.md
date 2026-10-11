@@ -8,7 +8,21 @@ fresh GPT-6 Luna High WP-04 source review finds no blocker. Host models,
 concurrency, 738 driver checks, 58 wrapper checks and normal/diagnostic WDK
 builds pass. Source `8679e6e7` has a clean test-signed 0.1.1 diagnostic
 package; 33 package checks and all 41 immutable bundle hashes pass. No audio
-repair or qualification claimed. Next: user runs the short r16 guest block. See
+repair or qualification claimed. First guest attempt: install passed;
+comparison refused by its `C:\ar\IS_TEST_VM` marker guard before running
+(nothing measured). Second attempt (marker created): disabled baseline
+valid (61 lost, p95 19.314 ms, jitter 8.296 ms, r15-like); enabled run
+invalid. A 4.77 s guest-wide pause, which the driver's own timer records
+also show, expired the bridge lease and the route failed with 0x80070016.
+Records were complete (0 dropped/exhausted). Third, WPR-traced attempt
+valid: no pause; instrumentation did not worsen continuity (41 vs 70 lost).
+Every one of the probe's 119 flagged capture packets is a packet the driver
+skipped: sample `GetReadPacket` returns the newest packet, not the next
+unread one, and 115 of the skipped packets were still intact. r17 repair
+(return oldest intact unread packet, MoreData) implemented uncommitted:
+27,537 driver checks, model sweep and normal/diagnostic 0.1.2 WDK builds
+pass. Next: independent WP-04 review of the diff, then commit, clean
+test-signed package/bundle and short guest comparison. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 
