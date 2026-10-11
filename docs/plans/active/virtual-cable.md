@@ -24,6 +24,43 @@ host's Hyper-V/WSL capability preserved.
 - Signing (human steps, costs): [virtual cable signing](../../operations/virtual-cable-signing.md).
 - Background, costs and gap analysis: [driver track](../future/M03-driver-signing.md).
 
+## Active task — engine cable route (step 1 of the single-PC path, 2026-10-10)
+
+User approved step 1: repeat the VCAB-20 bit-exact and VCAB-26 isolation
+checks through the AudioRouter engine instead of the proxy relay.
+
+Finding before implementation: no working Cable A → engine → Cable B path
+exists. The control crate's virtual-node plumbing predates the eight-cable
+driver (WP-08/WP-09 not started): `NativeBridgeInputWorker` renders the
+engine output to a physical endpoint, and the capture-sink tap
+(`NativeBridgeRealtimeWriter`) publishes without waiting for the consumer
+acknowledgement, which overwrites the single slot under load (see the
+WP-09 pacing note). Step 1 is therefore the first slice of WP-09.
+
+Ordered tasks:
+1. Portable engine test: a `VirtualRenderSource → VirtualCaptureSink`
+   session compiled by the engine and run through `RealtimeScheduler` is
+   bit-exact for float32 noise on the 2^-24 grid, silence and −0.0.
+2. `audiorouter-windows-audio`: a reusable cable route worker. One
+   realtime thread reads Cable A's render-source slot and runs the engine
+   scheduler; a second publishes to Cable B's capture sink only after the
+   consumer acknowledged the previous block (as `m03_bridge_tone`). The
+   bounded relay (preallocated, drop-oldest, counted) moves into the
+   library with its tests; nothing in the audio threads allocates, logs or
+   waits on locks.
+3. VM tool `m03_engine_route` (example) that builds the session, compiles it
+   with the engine and runs the worker; `run-cable-latency.ps1 -Route
+   engine` uses it instead of `m03_bridge_tone --passthrough`; acceptance
+   checks extended.
+4. Host checks: unit tests, fmt, Clippy (workspace), acceptance scripts;
+   then one VM bundle (r7) and one guest command.
+
+Scope label for results: engine compile and realtime processing between the
+cables; not yet the control/backend lifecycle (session start/stop, lease
+supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
+VCAB-25 (indicative), VDEV-12. Rollback: revert these commits; the driver
+and the proxy route are unchanged.
+
 ## Active repair — 2026-10-09 render publication review
 
 User confirmed playback was already running and requested source analysis and
