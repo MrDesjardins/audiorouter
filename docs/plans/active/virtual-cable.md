@@ -1590,7 +1590,11 @@ no clean stop), QPC-dated on the probe's clock. 3.5 s later, past the
 - the restarted route carries audio.
 `tests/acceptance/m03-cable-kill.ps1`: 6 checks (syntax, kill/QPC/lease
 wait present, no qualification claim, review self-test with 4 synthetic
-cases, host guard). The bundle preparer ships the runner.
+cases, host guard). The bundle preparer ships the runner. r24 bundle
+`C:\VMsr-share\diagnostics-20261011-cable-kill-r24` (source `bdf965af`,
+same driver source; 33 package checks pass), MANIFEST SHA-256
+`C31C0A799736EDCE23F11FD0074B4E3C3B926F8E9BD1940B552A1A4C0FD7AB9A`, 43/43
+verified. Guest command: `run-cable-kill.ps1` (3 repeats).
 
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
