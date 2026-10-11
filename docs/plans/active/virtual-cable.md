@@ -96,8 +96,17 @@ r11 (indicative, NEM): default periods, clean starts: engine route median
 16.6–18.2 ms but no clean start (losses). Earlier ~150 ms low-latency values
 were dating artefacts. **Step 2 done.** Open decision: a cable keeps a
 standing +30 ms after late OS render delivery (engine start 2); whether to
-shed standing delay is a latency-recovery design decision. Next: step 3,
-the traced one-hour 8-cable deviation run.
+shed standing delay is a latency-recovery design decision.
+
+**Decision (user, 2026-10-10): yes, recover latency.** A cable path drops
+excess audio (bounded, counted, at a block boundary) to return to its
+normal delay after a disturbance, instead of keeping a standing delay.
+Recorded in spec 17 ("Latency recovery"). Before implementing: locate
+where the standing delay is held (driver render ring, bridge, route relay
+or Windows engine) from r11 raw data and counters, then choose the owning
+layer, add host timing-model tests and run the repeated-start latency
+check again. Next: step 3, the traced one-hour 8-cable deviation run, then
+the latency-recovery design.
 
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease

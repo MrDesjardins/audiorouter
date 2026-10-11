@@ -458,6 +458,18 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   buffering adds at most one quantum (10 ms at 480 frames/48 kHz). This
   does not waive VCAB-24/25/28: continuity, measured latency, and pool gates
   still require guest evidence.
+- **Latency recovery (user decision 2026-10-10).** After a disturbance (for
+  example Windows delivering render audio late), a cable path must not keep
+  a standing extra delay for the rest of the stream. When the delay held in
+  a cable path stays above its normal level, AudioRouter drops the excess
+  audio at a block boundary to return to the normal level: a small, counted
+  glitch is preferred over lasting extra latency. Drops are bounded,
+  reported in the stream counters, and never touch audio that arrives on
+  time (the r3 rule that written audio is not silenced still holds for
+  on-time and late-but-within-target audio). Where the standing delay is
+  held, and therefore which layer drops it, is determined from measurements
+  before implementation (VM run r11, engine start 2: +30 ms after one late
+  `SetWritePacket`).
 - Capture DMA and its private prefetch are serviced on each running 1 ms
   timer tick, independently of the requested Windows notification period.
   Packet numbers and notification events advance only at that requested
