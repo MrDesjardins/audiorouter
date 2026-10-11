@@ -860,6 +860,20 @@ export interface DiagnosticsSnapshot {
   redacted: true;
 }
 
+/** `virtualCable.status` (spec 17 §7.1): the AudioRouter cable driver, read-only. */
+export interface VirtualCableStatus {
+  state: "notInstalled" | "installed" | "needsRepair" | "needsRestart" | "incompatible";
+  driverVersion: string | null;
+  protocol: string | null;
+  cableCount: number;
+  cables: {
+    busId: string;
+    renderEndpointId: string | null;
+    captureEndpointId: string | null;
+    present: boolean;
+  }[];
+}
+
 export interface StartupStatus {
   enabled: boolean;
   registration: "unavailable";
@@ -1274,6 +1288,7 @@ export type ImplementedMethod =
   | "recovery.clearSafeMode"
   | "safety.setPrivacyMute"
   | "startup.get"
+  | "virtualCable.status"
   | "startup.plan"
   | "startup.apply"
   | "devices.list"
@@ -1422,6 +1437,7 @@ export type MethodParams = {
   "recovery.clearSafeMode": { idempotencyKey?: string } | undefined;
   "safety.setPrivacyMute": { muted: boolean; idempotencyKey?: string };
   "startup.get": undefined;
+  "virtualCable.status": undefined;
   "startup.plan": { enabled: boolean };
   "startup.apply": { planId: EntityId; idempotencyKey: string };
   "devices.list": { cursor?: string; limit?: number; includeInactive?: boolean } | undefined;
@@ -1579,6 +1595,7 @@ export type MethodResult = {
   "recovery.clearSafeMode": RecoveryClearResult;
   "safety.setPrivacyMute": PrivacyMuteResult;
   "startup.get": StartupStatus;
+  "virtualCable.status": VirtualCableStatus;
   "startup.plan": StartupPlanResult;
   "startup.apply": StartupApplyResult;
   "devices.list": DeviceInfo[] | DeviceListPage;

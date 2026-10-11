@@ -1056,8 +1056,28 @@ fn endpoints_json(endpoints: &[CableEndpoint]) -> serde_json::Value {
     serde_json::to_value(endpoints).unwrap_or_default()
 }
 
-pub fn status(platform: &mut dyn Platform, context: &Context) -> Result<Outcome, Failure> {
-    let state = context.state.load()?;
+/// Read-only cable driver status (17 §7.1). Shared by the helper's `status`
+/// command and the standard-user backend (`virtualCable.status`); nothing
+/// here needs elevation except reading the helper state, which the caller
+/// supplies (`None` when it is absent or unreadable).
+#[derive(Clone, Debug, PartialEq)]
+pub struct StatusReport {
+    /// One of `classify_status`'s five states.
+    pub state: &'static str,
+    pub package_version: Option<String>,
+    pub installed_driver_version: Option<String>,
+    pub device_instance_id: Option<String>,
+    pub cable_count: u8,
+    /// Bridge protocol `major.minor` and capability bits, when it answers.
+    pub protocol: Option<String>,
+    pub capabilities: Option<u32>,
+    pub endpoints: Vec<CableEndpoint>,
+}
+
+pub fn status_report(
+    platform: &mut dyn Platform,
+    state: Option<&State>,
+) -> Result<StatusReport, Failure> {
     let device = platform.find_device()?;
     let endpoints = platform.cable_endpoints();
     let query = platform.query_driver();
@@ -1075,18 +1095,33 @@ pub fn status(platform: &mut dyn Platform, context: &Context) -> Result<Outcome,
         cables_match(&endpoints, count),
         query,
     );
+    Ok(StatusReport {
+        state: label,
+        package_version: state.map(|s| s.package_version.to_string()),
+        installed_driver_version: installed_version.map(|v| v.to_string()),
+        device_instance_id: device,
+        cable_count: count,
+        protocol: query.map(|(major, minor, _, _)| format!("{major}.{minor}")),
+        capabilities: query.map(|(_, _, caps, _)| caps),
+        endpoints,
+    })
+}
+
+pub fn status(platform: &mut dyn Platform, context: &Context) -> Result<Outcome, Failure> {
+    let state = context.state.load()?;
+    let report = status_report(platform, state.as_ref())?;
     Ok(success(
         "status",
         false,
         serde_json::json!({
-            "state": label,
-            "packageVersion": state.as_ref().map(|s| s.package_version.to_string()),
-            "installedDriverVersion": installed_version.map(|v| v.to_string()),
-            "deviceInstanceId": device,
-            "cableCount": count,
-            "protocol": query.map(|(major, minor, _, _)| format!("{major}.{minor}")),
-            "capabilities": query.map(|(_, _, caps, _)| caps),
-            "endpoints": endpoints_json(&endpoints),
+            "state": report.state,
+            "packageVersion": report.package_version,
+            "installedDriverVersion": report.installed_driver_version,
+            "deviceInstanceId": report.device_instance_id,
+            "cableCount": report.cable_count,
+            "protocol": report.protocol,
+            "capabilities": report.capabilities,
+            "endpoints": endpoints_json(&report.endpoints),
         }),
     ))
 }

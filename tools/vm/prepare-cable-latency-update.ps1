@@ -30,15 +30,23 @@ try {
     # Product cable route through the real control plane (WP-09).
     & cargo build --locked --release --target-dir $vmTarget -p audiorouter-control --example m03_cable_session
     if ($LASTEXITCODE -ne 0) { throw 'Static cable session tool build failed.' }
+    # The CLI, for WP-08's `virtual-cable status` acceptance in the guest.
+    & cargo build --locked --release --target-dir $vmTarget -p audiorouter-cli
+    if ($LASTEXITCODE -ne 0) { throw 'Static CLI build failed.' }
 } finally { $env:RUSTFLAGS = $previousFlags }
 $toneTool = Join-Path $vmTarget 'release\examples\m03_bridge_tone.exe'
 $cableSessionTool = Join-Path $vmTarget 'release\examples\m03_cable_session.exe'
+$cliTool = Join-Path $vmTarget 'release\audiorouter-cli.exe'
 $probe = Join-Path $workspace 'target\m00-probe-cable\m00-probe.exe'
 New-Item -ItemType Directory -Path (Split-Path -Parent $probe) -Force | Out-Null
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tools\m00-native-wasapi-probe\build.ps1') -Output $probe -StaticRuntime
 if ($LASTEXITCODE -ne 0) { throw 'Static impulse probe build failed.' }
-foreach ($tool in @($toneTool, $cableSessionTool, $probe)) { $null = Assert-PortableVmTool $tool }
+foreach ($tool in @($toneTool, $cableSessionTool, $cliTool, $probe)) { $null = Assert-PortableVmTool $tool }
 # Every request the product tool makes, except session.start (no driver here).
+# The CLI's cable status must run as a standard user and parse; on the host
+# (no AudioRouter driver) it reports notInstalled.
+$cliStatus = & $cliTool --json virtual-cable status 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or -not (($cliStatus | ConvertFrom-Json).state)) { throw "CLI virtual-cable status check failed: $cliStatus" }
 $sessionCheck = & $cableSessionTool --check 2>&1
 if ($LASTEXITCODE -ne 0) { throw "Cable session tool request check failed: $sessionCheck" }
 $selfTest = & $probe cable-impulse-selftest
@@ -48,7 +56,7 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $entries = @(Get-Content -LiteralPath (Join-Path $base 'MANIFEST.txt') | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
 foreach ($entry in $entries) {
     $relative = $entry.Substring(66)
-    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe', 'tools\m03_cable_session.exe', 'run-cable-kill.ps1', 'run-cable-tone.ps1', 'run-cable-bitexact.ps1')) { throw 'Base already contains latency or continuity tools; use a standard candidate base.' }
+    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe', 'tools\m03_cable_session.exe', 'tools\audiorouter-cli.exe', 'run-cable-kill.ps1', 'run-cable-tone.ps1', 'run-cable-bitexact.ps1')) { throw 'Base already contains latency or continuity tools; use a standard candidate base.' }
     $file = [IO.Path]::GetFullPath((Join-Path $output $relative))
     if (-not $file.StartsWith($output + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest path escapes output.' }
     New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
@@ -59,6 +67,7 @@ foreach ($entry in $entries) {
 Copy-Item -LiteralPath $toneTool -Destination (Join-Path $output 'tools\m03_bridge_tone.exe') -Force
 Copy-Item -LiteralPath $probe -Destination (Join-Path $output 'tools\m00-probe.exe')
 Copy-Item -LiteralPath $cableSessionTool -Destination (Join-Path $output 'tools\m03_cable_session.exe')
+Copy-Item -LiteralPath $cliTool -Destination (Join-Path $output 'tools\audiorouter-cli.exe')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency-starts.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-continuity.ps1') -Destination $output

@@ -789,7 +789,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 123] = [
+pub const API_METHODS: [ApiMethodSpec; 124] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1105,6 +1105,11 @@ pub const API_METHODS: [ApiMethodSpec; 123] = [
         name: "recordings.recycle",
         permission: PermissionScope::Record,
         side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "virtualCable.status",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
         name: "devices.list",

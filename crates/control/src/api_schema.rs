@@ -83,6 +83,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
             "Clear the latched crash-recovery safe mode after an operator confirms stability."
         }
         "startup.get" => "Report the desired sign-in startup policy and registration capability.",
+        "virtualCable.status" => "Report the AudioRouter cable driver state, version and cables (read-only; installation is a shell command).",
         "startup.plan" => "Preview a sign-in startup policy change without applying OS registration.",
         "startup.apply" => "Apply a validated sign-in startup policy when native registration is available.",
         "recordings.removeEntry" => "Remove a recording library entry without deleting its file.",
@@ -699,6 +700,7 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             &["idempotencyKey"],
         ),
         "startup.get" => object_schema(json!({}), &[]),
+        "virtualCable.status" => object_schema(json!({}), &[]),
         "startup.plan" => object_schema(json!({ "enabled": { "type": "boolean" } }), &["enabled"]),
         "startup.apply" => object_schema(
             json!({

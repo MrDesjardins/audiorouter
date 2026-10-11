@@ -332,9 +332,18 @@ pub(crate) fn validate_method_params(
         "startup.apply" => &["planId", "idempotencyKey"],
         "diagnostics.getVerbose" => &[],
         "diagnostics.setVerbose" => &["enabled"],
-        "system.describe" | "status.get" | "system.diagnostics" | "startup.get" | "apps.list"
-        | "applications.list" | "nodes.types" | "nodes.describe" | "presets.list"
-        | "processors.list" | "clients.list" => &[],
+        "system.describe"
+        | "status.get"
+        | "system.diagnostics"
+        | "startup.get"
+        | "virtualCable.status"
+        | "apps.list"
+        | "applications.list"
+        | "nodes.types"
+        | "nodes.describe"
+        | "presets.list"
+        | "processors.list"
+        | "clients.list" => &[],
         "processors.response" => &["sampleRateHz", "bands", "frequenciesHz"],
         _ => return Ok(()),
     };

@@ -70,6 +70,7 @@ mod sessions;
 mod status;
 #[cfg(test)]
 mod test_support;
+mod virtual_cable;
 mod virtual_devices;
 
 use api_output_schema::*;
@@ -403,6 +404,8 @@ pub struct ControlPlane {
     cable_route: Option<cable_routes::ActiveCableRoute>,
     #[cfg(windows)]
     managed_software_devices: audiorouter_windows_audio::ManagedSoftwareDeviceInventory,
+    /// Last `virtualCable.status` result and when it was read (2 s cache).
+    virtual_cable_status_cache: Option<(Instant, Value)>,
 }
 
 impl Default for ControlPlane {
@@ -537,6 +540,7 @@ impl ControlPlane {
             #[cfg(windows)]
             managed_software_devices:
                 audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
+            virtual_cable_status_cache: None,
         }
     }
 
@@ -674,6 +678,7 @@ impl ControlPlane {
                     "startup.plan" => self.dispatch_startup_plan(request.params),
                     "startup.apply" => self.dispatch_startup_apply(request.params),
                     "devices.list" => self.dispatch_devices_list(request.params),
+                    "virtualCable.status" => self.dispatch_virtual_cable_status(),
                     "nativeEndpoints.prepare" => {
                         self.dispatch_native_endpoints_prepare(request.params)
                     }

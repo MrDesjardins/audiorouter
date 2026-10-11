@@ -164,13 +164,21 @@ pub fn openapi(describe: &Value, port: u16, lan: Option<Ipv4Addr>) -> Value {
         ("capabilities", "system.describe"),
         ("sessions", "sessions.list"),
         ("status", "status.get"),
+        ("virtualCable/status", "virtualCable.status"),
     ] {
         let schema = describe["methods"]
             .as_array()
             .and_then(|methods| methods.iter().find(|method| method["name"] == name))
             .map(|method| method["outputSchema"].clone())
             .unwrap_or(json!({}));
-        paths.insert(format!("/api/v1/{path}"), json!({"get": {"operationId": format!("http.{path}"), "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Backend result", "content": {"application/json": {"schema": schema}}}}}}));
+        // Merge: a GET alias may share its path with the method's POST
+        // operation (virtualCable/status), which must stay documented.
+        let entry = paths
+            .entry(format!("/api/v1/{path}"))
+            .or_insert_with(|| json!({}));
+        if let Some(operations) = entry.as_object_mut() {
+            operations.insert("get".into(), json!({"operationId": format!("http.{path}"), "security": [{"bearerAuth": []}], "responses": {"200": {"description": "Backend result", "content": {"application/json": {"schema": schema}}}}}));
+        }
     }
     let active_get = describe["methods"]
         .as_array()
@@ -339,6 +347,7 @@ fn handle(
         ("GET", "/api/v1/sessions/active") => "sessions.active.get".into(),
         ("PUT", "/api/v1/sessions/active") => "sessions.active.set".into(),
         ("GET", "/api/v1/status") => "status.get".into(),
+        ("GET", "/api/v1/virtualCable/status") => "virtualCable.status".into(),
         ("POST", path) => {
             let Some(method) = path
                 .strip_prefix("/api/v1/")
@@ -926,6 +935,10 @@ mod tests {
                     .unwrap()["inputSchema"]
             );
         }
+        // The cable status GET alias shares its path with the POST operation.
+        let cable = &schema["paths"]["/api/v1/virtualCable/status"];
+        assert_eq!(cable["post"]["operationId"], "virtualCable.status");
+        assert_eq!(cable["get"]["operationId"], "http.virtualCable/status");
         let docs = exchange(
             api.port,
             &format!("GET /docs HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n\r\n", api.port),

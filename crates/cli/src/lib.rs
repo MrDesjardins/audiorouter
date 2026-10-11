@@ -84,6 +84,7 @@ where
         "devices" => list_subcommand(&command_args, "devices")?,
         "virtual-devices" => virtual_devices_command(&command_args)?,
         "virtual-routes" => virtual_routes_command(&command_args)?,
+        "virtual-cable" => virtual_cable_command(&command_args)?,
         "plugins" => plugins_command(&command_args)?,
         "presets" => presets_command(&command_args)?,
         "processors" => list_subcommand(&command_args, "processors")?,
@@ -1899,7 +1900,29 @@ fn help_value() -> Value {
         15,
         json!("recovery clear-safe-mode --database <path> --idempotency-key KEY"),
     );
+    value["commands"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!("virtual-cable status"));
     value
+}
+
+/// `virtual-cable status`: the AudioRouter cable driver's state, version and
+/// cables (spec 17 §7.2). Read-only; installing stays a shell command.
+fn virtual_cable_command(args: &[&str]) -> Result<Value, CliError> {
+    if args.get(1).copied() != Some("status") {
+        return Err(CliError::InvalidArguments(
+            "usage: virtual-cable status".into(),
+        ));
+    }
+    let response = ControlPlane::default().dispatch(request("virtualCable.status"));
+    match (response.result, response.error) {
+        (Some(result), _) => Ok(result),
+        (None, Some(error)) => Err(CliError::InvalidArguments(error.message)),
+        (None, None) => Err(CliError::InvalidArguments(
+            "cable status unavailable".into(),
+        )),
+    }
 }
 
 fn option_value<'a>(args: &'a [&str], option: &str) -> Result<&'a str, CliError> {

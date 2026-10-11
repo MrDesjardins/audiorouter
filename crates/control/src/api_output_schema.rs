@@ -283,6 +283,32 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
             "required": ["safeMode", "recentCrashes", "persistence"],
             "additionalProperties": false
         }),
+        "virtualCable.status" => json!({
+            "type": "object",
+            "properties": {
+                "state": { "enum": ["notInstalled", "installed", "needsRepair", "needsRestart", "incompatible"] },
+                "driverVersion": { "type": ["string", "null"], "maxLength": 32 },
+                "protocol": { "type": ["string", "null"], "maxLength": 16 },
+                "cableCount": { "type": "integer", "minimum": 0, "maximum": 8 },
+                "cables": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "busId": { "type": "string", "pattern": "^cable-[a-h]$" },
+                            "renderEndpointId": { "type": ["string", "null"], "maxLength": 512 },
+                            "captureEndpointId": { "type": ["string", "null"], "maxLength": 512 },
+                            "present": { "type": "boolean" }
+                        },
+                        "required": ["busId", "renderEndpointId", "captureEndpointId", "present"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["state", "driverVersion", "protocol", "cableCount", "cables"],
+            "additionalProperties": false
+        }),
         "startup.get" => json!({
             "type": "object",
             "properties": {

@@ -82,6 +82,7 @@ name = "audiorouter-control"
 version = "0.0.15"
 dependencies = [
  "audiorouter-domain",
+ "audiorouter-driver-helper",
  "audiorouter-dsp",
  "audiorouter-engine",
  "audiorouter-plugin-host",

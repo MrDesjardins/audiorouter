@@ -60,6 +60,7 @@ is channelClippedSamples / sampleRateHz; channel durations may overlap.
 | `audioMedia.beginUpload/uploadChunk/finishUpload/delete`, `audioSources.transport` | Bounded WAV/MP3 import into opaque backend media storage; per-node play/pause/stop/status for a running Audio File source and play/stop/status for a running Test Signal source. Import and source playback never open arbitrary file paths from the audio callback. |
 | `audioMedia.importTemporaryRecording` | Convert a completed WAV created by an explicitly started temporary-take recorder into 24-hour media; remove the exact temporary file and library row after validation. Requires `record` and enforces the existing 64 MiB / 120-second source limits. |
 | `startup.get/plan/apply` | Sign-in behavior preview and registration result |
+| `virtualCable.status` | AudioRouter cable driver state (`notInstalled`, `installed`, `needsRepair`, `needsRestart`, `incompatible`), driver version, bridge protocol and each enabled cable's endpoints (spec 17 §7.1). Read-only; installation is a desktop-shell command, never an API method. |
 | `safety.setPrivacyMute` | Immediate source suppression, then durable latch update |
 | `operations.get/cancel` | Persistent operation status; cancellation cannot undo completed side effects |
 | `events.subscribe/unsubscribe` | State and meter event stream |

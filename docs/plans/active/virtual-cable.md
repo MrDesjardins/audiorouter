@@ -1336,7 +1336,40 @@ or audio evidence.
 - **Acceptance:** `audiorouter-cli virtual-cable status --json` in the VM
   reports `installed` with the enabled cables' endpoint IDs after WP-07 install and
   `notInstalled` after remove.
-- **Status:** not started.
+- **Status:** step 1 (read-only status) implemented 2026-10-11 (user
+  approved). The shell install/update/repair/remove commands, the
+  `virtualDevices.*` deprecation and the domain bus set are still open.
+
+### WP-08 step 1 — read-only `virtualCable.status` (2026-10-11)
+
+- `crates/driver-helper`: `status_report` / `StatusReport` hold the
+  helper's existing read-only detection: the device and installed driver
+  version (SetupAPI/CfgMgr), the configured cable count, endpoints by
+  device instance, the bridge QUERY, and `classify_status`'s five states.
+  The helper's `status` command now formats that report; its JSON and its
+  28 tests are unchanged.
+- `crates/control/src/virtual_cable.rs`: `virtualCable.status` (read
+  scope, read-only, 2 s cache) returns `{state, driverVersion, protocol,
+  cableCount, cables:[{busId, renderEndpointId, captureEndpointId,
+  present}]}`. A standard user who cannot read the helper's install record
+  in ProgramData is treated as having none; it only matters when the
+  device is gone. Registered in `API_METHODS` (124), the input and output
+  schemas, authorization, the contract (`VirtualCableStatus`), the CLI
+  (`virtual-cable status`), HTTP (`GET /api/v1/virtualCable/status`
+  alias; the OpenAPI GET now merges with the method's POST entry on the
+  same path, test added), `docs/operations/api-reference.md` and spec 10.
+- Checks: control 244 passed, 9 ignored (3 new status tests: mapping,
+  missing endpoint, cache); domain 73; helper 28; CLI suites; shell
+  `http_api` 10 passed; contract drift (124 methods) and typechecks;
+  docs validation; workspace and `src-tauri` Clippy; fmt. On the host
+  without a driver, `audiorouter-cli virtual-cable status --json` reports
+  `notInstalled`. Lock files gained only the `audiorouter-driver-helper`
+  dependency, format version kept at 3.
+- VM acceptance: the bundle preparer now ships a static
+  `tools\audiorouter-cli.exe` and runs its status once on the host.
+  Guest: `audiorouter-cli --json virtual-cable status` must report
+  `installed`, driver 0.1.4.0, protocol 1.1, and two cables with both
+  endpoint IDs.
 
 ## WP-09 — Engine: Virtual Render Source / Virtual Capture Sink (17 §7.3)
 
