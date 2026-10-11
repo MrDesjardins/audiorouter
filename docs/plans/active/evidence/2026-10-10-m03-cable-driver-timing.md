@@ -756,6 +756,44 @@ Each run's bridge `driver_version` is checked before its results are used.
 Compare flagged capture packets, driver skips, lost impulses and jitter
 across r18 ×2 and r17 ×1 under equal guest conditions.
 
+### Controlled comparison result (2026-10-11)
+
+- **r18 repeat** (block 1): `driver-timing-traced-0a2045c5e85849c3970fa0dbf9006630.zip`,
+  inner `driver-timing-3aa01c388a864f1facddbc4697dcddf2.zip`, bridge 0.1.3.0.
+- **`-Step remove`**, guest restart, then **r17 install**
+  (`20261011-001907-install`: exit 0, four endpoints, no restart needed).
+- **r17 run**: `driver-timing-traced-2018685ebc4a46edbd1ac5f6a19b8721.zip`,
+  inner `driver-timing-cbd7e0f601584ea4804b51813dabdbe4.zip`, bridge
+  0.1.2.0.
+- All runs: `Passed=true`, WPR 0 lost, timing records 0 dropped and 0
+  exhausted. Longest all-CPU silence 22.4 ms (r18) and 78.8 ms (r17), so no
+  multi-second freeze.
+
+| SysMain off | Flagged capture packets, recording off / on | Driver skips (on) | Lost impulses off / on | Jitter off / on | Follow-up within 0.2 ms |
+|---|---|---|---|---|---|
+| r18 run 1 | 61 / 51 | 50 | 29 / 28 | 7.463 / 5.726 ms | 141 / 143 |
+| r18 run 2 | 24 / 33 | 37 | 21 / 17 | 9.755 / 5.416 ms | 129 / 134 |
+| r17 | 72 / 88 | 88 | 36 / 29 | 12.680 / 6.095 ms | 7 / 156 |
+
+- Mean flagged capture packets: r18 42.3, r17 80.0, so r18 has **47 %
+  fewer**.
+- Driver skips: r18 50 and 37 against r17 88 (about −51 %). Lost impulses:
+  r18 mean 23.8, r17 32.5 (−27 %). Corrupted impulses 0 everywhere.
+- r17 itself fell from 118 to 88 flagged once SysMain was off, so the
+  quieter guest also helps.
+- Earlier evidence showed r17 is neutral against r16 (118 vs 119). Taking
+  r17 as the r16 stand-in, r18 cuts capture glitches by about half under
+  equal conditions. Criterion 2 (≥ 80 %) is **not met**.
+- n = 2 + 1 runs; the r18 spread (24–61) is large.
+
+Conclusion: r18 is a real, repeatable improvement, keep it. The remaining
+skips are late first notifications caused by the VM's batched timer
+delivery (r19 analysis). After this comparison the guest has r17 (0.1.2)
+installed; reinstalling r18 needs `-Step install` from the r18 bundle (an
+upgrade, so likely a restart). Remaining decision: (b) document the
+deviation and run the hour-long VM diagnostic with r18, or (c) a
+native-timer environment for the continuity gate.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)

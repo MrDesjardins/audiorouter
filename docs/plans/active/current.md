@@ -37,9 +37,12 @@ are late first notifications. r19 rejected before implementation: the model
 shows frame-granular position worsens skips, and guest data shows the VM
 batches all high-resolution timers on one late interrupt (93–97 % of
 capture ticks within 0.05 ms of render ticks), so an extra timer cannot help.
-Next: user decides between a controlled r18 repeat with SysMain off, accepting
-r18 with a documented deviation and running the hour-long VM diagnostic, or
-a native-timer environment. See
+Controlled comparison with SysMain off (r18 ×2 against r17): flagged capture
+packets 42 vs 80 on average (−47 %), driver skips −51 %, lost impulses
+−27 %, 0 corrupted. r18 is a real repair but below the 80 % criterion. The
+guest currently has r17 installed. Next: user chooses between a documented
+deviation plus the hour-long VM diagnostic with r18, and a native-timer
+environment. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 
