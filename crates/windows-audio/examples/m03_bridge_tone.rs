@@ -17,7 +17,7 @@ use std::io::{Seek, SeekFrom, Write};
 
 const USAGE: &str = "usage: m03_bridge_tone [--seconds N] [--rate 44100|48000|96000] \
 [--channels 1-8] [--frames N] [--capture-bus cable-b] [--render-bus cable-a] \
-[--out PATH.wav] [--wav64] [--stall-ms N] [--passthrough] [--engine] [--device PATH]";
+[--out PATH.wav] [--wav64] [--discard] [--stall-ms N] [--passthrough] [--engine] [--device PATH]";
 
 #[derive(Clone, Debug, PartialEq)]
 struct Options {
@@ -30,6 +30,9 @@ struct Options {
     render_bus: String,
     out: std::path::PathBuf,
     wav64: bool,
+    /// Consume the render-source audio without writing the WAV (long runs);
+    /// `--out` still names the progress report.
+    discard: bool,
     stall_ms: u32,
     /// Republish render-source blocks into the capture sink instead of the
     /// tone (an AudioRouter cable-route proxy for latency measurement).
@@ -51,6 +54,7 @@ impl Default for Options {
             render_bus: "cable-a".to_owned(),
             out: std::path::PathBuf::from("render-source.wav"),
             wav64: false,
+            discard: false,
             stall_ms: 0,
             passthrough: false,
             engine: false,
@@ -69,7 +73,7 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
         };
         match flag.as_str() {
             "--device" => options.device = value()?,
-            "--seconds" => options.seconds = number(&value()?, 1, 3_600)?,
+            "--seconds" => options.seconds = number(&value()?, 1, 7_200)?,
             "--rate" => {
                 options.rate = number(&value()?, 1, 192_000)?;
                 if ![44_100, 48_000, 96_000].contains(&options.rate) {
@@ -82,6 +86,7 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
             "--render-bus" => options.render_bus = cable(&value()?)?,
             "--out" => options.out = std::path::PathBuf::from(value()?),
             "--wav64" => options.wav64 = true,
+            "--discard" => options.discard = true,
             "--stall-ms" => options.stall_ms = number(&value()?, 0, 60_000)?,
             "--passthrough" => options.passthrough = true,
             "--engine" => {
@@ -133,7 +138,7 @@ struct ProgressLog {
 
 impl ProgressLog {
     fn new(seconds: u32, stall_ms: u32) -> Self {
-        let limit = (seconds.min(3_600) + stall_ms.min(60_000).div_ceil(1_000) + 1) as usize;
+        let limit = (seconds.min(7_200) + stall_ms.min(60_000).div_ceil(1_000) + 1) as usize;
         Self {
             lines: Vec::with_capacity(limit),
             limit,
@@ -376,13 +381,19 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         NativeBridgeRegion::open(&capture_path, options.channels, options.frames).map_err(fail)?;
     let render_view =
         NativeBridgeRegion::open(&render_path, options.channels, options.frames).map_err(fail)?;
-    let mut wav = WavWriter::create(&options.out, options.channels, options.rate, options.wav64)
-        .map_err(|error| {
-            (
-                1,
-                format!("cannot create {}: {error}", options.out.display()),
-            )
-        })?;
+    let mut wav = if options.discard {
+        None
+    } else {
+        Some(
+            WavWriter::create(&options.out, options.channels, options.rate, options.wav64)
+                .map_err(|error| {
+                    (
+                        1,
+                        format!("cannot create {}: {error}", options.out.display()),
+                    )
+                })?,
+        )
+    };
     let mut engine = if options.engine {
         let session = audiorouter_windows_audio::cable_route_session(
             &options.render_bus,
@@ -519,14 +530,23 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             .name("tone-recording".to_owned())
             .spawn_scoped(scope, move || {
                 let _panic = workers::PanicSignal(disk_state);
-                let recorded = workers::record(disk_state, |samples| {
-                    wav.append(samples)
-                        .map_err(|error| format!("WAV write: {error}"))
+                let mut discarded_samples = 0_u64;
+                let recorded = workers::record(disk_state, |samples| match wav.as_mut() {
+                    Some(wav) => wav
+                        .append(samples)
+                        .map_err(|error| format!("WAV write: {error}")),
+                    None => {
+                        discarded_samples += samples.len() as u64;
+                        Ok(())
+                    }
                 });
                 let before = Instant::now();
-                let frames = wav
-                    .finish(options.rate)
-                    .map_err(|error| format!("WAV finish: {error}"))?;
+                let frames = match wav {
+                    Some(wav) => wav
+                        .finish(options.rate)
+                        .map_err(|error| format!("WAV finish: {error}"))?,
+                    None => discarded_samples / u64::from(options.channels),
+                };
                 workers::observe_max(&disk_state.disk_finish_us, before.elapsed());
                 recorded.map(|()| frames)
             })
@@ -810,7 +830,7 @@ mod tests {
         // The output sink is introduced only after collection has finished.
         log.write_to(&mut output).unwrap();
         assert_eq!(output, b"first\nlast\n");
-        assert_eq!(ProgressLog::new(u32::MAX, u32::MAX).limit, 3_661);
+        assert_eq!(ProgressLog::new(u32::MAX, u32::MAX).limit, 7_261);
     }
 
     #[test]
@@ -861,7 +881,12 @@ mod tests {
             "--engine implies pass-through"
         );
         assert!(!Options::default().engine);
+        // An hour-long continuity run keeps no WAV.
+        let long = parse_options(&args("--engine --discard --seconds 3680")).unwrap();
+        assert!(long.discard && long.seconds == 3_680 && !Options::default().discard);
+        assert_eq!(ProgressLog::new(3_680, 0).limit, 3_681);
         for bad in [
+            "--seconds 7201",
             "--engine --channels 8",
             "--engine --channels 3",
             "--channels 9",

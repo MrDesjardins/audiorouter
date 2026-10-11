@@ -1282,6 +1282,30 @@ static std::vector<RenderDiscontinuity> render_discontinuities(const std::vector
     return found;
 }
 
+// Runs of consecutive lost impulses, in emission order, for attributing a
+// long run's losses to the moments they happened (impulse k is emitted
+// k * 10 ms after the render stream started).
+struct CableLostRun { UINT64 first_impulse = 0, count = 0; };
+static std::vector<CableLostRun> cable_lost_runs(const CableLatencyReport& report) {
+    std::vector<CableLostRun> runs;
+    UINT64 next = 0;  // first impulse not yet accounted for
+    auto add_gap = [&](UINT64 end) { if (end > next) runs.push_back({next, end - next}); };
+    for (const auto& [impulse, latency] : report.by_impulse) {
+        (void)latency;
+        add_gap(impulse);
+        next = impulse + 1;
+    }
+    add_gap(report.emitted);
+    return runs;
+}
+
+static void print_cable_lost_runs(const CableLatencyReport& report) {
+    const auto runs = cable_lost_runs(report);
+    std::cout << "cable_lost_runs=" << runs.size() << '\n';
+    for (size_t index = 0; index < runs.size() && index < 256; ++index)
+        std::cout << "cable_lost_run first_impulse=" << runs[index].first_impulse << " count=" << runs[index].count << '\n';
+}
+
 // Dating, pairing and reporting shared by the live probe and the offline
 // re-analysis of a raw file.
 static CableLatencyReport analyze_cable_run(const std::vector<RenderClockSample>& clock, UINT64 overflow,
@@ -1314,6 +1338,7 @@ static CableLatencyReport analyze_cable_run(const std::vector<RenderClockSample>
     const CableLatencyReport report = pair_cable_impulses_dated(arrivals, emission, period_100ns);
     print_cable_report(report);
     print_cable_segments(report);
+    print_cable_lost_runs(report);
     const CableLatencyReport anchored = pair_cable_impulses(arrivals, anchor_100ns, period_100ns, emitted);
     std::cout << std::fixed << std::setprecision(3) << "cable_end_anchor_p50_ms=" << anchored.percentile(0.50)
               << " cable_end_anchor_segments=" << cable_latency_segments(anchored.by_impulse, 1.0).size() << '\n';
@@ -1497,6 +1522,15 @@ static int cable_impulse_self_test() {
             CABLE_CHECK(date_render_frame(wobble, rate, static_cast<double>(k) * 480.0 + 480.0, 4800.0, scratch, dated));
             CABLE_CHECK(std::fabs(dated - static_cast<double>(k) * 100000.0) < 5000.0);
         }
+        // Lost runs: impulses 0-1, 50-52 and the last two are missing.
+        CableLatencyReport partial;
+        partial.emitted = 100;
+        for (UINT64 k = 2; k < 98; ++k) if (k < 50 || k > 52) partial.by_impulse.emplace_back(k, 20.0);
+        const auto runs = cable_lost_runs(partial);
+        CABLE_CHECK(runs.size() == 3 && runs[0].first_impulse == 0 && runs[0].count == 2 && runs[1].first_impulse == 50 &&
+                    runs[1].count == 3 && runs[2].first_impulse == 98 && runs[2].count == 2);
+        partial.by_impulse.clear();
+        CABLE_CHECK(cable_lost_runs(partial).size() == 1 && cable_lost_runs(partial)[0].count == 100);
     }
 #undef CABLE_CHECK
     std::cout << checks << " cable impulse pairing checks pass\n";
@@ -1570,9 +1604,9 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     std::atomic<bool> stop_requested{false};
     std::atomic<bool> render_stop_emitting{false};
     const UINT64 render_frame_limit = static_cast<UINT64>(impulse_count) * interval;
-    // Preallocated: one sample per render wake (>= 2 ms periods) for the run.
+    // Preallocated: one sample per render wake (periods >= 2 ms) for the run.
     std::vector<RenderClockSample> render_clock;
-    render_clock.reserve(static_cast<size_t>(capture_duration_ms) + 2048);
+    render_clock.reserve(static_cast<size_t>(capture_duration_ms) / 2 + 2048);
     UINT64 render_clock_overflow = 0;
     const double render_rate = static_cast<double>(render_state.format->nSamplesPerSec);
 
@@ -2744,7 +2778,7 @@ int main(int argc, char** argv) {
             if (std::strcmp(argv[index], "low-latency") == 0) low_latency = true;
             else if (std::strncmp(argv[index], "raw=", 4) == 0 && argv[index][4]) raw_path = argv[index] + 4;
         }
-        if (impulse_count < 10 || impulse_count > 6000) { std::cout << "cable_impulse_count_out_of_range=1\n"; CoUninitialize(); return 2; }
+        if (impulse_count < 10 || impulse_count > 400000) { std::cout << "cable_impulse_count_out_of_range=1\n"; CoUninitialize(); return 2; }
         int result = cable_impulse_probe(render_index, capture_index, impulse_count, low_latency, raw_path);
         CoUninitialize();
         return result;
