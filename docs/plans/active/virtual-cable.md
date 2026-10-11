@@ -1778,6 +1778,24 @@ SHA-256 `E07D356B2C8C15F40646288AE16994BC86D247B9DB1AC22AB363806F5BDC4654`,
 7.1 Surround) and Cable B Output (recording, Advanced: 8 channel, 48000
 Hz) to 8 channels, runs the check, then restores both to stereo.
 
+**Task 4 blocked: Windows offers cables only 1 and 2 channels
+(2026-10-11).** In the VM, Sound settings → Advanced → Default Format lists
+only 1- and 2-channel formats (16/24/32-bit at 44.1/48/96 kHz), although
+the driver's data ranges and `CableSupportedFormats` include 4, 6 and 8
+channels (`cablewavtable.h`). Cause (code inspection): the cable topology
+(`cabletopotable.h`) has no nodes and no `KSPROPERTY_JACK_DESCRIPTION`. The
+SYSVAD speaker topology it derives from reports a `KSJACK_DESCRIPTION`
+whose `ChannelMapping` is the speaker mask. Without one, Windows treats the
+endpoint as stereo and filters the format list. This is a VCAB-11 defect:
+the spec says users can choose 1–8 channels in Sound settings. The product
+route's multichannel code (tasks 1–3) is done and host-tested, but no
+Windows client can open a cable at more than 2 channels in shared mode
+yet. Fix (driver, needs VM experiments): report a jack description that
+allows 7.1 while the default stays 48 kHz float stereo. Windows may take
+the jack's channel mapping as the default speaker setup, which would
+upmix every stereo app; the default must remain stereo. Then a WP-04
+review, install, restart, and this check.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
