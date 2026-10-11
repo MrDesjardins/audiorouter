@@ -1862,6 +1862,26 @@ package checks pass), SYS SHA-256
 MANIFEST SHA-256 `C5C5AE71005912717B92F95494F72056488BB5B054E876244E4908D811B34DEE`,
 45/45 verified.
 
+**r29 result (2026-10-11): Windows' speaker setup is unavailable for the
+cables.** After installing 0.1.6 and restarting, Sound settings → Playback →
+AudioRouter Cable A Input shows **Configure disabled**. Cause: the cable
+render endpoints are line-level analog connectors
+(`KSNODETYPE_ANALOG_CONNECTOR`). That was chosen on 2026-10-08 so each
+cable keeps its own name, because the speaker category forces the fixed
+"Speakers" label (validated lesson). Windows enables speaker
+configuration only for speaker-type endpoints, so no topology property
+(jack r28, DAC node r29) can make its dialog offer 7.1 while the cables
+keep their names. Capture endpoints list formats only up to their
+current channel count. VCAB-11's statement that users choose 1–8
+channels in Sound settings is therefore not achievable as written. The
+r28/r29 driver additions are harmless but unproven (no observable
+effect). Options for the user: (a) defer multichannel cables, keeping the
+host-tested route code; (b) an AudioRouter/helper path that sets a cable
+endpoint's device format directly (undocumented `IPolicyConfig` or the
+endpoint property store, elevated), to be researched; (c) speaker
+category for render endpoints, losing per-cable names (rejected
+2026-10-08). Also whether to keep or revert r28/r29 in the driver.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
