@@ -356,6 +356,56 @@ Validation: the step must be attributed in at least one traced start;
 otherwise rerun with more starts, not a different repair. Rollback:
 analysis only; no driver/route change until task 3 is reviewed.
 
+**Task 1–2 result (2026-10-11).** Archive
+`C:\VMs\ar-share\diagnostics-20261011-notification-lock-r20\starts-engine-17eacfee30a94f64896f8a0be34f276e.zip`,
+SHA-256 `E603AF0A8A2ACFD5E7EDB70740C7FD3A9C5C19E7417E0646734506ED4692DFB3`
+(matches the guest). Ten traced default-mode starts, 1,000 impulses each,
+r20 driver (`driver_version: [0, 1, 4, 0]` in all ten), every route trace
+`missed=0`, SysMain running. Nine clean starts, 2 lost impulses in total,
+0 corrupted. Three starts step by one block. Command:
+`python -I -B tools/vm/review-latency-stages.py <extracted dir>`.
+
+| Start | Total | Emission → route in | Route in → out | Out → arrival | Counters at the step |
+|---|---|---|---|---|---|
+| 6 | 34.72 → 44.60 | +0.04 | **+10.45** | +0.25 | relay silence 19 → 20; no driver anomaly |
+| 10 | 35.07 → 44.89 | −0.09 | **+9.97** | +0.13 | relay silence 19 → 20; no driver anomaly |
+| 4 | 43.61 → 53.66 | **+11.73** | −0.28 | −1.25 | render late 1, packet overrun 1, render underrun 1,440 (others 480), 2 lost |
+
+Out → arrival (Cable B, Windows capture, probe buffer) is constant at
+about 22 ms in every start. The standing delay is held in two places:
+
+1. **The route relay** (starts 6 and 10, attributed). `relay_take` sends
+   silence when no block is ready and keeps every later block; it drops
+   only when all three relay blocks are full. One early capture tick
+   therefore leaves one block queued for the rest of the stream (+10 ms).
+   The relay is in the VM tool (`m03_bridge_tone/workers.rs`); WP-09's
+   product route will need the same rule.
+2. **Before the route input** (start 4). The delay between Cable A's
+   render clock and the route reading the block grew by one block after one
+   late `SetWritePacket` and one packet overrun. The driver's private render
+   queue (`renderqueue.h`, up to 4 blocks) keeps a block whenever the lease
+   reader has not yet acknowledged the previous one. It never sheds a
+   standing block, so it is the likely holder. Not yet proven: the driver
+   does not report queue depth, and the Windows engine could also shift
+   the client stream.
+
+Recovery design (spec 17 latency recovery), one shared rule: a FIFO
+between a producer and a consumer at the same nominal block rate drops one
+queued block (counted) only when its depth has stayed ≥ 1 at every
+consumer take for a full window (proposed 100 blocks, about 1 s at
+480 frames). So a standing excess block is shed and a transient burst is
+not. On-time audio is never dropped: the depth floor proves the block was
+queued for the whole window. Order:
+- (a) a portable, allocation-free `StandingDelayTrim` in
+  `audiorouter-windows-audio` with unit tests (steady, single silence
+  insert, burst, jitter, never more than one drop per window), used by the
+  tool relay;
+- (b) the driver render queue, applied the same way, plus a queue-depth
+  or recovery count in the diagnostic timing records, after WP-04 review;
+- (c) one traced guest block on a new bundle to confirm every step returns
+  to the starting level, with drops counted.
+WP-09's product route reuses (a).
+
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
 supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
