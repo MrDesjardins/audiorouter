@@ -8,7 +8,10 @@
 //! once a second. Requires the AudioRouter driver; never touches the host
 //! database or any other device.
 //!
-//! Usage: m03_cable_session [--render-bus cable-a] [--capture-bus cable-b] [--seconds N]
+//! Usage: m03_cable_session [--render-bus cable-a] [--capture-bus cable-b] [--seconds N] [--check]
+//!
+//! `--check` runs every request except `session.start` (prepare,
+//! diagnostics, stop), so the request shapes are verified without a driver.
 use audiorouter_control::ControlPlane;
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
 use audiorouter_protocol::JsonRpcRequest;
@@ -74,6 +77,7 @@ fn run() -> Result<(), String> {
     let mut render_bus = "cable-a".to_owned();
     let mut capture_bus = "cable-b".to_owned();
     let mut seconds = 20_u64;
+    let mut check = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
@@ -87,6 +91,7 @@ fn run() -> Result<(), String> {
                     .filter(|seconds| (1..=3_600).contains(seconds))
                     .ok_or("--seconds must be 1..3600")?
             }
+            "--check" => check = true,
             other => return Err(format!("unknown argument {other}")),
         }
     }
@@ -132,6 +137,20 @@ fn run() -> Result<(), String> {
         json!({ "sessionId": "vm-cable-route" }),
     )?;
     println!("prepared: {prepared}");
+    if check {
+        let diagnostics = call(&mut plane, "system.diagnostics", json!({}))?;
+        println!(
+            "check diagnostics nativeAdapterKind={}",
+            diagnostics["nativeAdapterKind"]
+        );
+        let stopped = call(
+            &mut plane,
+            "session.stop",
+            json!({ "sessionId": "vm-cable-route", "idempotencyKey": "vm-cable-route-stop" }),
+        )?;
+        println!("check stopped: {stopped}");
+        return Ok(());
+    }
     let started = call(
         &mut plane,
         "session.start",
@@ -151,7 +170,7 @@ fn run() -> Result<(), String> {
         plane.service_running_native_audio(now);
         if progress.elapsed() >= Duration::from_secs(1) {
             progress = Instant::now();
-            let diagnostics = call(&mut plane, "system.diagnostics", Value::Null)?;
+            let diagnostics = call(&mut plane, "system.diagnostics", json!({}))?;
             println!(
                 "progress {} ms: cableRoute={} max_service_gap_us={}",
                 start.elapsed().as_millis(),
@@ -166,7 +185,7 @@ fn run() -> Result<(), String> {
         }
         std::thread::sleep(Duration::from_millis(1));
     }
-    let diagnostics = call(&mut plane, "system.diagnostics", Value::Null)?;
+    let diagnostics = call(&mut plane, "system.diagnostics", json!({}))?;
     println!("final cableRoute={}", diagnostics["cableRoute"]);
     let stopped = call(
         &mut plane,
@@ -174,7 +193,7 @@ fn run() -> Result<(), String> {
         json!({ "sessionId": "vm-cable-route", "idempotencyKey": "vm-cable-route-stop" }),
     )?;
     println!("stopped: {stopped}");
-    let diagnostics = call(&mut plane, "system.diagnostics", Value::Null)?;
+    let diagnostics = call(&mut plane, "system.diagnostics", json!({}))?;
     println!("after stop cableRoute={}", diagnostics["cableRoute"]);
     match failed {
         Some(route) => Err(format!("cable route stopped early: {route}")),

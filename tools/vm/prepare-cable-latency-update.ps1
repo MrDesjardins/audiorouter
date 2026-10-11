@@ -38,6 +38,9 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $probe) -Force | Out-Null
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tools\m00-native-wasapi-probe\build.ps1') -Output $probe -StaticRuntime
 if ($LASTEXITCODE -ne 0) { throw 'Static impulse probe build failed.' }
 foreach ($tool in @($toneTool, $cableSessionTool, $probe)) { $null = Assert-PortableVmTool $tool }
+# Every request the product tool makes, except session.start (no driver here).
+$sessionCheck = & $cableSessionTool --check 2>&1
+if ($LASTEXITCODE -ne 0) { throw "Cable session tool request check failed: $sessionCheck" }
 $selfTest = & $probe cable-impulse-selftest
 if ($LASTEXITCODE -ne 0) { throw "Probe pairing self-test failed: $selfTest" }
 

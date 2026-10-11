@@ -98,12 +98,12 @@ try {
                 $null = $active.Handle
                 $watch = [Diagnostics.Stopwatch]::StartNew()
                 while (-not ((Test-Path -LiteralPath $toneOut) -and ((Get-Content -LiteralPath $toneOut -Raw) -match $ready))) {
-                    if ($active.HasExited) { throw "$name engine route exited before its leases were active (exit $($active.ExitCode)); see $name-tone-stderr.txt." }
-                    if ($watch.Elapsed.TotalSeconds -ge 15) { throw "$name engine route readiness timed out." }
+                    if ($active.HasExited) { throw "$name $Route route exited before its leases were active (exit $($active.ExitCode)); see $name-tone-stderr.txt." }
+                    if ($watch.Elapsed.TotalSeconds -ge 15) { throw "$name $Route route readiness timed out." }
                     Start-Sleep -Milliseconds 50
                 }
                 Start-Sleep -Milliseconds 1500
-                if ($active.HasExited) { throw "$name engine route ended before the probe started (exit $($active.ExitCode))." }
+                if ($active.HasExited) { throw "$name $Route route ended before the probe started (exit $($active.ExitCode))." }
             }
             $probeArguments = @('cable-impulse',[string]$Impulses,$renderIndex,$captureIndex) + @(if ($mode.Name -eq 'low-latency') { 'low-latency' })
             # Raw clock samples and arrivals, for host re-analysis without another VM run.
@@ -113,7 +113,7 @@ try {
                 -Stderr (Join-Path $evidence "$name-probe-stderr.txt") -TimeoutSeconds ($probeSeconds + 30)
             $toneText = ''
             if ($active) {
-                if (-not $active.WaitForExit(($toneSeconds + 30) * 1000)) { throw "$name engine route did not finish within its watchdog." }
+                if (-not $active.WaitForExit(($toneSeconds + 30) * 1000)) { throw "$name $Route route did not finish within its watchdog." }
                 $toneCode = $active.ExitCode
                 $active.Dispose()
                 $active = $null
