@@ -6,8 +6,9 @@
 records, excluded from normal builds; short disabled/enabled comparison.
 Fresh GPT-6 Luna High WP-04 source review finds no blocker. Host model,
 concurrency/stop/restart/exhaustion, 738 driver checks, 58 wrapper checks and
-normal/diagnostic WDK x64 builds pass. Next: clean-source test-sign/package
-and immutable manifest verification, then the linked short guest block.
+normal/diagnostic WDK x64 builds pass. Clean source `8679e6e7` is test-signed
+as diagnostic 0.1.1; 33 package checks and all 41 bundle hashes pass.
+Next: user runs the linked short r16 guest block and returns its output.
 No repair or runtime qualification yet; no hour run. See
 [r16 record](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next agent task below.

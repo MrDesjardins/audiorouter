@@ -130,11 +130,41 @@ disabled/enabled comparison can measure observer impact and notification/
 fetch delays. Verifier/fuzz, native/bare-metal continuity, memory, signing
 and release gates are not waived. No hour run yet.
 
+## Clean candidate and immutable bundle — ready
+
+Reviewed source commit: `8679e6e7fa7e7af4ef0f3ef9b4019c3df2c8c3cb`.
+Clean x64 Release test-signed diagnostic package 0.1.1/0.1.1.0:
+`target/r16-driver-8679e6e7`, built 2026-10-11 06:03:50 UTC.
+`tests/acceptance/m03-driver-package.ps1 -Package target/r16-driver-8679e6e7`
+passes 33 checks, evidence `target/driver-package-test-f9ea361275584f03995c05ff69f02c3b`.
+Signature verification identifies the expected test signer; the host does
+not trust that test root (expected trust-chain failure), and no trust was added.
+
+| Artifact | SHA256 |
+|---|---|
+| SYS | `CE19FE2545CAD9E820F47CBCC3221C30F64ED3882231CB2C94B132C54B7457AD` |
+| CAT | `F090EAD188F3A1272937A7794BF2E3B3A23BBDC7514A67032D1F4F12968A5AFC` |
+| INF | `67BEBDFB08E3F218D9AF8F31858F45D7E46859A920A53D0624B523BC6AD078BB` |
+| CER | `92A1CBDDEA789EABFF5B0D0A1FD5ECFA7C655433B1A9C122FB8F3EEA7C550E4D` |
+| Bundle MANIFEST | `DA12FC85D4EB977952B3B28BB7C574E5E9E700701EED82B0AAA6F32559B09DD8` |
+
+Test signer thumbprint `FF6876FBE50A74DC0B69077C11DC28A1A9FAAD40`;
+CER is byte-identical to the retained slot-provenance bundle already trusted
+by the guest. No additional guest trust import is needed.
+
+Prepared `C:\VMs\ar-share\diagnostics-20261010-cable-driver-timing-r16`
+using `prepare-cable-latency-update.ps1`, retained slot-provenance base and
+`-TimingDriverPackage target/r16-driver-8679e6e7`. Static helper selftests
+and PE import checks pass; every one of the 41 manifest entries was
+independently recomputed with Get-FileHash and matches. Bundle is immutable.
+The returned r12 result reports `CablesBefore=2`, `CableCountRestored=true`,
+consistent with the existing install wrapper's four-endpoint check.
+
 ## Next action and rollback
 
-Commit reviewed source, build/test-sign a clean identified 0.1.1 diagnostic
-package, verify artifact hashes/signatures and the immutable r16 manifest,
-then user runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16).
+User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)
+inside Administrator PowerShell in AR-DriverTest, Media Player closed and
+Cable B Listen off. No guest execution occurred during host preparation.
 Review raw records/drop counters and both measurements before choosing a
 repair or requesting duration. Rollback inside the guest uses retained
 492d8ca8/0.1.0 package from `C:\ar\repair-20261010-slot-provenance` with its

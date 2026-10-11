@@ -6,8 +6,9 @@ Driver r16 preparation: bounded opt-in timer/notification/fetch records,
 timing model and disabled/enabled short guest wrapper implemented. Independent
 fresh GPT-6 Luna High WP-04 source review finds no blocker. Host models,
 concurrency, 738 driver checks, 58 wrapper checks and normal/diagnostic WDK
-builds pass. No audio repair or qualification claimed. Next: clean source
-test-sign/package verification, then the short guest block. See
+builds pass. Source `8679e6e7` has a clean test-signed 0.1.1 diagnostic
+package; 33 package checks and all 41 immutable bundle hashes pass. No audio
+repair or qualification claimed. Next: user runs the short r16 guest block. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 
