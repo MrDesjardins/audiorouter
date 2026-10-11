@@ -26,7 +26,7 @@ $python = @(Get-Command python, python3 -All -ErrorAction SilentlyContinue | For
 if (-not $python) { throw 'Python 3 is required for the host review self-test (install it or uv python).' }
 $review = Invoke-DriverVmProcess -Executable $python -Arguments @('-I','-B',(Join-Path $workspace 'tools\vm\review-cable-kill.py'),'--selftest') `
     -Stdout (Join-Path $root 'review.txt') -Stderr (Join-Path $root 'review-stderr.txt') -TimeoutSeconds 60
-Assert ($review.Code -eq 0 -and (Get-Content -LiteralPath (Join-Path $root 'review.txt') -Raw) -match '4 cases pass') 'host review verdict logic (silence, late audio, old audio, no restart audio)'
+Assert ($review.Code -eq 0 -and (Get-Content -LiteralPath (Join-Path $root 'review.txt') -Raw) -match '5 cases pass') 'host review verdict logic (silence, late audio, old audio, no restart audio, stray arrival)'
 if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
     $guard = Invoke-DriverVmProcess -Executable (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
         -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$runner) `

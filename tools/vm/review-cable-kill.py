@@ -56,8 +56,17 @@ def judge(emission, period, arrivals, kill, restart):
                  if emission[k] < restart or abs((q - emission[k]) / 1e4 - level) > LEVEL_TOLERANCE_MS]
         if stale:
             failures.append(f"{len(stale)} arrivals after the restart are old or off the route's delay")
-    # Arrivals that pair with nothing (out of window) are suspicious after a restart.
-    unpaired_after = sum(1 for q, _ in arrivals if q >= restart) - len(after)
+    # Arrivals that pair with nothing (out of window) are suspicious after a
+    # restart, except the probe's one extra final impulse: the next code
+    # after the window, one period after the last emission, at the route's
+    # delay (seen in every probe run since r13).
+    paired_times = {q for q, _ in after}
+    final_code = len(emission) % 16 + 1
+    unpaired_after = sum(
+        1 for q, amplitude in arrivals
+        if q >= restart and q not in paired_times
+        and not (level is not None and round(amplitude * 32) == final_code
+                 and abs((q - emission[-1] - period) / 1e4 - level) <= LEVEL_TOLERANCE_MS))
     if unpaired_after:
         failures.append(f"{unpaired_after} unpaired arrivals after the restart")
     return {
@@ -107,6 +116,8 @@ def selftest():
             q = emission[k] + latency_ms * 1e4
             if q < kill + stop_ms * 1e4 or emission[k] >= restart + 50 * period:
                 out.append((q, (1 + k % 16) / 32.0))
+        # The probe's extra final impulse, just outside the window.
+        out.append((1500 * period + latency_ms * 1e4, (1 + 1500 % 16) / 32.0))
         return sorted(out + list(extra))
 
     verdict, failures = judge(emission, period, arrivals(40, 45), kill, restart)
@@ -120,7 +131,11 @@ def selftest():
     assert any("old or off" in f for f in failures), failures
     _, failures = judge(emission, period, [a for a in arrivals(40, 45) if a[0] < restart], kill, restart)
     assert any("no audio after the restart" in f for f in failures), failures
-    print("review-cable-kill selftest: 4 cases pass")
+    # An unknown arrival outside the window is still a failure.
+    stray = (1500 * period + 400 * 1e4, 3 / 32.0)
+    _, failures = judge(emission, period, arrivals(40, 45, [stray]), kill, restart)
+    assert any("unpaired" in f for f in failures), failures
+    print("review-cable-kill selftest: 5 cases pass")
 
 
 if __name__ == "__main__":

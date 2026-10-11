@@ -1596,6 +1596,30 @@ same driver source; 33 package checks pass), MANIFEST SHA-256
 `C31C0A799736EDCE23F11FD0074B4E3C3B926F8E9BD1940B552A1A4C0FD7AB9A`, 43/43
 verified. Guest command: `run-cable-kill.ps1` (3 repeats).
 
+**A7 result, r24 (2026-10-11) — PASS.** Archive
+`C:\VMsr-share\diagnostics-20261011-cable-kill-r24\kill-bdb05502e8794465b0ab944e34ec5bd1.zip`,
+SHA-256 `B734DFFAA76472ED243E2D14ED2A188EA528460CE4A3B278B46BBA42A325C66E`
+(matches the guest). Runner `Passed=true`; three repeats, every probe
+exit 0, route 1 force-killed (exit −1), route 2 running 3.6 s after the
+kill. Command: `python -I -B tools/vm/review-cable-kill.py <extracted dir>`.
+
+| Repeat | Last Cable B audio after the kill | Delay before kill | After restart | Arrivals after restart |
+|---|---|---|---|---|
+| 1 | 0.0 ms | 36.4 ms | 42.3 ms | 766, all fresh |
+| 2 | 0.0 ms | 36.1 ms | 41.1 ms | 765, all fresh |
+| 3 | 2.3 ms | 36.8 ms | 42.8 ms | 760, all fresh |
+
+Limit 500 ms. No arrival after the restart pairs with an impulse emitted
+before it or deviates from the restarted route's delay by more than 15 ms.
+0 corrupted. The first review flagged one unpaired arrival per repeat:
+the probe's known extra final impulse (index 1,500, code 13 after 12,
+about 52 ms after the last emission; probe `out_of_window=1`, also seen
+since r13). The review now accepts exactly that impulse and still fails
+any other unpaired arrival (self-test case 5; acceptance 6 checks).
+Losses (about 362 per repeat) are the 3.6 s gap between kill and restart.
+Remaining slice 4 items: the 10-minute 997/47 Hz continuity test through
+the product route, and 8 channels / multi-cable layouts (engine width).
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
