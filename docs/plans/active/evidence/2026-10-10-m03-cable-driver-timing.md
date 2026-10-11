@@ -626,6 +626,39 @@ bundle (0.1.1) via `vm-checks.ps1 -Step install`, then restart the guest.
   `D475611AEB99EEF97B78FC1490ECC021B4363F9F702B6FBD9A1E70AE4BC92C9E`;
   41/41 entries recomputed, 0 mismatches.
 
+### r18 first guest run (2026-10-11) — invalid, whole-guest freeze attributed
+
+- r18 installed as `20261011-000445-install`; the guest booted at 00:05:07,
+  after it. Status `20261011-000603-status` reports `driver=0.1.3.0`, and
+  the bridge reports `driver_version: [0, 1, 3, 0]`.
+- Archive `driver-timing-traced-077f0fe6ab574ec89ffb5fcafa29e3dc.zip`,
+  inner `driver-timing-6c2eda1a710d4d43a96f8b2e0eaec26b.zip`.
+- The recording-off half failed: route exit 1 with `0x80070016` after
+  every route thread stalled about 3.46 s; leases were deactivated at
+  11,487 ms. The recording-on half did not run. Same failure pattern as the
+  first r16 attempt.
+- WPR: 324,897 events, 0 lost. `--silences`: a **3,451.1 ms interval with
+  no event of any kind on any of the four CPUs** (QPC 675719125–710230565);
+  each CPU's longest gap is 3.45–3.46 s.
+- `--activity`: `svchost.exe` PID 1588 rose to 53 % at 10 s and filled one
+  CPU through the freeze. It was also busy right after the install, at the
+  start of the trace. Process rundown: `svchost.exe -k
+  LocalSystemNetworkRestricted -p -s SysMain`, Windows' memory-prefetch
+  service, formerly Superfetch.
+
+A total absence of DPCs, interrupts and switches means the guest was not
+executing: it was suspended beneath the guest OS. Neither the driver nor
+timing recording can do that, and recording was off here. Both multi-second
+freezes so far came shortly after an install or boot, and the valid r16 run
+long after. Working hypothesis: SysMain's memory-management bursts are
+pathologically slow under VirtualBox NEM, which stalls the whole VM. One
+trace supports this; it is not yet proven. `quiet-guest.ps1` does not touch
+SysMain.
+
+Next: stop and disable SysMain in the guest only (reversible; the previous
+start type is recorded in `C:\ar\sysmain-state.txt`), then rerun the r18
+comparison without reinstalling. No host change.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)
