@@ -20,6 +20,10 @@ Next: verify the r15 bundle, then run the
 [focused trace](../../operations/virtual-cable-latency.md#focused-capture-scheduling-trace-after-r14).
 Review ETL coverage/lost events before readiness/dispatch/DPC correlation.
 
+r15 is now ready: source `42111f71`, 39 manifest entries independently
+verified at `C:\VMs\ar-share\diagnostics-20261010-cable-scheduling-r15`,
+unchanged SYS. Exact next task is the linked guest scheduling command above.
+
 This section supersedes sections 4–9 below, which describe the earlier
 `28b989f5` candidate and remain as history. Details and hashes are in the
 [repair record](evidence/2026-10-10-m03-render-commit-validity.md).

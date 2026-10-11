@@ -41,6 +41,12 @@ ownership/failures and runner mode selection on host without audio/WPR.
 Commit and prepare a verified new bundle with unchanged SYS. Rollback: r14
 and owned recorder stop/cancel; no host/driver/buffer/security changes.
 
+r15 ready: clean source `42111f71`, independently verified 39-entry manifest
+at `C:\VMs\ar-share\diagnostics-20261010-cable-scheduling-r15`; SYS unchanged.
+Next action: user runs the
+[focused scheduling block](../../operations/virtual-cable-latency.md#focused-capture-scheduling-trace-after-r14)
+inside AR-DriverTest once, then agent reviews ETL coverage/loss and QPC gaps.
+
 Latest r14 review: archive/hash verified; COM/MMCSS succeeded, all worker
 errors and trace misses zero. Default losses 0/0/0, but p95 42.30/35.82/41.40
 ms exceeds the 40 ms target in two starts. Low-latency losses 35/27/20,

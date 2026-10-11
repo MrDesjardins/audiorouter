@@ -961,3 +961,15 @@ activity. The kernel profile does not timestamp every driver DDI call;
 absence of a direct notification timestamp remains an attribution limit.
 Trace overhead and NEM prevent release qualification. Rollback: retained
 r14, owned recording save/cancel, original driver. VCAB-24/25 stay open.
+
+r15 bundle prepared from clean source
+`42111f7127792d72a33762ba61f74148a84ba0cd` at
+`C:\VMs\ar-share\diagnostics-20261010-cable-scheduling-r15`.
+Independent Get-FileHash comparison verifies all 39 manifest entries.
+Manifest SHA-256:
+`CC8A6CB285EB46B451280A9BB947D8E5CDD4039A1C4EB14CF401A7E483ED4F49`.
+Signed SYS remains
+`10CF8E879DE85E3A924CDCC0DBA2987D00CB8328DAB9CBA870B997F3EF952381`.
+Static builds and portable-import gates pass; docs validation 147 files /
+844 links and diff check pass. Exact next action: the linked guest command
+once, then review the returned scheduling archive before another audio run.
