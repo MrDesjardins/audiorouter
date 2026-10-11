@@ -794,6 +794,29 @@ upgrade, so likely a restart). Remaining decision: (b) document the
 deviation and run the hour-long VM diagnostic with r18, or (c) a
 native-timer environment for the continuity gate.
 
+### Decision and documented deviation (2026-10-11)
+
+The user chose (b): one hour of r18 in the VM.
+
+Deviation, recorded explicitly and not waived: the short-comparison
+criterion 2 (≥ 80 % fewer flagged capture packets) is **not met**. r18
+achieves about 47–50 % under equal conditions. The remaining loss is
+attributed to VirtualBox NEM's batched, late timer delivery (r19 analysis).
+The hour-long run is a **diagnostic VM deviation run, never VCAB-24
+qualification**. VCAB-24/25 qualification still needs a native-timer
+environment (native VT-x or bare metal), and the driver gate stays open.
+
+Run: `run-cable-continuity.ps1 -Minutes 60` from the r18 bundle (eight
+cables, four engine routes, an impulse train per route; cable count
+restored afterwards). Guest conditions: r18 0.1.3 verified loaded and
+SysMain off. No WPR, because an hour of scheduler trace is several GB; the
+runner's VM-wide stall classification and
+`tools/vm/review-cable-continuity.py` are used instead. Reference: r12
+one-hour run (driver 0.1.0, SysMain on): 1,456 / 1,438,480 impulses lost
+(0.101 %), 0 corrupted, about 283k–291k capture dropped frames per route,
+705 loss runs. The runner and probe in the r18 bundle come from a later
+commit than r12's, so the comparison is indicative rather than controlled.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)
