@@ -1620,6 +1620,20 @@ Losses (about 362 per repeat) are the 3.6 s gap between kill and restart.
 Remaining slice 4 items: the 10-minute 997/47 Hz continuity test through
 the product route, and 8 channels / multi-cable layouts (engine width).
 
+**Tone continuity preparation (2026-10-11).** `m03_cable_session --tone HZ
+--render-endpoint ID --capture-endpoint ID` plays a quiet sine (0.05) into
+Cable A Input and records Cable B Output plus a loopback reference of Cable
+A Input. From 2 s after start to 1 s before stop it counts discontinuities
+with the sine recurrence of `live_audio_continuity.rs`, streaming (no
+recording buffer), plus silent runs and WASAPI discontinuity flags. Test:
+a clean 997/47 Hz tone gives 0, and the harness's drop-plus-zero case
+gives 3 glitches and one 480-sample silent run. `tools/vm/run-cable-tone.ps1`
+runs 997 Hz, then 47 Hz, 10 minutes each by default, with endpoint IDs
+from the probe inventory. Verdict per tone: Cable B 0 glitches and 0 silent
+runs with the tone present is a pass; a disturbed reference is
+inconclusive. `tests/acceptance/m03-cable-tone.ps1`: 7 checks. The bundle
+preparer ships the runner.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
