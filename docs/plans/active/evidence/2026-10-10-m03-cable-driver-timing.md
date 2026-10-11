@@ -745,6 +745,17 @@ Open decision for the user (gate criteria are not relaxed silently):
   diagnostic (not qualification).
 - (c) Seek a native-timer environment for the continuity gate.
 
+**User decision (2026-10-11): (a) controlled repeat.**
+1. Repeat r18 (0.1.3 installed, SysMain off).
+2. `vm-checks -Step remove`, then restart. The helper refuses downgrades
+   (`crates/driver-helper/src/lib.rs:1243`).
+3. Install r17 (0.1.2) from the guest's existing r17 bundle, restart if
+   asked, then run the same traced comparison with SysMain off.
+
+Each run's bridge `driver_version` is checked before its results are used.
+Compare flagged capture packets, driver skips, lost impulses and jitter
+across r18 ×2 and r17 ×1 under equal guest conditions.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)
