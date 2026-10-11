@@ -1670,7 +1670,11 @@ block period). Latency cost: at most the wait itself, only at phases that
 need it. The VM tool relay (`m03_bridge_tone`) keeps the old rule as the
 diagnostic reference. windows-audio lib 137 passed, control 240 passed;
 worker tests 10/10 repeats; workspace Clippy clean. Next: rerun
-`run-cable-tone.ps1` on a new bundle.
+`run-cable-tone.ps1` on a new bundle. r26 bundle
+`C:\VMsr-share\diagnostics-20261011-cable-holdoff-r26` (source
+`10273764`, same driver source; 33 package checks pass), MANIFEST SHA-256
+`0666028FF652865230DF6DFCF72F6B29795157A3A5E3D71079C7BE09A675BDA3`, 44/44
+verified.
 
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
