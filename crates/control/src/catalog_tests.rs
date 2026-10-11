@@ -134,10 +134,13 @@ fn describe_exposes_versions_methods_limits_and_unavailable_nodes() {
     );
     assert_eq!(
         node_schema["properties"]["ports"]["items"]["properties"]["channels"]["maximum"],
-        2
+        audiorouter_domain::MAX_CABLE_CHANNELS
     );
     let edge_schema = &session_schema["properties"]["edges"]["items"];
-    assert_eq!(edge_schema["properties"]["matrix"]["maxItems"], 4);
+    assert_eq!(
+        edge_schema["properties"]["matrix"]["maxItems"],
+        audiorouter_domain::MAX_CHANNEL_MATRIX_COEFFICIENTS
+    );
     assert_eq!(
         edge_schema["properties"]["matrix"]["items"]["minimum"],
         -2.0

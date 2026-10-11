@@ -34,7 +34,13 @@ pub const MAX_ENTITY_ID_BYTES: usize = 128;
 pub const MAX_DISPLAY_NAME_BYTES: usize = 256;
 pub const MAX_PORT_NAME_BYTES: usize = 128;
 pub const MAX_PORTS_PER_NODE: usize = 16;
-pub const MAX_CHANNEL_MATRIX_COEFFICIENTS: usize = 4;
+/// Largest edge matrix: 8 × 8, a direct multichannel cable route (WP-09).
+pub const MAX_CHANNEL_MATRIX_COEFFICIENTS: usize = 64;
+/// Channels a port may carry: cable nodes (`VirtualRenderSource`,
+/// `VirtualCaptureSink`) up to the driver's 8; every other node is mono or
+/// stereo (the engine's processing width).
+pub const MAX_CABLE_CHANNELS: u8 = 8;
+pub const MAX_PROCESSING_CHANNELS: u8 = 2;
 pub const MAX_EVENT_CATEGORY_BYTES: usize = 128;
 pub const MAX_EVENT_OPERATION_ID_BYTES: usize = 128;
 pub const MAX_PARAMETERS_PER_NODE: usize = 96;
@@ -1766,7 +1772,15 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     id: port.name.clone(),
                 });
             }
-            if !(1..=2).contains(&port.channels) {
+            let max_channels = if matches!(
+                node.kind,
+                NodeKind::VirtualRenderSource | NodeKind::VirtualCaptureSink
+            ) {
+                MAX_CABLE_CHANNELS
+            } else {
+                MAX_PROCESSING_CHANNELS
+            };
+            if !(1..=max_channels).contains(&port.channels) {
                 errors.push(ValidationError::InvalidChannels {
                     path: format!("{path}.ports[{port_index}].channels"),
                     channels: port.channels,
@@ -5198,5 +5212,71 @@ mod tests {
             .find(|method| method.name == "session.start")
             .unwrap();
         assert_eq!(start.side_effect, SideEffectClass::ExternalOperation);
+    }
+
+    /// Cable nodes carry up to 8 channels (a direct multichannel cable
+    /// route); every other node stays mono or stereo.
+    #[test]
+    fn cable_ports_allow_eight_channels_and_full_matrices() {
+        let cable = |id: &str, kind, direction, channels| {
+            let mut node = node(id, kind, direction);
+            node.ports[0].channels = channels;
+            if kind != NodeKind::Gain {
+                let bus = if direction == PortDirection::Output {
+                    "cable-a"
+                } else {
+                    "cable-b"
+                };
+                node.parameters
+                    .insert("busId".into(), serde_json::json!(bus));
+            }
+            node
+        };
+        let route = |source_channels: u8, sink_channels: u8| {
+            let mut link = edge("e", "in", "out");
+            link.matrix = vec![0.0; usize::from(source_channels) * usize::from(sink_channels)];
+            session(
+                vec![
+                    cable(
+                        "in",
+                        NodeKind::VirtualRenderSource,
+                        PortDirection::Output,
+                        source_channels,
+                    ),
+                    cable(
+                        "out",
+                        NodeKind::VirtualCaptureSink,
+                        PortDirection::Input,
+                        sink_channels,
+                    ),
+                ],
+                vec![link],
+            )
+        };
+        assert_eq!(
+            validate_session(&route(8, 8)).err(),
+            None,
+            "8 × 8 identity-sized matrix"
+        );
+        assert!(validate_session(&route(8, 2)).is_ok(), "7.1 down to stereo");
+        assert!(validate_session(&route(2, 8)).is_ok(), "stereo up to 8");
+        assert!(
+            validate_session(&route(9, 2)).is_err(),
+            "more than the driver's 8"
+        );
+        let mut wrong = route(8, 8);
+        wrong.edges[0].matrix.pop();
+        assert!(
+            validate_session(&wrong).is_err(),
+            "matrix must be destination × source"
+        );
+        // A processing node stays at most stereo.
+        let gain = cable("gain", NodeKind::Gain, PortDirection::Input, 3);
+        assert!(matches!(
+            validate_session(&session(vec![gain], vec![]))
+                .unwrap_err()
+                .as_slice(),
+            [ValidationError::InvalidChannels { channels: 3, .. }]
+        ));
     }
 }

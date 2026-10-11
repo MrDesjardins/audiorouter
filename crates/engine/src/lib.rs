@@ -5257,6 +5257,27 @@ pub enum GraphCompileError {
     MissingAudioMedia(String),
 }
 
+/// Domain validation plus the engine's processing width. Cable nodes may
+/// declare up to 8 channels for a direct multichannel cable route, which the
+/// cable worker carries without the engine (WP-09 slice 5); the engine itself
+/// processes mono and stereo only and refuses wider graphs here.
+fn validate_for_engine(session: &audiorouter_domain::Session) -> Result<(), GraphCompileError> {
+    audiorouter_domain::validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    if let Some(node) = session.nodes.iter().find(|node| {
+        node.enabled
+            && node
+                .ports
+                .iter()
+                .any(|port| usize::from(port.channels) > MAX_CHANNELS)
+    }) {
+        return Err(GraphCompileError::UnsupportedPath(format!(
+            "{} has more than {MAX_CHANNELS} channels; the audio engine processes mono and stereo",
+            node.name
+        )));
+    }
+    Ok(())
+}
+
 /// The single-endpoint worker already supplies one physical capture block.
 /// This exact mixer shape adds one bounded generated signal to that block.
 /// Other mixer shapes use the multi-input worker or remain unsupported.
@@ -5663,13 +5684,13 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
     >,
     audio_media: &std::collections::HashMap<String, Arc<DecodedAudio>>,
 ) -> Result<RuntimeGraph, GraphCompileError> {
-    use audiorouter_domain::{validate_session, NodeKind};
+    use audiorouter_domain::NodeKind;
     use std::collections::{HashMap, VecDeque};
 
     if !(MIN_GRAPH_SAMPLE_RATE_HZ..=MAX_GRAPH_SAMPLE_RATE_HZ).contains(&sample_rate_hz) {
         return Err(GraphCompileError::InvalidSampleRate);
     }
-    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    validate_for_engine(session)?;
     let session = prune_unfed_upstream(session);
     let session = session.as_ref();
     let session = harmonize_chain_widths(session);
@@ -6759,9 +6780,9 @@ pub fn compile_mixer_session(
     session: &audiorouter_domain::Session,
     generation: RuntimeGeneration,
 ) -> Result<CompiledMixerGraph, GraphCompileError> {
-    use audiorouter_domain::{validate_session, NodeKind};
+    use audiorouter_domain::NodeKind;
 
-    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    validate_for_engine(session)?;
     let session = fold_input_channel_modes(session);
     let session = session.as_ref();
     let mixers = session
@@ -6916,9 +6937,9 @@ pub fn compile_mixer_fanout_session_with_plugins_and_audio(
     >,
     audio_media: &std::collections::HashMap<String, Arc<DecodedAudio>>,
 ) -> Result<CompiledMixerFanoutGraph, GraphCompileError> {
-    use audiorouter_domain::{validate_session, NodeKind};
+    use audiorouter_domain::NodeKind;
 
-    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    validate_for_engine(session)?;
     let session = fold_input_channel_modes(session);
     let session = session.as_ref();
     let mixers = session
@@ -7923,9 +7944,9 @@ pub fn compile_native_paths_with_plugins_and_audio(
     >,
     audio_media: &std::collections::HashMap<String, Arc<DecodedAudio>>,
 ) -> Result<CompiledPathSet, GraphCompileError> {
-    use audiorouter_domain::{validate_session, NodeKind};
+    use audiorouter_domain::NodeKind;
 
-    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    validate_for_engine(session)?;
     let session = prune_inactive_upstream(session);
     let session = session.as_ref();
     let session = harmonize_chain_widths(session);
@@ -8198,9 +8219,9 @@ pub fn compile_fanout_session(
     session: &audiorouter_domain::Session,
     generation: RuntimeGeneration,
 ) -> Result<CompiledFanoutGraph, GraphCompileError> {
-    use audiorouter_domain::{validate_session, NodeKind, PortDirection};
+    use audiorouter_domain::{NodeKind, PortDirection};
 
-    validate_session(session).map_err(GraphCompileError::InvalidGraph)?;
+    validate_for_engine(session)?;
     let session = fold_input_channel_modes(session);
     let session = session.as_ref();
     let enabled_edges = session

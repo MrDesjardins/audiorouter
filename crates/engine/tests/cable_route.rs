@@ -271,3 +271,26 @@ fn cable_route_accepts_every_tool_chain() {
         }
     }
 }
+
+/// A multichannel cable route bypasses the engine (WP-09 slice 5): its
+/// compilers must refuse more than the processing width with an error,
+/// never a panic, so a mistaken route fails cleanly.
+#[test]
+fn engine_refuses_multichannel_cable_graphs_cleanly() {
+    let mut session = cable_route_session(2);
+    for node in &mut session.nodes {
+        node.ports[0].channels = 8;
+    }
+    session.edges[0].matrix = (0..64).map(|i| f32::from(u8::from(i % 9 == 0))).collect();
+    assert!(audiorouter_domain::validate_session(&session).is_ok());
+    let scheduler = RealtimeScheduler::new(4, 2, FRAMES).unwrap();
+    assert!(scheduler
+        .activate_session_at_sample_rate(&session, RuntimeGeneration::new(1), 48_000)
+        .is_err());
+    assert!(audiorouter_engine::compile_session_at_sample_rate(
+        &session,
+        RuntimeGeneration::new(1),
+        48_000
+    )
+    .is_err());
+}

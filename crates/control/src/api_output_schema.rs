@@ -2032,7 +2032,7 @@ pub(crate) fn session_item_schema() -> Value {
                                 "properties": {
                                     "name": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_PORT_NAME_BYTES, "description": "Maximum 128 UTF-8 bytes." },
                                     "direction": { "enum": ["input", "output"] },
-                                    "channels": { "type": "integer", "minimum": 1, "maximum": 2 }
+                                    "channels": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::MAX_CABLE_CHANNELS, "description": "1-2; cable nodes (virtualRenderSource, virtualCaptureSink) up to 8." }
                                 },
                                 "required": ["name", "direction", "channels"],
                                 "additionalProperties": false
