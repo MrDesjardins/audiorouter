@@ -1560,6 +1560,21 @@ it. Remaining slice 4 work: the A7 kill test (Cable B silent within
 997/47 Hz continuity test, and 8 channels / multi-cable layouts (engine
 width).
 
+**Decision (user, 2026-10-11): cable routes follow the cable setting.** A
+route's bridge block is the driver's `DefaultPeriodFrames` (QUERY
+`default_period_frames`), as spec 17 §5.5 already states ("AudioRouter
+uses the value as its own preferred period when it opens a cable"). If
+the driver reports 0 or a value outside 128–960, the route uses 480
+frames. A future low-latency switch (WP-10) lowers that one value through
+the elevated helper (`configure DefaultPeriodFrames=128`, already
+implemented, range 128–960), for every cable route. Implemented:
+`cable_route_block_frames` (unit test for in-range, 0 and out-of-range
+values), and `blockFrames` in `system.diagnostics.cableRoute` (schema and
+contract). Control suite 240 passed, 9 ignored; Clippy and the contract
+typecheck are clean. The VM driver reports 480 today, so r23's numbers
+stand. A VM check of a 128-frame configuration (helper configure, device
+restart, product route in low-latency mode) belongs with WP-10's switch.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC

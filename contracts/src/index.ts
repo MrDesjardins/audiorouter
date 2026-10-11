@@ -762,6 +762,8 @@ export interface DiagnosticsSnapshot {
     generation: number;
     renderBus: string;
     captureBus: string;
+    /** Bridge block in frames: the driver's preferred period (128–960). */
+    blockFrames: number;
     state: "running" | "stopped" | "failed";
     failure: string | null;
     renderBlocks: number;

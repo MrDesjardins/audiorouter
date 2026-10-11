@@ -17,7 +17,20 @@ use audiorouter_domain::Node;
 /// The driver's bridge device; one device serves every cable.
 pub(crate) const CABLE_BRIDGE_DEVICE: &str = r"\\.\AudioRouterVirtualBridge";
 pub(crate) const CABLE_ROUTE_RATE_HZ: u32 = 48_000;
-pub(crate) const CABLE_ROUTE_FRAMES: u16 = 480;
+/// Bridge block when the driver reports no preferred period (0) or one
+/// outside `DefaultPeriodFrames`' range (spec 17 §5.5).
+pub(crate) const CABLE_ROUTE_FALLBACK_FRAMES: u16 = 480;
+
+/// The route's bridge block: the driver's `DefaultPeriodFrames`, which
+/// AudioRouter uses as its preferred period when it opens a cable (user
+/// decision 2026-10-11: follow the cable setting; a low-latency switch
+/// lowers that one value). Range 128–960, else the 480-frame fallback.
+pub(crate) fn cable_route_block_frames(default_period_frames: u32) -> u16 {
+    match u16::try_from(default_period_frames) {
+        Ok(frames @ 128..=960) => frames,
+        _ => CABLE_ROUTE_FALLBACK_FRAMES,
+    }
+}
 pub(crate) const CABLE_ROUTE_CHANNELS: u16 = 2;
 pub(crate) const CABLE_ROUTE_LEASE_MS: u32 = 2_000;
 
@@ -130,6 +143,7 @@ pub(crate) struct ActiveCableRoute {
     pub session_id: EntityId,
     pub generation: u64,
     pub shape: CableRouteShape,
+    pub block_frames: u16,
     worker: Option<audiorouter_windows_audio::CableRouteWorker>,
     render: Option<audiorouter_windows_audio::NativeBridgeController>,
     capture: Option<audiorouter_windows_audio::NativeBridgeController>,
@@ -191,6 +205,7 @@ impl ActiveCableRoute {
             "generation": self.generation,
             "renderBus": self.shape.render_bus,
             "captureBus": self.shape.capture_bus,
+            "blockFrames": self.block_frames,
             "state": if self.is_running() { "running" } else if self.failure.is_some() { "failed" } else { "stopped" },
             "failure": self.failure,
             "renderBlocks": counters.render_blocks,
@@ -336,6 +351,7 @@ impl ControlPlane {
                 )));
             }
         }
+        let frames = cable_route_block_frames(info.default_period_frames);
         let graph = audiorouter_engine::compile_session_at_sample_rate(
             &session,
             audiorouter_engine::RuntimeGeneration::new(generation),
@@ -344,7 +360,7 @@ impl ControlPlane {
         .map_err(|error| bridge_error("cable route compile", &error))?;
         let processor = CableRouteProcessor::new(
             usize::from(CABLE_ROUTE_CHANNELS),
-            usize::from(CABLE_ROUTE_FRAMES),
+            usize::from(frames),
             graph,
         )
         .map_err(|error| bridge_error("cable route", &error))?;
@@ -363,7 +379,7 @@ impl ControlPlane {
             generation: lease_generation,
             sample_rate_hz: CABLE_ROUTE_RATE_HZ,
             channels: CABLE_ROUTE_CHANNELS,
-            frames_per_quantum: CABLE_ROUTE_FRAMES,
+            frames_per_quantum: frames,
             lease_ms: CABLE_ROUTE_LEASE_MS,
         };
         let mapping = |bus: &str, side: &str| {
@@ -374,7 +390,7 @@ impl ControlPlane {
         };
         let render_path = mapping(&shape.render_bus, "render");
         let capture_path = mapping(&shape.capture_bus, "capture");
-        let block_samples = usize::from(CABLE_ROUTE_FRAMES) * usize::from(CABLE_ROUTE_CHANNELS);
+        let block_samples = usize::from(frames) * usize::from(CABLE_ROUTE_CHANNELS);
         let render_session = NativeBridgeSession::create(
             &render_path,
             hello(&shape.render_bus, AudioBridgeDirection::RenderSource),
@@ -393,16 +409,12 @@ impl ControlPlane {
                 return Err(bridge_error("cable output preparation failed", &error));
             }
         };
-        let views =
-            NativeBridgeRegion::open(&render_path, CABLE_ROUTE_CHANNELS, CABLE_ROUTE_FRAMES)
-                .and_then(|render| {
-                    NativeBridgeRegion::open(
-                        &capture_path,
-                        CABLE_ROUTE_CHANNELS,
-                        CABLE_ROUTE_FRAMES,
-                    )
+        let views = NativeBridgeRegion::open(&render_path, CABLE_ROUTE_CHANNELS, frames).and_then(
+            |render| {
+                NativeBridgeRegion::open(&capture_path, CABLE_ROUTE_CHANNELS, frames)
                     .map(|capture| (render, capture))
-                });
+            },
+        );
         let (render_view, capture_view) = match views {
             Ok(views) => views,
             Err(error) => {
@@ -415,6 +427,7 @@ impl ControlPlane {
             session_id: session_id.clone(),
             generation,
             shape: shape.clone(),
+            block_frames: frames,
             worker: None,
             render: None,
             capture: None,
@@ -672,6 +685,21 @@ mod tests {
         extra.enabled = false;
         nodes.push(extra);
         assert!(cable_route_shape(&session(nodes)).unwrap().is_ok());
+    }
+
+    #[test]
+    fn cable_route_block_follows_the_driver_default_period() {
+        assert_eq!(cable_route_block_frames(480), 480);
+        assert_eq!(cable_route_block_frames(128), 128);
+        assert_eq!(cable_route_block_frames(960), 960);
+        // Not reported (no LOW_LATENCY_PERIODS) or outside the registry range.
+        for value in [0, 64, 127, 961, 4_096, u32::MAX] {
+            assert_eq!(
+                cable_route_block_frames(value),
+                CABLE_ROUTE_FALLBACK_FRAMES,
+                "{value}"
+            );
+        }
     }
 
     #[test]
