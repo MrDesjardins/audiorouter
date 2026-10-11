@@ -46,9 +46,14 @@ deviation run (valid, 0.1.3 loaded, SysMain off; not qualification): 409 /
 corrupted, loss runs 705 → 284, capture dropped frames −72 %. Losses
 cluster in minutes 1–6 and 59–60, alongside whole-guest pump gaps; minutes
 16–58 lost 3 impulses across four routes. Not controlled against r12
-(SysMain was on, older runner). Next: VCAB-24/25 qualification needs a
-native-timer environment (native VT-x or bare metal, user-run); separately,
-fix the pre-existing unlocked `m_NotificationList` registration. See
+(SysMain was on, older runner). A native-timer environment is not
+available (user, 2026-10-11): VCAB-24/25 qualification is blocked, not
+waived. r20 (commit `6b2b915a`, 0.1.4) locks notification-list
+register/unregister against the timer walk; reviewed (no blocker, findings
+applied), host checks pass, bundle
+`diagnostics-20261011-notification-lock-r20` ready. Next: user runs the
+three guest blocks (install + Driver Verifier, repeated starts under
+Verifier, 10-minute continuity), then SysMain is restored. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 

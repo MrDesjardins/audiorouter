@@ -920,6 +920,30 @@ impulses, continuity no worse than r18 (bridge `driver_version` 0.1.4.0).
 Rollback: reinstall the r18 bundle (0.1.3) by `-Step remove` then
 `-Step install` (downgrades are refused).
 
+**r20 candidate and bundle — ready.**
+- Source commit `6b2b915acc007368c79f8988ca81babec3a14013`, clean tree (the
+  user's release-0.0.15 evidence edit stashed only during packaging, restored
+  unchanged).
+- `build.ps1 -Version 0.1.4 -TimingDiagnostics -TestSign` →
+  `target/r20-driver-6b2b915a`, 0.1.4.0, `signed: test`, timing diagnostics
+  compiled in (recording stays off unless a timing run enables it, as in
+  the r18 hour run). Trailing exit 1 is the expected host trust-chain
+  verification. Signer `FF6876FB…AD40` (already trusted by the guest).
+- `tests/acceptance/m03-driver-package.ps1`: 33 checks pass.
+- SYS SHA256 `CC108B9FD71163439E42BB4FDB6F9565FA2419FA49FA47564BFCFCFA1C9883B1`
+  (bundle copy identical).
+- Bundle `C:\VMs\ar-share\diagnostics-20261011-notification-lock-r20` (base
+  `repair-20261010-slot-provenance`), MANIFEST SHA256
+  `A9C73F96B655364CCDA0E81DC3B11D67BD18F08AEE6B0D334986BC193E0DE2A4`;
+  41/41 entries recomputed, 0 mismatches. `prepare-cable-latency-update.ps1`
+  must run as a child `powershell.exe -File` (cargo's stderr is fatal under
+  `Stop` in-process; validated lesson 2026-10-03).
+
+Guest procedure (user, three blocks, two restarts): copy + install +
+`verifier-on`, restart; status (0.1.4.0) + repeated-start engine run under
+Verifier + `verifier-off`, restart; status + 10-minute continuity, then
+restore SysMain.
+
 ## Next action and rollback
 
 The VM investigation of r18 is complete; no further VM run is planned. Next:
