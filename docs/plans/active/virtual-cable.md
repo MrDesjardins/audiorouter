@@ -78,6 +78,14 @@ Input → Output with no route, which favours it. Next: bundle r9, engine
 run, VB-Cable install, VB-Cable run; compare median steady levels per
 mode (VCAB-25: ≤ 5 ms worse than VB-Cable).
 
+r9 results (indicative, NEM): default periods, clean starts: engine route
+33.9–42.0 ms vs VB-Cable Input → Output 48.4–51.5 ms, so the route is not
+worse than VB-Cable. Low-latency: no clean engine start. Measurement flaw
+found: the probe dates impulses from one end-of-run anchor, so levels
+before a render-side disturbance are unreliable (VB-Cable −3.9 ms; the r8
+reading is withdrawn). Next: probe dates impulses from in-run render-clock
+samples and reports render discontinuities; then rerun both routes.
+
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
 supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,

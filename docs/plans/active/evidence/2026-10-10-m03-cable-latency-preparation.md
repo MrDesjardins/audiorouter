@@ -323,3 +323,50 @@ is below the 40 ms default target; two of five starts were above 40 ms. In
 low-latency mode the route never holds a level under NEM (40–66 late and
 15–23 overrun packet writes per run), as on the proxy route. These are
 indicative VM numbers. The VB-Cable comparison run is next.
+## Repeated starts, VB-Cable (bundle r9) — 2026-10-10, NEM VM, guest quieted
+
+VB-Cable installed by the user inside AR-DriverTest only (endpoints
+`CABLE Input`, `CABLE In 16ch`, `CABLE Output`, defaults kept). Run
+`starts-vbcable-5c95dde8570c48afbf2937afad07f403`, archive SHA-256
+`A1A4C0FB246709A83B1064CBE1E52B554787AF70FD8993A0FB4C71A6DD5A033B`
+(verified on the host), extracted to `target/starts-vbcable-5c95dde8`.
+Both VB-Cable endpoints use 48 kHz float32 like the AudioRouter cables. The
+runner exited with failure because start 4 (default) ended with 17 impulses
+emitted, 0 matched and 39,680 capture frames dropped (probe exit 1; a VM
+disturbance at start). VB-Cable's capture side ignores the low-latency
+request (capture buffer 1,056 frames in both modes).
+
+Per-start medians (p50, ms); "clean" = no lost impulse and no dropped
+capture frame:
+
+| Mode | AudioRouter engine route (r9) | VB-Cable Input → Output, no route |
+| --- | --- | --- |
+| Default, clean starts | 33.870*, 42.024, 40.094, 35.238 | 49.709, 51.507, 48.397 |
+| Default, disturbed starts | 31.107 (63 lost) | 24.871 (32 lost), start 4 failed |
+| Low-latency | no clean start (17–47 lost each, NEM) | 50.917, 54.791, 47.005, 61.388 clean; 51.194 (384 frames dropped) |
+
+\* engine start 1 stepped from 33.870 to 43.870 ms (exactly +10.000 ms) at
+impulse 301 with no lost impulse, dropped frame or route counter increase.
+
+VB-Cable's latency alternates by about 1 ms inside a level (its own
+timing), so the 1 ms segment tolerance splits it into many segments; the
+per-start median is the comparable figure for both. Indicative comparison
+(default periods, clean starts): the AudioRouter engine route, which
+includes a route, is about 10–15 ms **lower** than VB-Cable's direct
+Input → Output in this VM, so VCAB-25's "no more than 5 ms worse than
+VB-Cable" holds here with margin. Low-latency periods cannot be compared:
+the AudioRouter route has no clean start under NEM.
+
+**Measurement finding (corrects the r8 reading):** VB-Cable start 1 shows a
+first level of −3.9 ms, which is physically impossible. The probe dates
+every impulse from one render-clock anchor taken at the end of the run, so
+when the render side loses or inserts time mid-run (a VM stall), every
+earlier impulse is dated wrongly by that amount. Levels before a disturbance
+are therefore not reliable. In r8 the render-source lease reported 1,104
+underrun frames (23 ms) at the stall, close to the 25 ms step; the earlier
+conclusion that the extra delay sat in endpoint buffering is not
+established. The step could be partly or entirely this dating error.
+Clean single-level starts are unaffected. Next measurement repair: date
+impulses from render-clock samples taken during the run (position and QPC
+per period) and report render-side discontinuities, so a level step can be
+attributed to the probe or to the route.
