@@ -106,7 +106,8 @@ driver `492d8ca8` (SYS SHA-256 unchanged), 36 entries, manifest SHA-256
 
 In the guest, `quiet-guest.ps1 -Apply` stopped at its CPU-settle wait with
 "A counter with a negative denominator value was detected" after applying
-and recording every setting. Commit 6f3fcb5a retries failed samples (48 host
-checks). Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r5`,
-source 6f3fcb5a, driver `492d8ca8` unchanged, manifest SHA-256
-``. Use r5.
+and recording every setting. The fix retries failed samples (48 host
+checks); it landed in commit `1006bdad` with the docs pointing here.
+Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r5`, source
+`1006bdad`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
+`83FA6C659A9EDA98092648FD665153A04A4DC8442C9ED16DCA88C60889619C3D`. Use r5.
