@@ -152,6 +152,24 @@ def main(path, start_skip_ms=0.0):
         big = sorted(((round(v, 3), n, round(n * packet_ms, 1)) for n, v in late_by_n.items()), reverse=True)[:8]
         print("  largest notify lateness (ms, n, boundary ms):", big)
 
+    # Do independent per-stream high-resolution timers fire on the same
+    # interrupt? If so, an extra timer cannot deliver earlier (r19 analysis).
+    ticks = {sid: sorted(r["qpc"] for r in rs if r["event"] == 1) for sid, rs in streams.items()}
+    ids = sorted(ticks)
+    if len(ids) >= 2:
+        import bisect
+        a, b = ticks[ids[0]], ticks[ids[1]]
+        lo, hi = max(a[0], b[0]), min(a[-1], b[-1])
+        near = total = 0
+        for q in b:
+            if lo <= q <= hi:
+                j = bisect.bisect_left(a, q)
+                gap = min(abs(q - a[k]) for k in (j - 1, j) if 0 <= k < len(a))
+                near += gap * 1000.0 / freq <= 0.05
+                total += 1
+        if total:
+            print(f"timer ticks of stream {ids[1]} within 0.05 ms of stream {ids[0]}: {near / total:.1%}")
+
 
 if __name__ == "__main__":
     main(sys.argv[1], float(sys.argv[2]) if len(sys.argv) > 2 else 0.0)

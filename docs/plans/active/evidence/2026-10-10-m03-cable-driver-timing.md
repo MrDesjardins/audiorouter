@@ -710,6 +710,41 @@ position advances in whole-millisecond steps (`floor(ms) × 384 B`) and the
 Both touch the timer and the position math shared with render, so the
 model, render-path regression and review need more care than r17/r18.
 
+### r19 analysis (2026-10-11) — not implemented; the evidence rejects both parts
+
+User approved r19. Modelling and the guest data came before any driver
+change:
+
+1. **Frame-granular position makes it worse.** The `simulate()` r18 policy
+   with `position = int(ms × 48)` gives 224 / 206 / 214 skips, against 175 /
+   139 / 138 with the millisecond floor (seeds 1/17/99). The floor delays
+   the notification and the capture writer equally. Removing it shrinks the
+   reader's slack.
+2. **An extra boundary-aligned timer cannot deliver earlier in this VM.**
+   A scratch model gives 16–21 skips with an extra one-shot timer at each
+   packet boundary, but only by assuming independent delivery. Guest data
+   contradicts that: each stream has its own `EX_TIMER_HIGH_RESOLUTION`
+   timer, yet capture ticks fall within 0.05 ms of a render tick in 93.5 %
+   (r16), 96.8 % (r17) and 96.6 % (r18) of cases. That check is now in
+   `review-driver-timing.py`. Tick intervals cluster at 1.5 / 2.0 / 2.5 ms.
+   The guest delivers all such timers on one shared, late interrupt
+   (VirtualBox NEM), so an added timer would fire at the same moments.
+
+Conclusion: the remaining capture skips (50 in r18) come from the VM's
+timer-interrupt delivery (lateness up to ~3.3 ms against a 2.67 ms slack).
+No driver-side timing change shown here can recover them, which matches the
+validated lesson to qualify VCAB-24 on native VT-x or bare metal. r18 is
+the effective repair found: intact skips 0, the follow-up fixed (141/143),
+capture flags −57 %, lost impulses 28/29.
+
+Open decision for the user (gate criteria are not relaxed silently):
+- (a) Run a controlled r18 repeat, plus an r17 or r16 run, with SysMain off
+  to separate r18's effect from the quieter guest.
+- (b) Accept r18 as the NEM-limited repair, record criterion 2 as a
+  documented deviation, and proceed to the hour-long run in the VM as a
+  diagnostic (not qualification).
+- (c) Seek a native-timer environment for the continuity gate.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)

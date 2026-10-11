@@ -33,8 +33,13 @@ r18 guest (0.1.3 verified, SysMain off after a traced 3.45 s whole-guest
 freeze during a SysMain burst): the re-signal works (141/143 immediate
 follow-ups); skips 119 → 50, flagged capture packets 119 → 51 (57 %), lost
 impulses 28/29, 0 corrupted. Gate criterion 2 (≥ 80 %) not met. The rest
-are late first notifications. Next: decide on r19 (frame-granular position
-and boundary-aligned notification timer). See
+are late first notifications. r19 rejected before implementation: the model
+shows frame-granular position worsens skips, and guest data shows the VM
+batches all high-resolution timers on one late interrupt (93–97 % of
+capture ticks within 0.05 ms of render ticks), so an extra timer cannot help.
+Next: user decides between a controlled r18 repeat with SysMain off, accepting
+r18 with a documented deviation and running the hour-long VM diagnostic, or
+a native-timer environment. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 
