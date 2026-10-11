@@ -451,6 +451,31 @@ SHA-256 `D964632B6DED1F8D5EEF48F5616840C55175E51DF393F048D7831E91A98FB497`,
 `run-cable-latency-starts.ps1 -Route engine -TraceRoute -PeriodMode default
 -Starts 10 -Impulses 1000` from that bundle (copy from Z: first).
 
+**(c) result (2026-10-11) — latency recovery works for the relay.** Archive
+`C:\VMsr-share\diagnostics-20261011-latency-trim-r21\starts-engine-7098814725e642afa6651350ff065ad4.zip`,
+SHA-256 `A57E2C280D88507D99C39C4CCF3FD55B855617E5F55B49CFADF1457397FC7AE4`
+(matches the guest). `driver_version: [0, 1, 4, 0]` in all ten, route
+traces `missed=0`, `Passed=true`, 0 corrupted. Default mode: median steady
+36.2 ms, median clean p50 37.5 ms, 5 clean starts.
+
+| Start | Real step up (write → arrival) | Back to start level | Relay silence | trimmed |
+|---|---|---|---|---|
+| 4 | +9.79 ms at impulse 119 | −10.02 at 220 (1.0 s) | 18 → 19 | 1 |
+| 8 | +9.82 at 71; +10.01 at 592 | −9.89 at 172; −10.16 at 724 | 19 → 21 | 2 |
+| 9 | +9.91 at 540; +5.48 at 848 | −10.08 at 724; back at 989 | 19 → 21 | 2 |
+
+Every real one-block step returned to the starting level about one window
+later (1.0–1.8 s), and `trimmed` equals the extra silence inserts in
+every start. No start without a trim kept a step. Losses: 9 / 10,000. Five
+are the trimmed blocks themselves (one impulse per 480-frame block, as
+the spec accepts: a counted glitch instead of lasting delay). Four are
+start-up losses in starts 3 and 7 (impulses 54–65), unrelated to
+trimming. Compare r20 without trimming: three of ten starts kept +10 ms
+to the end. Limits: VM, default period only; low-latency mode and the
+product route (WP-09) are not yet covered. The relay rule lives in the
+library for WP-09 to reuse. Step 4 of the single-PC path is done for
+the measured holder.
+
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
 supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
