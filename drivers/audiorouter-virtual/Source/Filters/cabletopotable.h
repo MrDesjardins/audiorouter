@@ -55,8 +55,22 @@ static KSDATARANGE CableTopologyAnalogDataRange = {
 };
 static PKSDATARANGE CableTopologyDataRanges[] = { &CableTopologyAnalogDataRange };
 
+// Render: wave source -> DAC node -> line-out bridge. The DAC node carries
+// KSPROPERTY_AUDIO_CHANNEL_CONFIG, through which Windows' speaker setup reads
+// and sets the endpoint's speaker configuration (VCAB-11).
+static PCPROPERTY_ITEM CableDacNodeProperties[] = {
+    { &KSPROPSETID_Audio, KSPROPERTY_AUDIO_CHANNEL_CONFIG,
+      KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_BASICSUPPORT,
+      PropertyHandler_CableDacChannelConfig },
+};
+DEFINE_PCAUTOMATION_TABLE_PROP(AutomationCableDacNode, CableDacNodeProperties);
+#define CABLE_RENDER_DAC_NODE 0
+static PCNODE_DESCRIPTOR CableRenderTopologyNodes[] = {
+    { 0, &AutomationCableDacNode, &KSNODETYPE_DAC, NULL },
+};
 static PCCONNECTION_DESCRIPTOR CableRenderTopologyConnections[] = {
-    { PCFILTER_NODE, KSPIN_TOPO_WAVEOUT_SOURCE, PCFILTER_NODE, KSPIN_TOPO_LINEOUT_DEST }
+    { PCFILTER_NODE, KSPIN_TOPO_WAVEOUT_SOURCE, CABLE_RENDER_DAC_NODE, KSNODEPIN_STANDARD_IN },
+    { CABLE_RENDER_DAC_NODE, KSNODEPIN_STANDARD_OUT, PCFILTER_NODE, KSPIN_TOPO_LINEOUT_DEST }
 };
 static PCCONNECTION_DESCRIPTOR CableCaptureTopologyConnections[] = {
     { PCFILTER_NODE, KSPIN_TOPO_MIC_ELEMENTS, PCFILTER_NODE, KSPIN_TOPO_BRIDGE }
@@ -78,7 +92,8 @@ static PCPIN_DESCRIPTOR Cable##letter##RenderTopologyPins[] = { \
 }; \
 static PCFILTER_DESCRIPTOR Cable##letter##RenderTopologyFilterDescriptor = { \
     0, &AutomationCableRenderTopoFilter, sizeof(PCPIN_DESCRIPTOR), SIZEOF_ARRAY(Cable##letter##RenderTopologyPins), \
-    Cable##letter##RenderTopologyPins, sizeof(PCNODE_DESCRIPTOR), 0, NULL, \
+    Cable##letter##RenderTopologyPins, sizeof(PCNODE_DESCRIPTOR), \
+    SIZEOF_ARRAY(CableRenderTopologyNodes), CableRenderTopologyNodes, \
     SIZEOF_ARRAY(CableRenderTopologyConnections), CableRenderTopologyConnections, 0, NULL \
 }; \
 static PCPIN_DESCRIPTOR Cable##letter##CaptureTopologyPins[] = { \

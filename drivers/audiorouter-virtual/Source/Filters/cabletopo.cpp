@@ -77,4 +77,76 @@ NTSTATUS PropertyHandler_CableCaptureTopoFilter(_In_ PPCPROPERTY_REQUEST Propert
                              CableCaptureJackDescriptions);
 }
 
+// Exactly the channel masks of CableSupportedFormats (cablewavtable.h): the
+// wave pin's IsFormatSupported matches masks exactly, so accepting any other
+// layout here would let Windows store a speaker setup the pin then refuses.
+static bool IsCableSpeakerConfig(LONG Config)
+{
+    switch (Config)
+    {
+    case KSAUDIO_SPEAKER_MONO:
+    case KSAUDIO_SPEAKER_STEREO:
+    case KSAUDIO_SPEAKER_QUAD:
+    case KSAUDIO_SPEAKER_5POINT1:
+    case KSAUDIO_SPEAKER_7POINT1_SURROUND:
+        return true;
+    default:
+        return false;
+    }
+}
+
+// KSPROPERTY_AUDIO_CHANNEL_CONFIG on the render topology's DAC node: the
+// documented way Windows' speaker setup (Control Panel, Configure) reads and
+// sets an endpoint's speaker configuration. Get reports the current layout
+// (stereo by default); Set accepts any layout listed above.
+#pragma code_seg("PAGE")
+NTSTATUS PropertyHandler_CableDacChannelConfig(_In_ PPCPROPERTY_REQUEST PropertyRequest)
+{
+    PAGED_CODE();
+    ASSERT(PropertyRequest);
+    if (!IsEqualGUIDAligned(*PropertyRequest->PropertyItem->Set, KSPROPSETID_Audio) ||
+        PropertyRequest->PropertyItem->Id != KSPROPERTY_AUDIO_CHANNEL_CONFIG)
+    {
+        return STATUS_INVALID_DEVICE_REQUEST;
+    }
+    if (PropertyRequest->Verb & KSPROPERTY_TYPE_BASICSUPPORT)
+    {
+        return PropertyHandler_BasicSupport(
+            PropertyRequest,
+            KSPROPERTY_TYPE_BASICSUPPORT | KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_SET,
+            VT_ILLEGAL);
+    }
+    if (PropertyRequest->ValueSize == 0)
+    {
+        if (PropertyRequest->Verb & KSPROPERTY_TYPE_SET)
+        {
+            return STATUS_INVALID_PARAMETER;
+        }
+        PropertyRequest->ValueSize = sizeof(KSAUDIO_CHANNEL_CONFIG);
+        return STATUS_BUFFER_OVERFLOW;
+    }
+    if (PropertyRequest->ValueSize < sizeof(KSAUDIO_CHANNEL_CONFIG) || PropertyRequest->Value == NULL)
+    {
+        return STATUS_BUFFER_TOO_SMALL;
+    }
+    PCMiniportTopology miniport = (PCMiniportTopology)PropertyRequest->MajorTarget;
+    PKSAUDIO_CHANNEL_CONFIG config = (PKSAUDIO_CHANNEL_CONFIG)PropertyRequest->Value;
+    if (PropertyRequest->Verb & KSPROPERTY_TYPE_GET)
+    {
+        config->ActiveSpeakerPositions = miniport->ChannelConfig();
+        PropertyRequest->ValueSize = sizeof(KSAUDIO_CHANNEL_CONFIG);
+        return STATUS_SUCCESS;
+    }
+    if (PropertyRequest->Verb & KSPROPERTY_TYPE_SET)
+    {
+        if (!IsCableSpeakerConfig(config->ActiveSpeakerPositions))
+        {
+            return STATUS_NOT_SUPPORTED;
+        }
+        miniport->SetChannelConfig(config->ActiveSpeakerPositions);
+        return STATUS_SUCCESS;
+    }
+    return STATUS_INVALID_DEVICE_REQUEST;
+}
+
 #pragma code_seg()

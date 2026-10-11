@@ -13,4 +13,6 @@ NTSTATUS PropertyHandler_CableRenderTopoFilter(_In_ PPCPROPERTY_REQUEST Property
 
 NTSTATUS PropertyHandler_CableCaptureTopoFilter(_In_ PPCPROPERTY_REQUEST PropertyRequest);
 
+NTSTATUS PropertyHandler_CableDacChannelConfig(_In_ PPCPROPERTY_REQUEST PropertyRequest);
+
 #endif // _AUDIOROUTERVIRTUAL_CABLETOPO_H_
