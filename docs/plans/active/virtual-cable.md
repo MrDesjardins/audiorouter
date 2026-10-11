@@ -1766,6 +1766,18 @@ Checks: windows-audio lib 141 passed, control 241 passed, worker tests
 10/10 repeats, workspace and `src-tauri` Clippy, fmt and the contract
 typecheck clean. Next: task 4 (VM, 8-channel formats).
 
+Task 4 preparation: `m03_cable_session --channels N` (both cables N
+channels, identity map; `--check` passes at 8). `tools/vm/run-cable-bitexact.ps1
+-Channels 8` runs the probe's `cable-bitexact` (float32-grid noise at the
+shared mix format) through the product route, and refuses to judge unless
+the probe reports N channels. `tests/acceptance/m03-cable-bitexact.ps1`: 7
+checks. r27 bundle `C:\VMsr-share\diagnostics-20261011-multichannel-r27`
+(source `58646d6e`, same driver source; 33 package checks pass), MANIFEST
+SHA-256 `E07D356B2C8C15F40646288AE16994BC86D247B9DB1AC22AB363806F5BDC4654`,
+45/45 verified. Guest: the user sets Cable A Input (playback, Configure:
+7.1 Surround) and Cable B Output (recording, Advanced: 8 channel, 48000
+Hz) to 8 channels, runs the check, then restores both to stereo.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
