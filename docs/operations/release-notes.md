@@ -1,5 +1,35 @@
 # AudioRouter release notes
 
+## 0.0.15 — 2026-10-10 (unsigned experimental preview)
+
+- **Fixed: switching sessions while one was playing.** Choosing another
+  session now stops the one that is playing and releases its audio
+  devices; press **Play** to start the new session. Before, Play then
+  failed with "native worker is already attached", and going back to the
+  first session did not recover until AudioRouter restarted. Creating,
+  duplicating, importing or deleting a session switches the same way.
+- **Reconnect shows what it did.** The message bar now says it is
+  reconnecting, then confirms that sessions, devices and audio status are
+  up to date, or says why reconnecting failed.
+- Reliability work since 0.0.14:
+  - audio keeps running while long requests run, such as preparing
+    plug-ins and exporting or importing a session file;
+  - the local control connection serves several clients at once and
+    survives a bad connection;
+  - the database uses write-ahead logging, so copy it only with AudioRouter
+    closed;
+  - a failing panel shows a recovery panel instead of a blank window;
+  - the MCP server offers a smaller default tool set and stays up after bad
+    input;
+  - Network Send/Receive can be paired with an optional key;
+  - request IDs, verbose logging and a support bundle for troubleshooting.
+
+Windows 11 x64; app and installer unsigned. No driver installation; the
+AudioRouter virtual cable is still in development and is not part of this
+installer. Close AudioRouter before upgrading; retain 0.0.14 and compatible
+configuration/recording backups for rollback. Full M08
+install/hardware/accessibility/signing gates remain open.
+
 ## 0.0.14 — 2026-10-05 (unsigned experimental preview)
 
 - **One download.** The installer now also contains the Stream Deck plugin.
