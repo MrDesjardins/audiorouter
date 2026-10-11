@@ -15,6 +15,14 @@ and probe scheduling review, not another r13/hour test or speculative
 kernel backlog drop. See [r13 evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#r13-returned-stage-trace-review-2026-10-10).
 This supersedes the older r13 pending-run bullets below.
 
+Follow-up implementation: the probe now has thread-owned COM/MMCSS setup,
+startup readiness, explicit worker error exits and opt-in capture packet
+QPC observations. Host static build and 2,208/253/189 probe/runner checks pass.
+No kernel change: previous completed DMA slots can already be overwritten.
+Next is manifest verification of r14, followed by the
+[short capture reader comparison](../../operations/virtual-cable-latency.md#capture-reader-scheduling-comparison-after-r13).
+Runtime registration and any loss reduction remain guest evidence pending.
+
 - **Installed in the VM:** candidate `492d8ca8` (slot provenance + packet
   outcome counters), bundle `C:\VMs\ar-share\repair-20261010-slot-provenance`.
   Two clean smokes, install/status and a 30-second direct run passed with

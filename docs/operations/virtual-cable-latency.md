@@ -226,6 +226,42 @@ file write failure, or missing QPC observations fail the diagnostic. CSV output
 is flushed only after the workers and leases stop. No new driver installation
 or host configuration change is needed for this bundle.
 
+## Capture reader scheduling comparison after r13
+
+r13 preserved every observed input impulse through sink publication, but
+39 impulses disappeared downstream. The diagnostic's own render/capture
+threads were not registered with MMCSS. The corrected probe registers both
+workers under Pro Audio, initializes their COM apartments and waits for
+readiness before starting either stream. Registration/API failure invalidates
+the run; no fallback silently substitutes a different scheduling condition.
+
+With `-TraceRoute`, raw CSV also contains
+`capture,device_position,frames,flags,packet_qpc_100ns,read_qpc_100ns,wake_qpc_100ns`.
+The packet timestamp dates its first sample; read/wake times are observations.
+Keep timestamp-error flags visible and exclude such timestamps from lag
+calculations. Compare packet position gaps, read/wake intervals, batches
+drained per wake and `read − packet timestamp − packet duration` near missing
+impulses. These narrow reader/engine/driver delivery timing; they do not
+independently timestamp the driver's GetReadPacket call.
+
+New destination: `C:\VMs\ar-share\diagnostics-20261010-cable-capture-reader-r14`.
+Run only after the agent verifies its manifest. Use Administrator PowerShell
+**inside AR-DriverTest**, with Media Player closed and Cable B Listen off.
+About two minutes; no driver reinstall. Rollback: use the retained r13 bundle.
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-cable-capture-reader-r14' 'C:\ar\diagnostics-20261010-cable-capture-reader-r14' /E /R:1 /W:1 /XF latency-*.zip starts-*.zip continuity-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-capture-reader-r14\run-cable-latency-starts.ps1' -Route engine -Starts 3 -Impulses 400 -TraceRoute
+    if ($LASTEXITCODE -ne 0) { throw 'Capture trace failed. Evidence was preserved; send the output.' }
+}
+```
+
+All earlier losses and qualification failures remain recorded. MMCSS reduces
+a diagnostic scheduling risk; guest evidence must establish whether it
+changes losses. Buffer sizes, audio periods, SYS and thresholds are unchanged.
+
 ## Eight-cable sustained continuity (VCAB-24 step 3 deviation run)
 
 This one-hour guest run checks four concurrent AudioRouter engine routes

@@ -98,7 +98,12 @@ function Test-Starts([string] $Case, [string] $Route) {
         $script:probeCalls += $mode
             Assert (($Arguments -contains 'trace-submissions') -eq $TraceRoute) 'submission trace switch follows request'
             $fakeText = Get-FakeProbe $Case $script:probeCalls.Count $mode
-            if ($TraceRoute) { $fakeText += "`ncable_submission_trace_samples=500 cable_submission_trace_missed=0" }
+            if ($TraceRoute) {
+                $fakeText += "`ncable_submission_trace_samples=500 cable_submission_trace_missed=0"
+                if ($Case -ne 'trace-capture-missing') {
+                    $fakeText += "`ncable_capture_trace_samples=500 cable_capture_trace_missed=$(if ($Case -eq 'trace-capture-overflow') { 1 } else { 0 })"
+                }
+            }
             Set-Content -LiteralPath $Stdout -Value $fakeText
         return @{ Code = $(if ($Case -eq 'probe-failure' -and $script:probeCalls.Count -eq 3) { 1 } else { 0 }) }
     }
@@ -139,6 +144,8 @@ function Test-Starts([string] $Case, [string] $Route) {
         'vbcable-missing' { Assert ([bool]$failure -and [string]$failure -match 'Install VB-Cable' -and $script:probeCalls.Count -eq 0) 'missing VB-Cable starts no audio' }
         'trace-pass' { Assert ($saved.TraceRoute -and $script:started.Count -eq 6) 'complete trace run records its opt-in mode' }
         'trace-missing' { Assert ([bool]$failure -and [string]$failure -match 'trace is missing') 'missing trace cannot silently pass' }
+        'trace-capture-missing' { Assert ([bool]$failure -and [string]$failure -match 'trace is missing') 'missing capture packets cannot silently pass' }
+        'trace-capture-overflow' { Assert ([bool]$failure -and [string]$failure -match 'trace is missing') 'capture trace overflow cannot silently pass' }
         'status-failure' { Assert ([bool]$failure -and $script:started.Count -eq 0 -and $script:probeCalls.Count -eq 0) 'driver status failure starts no audio' }
         'early-exit' { Assert ([bool]$failure -and $script:probeCalls.Count -eq 0 -and [string]$failure -match 'before its leases') 'early route exit stops before the probe' }
         'probe-failure' { Assert ([bool]$failure -and $results.Count -eq 6) 'probe failure reported after every measurement' }
@@ -148,6 +155,8 @@ function Test-Starts([string] $Case, [string] $Route) {
 Test-Starts 'engine-pass' 'engine'
 Test-Starts 'trace-pass' 'engine'
 Test-Starts 'trace-missing' 'engine'
+Test-Starts 'trace-capture-missing' 'engine'
+Test-Starts 'trace-capture-overflow' 'engine'
 Test-Starts 'vbcable-pass' 'vbcable'
 Test-Starts 'stall' 'vbcable'
 Test-Starts 'vbcable-missing' 'vbcable'

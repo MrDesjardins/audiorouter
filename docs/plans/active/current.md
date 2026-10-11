@@ -102,6 +102,16 @@ packet retention/delivery and probe worker scheduling before another guest
 command; no unchanged hour run or guessed backlog drop. Details:
 [r13 result](evidence/2026-10-10-m03-cable-latency-preparation.md#r13-returned-stage-trace-review-2026-10-10).
 
+Capture investigation: probe std::threads lacked COM/MMCSS setup while route
+workers had it. The corrected probe now registers both workers, waits for
+readiness and rejects worker API/scheduling errors. Short raw traces add
+capture device positions, frames, flags, packet timestamps and reader/wake
+QPC observations. Driver GetReadPacket returns the newest completed packet;
+an older physical slot may be overwritten, so returning guessed old data is
+not a safe recovery. Host static build, 2,208 offline probe checks, 253
+repeated-start checks and 189 continuity checks pass. Next: verify a new r14
+bundle with identical SYS, then the short reader comparison; no hour run.
+
 Driver-agent resumption: read the [Claude / next-agent handoff](virtual-cable-agent-handoff.md)
 first. It records the prepared candidate, exact next guest step, completed
 checks, open defects and host/VM safety boundaries as of 2026-10-10.

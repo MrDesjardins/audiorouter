@@ -110,7 +110,9 @@ try {
                 if (-not (Test-Path -LiteralPath $tracePath) -or
                     (Get-Content -LiteralPath $tracePath -TotalCount 1) -notmatch '\bmissed=0\b' -or
                     (Get-ProbeValue $probeText 'cable_submission_trace_samples') -le 0 -or
-                    (Get-ProbeValue $probeText 'cable_submission_trace_missed') -ne 0) {
+                    (Get-ProbeValue $probeText 'cable_submission_trace_missed') -ne 0 -or
+                    (Get-ProbeValue $probeText 'cable_capture_trace_samples') -le 0 -or
+                    (Get-ProbeValue $probeText 'cable_capture_trace_missed') -ne 0) {
                     throw "$name trace is missing or incomplete; evidence preserved."
                 }
             }

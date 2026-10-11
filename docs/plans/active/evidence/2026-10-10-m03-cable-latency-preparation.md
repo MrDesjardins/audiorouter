@@ -773,3 +773,54 @@ prepare a focused observation/repair only when it distinguishes those
 layers. Keep the current candidate and all loss counters. No new guest
 command or unchanged hour run is needed now. Rollback is documentation
 only; VCAB-24/25 qualification remains failed/open.
+
+### Capture packet and probe scheduling investigation — r14 (2026-10-10)
+
+Code review: `GetReadPacket` calls UpdatePosition under the position lock,
+returns completed packet count minus one, derives its first-sample timestamp
+and records the last OS-read number. With two DMA slots, the slot preceding
+the latest completed packet is being reused by the current packet. For
+example, after 2.5 packet periods, packet 1 is complete while packet 0's slot
+already contains half of packet 2. Returning packet 0 would mix generations.
+`MoreData=FALSE` does not prove a missing queue: the previous packet is not
+fully retained. Windows permits oldest-first overwrite on capture overflow;
+see [GetReadPacket contract](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/portcls/nf-portcls-iminiportwavertinputstream-getreadpacket).
+This review does not prove which r13 event occurred at this boundary.
+
+WriteBytes counts missed DMA laps and bridge underruns, but those counters
+do not count every packet the OS fails to fetch after DMA was produced.
+This explains why zero bridge counters cannot exclude downstream loss.
+The diagnostic itself drains every available WASAPI packet, but its workers
+previously ran without COM initialization/MMCSS registration. The route
+workers already register under Pro Audio. Correcting that asymmetry is
+justified; it does not establish that ordinary-priority threads caused the
+39 downstream losses. [MMCSS API](https://learn.microsoft.com/en-us/windows/win32/api/avrt/nf-avrt-avsetmmthreadcharacteristicsw)
+associates the calling thread and requires reverting its registration.
+
+Implementation: thread-owned COM/MMCSS guards; startup handshake before
+stream Start; fail on registration or worker API error; no process-priority
+or system-timer change. Existing short trace gains preallocated capture
+observations including silence/flagged packets. CSV writes happen after
+join. Capture trace capacity follows the existing ≥2 ms period bound and
+startup allowance; overflow/QPC failure invalidates the diagnostic. Raw
+replay ignores new observation rows and keeps original latency/loss output.
+Original packet flags and skipped-frame counters remain visible.
+
+Host validation: static CRT build passed; probe offline self-test 2,208
+checks (QPC units/long uptime, capture-row serialization, write error
+preservation and existing pairing/timing checks); repeated-start runner 253
+checks (including missing/overflowed capture trace); continuity runner 189
+checks. Commands: `tools/m00-native-wasapi-probe/build.ps1 -StaticRuntime
+-Output target/m00-probe-cable/m00-probe.exe`, that executable's
+`cable-impulse-selftest`, and the two corresponding acceptance scripts.
+No endpoint or driver was opened. COM/MMCSS registration success and
+readiness/error runtime behavior still require the guest; offline checks do
+not qualify audio. No Rust/UI change requires formatting or Clippy reruns.
+
+Next: clean source commit, verified r14 bundle with unchanged candidate SYS,
+then the [two-minute reader comparison](../../../operations/virtual-cable-latency.md#capture-reader-scheduling-comparison-after-r13).
+Review missing-impulse boundaries against capture packet read/wake timing
+and position gaps. Reject timestamp-error metadata as lag evidence.
+Remaining Windows engine/driver ambiguity may require an OS scheduling
+trace; choose that only from the new observations. VCAB-24/25 stay open.
+Rollback: retained r13 diagnostic, current driver and original archives.

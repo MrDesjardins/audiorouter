@@ -3,6 +3,7 @@
 #include <audioclient.h>
 #include <audioclientactivationparams.h>
 #include <audiopolicy.h>
+#include <avrt.h>
 #include <mmdeviceapi.h>
 #include <functiondiscoverykeys_devpkey.h>
 #include <iostream>
@@ -1227,6 +1228,39 @@ struct RenderSubmission {
     UINT32 frames, padding;
     RenderClockSample before, after;
 };
+struct CaptureObservation {
+    UINT64 position, packet_qpc, read_qpc, wake_qpc;
+    UINT32 frames;
+    DWORD flags;
+};
+
+// Enter and leave on the worker that owns the COM/MMCSS registration. Never
+// transfer this handle to the control thread or change the process priority.
+struct CableAudioThread {
+    HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    HANDLE task = nullptr;
+    DWORD error = 0;
+    CableAudioThread() {
+        if (FAILED(com)) return;
+        DWORD index = 0;
+        task = AvSetMmThreadCharacteristicsW(L"Pro Audio", &index);
+        if (!task) { error = GetLastError(); return; }
+        if (!AvSetMmThreadPriority(task, AVRT_PRIORITY_HIGH)) error = GetLastError();
+    }
+    bool ready() const { return SUCCEEDED(com) && task && error == 0; }
+    ~CableAudioThread() {
+        if (task) AvRevertMmThreadCharacteristics(task);
+        if (SUCCEEDED(com)) CoUninitialize();
+    }
+    CableAudioThread(const CableAudioThread&) = delete;
+    CableAudioThread& operator=(const CableAudioThread&) = delete;
+};
+
+// Split whole seconds so a long machine uptime cannot overflow tick scaling.
+static UINT64 cable_qpc_100ns(UINT64 ticks, UINT64 frequency) {
+    return (ticks / frequency) * 10000000 +
+        static_cast<UINT64>((static_cast<long double>(ticks % frequency) * 10000000) / frequency);
+}
 struct RenderDiscontinuity { double at_frame; double shift_ms; };
 
 static double render_offset_100ns(const RenderClockSample& sample, double rate) {
@@ -1367,10 +1401,16 @@ static CableLatencyReport analyze_cable_run(const std::vector<RenderClockSample>
 }
 
 // Raw run data for host-side re-analysis (`cable-impulse-reanalyze`).
+static void write_capture_observations(std::ostream& out, const std::vector<CaptureObservation>& captures) {
+    for (const auto& sample : captures) out << "capture," << sample.position << ',' << sample.frames << ','
+        << sample.flags << ',' << sample.packet_qpc << ',' << sample.read_qpc << ',' << sample.wake_qpc << '\n';
+}
+
 static bool write_cable_raw(const char* path, const std::vector<RenderClockSample>& clock, UINT64 overflow,
                             const std::vector<CableArrival>& arrivals, double rate, UINT32 interval, UINT64 emitted,
                             double period_100ns, double anchor_100ns,
-                            const std::vector<RenderSubmission>& submissions) {
+                            const std::vector<RenderSubmission>& submissions,
+                            const std::vector<CaptureObservation>& captures = {}) {
     std::ofstream out(path, std::ios::trunc);
     if (!out) return false;
     out << std::setprecision(17) << "meta," << rate << ',' << interval << ',' << emitted << ',' << period_100ns << ','
@@ -1380,6 +1420,7 @@ static bool write_cable_raw(const char* path, const std::vector<RenderClockSampl
     for (const auto& sample : submissions) out << "submit," << sample.first_frame << ',' << sample.frames << ','
         << sample.padding << ',' << sample.before.frames << ',' << sample.before.qpc_100ns << ','
         << sample.after.frames << ',' << sample.after.qpc_100ns << '\n';
+    write_capture_observations(out, captures);
     return static_cast<bool>(out);
 }
 
@@ -1409,6 +1450,19 @@ static int cable_impulse_reanalyze(const char* path) {
 static int cable_impulse_self_test() {
     unsigned checks = 0;
 #define CABLE_CHECK(condition) do { if (!(condition)) { std::cerr << "cable self-test failed line " << __LINE__ << '\n'; return 1; } ++checks; } while (0)
+    CABLE_CHECK(cable_qpc_100ns(10000001, 10000000) == 10000001);
+    CABLE_CHECK(cable_qpc_100ns(1, 3) == 3333333);
+    CABLE_CHECK(cable_qpc_100ns(9000000000000000000ULL, 10000000) == 9000000000000000000ULL);
+    {
+        std::ostringstream raw;
+        write_capture_observations(raw, {{480, 100000, 210000, 209999, 128, AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY},
+                                        {608, 126666, 210100, 209999, 128, AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR}});
+        CABLE_CHECK(raw.str() == "capture,480,128,1,100000,210000,209999\ncapture,608,128,4,126666,210100,209999\n");
+        // An ostream error must remain visible to write_cable_raw's caller.
+        raw.setstate(std::ios::badbit);
+        write_capture_observations(raw, {{0, 0, 0, 0, 128, 0}});
+        CABLE_CHECK(!raw);
+    }
     for (UINT64 k = 0; k < 64; ++k) {
         const float amplitude = cable_impulse_amplitude(k);
         CABLE_CHECK(amplitude * 32.0f == static_cast<float>(1 + k % 16));  // exact in float32
@@ -1635,11 +1689,42 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     if (trace_submissions) submissions.reserve(static_cast<size_t>(capture_duration_ms) / 2 + 2048);
     UINT64 submission_missed = 0;
     const double render_rate = static_cast<double>(render_state.format->nSamplesPerSec);
+    std::vector<CaptureObservation> capture_observations;
+    if (trace_submissions) capture_observations.reserve(static_cast<size_t>(capture_duration_ms) / 2 + 2048);
+    UINT64 capture_trace_missed = 0;
+    LARGE_INTEGER qpc_frequency{};
+    if (!QueryPerformanceFrequency(&qpc_frequency) || qpc_frequency.QuadPart <= 0) {
+        capture_service->Release(); render_service->Release();
+        render_state.release(); capture_state.release(); return 1;
+    }
+    auto observe_qpc = [&]() -> UINT64 {
+        LARGE_INTEGER ticks{};
+        if (!QueryPerformanceCounter(&ticks) || ticks.QuadPart < 0) return 0;
+        return cable_qpc_100ns(static_cast<UINT64>(ticks.QuadPart), static_cast<UINT64>(qpc_frequency.QuadPart));
+    };
+    std::mutex startup_mutex;
+    std::condition_variable startup_cv;
+    unsigned startup_count = 0;
+    HRESULT render_com = E_FAIL, capture_com = E_FAIL;
+    DWORD render_scheduling_error = 0, capture_scheduling_error = 0;
+    bool render_scheduling_ready = false, capture_scheduling_ready = false;
+    HRESULT render_error = S_OK, capture_error = S_OK;
+    auto announce_ready = [&] {
+        std::lock_guard<std::mutex> lock(startup_mutex);
+        ++startup_count;
+        startup_cv.notify_one();
+    };
 
     std::thread render_thread([&] {
+        CableAudioThread scheduling;
+        render_com = scheduling.com;
+        render_scheduling_error = scheduling.error;
+        render_scheduling_ready = scheduling.ready();
+        announce_ready();
+        if (!scheduling.ready()) return;
         while (!stop_requested.load(std::memory_order_relaxed)) {
             const DWORD wait = WaitForSingleObject(render_state.ready_event, 100);
-            if (wait == WAIT_FAILED) break;
+            if (wait == WAIT_FAILED) { render_error = HRESULT_FROM_WIN32(GetLastError()); break; }
             if (wait == WAIT_TIMEOUT) continue;
             RenderSubmission submission{};
             auto sample_clock = [&](RenderClockSample& sample) {
@@ -1651,12 +1736,14 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
             };
             const bool before_ok = !trace_submissions || sample_clock(submission.before);
             UINT32 padding = 0;
-            if (FAILED(render_state.client->GetCurrentPadding(&padding))) continue;
+            render_error = render_state.client->GetCurrentPadding(&padding);
+            if (FAILED(render_error)) break;
             const bool after_ok = !trace_submissions || sample_clock(submission.after);
             const UINT32 available = render_buffer_size - padding;
             if (available == 0) continue;
             BYTE* data = nullptr;
-            if (FAILED(render_service->GetBuffer(available, &data))) continue;
+            render_error = render_service->GetBuffer(available, &data);
+            if (FAILED(render_error)) break;
             if (!render_stop_emitting.load(std::memory_order_relaxed)) {
                 submission.first_frame = impulse_sample_index;
                 submission.frames = available;
@@ -1664,14 +1751,16 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
                 render_cable_impulses(data, available, render_state.format, impulse_sample_index);
                 if (impulse_sample_index >= render_frame_limit) render_stop_emitting.store(true);
                 const HRESULT released = render_service->ReleaseBuffer(available, 0);
+                render_error = released;
                 if (trace_submissions) {
                     if (before_ok && after_ok && SUCCEEDED(released) && submissions.size() < submissions.capacity())
                         submissions.push_back(submission);
                     else ++submission_missed;
                 }
             } else {
-                render_service->ReleaseBuffer(available, AUDCLNT_BUFFERFLAGS_SILENT);
+                render_error = render_service->ReleaseBuffer(available, AUDCLNT_BUFFERFLAGS_SILENT);
             }
+            if (FAILED(render_error)) break;
             render_frames_submitted.fetch_add(available, std::memory_order_relaxed);
             UINT64 position = 0, qpc = 0;
             if (render_state.clock_frequency && SUCCEEDED(render_state.clock->GetPosition(&position, &qpc))) {
@@ -1683,20 +1772,35 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
         }
     });
     std::thread capture_thread([&] {
+        CableAudioThread scheduling;
+        capture_com = scheduling.com;
+        capture_scheduling_error = scheduling.error;
+        capture_scheduling_ready = scheduling.ready();
+        announce_ready();
+        if (!scheduling.ready()) return;
         bool have_position = false;
         UINT64 expected = 0;
         INT64 last_hit = -1000000;
         while (!stop_requested.load(std::memory_order_relaxed)) {
             const DWORD wait = WaitForSingleObject(capture_state.ready_event, 100);
-            if (wait == WAIT_FAILED) break;
+            if (wait == WAIT_FAILED) { capture_error = HRESULT_FROM_WIN32(GetLastError()); break; }
             if (wait == WAIT_TIMEOUT) continue;
+            const UINT64 wake_qpc = trace_submissions ? observe_qpc() : 0;
             for (;;) {
                 UINT32 frames = 0;
-                if (FAILED(capture_service->GetNextPacketSize(&frames)) || frames == 0) break;
+                capture_error = capture_service->GetNextPacketSize(&frames);
+                if (FAILED(capture_error) || frames == 0) break;
                 BYTE* data = nullptr;
                 DWORD flags = 0;
                 UINT64 position = 0, timestamp = 0;
-                if (FAILED(capture_service->GetBuffer(&data, &frames, &flags, &position, &timestamp))) break;
+                capture_error = capture_service->GetBuffer(&data, &frames, &flags, &position, &timestamp);
+                if (FAILED(capture_error) || frames == 0) break;
+                if (trace_submissions) {
+                    const UINT64 read_qpc = observe_qpc();
+                    if (wake_qpc && read_qpc && capture_observations.size() < capture_observations.capacity())
+                        capture_observations.push_back({position, timestamp, read_qpc, wake_qpc, frames, flags});
+                    else ++capture_trace_missed;
+                }
                 if (have_position && position > expected) capture_dropped_frames += position - expected;
                 if (flags & (AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY | AUDCLNT_BUFFERFLAGS_TIMESTAMP_ERROR)) ++capture_flagged_packets;
                 have_position = true;
@@ -1718,11 +1822,18 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
                         }
                     }
                 }
-                capture_service->ReleaseBuffer(frames);
+                capture_error = capture_service->ReleaseBuffer(frames);
+                if (FAILED(capture_error)) break;
             }
+            if (FAILED(capture_error)) break;
         }
     });
-    hr = capture_state.client->Start();
+    {
+        std::unique_lock<std::mutex> lock(startup_mutex);
+        const bool ready = startup_cv.wait_for(lock, std::chrono::seconds(2), [&] { return startup_count == 2; });
+        hr = ready && render_scheduling_ready && capture_scheduling_ready ? S_OK : E_FAIL;
+    }
+    if (SUCCEEDED(hr)) hr = capture_state.client->Start();
     print_hr("cable_capture_start", hr);
     std::this_thread::sleep_for(std::chrono::milliseconds(150));
     if (SUCCEEDED(hr)) hr = render_state.client->Start();
@@ -1733,6 +1844,14 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     SetEvent(capture_state.ready_event);
     render_thread.join();
     capture_thread.join();
+    print_hr("cable_render_worker_com", render_com);
+    print_hr("cable_capture_worker_com", capture_com);
+    std::cout << "cable_render_worker_mmcss=" << render_scheduling_ready << " cable_render_worker_scheduling_error=" << render_scheduling_error
+              << " cable_capture_worker_mmcss=" << capture_scheduling_ready << " cable_capture_worker_scheduling_error=" << capture_scheduling_error << '\n';
+    print_hr("cable_render_worker_error", render_error);
+    print_hr("cable_capture_worker_error", capture_error);
+    if (trace_submissions) std::cout << "cable_capture_trace_samples=" << capture_observations.size()
+                                   << " cable_capture_trace_missed=" << capture_trace_missed << '\n';
     // End-of-run anchor (see impulse_loopback_probe: the start sample is
     // biased by the render clock's warm-up).
     double render_anchor = 0.0;
@@ -1759,7 +1878,7 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     const double period_100ns = static_cast<double>(interval) * render_state.format->nBlockAlign /
                                 static_cast<double>(render_state.clock_frequency) * 1.0e7;
     const bool raw_ok = !raw_path || write_cable_raw(raw_path, render_clock, render_clock_overflow, arrivals, render_rate, interval, emitted,
-                                     period_100ns, render_anchor, submissions);
+                                     period_100ns, render_anchor, submissions, capture_observations);
     if (!raw_ok)
         std::cout << "cable_raw_write_failed=1\n";
     const CableLatencyReport report = analyze_cable_run(render_clock, render_clock_overflow, arrivals, render_rate, interval,
@@ -1768,7 +1887,8 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
                  "proxy), timed on the shared QPC timeline; not product engine latency.\n";
     render_state.release();
     capture_state.release();
-    return report.matched == 0 || submission_missed != 0 || !raw_ok ? 1 : 0;
+    return FAILED(hr) || FAILED(render_error) || FAILED(capture_error) || !render_scheduling_ready || !capture_scheduling_ready ||
+        report.matched == 0 || submission_missed != 0 || capture_trace_missed != 0 || !raw_ok ? 1 : 0;
 }
 
 // ---------------------------------------------------------------------------

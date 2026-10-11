@@ -28,6 +28,21 @@ host's Hyper-V/WSL capability preserved.
 
 ### Execution queue after r12 — 2026-10-10
 
+Investigation implementation plan after r13: requirements VCAB-20/24/25/28,
+VDEV-12. The probe's render/capture std::threads lack COM initialization and
+MMCSS registration. Add thread-owned COM/MMCSS guards and startup readiness;
+registration failure invalidates the diagnostic before stream start. Add
+bounded capture packet observations (device position, frames, flags, packet
+QPC, read QPC and wake QPC) to the existing opt-in short raw trace. Preserve
+original counters/latency thresholds and identify API/trace errors explicitly.
+File output remains after join. Check static build, offline pairing and
+trace serialization, affected runner checks and docs; package a fresh source
+identified bundle with unchanged SYS. Rollback: r13 tools. Driver review:
+GetReadPacket returns the newest completed slot; the older slot may already
+be partially overwritten, so returning it to recover losses is not justified.
+Next short guest result must distinguish reader delays from upstream packet
+delivery, rather than repeat the unchanged hour qualification.
+
 Latest action (r13 returned): the short trace is complete and checksum
 verified. Default losses are 0/1/0; low-latency losses 19/16/17. All observed
 input pulses survive through sink publication, corroborated by the source
