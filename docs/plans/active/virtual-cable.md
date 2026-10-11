@@ -1855,7 +1855,12 @@ re-sends speaker configuration when DirectSound objects are created
 warnings; 88,167 driver checks pass. VM plan: install 0.1.6 and restart.
 On the Playback tab, check that the cable shows a Configure button and
 lists 7.1 Surround. If not, remove and reinstall the device so its
-endpoints are created fresh, then check again.
+endpoints are created fresh, then check again. r29 bundle `C:\VMsr-share\diagnostics-20261011-cable-dac-r29`
+(source `68613d29`, clean; 0.1.6.0 test-signed with timing diagnostics; 33
+package checks pass), SYS SHA-256
+`8C5B9B6DB0BACB6A928F84E87473D37EFBF1FD1115F9017BBCB98C116F766C1D`,
+MANIFEST SHA-256 `C5C5AE71005912717B92F95494F72056488BB5B054E876244E4908D811B34DEE`,
+45/45 verified.
 
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
