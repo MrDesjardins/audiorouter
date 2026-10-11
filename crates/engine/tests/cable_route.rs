@@ -146,3 +146,128 @@ fn engine_processing_width_is_still_stereo() {
     assert_eq!(MAX_CHANNELS, 2);
     assert!(RealtimeScheduler::new(4, 8, FRAMES).is_err());
 }
+
+/// Built-in one-in/one-out tools, as in `tool_combinations.rs`. Duck uses
+/// its key-less round trigger: a cable route has one source.
+const TOOLS: &[NodeKind] = &[
+    NodeKind::Meter,
+    NodeKind::Gain,
+    NodeKind::Volume,
+    NodeKind::BassTreble,
+    NodeKind::Dehum,
+    NodeKind::Declick,
+    NodeKind::Denoise,
+    NodeKind::SpeechDenoise,
+    NodeKind::SpectralGate,
+    NodeKind::FirFilter,
+    NodeKind::TimeShift,
+    NodeKind::Mute,
+    NodeKind::ParametricEq,
+    NodeKind::Compressor,
+    NodeKind::Gate,
+    NodeKind::Limiter,
+    NodeKind::Delay,
+    NodeKind::GraphicEq,
+    NodeKind::Pitch,
+    NodeKind::Duck,
+];
+
+/// Cable A → `chain` → Cable B, every tool active or every tool bypassed.
+fn tool_route(chain: &[NodeKind], bypass: bool, serial: usize) -> Session {
+    let mut session = cable_route_session(2);
+    session.id = EntityId::new(format!("cable-tools-{serial}"));
+    session.edges.clear();
+    let mut previous = "source".to_owned();
+    for (index, &kind) in chain.iter().enumerate() {
+        let id = format!("t{index}");
+        let parameters = match kind {
+            NodeKind::TimeShift => json!({ "bufferSeconds": 10 }),
+            NodeKind::Mute => json!({ "muted": false }),
+            NodeKind::Duck => json!({ "trigger": "siegeRound", "amountDb": 20.0 }),
+            NodeKind::Gain => json!({ "gainDb": -3.0 }),
+            _ => json!({}),
+        };
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 2,
+        };
+        session.nodes.push(Node {
+            id: EntityId::new(&id),
+            kind,
+            type_version: 1,
+            name: id.clone(),
+            enabled: true,
+            bypass,
+            parameters: parameters.as_object().unwrap().clone(),
+            ports: vec![
+                port("in", PortDirection::Input),
+                port("out", PortDirection::Output),
+            ],
+        });
+        session.edges.push(link(&previous, &id));
+        previous = id;
+    }
+    session.edges.push(link(&previous, "sink"));
+    session
+}
+
+fn link(source: &str, destination: &str) -> Edge {
+    Edge {
+        id: EntityId::new(format!("{source}->{destination}")),
+        source_node: EntityId::new(source),
+        source_port: "out".into(),
+        destination_node: EntityId::new(destination),
+        destination_port: "in".into(),
+        matrix: vec![1.0, 0.0, 0.0, 1.0],
+        enabled: true,
+    }
+}
+
+/// Every built-in tool, in 4–6-tool chains, compiles between two cables
+/// (spec 17 §7.3, validated lesson 2026-10-02) and processes finite audio;
+/// with every tool bypassed the route stays bit-exact.
+#[test]
+fn cable_route_accepts_every_tool_chain() {
+    let mut serial = 0;
+    for length in [4, 5, 6] {
+        for start in 0..TOOLS.len() {
+            let chain: Vec<NodeKind> = (0..length)
+                .map(|step| TOOLS[(start + step * 3) % TOOLS.len()])
+                .collect();
+            for bypass in [false, true] {
+                serial += 1;
+                let scheduler = RealtimeScheduler::new(4, 2, FRAMES).unwrap();
+                scheduler
+                    .activate_session_at_sample_rate(
+                        &tool_route(&chain, bypass, serial),
+                        RuntimeGeneration::new(1),
+                        48_000,
+                    )
+                    .unwrap_or_else(|error| panic!("{chain:?} bypass={bypass}: {error:?}"));
+                let mut output = vec![0.0f32; FRAMES * 2];
+                for block in 0..24u64 {
+                    let input = signal(2, block);
+                    let mut buffer = scheduler.acquire_input().unwrap();
+                    buffer.copy_from_interleaved(&input).unwrap();
+                    assert!(scheduler.submit_input(buffer).is_ok());
+                    let generation = scheduler.process_once().unwrap().expect("processed");
+                    let processed = scheduler.receive_output_for_generation(generation).unwrap();
+                    processed.copy_to_interleaved(&mut output).unwrap();
+                    let _ = scheduler.output().try_recycle(processed);
+                    assert!(output.iter().all(|sample| sample.is_finite()), "{chain:?}");
+                    if bypass {
+                        for (sent, received) in input.iter().zip(&output) {
+                            let expected = if *sent == 0.0 { 0.0 } else { *sent };
+                            assert_eq!(
+                                expected.to_bits(),
+                                received.to_bits(),
+                                "{chain:?} bypassed"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1424,6 +1424,19 @@ acknowledges keeps the primed block intact (nothing published past it,
 relay bounded); an idle source yields counted silence. 20/20 repeated
 runs pass; crate Clippy and fmt clean. The VM tool is unchanged.
 
+Slice 2 done (2026-10-11): `crates/engine/tests/cable_route.rs`
+`cable_route_accepts_every_tool_chain`. All 20 built-in tools (Duck with
+its key-less round trigger) in 60 4–6-tool chains between
+`VirtualRenderSource` and `VirtualCaptureSink` compile through the
+single-graph compiler the worker uses, process finite audio, and are
+bit-exact when every tool is bypassed. No drift correction or resampler
+can occur: the single-graph runtime has no such `ProcessingStage`. Drift
+and rate conversion exist only in the multi-path control code for
+physical devices, so a same-rate cable route never touches them (§7.3).
+Not covered: multi-source layouts (Mixer, keyed Duck, connected Mixers)
+between cables. Those need the multi-path compiler and are outside slice
+3's one-source scope; the multi-path tool suite keeps physical layouts.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
