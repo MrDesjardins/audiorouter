@@ -1676,6 +1676,32 @@ worker tests 10/10 repeats; workspace Clippy clean. Next: rerun
 `0666028FF652865230DF6DFCF72F6B29795157A3A5E3D71079C7BE09A675BDA3`, 44/44
 verified.
 
+**Tone result r26 (2026-10-11) — the route's own cycle is gone; the
+remaining glitches coincide with whole-process VM stalls.** Archive
+`C:\VMsr-share\diagnostics-20261011-cable-holdoff-r26	one-f34d5d15a9354fa6824539f24e337036.zip`,
+SHA-256 `D976EE63A83EB246AD2DBD56D68E3ED3ECE17330DC1F0C550773B9867C4083CC`
+(matches the guest). Reference clean in both runs; route exit 0.
+
+| Tone | Cable B glitches | Silent runs | Route silence / trims / drops | Glitch clusters (s after start) ↔ service-loop stall in the same second |
+|---|---|---|---|---|
+| 997 Hz | 5 (r25: 250) | 2 | 2 / 0 / 0 | ~300 ↔ 17.7 ms; ~438 ↔ 186 ms |
+| 47 Hz | 41 (r25: 17) | 15 | 5 / 0 / 0 | ~68 ↔ 19.4 ms; ~130 ↔ 21.4 ms; ~305 ↔ 17.5 ms; ~316 ↔ 369 ms |
+
+The hold-off removed the silence-and-trim cycle: zero trims, and route
+silences fell from 86 to 2 at 997 Hz. Every remaining glitch cluster
+falls in the same second as a stall of the tool's 1 ms service loop
+(17–369 ms). Those stalls are process-wide scheduling pauses, the VM
+behaviour that already blocks VCAB-24 qualification (r12–r20). Not every
+silent run is a route silence (47 Hz: 15 runs, 5 route silences), so
+some gaps arise downstream (driver capture or the Windows engine) during
+the same stalls. This is correlation, not an attributed cause per gap.
+The 47 Hz run had more stalls than the 997 Hz run, not a worse route.
+VCAB-24 stays not qualified (VM deviation, native-timer environment
+unavailable). WP-09 product-route work items done in the VM: works end to
+end (r23), latency recovery, A7 kill test (r24), continuity at the
+route level (r26). Remaining WP-09 work: 8 channels and multi-cable
+layouts (engine processing width), then WP-10 UI.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
