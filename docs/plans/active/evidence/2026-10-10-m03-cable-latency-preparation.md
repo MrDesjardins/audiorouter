@@ -183,3 +183,34 @@ route; repeated-start latency and the VB-Cable comparison on a native VT-x or
 bare-metal Windows test PC (this PC cannot run native VT-x; see
 [native VT-x session](../../../operations/virtual-cable-native-vtx-session.md)).
 The guest stays quieted until `quiet-guest.ps1 -Revert` is run in the VM.
+## Bundle r7 (engine route, step 1 of the single-PC path)
+
+Commits `72aa6682` and `31f8feec`. Before this, no Cable A → engine →
+Cable B path existed (WP-09 not started). Added:
+
+- `crates/engine/tests/cable_route.rs`: a `VirtualRenderSource →
+  VirtualCaptureSink` session compiled by the engine and run on
+  `RealtimeScheduler` passes float32 noise on the 2^-24 grid unchanged in
+  mono and stereo (3 tests). Findings: the engine processes 128-frame quanta
+  of at most 2 channels (`MAX_CHANNELS`), so 8-channel cables (VCAB-20)
+  cannot pass through it yet; and its channel matrix maps −0.0 to +0.0 by
+  design (`mapped_mono`), the only bit difference, pinned by the test.
+- `CableRouteProcessor` (`crates/windows-audio/src/cable_route.rs`):
+  re-blocks bridge blocks into engine quanta with preallocated FIFOs (delay
+  below one quantum) and fails closed to counted silence; 4 unit tests
+  (16–4,096-frame blocks, exact ramps, missing graph, unsupported shapes).
+- `m03_bridge_tone --engine` runs that processor in its render worker;
+  20 example tests including a continuous, unchanged ramp through mapped
+  slots. `run-cable-latency.ps1 -Route engine` uses it and records
+  `Route` and an engine scope; acceptance 220 checks (new `engine-pass`).
+
+Host checks 2026-10-10: the tests above pass; `cargo fmt --all -- --check`
+clean; `cargo clippy --workspace --all-targets --all-features -- -D
+warnings` clean. Not run on the host: any driver or audio stream.
+
+Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r7`, source
+`31f8feec`, base `repair-20261010-slot-provenance`, driver `492d8ca8`
+(SYS SHA-256 `10CF8E879DE85E3A924CDCC0DBA2987D00CB8328DAB9CBA870B997F3EF952381`,
+unchanged), manifest SHA-256
+`83DF4E23FED3E842CFA8C6DC77B81EB14B59D892D54B306669C379B8B38F9647`.
+Guest command: the runbook block with `-Route engine`.
