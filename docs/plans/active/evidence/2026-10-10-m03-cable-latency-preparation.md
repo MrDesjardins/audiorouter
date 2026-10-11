@@ -111,3 +111,36 @@ checks); it landed in commit `1006bdad` with the docs pointing here.
 Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r5`, source
 `1006bdad`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
 `83FA6C659A9EDA98092648FD665153A04A4DC8442C9ED16DCA88C60889619C3D`. Use r5.
+
+## First VM run (bundle r5) — 2026-10-10, NEM VM, guest quieted
+
+Run `latency-efde7b79506a4cc688e2c01a13d76bf9`, archive
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r5\latency-efde7b79506a4cc688e2c01a13d76bf9.zip`,
+SHA-256 `7FFB85F9804FF744D66421BDE751F23BEA67337D859A56E7E2E613900F3D39FC`,
+extracted to `target/latency-efde7b79`. VirtualBox under NEM (host hypervisor
+on); guest quieted with `quiet-guest.ps1`.
+
+| Check | Result |
+| --- | --- |
+| Bit-exact (VCAB-20 proxy, 480 frames) | **Pass**: 480,000 frames aligned and identical, 0 mismatched samples, 24,000 silence frames exact +0.0; relay forwarded 1,201, dropped 0 |
+| Isolation (VCAB-26 proxy) | Cable A Output exact silence on both paths, **but inconclusive**: nothing read Cable B Output, so Cable B carried no tone (tone tool exit: "no capture consumer acknowledged the primed block"); fixed in r6 |
+| Latency, 480-frame relay, default periods | p1 56.942, p50 56.943, p95 56.945, p99 93.944 ms; 980/1000 matched, 20 lost (6,240 capture frames dropped during a 142 ms VM pause); target p95 ≤ 40 ms missed |
+| Latency, 128-frame relay, low-latency periods | p50 92.3, p95 126.0 ms; 82 lost; packet writes late 137, overrun 55; render underrun 14,160; target missed |
+
+Reading: the default-mode latency is a deterministic ≈56.94 ms pipeline in
+this VM: the probe's WASAPI streams were granted 1,056-frame (22 ms) buffers
+on each side, plus the 480-frame bridge quantum and relay. Low-latency
+periods (128 frames, 2.67 ms) do not hold under NEM timing. Neither number
+is product evidence for VCAB-25 (proxy route, VM timer delays, no VB-Cable
+comparison); a native or bare-metal run is required.
+
+## Bundle r6 (isolation keeps Cable B active)
+
+Commit `ac20975e`: `cable-isolation` takes an optional fifth argument, a
+second Output to record and discard, and reports
+`isolation_drain_active_frames`; the runner drains Cable B Output and passes
+isolation only if Cable A Output is exact silence **and** Cable B carried
+audio. Acceptance 192 checks (new `idle-b` case: silence with an idle Cable B
+is inconclusive). Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r6`,
+source `ac20975e`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest
+SHA-256 `2311F75CC61D5CEB4BD1C8B0EF1C329F35E9582DE1386DCA910B4DF6C43B0AD4`.
