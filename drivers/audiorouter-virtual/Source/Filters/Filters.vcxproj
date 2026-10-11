@@ -183,7 +183,6 @@
   <ItemGroup>
     <ClCompile Include="micarraytopo.cpp" />
     <ClCompile Include="speakertopo.cpp" />
-    <ClCompile Include="cabletopo.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Inf Exclude="@(Inf)" Include="*.inf" />

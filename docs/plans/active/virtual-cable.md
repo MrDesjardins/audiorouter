@@ -1882,6 +1882,24 @@ endpoint property store, elevated), to be researched; (c) speaker
 category for render endpoints, losing per-cable names (rejected
 2026-10-08). Also whether to keep or revert r28/r29 in the driver.
 
+**Decisions (user, 2026-10-11): defer 8-channel cables; revert r28/r29.**
+The driver source is restored to its pre-r28 state (the r20 notification
+lock, published as 0.1.4): the cable topology files are identical to
+`1fe3ba81~1`, and `cabletopo.cpp/.h` are removed. Host: build passes with 0
+warnings; 88,167 driver checks pass. The multichannel route code (slice 5
+tasks 1–3: domain 1–8 cable channels, `CableMatrixRoute`, the worker stage,
+control shape, diagnostics) stays. It is host-tested and is used as soon
+as a cable endpoint runs at more than 2 channels. **VCAB-11 (users choose
+1–8 channels in Sound settings) and VCAB-20 8-channel are blocked:**
+Windows disables speaker setup for the line-level cable endpoints, and
+capture lists only up to the current channel count. A future option is
+a direct format setter through the elevated helper (undocumented
+`IPolicyConfig`), to be researched before any implementation; it is not
+authorized now. Guest rollback to 0.1.4 (downgrades are refused):
+`vm-checks.ps1 -Step remove` from the r29 bundle, then `-Step install`
+from `diagnostics-20261011-multichannel-r27` (0.1.4, same driver source
+as r20), then restart. Next: WP-10 UI with stereo cable routes.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC

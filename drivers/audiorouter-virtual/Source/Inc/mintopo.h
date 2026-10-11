@@ -36,7 +36,6 @@ class CMiniportTopology :
     union {
         PVOID               m_DeviceContext;
     };
-    LONG                    m_ChannelConfig;
 
 public:
     DECLARE_STD_UNKNOWN();
@@ -51,17 +50,9 @@ public:
     : CUnknown(UnknownOuter),
       CMiniportTopologyAudioRouterVirtual(FilterDesc, DeviceMaxChannels),
       m_DeviceType(DeviceType),
-      m_DeviceContext(DeviceContext),
-      m_ChannelConfig(KSAUDIO_SPEAKER_STEREO)
+      m_DeviceContext(DeviceContext)
     {
     }
-
-    // Speaker configuration set through a cable topology's DAC node
-    // (KSPROPERTY_AUDIO_CHANNEL_CONFIG, Control Panel speaker setup). Stereo
-    // until Windows sets another; the cable carries whatever channel count
-    // each stream opens with, so this is only reported back.
-    LONG ChannelConfig() const { return m_ChannelConfig; }
-    void SetChannelConfig(LONG Config) { m_ChannelConfig = Config; }
 
     ~CMiniportTopology();
 
