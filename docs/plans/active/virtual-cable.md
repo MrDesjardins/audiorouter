@@ -68,9 +68,15 @@ the stall's +25 ms sits in endpoint buffering outside the route (route
 queue depth unchanged). Lesson recorded in AGENTS.md. **Step 1 done** for
 the stereo engine processing path; 8 channels wait for engine width.
 
-Next (step 2): a repeated-start latency mode that reports a steady level
-per start and marks stall-shifted segments, then the same measurement on
-VB-Cable installed in the VM (user-run install inside the VM only).
+Step 2 (user approved 2026-10-10): the probe reports steady levels in
+impulse order (`cable_segments`, `cable_steady_level_ms`; 146 self-test
+checks); `run-cable-latency-starts.ps1 -Route engine|vbcable` measures
+fresh starts in both period modes (acceptance 112 checks); runbook section
+"Repeated starts and the VB-Cable comparison". VB-Cable is installed by
+the user inside the VM only. Comparison caveat: VB-Cable is measured
+Input → Output with no route, which favours it. Next: bundle r9, engine
+run, VB-Cable install, VB-Cable run; compare median steady levels per
+mode (VCAB-25: ≤ 5 ms worse than VB-Cable).
 
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease

@@ -1076,6 +1076,7 @@ struct CableArrival { double qpc_100ns; float amplitude; };
 struct CableLatencyReport {
     UINT64 emitted = 0, matched = 0, lost = 0, corrupted = 0, duplicates = 0, out_of_window = 0;
     std::vector<double> latencies_ms;  // sorted
+    std::vector<std::pair<UINT64, double>> by_impulse;  // (impulse, ms), emission order
     double percentile(double p) const {
         if (latencies_ms.empty()) return 0.0;
         const size_t index = static_cast<size_t>(std::min<double>(
@@ -1115,10 +1116,61 @@ static CableLatencyReport pair_cable_impulses(const std::vector<CableArrival>& a
         used[static_cast<size_t>(k)] = true;
         ++report.matched;
         report.latencies_ms.push_back(latency / 10000.0);
+        report.by_impulse.emplace_back(static_cast<UINT64>(k), latency / 10000.0);
     }
     report.lost = emitted - report.matched;
     std::sort(report.latencies_ms.begin(), report.latencies_ms.end());
+    std::sort(report.by_impulse.begin(), report.by_impulse.end());
     return report;
+}
+
+// Steady latency levels in emission order. A cable route's end-to-end delay
+// is flat until a stall or start-up phase re-seats a queue; a new segment
+// starts when an impulse differs from its segment's first latency by more
+// than the tolerance. One segment per steady level; jitter shows as many.
+struct CableLatencySegment { UINT64 first_impulse = 0, impulses = 0; double level_ms = 0, min_ms = 0, max_ms = 0; };
+static std::vector<CableLatencySegment> cable_latency_segments(
+    const std::vector<std::pair<UINT64, double>>& by_impulse, double tolerance_ms) {
+    std::vector<CableLatencySegment> segments;
+    std::vector<double> values;  // current segment; values[0] is its first latency
+    auto close = [&]() {
+        if (values.empty()) return;
+        std::sort(values.begin(), values.end());
+        segments.back().level_ms = values[values.size() / 2];  // median
+        values.clear();
+    };
+    for (const auto& [impulse, latency] : by_impulse) {
+        if (values.empty() || std::fabs(latency - values.front()) > tolerance_ms) {
+            close();
+            segments.push_back({impulse, 0, 0, latency, latency});
+        }
+        auto& segment = segments.back();
+        ++segment.impulses;
+        segment.min_ms = std::min(segment.min_ms, latency);
+        segment.max_ms = std::max(segment.max_ms, latency);
+        values.push_back(latency);  // appended: values[0] stays the anchor
+    }
+    close();
+    return segments;
+}
+
+static void print_cable_segments(const CableLatencyReport& report) {
+    const auto segments = cable_latency_segments(report.by_impulse, 1.0);
+    // The first level that lasts 50 impulses (0.5 s) is the start's steady level.
+    const CableLatencySegment* steady = nullptr;
+    for (const auto& segment : segments) if (segment.impulses >= 50) { steady = &segment; break; }
+    std::cout << std::fixed << std::setprecision(3) << "cable_segments=" << segments.size();
+    if (steady) std::cout << " cable_steady_level_ms=" << steady->level_ms << " cable_steady_first_impulse=" << steady->first_impulse
+                          << " cable_steady_impulses=" << steady->impulses
+                          << " cable_steady_spread_ms=" << (steady->max_ms - steady->min_ms);
+    else std::cout << " cable_steady_level_unavailable=1";
+    std::cout << '\n';
+    for (size_t index = 0; index < segments.size() && index < 8; ++index)
+        std::cout << "cable_segment index=" << index << " first_impulse=" << segments[index].first_impulse
+                  << " impulses=" << segments[index].impulses << " level_ms=" << segments[index].level_ms
+                  << " spread_ms=" << (segments[index].max_ms - segments[index].min_ms) << '\n';
+    std::cout.unsetf(std::ios::floatfield);
+    std::cout.precision(6);
 }
 
 static void print_cable_report(const CableLatencyReport& report) {
@@ -1190,6 +1242,35 @@ static int cable_impulse_self_test() {
     for (UINT64 k = 0; k < 200; ++k) arrivals.push_back(arrival(k, 154.0));
     report = pair_cable_impulses(arrivals, anchor, period, 200);
     CABLE_CHECK(report.matched == 200 && std::fabs(report.percentile(0.5) - 154.0) < 1e-6);
+    // Steady levels: 25.27 ms for 230 impulses, a stall (4 lost), then 50.27 ms
+    // (the r8 shape); sub-tolerance jitter stays inside one segment.
+    arrivals.clear();
+    for (UINT64 k = 0; k < 1000; ++k) {
+        if (k >= 230 && k < 234) continue;
+        arrivals.push_back(arrival(k, (k < 230 ? 25.272 : 50.273) + ((k % 3) * 0.001)));
+    }
+    report = pair_cable_impulses(arrivals, anchor, period, 1000);
+    auto segments = cable_latency_segments(report.by_impulse, 1.0);
+    CABLE_CHECK(segments.size() == 2);
+    CABLE_CHECK(segments[0].first_impulse == 0 && segments[0].impulses == 230 && std::fabs(segments[0].level_ms - 25.273) < 1e-6);
+    CABLE_CHECK(segments[1].first_impulse == 234 && segments[1].impulses == 766 && std::fabs(segments[1].level_ms - 50.274) < 1e-6);
+    CABLE_CHECK(segments[0].max_ms - segments[0].min_ms < 0.0021);
+    // Emission order, not arrival order: shuffled arrivals give the same segments.
+    std::reverse(arrivals.begin(), arrivals.end());
+    report = pair_cable_impulses(arrivals, anchor, period, 1000);
+    CABLE_CHECK(cable_latency_segments(report.by_impulse, 1.0).size() == 2);
+    // Block-sized toggling (the r7 defect) is many segments, not one level.
+    arrivals.clear();
+    for (UINT64 k = 0; k < 400; ++k) arrivals.push_back(arrival(k, (k % 4 == 0) ? 41.654 : 51.653));
+    report = pair_cable_impulses(arrivals, anchor, period, 400);
+    CABLE_CHECK(cable_latency_segments(report.by_impulse, 1.0).size() == 200);
+    // A drift below the tolerance per step but beyond it overall splits.
+    arrivals.clear();
+    for (UINT64 k = 0; k < 300; ++k) arrivals.push_back(arrival(k, 30.0 + static_cast<double>(k) * 0.01));
+    report = pair_cable_impulses(arrivals, anchor, period, 300);
+    segments = cable_latency_segments(report.by_impulse, 1.0);
+    CABLE_CHECK(segments.size() == 3 && segments[0].impulses == 101);
+    CABLE_CHECK(cable_latency_segments({}, 1.0).empty());
 #undef CABLE_CHECK
     std::cout << checks << " cable impulse pairing checks pass\n";
     return 0;
@@ -1358,6 +1439,7 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
                                 static_cast<double>(render_state.clock_frequency) * 1.0e7;
     const CableLatencyReport report = pair_cable_impulses(arrivals, render_anchor, period_100ns, emitted);
     print_cable_report(report);
+    print_cable_segments(report);
     std::cout << "Scope: Cable A Input render-write to Cable B Output capture-read through the "
                  "driver bridge and the diagnostic pass-through relay (an AudioRouter route "
                  "proxy), timed on the shared QPC timeline; not product engine latency.\n";

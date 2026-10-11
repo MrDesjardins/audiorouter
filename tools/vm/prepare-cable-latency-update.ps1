@@ -40,7 +40,7 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $entries = @(Get-Content -LiteralPath (Join-Path $base 'MANIFEST.txt') | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
 foreach ($entry in $entries) {
     $relative = $entry.Substring(66)
-    if ($relative -in @('run-cable-latency.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe')) { throw 'Base already contains latency tools; use a standard candidate base.' }
+    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe')) { throw 'Base already contains latency tools; use a standard candidate base.' }
     $file = [IO.Path]::GetFullPath((Join-Path $output $relative))
     if (-not $file.StartsWith($output + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest path escapes output.' }
     New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
@@ -51,6 +51,7 @@ foreach ($entry in $entries) {
 Copy-Item -LiteralPath $toneTool -Destination (Join-Path $output 'tools\m03_bridge_tone.exe') -Force
 Copy-Item -LiteralPath $probe -Destination (Join-Path $output 'tools\m00-probe.exe')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency.ps1') -Destination $output
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency-starts.ps1') -Destination $output
 # Optional, reversible guest quieting before long diagnostics.
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'quiet-guest.ps1') -Destination $output
 $support = Join-Path $output 'paired-trace-support.ps1'

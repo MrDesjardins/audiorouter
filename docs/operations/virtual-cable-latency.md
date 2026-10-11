@@ -115,3 +115,64 @@ arrive continuous and unchanged. `cargo test -p audiorouter-windows-audio
 --lib cable_route` covers re-blocking at 16–4,096 frames and fail-closed
 silence; `cargo test -p audiorouter-engine --test cable_route` covers the
 compiled session itself.
+
+## Repeated starts and the VB-Cable comparison (VCAB-25 step 2)
+
+One run gives one end-to-end level, and in this VM that level depends on how
+full the endpoint buffers were when the streams started, or after a VM
+stall (2026-10-10 runs r5–r8: 25–57 ms on the same path). VCAB-25 also asks
+for "never worse than VB-Cable on the same PC by more than 5 ms".
+`run-cable-latency-starts.ps1` therefore opens fresh streams for every
+measurement and runs each period mode `-Starts` times (default 5, 400
+impulses each):
+
+- `-Route engine`: Cable A Input → bridge → AudioRouter engine → Cable B
+  Output, a new engine route process per measurement.
+- `-Route vbcable`: VB-Cable's own CABLE Input → CABLE Output. This has no
+  route in between, so the comparison favours VB-Cable.
+
+The probe reports latency levels in impulse order. A level lasts while each
+impulse stays within 1 ms of the level's first impulse, and the first level
+lasting 50 impulses is the start's steady level. A VM stall shows as a
+second segment instead of jitter. The runner prints the steady level of
+every start, the median per mode and how many starts shifted mid-run.
+
+### Install VB-Cable inside the VM only
+
+Never on the host for this test. Optional first: in VirtualBox, take a
+snapshot of AR-DriverTest (for example `03-before-vbcable`) so VB-Cable can
+be removed by restoring it.
+
+1. **Host PC:** download the VB-CABLE driver pack (zip) from
+   <https://vb-audio.com/Cable/> and save it in `C:\VMs\ar-share\`.
+2. **Inside the VM:** copy the zip from `Z:\` to the desktop, extract it,
+   right-click `VBCABLE_Setup_x64.exe` → **Run as administrator** →
+   **Install Driver**, then restart the VM.
+3. **Inside the VM:** in Sound settings, check that **CABLE Input** and
+   **CABLE Output** appear. Leave VB-Cable's settings at their defaults.
+
+### Run it (inside the VM)
+
+Administrator PowerShell, AudioRouter driver installed, Media Player
+closed, Cable B Listen off. AudioRouter engine route first (no VB-Cable
+needed):
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-cable-latency-r9' 'C:\ar\diagnostics-20261010-cable-latency-r9' /E /R:1 /W:1 /XF latency-*.zip starts-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r9\run-cable-latency-starts.ps1' -Route engine
+    if ($LASTEXITCODE -ne 0) { throw 'Repeated-start run failed. Evidence was preserved; send the output.' }
+}
+```
+
+After VB-Cable is installed and the VM restarted:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r9\run-cable-latency-starts.ps1' -Route vbcable
+```
+
+The engine run takes about 3 minutes and the VB-Cable run about 1.5. Each
+copies `starts-<route>-<run>.zip` to the bundle folder on `Z:`. Host-side
+checks: `tests/acceptance/m03-cable-latency-starts.ps1` (fake process
+boundaries, the probe's steady-level self-test, host refusal).
