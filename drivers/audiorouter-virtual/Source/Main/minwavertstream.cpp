@@ -129,6 +129,15 @@ Return Value:
         ExDeleteTimer(m_pNotificationTimer, TRUE, TRUE, NULL);
         m_pNotificationTimer = NULL;
     }
+    // PortCls normally unregisters every event before closing the pin. Free
+    // any entry it left; the timer is joined above and GetReadPacket cannot
+    // run on a closed stream, so nothing walks the list any more. The pool
+    // allocation is zeroed, so a NULL head means Init never ran.
+    while (m_NotificationList.Flink != NULL && !IsListEmpty(&m_NotificationList))
+    {
+        PLIST_ENTRY leRemoved = RemoveHeadList(&m_NotificationList);
+        ExFreePoolWithTag(CONTAINING_RECORD(leRemoved, NotificationListEntry, ListEntry), MINWAVERTSTREAM_POOLTAG);
+    }
     if (NULL != m_pMiniport)
     {
 
@@ -557,15 +566,18 @@ VOID CMiniportWaveRTStream::FreeBufferWithNotification
 }
 
 //=============================================================================
-#pragma code_seg("PAGE")
+// The notification list is walked under m_PositionSpinLock by TimerNotifyRT
+// and by GetReadPacket's re-signal, both at DISPATCH_LEVEL. Registration and
+// removal take the same lock, so these two routines must be non-paged; they
+// are still called at PASSIVE_LEVEL (asserted). A removed event is never signalled
+// again, and its entry is freed only after the lock is released.
+#pragma code_seg()
 NTSTATUS CMiniportWaveRTStream::RegisterNotificationEvent
 (
     _In_ PKEVENT NotificationEvent_
 )
 {
-    UNREFERENCED_PARAMETER(NotificationEvent_);
-
-    PAGED_CODE();
+    NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL);
 
     if (NotificationEvent_ == NULL)
     {
@@ -583,57 +595,72 @@ NTSTATUS CMiniportWaveRTStream::RegisterNotificationEvent
 
     nleNew->NotificationEvent = NotificationEvent_;
 
-    // Fail if the notification event already exists in our list.
-    if (!IsListEmpty(&m_NotificationList))
+    // Fail if the notification event already exists in our list. The check
+    // and the insertion form one critical section.
+    bool duplicate = false;
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+    PLIST_ENTRY leCurrent = m_NotificationList.Flink;
+    while (leCurrent != &m_NotificationList)
     {
-        PLIST_ENTRY leCurrent = m_NotificationList.Flink;
-        while (leCurrent != &m_NotificationList)
+        NotificationListEntry* nleCurrent = CONTAINING_RECORD( leCurrent, NotificationListEntry, ListEntry);
+        if (nleCurrent->NotificationEvent == NotificationEvent_)
         {
-            NotificationListEntry* nleCurrent = CONTAINING_RECORD( leCurrent, NotificationListEntry, ListEntry);
-            if (nleCurrent->NotificationEvent == NotificationEvent_)
-            {
-                ExFreePoolWithTag( nleNew, MINWAVERTSTREAM_POOLTAG );
-                return STATUS_UNSUCCESSFUL;
-            }
-
-            leCurrent = leCurrent->Flink;
+            duplicate = true;
+            break;
         }
-    }
 
-    InsertTailList(&m_NotificationList, &(nleNew->ListEntry));
+        leCurrent = leCurrent->Flink;
+    }
+    if (!duplicate)
+    {
+        InsertTailList(&m_NotificationList, &(nleNew->ListEntry));
+    }
+    KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+
+    if (duplicate)
+    {
+        ExFreePoolWithTag( nleNew, MINWAVERTSTREAM_POOLTAG );
+        return STATUS_UNSUCCESSFUL;
+    }
 
     return STATUS_SUCCESS;
 }
 
 //=============================================================================
-#pragma code_seg("PAGE")
+#pragma code_seg()
 NTSTATUS CMiniportWaveRTStream::UnregisterNotificationEvent
 (
     _In_ PKEVENT NotificationEvent_
 )
 {
-    UNREFERENCED_PARAMETER(NotificationEvent_);
+    NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL);
 
-    PAGED_CODE();
-
-    if (!IsListEmpty(&m_NotificationList))
+    NotificationListEntry* removed = NULL;
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+    PLIST_ENTRY leCurrent = m_NotificationList.Flink;
+    while (leCurrent != &m_NotificationList)
     {
-        PLIST_ENTRY leCurrent = m_NotificationList.Flink;
-        while (leCurrent != &m_NotificationList)
+        NotificationListEntry* nleCurrent = CONTAINING_RECORD( leCurrent, NotificationListEntry, ListEntry);
+        if (nleCurrent->NotificationEvent == NotificationEvent_)
         {
-            NotificationListEntry* nleCurrent = CONTAINING_RECORD( leCurrent, NotificationListEntry, ListEntry);
-            if (nleCurrent->NotificationEvent == NotificationEvent_)
-            {
-                RemoveEntryList( leCurrent );
-                ExFreePoolWithTag( nleCurrent, MINWAVERTSTREAM_POOLTAG );
-                return STATUS_SUCCESS;
-            }
-
-            leCurrent = leCurrent->Flink;
+            RemoveEntryList( leCurrent );
+            removed = nleCurrent;
+            break;
         }
+
+        leCurrent = leCurrent->Flink;
+    }
+    KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+
+    if (removed == NULL)
+    {
+        return STATUS_NOT_FOUND;
     }
 
-    return STATUS_NOT_FOUND;
+    ExFreePoolWithTag( removed, MINWAVERTSTREAM_POOLTAG );
+    return STATUS_SUCCESS;
 }
 
 

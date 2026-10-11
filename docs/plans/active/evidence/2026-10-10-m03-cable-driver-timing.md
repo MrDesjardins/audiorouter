@@ -867,6 +867,59 @@ So part of the gain is a quieter guest, not only r18. Criterion 2's
 deviation stands. VCAB-24/25 qualification still needs a native-timer
 environment.
 
+### Native-timer qualification unavailable (2026-10-11, user)
+
+The user states that a native-timer environment (native VT-x without the
+Windows hypervisor, or bare metal) is not possible. VCAB-24/25
+qualification of the cable continuity gate is therefore **blocked**, not
+waived: the gate stays open, and the one-hour r18 run remains a VM
+deviation diagnostic. Work continues on everything that does not need that
+environment.
+
+## Repair r20 — lock the notification list (2026-10-11)
+
+Defect (pre-existing, found in the r18 review): `RegisterNotificationEvent`
+and `UnregisterNotificationEvent` changed `m_NotificationList` without a
+lock. Meanwhile `TimerNotifyRT` (DISPATCH_LEVEL) and r18's `GetReadPacket`
+re-signal walk it under `m_PositionSpinLock` and call `KeSetEvent` on
+each entry. A stream start/stop racing a timer tick could walk a
+half-linked entry or signal a freed one (use-after-free in the kernel).
+
+Change (`minwavertstream.cpp`): both routines take `m_PositionSpinLock` for
+the duplicate check + insert and for find + remove. They free pool only
+after release, and move from the `PAGE` segment to non-paged code because
+they now hold a spin lock (`PAGED_CODE()` kept as the PASSIVE_LEVEL
+assertion). No timing or data-path change.
+
+Host verification (Windows host, no driver install, no audio):
+
+| Command | Result |
+|---|---|
+| `drivers/audiorouter-virtual/tests/build-tests.ps1` | 88,167 checks pass |
+| `tests/acceptance/m03-cable-driver-timing.ps1` | 58 checks pass |
+| `build.ps1 -Version 0.1.4` / `-TimingDiagnostics` | Pass, 0 errors, 0 warnings (`target/r20-build-normal.log`, `target/r20-build-diagnostic.log`) |
+
+Independent review (fresh-context agent, read-only): no blocking defect.
+All four list users verified; check+insert atomic; no signal after
+Unregister; no paged access or call-out under the lock; Register/Unregister
+documented at PASSIVE_LEVEL. Applied: `PAGED_CODE()` in the now non-paged
+routines replaced with `NT_ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL)`
+(avoids /analyze C28172); the destructor now frees entries PortCls left
+registered (pre-existing leak, SYSVAD has the same gap; Driver Verifier
+would report it at unload), after `ExDeleteTimer` joins the timer. Rerun
+after the fixes: same results as the table (88,167 checks; both builds 0
+warnings).
+
+The host has no test for the race itself: it needs a kernel. Guest
+validation: Driver Verifier (standard, includes IRQL checking) on
+`audioroutervirtual.sys` during the repeated-start run, which opens and
+closes streams (register/unregister) while timers fire, then verifier off
+and a 10-minute four-route continuity run compared with the r18 hour's
+steady-state minutes. Pass: no bugcheck, starts-run exit 0, 0 corrupted
+impulses, continuity no worse than r18 (bridge `driver_version` 0.1.4.0).
+Rollback: reinstall the r18 bundle (0.1.3) by `-Step remove` then
+`-Step install` (downgrades are refused).
+
 ## Next action and rollback
 
 The VM investigation of r18 is complete; no further VM run is planned. Next:
