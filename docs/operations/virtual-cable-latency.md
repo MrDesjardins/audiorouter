@@ -191,3 +191,41 @@ The engine run takes about 3 minutes and the VB-Cable run about 1.5. Each
 copies `starts-<route>-<run>.zip` to the bundle folder on `Z:`. Host-side
 checks: `tests/acceptance/m03-cable-latency-starts.ps1` (fake process
 boundaries, the probe's steady-level self-test, host refusal).
+
+## Eight-cable sustained continuity (VCAB-24 step 3 deviation run)
+
+This one-hour guest run checks four concurrent AudioRouter engine routes
+(Cable A→B, C→D, E→F and G→H) while sending a separately identity-coded
+impulse train through each pair. It attributes losses or driver counter
+increases to a VM-wide scheduling stall only when all four route processes
+report a nearby gap. It is a **VirtualBox NEM deviation run**, not VCAB-24
+qualification or a release gate: NEM scheduling can stall the whole guest.
+No host driver is installed or loaded, and the run does not change host
+settings.
+
+### Run it (inside the VM)
+
+Prerequisites: the test-signed AudioRouter driver is installed in AR-DriverTest;
+the VM is booted normally; use **Administrator PowerShell inside the VM**.
+Close Media Player and leave Cable B Listen off. Run this single block:
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-cable-continuity-r12' 'C:\ar\diagnostics-20261010-cable-continuity-r12' /E /R:1 /W:1 /XF continuity-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-continuity-r12\run-cable-continuity.ps1' -Minutes 60
+    if ($LASTEXITCODE -ne 0) { throw 'Continuity run failed. Evidence was preserved; send the output.' }
+}
+```
+
+The run takes about 62 minutes. It enables eight cables temporarily when
+needed, restores the original cable count in `finally`, and copies only this
+run's `continuity-<id>.zip` to
+`Z:\diagnostics-20261010-cable-continuity-r12`. The archive includes the
+four probe reports, raw impulse timings, route progress/counters and verdict.
+Send the printed output and the archive. A clean result is indicative only;
+it does not establish native VT-x/bare-metal continuity.
+
+Host PC checks: `tests/acceptance/m03-cable-continuity.ps1` covers progress
+parsing, four-route stall attribution, cable-count restoration, watchdogs,
+the VM guard and probe self-test without starting audio or opening the driver.

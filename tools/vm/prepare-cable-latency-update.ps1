@@ -1,6 +1,6 @@
 <# Host-only: build the static pass-through/engine-route tone tool and impulse probe from a
-   clean commit, then copy a verified base bundle with those tools and the
-   latency runner added. Never starts audio or installs/loads a driver. #>
+   clean commit, then copy a verified base bundle with the latency and sustained-continuity
+   runners added. Never starts audio or installs/loads a driver. #>
 [CmdletBinding()]
 param([Parameter(Mandatory = $true)][string] $BaseBundle,
     [Parameter(Mandatory = $true)][string] $Destination)
@@ -40,7 +40,7 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $entries = @(Get-Content -LiteralPath (Join-Path $base 'MANIFEST.txt') | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
 foreach ($entry in $entries) {
     $relative = $entry.Substring(66)
-    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe')) { throw 'Base already contains latency tools; use a standard candidate base.' }
+    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe')) { throw 'Base already contains latency or continuity tools; use a standard candidate base.' }
     $file = [IO.Path]::GetFullPath((Join-Path $output $relative))
     if (-not $file.StartsWith($output + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest path escapes output.' }
     New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
@@ -52,6 +52,7 @@ Copy-Item -LiteralPath $toneTool -Destination (Join-Path $output 'tools\m03_brid
 Copy-Item -LiteralPath $probe -Destination (Join-Path $output 'tools\m00-probe.exe')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency-starts.ps1') -Destination $output
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-continuity.ps1') -Destination $output
 # Optional, reversible guest quieting before long diagnostics.
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'quiet-guest.ps1') -Destination $output
 $support = Join-Path $output 'paired-trace-support.ps1'
