@@ -29,8 +29,12 @@ ignores MoreData 136/150 times and waits for the next notification, so it
 stays one packet behind and the loss moves. Gate not met. r18 (re-signal
 the notification event on MoreData) implemented and reviewed (no blocker;
 findings applied; pre-existing unlocked list registration recorded).
-Next: clean test-signed 0.1.3 package and bundle, guest install and restart,
-traced comparison against the same criteria. See
+r18 guest (0.1.3 verified, SysMain off after a traced 3.45 s whole-guest
+freeze during a SysMain burst): the re-signal works (141/143 immediate
+follow-ups); skips 119 → 50, flagged capture packets 119 → 51 (57 %), lost
+impulses 28/29, 0 corrupted. Gate criterion 2 (≥ 80 %) not met. The rest
+are late first notifications. Next: decide on r19 (frame-granular position
+and boundary-aligned notification timer). See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 

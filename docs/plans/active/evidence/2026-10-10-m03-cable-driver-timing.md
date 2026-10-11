@@ -659,6 +659,57 @@ Next: stop and disable SysMain in the guest only (reversible; the previous
 start type is recorded in `C:\ar\sysmain-state.txt`), then rerun the r18
 comparison without reinstalling. No host change.
 
+### r18 second guest run (2026-10-11) — valid; works as designed, gate partly met
+
+SysMain was stopped and disabled in the guest (saved start mode `Auto`, in
+`C:\ar\sysmain-state.txt`), with a 30 s settle. Archive
+`driver-timing-traced-dbf6da42d2f345988609169b2642f8bd.zip`, inner
+`driver-timing-eb3e0f202db2462c80124454ce6be4d5.zip` (`Passed=true`). Both
+halves report bridge `driver_version: [0, 1, 3, 0]`. WPR: 644,182 events,
+0 lost; longest all-CPU silence 30.1 ms (4 ≥ 20 ms), so no multi-second
+freeze. Timing records 40,042, dropped 0, exhausted 0.
+
+| | r18 recording off | r18 recording on | r17 on | r16 on |
+|---|---|---|---|---|
+| Lost / corrupted impulses | 29 / 0 | 28 / 0 | 54 / 0 | 41 / 0 |
+| p50 / p95 / jitter | 18.308 / 19.688 / 7.463 ms | 17.654 / 19.035 / 5.726 ms | 16.386 / 18.302 / 5.804 ms | 18.277 / 19.727 / 10.284 ms |
+| Probe flagged capture packets | 61 | **51** | 118 | 119 |
+| Render discontinuities | 118 (224.3 ms) | 85 (105.9 ms) | 99 | 73 |
+| Max control loop gap | 10.6 ms | 21.7 ms | 87.8 ms | 24.4 ms |
+
+Kernel review (capture stream 190, recording on):
+- 0 intact skips. Total skips **50** (r17 119, r16 119), all partly reused
+  by less than one packet (max 768 B).
+- `MoreData` returns 143, re-signals (event 7) 143, next fetch within
+  0.2 ms **141** (r17 14/150), after a boundary notification 0. The
+  re-signal works.
+- Notification lateness p50 1.218 / p99 2.689 / max 3.302 ms. True boundary
+  → fetch max 3.248 ms.
+
+**Gate:**
+- criterion 1 (0 intact skips): met;
+- criterion 3 (0 corrupted): met, despite 143 zero-margin rescues;
+- criterion 2 (≥ 80 % fewer flagged capture packets): **not met**, 57 %
+  (119 → 51); the target is ≤ 23.
+
+Lost impulses also fell (28/29 against 36–70 in earlier runs). Caveat:
+SysMain changed in this run, and run-to-run variance is large, so one pair
+cannot separate r18's effect from the quieter guest. The 50 remaining
+skips are fetches that came after the writer had reached the slot, i.e.
+late *first* notifications. r17/r18 cannot recover those; only earlier
+notification can.
+
+Next candidate (r19, not implemented): cut notification lateness. Today the
+position advances in whole-millisecond steps (`floor(ms) × 384 B`) and the
+1 ms timer fires every 1.8 ms at median, so a completed packet is reported
+1.2 ms late at median and up to 3.3 ms late.
+- Frame-granular position: removes up to 1 ms of the floor.
+- Timer due times aligned to packet boundaries (one-shot at the next
+  boundary rather than a free-running 1 ms period): reduces the cadence
+  component.
+Both touch the timer and the position math shared with render, so the
+model, render-path regression and review need more care than r17/r18.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)
