@@ -401,3 +401,153 @@ describe("session refresh and playback regressions", () => {
     expect(screen.queryByText(/Audio session is running/)).toBeNull();
   });
 });
+
+describe("switching sessions", () => {
+  const other = { ...structuredClone(demoSession), id: "other-session", name: "Other Session" };
+  // One backend audio adapter, attached to whichever session prepared it, as
+  // in the control plane: it stays attached after Stop until detached.
+  async function twoSessions() {
+    const { backend } = await fixture();
+    const native = { sessionId: demoSession.id as string | null, adapter: "configured-stopped" as string };
+    let running: string | null = null;
+    const snapshot = backend.snapshot;
+    const diagnostics = backend.refreshDiagnostics;
+    const audio = {
+      ...backend,
+      listSessions: vi.fn(async () => [structuredClone(demoSession), structuredClone(other)]),
+      snapshot: vi.fn(async () => {
+        const value = await snapshot();
+        return { ...value, status: { ...value.status, activeSessionIds: running ? [running] : [] } };
+      }),
+      refreshDiagnostics: vi.fn(async (): Promise<DiagnosticsSnapshot> => ({
+        ...(await diagnostics()),
+        nativeSessionId: native.sessionId,
+        nativeAdapter: (native.sessionId
+          ? native.adapter
+          : "implemented-not-activated") as DiagnosticsSnapshot["nativeAdapter"],
+        nativeAdapterKind: native.sessionId ? "endpoint" : null,
+      })),
+      prepareNativeEndpoint: vi.fn(async (sessionId: string, captureEndpointId: string, renderEndpointId: string) => {
+        if (native.sessionId && native.sessionId !== sessionId)
+          throw new Error("native endpoint worker limit reached or session is already attached");
+        native.sessionId = sessionId;
+        native.adapter = "configured-stopped";
+        return { sessionId, state: "configured-stopped" as const, captureEndpointId, renderEndpointId };
+      }),
+      detachNativeEndpoint: vi.fn(async (sessionId: string) => {
+        if (native.sessionId !== sessionId) throw new Error("native endpoint worker is not attached to this session");
+        native.sessionId = null;
+        return { sessionId, state: "detached" as const };
+      }),
+      startSession: vi.fn(async (sessionId: string) => {
+        if (native.sessionId !== sessionId) throw new Error("native worker is already attached");
+        running = sessionId;
+        native.adapter = "running";
+        return { sessionId, state: "running" as const, generation: 1, runtime: "native" as const };
+      }),
+      stopSession: vi.fn(async (sessionId: string) => {
+        if (running === sessionId) running = null;
+        native.adapter = "configured-stopped";
+        return { sessionId, state: "stopped" as const, runtime: "native" as const, recorders: [] };
+      }),
+    };
+    for (const id of [demoSession.id, other.id])
+      window.localStorage.setItem(
+        `audiorouter.ui.endpoint-binding.${id}`,
+        JSON.stringify({ captureEndpointId: "microphone", renderEndpointId: "headphones" }),
+      );
+    return { audio, native };
+  }
+  const chooseSession = (id: string) => {
+    fireEvent.click(screen.getByRole("tab", { name: "Session" }));
+    fireEvent.change(screen.getByLabelText("Choose session"), { target: { value: id } });
+  };
+
+  it("stops the running session and releases its audio, then plays the new one on Play", async () => {
+    const { audio, native } = await twoSessions();
+    await renderReady(<App backend={audio} />);
+    await waitFor(() => expect(audio.listSessions).toHaveBeenCalled());
+    start();
+    await messageBar().findByText(/Audio session is running/);
+    chooseSession(other.id);
+    await messageBar().findByText(/Stopped the running session\. Press Play to start "Other Session"/);
+    expect(audio.stopSession).toHaveBeenCalledWith(demoSession.id, expect.any(String));
+    expect(audio.detachNativeEndpoint).toHaveBeenCalledWith(demoSession.id);
+    expect(audio.startSession).toHaveBeenCalledTimes(1);
+    expect(native.sessionId).toBeNull();
+    start();
+    await messageBar().findByText(/Audio session is running/);
+    expect(audio.startSession).toHaveBeenLastCalledWith(other.id, expect.any(String));
+    // Going back works the same way.
+    chooseSession(demoSession.id);
+    await messageBar().findByText(/Stopped the running session\. Press Play to start/);
+    start();
+    await waitFor(() => expect(audio.startSession).toHaveBeenLastCalledWith(demoSession.id, expect.any(String)));
+  });
+
+  it("Play releases a stopped adapter that another session left attached", async () => {
+    const { audio, native } = await twoSessions();
+    native.sessionId = other.id;
+    await renderReady(<App backend={audio} />);
+    await waitFor(() => expect(audio.listSessions).toHaveBeenCalled());
+    start();
+    await messageBar().findByText(/Audio session is running/);
+    expect(audio.detachNativeEndpoint).toHaveBeenCalledWith(other.id);
+    expect(audio.detachNativeEndpoint.mock.invocationCallOrder[0]).toBeLessThan(
+      audio.startSession.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("Play does not take over audio another session is playing", async () => {
+    const { audio, native } = await twoSessions();
+    native.sessionId = other.id;
+    native.adapter = "running";
+    await renderReady(<App backend={audio} />);
+    await waitFor(() => expect(audio.listSessions).toHaveBeenCalled());
+    start();
+    await messageBar().findByText(/"Other Session" is playing\. Stop it first/);
+    expect(audio.detachNativeEndpoint).not.toHaveBeenCalled();
+    expect(audio.startSession).not.toHaveBeenCalled();
+  });
+
+  it("keeps the session when the running one cannot be stopped", async () => {
+    const { audio } = await twoSessions();
+    audio.stopSession = vi.fn(async () => {
+      throw new Error("stop refused");
+    });
+    await renderReady(<App backend={audio} />);
+    await waitFor(() => expect(audio.listSessions).toHaveBeenCalled());
+    start();
+    await messageBar().findByText(/Audio session is running/);
+    chooseSession(other.id);
+    await messageBar().findByText(/stop refused/);
+    expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe(demoSession.id);
+  });
+});
+
+describe("Reconnect", () => {
+  it("shows that it is reconnecting and reports the result", async () => {
+    const { backend } = await fixture();
+    await renderReady(<App backend={backend} />);
+    await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
+    const calls = backend.snapshot.mock.calls.length;
+    fireEvent.click(
+      within(document.querySelector(".topbar") as HTMLElement).getByRole("button", { name: "Reconnect" }),
+    );
+    await messageBar().findByText(/Reconnected\. Sessions, devices and audio status are up to date\./);
+    expect(backend.snapshot.mock.calls.length).toBeGreaterThan(calls);
+  });
+
+  it("reports a failed reconnect instead of doing nothing visible", async () => {
+    const { backend } = await fixture();
+    await renderReady(<App backend={backend} />);
+    await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
+    backend.snapshot.mockImplementation(async () => {
+      throw new Error("pipe closed");
+    });
+    fireEvent.click(
+      within(document.querySelector(".topbar") as HTMLElement).getByRole("button", { name: "Reconnect" }),
+    );
+    await messageBar().findByText(/Reconnect failed/, undefined, { timeout: 15000 });
+  }, 20000);
+});

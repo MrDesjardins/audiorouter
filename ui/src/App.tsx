@@ -438,13 +438,36 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const refresh = async () => {
     const requestedSessionId = session.id;
     const nextState = await snapshotCache.refresh(backend, requestedSessionId);
-    if (currentSessionIdRef.current !== requestedSessionId) return;
+    if (currentSessionIdRef.current !== requestedSessionId) return nextState;
     setSnapshotState(nextState);
     await refreshSessions();
     refreshRecordings(session.id);
     refreshRecorders();
     refreshApplications();
     refreshDevices({ announce: false });
+    return nextState;
+  };
+  // Reconnect reloads everything from the backend; it reports progress and
+  // the outcome in the message slot so the click is visibly acknowledged.
+  const [reconnecting, setReconnecting] = useState(false);
+  const reconnect = async () => {
+    if (reconnecting) return;
+    setReconnecting(true);
+    setActionMessage("Reconnecting to the AudioRouter backend...");
+    try {
+      const nextState = await refresh();
+      if (!backend.connected) {
+        setActionMessage("Reconnect failed: the AudioRouter backend is not running. Restart AudioRouter.");
+      } else if (nextState.error) {
+        setActionMessage(`Reconnect failed: ${nextState.error}`);
+      } else {
+        setActionMessage("Reconnected. Sessions, devices and audio status are up to date.");
+      }
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Reconnect failed."));
+    } finally {
+      setReconnecting(false);
+    }
   };
   const snapshot = snapshotState.snapshot;
   const hasSnapshot = snapshot !== null;
@@ -1355,8 +1378,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         uiIdempotencyKey("session-create"),
       );
       setCreatedSessions((current) => [...current, result.session]);
-      setSelectedSessionId(result.session.id);
-      setActionMessage(`Created stopped session ${result.session.name}.`);
+      const switched = await switchSession(result.session.id);
+      if (switched.switched)
+        setActionMessage(
+          `Created stopped session ${result.session.name}.${switched.stopped ? " The running session was stopped; press Play to start this one." : ""}`,
+        );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to create session."));
     } finally {
@@ -1373,8 +1399,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     try {
       const result = await backend.duplicateSession(session.id, id, name, uiIdempotencyKey("session-duplicate"));
       setCreatedSessions((current) => [...current, result.session]);
-      setSelectedSessionId(result.session.id);
-      setActionMessage(`Duplicated stopped session ${result.session.name}.`);
+      const switched = await switchSession(result.session.id);
+      if (switched.switched)
+        setActionMessage(
+          `Duplicated stopped session ${result.session.name}.${switched.stopped ? " The running session was stopped; press Play to start this one." : ""}`,
+        );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to duplicate session."));
     } finally {
@@ -1391,7 +1420,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       await backend.deleteSession(session.id, uiIdempotencyKey("session-delete"));
       setCreatedSessions((current) => current.filter((item) => item.id !== session.id));
       const fallback = availableSessions.find((item) => item.id !== session.id);
-      if (fallback) setSelectedSessionId(fallback.id);
+      if (fallback) await switchSession(fallback.id);
       setActionMessage(`Deleted session ${session.name}.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to delete session."));
@@ -1414,6 +1443,27 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setDeviceConsent({ busy: false, error: formatUiError(error, "AudioRouter could not save your choice.") });
     }
   };
+  // Native audio stays attached to the session that prepared it, even after
+  // that session stops, and the backend refuses another session's Play until
+  // it is released. Release a stopped adapter of any other session.
+  const releaseOtherSessionAudio = async (
+    diagnostics: Awaited<ReturnType<typeof backend.refreshDiagnostics>>,
+    keepSessionId: string,
+  ) => {
+    const other = diagnostics.nativeSessionId;
+    if (!other || other === keepSessionId || diagnostics.nativeAdapter === "running") return diagnostics;
+    if (diagnostics.nativeAdapterKind === "duplex") {
+      if (!backend.detachNativeDuplex) return diagnostics;
+      await backend.detachNativeDuplex(other);
+    } else if (diagnostics.nativeAdapterKind !== "render-source") {
+      if (!backend.detachNativeEndpoint) return diagnostics;
+      await backend.detachNativeEndpoint(other);
+    } else {
+      return diagnostics;
+    }
+    recordUiDiagnostic("Released the stopped audio adapter of another session");
+    return backend.refreshDiagnostics();
+  };
   const startSession = async (): Promise<boolean> => {
     if (sessionBusy.current || !backend.connected) return false;
     if (graphBusy) {
@@ -1426,6 +1476,17 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setNativePumpStats(null);
     try {
       let diagnostics = await backend.refreshDiagnostics();
+      if (diagnostics.nativeSessionId && diagnostics.nativeSessionId !== session.id) {
+        if (diagnostics.nativeAdapter === "running") {
+          const other = availableSessions.find((item) => item.id === diagnostics.nativeSessionId)?.name;
+          setActionMessage(
+            `No audio started. ${other ? `"${other}"` : "Another session"} is playing. Stop it first, then press Play.`,
+          );
+          return false;
+        }
+        setActionMessage("Releasing the audio devices of the previous session...");
+        diagnostics = await releaseOtherSessionAudio(diagnostics, session.id);
+      }
       // Several independent paths (or several devices on one path) run as one
       // session on the multi-path worker, which reads each device from its
       // node. Every path starts and stops together.
@@ -1804,6 +1865,47 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       sessionBusy.current = false;
       setSessionActionBusy(false);
     }
+  };
+  // Switching sessions stops whatever is playing and releases its audio
+  // devices first; the newly selected session then starts only on Play.
+  const switchSession = async (id: string): Promise<{ switched: boolean; stopped: boolean }> => {
+    if (id === session.id) return { switched: true, stopped: false };
+    if (sessionBusy.current) {
+      setActionMessage("Wait for the current audio action to finish before switching sessions.");
+      return { switched: false, stopped: false };
+    }
+    const running = snapshot?.status.activeSessionIds ?? [];
+    sessionBusy.current = true;
+    setSessionActionBusy(true);
+    try {
+      if (backend.connected && running.length > 0) {
+        setActionMessage("Stopping the running session before switching...");
+        for (const runningId of running) await backend.stopSession(runningId, uiIdempotencyKey("session-switch-stop"));
+      }
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to stop the running session, so the session was not switched."));
+      return { switched: false, stopped: false };
+    } finally {
+      sessionBusy.current = false;
+      setSessionActionBusy(false);
+    }
+    if (backend.connected) {
+      try {
+        await releaseOtherSessionAudio(await backend.refreshDiagnostics(), id);
+      } catch {
+        // Play releases it again before preparing the new session.
+        recordUiDiagnostic("Releasing the previous session's audio adapter failed; Play will retry");
+      }
+    }
+    setNativeGenerations({});
+    setNativePumpStats(null);
+    setAudioSourceStates({});
+    setConnectionReplacement(null);
+    setSelectedSessionId(id);
+    if (backend.connected) void snapshotCache.refresh(backend, id).then(setSnapshotState);
+    const name = availableSessions.find((item) => item.id === id)?.name ?? "the selected session";
+    if (running.length > 0) setActionMessage(`Stopped the running session. Press Play to start "${name}".`);
+    return { switched: true, stopped: running.length > 0 };
   };
   // The listener below is re-registered only when its dependencies change, so
   // it calls this render's actions through a ref. Captured directly, a
@@ -2418,12 +2520,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         <main className="panel" aria-label="Loading saved session">
           <h1>AudioRouter</h1>
           <p role="status">
-            {snapshotState.error
-              ? `Unable to load your saved session: ${snapshotState.error}`
-              : "Loading your saved session…"}
+            {reconnecting
+              ? "Reconnecting to the AudioRouter backend…"
+              : snapshotState.error
+                ? `Unable to load your saved session: ${snapshotState.error}`
+                : "Loading your saved session…"}
           </p>
           {snapshotState.error && (
-            <button type="button" onClick={refresh}>
+            <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
               Reconnect
             </button>
           )}
@@ -2579,8 +2683,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       presetError={presetError}
       session={session}
       setCreatedSessions={setCreatedSessions}
-      setSelectedSessionId={setSelectedSessionId}
-      refresh={refresh}
+      setSelectedSessionId={(value) => void switchSession(typeof value === "function" ? value(session.id) : value)}
+      refresh={async () => {
+        await refresh();
+      }}
       applications={applications}
       snapshot={snapshot}
       clearRecoverySafeMode={clearRecoverySafeMode}
@@ -2676,7 +2782,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 <option value="high-contrast">High contrast</option>
               </select>
             </label>
-            <button type="button" onClick={refresh}>
+            <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
               Reconnect
             </button>
             <QuitButton onMessage={setActionMessage} />
@@ -2955,8 +3061,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     unsaved={routeChanged}
                     onImported={(imported) => {
                       setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]);
-                      setSelectedSessionId(imported.id);
-                      void refresh();
+                      void switchSession(imported.id);
                     }}
                   />
                 }
@@ -3013,10 +3118,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 )}
                 sessions={availableSessions}
                 selectedSessionId={session.id}
-                onSelectSession={(id) => {
-                  setConnectionReplacement(null);
-                  setSelectedSessionId(id);
-                }}
+                onSelectSession={(id) => void switchSession(id)}
                 revision={session.revision}
                 sessionName={draft.name}
                 onNameChange={changeSessionName}
