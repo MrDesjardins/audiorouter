@@ -88,6 +88,29 @@ this PC would also need Memory Integrity (Windows Security → Device security
 → Core isolation) turned off for the session and back on afterwards, which is
 a separate security decision for the user; a bare-metal or other test PC
 avoids it.
+
+Follow-up the same day (user decisions): with Memory integrity off and a
+restart, `SecurityServicesRunning` became `{0}` but VBS still ran
+(`VirtualizationBasedSecurityStatus 2`) and kept the hypervisor present,
+because VBS itself is enabled in
+`HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard`. The user then set
+`EnableVirtualizationBasedSecurity` from **1 to 0** (original values read on
+2026-10-10: `EnableVirtualizationBasedSecurity=1`,
+`RequireMicrosoftSignedBootChain=1`, `WasEnabledBy=1`; only the first was
+changed). The planned `reg export` backup failed because
+`C:\VMs\ar-share\host-state` did not exist; create it first next time.
+
+Complete restore on this PC (Administrator PowerShell, then restart):
+
+```powershell
+reg add 'HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard' /v EnableVirtualizationBasedSecurity /t REG_DWORD /d 1 /f
+bcdedit /set hypervisorlaunchtype auto
+Suspend-BitLocker -MountPoint 'C:' -RebootCount 1   # only if BitLocker protection is on
+```
+
+Also turn **Memory integrity** back on (Windows Security → Device security →
+Core isolation) before that restart. Verify afterwards as described above
+(`HypervisorPresent True`, VBS status 2, `SecurityServicesRunning {2}`, WSL).
 Then run only the long tests the agent gives you.
 
 ## Restore the hypervisor (bring WSL and Memory Integrity back)
