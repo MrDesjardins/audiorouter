@@ -400,8 +400,7 @@ queued for the whole window. Order:
   `audiorouter-windows-audio` with unit tests (steady, single silence
   insert, burst, jitter, never more than one drop per window), used by the
   tool relay;
-- (b) the driver render queue, applied the same way, plus a queue-depth
-  or recovery count in the diagnostic timing records, after WP-04 review;
+- (b) ~~the driver render queue~~: dropped, see the correction below;
 - (c) one traced guest block on a new bundle to confirm every step returns
   to the starting level, with drops counted.
 WP-09's product route reuses (a).
@@ -416,7 +415,30 @@ jitter sheds none; at most one drop per window; a producer three blocks
 ahead is brought back in three windows. Relay test: the standing block is
 shed and the depth returns to zero. Host: `cargo test -p
 audiorouter-windows-audio` (lib 132 passed, 3 ignored; tool 24 passed),
-fmt check and workspace Clippy clean. Next: (b) driver render queue.
+fmt check and workspace Clippy clean.
+
+**Correction (2026-10-11): start 4 is a clock-dating artefact; (b)
+dropped.** The probe's `submit` rows give the moment each impulse was
+handed to Windows. Write → arrival (what a user hears from the app's
+write) at the three steps: start 4 84.33 → 84.18 ms (−0.15, no real
+change); start 6 74.97 → 84.87 (+9.89); start 10 75.48 → 85.32 (+9.84).
+At start 4's step the render clock position jumped about 480 frames ahead
+of the written frames (written-ahead-of-device 2,112 → 1,614–1,673 frames,
+padding unchanged at 576). Windows counted one glitch block in the
+stream position after the late write, so clock-dated latency rose while the
+audio did not move. The driver render queue cannot hold a standing block
+anyway: the reader acknowledges within 1–2 ms and the next 1 ms tick
+publishes the queued block. The only real standing delay measured is the
+relay's (a). r11's "+30 ms after one late `SetWritePacket`" was clock-dated
+too and is likely the same artefact. `review-latency-stages.py` now
+prints write → arrival.
+
+Next (c): rebuild the unchanged r20 driver from this commit (bundle
+packaging requires one source commit), prepare bundle r21 with the
+trimming tool, and have the user run the same traced block. Pass: every
+real step (write → arrival) returns to its starting level within about
+one window, with `trimmed=` equal to the extra silence inserts, 0
+corrupted, and no step in write → arrival without a matching trim.
 
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease

@@ -12,6 +12,11 @@ Stages per impulse k (QPC, 100 ns):
   route_out  first `capture` route observation containing it (sink
              publication to Cable B)
   arrival    probe capture arrival
+  write      QPC after the probe submission containing frame k * interval
+             (`submit` rows, present with -TraceRoute)
+write -> arrival is the delay a user hears from the moment the application
+hands audio to Windows. A render-clock jump (Windows counting a glitch block
+in the stream position) moves the clock-dated stages but not this one.
 Route observations are worker observation times, not DMA presentation
 times; a stage step of one block is still visible in their difference.
 """
@@ -58,7 +63,7 @@ def index_by_code(rows, emission, period):
 
 
 def review(run, name):
-    clock, arrivals = [], []
+    clock, arrivals, submits = [], [], []
     for row in csv.reader((run / f"{name}-raw.csv").open()):
         if row[0] == "meta":
             rate, interval, emitted, period, anchor = float(row[1]), int(row[2]), int(row[3]), float(row[4]), float(row[5])
@@ -66,6 +71,8 @@ def review(run, name):
             clock.append((float(row[1]), float(row[2])))
         elif row[0] == "arrival":
             arrivals.append((float(row[1]), float(row[2])))
+        elif row[0] == "submit":
+            submits.append([float(x) for x in row[1:]])
     emission = render_emission(clock, rate, interval, emitted, anchor, period)
     lines = (run / f"{name}-cable-a.route.csv").read_text().splitlines()
     route = list(csv.DictReader(lines[1:]))
@@ -78,7 +85,17 @@ def review(run, name):
     arr = index_by_code(arrivals, emission, period)
     ks = sorted(k for k in arr if k in rin and k in rout)
     ms = lambda v: v / 1e4
-    series = [(k, ms(rin[k] - emission[k]), ms(rout[k] - rin[k]), ms(arr[k] - rout[k]), ms(arr[k] - emission[k])) for k in ks]
+    starts = [s[0] for s in submits]
+
+    def write_qpc(k):
+        i = bisect.bisect_right(starts, k * interval) - 1
+        if i < 0 or k * interval >= submits[i][0] + submits[i][1]:
+            return None
+        return submits[i][6]  # QPC sample taken after the submission
+
+    writes = {k: write_qpc(k) for k in ks}
+    series = [(k, ms(rin[k] - emission[k]), ms(rout[k] - rin[k]), ms(arr[k] - rout[k]), ms(arr[k] - emission[k]),
+               ms(arr[k] - writes[k]) if writes[k] is not None else float("nan")) for k in ks]
     print(f"{name}: {len(ks)} impulses seen at all stages of {emitted}; {lines[0]}")
     # Sustained total-latency steps (> 4 ms over 50 impulses either side).
     total = [s[4] for s in series]
@@ -102,7 +119,8 @@ def review(run, name):
         q = emission[k]
         d = [x for x in depth if abs(x[0] - q) < 5e6]
         print(f"  step at impulse {k} (t={ms(q - emission[0]) / 1000:.2f} s):")
-        for col, label in ((1, "emission->route_in"), (2, "route_in->route_out"), (3, "route_out->arrival"), (4, "total")):
+        for col, label in ((1, "emission->route_in"), (2, "route_in->route_out"), (3, "route_out->arrival"), (4, "total"),
+                           (5, "write->arrival")):
             print(f"    {label:22s} {med(a, j, col):7.2f} -> {med(j, b, col):7.2f}  ({med(j, b, col) - med(a, j, col):+.2f})")
         if d:
             print(f"    relay depth {min(x[1] for x in d)}..{max(x[1] for x in d)}, silence {d[0][2]}->{d[-1][2]}, dropped {d[0][3]}->{d[-1][3]} within ±0.5 s")
