@@ -1499,6 +1499,21 @@ it in practice, but in Rust's model it is a data race. Rechecks: control
 239 passed, 9 ignored; windows-audio lib 136 passed, 3 ignored; worker
 tests 10/10 repeats; workspace and `src-tauri` Clippy and fmt clean.
 
+Slice 3 committed `b8d51a2f`. r22 bundle for slice 4: source `b8d51a2f`,
+`target/r22-driver-b8d51a2f` (0.1.4.0 test-signed with timing diagnostics,
+driver source unchanged since r20 so the guest does not reinstall; 33
+package checks pass). SYS SHA-256
+`6C7AEF68459B69A4B236335E7DACEAFD30D3A45B7EEE7E8FCE2FD1DE73F52182`. Bundle
+`C:\VMsr-share\diagnostics-20261011-product-route-r22`, MANIFEST SHA-256
+`FA1162EDC4C599F46EB05225779564B1197C4ABDA0CC4B8E0FAF08694D34AB70`, 42/42
+entries verified, includes `tools\m03_cable_session.exe`. Guest command:
+`run-cable-latency-starts.ps1 -Route product -Starts 5 -Impulses 1000`
+(both period modes). Pass: every start reaches `cable route running`, 0
+corrupted, latency and losses in the engine route's range (r21 default
+median steady 36.2 ms), counters in `final cableRoute`, and a clean
+stop. Still open after it: the A7 kill test, the 10-minute 997/47 Hz
+continuity test, 8 channels (engine width) and multi-cable layouts.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
