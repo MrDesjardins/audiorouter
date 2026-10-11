@@ -1,5 +1,42 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.15 — 2026-10-10 (in progress)
+
+User-requested release. Version bump and notes are committed as
+`aeba0f95` (`Release 0.0.15`); local annotated tag `v0.0.15` points there.
+The preceding documentation-anchor repair is `a6dc4697`. Do not push or
+publish without asking the user.
+
+Checks: the user's handoff reports shell tests, contract drift/typecheck,
+504 UI tests, UI format and lint passing. The previously saved workspace log
+had no completion summary. A complete rerun stopped at
+`crates/cli/tests/mcp_stdio.rs`: 1 passed and 2 failed. The bounded-backend
+case reported `Windows("Access is denied. (0x80070005)")`; its dependent MCP
+proxy case returned `null` instead of `false`. A direct retry reproduced
+both failures. Cargo could not replace `target/debug/audiorouter-cli.exe`
+(`Access is denied`), preventing a Cargo retry. The isolated-target retry
+could not build `lzma-sys`, so it provided no test evidence.
+
+`node tools/docs/validate.mjs` initially found two stale explicit anchors in
+the cable evidence; commit `a6dc4697` added those IDs and validation now passes
+(146 Markdown files, 823 links). The three release-tool self-tests pass.
+Artifact preparation built CLI and plugin worker, rebuilt `ui/dist`, then
+failed at the custom-protocol shell because
+`src-tauri/target/release/audiorouter-shell.exe` is held open by another
+process. No AudioRouter process was stopped. The fresh-install gate and
+artifact verification have not run; no release artifact directory was
+produced. No host driver or setting was changed.
+
+**Next:** user closes AudioRouter (if it is theirs), then rerun
+`tools/release/prepare-artifacts.ps1 -OutputDirectory target/releases/v0.0.15
+-ReleaseTag v0.0.15`, verify the installer embeds the rebuilt UI and uses
+custom-protocol, run `verify-artifacts.ps1`, resolve/re-run the Windows
+workspace test gate, then run the exact packaged fresh-install gate with no
+developer override. Record evidence before asking about push/publication.
+Task 2 (r12 continuity bundle) follows release packaging. Rollback: keep
+0.0.14 and compatible configuration/recording backups; the local release
+commit/tag can be reverted or deleted before publication.
+
 Driver-agent resumption: read the [Claude / next-agent handoff](virtual-cable-agent-handoff.md)
 first. It records the prepared candidate, exact next guest step, completed
 checks, open defects and host/VM safety boundaries as of 2026-10-10.
