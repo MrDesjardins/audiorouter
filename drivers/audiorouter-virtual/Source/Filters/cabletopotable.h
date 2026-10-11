@@ -29,6 +29,25 @@ static const GUID CableHRenderPinName = {0x88583ceb,0xd6b6,0x4e78,{0x86,0x72,0x5
 static const GUID CableHCapturePinCategory = {0x637b0783,0xf72a,0x48af,{0x8e,0x52,0x6b,0xd8,0xf4,0x72,0x77,0xb9}};
 // END GENERATED CABLE PIN NAME/CATEGORY GUIDS
 
+#include "cabletopo.h"
+
+// Jack description (spec 17 VCAB-11): without it Windows treats each cable as
+// stereo and offers only 1- and 2-channel formats. See cabletopo.cpp.
+static PCPROPERTY_ITEM CableRenderTopoFilterProperties[] = {
+    { &KSPROPSETID_Jack, KSPROPERTY_JACK_DESCRIPTION,
+      KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT, PropertyHandler_CableRenderTopoFilter },
+    { &KSPROPSETID_Jack, KSPROPERTY_JACK_DESCRIPTION2,
+      KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT, PropertyHandler_CableRenderTopoFilter },
+};
+DEFINE_PCAUTOMATION_TABLE_PROP(AutomationCableRenderTopoFilter, CableRenderTopoFilterProperties);
+static PCPROPERTY_ITEM CableCaptureTopoFilterProperties[] = {
+    { &KSPROPSETID_Jack, KSPROPERTY_JACK_DESCRIPTION,
+      KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT, PropertyHandler_CableCaptureTopoFilter },
+    { &KSPROPSETID_Jack, KSPROPERTY_JACK_DESCRIPTION2,
+      KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT, PropertyHandler_CableCaptureTopoFilter },
+};
+DEFINE_PCAUTOMATION_TABLE_PROP(AutomationCableCaptureTopoFilter, CableCaptureTopoFilterProperties);
+
 static KSDATARANGE CableTopologyAnalogDataRange = {
     sizeof(KSDATARANGE), 0, 0, 0,
     STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO), STATICGUIDOF(KSDATAFORMAT_SUBTYPE_ANALOG),
@@ -58,7 +77,7 @@ static PCPIN_DESCRIPTOR Cable##letter##RenderTopologyPins[] = { \
         KSPIN_DATAFLOW_OUT, KSPIN_COMMUNICATION_NONE, &KSNODETYPE_ANALOG_CONNECTOR, &Cable##letter##RenderPinName, 0 } } \
 }; \
 static PCFILTER_DESCRIPTOR Cable##letter##RenderTopologyFilterDescriptor = { \
-    0, NULL, sizeof(PCPIN_DESCRIPTOR), SIZEOF_ARRAY(Cable##letter##RenderTopologyPins), \
+    0, &AutomationCableRenderTopoFilter, sizeof(PCPIN_DESCRIPTOR), SIZEOF_ARRAY(Cable##letter##RenderTopologyPins), \
     Cable##letter##RenderTopologyPins, sizeof(PCNODE_DESCRIPTOR), 0, NULL, \
     SIZEOF_ARRAY(CableRenderTopologyConnections), CableRenderTopologyConnections, 0, NULL \
 }; \
@@ -71,7 +90,7 @@ static PCPIN_DESCRIPTOR Cable##letter##CaptureTopologyPins[] = { \
         KSPIN_DATAFLOW_OUT, KSPIN_COMMUNICATION_NONE, &KSCATEGORY_AUDIO, NULL, 0 } } \
 }; \
 static PCFILTER_DESCRIPTOR Cable##letter##CaptureTopologyFilterDescriptor = { \
-    0, NULL, sizeof(PCPIN_DESCRIPTOR), SIZEOF_ARRAY(Cable##letter##CaptureTopologyPins), \
+    0, &AutomationCableCaptureTopoFilter, sizeof(PCPIN_DESCRIPTOR), SIZEOF_ARRAY(Cable##letter##CaptureTopologyPins), \
     Cable##letter##CaptureTopologyPins, sizeof(PCNODE_DESCRIPTOR), 0, NULL, \
     SIZEOF_ARRAY(CableCaptureTopologyConnections), CableCaptureTopologyConnections, 0, NULL \
 };

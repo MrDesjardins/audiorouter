@@ -1796,6 +1796,33 @@ the jack's channel mapping as the default speaker setup, which would
 upmix every stereo app; the default must remain stereo. Then a WP-04
 review, install, restart, and this check.
 
+**Decision (user, 2026-10-11): fix the driver now.** Repair r28 (driver
+0.1.5): `Source/Filters/cabletopo.cpp/.h` add `KSPROPSETID_Jack`
+`KSPROPERTY_JACK_DESCRIPTION` and `_DESCRIPTION2` (GET, BASICSUPPORT) on
+every cable topology filter (automation tables in `cabletopotable.h`;
+`Filters.vcxproj` compiles the file). One `KSJACK_DESCRIPTION` with
+`ChannelMapping = KSAUDIO_SPEAKER_7POINT1_SURROUND` (0x63F) on the bridge
+pin: render topology pin 1, capture topology pin 0. They reuse
+`CMiniportTopology::PropertyHandlerJackDescription(2)`. The default format
+stays the wave pin's 48 kHz float stereo mode entry. Host: normal and
+diagnostic `build.ps1 -Version 0.1.5` pass with 0 warnings
+(`target/r28-build-*.log`, `cabletopo.cpp` compiled); driver unit tests
+88,167 checks pass. Independent review (fresh-context agent, read-only): no
+blocking defect. It confirmed the pin indices against `endpoints.h` and the
+SYSVAD speaker and mic tables, the `CMiniportTopology` cast,
+PAGE/PASSIVE_LEVEL, the struct layout and enums, and no new enumeration
+bugcheck path. Open question for the VM (review confidence medium-low):
+whether Windows makes 7.1 the cable's default speaker configuration or
+device format, which would upmix stereo apps. Required: the default stays
+stereo. Non-blocking notes kept: the capture jack mask is probably
+cosmetic; `cabletopo.h` relies on portcls types from its include site.
+VM steps: install 0.1.5 (upgrade, restart). Check that Windows offers
+4/6/8 channels (Configure, Advanced) while the default stays 2-channel
+48 kHz, and that the probe's mix format is stereo. Then set 8 channels,
+run `run-cable-bitexact.ps1 -Channels 8`, and restore stereo. Rollback:
+remove and reinstall 0.1.4 from the r27 bundle (`-Step remove`, then
+`-Step install`).
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
