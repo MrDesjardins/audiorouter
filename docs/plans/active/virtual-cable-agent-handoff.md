@@ -20,14 +20,21 @@ This section supersedes sections 4–9 below, which describe the earlier
   Defender/Windows Update bursts (2026-10-10 trace). VirtualBox runs through
   NEM because WSL keeps the hypervisor on. Tools: `m03-scheduler-trace
   --silences`, `run-direct-audio.ps1 -Seconds 300 -TraceScheduling`.
-- **User decisions pending:** quiet the guest (pause Windows Update,
-  Defender exclusion) and/or a reversible
+- **User decision pending:** a bare-metal or native-VT-x test PC for VCAB-24
+  (the guest quieting was applied; the
   [native VT-x session](../../operations/virtual-cable-native-vtx-session.md)
-  or a bare-metal test PC for VCAB-24. Never change host settings yourself.
-- **Prepared, not yet run:** [cable latency diagnostic](../../operations/virtual-cable-latency.md)
-  (`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r6`, VCAB-25 proxy).
-  Next guest action when the user returns: that one command on the installed
-  driver, then review `latency-<run>.zip`.
+  was tried and restored). Never change host settings yourself.
+- **Cable latency diagnostic run (r6, 2026-10-10):** through the proxy relay,
+  bit-exact (VCAB-20) and isolation with Cable B active (VCAB-26) pass;
+  default-mode latency is deterministic per run but its offset changed
+  between runs (56.94 ms r5, 33.39 ms r6); low-latency periods fail under
+  NEM ([evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#second-vm-run-bundle-r6--2026-10-10-nem-vm-guest-quieted)).
+  The guest is still quieted (`quiet-guest.ps1 -Revert` undoes it).
+- **Native VT-x on this PC: not practical** (VBS kept by Windows Hello
+  Enhanced Sign-in Security); host fully restored and verified. VCAB-24 and
+  VCAB-25 need a separate bare-metal or native-VT-x test PC (user decision).
+  Host-only next work: product-engine route checks and a repeated-start
+  latency mode.
 - The user prefers host-side verification first and one combined, fail-fast
   guest block per step.
 

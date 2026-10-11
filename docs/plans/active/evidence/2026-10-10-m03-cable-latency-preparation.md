@@ -144,3 +144,42 @@ audio. Acceptance 192 checks (new `idle-b` case: silence with an idle Cable B
 is inconclusive). Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r6`,
 source `ac20975e`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest
 SHA-256 `2311F75CC61D5CEB4BD1C8B0EF1C329F35E9582DE1386DCA910B4DF6C43B0AD4`.
+
+## Second VM run (bundle r6) — 2026-10-10, NEM VM, guest quieted
+
+Run `latency-6ec5fe40a5294257a05f38a997009610`, archive
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r6\latency-6ec5fe40a5294257a05f38a997009610.zip`,
+SHA-256 `5121B6C2BD9EF235BB477D7E2CDA139D51DC28E9D700817C153DA278EE7376C3`
+(verified on the host), extracted to `target/latency-6ec5fe40`. Driver
+`0.1.0.0` installed (helper protocol 1.1), source `ac20975e`, VirtualBox under
+NEM, guest still quieted from the r5 run. Runner verdict `Passed=True`
+(the diagnostic completed); `Qualification=False` (proxy scope).
+
+| Check | Result |
+| --- | --- |
+| Bit-exact (VCAB-20 proxy, 480 frames) | **Pass**: 480,000 frames compared, 0 mismatched samples, silence exact; relay forwarded 1,200, silence 19, dropped 0 |
+| Isolation (VCAB-26 proxy) | **Pass**: Cable A Output exact silence (0 nonzero samples, peak −1000 dBFS sentinel) on both paths while Cable B Output carried audio (A Input→A Output path: 239,999 of 240,000 drained frames active; B Input→A Output path: 240,480 of 240,480) |
+| Latency, 480-frame relay, default periods | p1 33.387, p50 33.389, p95 33.390, p99 33.390 ms, jitter 0.002 ms; 1,000/1,000 matched, 0 lost, 0 corrupted; packet writes 1,102 accepted, 0 late, 0 overrun; meets the default target (p95 ≤ 40 ms, jitter ≤ 2 ms) in this run |
+| Latency, 128-frame relay, low-latency periods | p50 107.3, p95 150.6 ms, jitter 157.3 ms; 898 matched, 102 lost, 0 corrupted; 28,776 capture frames dropped; packet writes 3,857 accepted, 159 late, 46 overrun; render underrun 18,144; target missed |
+
+Reading:
+
+- The data path is correct through the proxy route: bit-exact and isolated,
+  with no corrupted or duplicated impulse in either latency run.
+- Default mode was again deterministic (0.002 ms spread), but its steady
+  offset moved from 56.94 ms (r5) to 33.39 ms (r6) with the same 1,056-frame
+  client buffers. The 23.55 ms difference (≈1,130 frames, about one client
+  buffer) is a startup phase: how much each queue holds when the streams
+  start, which then stays fixed for the run. One run is therefore not a
+  latency figure; VCAB-25 needs repeated starts and a p95 across them.
+- Low-latency periods (128 frames, 2.67 ms) still do not hold under NEM
+  timing (late/overrun packet writes, capture drops), matching the traced
+  timer delays. No driver conclusion follows from this VM.
+- Not product evidence: proxy relay instead of the AudioRouter engine, no
+  VB-Cable comparison, NEM VM timing.
+
+Remaining for VCAB-20/25/26: the same checks through the product engine
+route; repeated-start latency and the VB-Cable comparison on a native VT-x or
+bare-metal Windows test PC (this PC cannot run native VT-x; see
+[native VT-x session](../../../operations/virtual-cable-native-vtx-session.md)).
+The guest stays quieted until `quiet-guest.ps1 -Revert` is run in the VM.

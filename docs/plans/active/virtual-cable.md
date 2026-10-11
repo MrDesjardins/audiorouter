@@ -133,10 +133,14 @@ VM cannot qualify VCAB-24. A reversible, user-run [native VT-x session](../../op
 documents turning the hypervisor off for one boot and restoring WSL/Memory
 Integrity. VCAB-25 preparation is built and host-verified: pass-through relay,
 identity-coded impulse probe and [latency runbook](../../operations/virtual-cable-latency.md)
-([evidence](evidence/2026-10-10-m03-cable-latency-preparation.md)). Next:
-when the user is back, the latency run on the installed driver; then the
-user's decision on quieting the guest and on a native VT-x or bare-metal
-session for sustained runs.
+([evidence](evidence/2026-10-10-m03-cable-latency-preparation.md)). VM r6
+(guest quieted): proxy bit-exact and isolation (Cable B active) pass;
+default latency 33.39 ms p95 with 0.002 ms jitter but 56.94 ms in r5 (startup
+phase varies per run); low-latency periods fail under NEM. Native VT-x proved
+impractical on this PC (VBS kept by Windows Hello ESS); host restored and
+verified. Next: VCAB-24/25 on a separate bare-metal or native-VT-x test PC
+(user decision); meanwhile host-side product-engine route checks and a
+repeated-start latency mode.
 Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
