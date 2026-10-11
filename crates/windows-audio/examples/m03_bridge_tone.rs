@@ -17,7 +17,7 @@ use std::io::{Seek, SeekFrom, Write};
 
 const USAGE: &str = "usage: m03_bridge_tone [--seconds N] [--rate 44100|48000|96000] \
 [--channels 1-8] [--frames N] [--capture-bus cable-b] [--render-bus cable-a] \
-[--out PATH.wav] [--wav64] [--stall-ms N] [--passthrough] [--device PATH]";
+[--out PATH.wav] [--wav64] [--stall-ms N] [--passthrough] [--engine] [--device PATH]";
 
 #[derive(Clone, Debug, PartialEq)]
 struct Options {
@@ -34,6 +34,9 @@ struct Options {
     /// Republish render-source blocks into the capture sink instead of the
     /// tone (an AudioRouter cable-route proxy for latency measurement).
     passthrough: bool,
+    /// Pass-through that runs the AudioRouter engine on a compiled cable-only
+    /// session between the cables (implies `passthrough`; 1–2 channels).
+    engine: bool,
 }
 
 impl Default for Options {
@@ -50,6 +53,7 @@ impl Default for Options {
             wav64: false,
             stall_ms: 0,
             passthrough: false,
+            engine: false,
         }
     }
 }
@@ -80,6 +84,10 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
             "--wav64" => options.wav64 = true,
             "--stall-ms" => options.stall_ms = number(&value()?, 0, 60_000)?,
             "--passthrough" => options.passthrough = true,
+            "--engine" => {
+                options.engine = true;
+                options.passthrough = true;
+            }
             "--help" | "-h" => return Err(USAGE.to_owned()),
             other => return Err(format!("unknown option {other}\n{USAGE}")),
         }
@@ -88,6 +96,12 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
         // One cable can carry both directions, but separate cables are what
         // the crosstalk check needs; allow it only explicitly via distinct IDs.
         return Err("use different cables for --capture-bus and --render-bus".to_owned());
+    }
+    if options.engine && usize::from(options.channels) > audiorouter_engine::MAX_CHANNELS {
+        return Err(format!(
+            "--engine supports at most {} channels (the engine's processing width)",
+            audiorouter_engine::MAX_CHANNELS
+        ));
     }
     Ok(options)
 }
@@ -369,6 +383,29 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 format!("cannot create {}: {error}", options.out.display()),
             )
         })?;
+    let mut engine = if options.engine {
+        let session = audiorouter_windows_audio::cable_route_session(
+            &options.render_bus,
+            &options.capture_bus,
+            options.channels as u8,
+        );
+        let graph = audiorouter_engine::compile_session_at_sample_rate(
+            &session,
+            audiorouter_engine::RuntimeGeneration::new(1),
+            options.rate,
+        )
+        .map_err(|error| (1, format!("engine route compile: {error:?}")))?;
+        Some(
+            audiorouter_windows_audio::CableRouteProcessor::new(
+                usize::from(options.channels),
+                usize::from(options.frames),
+                graph,
+            )
+            .map_err(fail)?,
+        )
+    } else {
+        None
+    };
     let state = workers::Shared::new(samples, 64);
     let _timer = TimerResolution::acquire()?;
     println!("isolated capture/render workers; 64 preallocated recording blocks; {} seconds; intentional stall {} ms", options.seconds, options.stall_ms);
@@ -378,6 +415,14 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             options.render_bus,
             options.capture_bus,
             workers::RELAY_BLOCKS
+        );
+    }
+    if options.engine {
+        println!(
+            "engine route: {} -> AudioRouter engine (compiled cable-only session, {}-frame quanta) -> {}",
+            options.render_bus,
+            audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
+            options.capture_bus
         );
     }
 
@@ -422,6 +467,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             .map_err(|error| (1, format!("capture worker startup: {error}")))?;
         let render_state = &state;
         let render_region = &render_view;
+        let render_engine = engine.as_mut();
         let render_worker = std::thread::Builder::new()
             .name("tone-render".to_owned())
             .spawn_scoped(scope, move || {
@@ -440,9 +486,13 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 };
                 let _ = ready_tx.send(("render", readiness));
                 let result = match setup {
-                    Ok((_scheduling_guard, _scheduling)) => {
-                        workers::render(render_region, render_state, options, generation)
-                    }
+                    Ok((_scheduling_guard, _scheduling)) => workers::render(
+                        render_region,
+                        render_state,
+                        options,
+                        generation,
+                        render_engine,
+                    ),
                     Err(error) => Err(error),
                 };
                 if result.is_err() {
@@ -681,6 +731,13 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 state.relay_dropped.load(Ordering::Acquire)
             );
         }
+        if options.engine {
+            println!(
+                "engine route quanta: processed={} silent={}",
+                state.engine_processed.load(Ordering::Acquire),
+                state.engine_silent.load(Ordering::Acquire)
+            );
+        }
         println!(
             "capture-sink blocks written: {}",
             state.capture_blocks.load(Ordering::Acquire)
@@ -798,7 +855,15 @@ mod tests {
                 .unwrap()
                 .passthrough
         );
+        let engine = parse_options(&args("--engine --frames 128")).unwrap();
+        assert!(
+            engine.engine && engine.passthrough,
+            "--engine implies pass-through"
+        );
+        assert!(!Options::default().engine);
         for bad in [
+            "--engine --channels 8",
+            "--engine --channels 3",
             "--channels 9",
             "--rate 22050",
             "--frames 4097",

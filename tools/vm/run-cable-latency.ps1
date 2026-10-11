@@ -1,9 +1,11 @@
 <# Bounded guest cable latency (VCAB-25), bit-exactness (VCAB-20) and isolation (VCAB-26) diagnostic
-   on the already installed driver. Cable A Input -> driver bridge -> pass-through
-   relay (an AudioRouter route proxy) -> Cable B Output, measured by the native
-   probe. Not product-engine latency or qualification. #>
+   on the already installed driver. Cable A Input -> driver bridge -> route -> Cable B Output,
+   measured by the native probe. -Route proxy: diagnostic pass-through relay. -Route engine:
+   the AudioRouter engine runs a compiled cable-only session between the cables (not yet the
+   backend lifecycle). Neither is qualification. #>
 [CmdletBinding()]
-param([ValidateRange(100, 3000)][int] $Impulses = 1000)
+param([ValidateRange(100, 3000)][int] $Impulses = 1000,
+    [ValidateSet('proxy', 'engine')][string] $Route = 'proxy')
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') { throw 'Run inside AR-DriverTest from the copied bundle under C:\ar.' }
@@ -31,6 +33,8 @@ $configurations = @(
     @{ Name = 'default-480'; Frames = 480; Mode = 'default'; TargetP95Ms = 40.0 },
     @{ Name = 'low-latency-128'; Frames = 128; Mode = 'low-latency'; TargetP95Ms = 20.0 }
 )
+$routeFlag = if ($Route -eq 'engine') { '--engine' } else { '--passthrough' }
+$routeLabel = if ($Route -eq 'engine') { 'engine route' } else { 'proxy route' }
 $results = @()
 $bitExact = $null
 $isolation = @()
@@ -42,7 +46,7 @@ function Get-ProbeValue([string] $Text, [string] $Name) {
     return $null
 }
 try {
-    Write-Host 'Cable latency diagnostic: Cable A Input -> pass-through -> Cable B Output, two configurations. No manual playback needed.'
+    Write-Host "Cable latency diagnostic (): Cable A Input -> route -> Cable B Output, two configurations. No manual playback needed."
     $status = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','status') `
         -Stdout (Join-Path $evidence 'status.txt') -Stderr (Join-Path $evidence 'status-stderr.txt') -TimeoutSeconds 60
     if ($status.Code -ne 0) { throw 'Installed-driver status failed. No audio test started.' }
@@ -65,7 +69,7 @@ try {
         $name = $configuration.Name
         $toneSeconds = $probeSeconds + 8
         $toneOut = Join-Path $evidence "$name-tone.txt"
-        $toneArguments = @('--passthrough','--frames',[string]$configuration.Frames,'--seconds',[string]$toneSeconds,
+        $toneArguments = @($routeFlag,'--frames',[string]$configuration.Frames,'--seconds',[string]$toneSeconds,
             '--out',(Join-Path $evidence "$name-cable-a.wav")) | ForEach-Object { ConvertTo-DriverProcessArgument $_ }
         $active = Start-Process -FilePath $tone -ArgumentList ($toneArguments -join ' ') -WindowStyle Hidden -PassThru `
             -RedirectStandardOutput $toneOut -RedirectStandardError (Join-Path $evidence "$name-tone-stderr.txt")
@@ -100,6 +104,7 @@ try {
             P95Ms = $p95; P99Ms = Get-ProbeValue $probeText 'cable_latency_p99_ms'; MaxMs = Get-ProbeValue $probeText 'cable_latency_max_ms'
             JitterMs = $jitter; Emitted = Get-ProbeValue $probeText 'cable_impulses_emitted'; Lost = $lost; Corrupted = $corrupted
             Relay = ([regex]::Match($toneText, '(?m)^pass-through relay: .*$')).Value
+            Engine = ([regex]::Match($toneText, '(?m)^engine route quanta: .*$')).Value
             Counters = @([regex]::Matches($toneText, '(?m)^(capture-sink|render-source) (counters|packet writes) \(.*$') | ForEach-Object { $_.Value.TrimEnd() })
             TargetP95Ms = $configuration.TargetP95Ms; TargetJitterMs = 2.0
             MeetsTargets = ($measured.Code -eq 0 -and $null -ne $p95 -and $p95 -le $configuration.TargetP95Ms -and
@@ -109,13 +114,14 @@ try {
         Write-Host ("{0}: p50 {1} ms, p95 {2} ms (target <= {3}), jitter p99-p1 {4} ms (target <= 2), lost {5}, corrupted {6}; probe exit {7}, pass-through exit {8}" -f `
             $name, $result.P50Ms, $p95, $configuration.TargetP95Ms, $jitter, $lost, $corrupted, $measured.Code, $toneCode)
         if ($result.Relay) { Write-Host "  $($result.Relay)" }
+        if ($result.Engine) { Write-Host "  $($result.Engine)" }
         $result.Counters | ForEach-Object { Write-Host "  $_" }
     }
     # Bit-exactness through the same 480-frame pass-through: 10 s of seeded
     # noise then 0.5 s of silence; every sample must match, silence must be +0.0.
     $name = 'bitexact-480'
     $toneOut = Join-Path $evidence "$name-tone.txt"
-    $toneArguments = @('--passthrough','--frames','480','--seconds','20','--out',(Join-Path $evidence "$name-cable-a.wav")) |
+    $toneArguments = @($routeFlag,'--frames','480','--seconds','20','--out',(Join-Path $evidence "$name-cable-a.wav")) |
         ForEach-Object { ConvertTo-DriverProcessArgument $_ }
     $active = Start-Process -FilePath $tone -ArgumentList ($toneArguments -join ' ') -WindowStyle Hidden -PassThru `
         -RedirectStandardOutput $toneOut -RedirectStandardError (Join-Path $evidence "$name-tone-stderr.txt")
@@ -142,6 +148,7 @@ try {
         MismatchedSamples = Get-ProbeValue $probeText 'bitexact_mismatched_samples'; MaxAbsDiff = Get-ProbeValue $probeText 'bitexact_max_abs_diff'
         SilenceNonzero = Get-ProbeValue $probeText 'bitexact_silence_nonzero_samples'
         Relay = ([regex]::Match((Get-Content -LiteralPath $toneOut -Raw), '(?m)^pass-through relay: .*$')).Value
+        Engine = ([regex]::Match((Get-Content -LiteralPath $toneOut -Raw), '(?m)^engine route quanta: .*$')).Value
     }
     Write-Host ("{0}: {1}; compared {2} frames, mismatched samples {3}, max diff {4}, non-zero silence samples {5}; probe exit {6}, pass-through exit {7}" -f `
         $name, $(if ($bitExact.Passed) { 'bit-exact' } else { 'NOT bit-exact' }), $bitExact.ComparedFrames, $bitExact.MismatchedSamples,
@@ -197,8 +204,9 @@ try {
         } finally { $active.Dispose() }
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Passed = (-not [bool]$failure); Error = [string]$failure
-        Results = $results; BitExact = $bitExact; Isolation = $isolation; Qualification = $false
-        Scope = 'Cable A -> driver bridge -> diagnostic pass-through relay -> Cable B; AudioRouter route proxy, not product-engine latency or VB-Cable comparison' }
+        Route = $Route; Results = $results; BitExact = $bitExact; Isolation = $isolation; Qualification = $false
+        Scope = $(if ($Route -eq 'engine') { 'Cable A -> driver bridge -> AudioRouter engine (compiled cable-only session, 128-frame quanta) -> Cable B; not the backend lifecycle or a VB-Cable comparison' }
+            else { 'Cable A -> driver bridge -> diagnostic pass-through relay -> Cable B; AudioRouter route proxy, not product-engine latency or VB-Cable comparison' }) }
     $zip = Join-Path $bundle "$run.zip"
     Compress-Archive -LiteralPath $evidence -DestinationPath $zip
     Copy-Item -LiteralPath $zip -Destination $peer
@@ -209,10 +217,10 @@ if ($failure) { throw $failure }
 if (@($results | Where-Object { -not $_.MeetsTargets }).Count -gt 0) {
     Write-Host 'Latency measured; at least one configuration misses a VCAB-25 target (see above).'
 } else {
-    Write-Host 'Latency measured; both configurations meet the VCAB-25 p95/jitter targets for this proxy route.'
+    Write-Host "Latency measured; both configurations meet the VCAB-25 p95/jitter targets for this $routeLabel."
 }
-if ($bitExact.Passed) { Write-Host 'Bit-exact through the proxy route (VCAB-20 check at the endpoint format).' }
-else { Write-Host 'NOT bit-exact through the proxy route (see above).' }
+if ($bitExact.Passed) { Write-Host "Bit-exact through the $routeLabel (VCAB-20 check at the endpoint format)." }
+else { Write-Host "NOT bit-exact through the $routeLabel (see above)." }
 if (@($isolation | Where-Object { -not $_.Passed }).Count -eq 0 -and $isolation.Count -eq 2) { Write-Host 'Cable A Output stayed exact silence (VCAB-26 isolation check).' }
 else { Write-Host 'Isolation check failed (see above).' }
 Write-Host 'Send the output.'

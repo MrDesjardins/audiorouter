@@ -1,8 +1,8 @@
 //! Mapped audio workers. Control and disk work never run in these loops.
 use super::{fill_tone_block, Options};
 use audiorouter_windows_audio::{
-    AudioServiceThreadCapabilities, AudioServiceThreadGuard, NativeBridgeRegion,
-    NativeBridgeRegionError,
+    AudioServiceThreadCapabilities, AudioServiceThreadGuard, CableRouteProcessor,
+    NativeBridgeRegion, NativeBridgeRegionError,
 };
 use crossbeam_queue::ArrayQueue;
 use std::sync::{
@@ -53,6 +53,10 @@ pub(super) struct Shared {
     pub relay_forwarded: AtomicU64,
     pub relay_silence: AtomicU64,
     pub relay_dropped: AtomicU64,
+    // `--engine`: quanta the engine processed, and quanta it replaced with
+    // silence (no output); published by the render worker.
+    pub engine_processed: AtomicU64,
+    pub engine_silent: AtomicU64,
 }
 
 /// Relay depth: enough to absorb one late capture poll, small enough to keep
@@ -85,6 +89,8 @@ impl Shared {
             relay_forwarded: AtomicU64::new(0),
             relay_silence: AtomicU64::new(0),
             relay_dropped: AtomicU64::new(0),
+            engine_processed: AtomicU64::new(0),
+            engine_silent: AtomicU64::new(0),
         });
         for _ in 0..RELAY_BLOCKS {
             assert!(state.relay_free.push(vec![0.0; samples]).is_ok());
@@ -302,6 +308,7 @@ pub(super) fn render(
     state: &Shared,
     options: &Options,
     generation: u64,
+    mut engine: Option<&mut CableRouteProcessor>,
 ) -> Result<(), String> {
     let mut packet = state
         .free
@@ -342,8 +349,22 @@ pub(super) fn render(
                 }
                 sequence = header.sequence;
                 packet.count = usize::from(header.frames) * usize::from(header.channels);
-                if options.passthrough {
-                    relay_forward(state, &packet.samples[..packet.count]);
+                match engine.as_deref_mut() {
+                    Some(route) => {
+                        route.push_block(&packet.samples[..packet.count], |block| {
+                            relay_forward(state, block)
+                        });
+                        state
+                            .engine_processed
+                            .store(route.processed_quanta(), Ordering::Release);
+                        state
+                            .engine_silent
+                            .store(route.silent_quanta(), Ordering::Release);
+                    }
+                    None if options.passthrough => {
+                        relay_forward(state, &packet.samples[..packet.count]);
+                    }
+                    None => {}
                 }
                 state
                     .recorded
@@ -468,7 +489,7 @@ mod tests {
             let _stop = Stop(&state);
             let capture = scope.spawn(|| capture(&capture_view, &state, &options, 1, &mut tone));
             let render = scope.spawn(|| {
-                let result = render(&render_view, &state, &options, 1);
+                let result = render(&render_view, &state, &options, 1, None);
                 state.renderer_done.store(true, Ordering::Release);
                 result
             });
@@ -602,7 +623,7 @@ mod tests {
             let _stop = Stop(&state);
             let capture = scope.spawn(|| capture(&capture_view, &state, &options, 1, &mut block));
             let render = scope.spawn(|| {
-                let result = render(&render_view, &state, &options, 1);
+                let result = render(&render_view, &state, &options, 1, None);
                 state.renderer_done.store(true, Ordering::Release);
                 result
             });
@@ -654,6 +675,91 @@ mod tests {
     }
 
     #[test]
+    fn engine_route_republishes_a_continuous_unchanged_stream() {
+        let capture_map = Mapping::new();
+        let render_map = Mapping::new();
+        let capture_view = capture_map.view();
+        let render_view = render_map.view();
+        let mut block = vec![0.0; 960];
+        capture_map
+            .region
+            .as_ref()
+            .unwrap()
+            .write_f64(1, 1, &block)
+            .unwrap();
+        let state = Shared::new(960, 64);
+        let options = Options {
+            passthrough: true,
+            engine: true,
+            ..Options::default()
+        };
+        let graph = audiorouter_engine::compile_session_at_sample_rate(
+            &audiorouter_windows_audio::cable_route_session("cable-a", "cable-b", 2),
+            audiorouter_engine::RuntimeGeneration::new(1),
+            48_000,
+        )
+        .unwrap();
+        let mut route = CableRouteProcessor::new(2, 480, graph).unwrap();
+        // Exact float32 ramp across block boundaries: re-blocking must keep
+        // every sample, in order, unchanged.
+        let step = 1.0 / f64::from(1u32 << 23);
+        let mut received = Vec::new();
+        std::thread::scope(|scope| {
+            let _stop = Stop(&state);
+            let capture = scope.spawn(|| capture(&capture_view, &state, &options, 1, &mut block));
+            let render = scope.spawn(|| {
+                let result = render(&render_view, &state, &options, 1, Some(&mut route));
+                state.renderer_done.store(true, Ordering::Release);
+                result
+            });
+            let disk = scope.spawn(|| record(&state, |_| Ok(())));
+            state.start.set(Instant::now()).unwrap();
+            let mut got = vec![0.0; 960];
+            let mut capture_sequence = 0;
+            for sequence in 1..=40u64 {
+                let first = (sequence - 1) as f64 * 960.0;
+                let samples: Vec<f64> = (0..960)
+                    .map(|index| (first + index as f64 + 1.0) * step)
+                    .collect();
+                render_map
+                    .region
+                    .as_ref()
+                    .unwrap()
+                    .write_f64(1, sequence, &samples)
+                    .unwrap();
+                until(|| render_map.region.as_ref().unwrap().consumer_sequence() == sequence);
+                until(|| {
+                    capture_map
+                        .region
+                        .as_ref()
+                        .unwrap()
+                        .read_into_f64_after(1, capture_sequence, &mut got)
+                        .map(|header| capture_sequence = header.sequence)
+                        .is_ok()
+                });
+                // Whole silent blocks are relay gaps while the engine fills.
+                if got.iter().any(|sample| *sample != 0.0) {
+                    received.extend_from_slice(&got);
+                }
+            }
+            state.stop.store(true, Ordering::Release);
+            capture.join().unwrap().unwrap();
+            render.join().unwrap().unwrap();
+            disk.join().unwrap().unwrap();
+        });
+        assert!(received.len() >= 30 * 960, "{} samples", received.len());
+        for (index, sample) in received.iter().enumerate() {
+            assert_eq!(*sample, (index as f64 + 1.0) * step, "sample {index}");
+        }
+        assert_eq!(state.relay_dropped.load(Ordering::Relaxed), 0);
+        assert_eq!(state.engine_silent.load(Ordering::Relaxed), 0);
+        assert_eq!(
+            state.engine_processed.load(Ordering::Relaxed),
+            40 * 480 / 128
+        );
+    }
+
+    #[test]
     fn recording_backpressure_is_an_explicit_worker_error() {
         let mapping = Mapping::new();
         let view = mapping.view();
@@ -661,7 +767,7 @@ mod tests {
         let options = Options::default();
         std::thread::scope(|scope| {
             let _stop = Stop(&state);
-            let worker = scope.spawn(|| render(&view, &state, &options, 1));
+            let worker = scope.spawn(|| render(&view, &state, &options, 1, None));
             state.start.set(Instant::now()).unwrap();
             for sequence in 1..=2 {
                 mapping
@@ -787,7 +893,7 @@ mod tests {
         let options = Options::default();
         std::thread::scope(|scope| {
             let _stop = Stop(&state);
-            let worker = scope.spawn(|| render(&view, &state, &options, 1));
+            let worker = scope.spawn(|| render(&view, &state, &options, 1, None));
             state.start.set(Instant::now()).unwrap();
             mapping
                 .region
@@ -820,7 +926,7 @@ mod tests {
         let options = Options::default();
         std::thread::scope(|scope| {
             let _stop = Stop(&state);
-            let worker = scope.spawn(|| render(&view, &state, &options, 1));
+            let worker = scope.spawn(|| render(&view, &state, &options, 1, None));
             state.start.set(Instant::now()).unwrap();
             until(|| state.render_armed.load(Ordering::Acquire));
             assert_eq!(state.render_blocks.load(Ordering::Acquire), 0);
@@ -858,7 +964,7 @@ mod tests {
             .write_f64(2, 1, &[0.25; 960])
             .unwrap();
         state.start.set(Instant::now()).unwrap();
-        assert!(render(&view, &state, &Options::default(), 1)
+        assert!(render(&view, &state, &Options::default(), 1, None)
             .unwrap_err()
             .contains("StaleGeneration"));
         assert_eq!(state.render_blocks.load(Ordering::Acquire), 0);
@@ -878,7 +984,7 @@ mod tests {
             .unwrap();
         state.start.set(Instant::now()).unwrap();
 
-        let error = render(&view, &state, &options, 1).unwrap_err();
+        let error = render(&view, &state, &options, 1, None).unwrap_err();
 
         assert!(error.contains("previous=0"));
         assert!(error.contains("expected=1"));

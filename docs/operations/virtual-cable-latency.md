@@ -2,12 +2,22 @@
 
 Measures how long an impulse takes from **AudioRouter Cable A Input** to
 **AudioRouter Cable B Output** inside the AR-DriverTest VM, through the
-driver's bridge and a diagnostic pass-through that stands in for an
-AudioRouter cable-to-cable route. It needs the test-signed driver already
-installed in the VM (see the [direct audio runbook](virtual-cable-direct-audio.md))
+driver's bridge and a route between the cables. It needs the test-signed
+driver already installed in the VM (see the [direct audio runbook](virtual-cable-direct-audio.md))
 and asks for no manual playback.
 
-**What it is not:** it is not the product engine's latency, not the VB-Cable
+`-Route` picks what sits between the cables:
+
+- `proxy` (default): a diagnostic pass-through relay that copies blocks.
+- `engine`: the AudioRouter engine. The tool compiles a cable-only session
+  (Cable A render source → Cable B capture sink, no tools) with the engine
+  compiler and runs it on the engine's realtime scheduler, re-blocking the
+  480- or 128-frame bridge blocks into 128-frame engine quanta
+  (`CableRouteProcessor`). This is the product's audio processing, but not
+  yet its backend lifecycle (starting and stopping a session, lease
+  supervision, the app). It supports 1–2 channels, the engine's width.
+
+**What it is not:** it is not the full product's latency, not the VB-Cable
 comparison VCAB-25 also requires, and not qualification. Inside a VirtualBox VM
 that runs through the Windows Hypervisor Platform, late timer delivery adds
 delay and jitter that bare metal does not have
@@ -17,10 +27,13 @@ so treat the numbers as an upper bound until measured under native VT-x
 
 ## How it works
 
-1. `m03_bridge_tone --passthrough` opens the Cable A render-source and Cable B
-   capture-sink leases and republishes every Cable A block into Cable B
-   through three preallocated relay buffers (counted: forwarded, silence
-   before audio arrives, dropped when the relay backs up).
+1. `m03_bridge_tone --passthrough` (or `--engine`) opens the Cable A
+   render-source and Cable B capture-sink leases and republishes every
+   Cable A block into Cable B through three preallocated relay buffers
+   (counted: forwarded, silence before audio arrives, dropped when the relay
+   backs up). With `--engine`, each block first passes through the engine;
+   the tool reports the quanta it processed and any it replaced with
+   silence because the engine produced no output (expected: zero).
 2. The native probe (`m00-probe.exe cable-impulse`) plays 1,000 impulses at a
    10 ms cadence into Cable A Input and records Cable B Output. Impulse *k*
    has the exact float amplitude (1 + k mod 16) / 32, so each arrival is
@@ -39,7 +52,10 @@ so treat the numbers as an upper bound until measured under native VT-x
    channel) then 0.5 s of silence; the capture is aligned on an exact
    32-frame match and every sample is compared, and the silence must be
    exact +0.0. This is VCAB-20 at the endpoints' float32 mix format through
-   the proxy route, not across the product engine or other rates/channels.
+   the chosen route, not at other rates or channel counts. The engine maps
+   −0.0 to +0.0 by design (its channel matrix sums from +0.0); the probe's
+   noise contains no −0.0, and `crates/engine/tests/cable_route.rs` pins
+   that single deviation.
 5. Isolation: the tone tool runs in its normal mode (a tone on Cable B
    Output, Cable A Input consumed). Nothing routes into Cable A Output, so
    `m00-probe.exe cable-isolation` records it for 5 s while noise plays into
@@ -91,6 +107,11 @@ missed target is a measurement, not a crash; do not rerun it unchanged.
 with fake process boundaries (pass, slow, lost impulses, status failure,
 ambiguous endpoints, early pass-through exit, probe failure, hung
 pass-through), the real static probe's `cable-impulse-selftest` and the
-host-refusal guard. `cargo test -p audiorouter-windows-audio --example
-m03_bridge_tone` covers the relay (order, counted silence, bounded drop of
-the oldest block, and an end-to-end mapped-slot pass-through).
+host-refusal guard, and the engine route's arguments and recorded scope.
+`cargo test -p audiorouter-windows-audio --example m03_bridge_tone` covers
+the relay (order, counted silence, bounded drop of the oldest block, an
+end-to-end mapped-slot pass-through) and an engine-route ramp that must
+arrive continuous and unchanged. `cargo test -p audiorouter-windows-audio
+--lib cable_route` covers re-blocking at 16–4,096 frames and fail-closed
+silence; `cargo test -p audiorouter-engine --test cable_route` covers the
+compiled session itself.

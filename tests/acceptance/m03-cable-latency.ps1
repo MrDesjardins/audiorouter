@@ -21,7 +21,9 @@ Assert (-not $errors) 'Windows PowerShell package preparer syntax'
 $helper = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-ProbeValue' }, $true)
 . ([scriptblock]::Create($helper.Extent.Text))
 $configurationAst = $ast.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$configurations' }, $true)
-$body = $ast.Find({ param($node) $node -is [Management.Automation.Language.TryStatementAst] -and $node.Extent.Text.Contains('Cable latency diagnostic:') }, $true)
+$body = $ast.Find({ param($node) $node -is [Management.Automation.Language.TryStatementAst] -and $node.Extent.Text.Contains('Cable latency diagnostic (') }, $true)
+$routeAsts = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -in @('$routeFlag','$routeLabel') }, $true))
+Assert ($routeAsts.Count -eq 2) 'route flag and label are derived from -Route'
 $execution = [scriptblock]::Create($body.Extent.Text)
 
 $renderName = 'AudioRouter Cable A Input (AudioRouter Virtual Cable)'
@@ -38,7 +40,7 @@ cable_latency_min_ms=8.000 cable_latency_p1_ms=8.500 cable_latency_p50_ms=9.000 
 "@
 }
 
-function Test-Latency([string] $Case) {
+function Test-Latency([string] $Case, [string] $Route = 'proxy') {
     $evidence = Join-Path $root $Case
     $bundle = Join-Path $evidence 'bundle'
     $peer = Join-Path $evidence 'peer'
@@ -47,6 +49,7 @@ function Test-Latency([string] $Case) {
     $Impulses = 1000
     $powershell = 'fake-powershell'; $probe = 'fake-probe'; $tone = 'fake-tone'
     . ([scriptblock]::Create($configurationAst.Extent.Text))
+    foreach ($routeAst in $routeAsts) { . ([scriptblock]::Create($routeAst.Extent.Text)) }
     $results = @(); $bitExact = $null; $isolation = @(); $failure = $null; $active = $null
     $script:started = @(); $script:probeCalls = @(); $script:killed = 0; $script:disposed = 0
     function Start-Sleep { param($Milliseconds) }
@@ -55,7 +58,7 @@ function Test-Latency([string] $Case) {
         Assert ($FilePath -eq $tone -and $WindowStyle -eq 'Hidden') 'only the owned pass-through tool is started, hidden'
         $script:started += [string]$ArgumentList
         $ready = $Case -ne 'early-exit'
-        Set-Content -LiteralPath $RedirectStandardOutput -Value $(if ($ready) { "driver: info`nrender worker polling before lease activation`ncapture-sink counters (cable-b): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source counters (cable-a): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source packet writes (cable-a): NativeBridgePacketCounters { accepted: 1200, late: 0, overrun: 0 }`npass-through relay: forwarded=1500 silence=40 dropped=0" } else { 'driver: info' })
+        Set-Content -LiteralPath $RedirectStandardOutput -Value $(if ($ready) { "driver: info`nrender worker polling before lease activation`ncapture-sink counters (cable-b): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source counters (cable-a): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source packet writes (cable-a): NativeBridgePacketCounters { accepted: 1200, late: 0, overrun: 0 }`npass-through relay: forwarded=1500 silence=40 dropped=0`nengine route quanta: processed=5600 silent=0" } else { 'driver: info' })
         Set-Content -LiteralPath $RedirectStandardError -Value ''
         $fake = [pscustomobject]@{ Handle = 1; HasExited = (-not $ready); ExitCode = $(if ($ready) { 0 } else { 3 }) }
         $fake | Add-Member ScriptMethod WaitForExit { param($Milliseconds) if ($Case -eq 'tone-hang') { return $false }; $this.HasExited = $true; return $true }
@@ -115,10 +118,12 @@ bitexact_pass=$(if ($exact) { 1 } else { 0 })")
     $saved = Read-PairedTraceJson (Join-Path $evidence 'result.json')
     Assert ($saved.Qualification -eq $false) "$Case never claims qualification"
     switch ($Case) {
-        { $_ -in 'pass','slow','lost','not-exact','leak','idle-b' } {
+        { $_ -in 'pass','slow','lost','not-exact','leak','idle-b','engine-pass' } {
             Assert (-not $failure) "$Case completes"
-            Assert ($script:started.Count -eq 4 -and $script:started[3] -notmatch '"--passthrough"' -and $script:started[0] -match '"--frames" "480"' -and $script:started[1] -match '"--frames" "128"' -and $script:started[2] -match '"--frames" "480"') 'latency at 480 and 128 frames, then bit-exactness at 480'
-            Assert (@($script:started[0..2] | Where-Object { $_ -notmatch '"--passthrough"' }).Count -eq 0) 'pass-through for latency and bit-exactness; tone mode for isolation'
+            Assert ($script:started.Count -eq 4 -and $script:started[3] -notmatch '"--(passthrough|engine)"' -and $script:started[0] -match '"--frames" "480"' -and $script:started[1] -match '"--frames" "128"' -and $script:started[2] -match '"--frames" "480"') 'latency at 480 and 128 frames, then bit-exactness at 480'
+            $routeArgument = if ($Route -eq 'engine') { '"--engine"' } else { '"--passthrough"' }
+            $otherArgument = if ($Route -eq 'engine') { '"--passthrough"' } else { '"--engine"' }
+            Assert (@($script:started[0..2] | Where-Object { $_ -notmatch $routeArgument -or $_ -match $otherArgument }).Count -eq 0) "$Route route for latency and bit-exactness; tone mode for isolation"
             $seconds = [int]([regex]::Match($script:started[0], '"--seconds" "(\d+)"').Groups[1].Value)
             Assert ($seconds -ge 18) 'pass-through outlives the probe'
             Assert (($script:probeCalls -join ',') -eq 'default,low-latency,bitexact,isolation-2,isolation-4') 'latency, bit-exact, then both isolation paths'
@@ -128,7 +133,13 @@ bitexact_pass=$(if ($exact) { 1 } else { 0 })")
             Assert ($results.Count -eq 2 -and $results[0].Relay -match 'forwarded=1500' -and @($results[0].Counters).Count -eq 3) 'relay statistics and driver counters recorded'
             Assert ($results[0].P95Ms -eq 23.5 -and $results[0].JitterMs -eq 1.4) 'probe values parsed'
         }
-        'pass' { Assert ($results[0].MeetsTargets -and $results[1].MeetsTargets -and @($isolation | Where-Object { $_.Passed }).Count -eq 2) 'targets met and both isolation paths silent' }
+        'engine-pass' {
+            Assert ($results[0].Engine -match 'processed=5600 silent=0' -and $bitExact.Engine -match 'silent=0') 'engine quanta recorded for latency and bit-exactness'
+            Assert ($saved.Route -eq 'engine' -and $saved.Scope -match 'AudioRouter engine' -and $saved.Scope -notmatch 'proxy') 'engine scope recorded, not called a proxy'
+        }
+        'pass' {
+            Assert ($saved.Route -eq 'proxy' -and $saved.Scope -match 'proxy') 'proxy scope recorded'
+            Assert ($results[0].MeetsTargets -and $results[1].MeetsTargets -and @($isolation | Where-Object { $_.Passed }).Count -eq 2) 'targets met and both isolation paths silent' }
         'idle-b' { Assert (-not $isolation[0].Passed -and -not $isolation[1].Passed -and $isolation[0].NonzeroSamples -eq 0) 'silence with an idle Cable B is inconclusive, not a pass' }
         'leak' { Assert ($isolation[0].Passed -and -not $isolation[1].Passed -and $isolation[1].NonzeroSamples -eq 7) 'a leak into Cable A Output is reported, not hidden' }
         'not-exact' { Assert (-not $bitExact.Passed -and $bitExact.MismatchedSamples -eq 12) 'a mismatch is reported, not hidden' }
@@ -143,6 +154,7 @@ bitexact_pass=$(if ($exact) { 1 } else { 0 })")
     }
 }
 foreach ($case in @('pass','slow','lost','not-exact','leak','idle-b','status-failure','duplicate','early-exit','probe-failure','tone-hang')) { Test-Latency $case }
+Test-Latency 'engine-pass' 'engine'
 
 $probeBinary = Join-Path $workspace 'target\m00-probe-cable\m00-probe.exe'
 $imports = @(Assert-PortableVmTool $probeBinary)

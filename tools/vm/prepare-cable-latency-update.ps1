@@ -1,4 +1,4 @@
-<# Host-only: build the static pass-through tone tool and impulse probe from a
+<# Host-only: build the static pass-through/engine-route tone tool and impulse probe from a
    clean commit, then copy a verified base bundle with those tools and the
    latency runner added. Never starts audio or installs/loads a driver. #>
 [CmdletBinding()]
@@ -55,7 +55,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency.ps1') -Destin
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'quiet-guest.ps1') -Destination $output
 $support = Join-Path $output 'paired-trace-support.ps1'
 if (-not (Test-Path -LiteralPath $support)) { Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'paired-trace-support.ps1') -Destination $support }
-$manifest = @('AudioRouter cable latency diagnostic (pass-through proxy); guest-only measurement', "source: $commit", "base: $base",
+$manifest = @('AudioRouter cable latency diagnostic (proxy or engine route); guest-only measurement', "source: $commit", "base: $base",
     "driver: $($driver.gitCommit) built $($driver.builtAt)", "prepared: $([DateTime]::UtcNow.ToString('u'))", '')
 foreach ($file in Get-ChildItem -LiteralPath $output -File -Recurse | Sort-Object FullName) {
     $manifest += '{0}  {1}' -f (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLower(), $file.FullName.Substring($output.Length + 1)
