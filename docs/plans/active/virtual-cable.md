@@ -1375,6 +1375,17 @@ or audio evidence.
   the host CLI status check passed while packaging), MANIFEST SHA-256
   `52BC22996D2478EB0ACDB5FD8840BE1278CF057437B3A629B322F8D7BE2327C6`,
   46/46 verified.
+- **VM acceptance passed (2026-10-11).** In a standard-user (not elevated)
+  PowerShell in the guest, `audiorouter-cli.exe --json virtual-cable status`
+  reported `state: installed`, `driverVersion: 0.1.4.0`, `protocol: 1.1`
+  (so the bridge answered QUERY), `cableCount: 2`, and `cable-a` /
+  `cable-b` each with both endpoint IDs and `present: true` (Cable A render
+  `{0.0.0.00000000}.{9381b095-7d2a-4d6a-b4d9-1e042a749638}`, capture
+  `{0.0.1.00000000}.{93873238-b62e-41fe-a11b-6b551c6ba2f8}`). The
+  `notInstalled` half of the acceptance is covered on the host, which has
+  no driver. A guest run after `-Step remove` is still open, deferred until
+  a removal is needed anyway. Next: WP-10 first slice (Setup → Virtual
+  cables panel, library availability, Pass-through template).
 
 ## WP-09 — Engine: Virtual Render Source / Virtual Capture Sink (17 §7.3)
 
