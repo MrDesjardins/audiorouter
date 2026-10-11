@@ -17,7 +17,7 @@ use std::io::{Seek, SeekFrom, Write};
 
 const USAGE: &str = "usage: m03_bridge_tone [--seconds N] [--rate 44100|48000|96000] \
 [--channels 1-8] [--frames N] [--capture-bus cable-b] [--render-bus cable-a] \
-[--out PATH.wav] [--wav64] [--discard] [--stall-ms N] [--passthrough] [--engine] [--device PATH]";
+[--out PATH.wav] [--wav64] [--discard] [--trace-route] [--stall-ms N] [--passthrough] [--engine] [--device PATH]";
 
 #[derive(Clone, Debug, PartialEq)]
 struct Options {
@@ -40,6 +40,7 @@ struct Options {
     /// Pass-through that runs the AudioRouter engine on a compiled cable-only
     /// session between the cables (implies `passthrough`; 1–2 channels).
     engine: bool,
+    trace_route: bool,
 }
 
 impl Default for Options {
@@ -58,6 +59,7 @@ impl Default for Options {
             stall_ms: 0,
             passthrough: false,
             engine: false,
+            trace_route: false,
         }
     }
 }
@@ -87,6 +89,7 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
             "--out" => options.out = std::path::PathBuf::from(value()?),
             "--wav64" => options.wav64 = true,
             "--discard" => options.discard = true,
+            "--trace-route" => options.trace_route = true,
             "--stall-ms" => options.stall_ms = number(&value()?, 0, 60_000)?,
             "--passthrough" => options.passthrough = true,
             "--engine" => {
@@ -107,6 +110,15 @@ fn parse_options(arguments: &[String]) -> Result<Options, String> {
             "--engine supports at most {} channels (the engine's processing width)",
             audiorouter_engine::MAX_CHANNELS
         ));
+    }
+    if options.trace_route
+        && (!options.passthrough
+            || options.seconds > 60
+            || options.rate != 48_000
+            || options.channels != 2
+            || ![128, 480].contains(&options.frames))
+    {
+        return Err("--trace-route requires pass-through/engine, <=60 seconds, stereo 48000 Hz and 128/480 frames".to_owned());
     }
     Ok(options)
 }
@@ -272,6 +284,9 @@ fn main() {
 }
 
 #[cfg(windows)]
+#[path = "m03_bridge_tone/trace.rs"]
+mod trace;
+#[cfg(windows)]
 #[path = "m03_bridge_tone/workers.rs"]
 mod workers;
 
@@ -418,6 +433,13 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         None
     };
     let state = workers::Shared::new(samples, 64);
+    if options.trace_route {
+        let trace = trace::Trace::new(options.seconds, options.frames).map_err(fail)?;
+        state
+            .trace
+            .set(trace)
+            .map_err(|_| (1, "trace already initialized".to_owned()))?;
+    }
     let _timer = TimerResolution::acquire()?;
     println!("isolated capture/render workers; 64 preallocated recording blocks; {} seconds; intentional stall {} ms", options.seconds, options.stall_ms);
     if options.passthrough {
@@ -628,7 +650,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                     if progress.elapsed() >= Duration::from_secs(1) {
                         let before = Instant::now();
                         progress_log.record(format!(
-                            "progress {} ms: written={} read={} ack={} interval_capture_gap_us={} interval_render_gap_us={} interval_control_gap_us={} capture={:?} render={:?} render_packets={:?}",
+                            "progress {} ms: written={} read={} ack={} interval_capture_gap_us={} interval_render_gap_us={} interval_control_gap_us={} capture={:?} render={:?} render_packets={:?} snapshot_qpc_100ns={}",
                             start.elapsed().as_millis(),
                             state.capture_blocks.load(Ordering::Acquire),
                             state.render_blocks.load(Ordering::Acquire),
@@ -638,7 +660,8 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                             interval_control_gap_us,
                             capture_controller.as_ref().unwrap().counters(),
                             render_controller.as_ref().unwrap().counters(),
-                            packet_counters.then(|| render_controller.as_ref().unwrap().packet_counters())
+                            packet_counters.then(|| render_controller.as_ref().unwrap().packet_counters()),
+                            trace::snapshot_100ns().map_err(|e| (1, e))?
                         )).map_err(|error| (1, error.to_owned()))?;
                         report_us = report_us.max(before.elapsed().as_micros());
                         interval_control_gap_us = 0;
@@ -705,9 +728,23 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         // Every lease is deactivated and every audio/disk worker is joined.
         // Preserve snapshots on disk before any potentially blocked stdout.
         let progress_path = options.out.with_extension("progress.txt");
+        let trace_result = if let Some(trace) = state.trace.get() {
+            let path = options.out.with_extension("route.csv");
+            std::fs::File::create(&path)
+                .and_then(|file| trace.write_to(file))
+                .map_err(|error| (1, format!("route trace: {error}")))
+        } else {
+            Ok(())
+        };
         let progress_result = std::fs::File::create(&progress_path)
             .and_then(|mut file| progress_log.write_to(&mut file))
             .map_err(|error| (1, format!("progress report: {error}")));
+        if options.trace_route {
+            println!(
+                "route impulse observations: {}",
+                options.out.with_extension("route.csv").display()
+            );
+        }
         if let Some((
             capture_counters,
             render_counters,
@@ -785,6 +822,7 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
             .and(capture_result)
             .and(render_result)
             .and(progress_result)
+            .and(trace_result)
             .and(disk_result.map(|_| ()))?;
         if state.capture_blocks.load(Ordering::Acquire) == 1 {
             return Err((
@@ -881,12 +919,22 @@ mod tests {
             "--engine implies pass-through"
         );
         assert!(!Options::default().engine);
+        assert!(
+            parse_options(&args("--engine --trace-route --frames 128"))
+                .unwrap()
+                .trace_route
+        );
         // An hour-long continuity run keeps no WAV.
         let long = parse_options(&args("--engine --discard --seconds 3680")).unwrap();
         assert!(long.discard && long.seconds == 3_680 && !Options::default().discard);
         assert_eq!(ProgressLog::new(3_680, 0).limit, 3_681);
         for bad in [
             "--seconds 7201",
+            "--trace-route",
+            "--engine --trace-route --seconds 61",
+            "--engine --trace-route --rate 96000",
+            "--engine --trace-route --frames 256",
+            "--engine --trace-route --channels 1",
             "--engine --channels 8",
             "--engine --channels 3",
             "--channels 9",

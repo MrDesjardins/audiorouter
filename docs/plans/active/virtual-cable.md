@@ -26,6 +26,78 @@ host's Hyper-V/WSL capability preserved.
 
 ## Active task — engine cable route (step 1 of the single-PC path, 2026-10-10)
 
+### Execution queue after r12 — 2026-10-10
+
+Objective: explain the remaining impulse losses and locate persistent delay
+before changing latency recovery. Requirements: VCAB-20/24/25/28, VDEV-12;
+spec 17's approved bounded, counted recovery decision governs any later repair.
+VCAB-24 and VCAB-25 remain open. The user operates guest tests; the agent does
+offline host analysis, code preparation and checks.
+
+Prerequisites available: r12 continuity archive and both r11 repeated-start
+archives in `C:\VMs\ar-share`; r11 archive hashes reverified against the
+recorded evidence. The existing probe's read-only `cable-impulse-reanalyze`
+mode reproduces r11 engine default start 2: 34.379 ms initially, 64.446 ms
+from impulse 148, two losses, no render-clock discontinuity (host replay exit
+0). Original archives remain the source evidence.
+
+| Order | Owner | Work and completion evidence | User action |
+|---|---|---|---|
+| 1 | Agent, host | Correlate r12 losses with saved render/arrival QPC clocks, per-route progress and packet/counter deltas. Validate event dating first: the existing VM-wide classifier dates losses from launch wall time plus nominal impulse index, so render skips and launch uncertainty can distort long-run attribution. Produce a reproducible event table with explicit uncertainty and unresolved events. | None; reports are present. |
+| 2 | Agent, host | Reconstruct r11 default start 2 around impulse 148 and compare clean starts. Trace Windows positions, driver ring/provenance, bridge publication and relay depth. Record the owning layer or the specific missing observable; a persistent +30 ms is reproduced, but its location is not established. | None while saved evidence suffices. |
+| 3 | Agent, host | If the owning layer is established, document recovery limits/counters/rollback, implement there, and check on-time preservation, bounded drops, silence/privacy and timing regressions. If the evidence cannot locate it, prepare a short diagnostic that measures the missing observable instead. | Wait for a verified bundle and command. |
+| 4 | Agent prepares; user runs in VM | Verify the bundle manifest and source/driver hashes, then supply one fail-fast Administrator PowerShell block inside AR-DriverTest. First run is a bounded reproduction/recovery check (about 3 minutes using repeated starts, or a shorter targeted trace if attribution is still blocked). Compare latency before/after the disturbance and every loss/counter delta. | Run only the new block once provided; send output/archive. |
+| 5 | Agent reviews; user later qualifies | Review the short result before increasing duration. Repeat the 8-cable hour run only after a meaningful repair or diagnostic improvement; native qualification/signing remains a separate gate. | No hour-long repeat now. |
+
+Validation: offline reports must reproduce published loss totals and timing
+levels, preserve original QPC units, expose synchronization uncertainty, and
+avoid equating nearby gaps with proven cause. Any implementation needs owning
+layer regression checks, pinned formatting/Clippy and affected acceptance
+checks before a guest bundle. Guest results are Windows evidence; timing-model
+checks alone cannot close audio qualification.
+
+Rollback: keep candidate `492d8ca8` and its verified slot-provenance bundle;
+retain current cable-count restoration. Preserve Hyper-V/WSL, host security
+and VM audio configuration. No buffer enlargement, suppressed counters or
+threshold relaxation. Status: host correlation and waveform localization
+completed as described below; the next guest action is the short r13
+route/submission trace, after its bundle manifest is verified.
+
+Implementation decision (2026-10-10, user requested improvement): r11's
+saved Cable A bridge WAV has impulse 146 at frame 71,104 and impulse 148 at
+73,024 (48 kHz); impulse 147 is absent. After accounting for the skipped
+impulse, subsequent payload is shifted by 960 frames (20 ms) before the
+engine. End-to-end latency shifts by about 30 ms. This narrows the location
+but does not prove a 30 ms queue exists in the driver. The probe generates
+payload using submitted frame count and dates it using device-clock frame
+count; these can diverge through underruns. Diagnose their relationship
+before dropping valid audio to recover a possibly misdated delay.
+
+Ordered implementation: (1) add opt-in, preallocated render-submission
+snapshots to the probe's raw report, bracketing padding reads with device
+clock readings; (2) add opt-in, bounded route input/output impulse traces
+using the common QPC timeline, with relay depth/silence/drop counts; (3)
+enable both with a short repeated-start runner switch, preserving existing
+results/counters; (4) run probe self-tests, trace/runner regressions, format,
+Clippy, docs validation and static VM builds; (5) prepare a verified new
+diagnostic bundle and one guest block. The trace is restricted to ≤60-second
+stereo 48 kHz/480-frame runs; overflow makes the trace invalid. All file
+output occurs after the audio workers stop. No kernel change is justified
+yet; rollback is removal of the opt-in diagnostic changes and use of r12.
+
+Host result: `review-cable-continuity.py` reproduces all 1,456 losses from the
+saved r12 archive. Nominal dates drift by 4.808–4.862 s relative to in-run QPC
+dates. With progress interval ends anchored to driver QPC counters (10 MHz
+in the reviewed guest), 597 of 705 loss runs have nearby ≥20 ms gaps in all
+four routes; 119 impulses remain without that correlation, versus 1,041 in
+the original nominal report. These are timing correlations with inherited
+payload/device-frame dating uncertainty, not a root-cause finding or a pass.
+The runner now records/uses explicit normalized QPC snapshot and loss times,
+rejects mixed timing bases, and rejects a truncated loss list. The short r13
+trace is necessary to distinguish submitted-payload starvation from actual
+queued latency before recovery can safely discard audio. Host checks and
+the exact next guest block are recorded in the preparation evidence/runbook.
+
 User approved step 1: repeat the VCAB-20 bit-exact and VCAB-26 isolation
 checks through the AudioRouter engine instead of the proxy relay.
 
@@ -118,12 +190,15 @@ verifies and the test-signed SYS hash is unchanged (`10CF8E87…52381`); see
 [preparation evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r12-eight-cable-sustained-continuity-preparation-2026-10-10).
 The guest run is a one-hour NEM deviation
 measurement of four simultaneous AudioRouter engine routes with eight cables,
-not VCAB-24 qualification. After the user returns its `continuity-*.zip`,
-review every route's impulse loss, packet/counter data and progress gaps,
-attribute events only when all four route processes show a nearby scheduling
-gap, and record the result in the cable preparation evidence. Then locate the
-standing delay using the r11 raw data/counters before designing latency
-recovery (spec 17).
+not VCAB-24 qualification. The user completed it; the report records 1,456
+lost impulses, zero corruption, major per-route clock gaps and cross-route
+loss clusters, but its gate is `unexplained-events` and qualification is false.
+The exact report and limitations are recorded in the
+[r12 result](evidence/2026-10-10-m03-cable-latency-preparation.md#one-hour-guest-result-r12-2026-10-10).
+Next correlate each missing impulse index with raw clock gaps and counter
+deltas, then locate the standing delay using the r11 raw data/counters before
+designing latency recovery (spec 17). Do not repeat the unchanged hour-long
+run or infer a root cause from the VM-wide classifier alone.
 
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease

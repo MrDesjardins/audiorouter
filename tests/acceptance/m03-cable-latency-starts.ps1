@@ -52,6 +52,7 @@ function Test-Starts([string] $Case, [string] $Route) {
     New-Item -ItemType Directory -Path $evidence,$bundle,$peer | Out-Null
     $run = $Case
     $Starts = 3; $Impulses = 400
+    $TraceRoute = $Case -like 'trace-*'
     $powershell = 'fake-powershell'; $probe = 'fake-probe'; $tone = 'fake-tone'
     foreach ($assignment in $assignments) { . ([scriptblock]::Create($assignment.Extent.Text)) }
     $results = @(); $summary = @(); $failure = $null; $active = $null
@@ -61,6 +62,11 @@ function Test-Starts([string] $Case, [string] $Route) {
         param($FilePath,$ArgumentList,$WindowStyle,[switch]$PassThru,$RedirectStandardOutput,$RedirectStandardError)
         Assert ($FilePath -eq $tone -and $WindowStyle -eq 'Hidden') 'only the owned route tool is started, hidden'
         $script:started += [string]$ArgumentList
+        Assert (($ArgumentList -match '"--trace-route"') -eq $TraceRoute) 'route trace switch follows request'
+        if ($TraceRoute -and $Case -ne 'trace-missing') {
+            $tracePath = $RedirectStandardOutput.Replace('-tone.txt', '-cable-a.route.csv')
+            Set-Content -LiteralPath $tracePath -Value "# observation QPC; missed=0`nstage,qpc_100ns`nrender,123"
+        }
         $ready = $Case -ne 'early-exit'
         Set-Content -LiteralPath $RedirectStandardOutput -Value $(if ($ready) { "driver: info`nrender worker polling before lease activation`ncapture-sink counters (cable-b): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source counters (cable-a): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source packet writes (cable-a): NativeBridgePacketCounters { accepted: 600, late: 0, overrun: 0 }`nengine route quanta: processed=2200 silent=0" } else { 'driver: info' })
         Set-Content -LiteralPath $RedirectStandardError -Value ''
@@ -90,7 +96,10 @@ function Test-Starts([string] $Case, [string] $Route) {
         Assert (@($Arguments | Where-Object { $_ -like 'raw=*' -and $_.Substring(4).StartsWith($evidence + '\') -and $_ -like '*-raw.csv' }).Count -eq 1) 'raw data saved inside this run''s evidence'
         $mode = if ($Arguments -contains 'low-latency') { 'low-latency' } else { 'default' }
         $script:probeCalls += $mode
-        Set-Content -LiteralPath $Stdout -Value (Get-FakeProbe $Case $script:probeCalls.Count $mode)
+            Assert (($Arguments -contains 'trace-submissions') -eq $TraceRoute) 'submission trace switch follows request'
+            $fakeText = Get-FakeProbe $Case $script:probeCalls.Count $mode
+            if ($TraceRoute) { $fakeText += "`ncable_submission_trace_samples=500 cable_submission_trace_missed=0" }
+            Set-Content -LiteralPath $Stdout -Value $fakeText
         return @{ Code = $(if ($Case -eq 'probe-failure' -and $script:probeCalls.Count -eq 3) { 1 } else { 0 }) }
     }
     function Compress-Archive {
@@ -103,7 +112,7 @@ function Test-Starts([string] $Case, [string] $Route) {
     $saved = Read-PairedTraceJson (Join-Path $evidence 'result.json')
     Assert ($saved.Qualification -eq $false -and $saved.Route -eq $Route) "$Case records its route and never claims qualification"
     switch ($Case) {
-        { $_ -in 'engine-pass', 'vbcable-pass', 'stall' } {
+        { $_ -in 'engine-pass', 'vbcable-pass', 'stall', 'trace-pass' } {
             Assert (-not $failure) "$Case completes"
             Assert (($script:probeCalls -join ',') -eq 'default,low-latency,default,low-latency,default,low-latency') 'each start measures both period modes'
             Assert ($results.Count -eq 6 -and $summary.Count -eq 2) 'six measurements and two mode summaries'
@@ -128,6 +137,8 @@ function Test-Starts([string] $Case, [string] $Route) {
             Assert ($low.CleanStarts -eq 2 -and -not $results[1].Clean -and $results[1].RenderDiscontinuityMs -eq 25.0) 'a start with a render stall or loss is excluded from the comparison'
         }
         'vbcable-missing' { Assert ([bool]$failure -and [string]$failure -match 'Install VB-Cable' -and $script:probeCalls.Count -eq 0) 'missing VB-Cable starts no audio' }
+        'trace-pass' { Assert ($saved.TraceRoute -and $script:started.Count -eq 6) 'complete trace run records its opt-in mode' }
+        'trace-missing' { Assert ([bool]$failure -and [string]$failure -match 'trace is missing') 'missing trace cannot silently pass' }
         'status-failure' { Assert ([bool]$failure -and $script:started.Count -eq 0 -and $script:probeCalls.Count -eq 0) 'driver status failure starts no audio' }
         'early-exit' { Assert ([bool]$failure -and $script:probeCalls.Count -eq 0 -and [string]$failure -match 'before its leases') 'early route exit stops before the probe' }
         'probe-failure' { Assert ([bool]$failure -and $results.Count -eq 6) 'probe failure reported after every measurement' }
@@ -135,6 +146,8 @@ function Test-Starts([string] $Case, [string] $Route) {
     }
 }
 Test-Starts 'engine-pass' 'engine'
+Test-Starts 'trace-pass' 'engine'
+Test-Starts 'trace-missing' 'engine'
 Test-Starts 'vbcable-pass' 'vbcable'
 Test-Starts 'stall' 'vbcable'
 Test-Starts 'vbcable-missing' 'vbcable'

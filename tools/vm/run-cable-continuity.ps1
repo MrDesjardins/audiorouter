@@ -19,7 +19,9 @@ function ConvertFrom-ProgressLine([string] $Line) {
         $total += [long]$counter.Groups[2].Value
     }
     $gapUs = [Math]::Max([Math]::Max([long]$head.Groups[2].Value, [long]$head.Groups[3].Value), [long]$head.Groups[4].Value)
-    return [pscustomobject]@{ Ms = [long]$head.Groups[1].Value; MaxGapMs = $gapUs / 1000.0; Errors = $total }
+    $qpc = [regex]::Match($Line, '\bsnapshot_qpc_100ns=(\d+)')
+    return [pscustomobject]@{ Ms = [long]$head.Groups[1].Value; MaxGapMs = $gapUs / 1000.0; Errors = $total
+        QpcSeconds = $(if ($qpc.Success) { [double]$qpc.Groups[1].Value / 1.0e7 } else { $null }) }
 }
 
 # Intervals (absolute seconds) of one route process: start, end, largest gap,
@@ -32,8 +34,15 @@ function Get-ProgressIntervals([string[]] $Lines, [double] $StartSeconds) {
         if (-not $entry) { continue }
         $from = if ($previous) { $previous.Ms } else { 0 }
         $added = if ($previous) { $entry.Errors - $previous.Errors } else { $entry.Errors }
-        $intervals += [pscustomobject]@{ From = $StartSeconds + $from / 1000.0; To = $StartSeconds + $entry.Ms / 1000.0
-            MaxGapMs = $entry.MaxGapMs; Added = $added }
+        $hasQpc = $null -ne $entry.QpcSeconds
+        if ($previous -and ($null -ne $previous.QpcSeconds) -ne $hasQpc) { throw 'Mixed QPC/nominal progress clocks.' }
+        $to = if ($hasQpc) { $entry.QpcSeconds } else { $StartSeconds + $entry.Ms / 1000.0 }
+        $begin = if ($hasQpc) {
+            if ($previous) { $previous.QpcSeconds } else { $to - $entry.Ms / 1000.0 }
+        } else { $StartSeconds + $from / 1000.0 }
+        if ($to -lt $begin -or $added -lt 0) { throw 'Progress clock/counters regressed.' }
+        $intervals += [pscustomobject]@{ From = $begin; To = $to
+            MaxGapMs = $entry.MaxGapMs; Added = $added; Timing = $(if ($hasQpc) { 'qpc' } else { 'nominal' }) }
         $previous = $entry
     }
     return $intervals
@@ -41,7 +50,7 @@ function Get-ProgressIntervals([string[]] $Lines, [double] $StartSeconds) {
 
 # VM-wide: every route process had a gap of at least StallMs within
 # ToleranceSeconds of the event. Four independent processes stalling together
-# is a guest-wide scheduling stall, not one route's fault.
+# establishes four-route gap correlation. It does not prove the cause of a loss.
 function Test-VmWideStall([double] $At, [object[]] $IntervalsPerRoute, [double] $StallMs = 20.0, [double] $ToleranceSeconds = 1.5) {
     foreach ($intervals in $IntervalsPerRoute) {
         $hit = @($intervals | Where-Object { $_.MaxGapMs -ge $StallMs -and $_.From -le ($At + $ToleranceSeconds) -and $_.To -ge ($At - $ToleranceSeconds) })
@@ -175,13 +184,27 @@ try {
         $probeText = Get-Content -LiteralPath (Join-Path $evidence "$($pair.Name)-probe.txt") -Raw
         $toneText = Get-Content -LiteralPath (Join-Path $evidence "$($pair.Name)-tone.txt") -Raw
         $events = @()
-        foreach ($lostRun in [regex]::Matches($probeText, '(?m)^cable_lost_run first_impulse=(\d+) count=(\d+)')) {
-            $at = $pair.ProbeStart + 0.15 + [double]$lostRun.Groups[1].Value * 0.01
+        $qpcDating = @($pair.Intervals | Where-Object { $_.Timing -eq 'qpc' }).Count -gt 0
+        $windowStart = $pair.ProbeStart + 1.0
+        $windowEnd = $pair.ProbeEnd - 1.0
+        foreach ($lostRun in [regex]::Matches($probeText, '(?m)^cable_lost_run first_impulse=(\d+) count=(\d+)(?: first_qpc_100ns=([0-9.]+) last_qpc_100ns=([0-9.]+))?')) {
+            if ($qpcDating -ne $lostRun.Groups[3].Success) { throw 'Probe and route timing bases differ; cannot attribute losses.' }
+            $at = if ($qpcDating) { [double]$lostRun.Groups[3].Value / 1.0e7 } else { $pair.ProbeStart + 0.15 + [double]$lostRun.Groups[1].Value * 0.01 }
             $events += [pscustomobject]@{ Kind = 'lost-impulses'; At = $at; Size = [int]$lostRun.Groups[2].Value }
         }
+        if ($qpcDating) {
+            $anchor = Get-ProbeValue $probeText 'cable_emission_first_qpc_100ns'
+            $end = Get-ProbeValue $probeText 'cable_emission_last_qpc_100ns'
+            if ($null -eq $anchor -or $null -eq $end) { throw 'QPC emission window missing.' }
+            $windowStart = $anchor / 1.0e7 + 1.0
+            $windowEnd = $end / 1.0e7 - 1.0
+        }
+        $lostTotal = Get-ProbeValue $probeText 'cable_impulses_lost'
+        $reportedLosses = [long](($events | Measure-Object -Property Size -Sum).Sum)
+        if ($reportedLosses -ne $lostTotal) { throw 'Lost-run report is incomplete; cannot attribute every loss.' }
         # Driver counter increases inside the measurement window (the route's
         # start-up and its idle tail after the impulses stop are excluded).
-        foreach ($interval in $pair.Intervals | Where-Object { $_.Added -gt 0 -and $_.From -ge ($pair.ProbeStart + 1.0) -and $_.To -le ($pair.ProbeEnd - 1.0) }) {
+        foreach ($interval in $pair.Intervals | Where-Object { $_.Added -gt 0 -and $_.From -ge $windowStart -and $_.To -le $windowEnd }) {
             $events += [pscustomobject]@{ Kind = 'driver-counters'; At = ($interval.From + $interval.To) / 2; Size = $interval.Added }
         }
         foreach ($item in $events) {
@@ -189,7 +212,7 @@ try {
             if ($item.VmWide) { $attributed++ } else { $unexplained++ }
         }
         $results += [pscustomobject][ordered]@{
-            Pair = $pair.Name; ProbeCode = $probes[$pair.Name].ExitCode; RouteCode = $routes[$pair.Name].ExitCode
+            Pair = $pair.Name; ProbeCode = $probes[$pair.Name].ExitCode; RouteCode = $routes[$pair.Name].ExitCode; Timing = $(if ($qpcDating) { 'render-qpc-estimate' } else { 'nominal' })
             Emitted = Get-ProbeValue $probeText 'cable_impulses_emitted'; Lost = Get-ProbeValue $probeText 'cable_impulses_lost'
             Corrupted = Get-ProbeValue $probeText 'cable_impulses_corrupted'; LostRuns = Get-ProbeValue $probeText 'cable_lost_runs'
             CaptureDropped = Get-ProbeValue $probeText 'cable_capture_dropped_frames'; RenderSteps = Get-ProbeValue $probeText 'cable_render_discontinuities'

@@ -7,7 +7,8 @@
 [CmdletBinding()]
 param([Parameter(Mandatory = $true)][ValidateSet('engine', 'vbcable')][string] $Route,
     [ValidateRange(1, 10)][int] $Starts = 5,
-    [ValidateRange(200, 1000)][int] $Impulses = 400)
+    [ValidateRange(200, 1000)][int] $Impulses = 400,
+    [switch] $TraceRoute)
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') { throw 'Run inside AR-DriverTest from the copied bundle under C:\ar.' }
@@ -48,6 +49,7 @@ function Get-Median([double[]] $Values) {
     return $sorted[[int][Math]::Floor(($sorted.Count - 1) / 2)]
 }
 try {
+    if ($TraceRoute -and $Route -ne 'engine') { throw 'TraceRoute requires the engine route.' }
     Write-Host "Cable latency starts ($Route): $Starts starts x 2 period modes, $Impulses impulses each. No manual playback needed."
     $status = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','status') `
         -Stdout (Join-Path $evidence 'status.txt') -Stderr (Join-Path $evidence 'status-stderr.txt') -TimeoutSeconds 60
@@ -73,7 +75,9 @@ try {
                 $toneSeconds = $probeSeconds + 8
                 $toneOut = Join-Path $evidence "$name-tone.txt"
                 $toneArguments = @('--engine','--frames',[string]$mode.Frames,'--seconds',[string]$toneSeconds,
-                    '--out',(Join-Path $evidence "$name-cable-a.wav")) | ForEach-Object { ConvertTo-DriverProcessArgument $_ }
+                    '--out',(Join-Path $evidence "$name-cable-a.wav"))
+                if ($TraceRoute) { $toneArguments += '--trace-route' }
+                $toneArguments = $toneArguments | ForEach-Object { ConvertTo-DriverProcessArgument $_ }
                 $active = Start-Process -FilePath $tone -ArgumentList ($toneArguments -join ' ') -WindowStyle Hidden -PassThru `
                     -RedirectStandardOutput $toneOut -RedirectStandardError (Join-Path $evidence "$name-tone-stderr.txt")
                 $null = $active.Handle
@@ -89,6 +93,7 @@ try {
             $probeArguments = @('cable-impulse',[string]$Impulses,$renderIndex,$captureIndex) + @(if ($mode.Name -eq 'low-latency') { 'low-latency' })
             # Raw clock samples and arrivals, for host re-analysis without another VM run.
             $probeArguments += 'raw=' + (Join-Path $evidence "$name-raw.csv")
+            if ($TraceRoute) { $probeArguments += 'trace-submissions' }
             $measured = Invoke-DriverVmProcess -Executable $probe -Arguments $probeArguments -Stdout (Join-Path $evidence "$name-probe.txt") `
                 -Stderr (Join-Path $evidence "$name-probe-stderr.txt") -TimeoutSeconds ($probeSeconds + 30)
             $toneText = ''
@@ -100,6 +105,15 @@ try {
                 $toneText = Get-Content -LiteralPath $toneOut -Raw
             }
             $probeText = Get-Content -LiteralPath (Join-Path $evidence "$name-probe.txt") -Raw
+            if ($TraceRoute) {
+                $tracePath = Join-Path $evidence "$name-cable-a.route.csv"
+                if (-not (Test-Path -LiteralPath $tracePath) -or
+                    (Get-Content -LiteralPath $tracePath -TotalCount 1) -notmatch '\bmissed=0\b' -or
+                    (Get-ProbeValue $probeText 'cable_submission_trace_samples') -le 0 -or
+                    (Get-ProbeValue $probeText 'cable_submission_trace_missed') -ne 0) {
+                    throw "$name trace is missing or incomplete; evidence preserved."
+                }
+            }
             $result = [pscustomobject][ordered]@{
                 Start = $start; Mode = $mode.Name; Frames = $mode.Frames; ProbeCode = $measured.Code; ToneCode = $toneCode
                 SteadyLevelMs = Get-ProbeValue $probeText 'cable_steady_level_ms'; SteadySpreadMs = Get-ProbeValue $probeText 'cable_steady_spread_ms'
@@ -156,7 +170,7 @@ try {
         } finally { $active.Dispose() }
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Route = $Route; Passed = (-not [bool]$failure); Error = [string]$failure
-        Starts = $Starts; Impulses = $Impulses; Results = $results; Summary = $summary; Qualification = $false
+        Starts = $Starts; Impulses = $Impulses; TraceRoute = [bool]$TraceRoute; Results = $results; Summary = $summary; Qualification = $false
         Scope = $(if ($Route -eq 'engine') { 'Cable A Input -> driver bridge -> AudioRouter engine (compiled cable-only session) -> Cable B Output, repeated starts; NEM VM, not qualification' }
             else { 'VB-Cable CABLE Input -> CABLE Output (no route), repeated starts; same-VM comparison for VCAB-25, NEM VM, not qualification' }) }
     $zip = Join-Path $bundle "$run.zip"

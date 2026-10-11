@@ -57,6 +57,7 @@ pub(super) struct Shared {
     // silence (no output); published by the render worker.
     pub engine_processed: AtomicU64,
     pub engine_silent: AtomicU64,
+    pub trace: OnceLock<super::trace::Trace>,
 }
 
 /// Relay depth: enough to absorb one late capture poll, small enough to keep
@@ -91,6 +92,7 @@ impl Shared {
             relay_dropped: AtomicU64::new(0),
             engine_processed: AtomicU64::new(0),
             engine_silent: AtomicU64::new(0),
+            trace: OnceLock::new(),
         });
         for _ in 0..RELAY_BLOCKS {
             assert!(state.relay_free.push(vec![0.0; samples]).is_ok());
@@ -285,7 +287,11 @@ pub(super) fn capture(
                 .checked_add(1)
                 .ok_or("capture sequence exhausted")?;
             match region.write_f64(generation, sequence, tone) {
-                Ok(()) => {}
+                Ok(()) => {
+                    if let Some(trace) = state.trace.get() {
+                        trace.record("capture", sequence, tone, state);
+                    }
+                }
                 Err(error)
                     if is_expected_mapping_retirement(
                         state.retiring.load(Ordering::Acquire),
@@ -349,6 +355,9 @@ pub(super) fn render(
                 }
                 sequence = header.sequence;
                 packet.count = usize::from(header.frames) * usize::from(header.channels);
+                if let Some(trace) = state.trace.get() {
+                    trace.record("render", sequence, &packet.samples[..packet.count], state);
+                }
                 match engine.as_deref_mut() {
                     Some(route) => {
                         route.push_block(&packet.samples[..packet.count], |block| {

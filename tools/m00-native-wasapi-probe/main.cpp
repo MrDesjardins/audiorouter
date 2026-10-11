@@ -1219,6 +1219,14 @@ static void print_cable_report(const CableLatencyReport& report) {
 // snaps back, r10). An impulse is dated with the median offset of the
 // samples within +-0.1 s of its frame, and only lasting steps are reported.
 struct RenderClockSample { double frames; double qpc_100ns; };
+// Optional short-run observations around GetCurrentPadding. Device position
+// can include silence while submitted payload indices do not. Keep both, plus
+// the bracketing QPC readings; this is evidence, not an assumed presentation time.
+struct RenderSubmission {
+    UINT64 first_frame;
+    UINT32 frames, padding;
+    RenderClockSample before, after;
+};
 struct RenderDiscontinuity { double at_frame; double shift_ms; };
 
 static double render_offset_100ns(const RenderClockSample& sample, double rate) {
@@ -1299,11 +1307,18 @@ static std::vector<CableLostRun> cable_lost_runs(const CableLatencyReport& repor
     return runs;
 }
 
-static void print_cable_lost_runs(const CableLatencyReport& report) {
+static void print_cable_lost_runs(const CableLatencyReport& report, const std::vector<double>* emission = nullptr) {
     const auto runs = cable_lost_runs(report);
     std::cout << "cable_lost_runs=" << runs.size() << '\n';
-    for (size_t index = 0; index < runs.size() && index < 256; ++index)
-        std::cout << "cable_lost_run first_impulse=" << runs[index].first_impulse << " count=" << runs[index].count << '\n';
+    for (size_t index = 0; index < runs.size() && index < 256; ++index) {
+        std::cout << "cable_lost_run first_impulse=" << runs[index].first_impulse << " count=" << runs[index].count;
+        if (emission) std::cout << std::fixed << std::setprecision(3)
+            << " first_qpc_100ns=" << (*emission)[static_cast<size_t>(runs[index].first_impulse)]
+            << " last_qpc_100ns=" << (*emission)[static_cast<size_t>(runs[index].first_impulse + runs[index].count - 1)];
+        std::cout << '\n';
+    }
+    std::cout.unsetf(std::ios::floatfield);
+    std::cout.precision(6);
 }
 
 // Dating, pairing and reporting shared by the live probe and the offline
@@ -1324,6 +1339,10 @@ static CableLatencyReport analyze_cable_run(const std::vector<RenderClockSample>
         else { emission[static_cast<size_t>(k)] = anchor_100ns + static_cast<double>(k) * period_100ns; ++anchor_dated; }
     }
     for (size_t k = 1; k < emission.size(); ++k) emission[k] = std::max(emission[k], emission[k - 1]);
+    if (!emission.empty()) {
+        std::cout << std::fixed << std::setprecision(3) << "cable_emission_first_qpc_100ns=" << emission.front()
+                  << " cable_emission_last_qpc_100ns=" << emission.back() << '\n';
+    }
     const auto discontinuities = render_discontinuities(advancing, rate, 2.0);
     double discontinuity_ms = 0.0;
     for (const auto& step : discontinuities) discontinuity_ms += step.shift_ms;
@@ -1338,7 +1357,7 @@ static CableLatencyReport analyze_cable_run(const std::vector<RenderClockSample>
     const CableLatencyReport report = pair_cable_impulses_dated(arrivals, emission, period_100ns);
     print_cable_report(report);
     print_cable_segments(report);
-    print_cable_lost_runs(report);
+    print_cable_lost_runs(report, &emission);
     const CableLatencyReport anchored = pair_cable_impulses(arrivals, anchor_100ns, period_100ns, emitted);
     std::cout << std::fixed << std::setprecision(3) << "cable_end_anchor_p50_ms=" << anchored.percentile(0.50)
               << " cable_end_anchor_segments=" << cable_latency_segments(anchored.by_impulse, 1.0).size() << '\n';
@@ -1350,13 +1369,17 @@ static CableLatencyReport analyze_cable_run(const std::vector<RenderClockSample>
 // Raw run data for host-side re-analysis (`cable-impulse-reanalyze`).
 static bool write_cable_raw(const char* path, const std::vector<RenderClockSample>& clock, UINT64 overflow,
                             const std::vector<CableArrival>& arrivals, double rate, UINT32 interval, UINT64 emitted,
-                            double period_100ns, double anchor_100ns) {
+                            double period_100ns, double anchor_100ns,
+                            const std::vector<RenderSubmission>& submissions) {
     std::ofstream out(path, std::ios::trunc);
     if (!out) return false;
     out << std::setprecision(17) << "meta," << rate << ',' << interval << ',' << emitted << ',' << period_100ns << ','
         << anchor_100ns << ',' << overflow << '\n';
     for (const auto& sample : clock) out << "clock," << sample.frames << ',' << sample.qpc_100ns << '\n';
     for (const auto& arrival : arrivals) out << "arrival," << arrival.qpc_100ns << ',' << arrival.amplitude << '\n';
+    for (const auto& sample : submissions) out << "submit," << sample.first_frame << ',' << sample.frames << ','
+        << sample.padding << ',' << sample.before.frames << ',' << sample.before.qpc_100ns << ','
+        << sample.after.frames << ',' << sample.after.qpc_100ns << '\n';
     return static_cast<bool>(out);
 }
 
@@ -1542,7 +1565,7 @@ static int cable_impulse_self_test() {
 // impulses are dated from in-run render clock samples (see
 // date_render_frame), with the end-of-run anchor kept for comparison.
 static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impulse_count, bool low_latency,
-                               const char* raw_path = nullptr) {
+                               const char* raw_path = nullptr, bool trace_submissions = false) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -1608,6 +1631,9 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     std::vector<RenderClockSample> render_clock;
     render_clock.reserve(static_cast<size_t>(capture_duration_ms) / 2 + 2048);
     UINT64 render_clock_overflow = 0;
+    std::vector<RenderSubmission> submissions;
+    if (trace_submissions) submissions.reserve(static_cast<size_t>(capture_duration_ms) / 2 + 2048);
+    UINT64 submission_missed = 0;
     const double render_rate = static_cast<double>(render_state.format->nSamplesPerSec);
 
     std::thread render_thread([&] {
@@ -1615,16 +1641,34 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
             const DWORD wait = WaitForSingleObject(render_state.ready_event, 100);
             if (wait == WAIT_FAILED) break;
             if (wait == WAIT_TIMEOUT) continue;
+            RenderSubmission submission{};
+            auto sample_clock = [&](RenderClockSample& sample) {
+                UINT64 position = 0, qpc = 0;
+                if (!render_state.clock_frequency || FAILED(render_state.clock->GetPosition(&position, &qpc))) return false;
+                sample = {static_cast<double>(position) / static_cast<double>(render_state.clock_frequency) * render_rate,
+                          static_cast<double>(qpc)};
+                return true;
+            };
+            const bool before_ok = !trace_submissions || sample_clock(submission.before);
             UINT32 padding = 0;
             if (FAILED(render_state.client->GetCurrentPadding(&padding))) continue;
+            const bool after_ok = !trace_submissions || sample_clock(submission.after);
             const UINT32 available = render_buffer_size - padding;
             if (available == 0) continue;
             BYTE* data = nullptr;
             if (FAILED(render_service->GetBuffer(available, &data))) continue;
             if (!render_stop_emitting.load(std::memory_order_relaxed)) {
+                submission.first_frame = impulse_sample_index;
+                submission.frames = available;
+                submission.padding = padding;
                 render_cable_impulses(data, available, render_state.format, impulse_sample_index);
                 if (impulse_sample_index >= render_frame_limit) render_stop_emitting.store(true);
-                render_service->ReleaseBuffer(available, 0);
+                const HRESULT released = render_service->ReleaseBuffer(available, 0);
+                if (trace_submissions) {
+                    if (before_ok && after_ok && SUCCEEDED(released) && submissions.size() < submissions.capacity())
+                        submissions.push_back(submission);
+                    else ++submission_missed;
+                }
             } else {
                 render_service->ReleaseBuffer(available, AUDCLNT_BUFFERFLAGS_SILENT);
             }
@@ -1705,6 +1749,8 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
               << " cable_capture_dropped_frames=" << capture_dropped_frames
               << " cable_capture_flagged_packets=" << capture_flagged_packets
               << " cable_arrivals=" << arrivals.size() << '\n';
+    if (trace_submissions) std::cout << "cable_submission_trace_samples=" << submissions.size()
+                                   << " cable_submission_trace_missed=" << submission_missed << '\n';
     if (!anchored || render_state.clock_frequency == 0) {
         std::cout << "cable_render_anchor_unavailable=1\n";
         render_state.release(); capture_state.release();
@@ -1712,8 +1758,9 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     }
     const double period_100ns = static_cast<double>(interval) * render_state.format->nBlockAlign /
                                 static_cast<double>(render_state.clock_frequency) * 1.0e7;
-    if (raw_path && !write_cable_raw(raw_path, render_clock, render_clock_overflow, arrivals, render_rate, interval, emitted,
-                                     period_100ns, render_anchor))
+    const bool raw_ok = !raw_path || write_cable_raw(raw_path, render_clock, render_clock_overflow, arrivals, render_rate, interval, emitted,
+                                     period_100ns, render_anchor, submissions);
+    if (!raw_ok)
         std::cout << "cable_raw_write_failed=1\n";
     const CableLatencyReport report = analyze_cable_run(render_clock, render_clock_overflow, arrivals, render_rate, interval,
                                                         emitted, period_100ns, render_anchor);    std::cout << "Scope: Cable A Input render-write to Cable B Output capture-read through the "
@@ -1721,7 +1768,7 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
                  "proxy), timed on the shared QPC timeline; not product engine latency.\n";
     render_state.release();
     capture_state.release();
-    return report.matched == 0 ? 1 : 0;
+    return report.matched == 0 || submission_missed != 0 || !raw_ok ? 1 : 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -2773,13 +2820,18 @@ int main(int argc, char** argv) {
         UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
         UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
         bool low_latency = false;
+        bool trace_submissions = false;
         const char* raw_path = nullptr;
         for (int index = 5; index < argc; ++index) {
             if (std::strcmp(argv[index], "low-latency") == 0) low_latency = true;
+            else if (std::strcmp(argv[index], "trace-submissions") == 0) trace_submissions = true;
             else if (std::strncmp(argv[index], "raw=", 4) == 0 && argv[index][4]) raw_path = argv[index] + 4;
         }
         if (impulse_count < 10 || impulse_count > 400000) { std::cout << "cable_impulse_count_out_of_range=1\n"; CoUninitialize(); return 2; }
-        int result = cable_impulse_probe(render_index, capture_index, impulse_count, low_latency, raw_path);
+        if (trace_submissions && (impulse_count > 6000 || !raw_path)) {
+            std::cout << "cable_submission_trace_requires_raw_and_at_most_6000_impulses=1\n"; CoUninitialize(); return 2;
+        }
+        int result = cable_impulse_probe(render_index, capture_index, impulse_count, low_latency, raw_path, trace_submissions);
         CoUninitialize();
         return result;
     }

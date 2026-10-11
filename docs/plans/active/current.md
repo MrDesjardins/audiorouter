@@ -45,9 +45,37 @@ preparer and documents the procedure. All 153 host acceptance checks pass.
 The r12 bundle is ready at
 `C:\VMs\ar-share\diagnostics-20261010-cable-continuity-r12`; its 38-file
 manifest verifies, and SYS SHA-256 is unchanged. The one-hour inside-VM
-command is in the virtual-cable latency runbook and will be provided to the
-user. After the user returns the guest zip, review and record it, then locate
-the standing delay before designing recovery (spec 17).
+run completed. The returned archive's SHA-256 matches the user's hash. It
+reported 1,456 lost impulses over four routes, no corruption, and
+`unexplained-events` (`Qualification=false`). Loss events overlap across
+multiple routes even when the strict all-four-route ≥20 ms gap test does not
+classify them VM-wide; see the detailed analysis in
+[r12 continuity evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#one-hour-guest-result-r12-2026-10-10).
+Do not treat the VM-wide label as root-cause attribution. Next, inspect the
+r12 raw event timing and counter deltas, then locate the standing delay from
+r11 data before designing recovery (spec 17); do not rerun the unchanged
+one-hour test.
+
+Driver work is organized in the
+[execution queue](virtual-cable.md#execution-queue-after-r12-2026-10-10):
+agent analyzes r12 timing/counters and localizes r11 standing delay on the
+host, then prepares a verified short VM diagnostic or recovery check. The
+saved r11 replay reproduces the 34.379→64.446 ms shift at impulse 148. Both
+r11 archives are present and their hashes match; the user has no new guest
+command to run until a bundle measuring or repairing the identified issue is
+ready. Recheck the classifier's nominal event dating before attributing r12
+losses, since saved QPC clocks are available.
+
+Driver follow-up: offline QPC review reproduced all losses and found about
+4.8 s nominal-date drift; only 119 lost impulses lack nearby all-route gaps
+under the corrected correlation. The saved Cable A bridge WAV places a
+20 ms payload shift before the engine, while end-to-end dating reports
+30 ms. Submitted payload frames may have slipped relative to device-clock
+frames, so discarding a guessed driver backlog is not yet justified. The
+runner dating error is fixed; an opt-in, preallocated route/submission trace
+and short r13 runner are prepared to resolve the missing measurement. Next:
+verify the r13 manifest and ask the user to run the two-minute engine trace
+from the latency runbook, then review its archive before recovery changes.
 
 For release 0.0.15, fresh-install qualification remains deferred while the
 user uses AudioRouter for game audio. When they are done, ask them to close it

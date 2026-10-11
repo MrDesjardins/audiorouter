@@ -14,12 +14,24 @@ This section supersedes sections 4–9 below, which describe the earlier
   the replacement records per-slot provenance before progress. A host timing
   model (`renderTimingModelChecks`, 738 driver checks) reproduces both the r3
   loss and the original stale replay and checks the fix.
-- **Sustained runs fail from the VM, not the driver:** 300-second runs lose
+- **Earlier traced 300-second losses correlated with guest stalls:** those runs lose
   audio only during VM-wide events: all-CPU guest silences (2026-10-09 trace)
   and ~47 ms late timer delivery to every audio thread during guest
   Defender/Windows Update bursts (2026-10-10 trace). VirtualBox runs through
   NEM because WSL keeps the hypervisor on. Tools: `m03-scheduler-trace
   --silences`, `run-direct-audio.ps1 -Seconds 300 -TraceScheduling`.
+- **r12 one-hour result:** 1,456 lost impulses, zero corruption, and
+  `unexplained-events`; the result does not establish the cause of every loss.
+  Review nominal event dating against saved QPC clocks before attribution.
+  The current ordered work and user-run gate are in the
+  [execution queue](virtual-cable.md#execution-queue-after-r12-2026-10-10).
+  Both r11 archives and r12 are on the host; no new guest run is needed yet.
+- **Follow-up host analysis:** nominal loss dates drift about 4.8 s over r12.
+  QPC correlation leaves 119 impulses without a nearby all-four-route gap;
+  all 1,456 losses are retained. r11's source bridge waveform already has
+  a 20 ms payload shift before engine processing. The opt-in r13 short trace
+  captures submit/device-clock relations and route impulse observations;
+  run it after the bundle is verified, before choosing latency recovery.
 - **User decision pending:** production driver signing (cost), the only
   route to bare-metal VCAB-24/25 on this PC (the guest quieting was applied;
   the [native VT-x session](../../operations/virtual-cable-native-vtx-session.md)
@@ -53,9 +65,9 @@ repairs, fewer speculative retries and a clear route to completion.
 
 - The user explicitly requested deep code analysis and fixes before another
   test, documentation of findings, and direct commits/pushes to `main`.
-- The latest code repair and its candidate package are complete. The next
-  action is a clean guest installation smoke, not another code change based
-  only on a guess. No result for this candidate's guest smoke has been received.
+- The candidate's smokes and subsequent r11/r12 runs are complete. The next
+  action is offline loss correlation and standing-delay localization from
+  saved reports, followed by a verified short diagnostic or owning-layer repair.
 - Give complete copy/paste commands. Always identify **host PC** versus
   **inside the VM**. Do not ask the user to infer directories or arguments.
 - Review each new result before increasing duration or moving to a riskier

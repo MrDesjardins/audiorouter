@@ -40,6 +40,14 @@ Assert (Test-VmWideStall 102.5 @($stalled, $stalled, $stalled, $stalled)) 'all f
 Assert (-not (Test-VmWideStall 102.5 @($stalled, $stalled, $stalled, $quiet))) 'one route without a gap: not VM-wide'
 Assert ((Test-VmWideStall 104.4 @($stalled, $stalled)) -and -not (Test-VmWideStall 104.6 @($stalled, $stalled))) 'tolerance of 1.5 s around the stall interval'
 Assert (-not (Test-VmWideStall 102.5 @($stalled, @()))) 'a route with no progress cannot confirm a stall'
+$qpcLines = @()
+$qpcLines += (New-ProgressLine 1000 3000 480) + ' snapshot_qpc_100ns=60010000000'
+$qpcLines += (New-ProgressLine 2000 50000 1920) + ' snapshot_qpc_100ns=60020000000'
+$qpcIntervals = @(Get-ProgressIntervals $qpcLines 12345.0)
+Assert ($qpcIntervals[0].From -eq 6000 -and $qpcIntervals[1].To -eq 6002 -and $qpcIntervals[1].Added -eq 1440) 'QPC timeline ignores wall-clock launch dating and preserves counter deltas'
+$mixedFailed = $false
+try { $null = Get-ProgressIntervals @($qpcLines[0], (New-ProgressLine 2000 3000 480)) 100.0 } catch { $mixedFailed = $true }
+Assert $mixedFailed 'mixed QPC and nominal clock records fail attribution'
 
 # Orchestration with fake process boundaries.
 $body = $ast.Find({ param($node) $node -is [Management.Automation.Language.TryStatementAst] -and $node.Extent.Text.Contains('Cable continuity: 8 cables') }, $true)
@@ -99,18 +107,25 @@ function Test-Continuity([string] $Case) {
             Set-Content -LiteralPath $RedirectStandardOutput -Value $(if ($ready) { "render worker polling before lease activation`nengine route quanta: processed=28000 silent=0`npass-through relay: forwarded=6000 silence=20 dropped=0`ncapture-sink counters (cable-b): NativeBridgeStreamCounters { underrun_frames: 0 }`nrender-source counters (cable-a): NativeBridgeStreamCounters { underrun_frames: 480 }`nrender-source packet writes (cable-a): NativeBridgePacketCounters { accepted: 6000, late: 0, overrun: 0 }" } else { 'driver: info' })
             # Progress (tool-relative ms): a 50 ms gap at 3-4 s on every route
             # for the VM-wide case, on A-to-B only for the unexplained case.
-            $stall = ($Case -eq 'vm-wide') -or ($Case -eq 'unexplained' -and $name -eq 'A-to-B')
+            $stall = ($Case -in 'vm-wide','qpc-wide') -or ($Case -eq 'unexplained' -and $name -eq 'A-to-B')
             $progressLines = for ($second = 1; $second -le 62; $second++) {
-                $underrun = if ($second -ge 4 -and ($Case -in 'vm-wide','unexplained') -and $name -eq 'A-to-B') { 1920 } else { 480 }
-                New-ProgressLine ($second * 1000) $(if ($stall -and $second -eq 4) { 50000 } else { 3000 }) $underrun
+                $underrun = if ($second -ge 4 -and ($Case -in 'vm-wide','unexplained','qpc-wide') -and $name -eq 'A-to-B') { 1920 } else { 480 }
+                $progressLine = New-ProgressLine ($second * 1000) $(if ($stall -and $second -eq 4) { 50000 } else { 3000 }) $underrun
+                if ($Case -eq 'qpc-wide') { $progressLine += " snapshot_qpc_100ns=$(20000000000 + $second * 10000000)" }
+                $progressLine
             }
             Set-Content -LiteralPath (Join-Path $evidence "$name.progress.txt") -Value $progressLines
             $exit = if ($ready) { 0 } else { 3 }
             $fake = [pscustomobject]@{ Handle = 1; HasExited = (-not $ready); ExitCode = $exit; Kind = 'tone' }
         } else {
             $script:probeRuns += [string]$ArgumentList
-            $lost = if ($Case -in 'vm-wide','unexplained' -and $name -eq 'A-to-B') { "cable_lost_runs=1`ncable_lost_run first_impulse=300 count=3" } else { 'cable_lost_runs=0' }
-            $lostCount = if ($Case -in 'vm-wide','unexplained' -and $name -eq 'A-to-B') { 3 } else { 0 }
+            $lost = if ($Case -in 'vm-wide','unexplained','qpc-wide' -and $name -eq 'A-to-B') { "cable_lost_runs=1`ncable_lost_run first_impulse=300 count=3" } else { 'cable_lost_runs=0' }
+            $lostCount = if ($Case -in 'vm-wide','unexplained','qpc-wide' -and $name -eq 'A-to-B') { 3 } else { 0 }
+            if ($Case -eq 'lost-truncated' -and $name -eq 'A-to-B') { $lostCount = 3 }
+            if ($Case -eq 'qpc-wide') {
+                $lost += ' first_qpc_100ns=20035000000 last_qpc_100ns=20035200000'
+                $lost += "`ncable_emission_first_qpc_100ns=20010000000 cable_emission_last_qpc_100ns=20600000000"
+            }
             $corrupted = if ($Case -eq 'corrupted' -and $name -eq 'G-to-H') { 2 } else { 0 }
             Set-Content -LiteralPath $RedirectStandardOutput -Value "cable_render_frames_submitted=1 cable_capture_frames=1 cable_capture_dropped_frames=0 cable_capture_flagged_packets=1 cable_arrivals=6000`ncable_dating=in-run-median cable_render_clock_samples=6000 cable_render_clock_overflow=0 cable_anchor_dated_impulses=0 cable_render_discontinuities=0 cable_render_discontinuity_ms=0.000`ncable_impulses_emitted=6000 cable_impulses_matched=$(6000 - $lostCount) cable_impulses_lost=$lostCount cable_impulses_corrupted=$corrupted cable_impulses_duplicate=0 cable_impulses_out_of_window=0`ncable_latency_p50_ms=38.5`ncable_segments=1 cable_steady_level_ms=38.5`n$lost"
             $fake = [pscustomobject]@{ Handle = 1; HasExited = $false; ExitCode = 0; Kind = 'probe' }
@@ -151,6 +166,10 @@ function Test-Continuity([string] $Case) {
             Assert ($events.Count -eq 2 -and @($events | Where-Object { $_.VmWide }).Count -eq 2) 'the loss and the counter increase both coincide with the four-route stall'
             Assert ($verdict -eq 'all-events-vm-wide') 'documented deviation verdict'
         }
+        'qpc-wide' {
+            Assert ($verdict -eq 'all-events-vm-wide' -and $results[0].Events[0].At -eq 2003.5 -and $results[0].Timing -eq 'render-qpc-estimate') 'real QPC loss and progress dates share one timeline despite unrelated launch clock'
+        }
+        'lost-truncated' { Assert ([bool]$failure -and [string]$failure -match 'Lost-run report is incomplete') 'truncated loss list fails instead of silently attributing part of the run' }
         'unexplained' {
             Assert (@($results[0].Events | Where-Object { -not $_.VmWide }).Count -eq 2 -and $verdict -eq 'unexplained-events') 'a stall on one route only does not explain its loss'
         }
@@ -160,7 +179,7 @@ function Test-Continuity([string] $Case) {
         'corrupted' { Assert ([bool]$failure -and [string]$failure -match 'corrupted') 'corrupted impulses fail the run' }
     }
 }
-foreach ($case in @('clean','vm-wide','unexplained','already-8','set-cables-failure','route-early-exit','probe-hang','corrupted')) { Test-Continuity $case }
+foreach ($case in @('clean','vm-wide','qpc-wide','lost-truncated','unexplained','already-8','set-cables-failure','route-early-exit','probe-hang','corrupted')) { Test-Continuity $case }
 
 $probeBinary = Join-Path $workspace 'target\m00-probe-cable\m00-probe.exe'
 $imports = @(Assert-PortableVmTool $probeBinary)

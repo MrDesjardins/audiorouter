@@ -532,11 +532,144 @@ new bundle `driver\audioroutervirtual.sys` hashes are identical:
 `10cf8e879de85e3a924cdcc0dba2987d00cb8328dab9cba870b997f3ef952381`.
 No driver was installed or loaded on the host, and no host setting changed.
 
-Guest run is **pending user execution**. In Administrator PowerShell inside
-AR-DriverTest, use the one-hour block in
-[`virtual-cable-latency.md`](../../../operations/virtual-cable-latency.md#eight-cable-sustained-continuity-vcab-24-step-3-deviation-run).
-It takes about 62 minutes and copies one `continuity-*.zip` to the shared
-folder. After the user provides the zip, verify its hash, inspect all four
-probe/raw/progress/counter reports, attribute a loss/counter event as VM-wide
-only when all four routes report a nearby ≥20 ms gap, and append the observed
-results here. Do not infer a clean run from the host acceptance test.
+### One-hour guest result — r12 (2026-10-10)
+
+User ran the bundle in AR-DriverTest and copied
+`continuity-e9eff1834e9a4634a761e38d8fee31ba.zip` to
+`C:\VMs\ar-share\diagnostics-20261010-cable-continuity-r12`. SHA-256 verified
+on the host: `6c216807e09e44f18111c3839d6434f1736d4812fddbf330032633a454bd8d83`,
+matching the user's reported hash. The harness completed its 60-minute run;
+exit codes passed, no impulses were corrupted, the saved cable count was
+restored, and the result verdict is `unexplained-events` with
+`Qualification=false`. This is a failed NEM deviation run, not VCAB-24
+qualification.
+
+| Route | Emitted | Lost | Loss runs | Capture dropped frames | Render steps | p50 latency | ≥20 ms progress intervals |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| A→B | 359,621 | 378 | 176 | 286,944 | 67 | 61.752 ms | 57 |
+| C→D | 359,621 | 345 | 173 | 283,104 | 61 | 63.029 ms | 57 |
+| E→F | 359,620 | 364 | 177 | 291,168 | 62 | 62.758 ms | 53 |
+| G→H | 359,618 | 369 | 179 | 290,304 | 65 | 61.951 ms | 55 |
+
+Across routes, 1,456 of 1,438,480 emitted impulses were lost (about
+0.101%); corruption and duplication were zero. The report recorded 705 loss
+runs and 293 counter-increase events, with 434 of the 998 total events
+classified VM-wide by the harness and 564 called unexplained. Despite that
+strict label, losses cluster in the harness's nominal event dates: when bucketed into
+fixed 100 ms windows, 136 of 245 occupied windows had losses on at least two
+routes and 20 had losses on all four. This is evidence of shared timing
+pressure, but exact cross-route synchronization needs QPC-clock dating before
+attribution. It does not establish that each loss coincided with a ≥20 ms
+measured gap in every route.
+
+The raw probe clock streams also contain long gaps: 84–95 inter-clock gaps
+over 20 ms per route, with maxima of 734–744 ms. That independently confirms
+major pauses during the measurement, consistent with the route progress
+reports' roughly 732–738 ms maximum pump gaps. This establishes scheduling
+gaps, but the current output does not join each missing impulse index to the
+clock gap and counter delta that caused it.
+
+Interpretation: `Test-VmWideStall` calls an event VM-wide only when all four
+one-second progress intervals contain a ≥20 ms maximum gap within ±1.5 s of
+the event. Lost-event dates use launch wall time plus nominal impulse index
+times 10 ms, rather than the saved render QPC clocks. Render skips, launch
+uncertainty and long-run timing drift must be checked before interpreting
+cross-route clusters or unexplained events. A shared burst can lose impulses on multiple routes and
+still be classified unexplained if one route's sampled interval misses the
+threshold/window. The harness classification is not a causal diagnosis.
+Driver counters also show substantial render-source underrun/overrun and
+capture-sink underruns on every route; engine processing itself reported zero
+silent quanta. The run therefore does not support a driver-only or VM-only
+root-cause conclusion. Preserve the counters and do not tune buffers or weaken
+the event threshold from this run.
+
+Next: inspect r12 raw impulse timing against each route's progress intervals
+and packet/counter deltas, then use the already collected r11 raw data to locate
+the standing delay before designing the approved latency-recovery behavior.
+Do not repeat an unchanged hour-long run; if further VM evidence is needed,
+first improve the report to correlate per-route impulse loss and counter deltas
+with the measured pump gaps and shared cross-route loss windows.
+
+### Work organization and offline replay (2026-10-10)
+
+Both r11 archives were rehashed on the host and still match the SHA-256
+values above. Read-only replay command (host PC):
+
+```powershell
+& 'C:\VMs\ar-share\diagnostics-20261010-cable-latency-r11\tools\m00-probe.exe' cable-impulse-reanalyze 'C:\code\audiorouter\target\starts-engine-ee54eaca\starts-engine-ee54eaca00e1479b9587955163371eb9\start2-default-raw.csv'
+```
+
+Exit 0. Reproduced 400 emitted / 398 matched / 2 lost, no corrupted or
+duplicate impulses, zero render-clock discontinuities, initial level
+34.379 ms for 145 impulses and level 64.446 ms from impulse 148 for 252
+impulses. This reproduces the symptom; it does not locate the queued audio.
+The [execution queue](../virtual-cable.md#execution-queue-after-r12-2026-10-10)
+records inputs, task order, validation, rollback and the short guest-run gate.
+No additional guest run is needed while these offline tasks are pending.
+
+### QPC attribution repair and stage localization — r13 preparation (2026-10-10)
+
+Offline review command, host PC (bundled Python 3 executable used):
+
+```text
+python tools/vm/review-cable-continuity.py C:\VMs\ar-share\diagnostics-20261010-cable-continuity-r12\continuity-e9eff1834e9a4634a761e38d8fee31ba.zip --probe target/m00-probe-cable/m00-probe.exe --driver-qpc-frequency 10000000 --output target/r12-qpc-review
+```
+
+The frequency is explicit: 10 MHz was established for this guest in the
+prior scheduling trace. Progress snapshots in r12 lack normalized QPC
+timestamps; the offline review anchors them to the latest driver counter
+QPC and retains the existing ±1.5 s/20 ms correlation thresholds. The new
+runner instead receives normalized QPC snapshots directly from the route.
+
+| Route | Loss runs | Nearby all-four gaps (QPC) | Lost impulses without that correlation | Nominal timing drift |
+|---|---:|---:|---:|---:|
+| A→B | 176 | 146 | 33 | −4.808 s |
+| C→D | 173 | 148 | 28 | −4.858 s |
+| E→F | 177 | 149 | 30 | −4.827 s |
+| G→H | 179 | 154 | 28 | −4.862 s |
+
+All 1,456 lost impulses reproduced. The original report left 1,041 impulses
+without all-route gap correlation; QPC dating leaves 119. This improves
+the diagnosis, not continuity; it does not establish the cause of each loss.
+The render-clock dating still assumes submitted payload frames correspond
+to hardware-clock frames. Inspect that assumption before interpreting the
+remaining events or sizing a recovery drop.
+
+Stage localization from r11 engine default start 2's IEEE float32 stereo
+bridge WAV (48 kHz): impulse 146, amplitude code 3/32, occurs at frame
+71,104; next is impulse 148, code 5/32, at 73,024. Impulse 147 is absent.
+Their spacing is 1,920 frames versus the 960 frames expected across two
+impulse indices: an extra 960 frames (20 ms) already exists at Cable A's
+bridge output. Later impulses retain that shift. The source WAV also has
+the extra final impulse outside the probe's 400-impulse analysis window.
+End-to-end dating shifts by 30 ms; this does not prove the driver holds a
+30 ms queue. The new trace measures submitted payload/device positions,
+source bridge observation and sink publication, including relay depth and
+silence/drop counts, to locate the difference.
+
+Changes: probe prints QPC loss/window dates and optionally stores `submit`
+rows bracketing padding with clock samples. Route progress always includes
+normalized QPC snapshots. Optional `--trace-route` records bounded,
+preallocated render/capture impulse observations and fails on overflow;
+only stopped workers' data is written. `-TraceRoute` enables both in the
+short repeated-start runner and rejects missing traces. Raw write failure,
+mixed clocks and incomplete loss reports fail instead of misleadingly
+completing. Original latency statistics and counters are preserved.
+
+Host validation (Windows, no endpoint/driver opened): 23 tone-tool tests;
+2,203 probe self-test checks; 189 continuity-runner checks; 233 repeated-start
+checks; two offline QPC regression tests; both formatting checks; workspace
+and src-tauri Clippy passed. Rust emitted a filesystem hard-link cache
+warning and copied cache files; no Clippy code finding. Static CRT builds
+of probe/route tool passed. The first wiring check failed because trace
+stdout preceded preserved progress output; output ordering was repaired
+and all 23 tests passed. The first QPC fixture had PowerShell array
+concatenation precedence wrong; the corrected fixture now covers the actual
+QPC path and mixed-clock rejection. The no-loss sum was explicitly converted
+to zero after the regression exposed an empty-sum/null mismatch.
+
+Next: prepare a verified r13 bundle from clean identified source, keep
+the signed driver byte-identical to the slot-provenance base, and give the
+user the [short trace block](../../../operations/virtual-cable-latency.md#short-routesubmission-trace-after-r12).
+Qualification remains false; kernel/audio recovery changes await this
+measurement. Rollback: r12 tools and candidate `492d8ca8`.

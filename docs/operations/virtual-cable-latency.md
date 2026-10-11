@@ -192,6 +192,40 @@ copies `starts-<route>-<run>.zip` to the bundle folder on `Z:`. Host-side
 checks: `tests/acceptance/m03-cable-latency-starts.ps1` (fake process
 boundaries, the probe's steady-level self-test, host refusal).
 
+## Short route/submission trace after r12
+
+The r12 loss classifier used nominal impulse times, which drifted about
+4.8 seconds from the saved render QPC clock over the hour. The updated runner
+uses explicit QPC event/snapshot times. This fixes attribution; losses and
+counters remain visible. A short trace also measures the relationship between
+submitted payload frames and Windows device positions, and records impulses
+at route input/output with relay queue depth, silence and drop counts.
+Route trace times are observation times, not DMA presentation timestamps.
+The new raw `submit` rows retain clock readings before/after the padding query
+so its uncertainty can be checked. Original latency outputs remain unchanged
+until the extra delay is located; neither a QPC correlation nor this trace
+closes the native qualification gates.
+
+Prepared destination: `C:\VMs\ar-share\diagnostics-20261010-cable-stage-trace-r13`.
+Use Administrator PowerShell **inside AR-DriverTest**, Media Player closed,
+Cable B Listen off. This measures three fresh starts per period mode, taking
+about two minutes, and preserves a ZIP in the matching shared folder.
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-cable-stage-trace-r13' 'C:\ar\diagnostics-20261010-cable-stage-trace-r13' /E /R:1 /W:1 /XF latency-*.zip starts-*.zip continuity-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-stage-trace-r13\run-cable-latency-starts.ps1' -Route engine -Starts 3 -Impulses 400 -TraceRoute
+    if ($LASTEXITCODE -ne 0) { throw 'Stage trace failed. Evidence was preserved; send the output.' }
+}
+```
+
+The opt-in route trace is limited to short stereo 48 kHz runs with 128/480
+frame blocks and uses preallocated queues. Trace overflow, missing data, raw
+file write failure, or missing QPC observations fail the diagnostic. CSV output
+is flushed only after the workers and leases stop. No new driver installation
+or host configuration change is needed for this bundle.
+
 ## Eight-cable sustained continuity (VCAB-24 step 3 deviation run)
 
 This one-hour guest run checks four concurrent AudioRouter engine routes
