@@ -1828,6 +1828,35 @@ remove and reinstall 0.1.4 from the r27 bundle (`-Step remove`, then
 MANIFEST SHA-256 `71BD7A55C950ED854E450ABDD21860724460184AFE30BE5ABF4E06DE21425945`,
 45/45 verified.
 
+**r28 result (2026-10-11): the jack alone does not unlock it.** After
+installing 0.1.5 and restarting (helper status `driver=0.1.5.0`; booted
+15:56:09 after the 15:44:43 install), MMDevices showed no
+`PKEY_AudioEndpoint_PhysicalSpeakers` on any cable endpoint. Sound
+settings still listed only 1- and 2-channel formats. The reviewer notes
+Windows probably writes that property only when the speaker wizard
+finishes, so its absence is not by itself proof.
+
+**Repair r29 (driver 0.1.6).** Following Microsoft's guidance that speaker
+setup uses `KSPROPERTY_AUDIO_CHANNEL_CONFIG` on a `KSNODETYPE_DAC` node,
+every cable render topology gains a DAC node (wave source → DAC → line-out
+bridge) with that property: GET reports the current mask, stereo by
+default (`CMiniportTopology::m_ChannelConfig`); SET accepts exactly the
+masks in `CableSupportedFormats` (mono, stereo, quad, 5.1 `0x3F`, 7.1
+surround `0x63F`), because the wave pin's `IsFormatSupported` matches
+masks exactly (review N1: 5.1 surround `0x60F` and 7.1 `0xFF` are not in
+the 60-format table, which the VM status check pins). Review (same
+reviewer, read-only): no blocking defect. Node and pin numbering,
+shared read-only tables, PortCls node routing and verb handling are
+correct, and the endpoint names are untouched. Applied: SET masks match
+the pin; a SET with no value returns `STATUS_INVALID_PARAMETER`. Known
+limit (N2): the setting is not persisted across driver restarts; Windows
+re-sends speaker configuration when DirectSound objects are created
+(Microsoft docs). Host: normal and diagnostic 0.1.6 builds have 0
+warnings; 88,167 driver checks pass. VM plan: install 0.1.6 and restart.
+On the Playback tab, check that the cable shows a Configure button and
+lists 7.1 Surround. If not, remove and reinstall the device so its
+endpoints are created fresh, then check again.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
