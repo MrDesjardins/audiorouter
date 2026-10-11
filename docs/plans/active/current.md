@@ -51,9 +51,13 @@ available (user, 2026-10-11): VCAB-24/25 qualification is blocked, not
 waived. r20 (commit `6b2b915a`, 0.1.4) locks notification-list
 register/unregister against the timer walk; reviewed (no blocker, findings
 applied), host checks pass, bundle
-`diagnostics-20261011-notification-lock-r20` ready. Next: user runs the
-three guest blocks (install + Driver Verifier, repeated starts under
-Verifier, 10-minute continuity), then SysMain is restored. See
+`diagnostics-20261011-notification-lock-r20`. Guest: 10 starts under
+Driver Verifier with no bugcheck and 0 corrupted; a 10-minute continuity
+rerun (the first attempt was invalid because Verifier was still running
+without a restart) lost 416 / 240,000 (0.17 %), 0 corrupted, the same
+regime as r18's first 10 minutes. r20 (0.1.4) is the current driver;
+SysMain restored in the guest. Driver work in the VM is complete. Open:
+VCAB-24/25 qualification (blocked: no native-timer environment). See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 

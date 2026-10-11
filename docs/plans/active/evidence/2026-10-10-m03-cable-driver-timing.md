@@ -979,6 +979,38 @@ Repair: the rerun block requires `LastBootUpTime` later than the newest
 rerun disables it again for comparability with r18. No conclusion about
 r20 continuity is drawn from this run.
 
+**r20 Block 3 rerun (2026-10-11) — valid; no regression detected.** Archive
+`continuity-9c73e1b29c1e4dcd92d39ca930644fb3.zip`, SHA-256
+`3FB2792BA4D028B29CF600CB9DF6B67CBA4DB2877EEFEE45D49A323305610E6F` (matches
+the guest). The new guard passed: the guest booted after `verifier-off`
+(QPC 764.4 s at 11:34:54 gives a boot near 11:22). Bridge
+`driver_version: [0, 1, 4, 0]` on all routes. SysMain ran during boot (the
+user restarted before disabling it) and was stopped by the block; the run
+started 164 s after boot. Result: `Passed=true`, verdict
+`unexplained-events`, cable count restored, `Qualification=false`.
+
+| Route | Emitted | Lost | Loss runs | Capture dropped frames | Render steps | p50 latency | ≥20 ms progress intervals |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| A→B | 60,000 | 95 | 73 | 33,120 | 29 | 61.936 ms | 20 |
+| C→D | 60,000 | 103 | 86 | 33,120 | 31 | 63.285 ms | 22 |
+| E→F | 60,000 | 109 | 91 | 33,120 | 34 | 60.859 ms | 20 |
+| G→H | 60,000 | 109 | 92 | 33,600 | 34 | 64.596 ms | 22 |
+
+Totals: 416 / 240,000 lost (0.17 %), 0 corrupted. Offline QPC review
+(`target/r20-continuity-review`): all losses reproduced. 259 of 342 loss runs
+have an all-four-route ≥20 ms gap within ±1.5 s; 83 impulses lack one.
+Losses cluster with gaps: minute 2 (max 235 ms) and minute 9 (7 gaps, 178
+lost).
+
+Comparison with the first 10 minutes of the r18 hour (r18 started 74 s
+after boot), A→B cumulative counters at 10 minutes: late render packet
+writes 28 (r18) vs 34 (r20), capture underrun frames 17,568 vs 19,392.
+Lost impulses, all routes: about 304 vs 416. Same regime; the invalid
+Verifier attempt's 7.5 % is absent. The pass criterion "no worse than r18" is
+met within this VM's run-to-run variation, not exactly (more losses, mostly
+at VM-wide gaps). The change does not touch the audio data path. r20
+(0.1.4) becomes the current diagnostic driver; the guest has it installed.
+
 Guest procedure (user, three blocks, two restarts): copy + install +
 `verifier-on`, restart; status (0.1.4.0) + repeated-start engine run under
 Verifier + `verifier-off`, restart; status + 10-minute continuity, then
@@ -986,12 +1018,12 @@ restore SysMain.
 
 ## Next action and rollback
 
-The VM investigation of r18 is complete; no further VM run is planned. Next:
-(1) VCAB-24/25 qualification of r18 in a native-timer environment (native
-VT-x or bare metal, user-run, reversible); (2) as a separate change, fix the
-pre-existing unlocked `m_NotificationList` registration. The guest has r18
-(0.1.3) installed with SysMain disabled; restore SysMain with
-`Set-Service SysMain -StartupType Automatic; Start-Service SysMain` when VM
-tests are finished. Rollback inside the guest uses the retained
+The VM investigation is complete (r18, then r20 locking). The guest has
+r20 (0.1.4) installed, Driver Verifier off and SysMain restored. Open:
+VCAB-24/25 continuity qualification, blocked because no native-timer
+environment is available (user, 2026-10-11); the gate stays open and is not
+waived. Rollback to r18: `vm-checks.ps1 -Step remove` from the r20 bundle,
+then `-Step install` from `diagnostics-20261011-cable-resignal-r18`.
+Rollback inside the guest uses the retained
 492d8ca8/0.1.0 package from `C:\ar\repair-20261010-slot-provenance` with its
 existing install step. No host trust/security/audio/WSL change occurred.
