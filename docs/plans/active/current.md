@@ -20,9 +20,12 @@ Every one of the probe's 119 flagged capture packets is a packet the driver
 skipped: sample `GetReadPacket` returns the newest packet, not the next
 unread one, and 115 of the skipped packets were still intact. r17 repair
 (return oldest intact unread packet, MoreData) implemented uncommitted:
-27,537 driver checks, model sweep and normal/diagnostic 0.1.2 WDK builds
-pass. Next: independent WP-04 review of the diff, then commit, clean
-test-signed package/bundle and short guest comparison. See
+Independent review: no blocking defect; findings applied (88,167 checks).
+Committed `70e0d829`; clean test-signed 0.1.2 diagnostic package (33 checks)
+and immutable bundle `diagnostics-20261011-cable-capture-read-r17`
+(41/41 hashes) ready. Next: user runs the r17 guest install plus traced
+comparison; pass = 0 intact-slot skips, flagged capture packets ≥ 80 %
+below 119, 0 corrupted impulses. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 

@@ -429,8 +429,27 @@ Non-blocking findings and resolution:
 After the fixes: `build-tests.ps1` reports 88,167 checks passed, and the
 normal 0.1.2 build passes (`target/r17-build-normal2.log`).
 
-Next: commit, clean test-signed 0.1.2 diagnostic package and bundle, then
-the short guest comparison.
+### r17 clean candidate and immutable bundle — ready (2026-10-11)
+
+Source commit `70e0d82972c1aa0685ca60c88231b77ed7567023`. The user's
+unrelated uncommitted release-0.0.15 evidence edit was stashed only while the
+clean-tree packaging steps ran and then restored unchanged.
+
+| Artifact / check | Result |
+|---|---|
+| `build.ps1 -Version 0.1.2 -TimingDiagnostics -TestSign` | `target/r17-driver-70e0d829`, package.json clean/test/timing, 0.1.2.0; the script's trailing exit code 1 is the expected host trust-chain verification (log complete) |
+| Signer | `FF6876FBE50A74DC0B69077C11DC28A1A9FAAD40`; CER SHA256 `92A1CBDD…E4D` byte-identical to the guest-trusted retained bundle; no host trust added |
+| `tests/acceptance/m03-driver-package.ps1` | 33 checks pass, `target/driver-package-test-8e9fc5ed06424ed09f89f6737b7be2e4` |
+| SYS SHA256 | `C78DD35F33AACB48C86C448297DE3823336823F12578582FDDC0EC3C1EC9AC56` (bundle copy identical) |
+| `prepare-cable-latency-update.ps1` (base `repair-20261010-slot-provenance`) | `C:\VMs\ar-share\diagnostics-20261011-cable-capture-read-r17`; timing tool selftest passes; `target/r17-bundle.log` |
+| Bundle MANIFEST | SHA256 `5A163711510831DEE0E6DE12059DA6944F462DD6E29DC5B7425A4A37B2D18620`; all 41 entries recomputed, 0 mismatches |
+
+The bundle's `run-cable-driver-timing.ps1` compares r17 with recording
+off and r17 with recording on. The r16 run above is the pre-repair reference.
+Next: the user runs the guest block in the operations reply (copy, install,
+traced comparison). Rollback: reinstall the r16 bundle
+(`diagnostics-20261010-cable-driver-timing-r16`, 0.1.1) or the retained
+0.1.0 package with `vm-checks.ps1 -Step install`.
 
 ## Next action and rollback
 
