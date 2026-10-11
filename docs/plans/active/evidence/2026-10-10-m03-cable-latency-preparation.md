@@ -694,3 +694,82 @@ validation passed (147 Markdown files, 830 links), and `git diff --check`
 passed. The exact next action is the user-run short trace block linked above,
 about two minutes. Review its returned `starts-engine-*.zip` before changing
 recovery or claiming improved audio continuity.
+
+### r13 returned stage trace review — 2026-10-10
+
+Original archive:
+`C:\VMs\ar-share\diagnostics-20261010-cable-stage-trace-r13\starts-engine-49fccac967e041fc96099386a0e0b4cf.zip`.
+Host `Get-FileHash` SHA-256 matches the user:
+`741442A6B69C6DBC2B38F0231067934D7015DFB04A440E0BCA098236CE1BBE46`.
+Working tree was clean before this documentation change. No host audio,
+driver, VM configuration, security or power change was made.
+
+| Start / mode | Lost / 400 | Median ms | p95 ms | p99−p1 ms | Before observed input | After sink publication |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 default | 0 | 38.09 | 38.46 | 0.91 | 0 | 0 |
+| 2 default | 1 | 38.01 | 38.40 | 0.95 | 0 | 1 |
+| 3 default | 0 | 37.35 | 37.93 | 0.89 | 0 | 0 |
+| 1 low latency | 19 | 17.24 | 18.11 | 13.54 | 5 | 14 |
+| 2 low latency | 16 | 17.60 | 18.55 | 10.60 | 4 | 12 |
+| 3 low latency | 17 | 16.26 | 18.91 | 11.44 | 5 | 12 |
+
+Reproduction: extract a working copy with .NET `ZipFile.ExtractToDirectory`
+to `target/r13-stage-review`; keep the original ZIP unchanged. Read each
+`*-raw.csv`, `*-cable-a.route.csv`, `*-probe.txt` and source WAV. Decode
+impulse codes as rounded peak × 32, compare input/publication code lists,
+and reconstruct indices from their modulo-16 progression starting at code
+1. Independently expand the probe's reported loss runs and compare the
+missing-index lists. Inspect WAV RIFF chunks, require IEEE float32 stereo
+48 kHz, and compare every nonzero pulse code with the render trace. The
+local review script/output are `target/r13-stage-review/inspect.py` and
+`review.txt`; bundled Python execution exited 0 after all comparisons.
+An initial comparison compared loss-run starts instead of expanding their
+counts; correcting that review error made every comparison agree. These
+are offline original-data comparisons, not new audio execution.
+
+Every route trace header reports `missed=0`; submission counts are
+399/398/399 default and 1,483/1,486/1,488 low latency, with zero missed.
+Source render pulse counts are 401/401/401 default and 396/397/396 low
+latency; capture publication has exactly the same code order/counts.
+Each stream includes the existing extra final impulse 400; all reported
+loss counts above exclude it, matching the unchanged 400-impulse window.
+Capture arrivals are 401/400/401 default and 382/385/384 low latency.
+
+Low-latency source-missing indices are respectively
+`6,8,58,62,335`; `34,146,232,361`; `79,120,131,134,230`.
+Default start 2's missing impulse 102 is present at render input and at
+sink publication (capture sequence 125, first-hit frame 160, QPC
+101129667735). Sink underrun/overrun/sequence-gap counters remain zero in
+that run; the probe reports 384 skipped capture-position frames. A zero
+bridge counter is therefore insufficient evidence of delivered capture
+audio. Low-latency capture-position gaps total 12,288/9,472/14,720 frames;
+source underruns 9,040/7,312/10,464; late writes 83/69/90; render overruns
+11/16/22 packets. Relay drops 14/7/9 blocks do not remove any observed
+impulse in this sparse waveform; they must still be retained as failures.
+
+Matched input-to-publication observation medians are 6.262/6.269/4.686 ms
+default and 4.149/4.323/3.254 ms low latency, maxima under 10.007 ms.
+These are worker observation intervals, not sample presentation latency.
+Padding/clock sample brackets reach at most 0.434 ms; initial zero device
+positions and changing submission/presentation offsets prevent treating
+`device frames + padding` as an independently verified payload position.
+Default levels remain stable; no +30 ms persistent transition occurred.
+Low-latency discontinuity counts are 33/33/43, and jitter still fails.
+No recovery size or owning kernel queue is established by this run.
+
+Index reconstruction has a modulo-16 ambiguity if an entire 16-pulse cycle
+vanishes. In these runs its missing lists match the independently dated
+probe report, source WAV and trace counts. This supports the measured
+stage boundaries; it does not distinguish the Cable B DMA, Windows audio
+engine and diagnostic capture reader as the downstream cause.
+
+Next task (VCAB-20/24/25/28, VDEV-12): inspect packet retention and
+`GetReadPacket` delivery under late audio-engine wakeups, and the probe's
+render/capture worker scheduling. Code inspection shows the probe uses
+ordinary `std::thread` workers without the route tool's MMCSS registration;
+this is a diagnostic scheduling risk, not proof that it caused the loss.
+Model sample preservation and skipped packets before a kernel change;
+prepare a focused observation/repair only when it distinguishes those
+layers. Keep the current candidate and all loss counters. No new guest
+command or unchanged hour run is needed now. Rollback is documentation
+only; VCAB-24/25 qualification remains failed/open.

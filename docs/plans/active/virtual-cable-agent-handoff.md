@@ -6,6 +6,15 @@ This section supersedes sections 4–9 below, which describe the earlier
 `28b989f5` candidate and remain as history. Details and hashes are in the
 [repair record](evidence/2026-10-10-m03-render-commit-validity.md).
 
+**Latest r13 result received:** user archive hash verified; offline review
+finds default losses 0/1/0 and low-latency 19/16/17. Source-WAV and route
+trace pulse order agree: 14 losses before observed input, none between
+observed input and sink publication, 39 after publication. The persistent
+r11 +30 ms jump did not recur. Next agent task is capture packet delivery
+and probe scheduling review, not another r13/hour test or speculative
+kernel backlog drop. See [r13 evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#r13-returned-stage-trace-review-2026-10-10).
+This supersedes the older r13 pending-run bullets below.
+
 - **Installed in the VM:** candidate `492d8ca8` (slot provenance + packet
   outcome counters), bundle `C:\VMs\ar-share\repair-20261010-slot-provenance`.
   Two clean smokes, install/status and a 30-second direct run passed with

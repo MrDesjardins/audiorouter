@@ -91,6 +91,17 @@ pipe-test environment issue. Then ask before pushing the tag or
 creating/publishing a GitHub release. Rollback: keep 0.0.14 and compatible
 configuration/recording backups; the local release tag is unpushed.
 
+r13 returned and reviewed: SHA-256 matches the user. Six runs retain 53
+lost impulses: default 0/1/0 and low-latency 19/16/17. Default median latency
+is 37.35–38.09 ms; the r11 persistent +30 ms jump did not recur. Independent
+source-WAV pulse codes agree with the render trace, and render/capture
+publication pulse order agrees in every run. Fourteen losses precede the
+observed route input; 39 follow sink publication. This narrows the boundary
+without establishing a kernel cause. Next agent task: inspect capture
+packet retention/delivery and probe worker scheduling before another guest
+command; no unchanged hour run or guessed backlog drop. Details:
+[r13 result](evidence/2026-10-10-m03-cable-latency-preparation.md#r13-returned-stage-trace-review-2026-10-10).
+
 Driver-agent resumption: read the [Claude / next-agent handoff](virtual-cable-agent-handoff.md)
 first. It records the prepared candidate, exact next guest step, completed
 checks, open defects and host/VM safety boundaries as of 2026-10-10.

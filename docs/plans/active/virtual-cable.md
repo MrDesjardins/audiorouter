@@ -28,6 +28,17 @@ host's Hyper-V/WSL capability preserved.
 
 ### Execution queue after r12 — 2026-10-10
 
+Latest action (r13 returned): the short trace is complete and checksum
+verified. Default losses are 0/1/0; low-latency losses 19/16/17. All observed
+input pulses survive through sink publication, corroborated by the source
+WAV; 14 losses occur before observed input and 39 after publication. The
+standing +30 ms r11 jump did not recur. Next, agent reviews capture packet
+delivery/retention and the probe's unregistered audio threads against the
+observed timing before choosing a repair. No new guest run is requested.
+The [r13 evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#r13-returned-stage-trace-review-2026-10-10)
+supersedes the pending r13 run instructions below. VCAB-24/25 remain open;
+preserve all counters, thresholds, existing bundles and host settings.
+
 Objective: explain the remaining impulse losses and locate persistent delay
 before changing latency recovery. Requirements: VCAB-20/24/25/28, VDEV-12;
 spec 17's approved bounded, counted recovery decision governs any later repair.
