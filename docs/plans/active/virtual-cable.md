@@ -1575,6 +1575,23 @@ typecheck are clean. The VM driver reports 480 today, so r23's numbers
 stand. A VM check of a 128-frame configuration (helper configure, device
 restart, product route in low-latency mode) belongs with WP-10's switch.
 
+**A7 kill test preparation (2026-10-11).** `tools/vm/run-cable-kill.ps1`
+(guest): per repeat it starts the product route (`m03_cable_session`),
+then 1,500 probe impulses into Cable A Input with Cable B Output captured.
+About 4 s in it force-kills the route (`Process.Kill`, TerminateProcess:
+no clean stop), QPC-dated on the probe's clock. 3.5 s later, past the
+2 s lease timeout, it starts a new route and records kill/restart times in
+`result.json`. Host verdict, `tools/vm/review-cable-kill.py`:
+- the last arrival is at most 500 ms after the kill, with nothing more
+  until the restart;
+- after the restart, every arrival pairs with an impulse emitted after the
+  restart request, at the new route's steady delay ± 15 ms (codes repeat
+  every 16 impulses, so stale audio is recognised by timing);
+- the restarted route carries audio.
+`tests/acceptance/m03-cable-kill.ps1`: 6 checks (syntax, kill/QPC/lease
+wait present, no qualification claim, review self-test with 4 synthetic
+cases, host guard). The bundle preparer ships the runner.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
