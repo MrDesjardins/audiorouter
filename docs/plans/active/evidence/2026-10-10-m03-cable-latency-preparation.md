@@ -288,3 +288,18 @@ start-up and stall history by up to about one client buffer. Step 2
 (repeated starts and the same-VM VB-Cable comparison) must report steady
 levels per start and mark stall-shifted segments rather than one pooled
 percentile.
+## Bundle r9 (repeated starts and VB-Cable comparison, step 2)
+
+Commit `a2bd36bf`. The probe reports steady latency levels in impulse order
+(`cable_segments`, `cable_steady_level_ms`, up to eight `cable_segment`
+lines; tolerance 1 ms from a level's first impulse; the first level lasting
+50 impulses is the start's steady level). Self-test 146 checks, including
+the r8 shape (two levels around a stall), emission-order independence, the
+r7 one-block toggle (200 segments) and slow drift. New runner
+`run-cable-latency-starts.ps1 -Route engine|vbcable` (fresh streams per
+measurement, both period modes, `-Starts` 5, 400 impulses); acceptance 112
+checks; the existing latency acceptance still passes 220.
+
+Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r9`, source
+`a2bd36bf`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
+`8029570880076E299A52596E06CCBABF87396AE339CBE9E6B491C651458C7C4B`.
