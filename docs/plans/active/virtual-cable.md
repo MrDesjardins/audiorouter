@@ -1369,7 +1369,12 @@ or audio evidence.
   `tools\audiorouter-cli.exe` and runs its status once on the host.
   Guest: `audiorouter-cli --json virtual-cable status` must report
   `installed`, driver 0.1.4.0, protocol 1.1, and two cables with both
-  endpoint IDs.
+  endpoint IDs. r30 bundle
+  `C:\VMs\ar-share\diagnostics-20261011-cable-status-r30` (source
+  `177e558d`, same driver source as r20, 0.1.4.0; 33 package checks pass;
+  the host CLI status check passed while packaging), MANIFEST SHA-256
+  `52BC22996D2478EB0ACDB5FD8840BE1278CF057437B3A629B322F8D7BE2327C6`,
+  46/46 verified.
 
 ## WP-09 — Engine: Virtual Render Source / Virtual Capture Sink (17 §7.3)
 
