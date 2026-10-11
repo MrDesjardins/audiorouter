@@ -1821,7 +1821,12 @@ VM steps: install 0.1.5 (upgrade, restart). Check that Windows offers
 48 kHz, and that the probe's mix format is stereo. Then set 8 channels,
 run `run-cable-bitexact.ps1 -Channels 8`, and restore stereo. Rollback:
 remove and reinstall 0.1.4 from the r27 bundle (`-Step remove`, then
-`-Step install`).
+`-Step install`). r28 bundle `C:\VMsr-share\diagnostics-20261011-cable-jack-r28`
+(source `1fe3ba81`, clean; 0.1.5.0 test-signed with timing diagnostics,
+`cabletopo.cpp` compiled; 33 package checks pass), SYS SHA-256
+`D811EE6F9A788EBAE034D6B3CF5BFDF081E5B9535D5F5B011492CD4CAFEAF1F0`,
+MANIFEST SHA-256 `71BD7A55C950ED854E450ABDD21860724460184AFE30BE5ABF4E06DE21425945`,
+45/45 verified.
 
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
