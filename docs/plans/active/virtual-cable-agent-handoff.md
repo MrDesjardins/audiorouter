@@ -23,6 +23,11 @@ Next is manifest verification of r14, followed by the
 [short capture reader comparison](../../operations/virtual-cable-latency.md#capture-reader-scheduling-comparison-after-r13).
 Runtime registration and any loss reduction remain guest evidence pending.
 
+r14 bundle is now verified and ready (38 files, unchanged SYS), from clean
+source `95614628` at `C:\VMs\ar-share\diagnostics-20261010-cable-capture-reader-r14`.
+The exact next user action is the linked short capture reader command above;
+review its ZIP before requesting any longer run.
+
 - **Installed in the VM:** candidate `492d8ca8` (slot provenance + packet
   outcome counters), bundle `C:\VMs\ar-share\repair-20261010-slot-provenance`.
   Two clean smokes, install/status and a 30-second direct run passed with

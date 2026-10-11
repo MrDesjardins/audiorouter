@@ -824,3 +824,15 @@ and position gaps. Reject timestamp-error metadata as lag evidence.
 Remaining Windows engine/driver ambiguity may require an OS scheduling
 trace; choose that only from the new observations. VCAB-24/25 stay open.
 Rollback: retained r13 diagnostic, current driver and original archives.
+
+r14 prepared from clean source `95614628552b347760fad65d2a2b7e4f15b9ad24`
+using `prepare-cable-latency-update.ps1` and the slot-provenance base.
+Independent hash review verifies all 38 manifest entries at
+`C:\VMs\ar-share\diagnostics-20261010-cable-capture-reader-r14`.
+Manifest SHA-256:
+`BDDBA4B244C17399D8E15AEB344CBFE9ECADB1423F9F428B0D3DF79F7045CAFA`.
+SYS remains byte-identical:
+`10CF8E879DE85E3A924CDCC0DBA2987D00CB8328DAB9CBA870B997F3EF952381`.
+Static builds and portability/import gates pass; docs validation passes
+(147 Markdown files, 837 links) and diff check passes. Next action is the
+linked short guest block once; return its output/ZIP before increasing duration.

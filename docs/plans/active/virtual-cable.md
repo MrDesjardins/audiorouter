@@ -43,6 +43,15 @@ be partially overwritten, so returning it to recover losses is not justified.
 Next short guest result must distinguish reader delays from upstream packet
 delivery, rather than repeat the unchanged hour qualification.
 
+r14 is ready: source `95614628`, new share folder
+`C:\VMs\ar-share\diagnostics-20261010-cable-capture-reader-r14`;
+all 38 manifest entries independently verified and SYS unchanged. Static
+build, import gate, 2,208 probe checks, 253 repeated-start checks, 189
+continuity checks and docs validation pass. Exact next task: user runs the
+[two-minute capture reader comparison](../../operations/virtual-cable-latency.md#capture-reader-scheduling-comparison-after-r13)
+once, then agent reviews packet read timing and losses. The r13 pending-run
+instructions below are historical.
+
 Latest action (r13 returned): the short trace is complete and checksum
 verified. Default losses are 0/1/0; low-latency losses 19/16/17. All observed
 input pulses survive through sink publication, corroborated by the source
