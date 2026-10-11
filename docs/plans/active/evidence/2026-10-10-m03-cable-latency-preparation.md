@@ -145,6 +145,8 @@ is inconclusive). Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r6`
 source `ac20975e`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest
 SHA-256 `2311F75CC61D5CEB4BD1C8B0EF1C329F35E9582DE1386DCA910B4DF6C43B0AD4`.
 
+<a id="second-vm-run-bundle-r6--2026-10-10-nem-vm-guest-quieted"></a>
+
 ## Second VM run (bundle r6) — 2026-10-10, NEM VM, guest quieted
 
 Run `latency-6ec5fe40a5294257a05f38a997009610`, archive
@@ -214,6 +216,8 @@ Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r7`, source
 unchanged), manifest SHA-256
 `83DF4E23FED3E842CFA8C6DC77B81EB14B59D892D54B306669C379B8B38F9647`.
 Guest command: the runbook block with `-Route engine`.
+<a id="third-vm-run-bundle-r7-engine-route--2026-10-10-nem-vm-guest-quieted"></a>
+
 ## Third VM run (bundle r7, engine route) — 2026-10-10, NEM VM, guest quieted
 
 Run `latency-d89ce8d3cb604e28b5353b5b9c505004`, archive
