@@ -451,6 +451,90 @@ traced comparison). Rollback: reinstall the r16 bundle
 (`diagnostics-20261010-cable-driver-timing-r16`, 0.1.1) or the retained
 0.1.0 package with `vm-checks.ps1 -Step install`.
 
+First r17 guest attempt (2026-10-10): `vm-checks.ps1 -Step install` failed
+2 of 3 checks: the helper returned exit 5, and fewer than four endpoints
+were reported. The second install was an idempotent no-op. Evidence:
+`C:\ar\evidence\20261010-234557-install`. Exit 5 is the helper's
+`RestartRequired` (`crates/driver-helper/src/lib.rs:58`): the 0.1.2 update
+is staged, but 0.1.1 was loaded, so endpoints return only after a guest
+restart. No comparison ran. Next: restart the guest only, then
+`-Step status` and the traced comparison without reinstalling. Confirm
+`driver_version: [0, 1, 2, 0]` in the tone output before using results.
+
+Second r17 guest attempt (2026-10-10): **invalid for r17, because the old
+driver was still running.**
+- `-Step status` passed (`driver=0.1.2.0`, four endpoints). Its evidence
+  folder is `20261010-234646-status`, only 49 s after the install, and the
+  status step reports the installed package version, not the loaded image.
+- The traced comparison passed: `driver-timing-traced-cd15ffbe4d394a16a3849d1b8e125f1f.zip`,
+  inner `driver-timing-47c6798658394129ab10861f981d46ab.zip`; WPR lost
+  0 events; timing records 41,181, dropped 0, exhausted 0.
+- Both tone outputs report bridge `driver_version: [0, 1, 1, 0]`. The build
+  stamps this from `-Version` (`build.ps1:84-87`), so the loaded image was
+  r16 0.1.1.
+- The kernel records confirm it: 165 skipped capture packets, 127 of them
+  intact, i.e. the r16 newest-packet selection.
+
+As an extra r16 repeat it reproduces the mechanism: the probe flagged 166
+capture packets (21,120 frames) against 165 driver skips. Recording off/on:
+lost 41/51, p95 18.109/18.496 ms, jitter 7.744/9.048 ms, corrupted 0/0.
+Notification lateness p50 1.226 ms (max 3.287 ms); fetch after
+notification p99 0.624 ms. These are not r17 results.
+
+Harness gap: neither `-Step status` nor the timing wrapper checks that the
+bridge-reported driver version matches the bundle's package. Until a wrapper
+guard is added, the guest block must require a boot time later than the
+install, and the review must check the tone output's `driver_version`.
+
+## r17 guest result (2026-10-10) — valid; repair works in the kernel but fails the gate
+
+The guest restart was verified: boot 23:51:18, after the 23:45:57 install;
+status `20261010-235224-status`. Archive
+`driver-timing-traced-ac0b0fb85f4d4273940f2ed3d78d6d7e.zip`, inner
+`driver-timing-3ce8f411395d44958e4ecbb42af912b9.zip` (`Passed=true`). Both
+tone outputs report bridge `driver_version: [0, 1, 2, 0]`. WPR lost 0
+events. Timing records 39,751, dropped 0, exhausted 0.
+
+| | r17 recording off | r17 recording on | r16 on (reference) |
+|---|---|---|---|
+| Lost impulses / corrupted | 36 / 0 | 54 / 0 | 41 / 0 |
+| p50 / p95 / jitter | 17.293 / 18.827 / 20.647 ms | 16.386 / 18.302 / 5.804 ms | 18.277 / 19.727 / 10.284 ms |
+| Probe flagged capture packets | 76 (25,472 dropped frames) | 118 (15,232) | 119 |
+| Render discontinuities | 62 (371.7 ms) | 99 (110.7 ms) | 73 (62.1 ms) |
+| Max control loop gap | 349.3 ms | 87.8 ms | 24.4 ms |
+
+Kernel review (`review-driver-timing.py`, recording on, capture stream 188):
+- **0 intact-slot skips** (r16: 115) and no returned packet with reuse
+  begun, so the selection rule behaves as designed.
+- Total skips are still **119**, now all partly reused: 117 by less than
+  one packet, maximum 1,280 B.
+- 150 returns set `MoreData`. The next fetch followed within 0.2 ms only
+  14 times. 136 times it came only after the next driver notification.
+
+So the Windows audio engine reads one packet per notification wake-up here
+and mostly does not act on `MoreData`. Once a fetch rescues an older packet,
+the engine remains one packet behind. With two slots, that packet's slot is
+reached by the writer at the very boundary that triggers the next
+notification, so its next fetch finds it partly overwritten. The loss moves
+by one packet instead of disappearing.
+
+Gate: criterion 1 (0 intact skips) **met**; criterion 2 (≥ 80 % fewer
+flagged capture packets) **not met** (118 vs 119); criterion 3 (0
+corrupted) met. Large run-to-run variation, for example 349 ms and 88 ms
+control-loop gaps in this pair, also means single runs cannot resolve small
+effects. r17 is not harmful in this data, but it is not a repair on its
+own. No hour run.
+
+Next candidate (r18, not implemented): when `GetReadPacket` returns with
+`MoreData`, also signal the stream's registered notification event(s), so
+the engine wakes again at once and catches up. The current behaviour is
+14/150 immediate follow-ups. An extra signal at most produces one
+`STATUS_DEVICE_NOT_READY` poll. It needs the notification-list
+synchronisation used by the timer DPC, a model of OS wake/fetch behaviour
+first, and review. Alternative or complementary: reduce notification
+lateness (p50 1.287 ms) with frame-granular positions and boundary-aligned
+timer due times.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)

@@ -23,9 +23,12 @@ unread one, and 115 of the skipped packets were still intact. r17 repair
 Independent review: no blocking defect; findings applied (88,167 checks).
 Committed `70e0d829`; clean test-signed 0.1.2 diagnostic package (33 checks)
 and immutable bundle `diagnostics-20261011-cable-capture-read-r17`
-(41/41 hashes) ready. Next: user runs the r17 guest install plus traced
-comparison; pass = 0 intact-slot skips, flagged capture packets ≥ 80 %
-below 119, 0 corrupted impulses. See
+(41/41 hashes). r17 guest result (0.1.2 verified loaded): 0 intact skips,
+but still 119 skips and 118 flagged capture packets. The audio engine
+ignores MoreData 136/150 times and waits for the next notification, so it
+stays one packet behind and the loss moves. Gate not met. Next: decide on
+r18 (re-signal the notification event on MoreData) and/or boundary-aligned
+notifications. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 
