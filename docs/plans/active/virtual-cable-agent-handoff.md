@@ -2,6 +2,15 @@
 
 ## Current state (2026-10-10 evening) — read this first
 
+**r14 completed:** checksum matches; MMCSS/COM setup and worker APIs pass,
+zero trace misses. Default losses 0/0/0 (two p95s above 40 ms); low-latency
+35/27/20 losses, so registration did not solve the defect. Stage/WAV review
+finds 19 losses before observed input, 63 after publication, none between.
+The next task is notification/OS-fetch timing modeling and a focused guest
+scheduler observation if needed. No unchanged guest retry. Details:
+[r14 result](evidence/2026-10-10-m03-cable-latency-preparation.md#r14-returned-capture-reader-review-2026-10-10).
+This supersedes pending r14 run instructions below.
+
 This section supersedes sections 4–9 below, which describe the earlier
 `28b989f5` candidate and remain as history. Details and hashes are in the
 [repair record](evidence/2026-10-10-m03-render-commit-validity.md).

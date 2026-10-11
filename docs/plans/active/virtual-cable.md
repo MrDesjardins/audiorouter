@@ -28,6 +28,20 @@ host's Hyper-V/WSL capability preserved.
 
 ### Execution queue after r12 — 2026-10-10
 
+Latest r14 review: archive/hash verified; COM/MMCSS succeeded, all worker
+errors and trace misses zero. Default losses 0/0/0, but p95 42.30/35.82/41.40
+ms exceeds the 40 ms target in two starts. Low-latency losses 35/27/20,
+versus r13 19/16/17: scheduling registration did not solve loss. Stage/WAV
+comparison retains 19 losses before observed input, zero between input and
+sink publication, 63 downstream. Capture position gaps total 35,712 frames;
+26,880 occur across read intervals ≤5 ms. One 70.607 ms shared pause occurs,
+but starts 2/3 lose audio with reader gaps no greater than 6.310/5.607 ms.
+Next agent task: model notification/GetReadPacket timing at 128 frames and
+prepare a focused guest OS scheduling trace if necessary to distinguish DPC
+delivery, Windows audio-engine fetch and client wake. No unchanged short/hour
+rerun, buffer enlargement or speculative kernel recovery. See
+[r14 result](evidence/2026-10-10-m03-cable-latency-preparation.md#r14-returned-capture-reader-review-2026-10-10).
+
 Investigation implementation plan after r13: requirements VCAB-20/24/25/28,
 VDEV-12. The probe's render/capture std::threads lack COM initialization and
 MMCSS registration. Add thread-owned COM/MMCSS guards and startup readiness;

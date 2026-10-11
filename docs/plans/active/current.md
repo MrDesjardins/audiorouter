@@ -2,6 +2,13 @@
 
 ## Release 0.0.15 — 2026-10-10 (in progress)
 
+Latest driver evidence: r14 archive verified. COM/MMCSS and trace completeness
+pass, but low-latency loss persists (35/27/20 impulses); default is lossless
+in all three short runs, with two p95s above 40 ms. The probe registration
+repair did not solve continuity. Agent next reviews packet notification and
+Windows fetch/wake timing; no unchanged guest rerun or hour test. See
+[r14 review](evidence/2026-10-10-m03-cable-latency-preparation.md#r14-returned-capture-reader-review-2026-10-10).
+
 User-requested release. Version bump and notes are committed as
 `aeba0f95` (`Release 0.0.15`); local annotated tag `v0.0.15` points there.
 The preceding documentation-anchor repair is `a6dc4697`. Do not push or

@@ -836,3 +836,84 @@ SYS remains byte-identical:
 Static builds and portability/import gates pass; docs validation passes
 (147 Markdown files, 837 links) and diff check passes. Next action is the
 linked short guest block once; return its output/ZIP before increasing duration.
+
+### r14 returned capture reader review — 2026-10-10
+
+Archive:
+`C:\VMs\ar-share\diagnostics-20261010-cable-capture-reader-r14\starts-engine-904fe028f5174878994e5254b5dd31b9.zip`.
+Host Get-FileHash matches the user SHA-256:
+`614DFC334B12DBF7A3120F93CFB093047D458980A8E2EB728745D627137791D3`.
+Tree clean before documentation changes. COM and MMCSS setup succeed in all
+six runs; worker error exits zero; submission/capture/route traces have no
+misses. This verifies the new registration path, not continuity.
+
+| Start / mode | Lost / 400 | Median ms | p95 ms | Jitter ms | Before input / after publication |
+|---|---:|---:|---:|---:|---|
+| 1 default | 0 | 41.76 | 42.30 | 0.92 | 0 / 0 |
+| 2 default | 0 | 35.57 | 35.82 | 0.86 | 0 / 0 |
+| 3 default | 0 | 41.08 | 41.40 | 0.92 | 0 / 0 |
+| 1 low latency | 35 | 17.95 | 19.17 | 11.17 | 4 / 31 |
+| 2 low latency | 27 | 16.31 | 19.82 | 20.30 | 10 / 17 |
+| 3 low latency | 20 | 17.46 | 18.59 | 7.32 | 5 / 15 |
+
+82 low-latency losses versus r13's 52; registration does not solve loss.
+Do not infer that MMCSS caused the increase from these separate VM runs.
+No corruption/duplicate impulses. Default levels stable within runs, but
+two default p95s exceed 40 ms. Low-latency jitter fails in all starts. The
+earlier persistent +30 ms default transition did not recur.
+
+Offline working copy: `target/r14-stage-review`. The r13 independent pulse
+review script was applied to this archive (`inspect.py`, output `review.txt`):
+source WAV pulse order matches render trace; sink publication pulse order
+matches source; expanded probe loss lists match reconstructed missing codes.
+All comparisons exit 0, preserving the modulo-16 limitation noted for r13.
+Counts include extra final impulse 400 only for trace/WAV comparisons.
+Source/publication counts 401/401/401 default and 397/391/396 low latency;
+arrivals 401/401/401 and 366/374/381. No observed impulse is lost in the
+input-to-publication portion. Relay dropped blocks 10/9/11 remain failures
+even though no sparse pulse falls in those discarded blocks.
+
+New capture row review (`capture-review.py`, `capture-review.json`, bundled
+Python, exit 0) reconstructs forward position gaps and subtracts packet
+duration from read minus first-sample QPC. Every packet has a valid timestamp
+flag (zero timestamp errors); calculations still inherit driver timestamps.
+
+| Low-latency start | Captured packets | Gap events | Skipped frames | Skipped across read gaps ≤5 ms | Maximum read gap ms | Median / p99 completion-to-read estimate ms |
+|---|---:|---:|---:|---:|---:|---|
+| 1 | 1,821 | 93 | 14,976 | 8,832 | 70.607 | 1.409 / 2.845 |
+| 2 | 1,848 | 90 | 11,520 | 9,728 | 6.310 | 1.412 / 2.945 |
+| 3 | 1,866 | 72 | 9,216 | 8,320 | 5.607 | 1.400 / 2.781 |
+
+Reproduction: parse `capture` rows as position/frames/flags/packet QPC/read
+QPC/wake QPC; missing frames = next position − previous position − previous
+frames when positive. Read gap = next read QPC − previous read QPC, divided
+by 10,000. Completion-to-read estimate = (read − packet QPC)/10,000 −
+frames×1,000/48,000, excluding timestamp-error packets. Sum skipped frames
+matches unchanged stdout counters in every run. Default capture gaps zero;
+read gaps max 13.192/12.708/12.575 ms at the 10 ms audio period.
+
+Start 1's 70.607 ms reader/wake pause skips 3,200 frames, overlapping the
+progress interval with render/capture/control gaps 70.121/70.356/70.369 ms
+and large source/sink counter deltas. This supports shared-pause attribution
+for that event only. Starts 2/3 have loss without a comparable long pause.
+26,880 of 35,712 skipped frames occur across read intervals ≤5 ms. That is
+still almost two 128-frame periods (2.667 ms each); it cannot exclude an OS
+fetch/client phase or notification delay. Fresh packet timestamps and prompt
+reads do not independently prove where skipped packets vanished.
+
+Notification source review: the 1 ms timer updates DMA, compares completed
+packet count with last-notified count and coalesces a notification. It does
+not use a separate accumulating fractional-period clock. GetReadPacket
+advances DMA and returns the newest complete packet; prior DMA slots can be
+partially overwritten. No evidence justifies returning old slots or enlarging
+buffers. Driver/capture-OS/client timing is still unresolved for the frequent
+one-packet gaps. Sink underrun counts low mode 3,296/160/0; source underruns
+9,456/9,424/5,744 and late writes 102/84/56 remain failures.
+
+Next task (VCAB-20/24/25/28, VDEV-12): model timer notification, OS fetch and
+reader phase at 128 frames, then prepare a focused guest scheduler trace if
+the retained data cannot distinguish late DPC notification from delayed
+Windows audio-engine fetch/client wake. No unchanged r14/hour rerun, no
+kernel patch chosen from correlation, no buffer/security/host changes.
+Qualification remains open/failed. Rollback retains r13/r14 tools and
+candidate 492d8ca8. Only offline review and documentation changed this turn.
