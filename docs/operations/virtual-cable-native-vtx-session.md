@@ -79,6 +79,15 @@ Select-String 'C:\VMs\AR-DriverTest\Logs\VBox.log' -Pattern 'HMR3Init|NEM' | Sel
 
 Expect a line like `HM: HMR3Init: VT-x w/ nested paging ...` and no
 `fall back to NEM`. If NEM still appears, do not run tests; restore below.
+
+**Observed on this PC (2026-10-10):** after `hypervisorlaunchtype Off` and a
+restart, `HypervisorPresent` stayed `True` and Virtualization-Based Security
+with Memory Integrity kept running. With VBS/Memory Integrity enabled, the
+boot setting alone did not stop the hypervisor here. Getting native VT-x on
+this PC would also need Memory Integrity (Windows Security → Device security
+→ Core isolation) turned off for the session and back on afterwards, which is
+a separate security decision for the user; a bare-metal or other test PC
+avoids it.
 Then run only the long tests the agent gives you.
 
 ## Restore the hypervisor (bring WSL and Memory Integrity back)
