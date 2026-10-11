@@ -406,6 +406,18 @@ queued for the whole window. Order:
   to the starting level, with drops counted.
 WP-09's product route reuses (a).
 
+(a) done (2026-10-11): `StandingDelayTrim` and
+`STANDING_DELAY_WINDOW_BLOCKS` (100) in `crates/windows-audio/src/cable_route.rs`;
+the tool relay's capture side drops and counts a standing block
+(`pass-through relay: … trimmed=N`). Model tests: on-time audio untouched;
+one silence insert sheds exactly one block and returns to the normal wait;
+a late burst after two silences sheds two; an early block or in-period
+jitter sheds none; at most one drop per window; a producer three blocks
+ahead is brought back in three windows. Relay test: the standing block is
+shed and the depth returns to zero. Host: `cargo test -p
+audiorouter-windows-audio` (lib 132 passed, 3 ignored; tool 24 passed),
+fmt check and workspace Clippy clean. Next: (b) driver render queue.
+
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
 supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,

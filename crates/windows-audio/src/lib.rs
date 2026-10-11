@@ -14,6 +14,7 @@ use windows_core::Interface;
 mod cable_route;
 pub use cable_route::{
     cable_route_session, reblock_delay_frames, CableRouteError, CableRouteProcessor,
+    StandingDelayTrim, STANDING_DELAY_WINDOW_BLOCKS,
 };
 mod network_audio;
 pub use network_audio::*;

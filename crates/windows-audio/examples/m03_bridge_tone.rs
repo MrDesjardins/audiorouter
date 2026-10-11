@@ -782,10 +782,11 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
         println!("interval progress snapshots: {}", progress_path.display());
         if options.passthrough {
             println!(
-                "pass-through relay: forwarded={} silence={} dropped={}",
+                "pass-through relay: forwarded={} silence={} dropped={} trimmed={}",
                 state.relay_forwarded.load(Ordering::Acquire),
                 state.relay_silence.load(Ordering::Acquire),
-                state.relay_dropped.load(Ordering::Acquire)
+                state.relay_dropped.load(Ordering::Acquire),
+                state.relay_trimmed.load(Ordering::Acquire)
             );
         }
         if options.engine {

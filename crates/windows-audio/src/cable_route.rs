@@ -252,6 +252,63 @@ impl CableRouteProcessor {
     }
 }
 
+/// Default [`StandingDelayTrim`] window: 100 blocks, about 1 s at the
+/// 480-frame default bridge block.
+pub const STANDING_DELAY_WINDOW_BLOCKS: u32 = 100;
+
+/// Latency recovery for a block FIFO whose producer and consumer run at the
+/// same nominal block rate (spec 17, "Latency recovery").
+///
+/// When the consumer finds the FIFO empty it sends silence, and the block that
+/// arrives late then stays queued for the rest of the stream: a standing
+/// extra delay of one block (2026-10-11 traced VM run, one +10 ms step per
+/// silence insert). The consumer calls [`Self::after_take`] with the FIFO
+/// depth left after each take. When that depth stayed at least one for a
+/// whole window, the oldest queued block has waited a full block period at
+/// every take, so dropping it returns the FIFO to its normal delay. A burst
+/// or jitter that empties the FIFO once restarts the window, so on-time
+/// audio is never dropped and at most one block is dropped per window.
+/// Plain integer state: no allocation, lock or wait.
+#[derive(Clone, Debug)]
+pub struct StandingDelayTrim {
+    window: u32,
+    held: u32,
+    trimmed: u64,
+}
+
+impl StandingDelayTrim {
+    /// `window_blocks` of zero is treated as one.
+    pub const fn new(window_blocks: u32) -> Self {
+        Self {
+            window: if window_blocks == 0 { 1 } else { window_blocks },
+            held: 0,
+            trimmed: 0,
+        }
+    }
+
+    /// Record one consumer take (a block or silence) that left `depth`
+    /// blocks queued. Returns true when the caller must drop exactly one
+    /// queued block now, as a counted latency-recovery drop.
+    pub fn after_take(&mut self, depth: usize) -> bool {
+        if depth == 0 {
+            self.held = 0;
+            return false;
+        }
+        self.held += 1;
+        if self.held < self.window {
+            return false;
+        }
+        self.held = 0;
+        self.trimmed += 1;
+        true
+    }
+
+    /// Blocks dropped so far.
+    pub fn trimmed(&self) -> u64 {
+        self.trimmed
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,5 +442,104 @@ mod tests {
             CableRouteProcessor::new(2, 0, graph()).err(),
             Some(CableRouteError::InvalidBlockFrames)
         );
+    }
+
+    /// FIFO model at 10 ticks per block: block `n` arrives at `arrivals[n]`;
+    /// the consumer takes once per block period at `10 * k + 5`. Returns, per
+    /// take, how long the delivered block waited since it arrived (`None`
+    /// for silence), and the number of blocks the trim dropped.
+    fn run_fifo(arrivals: &[u64], takes: u64, window: u32) -> (Vec<Option<u64>>, u64) {
+        let mut queue = std::collections::VecDeque::new();
+        let mut next = 0;
+        let mut trim = StandingDelayTrim::new(window);
+        let mut delivered = Vec::new();
+        for take in 0..takes {
+            let now = 10 * take + 5;
+            while next < arrivals.len() && arrivals[next] <= now {
+                queue.push_back(arrivals[next]);
+                next += 1;
+            }
+            delivered.push(queue.pop_front().map(|arrival| now - arrival));
+            if trim.after_take(queue.len()) {
+                queue.pop_front().expect("trim drops only a queued block");
+            }
+        }
+        (delivered, trim.trimmed())
+    }
+
+    fn on_time(blocks: u64) -> Vec<u64> {
+        (0..blocks).map(|n| 10 * n + 1).collect()
+    }
+
+    #[test]
+    fn standing_delay_trim_leaves_on_time_audio_untouched() {
+        let (delivered, trimmed) = run_fifo(&on_time(1_000), 1_000, 100);
+        assert_eq!(trimmed, 0);
+        assert!(delivered.iter().all(|wait| *wait == Some(4)));
+    }
+
+    #[test]
+    fn standing_delay_trim_sheds_the_block_a_silence_insert_left_behind() {
+        // Block 50 arrives just after its take: one silence, then every later
+        // block waits one extra period (the traced r20 starts 6 and 10).
+        let mut arrivals = on_time(1_000);
+        arrivals[50] = 10 * 50 + 6;
+        let (without, _) = run_fifo(&arrivals, 1_000, u32::MAX);
+        assert_eq!(without[50], None);
+        assert!(without[52..].iter().all(|wait| *wait == Some(14)));
+        let (delivered, trimmed) = run_fifo(&arrivals, 1_000, 100);
+        assert_eq!(trimmed, 1);
+        assert_eq!(delivered.iter().filter(|wait| wait.is_none()).count(), 1);
+        // Normal wait again after one window; nothing else is lost.
+        assert!(delivered[160..].iter().all(|wait| *wait == Some(4)));
+        let blocks = delivered.iter().flatten().count() as u64;
+        assert_eq!(blocks + trimmed, 1_000);
+    }
+
+    #[test]
+    fn standing_delay_trim_sheds_one_block_per_silence_after_a_late_burst() {
+        // Blocks 200-202 arrive together after two takes found nothing: two
+        // silences, so two blocks stand until trimmed.
+        let mut burst = on_time(1_000);
+        for (n, arrival) in burst.iter_mut().enumerate().skip(200).take(3) {
+            *arrival = 10 * 202 + 4 + (n as u64 - 200);
+        }
+        let (delivered, trimmed) = run_fifo(&burst, 1_000, 100);
+        assert_eq!(delivered.iter().filter(|wait| wait.is_none()).count(), 2);
+        assert_eq!(trimmed, 2);
+        assert!(delivered[450..].iter().all(|wait| *wait == Some(4)));
+    }
+
+    #[test]
+    fn standing_delay_trim_ignores_early_blocks_and_jitter() {
+        // One block arriving a period early queues for one take only.
+        let mut early = on_time(1_000);
+        early[301] = 10 * 300 + 2;
+        let (delivered, trimmed) = run_fifo(&early, 1_000, 100);
+        assert_eq!(trimmed, 0);
+        assert!(delivered.iter().all(Option::is_some));
+        // Jitter inside the period: never a standing block.
+        let jitter: Vec<u64> = (0..1_000)
+            .map(|n| 10 * n + if n % 2 == 0 { 1 } else { 4 })
+            .collect();
+        let (delivered, trimmed) = run_fifo(&jitter, 1_000, 100);
+        assert_eq!(trimmed, 0);
+        assert!(delivered.iter().all(Option::is_some));
+    }
+
+    #[test]
+    fn standing_delay_trim_drops_at_most_one_block_per_window() {
+        let mut trim = StandingDelayTrim::new(100);
+        let drops: Vec<u32> = (0..1_000).filter(|_| trim.after_take(3)).collect();
+        assert_eq!(drops, (0..10).map(|k| 99 + 100 * k).collect::<Vec<_>>());
+        assert_eq!(trim.trimmed(), 10);
+        // A producer three blocks ahead is brought back one block per window.
+        let ahead: Vec<u64> = (0..1_000u64)
+            .map(|n| (10 * n + 1).saturating_sub(30))
+            .collect();
+        let (delivered, trimmed) = run_fifo(&ahead, 990, 100);
+        assert_eq!(trimmed, 3);
+        assert!(delivered[400..].iter().all(|wait| *wait == Some(4)));
+        assert_eq!(StandingDelayTrim::new(0).window, 1);
     }
 }

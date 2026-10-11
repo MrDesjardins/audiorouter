@@ -2,7 +2,7 @@
 use super::{fill_tone_block, Options};
 use audiorouter_windows_audio::{
     AudioServiceThreadCapabilities, AudioServiceThreadGuard, CableRouteProcessor,
-    NativeBridgeRegion, NativeBridgeRegionError,
+    NativeBridgeRegion, NativeBridgeRegionError, StandingDelayTrim, STANDING_DELAY_WINDOW_BLOCKS,
 };
 use crossbeam_queue::ArrayQueue;
 use std::sync::{
@@ -53,6 +53,9 @@ pub(super) struct Shared {
     pub relay_forwarded: AtomicU64,
     pub relay_silence: AtomicU64,
     pub relay_dropped: AtomicU64,
+    // Latency-recovery drops: a block left standing in the relay after a
+    // silence insert, shed by `StandingDelayTrim` (spec 17).
+    pub relay_trimmed: AtomicU64,
     // `--engine`: quanta the engine processed, and quanta it replaced with
     // silence (no output); published by the render worker.
     pub engine_processed: AtomicU64,
@@ -90,6 +93,7 @@ impl Shared {
             relay_forwarded: AtomicU64::new(0),
             relay_silence: AtomicU64::new(0),
             relay_dropped: AtomicU64::new(0),
+            relay_trimmed: AtomicU64::new(0),
             engine_processed: AtomicU64::new(0),
             engine_silent: AtomicU64::new(0),
             trace: OnceLock::new(),
@@ -157,8 +161,10 @@ pub(super) fn relay_forward(state: &Shared, samples: &[f64]) {
 }
 
 /// Capture side of the pass-through: the next block to publish, or silence
-/// (counted) when nothing has arrived from the render source yet.
-pub(super) fn relay_take(state: &Shared, block: &mut [f64]) {
+/// (counted) when nothing has arrived from the render source yet. A block
+/// that stays queued behind every take for a whole trim window is a standing
+/// delay (a late block after a silence insert); it is dropped and counted.
+pub(super) fn relay_take(state: &Shared, trim: &mut StandingDelayTrim, block: &mut [f64]) {
     match state.relay_ready.pop() {
         Some(buffer) => {
             let count = block.len().min(buffer.len());
@@ -170,6 +176,12 @@ pub(super) fn relay_take(state: &Shared, block: &mut [f64]) {
         None => {
             block.fill(0.0);
             state.relay_silence.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    if trim.after_take(state.relay_ready.len()) {
+        if let Some(oldest) = state.relay_ready.pop() {
+            let _ = state.relay_free.push(oldest);
+            state.relay_trimmed.fetch_add(1, Ordering::Relaxed);
         }
     }
 }
@@ -254,6 +266,7 @@ pub(super) fn capture(
     let mut sequence = 1;
     let mut stalled = options.stall_ms == 0;
     let run_for = Duration::from_secs(u64::from(options.seconds));
+    let mut trim = StandingDelayTrim::new(STANDING_DELAY_WINDOW_BLOCKS);
     loop {
         let stopping = state.stop.load(Ordering::Acquire);
         let now = Instant::now();
@@ -274,7 +287,7 @@ pub(super) fn capture(
         }
         if region.consumer_sequence() >= sequence {
             if options.passthrough {
-                relay_take(state, tone);
+                relay_take(state, &mut trim, tone);
             } else {
                 fill_tone_block(
                     tone,
@@ -574,15 +587,16 @@ mod tests {
     #[test]
     fn relay_preserves_order_counts_silence_and_bounds_its_depth() {
         let state = Shared::new(4, 2);
+        let mut trim = StandingDelayTrim::new(STANDING_DELAY_WINDOW_BLOCKS);
         let mut block = [9.0; 4];
-        relay_take(&state, &mut block);
+        relay_take(&state, &mut trim, &mut block);
         assert_eq!(block, [0.0; 4], "empty relay publishes silence");
         assert_eq!(state.relay_silence.load(Ordering::Relaxed), 1);
         for value in 1..=2 {
             relay_forward(&state, &[f64::from(value); 4]);
         }
         for value in 1..=2 {
-            relay_take(&state, &mut block);
+            relay_take(&state, &mut trim, &mut block);
             assert_eq!(block, [f64::from(value); 4], "FIFO order");
         }
         assert_eq!(state.relay_forwarded.load(Ordering::Relaxed), 2);
@@ -593,10 +607,10 @@ mod tests {
         }
         assert_eq!(state.relay_dropped.load(Ordering::Relaxed), 2);
         for value in 3..=5 {
-            relay_take(&state, &mut block);
+            relay_take(&state, &mut trim, &mut block);
             assert_eq!(block, [f64::from(value); 4]);
         }
-        relay_take(&state, &mut block);
+        relay_take(&state, &mut trim, &mut block);
         assert_eq!(block, [0.0; 4]);
         assert_eq!(
             state.relay_free.len(),
@@ -605,8 +619,30 @@ mod tests {
         );
         // A shorter source block is zero-padded, never mixed with stale data.
         relay_forward(&state, &[7.0; 2]);
-        relay_take(&state, &mut block);
+        relay_take(&state, &mut trim, &mut block);
         assert_eq!(block, [7.0, 7.0, 0.0, 0.0]);
+        assert_eq!(state.relay_trimmed.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn relay_sheds_a_block_left_standing_after_a_silence_insert() {
+        let state = Shared::new(4, 2);
+        let mut trim = StandingDelayTrim::new(3);
+        let mut block = [0.0; 4];
+        // One take found nothing; from then on one block always stays queued.
+        relay_take(&state, &mut trim, &mut block);
+        relay_forward(&state, &[1.0; 4]);
+        let mut taken = Vec::new();
+        for value in 2..=6 {
+            relay_forward(&state, &[f64::from(value); 4]);
+            relay_take(&state, &mut trim, &mut block);
+            taken.push(block[0]);
+        }
+        // Third take with a standing block drops the oldest queued one (4).
+        assert_eq!(taken, [1.0, 2.0, 3.0, 5.0, 6.0]);
+        assert_eq!(state.relay_trimmed.load(Ordering::Relaxed), 1);
+        assert_eq!(state.relay_ready.len(), 0, "normal depth again");
+        assert_eq!(state.relay_dropped.load(Ordering::Relaxed), 0);
     }
 
     #[test]
