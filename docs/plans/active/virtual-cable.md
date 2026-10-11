@@ -85,7 +85,11 @@ found: the probe dates impulses from one end-of-run anchor, so levels
 before a render-side disturbance are unreliable (VB-Cable −3.9 ms; the r8
 reading is withdrawn). Next: probe dates impulses from in-run render-clock
 samples and reports render discontinuities; then rerun both routes.
-Done on the host (bundle r10, `a5ebd0f9`); next: the user reruns both routes.
+Done on the host (bundle r10, `a5ebd0f9`). r10: VB-Cable's position wobble
+fooled the two-sample stall detector; repaired with median-offset dating
+and raw data saved per run (bundle r11, `cc36d285`). Next: the user reruns
+both routes; later method changes are checked on the saved raw data on the
+host first.
 
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease

@@ -437,3 +437,6 @@ the r8 stall shape (one 25 ms step, every impulse more than 0.1 s from it
 dated exactly) and a 20 ms forward skip; a synthetic raw file
 round-trips to exactly 40.000 ms. Acceptance: repeated starts 144 checks,
 single run 220.
+Bundle r11: `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r11`, source
+`cc36d285`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
+`BFCA9B0837F1D14AE958551FF89A12217BF42DDD423F321DA8D5CEF4781C7C45`.
