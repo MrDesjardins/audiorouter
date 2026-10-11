@@ -63,6 +63,16 @@ threshold relaxation. Status: host correlation and waveform localization
 completed as described below; the next guest action is the short r13
 route/submission trace, after its bundle manifest is verified.
 
+Ready for the user: r13 at
+`C:\VMs\ar-share\diagnostics-20261010-cable-stage-trace-r13`, source
+`a4949be8`. Manifest verifies 38 files; signed SYS is byte-identical to the
+installed slot-provenance candidate. Run the
+[two-minute trace block](../../operations/virtual-cable-latency.md#short-routesubmission-trace-after-r12)
+inside AR-DriverTest. No reinstall is needed. The next agent action after
+the archive arrives is to map each submit/device-frame displacement and
+route input/output observation around loss/latency shifts, then choose the
+owning-layer recovery using that evidence.
+
 Implementation decision (2026-10-10, user requested improvement): r11's
 saved Cable A bridge WAV has impulse 146 at frame 71,104 and impulse 148 at
 73,024 (48 kHz); impulse 147 is absent. After accounting for the skipped

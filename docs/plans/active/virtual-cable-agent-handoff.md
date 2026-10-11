@@ -25,13 +25,19 @@ This section supersedes sections 4–9 below, which describe the earlier
   Review nominal event dating against saved QPC clocks before attribution.
   The current ordered work and user-run gate are in the
   [execution queue](virtual-cable.md#execution-queue-after-r12-2026-10-10).
-  Both r11 archives and r12 are on the host; no new guest run is needed yet.
+  Both r11 archives and r12 are on the host; their offline review is complete.
 - **Follow-up host analysis:** nominal loss dates drift about 4.8 s over r12.
   QPC correlation leaves 119 impulses without a nearby all-four-route gap;
   all 1,456 losses are retained. r11's source bridge waveform already has
   a 20 ms payload shift before engine processing. The opt-in r13 short trace
   captures submit/device-clock relations and route impulse observations;
   run it after the bundle is verified, before choosing latency recovery.
+  Bundle r13 is verified (38 files) at
+  `C:\VMs\ar-share\diagnostics-20261010-cable-stage-trace-r13`, source
+  `a4949be8`, with the same signed SYS. Next: user runs the
+  [two-minute trace](../../operations/virtual-cable-latency.md#short-routesubmission-trace-after-r12)
+  in AR-DriverTest, agent reviews its ZIP and chooses recovery from measured
+  submit/device-frame and route observations. No driver reinstall needed.
 - **User decision pending:** production driver signing (cost), the only
   route to bare-metal VCAB-24/25 on this PC (the guest quieting was applied;
   the [native VT-x session](../../operations/virtual-cable-native-vtx-session.md)

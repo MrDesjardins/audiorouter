@@ -77,6 +77,13 @@ and short r13 runner are prepared to resolve the missing measurement. Next:
 verify the r13 manifest and ask the user to run the two-minute engine trace
 from the latency runbook, then review its archive before recovery changes.
 
+r13 preparation complete: clean source `a4949be8`, verified 38-file bundle
+at `C:\VMs\ar-share\diagnostics-20261010-cable-stage-trace-r13`; signed SYS
+hash unchanged. The user can now run the short trace block in AR-DriverTest.
+23 tone tests, 2,203 probe checks, 189 continuity checks, 233 repeated-start
+checks, QPC review regressions, formatting, Clippy and docs validation passed;
+this is host diagnostic evidence, not a new driver audio qualification.
+
 For release 0.0.15, fresh-install qualification remains deferred while the
 user uses AudioRouter for game audio. When they are done, ask them to close it
 and run the exact packaged fresh-install gate. Resolve the Windows workspace

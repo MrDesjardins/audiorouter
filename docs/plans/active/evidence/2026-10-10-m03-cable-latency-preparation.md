@@ -673,3 +673,24 @@ the signed driver byte-identical to the slot-provenance base, and give the
 user the [short trace block](../../../operations/virtual-cable-latency.md#short-routesubmission-trace-after-r12).
 Qualification remains false; kernel/audio recovery changes await this
 measurement. Rollback: r12 tools and candidate `492d8ca8`.
+
+Bundle r13 is now ready at
+`C:\VMs\ar-share\diagnostics-20261010-cable-stage-trace-r13`, prepared from
+clean source `a4949be87337384fdc47162f41fe113a9fce43ca`. Host preparation
+command:
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/vm/prepare-cable-latency-update.ps1 -BaseBundle C:\VMs\ar-share\repair-20261010-slot-provenance -Destination C:\VMs\ar-share\diagnostics-20261010-cable-stage-trace-r13
+```
+
+Static builds and portability/import checks passed; the manifest verifies
+all 38 files. Manifest SHA-256:
+`9f400d0e0ba7738d5ebece1beb3e42bd20bc858d5135d8cc3b89acade498c858`.
+The packaged SYS SHA-256 matches the base:
+`10cf8e879de85e3a924cdcc0dba2987d00cb8328dab9cba870b997f3ef952381`;
+driver source remains `492d8ca82cac177d792fe0561003a8e157c4fab5`.
+No installation or audio execution occurred on the host. Documentation
+validation passed (147 Markdown files, 830 links), and `git diff --check`
+passed. The exact next action is the user-run short trace block linked above,
+about two minutes. Review its returned `starts-engine-*.zip` before changing
+recovery or claiming improved audio continuity.
