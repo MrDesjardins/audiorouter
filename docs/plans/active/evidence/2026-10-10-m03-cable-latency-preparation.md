@@ -250,3 +250,41 @@ Bundle r8: `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r8`, source
 Host checks: cable route unit tests (5), tool tests (20), latency
 acceptance (220), `cargo fmt --check` and workspace Clippy clean. Same guest
 command as r7 with the r8 folder.
+## Fourth VM run (bundle r8, engine route) — 2026-10-10, NEM VM, guest quieted
+
+Run `latency-ab73ed2e165a47b0931603da9184abda`, archive
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r8\latency-ab73ed2e165a47b0931603da9184abda.zip`,
+SHA-256 `059F76DEEB8B55B10E689A9CF8964E93A07152C9549ECF83928C81DE0B12457D`
+(verified on the host), extracted to `target/latency-ab73ed2e`.
+`-Route engine`, source `33dc8661`, driver `492d8ca8`.
+
+| Check | Result |
+| --- | --- |
+| Bit-exact (VCAB-20, engine route, 480 frames) | **Pass**: 480,000 frames, 0 mismatched, max difference 0, silence exact; engine silent quanta 0; relay dropped 0 |
+| Isolation (VCAB-26) | **Pass** on both paths with Cable B active; 0 nonzero samples |
+| Latency, 480 frames, default periods | min = p1 25.272 ms, p50 50.273, p95 50.275, max 57.273, mean 44.622; 996/1,000 matched, 4 lost, 0 corrupted |
+| Latency, 128 frames, low-latency periods | p50 48.7, p95 150.0 ms; 90 lost; 166 late / 34 overrun packet writes (NEM timing, unchanged) |
+
+Default-mode reading:
+
+- One VM-wide stall between 4 and 5 s: the capture, render and control
+  threads all recorded ~51.5 ms gaps at once; it caused the only counter
+  increases (capture-sink underrun 1,536, render-source underrun 1,104 and
+  overrun 1,776 frames, 1 late packet write, 1,920 probe capture frames
+  dropped) and the 4 lost impulses.
+- Latency had exactly two steady levels: 25.272 ms before the stall
+  (≈23 % of impulses, from the mean) and 50.273–50.275 ms after it. Each
+  level is flat to about 0.003 ms, so the r7 one-block toggle is gone: the
+  re-blocking repair is confirmed.
+- The +25 ms shift is not in the route: the tool's written − read block
+  count (relay and priming) stayed 19–21 before and after the stall. The
+  extra delay sits in the endpoint buffering outside the route (the probe's
+  WASAPI clients have 1,056-frame, 22 ms buffers per side), which the stall
+  left fuller. The same mechanism explains the proxy runs (r5 56.94 ms
+  after a VM pause, r6 33.39 ms without one).
+
+Consequences: a single end-to-end latency figure in this VM depends on
+start-up and stall history by up to about one client buffer. Step 2
+(repeated starts and the same-VM VB-Cable comparison) must report steady
+levels per start and mark stall-shifted segments rather than one pooled
+percentile.

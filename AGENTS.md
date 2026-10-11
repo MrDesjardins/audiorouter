@@ -91,6 +91,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-10 — A re-blocking stage must emit one block per block in, at a constant delay.**
+  Evidence: [VM runs r7 and r8](docs/plans/active/evidence/2026-10-10-m03-cable-latency-preparation.md#third-vm-run-bundle-r7-engine-route--2026-10-10-nem-vm-guest-quieted),
+  `cable_route` unit tests. Scope: any adapter between a bridge or endpoint
+  block size and the 128-frame engine quantum. Consequence: emitting
+  whenever a block was complete gave 0, 1, 1, 2 blocks per 480-frame input;
+  a consumer taking one block per period then toggled the latency by 10 ms
+  while every continuity test passed. Pre-fill `quantum − gcd(block,
+  quantum)` frames, emit at most one block per input block, and assert the
+  emission count per push, not only sample continuity.
+
 - **2026-10-10 — Derive render validity from what the OS has written, and model OS timing first.**
   Evidence: [repair record, r3 regression and slot-provenance fix](docs/plans/active/evidence/2026-10-10-m03-render-commit-validity.md),
   `renderTimingModelChecks` in the driver unit suite. Scope: WaveRT packet-mode
