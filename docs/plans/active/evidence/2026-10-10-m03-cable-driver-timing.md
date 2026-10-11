@@ -939,6 +939,20 @@ Rollback: reinstall the r18 bundle (0.1.3) by `-Step remove` then
   must run as a child `powershell.exe -File` (cargo's stderr is fatal under
   `Stop` in-process; validated lesson 2026-10-03).
 
+**r20 Block 2 result (2026-10-11), Driver Verifier active:** archive
+`starts-engine-e957e038f64c4072a8090008ac831752.zip`, SHA-256
+`5834ABBFA1B58E845CA45E5ACE1542D700ACAB2BBE28244F19A49DD108DB7B4F` (matches
+the guest's hash). Status PASS, `driver=0.1.4.0`; all 10 tone runs report
+bridge `driver_version: [0, 1, 4, 0]`. Five starts × two period modes (each
+opens and closes render and capture streams, registering and unregistering
+notification events while timers run): no bugcheck, every probe/tone exit 0,
+`Passed=true`, 0 corrupted impulses. Lost 120 (default) and 136
+(low-latency) of 4,000 impulses, and latency targets missed. That is
+expected and not comparable: Verifier's standard checks slow the VM.
+`verifier-off` PASS. This is guest evidence that the locked paths run at a
+legal IRQL. It does not prove the race is gone, because the race was
+never reproduced.
+
 Guest procedure (user, three blocks, two restarts): copy + install +
 `verifier-on`, restart; status (0.1.4.0) + repeated-start engine run under
 Verifier + `verifier-off`, restart; status + 10-minute continuity, then
