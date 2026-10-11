@@ -303,3 +303,23 @@ checks; the existing latency acceptance still passes 220.
 Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r9`, source
 `a2bd36bf`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
 `8029570880076E299A52596E06CCBABF87396AE339CBE9E6B491C651458C7C4B`.
+## Repeated starts, engine route (bundle r9) — 2026-10-10, NEM VM, guest quieted
+
+Run `starts-engine-05606185287447139fc1b5db3b56311a`, archive SHA-256
+`D9D6D7EB5D98A79871295BF3CDBF670599B9BE1B5FF0398675BE2CD51461A670`
+(verified on the host), extracted to `target/starts-engine-05606185`.
+5 starts × 2 modes, 400 impulses each; every probe and route exited 0;
+engine silent quanta 0 and corrupted impulses 0 in all ten.
+
+| Mode | Steady level per start (ms) | Median | Range | Starts that shifted | Lost |
+| --- | --- | --- | --- | --- | --- |
+| Default (480-frame blocks, 1,056-frame client buffers) | 33.870, 31.107, 42.024, 40.094, 35.238 (spread 0.002 each) | 35.238 | 31.1–42.0 | 1 (start 1: +10 ms later) | 63 (start 2) |
+| Low-latency (128-frame blocks, 280-frame client buffers) | 150.966 in start 5 only; no 50-impulse level in starts 1–4 (25–48 segments each) | — | — | 5 | 154 |
+
+Reading: in default mode every start settles on one flat level, and the
+level varies between starts by about 11 ms (half a 22 ms client buffer),
+which is the start-up buffering effect seen in r5–r8. The median, 35.2 ms,
+is below the 40 ms default target; two of five starts were above 40 ms. In
+low-latency mode the route never holds a level under NEM (40–66 late and
+15–23 overrun packet writes per run), as on the proxy route. These are
+indicative VM numbers. The VB-Cable comparison run is next.
