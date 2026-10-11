@@ -152,3 +152,9 @@ Security → Device security → Core isolation should show Memory integrity
 
 If anything does not come back, run the restore block again and restart;
 it is the same single setting. VirtualBox returns to NEM automatically.
+
+**Restored and verified (2026-10-10 18:12 boot):** `HypervisorPresent True`;
+VBS status 2 with `SecurityServicesConfigured {2}` and
+`SecurityServicesRunning {2}` (Memory integrity on); DeviceGuard
+`EnableVirtualizationBasedSecurity=1`, `RequireMicrosoftSignedBootChain=1`,
+`WasEnabledBy=1`; HVCI scenario `Enabled=1`; WSL 2 Ubuntu running.
