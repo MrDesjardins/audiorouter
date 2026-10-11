@@ -164,17 +164,21 @@ try {
     Start-Sleep -Milliseconds 1500
     foreach ($pair in @(@{ Label = 'A-Input-to-A-Output'; Render = $renderIndex }, @{ Label = 'B-Input-to-A-Output'; Render = $otherRenderIndex })) {
         if ($active.HasExited) { throw "$name tone tool ended before the $($pair.Label) probe (exit $($active.ExitCode))." }
-        $measured = Invoke-DriverVmProcess -Executable $probe -Arguments @('cable-isolation','5',$pair.Render,$quietCaptureIndex) `
+        # Record Cable B Output too (discarded) so Cable B genuinely carries its tone.
+        $measured = Invoke-DriverVmProcess -Executable $probe -Arguments @('cable-isolation','5',$pair.Render,$quietCaptureIndex,$captureIndex) `
             -Stdout (Join-Path $evidence "$name-$($pair.Label).txt") -Stderr (Join-Path $evidence "$name-$($pair.Label)-stderr.txt") -TimeoutSeconds 30
         $probeText = Get-Content -LiteralPath (Join-Path $evidence "$name-$($pair.Label).txt") -Raw
         $isolation += [pscustomobject][ordered]@{
             Path = $pair.Label; ProbeCode = $measured.Code
-            Passed = ($measured.Code -eq 0 -and (Get-ProbeValue $probeText 'isolation_pass') -eq 1)
+            Passed = ($measured.Code -eq 0 -and (Get-ProbeValue $probeText 'isolation_pass') -eq 1 -and
+                (Get-ProbeValue $probeText 'isolation_drain_active_frames') -gt 0)
+            CableBActiveFrames = Get-ProbeValue $probeText 'isolation_drain_active_frames'
             Frames = Get-ProbeValue $probeText 'isolation_frames'; NonzeroSamples = Get-ProbeValue $probeText 'isolation_nonzero_samples'
             PeakDbfs = Get-ProbeValue $probeText 'isolation_peak_dbfs'
         }
-        Write-Host ("isolation {0}: {1}; frames {2}, non-zero samples {3}; probe exit {4}" -f $pair.Label,
-            $(if ($isolation[-1].Passed) { 'exact silence' } else { 'LEAK' }), $isolation[-1].Frames, $isolation[-1].NonzeroSamples, $measured.Code)
+        Write-Host ("isolation {0}: {1}; frames {2}, non-zero samples {3}, Cable B active frames {4}; probe exit {5}" -f $pair.Label,
+            $(if ($isolation[-1].Passed) { 'exact silence while Cable B was active' } elseif ($isolation[-1].NonzeroSamples -gt 0) { 'LEAK' } else { 'Cable B was not active; inconclusive' }),
+            $isolation[-1].Frames, $isolation[-1].NonzeroSamples, $isolation[-1].CableBActiveFrames, $measured.Code)
     }
     if (-not $active.WaitForExit(60000)) { throw "$name tone tool did not finish within its watchdog." }
     $isolationToneCode = $active.ExitCode

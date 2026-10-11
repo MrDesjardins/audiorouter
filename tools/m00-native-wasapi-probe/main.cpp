@@ -1667,7 +1667,10 @@ static int cable_isolation_self_test() {
     return 0;
 }
 
-static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD seconds) {
+// drain_index (optional, UINT_MAX = none): another Output recorded and
+// discarded meanwhile, so the cable feeding it is genuinely active; its
+// non-silent frames are reported as proof of that activity.
+static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD seconds, UINT drain_index) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -1676,8 +1679,11 @@ static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD se
     LoopbackStreamState capture_state;
     bool ok = activate_shared_stream(enumerator, eRender, render_index, render_state, "isolation_render", true, 0, false);
     if (ok) ok = activate_shared_stream(enumerator, eCapture, capture_index, capture_state, "isolation_capture", true, 0, false);
+    LoopbackStreamState drain_state;
+    const bool draining = drain_index != UINT_MAX;
+    if (ok && draining) ok = activate_shared_stream(enumerator, eCapture, drain_index, drain_state, "isolation_drain", true, 0, false);
     enumerator->Release();
-    if (!ok) { render_state.release(); capture_state.release(); return 1; }
+    if (!ok) { render_state.release(); capture_state.release(); drain_state.release(); return 1; }
     if (render_state.format->wBitsPerSample != 32 || capture_state.format->wBitsPerSample != 32) {
         std::cout << "isolation_requires_float32_formats=1\n";
         render_state.release(); capture_state.release();
@@ -1687,10 +1693,13 @@ static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD se
     IAudioCaptureClient* capture_service = nullptr;
     hr = render_state.client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render_service));
     if (SUCCEEDED(hr)) hr = capture_state.client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&capture_service));
+    IAudioCaptureClient* drain_service = nullptr;
+    if (SUCCEEDED(hr) && draining) hr = drain_state.client->GetService(__uuidof(IAudioCaptureClient), reinterpret_cast<void**>(&drain_service));
     print_hr("isolation_services", hr);
     if (FAILED(hr)) {
         if (render_service) render_service->Release();
-        render_state.release(); capture_state.release();
+        if (capture_service) capture_service->Release();
+        render_state.release(); capture_state.release(); drain_state.release();
         return 1;
     }
     const UINT32 render_channels = render_state.format->nChannels;
@@ -1736,7 +1745,32 @@ static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD se
             }
         }
     });
-    hr = capture_state.client->Start();
+    UINT64 drain_frames = 0, drain_active_frames = 0;
+    std::thread drain_thread([&] {
+        if (!draining) return;
+        const UINT32 channels = drain_state.format->nChannels;
+        while (!stop.load()) {
+            if (WaitForSingleObject(drain_state.ready_event, 100) != WAIT_OBJECT_0) continue;
+            for (;;) {
+                UINT32 frames = 0;
+                if (FAILED(drain_service->GetNextPacketSize(&frames)) || frames == 0) break;
+                BYTE* data = nullptr; DWORD flags = 0; UINT64 position = 0, qpc = 0;
+                if (FAILED(drain_service->GetBuffer(&data, &frames, &flags, &position, &qpc))) break;
+                drain_frames += frames;
+                if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT) && data && drain_state.format->wBitsPerSample == 32) {
+                    const auto* in = reinterpret_cast<const float*>(data);
+                    for (UINT32 frame = 0; frame < frames; ++frame) {
+                        bool active = false;
+                        for (UINT32 channel = 0; channel < channels; ++channel) active = active || in[static_cast<size_t>(frame) * channels + channel] != 0.0f;
+                        if (active) ++drain_active_frames;
+                    }
+                }
+                drain_service->ReleaseBuffer(frames);
+            }
+        }
+    });
+    if (draining) { hr = drain_state.client->Start(); print_hr("isolation_drain_start", hr); }
+    if (SUCCEEDED(hr)) hr = capture_state.client->Start();
     print_hr("isolation_capture_start", hr);
     if (SUCCEEDED(hr)) hr = render_state.client->Start();
     print_hr("isolation_render_start", hr);
@@ -1744,16 +1778,22 @@ static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD se
     stop.store(true);
     SetEvent(render_state.ready_event);
     SetEvent(capture_state.ready_event);
+    if (draining) SetEvent(drain_state.ready_event);
     render_thread.join();
     capture_thread.join();
+    drain_thread.join();
     print_hr("isolation_render_stop", render_state.client->Stop());
     print_hr("isolation_capture_stop", capture_state.client->Stop());
+    if (draining) print_hr("isolation_drain_stop", drain_state.client->Stop());
     render_service->Release();
     capture_service->Release();
+    if (drain_service) drain_service->Release();
     std::cout << "isolation_rendered_frames=" << rendered << " isolation_capture_overflow_packets=" << overflow << '\n';
+    if (draining) std::cout << "isolation_drain_frames=" << drain_frames << " isolation_drain_active_frames=" << drain_active_frames << '\n';
     print_isolation_report(analyze_isolation(captured, capture_channels));
     render_state.release();
     capture_state.release();
+    drain_state.release();
     return rendered == 0 ? 1 : 0;
 }
 
@@ -2341,7 +2381,8 @@ int main(int argc, char** argv) {
         UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
         UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
         if (seconds < 1 || seconds > 120) { std::cout << "isolation_seconds_out_of_range=1\n"; CoUninitialize(); return 2; }
-        int result = cable_isolation_probe(render_index, capture_index, seconds);
+        UINT drain_index = argc > 5 ? static_cast<UINT>(std::strtoul(argv[5], nullptr, 10)) : UINT_MAX;
+        int result = cable_isolation_probe(render_index, capture_index, seconds, drain_index);
         CoUninitialize();
         return result;
     }
