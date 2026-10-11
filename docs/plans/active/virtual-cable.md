@@ -28,6 +28,31 @@ host's Hyper-V/WSL capability preserved.
 
 ### Execution queue after r12 — 2026-10-10
 
+Latest result: r15 scheduler archive is complete, hash verified and reviewed.
+84/1,000 impulses lost; p95 19.076 ms, jitter 7.390 ms. ETW lost/rejected
+events zero. Capture probe and associated audiodg threads have long waits
+before readiness (8.083/7.888 ms), short ready-to-running delays
+(0.504/0.650 ms maxima). Generic DPC events do not directly identify the
+AudioRouter timer callback. Stage losses are 29 before observed input, one
+between input/publication, 54 downstream. See
+[r15 evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#r15-returned-focused-scheduling-review-2026-10-10).
+This supersedes pending r15 user-run instructions below.
+
+Exact next agent task (VCAB-20/24/25/28, VDEV-12): design bounded,
+preallocated opt-in timestamps for timer entry, packet-count advance,
+notification and GetReadPacket entry/return, with per-stream identities and
+one clock. Model late timer, late fetch, coalesced notification, slot reuse
+and trace exhaustion before implementation. Check the r15 input/publication
+loss at impulse 720 against the existing relay observations separately.
+Obtain required fresh-context WP-04 review before kernel instrumentation;
+do not choose a timer or queue repair from readiness correlation alone.
+Validation must cover disabled-path equivalence, no callback allocation,
+blocking or file logging, bounded publication, trace exhaustion and stream
+teardown. Only after review/build/package verification prepare one short
+guest comparison. Rollback: instrumentation disabled/original 492d8ca8 SYS
+and retained r15 tools. No priority/buffer/security/host setting changes or
+unchanged guest/hour retry. Qualification gates remain open/failed.
+
 Next-step plan (after r14, user authorized): VCAB-20/24/25/28, VDEV-12.
 Model 48 kHz/128-frame capture with 1 ms DMA service, physical slot reuse,
 OS fetch delay and client queue retention. Check exact/late boundaries and

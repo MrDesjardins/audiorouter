@@ -2,6 +2,19 @@
 
 ## Current state (2026-10-10 evening) — read this first
 
+**r15 completed:** archive checksum matches; ETW lost/rejected events zero.
+84/1,000 impulses lost (29 before observed input, one input-to-publication,
+54 after publication); p95 19.076 ms, jitter 7.390 ms. Probe capture waits
+up to 8.083 ms before readiness, 0.504 ms after; associated audiodg capture
+thread waits up to 7.888 ms before readiness. DPC/ISR image mapping finds no
+routine directly in audioroutervirtual.sys, so notification versus OS fetch
+remains unresolved. Next task is bounded notification/fetch timestamp design
+and its timing model; kernel instrumentation requires fresh-context WP-04
+review. Do not repeat r15 or the hour test unchanged. See
+[r15 result](evidence/2026-10-10-m03-cable-latency-preparation.md#r15-returned-focused-scheduling-review-2026-10-10).
+This supersedes all pending r15 instructions below. Driver remains 492d8ca8;
+qualification remains open/failed. No new user command is ready.
+
 **r14 completed:** checksum matches; MMCSS/COM setup and worker APIs pass,
 zero trace misses. Default losses 0/0/0 (two p95s above 40 ms); low-latency
 35/27/20 losses, so registration did not solve the defect. Stage/WAV review

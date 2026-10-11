@@ -2,6 +2,17 @@
 
 ## Release 0.0.15 — 2026-10-10 (in progress)
 
+Latest driver evidence: r15 focused scheduler archive verified and reviewed.
+Zero ETW lost events; 84/1,000 impulses lost, p95 19.076 ms but jitter
+7.390 ms. Probe capture waits up to 8.083 ms before readiness and only
+0.504 ms after; associated Windows audio-engine capture waits up to
+7.888 ms before readiness. Generic DPC events do not identify the driver
+notification callback. Next agent task: design bounded notification/fetch
+timestamps, model their interpretation, and obtain required WP-04 review
+before kernel instrumentation. No unchanged guest rerun. Details:
+[r15 review](evidence/2026-10-10-m03-cable-latency-preparation.md#r15-returned-focused-scheduling-review-2026-10-10).
+This supersedes the pending r15 instructions below.
+
 Latest driver evidence: r14 archive verified. COM/MMCSS and trace completeness
 pass, but low-latency loss persists (35/27/20 impulses); default is lossless
 in all three short runs, with two p95s above 40 ms. The probe registration

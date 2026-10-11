@@ -973,3 +973,119 @@ Signed SYS remains
 Static builds and portable-import gates pass; docs validation 147 files /
 844 links and diff check pass. Exact next action: the linked guest command
 once, then review the returned scheduling archive before another audio run.
+
+### r15 returned focused scheduling review — 2026-10-10
+
+User returned the same archive identity twice; this is one guest run, not
+two measurements. Host archive:
+`C:\VMs\ar-share\diagnostics-20261010-cable-scheduling-r15\cable-scheduling-9b483297739944e58b93579d7a687278.zip`.
+Independent Get-FileHash matches supplied SHA-256:
+`EA1255D3A1842735F5A3810BB1E7265B6ED3D335B81D9B88BDF1349E56A81FE2`.
+Nested measurement archive `starts-engine-1d59bf6b9de5406a9752bc83f831792d.zip`
+also independently matches its printed hash:
+`FFA4C836A403214CF32CCB1FFF509DFAE91E6242D8DC1AA41D1D94C4D9B8AB06`.
+Extracted host review artifacts are under `target/r15-review` (ignored).
+Guest trace is `C:\ar\evidence\cable-scheduling-9b483297739944e58b93579d7a687278\trace\scheduling.etl`.
+No host audio, recorder, driver installation or system setting was changed.
+
+Trace coverage passes: owned recording started/saved, run/cleanup errors
+false; WPR final status reports dropped events and EventsLost zero.
+Offline ProcessTrace/CloseTrace both return 0; 130,939 context switches,
+89,301 readiness events, rejected 0, EventsLost 0; QPC frequency 10 MHz.
+Independent `tracerpt` summary agrees with both event counts, reports
+338,935 total events, 22 buffers and zero lost events. The offline reader's
+338,921 activity events exclude 14 EventTrace header/extension records.
+The initial sandboxed tracerpt attempt failed with WMI data service unavailable;
+the elevated offline retry succeeded. Its schema warning for some records
+does not invalidate the independent summary or the checked raw switch decoder.
+
+Single low-latency engine route: emitted 1,000, matched 916, lost **84**,
+corrupt/duplicate zero, one out-of-window arrival. p50 **17.952 ms**, p95
+**19.076 ms**, p1 13.134 ms, p99 20.524 ms, jitter **7.390 ms**, range
+8.499–21.691 ms. The p95 target is met in this short run; continuity and
+jitter fail. No steady latency level (163 segments). Render discontinuities
+96, cumulative 195.703 ms; capture position gaps 262, **33,792 skipped
+frames**, flagged packets 263. Actual WASAPI buffers are 280 frames each;
+the earlier model's 264-frame client ring is illustrative, not this run's
+measured size. All COM/MMCSS setup succeeds, worker/scheduling errors and
+raw/route trace misses zero. Render worker 5088, capture worker 7724,
+probe PID 7112. Route PID 2596; audiodg PID 1524.
+
+Independent pulse-code expansion of route render/capture rows and raw
+arrival rows reproduces the probe's exact 84 missing indices. Source WAV
+pulse order agrees with observed route input. Observed source/publication/
+arrival counts are 972/971/917, including the extra final impulse 1000.
+Of requested indices 0–999, **29 are absent before observed input, one
+(720) is lost between input and publication, 54 after publication**.
+Modulo-16 pulse identity assumes no hidden full cycle loss; the observed
+probe loss runs are at most two impulses. This identifies stage boundaries,
+not the precise kernel cause. Route relay drops 18, silence blocks 68,
+sink underrun 400, source underrun 21,664, overrun 448; sequence gaps zero.
+Late writes 168 and render overruns 52 remain failures.
+
+Scheduler review uses switch-out → first subsequent ReadyThread → switch-in
+for the same TID, requiring ordered edges. Statistics are restricted to
+first emission QPC 115132238639 through last emission +50 ms
+(115234417659.333), excluding intentional startup/teardown waits.
+
+| Thread | Wait-before-ready maximum ms | Ready-to-running maximum ms |
+|---|---:|---:|
+| Probe render 5088 | 7.6954 | 0.2235 |
+| Probe capture 7724 | 8.0828 | 0.5044 |
+| audiodg 1236, associated render | 7.4529 | 0.6762 |
+| audiodg 4012, associated capture | 7.8883 | 0.6498 |
+| Route audio 4824 / 4852 | 5.5449 / 5.5291 | 0.7355 / 0.7266 |
+
+audiodg roles are inferred: CPU context at readiness of render 5088 is
+1236 for 4,024 events; capture 7724 is associated with 4012 for 4,000.
+This is not a stack or an authoritative DDI-call attribution. One paired
+capture event: audiodg 4012 switches out at 115145376121, becomes ready at
+115145455004 and runs at 115145456980 (7.8883 ms / 0.1976 ms).
+Probe capture switches out at 115145376514, becomes ready at 115145457342
+and runs at 115145457927 (8.0828 ms / 0.0585 ms). Long waiting before
+readiness reaches Windows audio-engine threads too; dispatch after readiness
+is comparatively prompt. Increasing probe priority is unsupported by this
+evidence. Waiting alone cannot distinguish missing/late notifications from
+delayed OS fetch or internal Windows audio-engine work.
+
+Only three all-CPU event silences ≥5 ms overlap the pulse window:
+5.4062, 5.0265 and 5.3643 ms. The 163.734 ms maximum over the whole ETL is
+outside this window; it must not be attributed to these measured pulses.
+All-CPU event silence is an observation, not proof of a VM suspension.
+Generic trace records contain 14,195 DPCs, 340 TimerDPCs and 754 ISRs.
+Offline XML routine-address/image-range mapping finds none directly within
+audioroutervirtual.sys (rundown base 0xFFFFF80363270000, size 0x1D000).
+Kernel routines may dispatch the extended timer callback; absence of a
+driver routine address does not establish absence or timeliness of that
+callback. The dominant kernel DPC routine has a 7.337 ms maximum interval
+inside the pulse window, but its role is unresolved. No driver notification
+or GetReadPacket timestamp exists here to settle the remaining attribution.
+
+Reproduction on host, offline only: extract outer/nested ZIPs; run
+`target/m03-scheduler-trace.exe <etl> <switches.csv> --raw`,
+`--silences <etl> <silences.csv> 5`, and
+`--activity <etl> <activity.csv> 100 "audiodg.exe,m03_bridge_tone.exe,m00-probe.exe"`.
+Run `tracerpt.exe <etl> -o NUL -summary <summary.txt> -y` and
+`tracerpt.exe <etl> -o <events.xml> -of XML -y`. Map kernel routine addresses
+against ImageBase/ImageSize/FileName rundown; align XML SystemTime with
+raw QPC via matching switch events (first ten deltas agree within 1 µs).
+Local `analyze.py`/`review.txt`, `dpc-review.py`/`dpc-review.txt`,
+`gap-review.json` and `tracerpt-summary.txt` retain the computations.
+Pulse index expands peak×32−1 modulo 16 monotonically; compare missing
+0–999 indices with every printed lost-run range. Sum positive next-position
+minus previous-position minus previous-frames to reproduce 33,792 frames.
+All analyses completed with exit 0. No driver/unit or live-audio test run
+this turn; evidence is the user-run guest capture and host offline review.
+
+Next task: bounded opt-in notification/fetch timestamp design and timing
+model, then required fresh-context WP-04 review before kernel changes.
+Independently inspect the new input/publication loss at 720. Preserve
+zero allocation/blocking/file logging in callbacks and bounded storage;
+trace exhaustion must be explicit. No timer/queue repair chosen yet, no
+unchanged r15/hour retry, no buffer/priority/security/host changes. Driver
+492d8ca8 retained; VCAB-20/24/25/28 and VDEV-12 remain subject to their
+existing qualification gates. Rollback retains original SYS and r15 tools.
+
+Documentation validation passes (147 Markdown files, 848 local links);
+`git diff --check` passes. Diff inspected; only the four active-plan/evidence
+documents changed. No executable behavior changed in this review.
