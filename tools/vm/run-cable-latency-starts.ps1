@@ -87,6 +87,8 @@ try {
                 if ($active.HasExited) { throw "$name engine route ended before the probe started (exit $($active.ExitCode))." }
             }
             $probeArguments = @('cable-impulse',[string]$Impulses,$renderIndex,$captureIndex) + @(if ($mode.Name -eq 'low-latency') { 'low-latency' })
+            # Raw clock samples and arrivals, for host re-analysis without another VM run.
+            $probeArguments += 'raw=' + (Join-Path $evidence "$name-raw.csv")
             $measured = Invoke-DriverVmProcess -Executable $probe -Arguments $probeArguments -Stdout (Join-Path $evidence "$name-probe.txt") `
                 -Stderr (Join-Path $evidence "$name-probe-stderr.txt") -TimeoutSeconds ($probeSeconds + 30)
             $toneText = ''

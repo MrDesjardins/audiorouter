@@ -87,6 +87,7 @@ function Test-Starts([string] $Case, [string] $Route) {
         Assert ($Arguments[0] -eq 'cable-impulse' -and $Arguments[1] -eq '400' -and $TimeoutSeconds -ge 30) 'bounded impulse probe'
         $expected = if ($Route -eq 'vbcable') { @('5', '3') } else { @('2', '1') }
         Assert ($Arguments[2] -eq $expected[0] -and $Arguments[3] -eq $expected[1]) "$Route probe uses its exact endpoint indices"
+        Assert (@($Arguments | Where-Object { $_ -like 'raw=*' -and $_.Substring(4).StartsWith($evidence + '\') -and $_ -like '*-raw.csv' }).Count -eq 1) 'raw data saved inside this run''s evidence'
         $mode = if ($Arguments -contains 'low-latency') { 'low-latency' } else { 'default' }
         $script:probeCalls += $mode
         Set-Content -LiteralPath $Stdout -Value (Get-FakeProbe $Case $script:probeCalls.Count $mode)

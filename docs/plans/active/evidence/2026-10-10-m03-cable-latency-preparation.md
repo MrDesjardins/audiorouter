@@ -390,3 +390,50 @@ latency acceptance still passes 220.
 Bundle `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r10`, source
 `a5ebd0f9`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
 `CCFADBF4D0A227313775D972CE13FEC142512BCCAF74C1A3E28F2E6E1922A394`.
+## Repeated starts, both routes (bundle r10) — 2026-10-10, NEM VM, guest quieted
+
+Archives (SHA-256 verified on the host):
+`starts-engine-4918b63318ee41389be205abd51940e3.zip`
+`86BA530332A2D257712BA50E3EB120A6485833A9941D94DD280207C0C465CEE7`,
+`starts-vbcable-0b46ab5514504925ab84016b1d1c34bc.zip`
+`5E619BC884B200C92532B36997AC1F4B6BB8C7D62B2A3A84CD339EACFB6D9C22`;
+extracted to `target/starts-engine-4918b633` and `target/starts-vbcable-0b46ab55`.
+All probes exited 0.
+
+Default periods, per-start p50 (ms), in-run dating / end-anchor dating:
+
+| Start | Engine route | VB-Cable Input → Output |
+| --- | --- | --- |
+| 1 | 39.27 / 39.77 (2 lost) | 54.84 / 48.36 |
+| 2 | 63.90 / 40.40 (113 lost, 148 flagged) | 59.68 / 59.89 |
+| 3 | 44.79 / 37.22 (4 lost) | 49.66 / 49.72 |
+| 4 | **42.09 / 42.22 (clean)** | 60.64 / 60.75 |
+| 5 | 39.10 / 39.32 (one 9.8 ms render step) | 44.23 / 43.58 |
+
+Low-latency periods: the engine route lost 36–62 impulses per start
+(NEM); VB-Cable lost none and measured 61–66 ms (in-run) / 51–72 ms
+(anchor).
+
+Reading:
+
+- The two-sample stall detector misreads VB-Cable: its render position
+  wobbles by 2–3 ms and snaps back (for example +2.9 then −2.9 ms one
+  sample apart), so every VB-Cable start was flagged and none counted as
+  clean, and two-sample interpolation carried the wobble into the dating.
+  The engine route's position was smooth: its clean start had no flag, and
+  both datings agreed (42.09 / 42.22 ms).
+- With either dating, the engine route's default-period starts (about
+  39–45 ms apart from the disturbed start 2) are not slower than VB-Cable's
+  (44–61 ms). This repeats the r9 finding.
+- The guest was noisier than in r9 (113 lost in engine start 2).
+
+Repair (host, bundle r11): impulses are dated with the median per-sample
+offset (QPC minus stream time) within ±0.1 s; a stall or skip is reported
+only as a lasting step between the medians of 10 samples before and after
+it. Raw clock readings and arrivals are saved per measurement and can be
+re-analysed on the host (`cable-impulse-reanalyze`). Self-test 2,201
+checks, including a VB-Cable-like wobble (no step, dating within 0.5 ms),
+the r8 stall shape (one 25 ms step, every impulse more than 0.1 s from it
+dated exactly) and a 20 ms forward skip; a synthetic raw file
+round-trips to exactly 40.000 ms. Acceptance: repeated starts 144 checks,
+single run 220.
