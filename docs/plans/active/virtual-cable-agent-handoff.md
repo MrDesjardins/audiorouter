@@ -11,6 +11,15 @@ scheduler observation if needed. No unchanged guest retry. Details:
 [r14 result](evidence/2026-10-10-m03-cable-latency-preparation.md#r14-returned-capture-reader-review-2026-10-10).
 This supersedes pending r14 run instructions below.
 
+Next-step implementation: packet/slot timing model and guest scheduling
+wrapper are prepared. It records one 1,000-impulse low-latency route using
+the already guest-proven minimal WPR profile, with existing raw capture and
+route observations plus probe worker IDs. Refuses an existing recorder;
+owned instance save/cleanup and redirected child watchdog preserve evidence.
+Next: verify the r15 bundle, then run the
+[focused trace](../../operations/virtual-cable-latency.md#focused-capture-scheduling-trace-after-r14).
+Review ETL coverage/lost events before readiness/dispatch/DPC correlation.
+
 This section supersedes sections 4–9 below, which describe the earlier
 `28b989f5` candidate and remain as history. Details and hashes are in the
 [repair record](evidence/2026-10-10-m03-render-commit-validity.md).

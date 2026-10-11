@@ -917,3 +917,47 @@ Windows audio-engine fetch/client wake. No unchanged r14/hour rerun, no
 kernel patch chosen from correlation, no buffer/security/host changes.
 Qualification remains open/failed. Rollback retains r13/r14 tools and
 candidate 492d8ca8. Only offline review and documentation changed this turn.
+
+### Packet timing model and focused scheduler preparation — r15 (2026-10-10)
+
+Offline `tools/vm/model-cable-capture-timing.py` models whole-millisecond
+DMA progress at 48 frames/ms, 128-frame packets and two physical slots.
+It checks fractional packet boundaries, partial slot overwrite, delayed
+notification versus delayed fetch, and a two-packet 264-frame client ring.
+Boundary sweep checks every microsecond from 5–10 ms. All assertions pass.
+At 6 ms, packet 0 is already partially overwritten by packet 2. A fetch
+2 ms after the 6 ms notification can see packet 2 instead of packet 1.
+At an exact reuse boundary an older slot may still be intact; this does
+not guarantee its validity through a later asynchronous OS copy. This is
+a timing model, not evidence that a particular r14 fetch had that delay.
+Identical returned packets can follow a delayed timer or delayed OS fetch;
+prompt client reads therefore do not establish a driver cause.
+
+Implementation: repeated-start runner selects a requested period mode
+while retaining the default both-mode behavior. The new guest-only
+`run-cable-scheduling.ps1` uses the existing minimal WPR profile and owned
+recorder lifecycle around a redirected watchdog-limited child. Only one
+low-latency start, 1,000 impulses (10 seconds of pulses; 20-second route
+lifespan). It preserves ETL/recorder command logs and copies the exact child
+measurement archive by its printed run identity into the final ZIP. Busy
+recorder or validation/start failure starts no measurement. No global cancel.
+Probe prints render/capture worker IDs after join for scheduler correlation.
+No kernel/ABI, audio period, buffer, timer/security or host changes.
+
+Host validation: timing model passes; static CRT probe build and 2,208
+offline pairing/serialization checks pass; repeated-start runner 275 checks,
+including low-only selection; owned WPR lifecycle 128 checks; continuity
+runner 189 checks. Focused wrapper 46 checks cover success, busy recorder,
+measurement failure/timeout, missing archive and missing identity, all with
+fake native boundaries. An initial runner check counted the new nested
+mode-filter assignment as a second top-level table; AST selection was scoped
+to the actual top-level tables and passed. No host WPR/audio was started.
+
+Next: commit clean source, prepare/verify r15 with identical signed SYS,
+then the [focused guest command](../../../operations/virtual-cable-latency.md#focused-capture-scheduling-trace-after-r14).
+Host review verifies ETL event coverage/loss first, then maps capture gaps
+to client worker IDs, Windows audio-engine readiness/dispatch and DPC/ISR
+activity. The kernel profile does not timestamp every driver DDI call;
+absence of a direct notification timestamp remains an attribution limit.
+Trace overhead and NEM prevent release qualification. Rollback: retained
+r14, owned recording save/cancel, original driver. VCAB-24/25 stay open.

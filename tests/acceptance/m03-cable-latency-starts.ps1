@@ -20,7 +20,7 @@ foreach ($function in @('Get-ProbeValue', 'Get-Median')) {
     $definition = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $function }, $true)
     . ([scriptblock]::Create($definition.Extent.Text))
 }
-$assignments = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -in @('$endpoints', '$modes') }, $true))
+$assignments = @($ast.FindAll({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Parent -is [Management.Automation.Language.NamedBlockAst] -and $node.Left.Extent.Text -in @('$endpoints', '$modes') }, $true))
 Assert ($assignments.Count -eq 2) 'endpoint and mode tables found'
 $body = $ast.Find({ param($node) $node -is [Management.Automation.Language.TryStatementAst] -and $node.Extent.Text.Contains('Cable latency starts (') }, $true)
 $execution = [scriptblock]::Create($body.Extent.Text)
@@ -52,6 +52,7 @@ function Test-Starts([string] $Case, [string] $Route) {
     New-Item -ItemType Directory -Path $evidence,$bundle,$peer | Out-Null
     $run = $Case
     $Starts = 3; $Impulses = 400
+    $PeriodMode = if ($Case -eq 'low-only') { 'low-latency' } else { 'both' }
     $TraceRoute = $Case -like 'trace-*'
     $powershell = 'fake-powershell'; $probe = 'fake-probe'; $tone = 'fake-tone'
     foreach ($assignment in $assignments) { . ([scriptblock]::Create($assignment.Extent.Text)) }
@@ -146,6 +147,7 @@ function Test-Starts([string] $Case, [string] $Route) {
         'trace-missing' { Assert ([bool]$failure -and [string]$failure -match 'trace is missing') 'missing trace cannot silently pass' }
         'trace-capture-missing' { Assert ([bool]$failure -and [string]$failure -match 'trace is missing') 'missing capture packets cannot silently pass' }
         'trace-capture-overflow' { Assert ([bool]$failure -and [string]$failure -match 'trace is missing') 'capture trace overflow cannot silently pass' }
+        'low-only' { Assert (-not $failure -and $results.Count -eq 3 -and @($script:probeCalls | Where-Object { $_ -ne 'low-latency' }).Count -eq 0) 'focused mode opens only low-latency streams' }
         'status-failure' { Assert ([bool]$failure -and $script:started.Count -eq 0 -and $script:probeCalls.Count -eq 0) 'driver status failure starts no audio' }
         'early-exit' { Assert ([bool]$failure -and $script:probeCalls.Count -eq 0 -and [string]$failure -match 'before its leases') 'early route exit stops before the probe' }
         'probe-failure' { Assert ([bool]$failure -and $results.Count -eq 6) 'probe failure reported after every measurement' }
@@ -153,6 +155,7 @@ function Test-Starts([string] $Case, [string] $Route) {
     }
 }
 Test-Starts 'engine-pass' 'engine'
+Test-Starts 'low-only' 'engine'
 Test-Starts 'trace-pass' 'engine'
 Test-Starts 'trace-missing' 'engine'
 Test-Starts 'trace-capture-missing' 'engine'

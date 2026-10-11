@@ -262,6 +262,40 @@ All earlier losses and qualification failures remain recorded. MMCSS reduces
 a diagnostic scheduling risk; guest evidence must establish whether it
 changes losses. Buffer sizes, audio periods, SYS and thresholds are unchanged.
 
+## Focused capture scheduling trace after r14
+
+The r14 reader registration succeeded but did not solve loss. The offline
+128-frame model shows that a small delay before Windows fetches a completed
+packet can skip it even with a prompt client reader. The next run records
+the already guest-proven minimal scheduling/DPC/ISR profile alongside one
+10-second impulse train through the low-latency engine route. No default-mode
+repeat, driver reinstall, buffer increase or host setting change.
+
+Use Administrator PowerShell **inside AR-DriverTest**, Media Player closed,
+Cable B Listen off, and no other WPR recording running. Bundle:
+`C:\VMs\ar-share\diagnostics-20261010-cable-scheduling-r15`.
+Allow about two minutes including trace saving. Busy/unknown recorder status
+is refused; the wrapper saves/stops only its unique owned recorder instance.
+The final `cable-scheduling-*.zip` contains scheduling ETL, recorder logs,
+redirected measurement output and that run's nested measurement ZIP.
+
+```powershell
+& {
+    robocopy.exe 'Z:\diagnostics-20261010-cable-scheduling-r15' 'C:\ar\diagnostics-20261010-cable-scheduling-r15' /E /R:1 /W:1 /XF latency-*.zip starts-*.zip continuity-*.zip cable-scheduling-*.zip | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-scheduling-r15\run-cable-scheduling.ps1'
+    if ($LASTEXITCODE -ne 0) { throw 'Scheduling trace failed. Evidence preserved; send the output.' }
+}
+```
+
+Host review must verify trace coverage/lost events first, then correlate
+normalized QPC capture gaps with worker IDs, audiodg thread readiness and
+dispatch, and DPC activity. Scheduler evidence distinguishes waiting before
+readiness from waiting after readiness; it does not directly record every
+GetReadPacket invocation or prove the driver notified on time. Trace overhead
+and VirtualBox NEM remain limitations. Rollback: stop only the owned recording
+if save failed, and use r14. Retain all prior failed qualification evidence.
+
 ## Eight-cable sustained continuity (VCAB-24 step 3 deviation run)
 
 This one-hour guest run checks four concurrent AudioRouter engine routes

@@ -9,6 +9,13 @@ repair did not solve continuity. Agent next reviews packet notification and
 Windows fetch/wake timing; no unchanged guest rerun or hour test. See
 [r14 review](evidence/2026-10-10-m03-cable-latency-preparation.md#r14-returned-capture-reader-review-2026-10-10).
 
+Next step prepared: offline packet/slot model reproduces skipping after a
+small notification/fetch delay and shows client timestamps alone cannot
+distinguish the causes. A guest-only wrapper records the proven minimal WPR
+profile around one 1,000-impulse low-latency engine run; logs, raw traces,
+worker IDs and ETL are retained. Driver unchanged. Verify r15 bundle before
+the [focused scheduling command](../../operations/virtual-cable-latency.md#focused-capture-scheduling-trace-after-r14).
+
 User-requested release. Version bump and notes are committed as
 `aeba0f95` (`Release 0.0.15`); local annotated tag `v0.0.15` points there.
 The preceding documentation-anchor repair is `a6dc4697`. Do not push or

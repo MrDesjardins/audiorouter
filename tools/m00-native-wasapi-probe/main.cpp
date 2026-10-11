@@ -1708,6 +1708,7 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     HRESULT render_com = E_FAIL, capture_com = E_FAIL;
     DWORD render_scheduling_error = 0, capture_scheduling_error = 0;
     bool render_scheduling_ready = false, capture_scheduling_ready = false;
+    DWORD render_worker_id = 0, capture_worker_id = 0;
     HRESULT render_error = S_OK, capture_error = S_OK;
     auto announce_ready = [&] {
         std::lock_guard<std::mutex> lock(startup_mutex);
@@ -1716,6 +1717,7 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     };
 
     std::thread render_thread([&] {
+        render_worker_id = GetCurrentThreadId();
         CableAudioThread scheduling;
         render_com = scheduling.com;
         render_scheduling_error = scheduling.error;
@@ -1772,6 +1774,7 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
         }
     });
     std::thread capture_thread([&] {
+        capture_worker_id = GetCurrentThreadId();
         CableAudioThread scheduling;
         capture_com = scheduling.com;
         capture_scheduling_error = scheduling.error;
@@ -1846,6 +1849,7 @@ static int cable_impulse_probe(UINT render_index, UINT capture_index, DWORD impu
     capture_thread.join();
     print_hr("cable_render_worker_com", render_com);
     print_hr("cable_capture_worker_com", capture_com);
+    std::cout << "cable_render_worker_id=" << render_worker_id << " cable_capture_worker_id=" << capture_worker_id << '\n';
     std::cout << "cable_render_worker_mmcss=" << render_scheduling_ready << " cable_render_worker_scheduling_error=" << render_scheduling_error
               << " cable_capture_worker_mmcss=" << capture_scheduling_ready << " cable_capture_worker_scheduling_error=" << capture_scheduling_error << '\n';
     print_hr("cable_render_worker_error", render_error);

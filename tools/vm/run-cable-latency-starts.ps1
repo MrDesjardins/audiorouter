@@ -8,7 +8,8 @@
 param([Parameter(Mandatory = $true)][ValidateSet('engine', 'vbcable')][string] $Route,
     [ValidateRange(1, 10)][int] $Starts = 5,
     [ValidateRange(200, 1000)][int] $Impulses = 400,
-    [switch] $TraceRoute)
+    [switch] $TraceRoute,
+    [ValidateSet('both','default','low-latency')][string] $PeriodMode = 'both')
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') { throw 'Run inside AR-DriverTest from the copied bundle under C:\ar.' }
@@ -49,6 +50,7 @@ function Get-Median([double[]] $Values) {
     return $sorted[[int][Math]::Floor(($sorted.Count - 1) / 2)]
 }
 try {
+    if ($PeriodMode -and $PeriodMode -ne 'both') { $modes = @($modes | Where-Object { $_.Name -eq $PeriodMode }) }
     if ($TraceRoute -and $Route -ne 'engine') { throw 'TraceRoute requires the engine route.' }
     Write-Host "Cable latency starts ($Route): $Starts starts x 2 period modes, $Impulses impulses each. No manual playback needed."
     $status = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','status') `
@@ -172,7 +174,7 @@ try {
         } finally { $active.Dispose() }
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Route = $Route; Passed = (-not [bool]$failure); Error = [string]$failure
-        Starts = $Starts; Impulses = $Impulses; TraceRoute = [bool]$TraceRoute; Results = $results; Summary = $summary; Qualification = $false
+        Starts = $Starts; Impulses = $Impulses; TraceRoute = [bool]$TraceRoute; PeriodMode = $PeriodMode; Results = $results; Summary = $summary; Qualification = $false
         Scope = $(if ($Route -eq 'engine') { 'Cable A Input -> driver bridge -> AudioRouter engine (compiled cable-only session) -> Cable B Output, repeated starts; NEM VM, not qualification' }
             else { 'VB-Cable CABLE Input -> CABLE Output (no route), repeated starts; same-VM comparison for VCAB-25, NEM VM, not qualification' }) }
     $zip = Join-Path $bundle "$run.zip"

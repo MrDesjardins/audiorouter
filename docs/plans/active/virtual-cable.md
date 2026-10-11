@@ -28,6 +28,19 @@ host's Hyper-V/WSL capability preserved.
 
 ### Execution queue after r12 — 2026-10-10
 
+Next-step plan (after r14, user authorized): VCAB-20/24/25/28, VDEV-12.
+Model 48 kHz/128-frame capture with 1 ms DMA service, physical slot reuse,
+OS fetch delay and client queue retention. Check exact/late boundaries and
+show which observations remain ambiguous. Prepare a guest-only wrapper
+around one 1,000-impulse low-latency engine run using the already guest-proven
+minimal scheduling WPR profile. Keep raw capture/route rows and worker IDs;
+save scheduler ETL and redirected run evidence under one owned archive.
+Refuse busy/unknown WPR state, preserve failure evidence, stop only the
+unique recording instance and use child watchdogs. Validate model, wrapper
+ownership/failures and runner mode selection on host without audio/WPR.
+Commit and prepare a verified new bundle with unchanged SYS. Rollback: r14
+and owned recorder stop/cancel; no host/driver/buffer/security changes.
+
 Latest r14 review: archive/hash verified; COM/MMCSS succeeded, all worker
 errors and trace misses zero. Default losses 0/0/0, but p95 42.30/35.82/41.40
 ms exceeds the 40 ms target in two starts. Low-latency losses 35/27/20,

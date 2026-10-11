@@ -53,6 +53,7 @@ Copy-Item -LiteralPath $probe -Destination (Join-Path $output 'tools\m00-probe.e
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency-starts.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-continuity.ps1') -Destination $output
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-scheduling.ps1') -Destination $output
 # Optional, reversible guest quieting before long diagnostics.
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'quiet-guest.ps1') -Destination $output
 $support = Join-Path $output 'paired-trace-support.ps1'
