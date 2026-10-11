@@ -55,6 +55,11 @@ Ordered tasks:
 4. Host checks: unit tests, fmt, Clippy (workspace), acceptance scripts;
    then one VM bundle (r7) and one guest command.
 
+Status 2026-10-10: tasks 1–4 done on the host (relay stayed in the tool;
+the engine step is the library `CableRouteProcessor`); bundle r7 built
+([evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#bundle-r7-engine-route-step-1-of-the-single-pc-path)).
+Next: the user's guest run with `-Route engine`, then record it.
+
 Scope label for results: engine compile and realtime processing between the
 cables; not yet the control/backend lifecycle (session start/stop, lease
 supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
