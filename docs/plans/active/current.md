@@ -40,9 +40,15 @@ capture ticks within 0.05 ms of render ticks), so an extra timer cannot help.
 Controlled comparison with SysMain off (r18 ×2 against r17): flagged capture
 packets 42 vs 80 on average (−47 %), driver skips −51 %, lost impulses
 −27 %, 0 corrupted. r18 is a real repair but below the 80 % criterion. The
-guest currently has r17 installed. Next: user chooses between a documented
-deviation plus the hour-long VM diagnostic with r18, and a native-timer
-environment. See
+user chose the documented deviation plus one hour of r18. One-hour r18 VM
+deviation run (valid, 0.1.3 loaded, SysMain off; not qualification): 409 /
+1,440,000 impulses lost (0.028 %) against r12's 0.101 % (−72 %), 0
+corrupted, loss runs 705 → 284, capture dropped frames −72 %. Losses
+cluster in minutes 1–6 and 59–60, alongside whole-guest pump gaps; minutes
+16–58 lost 3 impulses across four routes. Not controlled against r12
+(SysMain was on, older runner). Next: VCAB-24/25 qualification needs a
+native-timer environment (native VT-x or bare metal, user-run); separately,
+fix the pre-existing unlocked `m_NotificationList` registration. See
 [r16 evidence](evidence/2026-10-10-m03-cable-driver-timing.md).
 This supersedes the r15 next-task/pending preparation below.
 

@@ -817,12 +817,64 @@ one-hour run (driver 0.1.0, SysMain on): 1,456 / 1,438,480 impulses lost
 705 loss runs. The runner and probe in the r18 bundle come from a later
 commit than r12's, so the comparison is indicative rather than controlled.
 
+### One-hour r18 VM deviation run result (2026-10-11) — valid, not qualification
+
+Archive `C:\VMs\ar-share\diagnostics-20261011-cable-resignal-r18\continuity-bfb072a2e51144f9808091c218cd0837.zip`,
+SHA-256 `607C79EC126D7C993EEAF7BD061EA6DC24E28A5FB12C83C1AAE4F0E73EA12C40`
+(computed on the host). All four routes report bridge
+`driver_version: [0, 1, 3, 0]` (r18 loaded). Guest conditions: SysMain off,
+restarted after the r18 install (guarded). Result: probe and route exit 0
+on every route, 0 corrupted, cable count restored, `Passed=true`,
+verdict `unexplained-events`, `Qualification=false`.
+
+| Route | Emitted | Lost | Loss runs | Capture dropped frames | Render steps | p50 latency | ≥20 ms progress intervals |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| A→B | 360,000 | 100 | 69 | 36,480 | 25 | 68.784 ms | 24 |
+| C→D | 360,000 | 100 | 71 | 96,960 | 25 | 63.218 ms | 23 |
+| E→F | 360,000 | 109 | 76 | 95,520 | 27 | 67.138 ms | 23 |
+| G→H | 360,000 | 100 | 68 | 97,440 | 24 | 63.489 ms | 24 |
+
+Totals: 409 / 1,440,000 impulses lost (0.028 %), against r12's
+1,456 / 1,438,480 (0.101 %): −72 %. Loss runs 284 vs 705 (−60 %), capture
+dropped frames 326,400 vs about 1,151,520 (−72 %), render steps 101 vs 255.
+
+Offline QPC review (host, same command shape as r12, the bundle's probe):
+
+```text
+python -I -B tools/vm/review-cable-continuity.py C:\VMs\ar-share\diagnostics-20261011-cable-resignal-r18\continuity-bfb072a2e51144f9808091c218cd0837.zip --probe C:\VMs\ar-share\diagnostics-20261011-cable-resignal-r18\tools\m00-probe.exe --driver-qpc-frequency 10000000 --output target/r18-hour-review
+```
+
+All 409 losses reproduced. Of 284 loss runs, 242 have an all-four-route
+≥20 ms gap within ±1.5 s (QPC dated); 42 lost impulses lack that
+correlation (r12: 119). Nominal date drift is 0 (the runner now records QPC
+progress). Of 76 occupied 100 ms windows, 52 have losses on at least two
+routes and 33 on all four.
+
+Time distribution: losses are not spread over the hour. Minutes 1–6 hold
+292 lost impulses and minutes 59–60 hold 79; minutes 16–58 hold 3 across
+all four routes (about 1.03 million impulses). The A→B pump gaps line up:
+≥20 ms intervals at minutes 0–5 (max 120 ms) and 58–60 (max 1,256 ms at
+the end), one at minute 13, none in between.
+
+Interpretation, bounded: in steady state with SysMain off, r18 kept the
+four routes nearly lossless in this VM (3 lost impulses in about 43 minutes).
+Almost every remaining loss coincides with whole-guest scheduling gaps
+just after the run starts (shortly after boot) and near its end. The run
+did not identify what caused those gaps (no WPR was recorded). The r12
+comparison is not controlled: r12 ran driver 0.1.0 with SysMain on, an
+older runner, and had 53–57 ≥20 ms intervals per route against 23–24 here.
+So part of the gain is a quieter guest, not only r18. Criterion 2's
+deviation stands. VCAB-24/25 qualification still needs a native-timer
+environment.
+
 ## Next action and rollback
 
-User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)
-inside Administrator PowerShell in AR-DriverTest, Media Player closed and
-Cable B Listen off. No guest execution occurred during host preparation.
-Review raw records/drop counters and both measurements before choosing a
-repair or requesting duration. Rollback inside the guest uses retained
+The VM investigation of r18 is complete; no further VM run is planned. Next:
+(1) VCAB-24/25 qualification of r18 in a native-timer environment (native
+VT-x or bare metal, user-run, reversible); (2) as a separate change, fix the
+pre-existing unlocked `m_NotificationList` registration. The guest has r18
+(0.1.3) installed with SysMain disabled; restore SysMain with
+`Set-Service SysMain -StartupType Automatic; Start-Service SysMain` when VM
+tests are finished. Rollback inside the guest uses the retained
 492d8ca8/0.1.0 package from `C:\ar\repair-20261010-slot-provenance` with its
 existing install step. No host trust/security/audio/WSL change occurred.
