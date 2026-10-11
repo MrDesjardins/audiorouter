@@ -610,6 +610,22 @@ arrive within 0.2 ms, and that the bridge reports
 the block checks boot time. Rollback: the r17 bundle (0.1.2) or the r16
 bundle (0.1.1) via `vm-checks.ps1 -Step install`, then restart the guest.
 
+**r18 candidate and bundle — ready.**
+- Built from source commit `240b9a14486d2a3a6482dff699fbf04674398e27`.
+  The user's release-0.0.15 evidence edit was stashed only during packaging
+  and restored unchanged.
+- `target/r18-driver-240b9a14`: version 0.1.3/0.1.3.0, built from a clean
+  tree, test-signed, timing diagnostics included.
+- Signer `FF6876FB…AD40`. The CER SHA256 `92A1CBDD…E4D` is unchanged and
+  already trusted by the guest; no trust was added on the host.
+- SYS SHA256 `4073348B13EE4EC563947928DCACDF74E470ADCFB0855E91C920F5884717C2C2`;
+  the bundle copy is identical.
+- Package checks: 33 pass.
+- Bundle `C:\VMs\ar-share\diagnostics-20261011-cable-resignal-r18`, from
+  base `repair-20261010-slot-provenance`. MANIFEST SHA256
+  `D475611AEB99EEF97B78FC1490ECC021B4363F9F702B6FBD9A1E70AE4BC92C9E`;
+  41/41 entries recomputed, 0 mismatches.
+
 ## Next action and rollback
 
 User runs the [one short guest block](../../../operations/virtual-cable-latency.md#driver-notificationfetch-comparison-after-r15-r16)
