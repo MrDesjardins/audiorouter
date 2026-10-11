@@ -1900,6 +1900,26 @@ authorized now. Guest rollback to 0.1.4 (downgrades are refused):
 from `diagnostics-20261011-multichannel-r27` (0.1.4, same driver source
 as r20), then restart. Next: WP-10 UI with stereo cable routes.
 
+Guest rollback done (2026-10-11): `-Step remove` (r29 bundle), then
+`-Step install` from the r27 bundle (exit 5, restart required, as
+expected), then a restart. `-Step status` reports `driver=0.1.4.0`, 4
+endpoints, 60 formats, min period ≤ 128 frames: PASS (evidence folder
+`20261011-161011-status`; its timestamp precedes the 16:10:24 install, so
+the next guest run must confirm bridge `driver_version: [0, 1, 4, 0]`).
+
+**Order for the UI (WP-10).** WP-10 depends on WP-08: the cable status the
+panel shows (`virtualCable.status`), library node availability, and the
+install/update/repair/remove shell commands are not started. The spec's
+"Game → Discord" template mixes cables with physical devices, which needs
+WP-09 mixed-clock routes (cable plus physical device), also not started.
+Proposed order: (1) WP-08 status detection and API, read-only, standard
+user; (2) WP-10 first slice: Setup → Virtual cables panel (status, driver
+version, counters), cable nodes available in the library when installed,
+and the "Pass-through" template (Cable A → Cable B, which works today);
+(3) later: elevated helper commands from the UI, the cable count and
+names, the low-latency switch, and mixed routes plus the Game → Discord
+template.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC
