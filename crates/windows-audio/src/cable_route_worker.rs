@@ -22,7 +22,9 @@
 //! lock, log or wait other than a 1 ms sleep. Lease activation, heartbeats
 //! and deactivation belong to the caller's control thread.
 
-use crate::cable_route::{CableRouteProcessor, StandingDelayTrim, STANDING_DELAY_WINDOW_BLOCKS};
+use crate::cable_route::{
+    CableRouteProcessor, SilenceHoldoff, StandingDelayTrim, STANDING_DELAY_WINDOW_BLOCKS,
+};
 use crate::{AudioServiceThreadGuard, NativeBridgeRegion, NativeBridgeRegionError};
 use crossbeam_queue::ArrayQueue;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -154,6 +156,10 @@ pub struct CableRouteWorkerConfig {
     pub capture_generation: u64,
     /// Interleaved samples per bridge block (frames × channels).
     pub block_samples: usize,
+    /// How long the capture side waits for a late block after the reader
+    /// acknowledged, before it publishes silence ([`SilenceHoldoff`]); half
+    /// a block period.
+    pub silence_holdoff_us: u64,
 }
 
 /// Running cable route. Dropping it stops and joins both threads.
@@ -214,6 +220,7 @@ impl CableRouteWorker {
                             &capture_sink,
                             &capture_shared,
                             config.capture_generation,
+                            config.silence_holdoff_us,
                             capture_buffer,
                         )
                     });
@@ -394,17 +401,24 @@ fn capture_loop(
     region: &NativeBridgeRegion,
     shared: &Shared,
     generation: u64,
+    silence_holdoff_us: u64,
     mut block: Vec<f64>,
 ) -> Result<(), String> {
     // Sequence 1 is the primed block written before the lease opened.
     let mut sequence = 1_u64;
     let mut trim = StandingDelayTrim::new(STANDING_DELAY_WINDOW_BLOCKS);
+    let mut holdoff = SilenceHoldoff::new(silence_holdoff_us);
+    let started = Instant::now();
     loop {
         if shared.stop.load(Ordering::Acquire) || shared.failed.load(Ordering::Acquire) {
             return Ok(());
         }
-        // Never overwrite a block the reader has not acknowledged.
-        if region.consumer_sequence() >= sequence {
+        // Never overwrite a block the reader has not acknowledged; give a
+        // block that is just late until the hold-off before choosing silence.
+        let now_us = u64::try_from(started.elapsed().as_micros()).unwrap_or(u64::MAX);
+        if region.consumer_sequence() >= sequence
+            && holdoff.publish_now(now_us, !shared.relay_ready.is_empty())
+        {
             shared.relay_take(&mut trim, &mut block);
             if shared.muted.load(Ordering::Acquire) {
                 block.fill(0.0);
@@ -501,6 +515,7 @@ mod tests {
                 render_generation: 1,
                 capture_generation: 2,
                 block_samples: BLOCK,
+                silence_holdoff_us: 5_000,
             },
         )
         .unwrap();
@@ -623,6 +638,7 @@ mod tests {
                 render_generation: 1,
                 capture_generation: 2,
                 block_samples: 0,
+                silence_holdoff_us: 5_000,
             },
         )
         .is_err());

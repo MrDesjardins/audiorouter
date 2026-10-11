@@ -1638,6 +1638,40 @@ same driver source; 33 package checks pass), MANIFEST SHA-256
 `A4397C62C6DDDF0A368BA3731E5856ADACA4A3B733E8300E50DA73D2AB1FE00E`, 44/44
 verified. Guest command: `run-cable-tone.ps1` (about 21 minutes).
 
+**Tone result r25 (2026-10-11) — FAIL; cause found and repaired.** Archive
+`C:\VMsr-share\diagnostics-20261011-cable-tone-r25	one-7472df7638b7410ba8b75f2184db7230.zip`,
+SHA-256 `76EE507C491A53E3B751D116B10D71AC721BFCD8209BE50E958A8D351CF6F9A0`
+(matches the guest). 10 minutes per tone, route exit 0 both times.
+
+| Tone | Cable B glitches | Silent runs (samples) | Route silence / trims | Reference (Cable A loopback) |
+|---|---|---|---|---|
+| 997 Hz | 250 | 91 (42,000) | 86 / 83 | 0 glitches, 0 silent runs |
+| 47 Hz | 17 | 7 (3,792) | 4 / 1 | 0 glitches, 0 silent runs |
+
+The input was clean. 87 × 480 ≈ the silent samples, so almost every
+glitch is a relay silence insert (a 480-sample gap) plus the trim that
+later sheds the block that stood behind it. Cause: both sides of the route
+tick at 10 ms from one driver clock, with a fixed phase set at start.
+When the render block normally lands just before the reader acknowledges,
+each late VM hiccup turns into a silence, then about 1 s later a trim.
+997 Hz had an unlucky phase (one per about 7 s); 47 Hz a lucky one. The
+impulse runs showed the same mechanism only as a few lost impulses.
+
+Repair: `SilenceHoldoff` (`crates/windows-audio/src/cable_route.rs`). After
+the reader acknowledges, the capture side waits up to half a block period
+(5 ms at 480 frames) for a late block before publishing silence. Model
+test `silence_holdoff_ends_the_silence_and_drop_cycle_at_every_phase`
+(phase sweep in 0.25 ms steps, 0.5 ms jitter plus a 3 ms late block every
+700 blocks, 60 s): without the hold-off the worst phase gives at least 8
+silences and 6 trims, as in the VM; with it, every phase gives at most one
+of each. Plain jitter up to 2 ms is absorbed too. Wired into
+`CableRouteWorker` (`silence_holdoff_us`; the control plane sets half the
+block period). Latency cost: at most the wait itself, only at phases that
+need it. The VM tool relay (`m03_bridge_tone`) keeps the old rule as the
+diagnostic reference. windows-audio lib 137 passed, control 240 passed;
+worker tests 10/10 repeats; workspace Clippy clean. Next: rerun
+`run-cable-tone.ps1` on a new bundle.
+
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
 - **Who:** agent on the host; user runs it in the VM now and on the main PC

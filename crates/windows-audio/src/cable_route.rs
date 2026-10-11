@@ -309,6 +309,46 @@ impl StandingDelayTrim {
     }
 }
 
+/// When to publish silence instead of waiting for the next block.
+///
+/// A cable route's two sides tick at the same block rate from one driver
+/// clock, with a fixed but arbitrary phase between them. When the reader's
+/// acknowledgement lands just before the next block arrives, taking the
+/// relay at once publishes silence. The late block then stands queued, so
+/// latency recovery drops one, which moves the route back to the edge: a
+/// silence-and-drop cycle. The 2026-10-11 VM tone run showed 86 silences
+/// and 83 trims in 10 minutes (about 250 glitches) at an unlucky phase, and
+/// 4 at a lucky one. Waiting up to `deadline` after the acknowledgement for
+/// a block absorbs that jitter. The reader then still gets a block well
+/// before it needs the next one (deadline is half a block period).
+/// Integer state only, times in microseconds: no allocation, lock or wait.
+#[derive(Clone, Debug)]
+pub struct SilenceHoldoff {
+    deadline_us: u64,
+    waiting_since_us: Option<u64>,
+}
+
+impl SilenceHoldoff {
+    pub const fn new(deadline_us: u64) -> Self {
+        Self {
+            deadline_us,
+            waiting_since_us: None,
+        }
+    }
+
+    /// The reader has acknowledged and wants a block now. Returns true when
+    /// the caller must publish now: a block is ready, or none came within
+    /// the deadline (publish counted silence).
+    pub fn publish_now(&mut self, now_us: u64, block_ready: bool) -> bool {
+        let since = *self.waiting_since_us.get_or_insert(now_us);
+        if block_ready || now_us.saturating_sub(since) >= self.deadline_us {
+            self.waiting_since_us = None;
+            return true;
+        }
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -541,5 +581,107 @@ mod tests {
         assert_eq!(trimmed, 3);
         assert!(delivered[400..].iter().all(|wait| *wait == Some(4)));
         assert_eq!(StandingDelayTrim::new(0).window, 1);
+    }
+
+    /// Route timing model in microseconds: blocks arrive every `P` at
+    /// `phase` plus jitter, and every `spike_every`-th block `spike_us`
+    /// late (a VM hiccup); the reader acknowledges every `P` at 0; the
+    /// capture side polls every 1 ms. Returns (silences, trims) after the
+    /// first 10 periods, over 60 s.
+    fn route_model(
+        phase_us: u64,
+        jitter_us: u64,
+        spike_every: u64,
+        spike_us: u64,
+        holdoff_us: u64,
+    ) -> (u64, u64) {
+        const P: u64 = 10_000;
+        const PERIODS: u64 = 6_000;
+        let mut seed = 0x2545_F491_4F6C_DD1Du64 ^ phase_us;
+        let mut arrivals = std::collections::VecDeque::new();
+        for n in 0..PERIODS + 2 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let jitter = seed % (2 * jitter_us + 1);
+            let spike = if spike_every != 0 && n % spike_every == spike_every - 1 {
+                spike_us
+            } else {
+                0
+            };
+            arrivals.push_back(P * (n + 1) + phase_us + jitter + spike - jitter_us);
+        }
+        let mut queue = 0_u64;
+        let mut holdoff = SilenceHoldoff::new(holdoff_us);
+        let mut trim = StandingDelayTrim::new(STANDING_DELAY_WINDOW_BLOCKS);
+        let (mut acknowledged, mut published) = (0_u64, 0_u64);
+        let (mut silences, mut trims) = (0, 0);
+        let mut now = 300;
+        while now < P * PERIODS {
+            while arrivals.front().is_some_and(|arrival| *arrival <= now) {
+                arrivals.pop_front();
+                queue += 1;
+            }
+            acknowledged = acknowledged.max(now / P);
+            if acknowledged > published && holdoff.publish_now(now, queue > 0) {
+                published += 1;
+                let counted = now > 10 * P;
+                if queue > 0 {
+                    queue -= 1;
+                } else if counted {
+                    silences += 1;
+                }
+                if trim.after_take(queue as usize) {
+                    queue -= 1;
+                    trims += u64::from(counted);
+                }
+            }
+            now += 1_000;
+        }
+        (silences, trims)
+    }
+
+    #[test]
+    fn silence_holdoff_ends_the_silence_and_drop_cycle_at_every_phase() {
+        // 0.5 ms jitter and a 3 ms late block every 700 blocks (7 s), the
+        // r25 VM rate. Without the hold-off, a phase that leaves the block
+        // arriving just before the reader acknowledges turns every spike into
+        // a silence and, a window later, a trim. With it, nothing.
+        let mut worst_without = (0, 0);
+        for phase in (0..10_000).step_by(250) {
+            let (silences, trims) = route_model(phase, 500, 700, 3_000, 5_000);
+            assert!(
+                silences <= 1 && trims <= 1,
+                "phase {phase} us: {silences} silences, {trims} trims"
+            );
+            let without = route_model(phase, 500, 700, 3_000, 0);
+            if without.0 + without.1 > worst_without.0 + worst_without.1 {
+                worst_without = without;
+            }
+        }
+        assert!(
+            worst_without.0 >= 8 && worst_without.1 >= 6,
+            "{worst_without:?}"
+        );
+        // Plain jitter of up to 2 ms is absorbed at every phase as well.
+        for phase in (0..10_000).step_by(250) {
+            let (silences, trims) = route_model(phase, 2_000, 0, 0, 5_000);
+            assert!(silences <= 1 && trims <= 1, "phase {phase} us");
+        }
+        assert_eq!(route_model(3_000, 0, 0, 0, 5_000), (0, 0));
+        let mut holdoff = SilenceHoldoff::new(5_000);
+        assert!(
+            holdoff.publish_now(100, true),
+            "a ready block is published at once"
+        );
+        assert!(!holdoff.publish_now(200, false) && !holdoff.publish_now(5_100, false));
+        assert!(
+            holdoff.publish_now(5_200, false),
+            "silence only after the deadline"
+        );
+        assert!(
+            !holdoff.publish_now(5_300, false),
+            "the next wait starts afresh"
+        );
     }
 }

@@ -443,6 +443,10 @@ impl ControlPlane {
                 render_generation: lease_generation,
                 capture_generation: lease_generation,
                 block_samples,
+                // Half a block period (5 ms at 480 frames, 48 kHz).
+                silence_holdoff_us: u64::from(frames) * 1_000_000
+                    / u64::from(CABLE_ROUTE_RATE_HZ)
+                    / 2,
             },
         );
         let worker = match worker {
