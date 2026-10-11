@@ -16,6 +16,11 @@ pub use cable_route::{
     cable_route_session, reblock_delay_frames, CableRouteError, CableRouteProcessor,
     StandingDelayTrim, STANDING_DELAY_WINDOW_BLOCKS,
 };
+mod cable_route_worker;
+pub use cable_route_worker::{
+    CableRouteCounters, CableRouteWorker, CableRouteWorkerConfig, CableRouteWorkerError,
+    CABLE_ROUTE_RELAY_BLOCKS,
+};
 mod network_audio;
 pub use network_audio::*;
 mod service_thread;

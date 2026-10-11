@@ -1361,7 +1361,68 @@ or audio evidence.
   - VM: counters visible in `system.diagnostics`.
 - **Acceptance:** above pass; no new allocation or lock in the audio path
   (review); same-rate cable routes never touch the resampler.
-- **Status:** not started.
+- **Status:** started 2026-10-11 (user approved). Requirement IDs:
+  VCAB-03/04, VCAB-20, VCAB-24/25 (indicative), VDEV-04/12, NFR-01,
+  spec 17 §7.3 and latency recovery.
+
+### WP-09 execution plan (2026-10-11)
+
+Starting point (code inspection): `NativeBridgeInputWorker` and
+`NativeBridgeOutputWorker` exist, but each is paced by a physical
+endpoint. Session start refuses `VirtualRenderSource` ("cannot feed a
+multi-path session yet"). `VirtualCaptureSink` exists only as a branch tap
+(`virtual_route_tap_set`, `NativeBridgeRealtimeWriter`), which publishes
+without waiting for the reader's acknowledgement. The control plane's
+`virtual_buses` registry predates the eight fixed cables. The only working
+cable → engine → cable path is the VM tool `m03_bridge_tone --engine`
+(two realtime threads, relay, `StandingDelayTrim`). The driver is
+`\\.\AudioRouterVirtualBridge` with buses `cable-a` … `cable-h`, and
+`NativeBridgeDriverInfo` reports the enabled cable count, so WP-09 does not
+wait for WP-08's full status API.
+
+Ordered slices:
+1. **Library `CableRouteWorker`** (`crates/windows-audio`). It owns the
+   render-source and capture-sink mapped views, a `CableRouteProcessor`
+   (compiled graph), a preallocated relay with `StandingDelayTrim`, and two
+   MMCSS threads. Render thread: read each published block, run the
+   engine, forward to the relay. Capture thread: publish the next relay
+   block only after the reader acknowledged the previous one (silence,
+   counted, when none is ready). It provides counters (forwarded, silence,
+   dropped, trimmed, engine processed/silent, render sequence gaps), a
+   failure flag, and stop/join. Lease activation, heartbeats and
+   deactivation stay with the caller's control thread. The audio loops
+   never allocate, lock, log or wait beyond a 1 ms sleep. Host tests run
+   over temporary mappings (no driver): bit-exact float32-grid noise
+   through the route; FIFO order; a silence insert is trimmed; a stalled
+   reader drops oldest, never overwrites an unacknowledged block; stop
+   joins with a retiring mapping. The VM tool stays unchanged as the
+   reference until slice 4 passes.
+2. **Engine** (`crates/engine`): add both node kinds to
+   `tests/tool_combinations.rs` as source/sink. Test that a cable-only
+   route compiles with no drift-correction or resampler stage (§7.3).
+3. **Control** (`crates/control`): start a cable-only session (one enabled
+   `VirtualRenderSource` → graph → one `VirtualCaptureSink`, 48 kHz,
+   stereo; other shapes refused with a clear error). Prepare both leases
+   on the fixed device, compile the graph, start the worker, heartbeat at
+   `LeaseMs / 4` from the backend's service loop, publish counters in
+   `system.diagnostics`, and stop/release on session stop and backend exit.
+   A protected path fails to silence. Portable tests with fake bindings
+   where the control seams allow; Windows build/Clippy.
+4. **VM**: product route through the backend (CLI session start) with the
+   cable probe: continuity, latency vs the tool route, and killing the
+   backend makes Cable B silent within 500 ms with no old audio after
+   restart (A7).
+Rollback: each slice is its own commit; the tool route and existing
+physical paths are untouched.
+
+Slice 1 done (2026-10-11): `crates/windows-audio/src/cable_route_worker.rs`
+(`CableRouteWorker`, `CableRouteWorkerConfig`, `CableRouteCounters`).
+Host tests over temporary mappings: float32-grid noise through the
+compiled route is bit-exact and in order after the constant 96-frame
+re-blocking delay (60 blocks, no drops or trims); a reader that never
+acknowledges keeps the primed block intact (nothing published past it,
+relay bounded); an idle source yields counted silence. 20/20 repeated
+runs pass; crate Clippy and fmt clean. The VM tool is unchanged.
 
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
