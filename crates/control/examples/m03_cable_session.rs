@@ -9,7 +9,10 @@
 //! database or any other device.
 //!
 //! Usage: m03_cable_session [--render-bus cable-a] [--capture-bus cable-b] [--seconds N] [--check]
-//!        [--tone HZ --render-endpoint ID --capture-endpoint ID]
+//!        [--channels 1-8] [--tone HZ --render-endpoint ID --capture-endpoint ID]
+//!
+//! `--channels` sets both cables' channel count (identity map); other than
+//! 2 it runs the multichannel route (direct mapping, WP-09 slice 5).
 //!
 //! `--tone` plays a quiet sine (amplitude 0.05) into the render endpoint
 //! (Cable A Input) for the whole run and records the capture endpoint
@@ -36,7 +39,7 @@ fn cable_bus(text: &str) -> Result<String, String> {
     }
 }
 
-fn cable_node(id: &str, kind: NodeKind, bus: &str, direction: PortDirection) -> Node {
+fn cable_node(id: &str, kind: NodeKind, bus: &str, direction: PortDirection, channels: u8) -> Node {
     Node {
         id: EntityId::new(id),
         kind,
@@ -56,7 +59,7 @@ fn cable_node(id: &str, kind: NodeKind, bus: &str, direction: PortDirection) -> 
             }
             .into(),
             direction,
-            channels: 2,
+            channels,
         }],
     }
 }
@@ -87,6 +90,7 @@ fn run() -> Result<(), String> {
     let mut capture_bus = "cable-b".to_owned();
     let mut seconds = 20_u64;
     let mut check = false;
+    let mut channels = 2_u8;
     let mut tone_hz = None;
     let mut render_endpoint = None;
     let mut capture_endpoint = None;
@@ -104,6 +108,13 @@ fn run() -> Result<(), String> {
                     .ok_or("--seconds must be 1..3600")?
             }
             "--check" => check = true,
+            "--channels" => {
+                channels = value()?
+                    .parse()
+                    .ok()
+                    .filter(|channels| (1..=8).contains(channels))
+                    .ok_or("--channels must be 1..8")?
+            }
             "--tone" => {
                 tone_hz = Some(
                     value()?
@@ -133,12 +144,14 @@ fn run() -> Result<(), String> {
                 NodeKind::VirtualRenderSource,
                 &render_bus,
                 PortDirection::Output,
+                channels,
             ),
             cable_node(
                 "cable-out",
                 NodeKind::VirtualCaptureSink,
                 &capture_bus,
                 PortDirection::Input,
+                channels,
             ),
         ],
         edges: vec![Edge {
@@ -147,7 +160,10 @@ fn run() -> Result<(), String> {
             source_port: "out".into(),
             destination_node: EntityId::new("cable-out"),
             destination_port: "in".into(),
-            matrix: vec![1.0, 0.0, 0.0, 1.0],
+            // Identity: channel n to channel n (bit-exact pass-through).
+            matrix: (0..usize::from(channels) * usize::from(channels))
+                .map(|index| f32::from(u8::from(index % (usize::from(channels) + 1) == 0)))
+                .collect(),
             enabled: true,
         }],
     };

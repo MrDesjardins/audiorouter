@@ -48,7 +48,7 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $entries = @(Get-Content -LiteralPath (Join-Path $base 'MANIFEST.txt') | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
 foreach ($entry in $entries) {
     $relative = $entry.Substring(66)
-    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe', 'tools\m03_cable_session.exe', 'run-cable-kill.ps1', 'run-cable-tone.ps1')) { throw 'Base already contains latency or continuity tools; use a standard candidate base.' }
+    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe', 'tools\m03_cable_session.exe', 'run-cable-kill.ps1', 'run-cable-tone.ps1', 'run-cable-bitexact.ps1')) { throw 'Base already contains latency or continuity tools; use a standard candidate base.' }
     $file = [IO.Path]::GetFullPath((Join-Path $output $relative))
     if (-not $file.StartsWith($output + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest path escapes output.' }
     New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
@@ -65,6 +65,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-continuity.ps1') -Des
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-scheduling.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-kill.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-tone.ps1') -Destination $output
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-bitexact.ps1') -Destination $output
 if ($TimingDriverPackage) {
     $timingPackage = Get-Content -LiteralPath (Join-Path $TimingDriverPackage 'package.json') -Raw | ConvertFrom-Json
     if (-not $timingPackage.timingDiagnostics -or $timingPackage.signed -ne 'test' -or
