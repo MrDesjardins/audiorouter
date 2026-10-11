@@ -70,7 +70,7 @@ guest-only script. After copying the bundle (first line of the block below),
 in Administrator PowerShell inside the VM:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r7\quiet-guest.ps1' -Apply
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r8\quiet-guest.ps1' -Apply
 ```
 
 It records the current values, pauses Windows Update for 7 days, disables
@@ -86,9 +86,9 @@ inside AR-DriverTest**, with the driver installed:
 
 ```powershell
 & {
-    robocopy.exe 'Z:\diagnostics-20261010-cable-latency-r7' 'C:\ar\diagnostics-20261010-cable-latency-r7' /E /R:1 /W:1 /XF latency-*.zip | Out-Null
+    robocopy.exe 'Z:\diagnostics-20261010-cable-latency-r8' 'C:\ar\diagnostics-20261010-cable-latency-r8' /E /R:1 /W:1 /XF latency-*.zip | Out-Null
     if ($LASTEXITCODE -ge 8) { throw 'Copy failed. Stop here.' }
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r7\run-cable-latency.ps1' -Route engine
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\ar\diagnostics-20261010-cable-latency-r8\run-cable-latency.ps1' -Route engine
     if ($LASTEXITCODE -ne 0) { throw 'Latency diagnostic failed. Evidence was preserved; send the output.' }
 }
 ```
@@ -98,7 +98,7 @@ p95, jitter, lost, corrupted), the relay statistics and the driver counters,
 one bit-exact line (compared frames, mismatched samples, non-zero silence),
 two isolation lines (frames, non-zero samples), then
 copies `latency-<run>.zip` to the same folder on `Z:` (host:
-`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r7`). Send the output. A
+`C:\VMs\ar-share\diagnostics-20261010-cable-latency-r8`). Send the output. A
 missed target is a measurement, not a crash; do not rerun it unchanged.
 
 ## Host-side checks

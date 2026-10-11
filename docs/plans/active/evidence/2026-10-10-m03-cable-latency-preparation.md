@@ -244,3 +244,9 @@ assert one emission per push at 16, 128, 144, 480 and 4,096 frames, the
 leading delay, and an unchanged sample stream; `reblock_delay_frames`
 values are pinned. Low-latency (128-frame) blocks never had the defect;
 their failure is the VM timing seen on the proxy route.
+Bundle r8: `C:\VMs\ar-share\diagnostics-20261010-cable-latency-r8`, source
+`33dc8661`, driver `492d8ca8` (SYS SHA-256 unchanged), manifest SHA-256
+`8859D4D802211D332F356A165E135D24377EDFA6A48837831C9795AB80A1388C`.
+Host checks: cable route unit tests (5), tool tests (20), latency
+acceptance (220), `cargo fmt --check` and workspace Clippy clean. Same guest
+command as r7 with the r8 folder.
