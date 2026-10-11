@@ -20,22 +20,34 @@ could not build `lzma-sys`, so it provided no test evidence.
 `node tools/docs/validate.mjs` initially found two stale explicit anchors in
 the cable evidence; commit `a6dc4697` added those IDs and validation now passes
 (146 Markdown files, 823 links). The three release-tool self-tests pass.
-Artifact preparation built CLI and plugin worker, rebuilt `ui/dist`, then
-failed at the custom-protocol shell because
-`src-tauri/target/release/audiorouter-shell.exe` is held open by another
-process. No AudioRouter process was stopped. The fresh-install gate and
-artifact verification have not run; no release artifact directory was
-produced. No host driver or setting was changed.
+Artifact preparation first built CLI/plugin worker and UI but could not
+replace the shell while the user app held it open. After the user closed the
+app, another shell process was identified and the user closed it; a separate
+orphaned CLI process from the failed pipe integration test was stopped. The
+custom-protocol shell and unsigned NSIS installer then built successfully.
+`verify-artifacts.ps1` passes. The installer is newer than `ui/dist` and the
+shell, and the rebuilt bundle contains the session-switch/reconnect code. The
+manifest records source revision `ca0b6e90`, version 0.0.15, x64 MSVC and
+unsigned status. npm first failed under network-restricted execution with DNS
+`ENOTFOUND`; lockfile-pinned `npm ci` passed with network access (133 packages,
+0 vulnerabilities), then preparation passed.
 
-**Next:** user closes AudioRouter (if it is theirs), then rerun
-`tools/release/prepare-artifacts.ps1 -OutputDirectory target/releases/v0.0.15
--ReleaseTag v0.0.15`, verify the installer embeds the rebuilt UI and uses
-custom-protocol, run `verify-artifacts.ps1`, resolve/re-run the Windows
-workspace test gate, then run the exact packaged fresh-install gate with no
-developer override. Record evidence before asking about push/publication.
-Task 2 (r12 continuity bundle) follows release packaging. Rollback: keep
-0.0.14 and compatible configuration/recording backups; the local release
-commit/tag can be reverted or deleted before publication.
+The Windows workspace suite remains incomplete: `mcp_stdio` failed twice at
+backend pipe startup with access denied and then a dependent assertion. The
+failed test left an `audiorouter-cli.exe` child open; this agent stopped that
+test-owned process. Do not claim the workspace suite passed. The exact-package
+fresh-install gate is deferred while the user uses AudioRouter for game audio;
+do not stop it. No `AUDIOROUTER_ALLOW_DEVICE_ADMIN` override, host driver
+installation or host setting change occurred.
+
+**Next:** continue Task 2: prepare the r12 continuity bundle, verify the SYS
+hash is unchanged, and give the user the one-hour VM command. After the user
+returns the guest zip, review and record it, then locate the standing delay
+before designing recovery (spec 17). When the user is done using AudioRouter,
+ask them to close it and run the exact packaged fresh-install gate. Resolve the
+workspace pipe-test environment issue. Then ask before pushing the tag or
+creating/publishing a GitHub release. Rollback: keep 0.0.14 and compatible
+configuration/recording backups; the local release tag is unpushed.
 
 Driver-agent resumption: read the [Claude / next-agent handoff](virtual-cable-agent-handoff.md)
 first. It records the prepared candidate, exact next guest step, completed
