@@ -20,9 +20,9 @@ This section supersedes sections 4–9 below, which describe the earlier
   Defender/Windows Update bursts (2026-10-10 trace). VirtualBox runs through
   NEM because WSL keeps the hypervisor on. Tools: `m03-scheduler-trace
   --silences`, `run-direct-audio.ps1 -Seconds 300 -TraceScheduling`.
-- **User decision pending:** a bare-metal or native-VT-x test PC for VCAB-24
-  (the guest quieting was applied; the
-  [native VT-x session](../../operations/virtual-cable-native-vtx-session.md)
+- **User decision pending:** production driver signing (cost), the only
+  route to bare-metal VCAB-24/25 on this PC (the guest quieting was applied;
+  the [native VT-x session](../../operations/virtual-cable-native-vtx-session.md)
   was tried and restored). Never change host settings yourself.
 - **Cable latency diagnostic run (r6, 2026-10-10):** through the proxy relay,
   bit-exact (VCAB-20) and isolation with Cable B active (VCAB-26) pass;
@@ -31,10 +31,12 @@ This section supersedes sections 4–9 below, which describe the earlier
   NEM ([evidence](evidence/2026-10-10-m03-cable-latency-preparation.md#second-vm-run-bundle-r6--2026-10-10-nem-vm-guest-quieted)).
   The guest is still quieted (`quiet-guest.ps1 -Revert` undoes it).
 - **Native VT-x on this PC: not practical** (VBS kept by Windows Hello
-  Enhanced Sign-in Security); host fully restored and verified. VCAB-24 and
-  VCAB-25 need a separate bare-metal or native-VT-x test PC (user decision).
-  Host-only next work: product-engine route checks and a repeated-start
-  latency mode.
+  Enhanced Sign-in Security); host fully restored and verified.
+- **This is the user's only PC (2026-10-10).** Do not plan on another test
+  PC. The ordered path (engine-route checks, repeated-start latency with a
+  same-VM VB-Cable comparison, a traced one-hour deviation run, then
+  production signing for bare-metal qualification here) is in the
+  [virtual cable plan](virtual-cable.md) status section.
 - The user prefers host-side verification first and one combined, fail-fast
   guest block per step.
 

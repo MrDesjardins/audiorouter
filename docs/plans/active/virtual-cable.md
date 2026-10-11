@@ -138,9 +138,22 @@ identity-coded impulse probe and [latency runbook](../../operations/virtual-cabl
 default latency 33.39 ms p95 with 0.002 ms jitter but 56.94 ms in r5 (startup
 phase varies per run); low-latency periods fail under NEM. Native VT-x proved
 impractical on this PC (VBS kept by Windows Hello ESS); host restored and
-verified. Next: VCAB-24/25 on a separate bare-metal or native-VT-x test PC
-(user decision); meanwhile host-side product-engine route checks and a
-repeated-start latency mode.
+verified. **Constraint (user, 2026-10-10): this is the only PC; no separate
+test PC.** Path under that constraint:
+1. VM, short runs (work reliably under NEM): repeat VCAB-20/26 through the
+   real AudioRouter engine route instead of the proxy relay.
+2. VM: repeated-start latency mode (N starts, p95 across starts) and the
+   same measurement on VB-Cable installed in the same VM, for the VCAB-25
+   "≤ 5 ms worse than VB-Cable on the same PC" comparison.
+3. VM: one-hour 8-cable run with scheduling trace; every loss must coincide
+   with a traced guest-wide stall and be counted by the driver. This is a
+   documented VCAB-24 deviation, not a pass.
+4. User decision (cost): production (attestation) driver signing. Only a
+   production-signed driver may run on this PC; the final bare-metal
+   VCAB-24/25/27 qualification then runs here, as a normal user install
+   (Secure Boot and Memory Integrity on), with a restore point and the
+   uninstall path verified first in the VM. The test-signed driver never
+   runs on the host.
 Do not rerun r3 unchanged.
 
 Ship AudioRouter-owned virtual cables (up to 8, Cable A–H; 2 enabled by
