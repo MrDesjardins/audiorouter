@@ -48,3 +48,35 @@ measurement supports only the matching float32 shared mix format. The wired
 product-route case has not been run in the VM. It covers neither all A16
 rates/formats/channel counts nor the full VCAB-20–26 matrix. No audio,
 driver or VM state was touched. A16's 8-channel acceptance remains unchanged.
+
+## 997 Hz product-route THD+N slice
+
+The native probe now has a `cable-tone` mode that writes a requested sine
+through the shared float32 cable endpoints and saves reference/capture WAVs.
+The Rust analyzer aligns the capture to the reference and reports per-channel
+THD+N with a worst-channel VCAB-22/23 diagnostic threshold. The guarded
+`run-cable-quality.ps1 -Case thdn-997-48k` launches `m03_cable_session`, runs
+the probe, analyzes the files, and packages a result explicitly marked
+`Qualification=false`. Defaults are 2 channels, 997 Hz, and a -60 dB THD+N
+diagnostic threshold. No live VM run has been performed.
+
+Checks on Windows host `AR-DriverTest`, pinned Rust 1.96.0:
+
+- `cargo fmt --manifest-path tools/m03-cable-quality/Cargo.toml -- --check` —
+  passed.
+- Offline analyzer tests — 7 passed; standalone Clippy with `-D warnings` —
+  passed.
+- `tests/acceptance/m03-cable-quality.ps1` — 24 host-safe checks passed,
+  including PowerShell parse and host guard checks for the new runner.
+- `tests/acceptance/docs.ps1` — 149 Markdown files and 858 local links passed.
+- Native probe static build and existing self-checks — 10 bit-exact and 4
+  isolation checks passed.
+- Static CRT release analyzer build and PE import check passed; imports are
+  `api-ms-win-core-synch-l1-2-0.dll`, `KERNEL32.dll`, and `ntdll.dll`.
+- `git diff --check` — passed.
+
+The initial acceptance run found a malformed PowerShell assertion regex caused
+by variable expansion; the assertion now uses literal substring checks and
+the full acceptance script passes. Static probe compilation does not exercise
+WASAPI. Native endpoint capture, route THD+N, and all other A16 cases remain
+unmeasured.

@@ -2,7 +2,7 @@
    diagnostic subsets of A16, never complete A16 qualification. #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','isolation-A-to-B','isolation-all-pairs')][string] $Case,
+    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','thdn-997-48k','isolation-A-to-B','isolation-all-pairs')][string] $Case,
     [ValidateRange(1, 8)][int] $Channels = 2,
     [ValidateRange(5, 60)][int] $Seconds = 20
 )
@@ -25,6 +25,16 @@ if ($Case -like 'float32-*') {
         -NoProfile -ExecutionPolicy Bypass -File $runner -Channels $Channels -Rate $rate -Seconds $Seconds
     if ($LASTEXITCODE -ne 0) { throw "Float32 bit-exact diagnostic failed (exit $LASTEXITCODE)." }
     Write-Host 'Diagnostic case completed. A16 remains incomplete until every required rate, format, channel count, resampling and crosstalk case is implemented and run.'
+    return
+}
+if ($Case -eq 'thdn-997-48k') {
+    $runner = Join-Path $bundle 'run-cable-thdn.ps1'
+    if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) { throw 'The bundle has no product-route THD+N runner.' }
+    Write-Host "WP-09b diagnostic subset: 997 Hz float32 tone through the product route, $Channels channel(s). Set both Cable endpoints to 48 kHz first. This does not pass A16."
+    & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+        -NoProfile -ExecutionPolicy Bypass -File $runner -Channels $Channels -Seconds $Seconds
+    if ($LASTEXITCODE -ne 0) { throw "THD+N diagnostic failed (exit $LASTEXITCODE)." }
+    Write-Host 'Diagnostic case completed. A16 remains incomplete.'
     return
 }
 if ($Case -eq 'isolation-all-pairs') {

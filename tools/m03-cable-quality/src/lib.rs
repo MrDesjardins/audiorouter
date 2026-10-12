@@ -367,6 +367,120 @@ pub fn analyze_silence_wav(
     }))
 }
 
+pub fn analyze_tone_wav(
+    capture_path: &std::path::Path,
+    frequency_hz: f64,
+    max_thdn_db: f64,
+) -> Result<serde_json::Value, String> {
+    let (sample_rate, channels, samples) = read_float_wav(capture_path)?;
+    analyze_tone_samples(
+        capture_path,
+        sample_rate,
+        channels,
+        &samples,
+        frequency_hz,
+        max_thdn_db,
+        None,
+    )
+}
+
+pub fn analyze_tone_pair_wav(
+    reference_path: &std::path::Path,
+    capture_path: &std::path::Path,
+    frequency_hz: f64,
+    max_thdn_db: f64,
+) -> Result<serde_json::Value, String> {
+    let (reference_rate, reference_channels, reference) = read_float_wav(reference_path)?;
+    let (capture_rate, capture_channels, capture) = read_float_wav(capture_path)?;
+    if reference_rate != capture_rate || reference_channels != capture_channels {
+        return Err("reference and capture WAV formats do not match".into());
+    }
+    let channels = usize::from(reference_channels);
+    let reference_frames = reference.len() / channels;
+    let first_reference = reference
+        .iter()
+        .step_by(channels)
+        .copied()
+        .collect::<Vec<_>>();
+    let first_capture = capture
+        .iter()
+        .step_by(channels)
+        .copied()
+        .collect::<Vec<_>>();
+    let (offset, _) = align(&first_reference, &first_capture, 96_000)
+        .ok_or("could not align tone reference and capture")?;
+    let end = offset
+        .checked_add(reference_frames)
+        .ok_or("tone capture range overflow")?;
+    if end > capture.len() / channels {
+        return Err("capture ended before the reference tone finished".into());
+    }
+    let samples = &capture[offset * channels..end * channels];
+    analyze_tone_samples(
+        capture_path,
+        capture_rate,
+        capture_channels,
+        samples,
+        frequency_hz,
+        max_thdn_db,
+        Some(offset),
+    )
+}
+
+fn analyze_tone_samples(
+    capture_path: &std::path::Path,
+    sample_rate: u32,
+    channels: u16,
+    samples: &[f32],
+    frequency_hz: f64,
+    max_thdn_db: f64,
+    alignment_offset: Option<usize>,
+) -> Result<serde_json::Value, String> {
+    if !frequency_hz.is_finite()
+        || frequency_hz <= 0.0
+        || !max_thdn_db.is_finite()
+        || max_thdn_db > 0.0
+    {
+        return Err("frequency must be positive and the THD+N target must be a finite dB value at or below 0".into());
+    }
+    if frequency_hz >= f64::from(sample_rate) / 2.0 {
+        return Err("tone frequency must be below Nyquist".into());
+    }
+    let channel_count = usize::from(channels);
+    let frames = samples.len() / channel_count;
+    if frames < 8 {
+        return Err("WAV is too short for a tone fit".into());
+    }
+    let mut channel_values = Vec::with_capacity(channel_count);
+    let mut worst = f64::NEG_INFINITY;
+    for channel in 0..channel_count {
+        let mono = (0..frames)
+            .map(|frame| samples[frame * channel_count + channel])
+            .collect::<Vec<_>>();
+        let thdn =
+            thdn_db(&mono, sample_rate, frequency_hz).ok_or("could not fit the requested tone")?;
+        if !thdn.is_finite() {
+            return Err("tone fit produced a non-finite THD+N value".into());
+        }
+        worst = worst.max(thdn);
+        channel_values.push(serde_json::json!({"channel": channel, "thdnDb": thdn}));
+    }
+    let pass = worst <= max_thdn_db;
+    Ok(serde_json::json!({
+        "requirement": "VCAB-22/23",
+        "target": format!("{frequency_hz} Hz THD+N <= {max_thdn_db} dB"),
+        "pass": pass,
+        "format": {"sampleRateHz": sample_rate, "channels": channels, "encoding": "float32"},
+        "frames": frames,
+        "alignmentOffsetFrames": alignment_offset,
+        "frequencyHz": frequency_hz,
+        "maxThdnDb": max_thdn_db,
+        "worstThdnDb": worst,
+        "channelsMetrics": channel_values,
+        "capture": capture_path.file_name().and_then(|name| name.to_str())
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -496,5 +610,49 @@ mod tests {
         let report = analyze_silence_wav(&path, -170.0).unwrap();
         assert_eq!(report["pass"], false);
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn tone_metric_reports_per_channel_thdn_verdict() {
+        let path =
+            std::env::temp_dir().join(format!("m03-quality-tone-{}.wav", std::process::id()));
+        let reference_path = std::env::temp_dir().join(format!(
+            "m03-quality-tone-reference-{}.wav",
+            std::process::id()
+        ));
+        let clean = tone(48_000, 48_000, 997.0, 0.89);
+        let mut stereo = Vec::with_capacity(clean.len() * 2);
+        for sample in &clean {
+            stereo.extend([*sample, *sample]);
+        }
+        write_test_wav(&path, 2, &stereo);
+        let report = analyze_tone_wav(&path, 997.0, -100.0).unwrap();
+        assert_eq!(report["pass"], true);
+        assert_eq!(report["channelsMetrics"].as_array().unwrap().len(), 2);
+        let distorted = clean
+            .iter()
+            .enumerate()
+            .flat_map(|(i, sample)| {
+                let harmonic = (0.001
+                    * (std::f64::consts::TAU * 2.0 * 997.0 * i as f64 / 48_000.0).sin())
+                    as f32;
+                [*sample, *sample + harmonic]
+            })
+            .collect::<Vec<_>>();
+        write_test_wav(&path, 2, &distorted);
+        let report = analyze_tone_wav(&path, 997.0, -100.0).unwrap();
+        assert_eq!(report["pass"], false);
+        assert!(report["worstThdnDb"].as_f64().unwrap() > -70.0);
+        assert!(analyze_tone_wav(&path, 24_000.0, -100.0).is_err());
+        write_test_wav(&reference_path, 2, &stereo);
+        let mut captured = vec![0.0; 14];
+        captured.extend_from_slice(&distorted);
+        captured.extend([0.0; 16]);
+        write_test_wav(&path, 2, &captured);
+        let report = analyze_tone_pair_wav(&reference_path, &path, 997.0, -100.0).unwrap();
+        assert_eq!(report["alignmentOffsetFrames"], 7);
+        assert_eq!(report["pass"], false);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_file(reference_path).unwrap();
     }
 }

@@ -2005,7 +2005,10 @@ WP-09 mixed-clock route work.
   `run-cable-quality.ps1 -Case float32-48k` entry point exposes that diagnostic
   subset at 44.1/48/96 kHz when the guest's Cable formats are set first, plus
   one unrouted Cable A-to-B diagnostic and a 56 ordered-pair isolation runner
-  at −140 dBFS. Six synthetic tests, standalone Clippy, native probe
+  at −140 dBFS. A separate 997 Hz tone mode now aligns the captured WAV to its
+  generated reference, fits THD+N per channel, and emits a separate VCAB-22/23
+  metric; `run-cable-quality.ps1 -Case thdn-997-48k` starts the product cable
+  route and packages the diagnostic report. Seven synthetic tests, standalone Clippy, native probe
   build/self-check, and a cross-tool WAV writer/analyzer check pass on the
   Windows host. The pairwise runner restores the original VM cable count in
   its `finally` path. No live endpoint was opened. The full channel matrix,

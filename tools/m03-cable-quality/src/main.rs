@@ -19,6 +19,15 @@ fn run() -> Result<(), String> {
                 .transpose()?.unwrap_or(-140.0);
             (m03_cable_quality::analyze_silence_wav(&first, threshold)?, output)
         }
+        "tone" => {
+            let capture = PathBuf::from(args.next().ok_or("capture WAV is required")?);
+            let output = PathBuf::from(args.next().ok_or("metrics output path is required")?);
+            let frequency = args.next().ok_or("tone frequency is required")?.parse::<f64>()
+                .map_err(|_| "tone frequency must be numeric".to_string())?;
+            let threshold = args.next().ok_or("THD+N threshold is required")?.parse::<f64>()
+                .map_err(|_| "THD+N threshold must be numeric".to_string())?;
+            (m03_cable_quality::analyze_tone_pair_wav(&first, &capture, frequency, threshold)?, output)
+        }
         "analyze" => {
             let capture = PathBuf::from(args.next().ok_or("capture WAV is required")?);
             let output = PathBuf::from(args.next().ok_or("metrics output path is required")?);
@@ -29,7 +38,7 @@ fn run() -> Result<(), String> {
                 .map_err(|_| "frequency must be numeric".to_string())).transpose()?;
             (m03_cable_quality::analyze_wav_pair(&first, &capture, max_offset, frequency)?, output)
         }
-        _ => return Err("usage: m03-cable-quality analyze <reference.wav> <capture.wav> <metrics.json> [max-offset-frames] [frequency-hz] | silence <capture.wav> <metrics.json> [max-peak-dbfs]".into()),
+        _ => return Err("usage: m03-cable-quality analyze <reference.wav> <capture.wav> <metrics.json> [max-offset-frames] [frequency-hz] | silence <capture.wav> <metrics.json> [max-peak-dbfs] | tone <reference.wav> <capture.wav> <metrics.json> <frequency-hz> <max-thdn-db>".into()),
     };
     if args.next().is_some() {
         return Err("too many arguments".into());

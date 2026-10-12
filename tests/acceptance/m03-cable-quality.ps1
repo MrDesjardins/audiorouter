@@ -14,8 +14,9 @@ function Assert([bool] $Value, [string] $Name) {
 $runner = Join-Path $workspace 'tools\vm\run-cable-bitexact.ps1'
 $qualityRunner = Join-Path $workspace 'tools\vm\run-cable-quality.ps1'
 $isolationRunner = Join-Path $workspace 'tools\vm\run-cable-isolation-matrix.ps1'
+$thdnRunner = Join-Path $workspace 'tools\vm\run-cable-thdn.ps1'
 $prepare = Join-Path $workspace 'tools\vm\prepare-cable-latency-update.ps1'
-foreach ($scriptPath in @($runner,$qualityRunner,$isolationRunner,$prepare)) {
+foreach ($scriptPath in @($runner,$qualityRunner,$isolationRunner,$thdnRunner,$prepare)) {
     $tokens = $null; $parseErrors = $null
     [void][Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors)
     Assert (-not $parseErrors) "PowerShell parses: $([IO.Path]::GetFileName($scriptPath))"
@@ -30,6 +31,10 @@ $qualityText = Get-Content -LiteralPath $qualityRunner -Raw
 Assert ($qualityText -match "float32-44k1.*float32-48k.*float32-96k") 'VM entry point exposes only implemented float32 rate cases'
 Assert ($qualityText -match 'isolation-A-to-B' -and $qualityText -match "'silence'.*'-140'") 'VM entry point records a cable isolation measurement against VCAB-26'
 Assert ($qualityText -match 'isolation-all-pairs' -and $qualityText -match 'run-cable-isolation-matrix') 'VM entry point wires the ordered isolation matrix'
+Assert ($qualityText -match 'thdn-997-48k' -and $qualityText -match 'run-cable-thdn\.ps1') 'VM entry point wires the product-route THD+N diagnostic'
+$thdnText = Get-Content -LiteralPath $thdnRunner -Raw
+Assert ($thdnText.Contains("'cable-tone'") -and $thdnText.Contains("'tone',`$reference,`$captureWav")) 'THD+N runner captures and analyzes native tone WAVs'
+Assert ($thdnText -match '\$metrics\.pass' -and $thdnText -match 'Qualification=\$false') 'THD+N metric gates only a diagnostic result'
 $isolationText = Get-Content -LiteralPath $isolationRunner -Raw
 Assert ($isolationText -match '56 ordered float32 cable isolation pairs') 'matrix report labels its measured scope'
 Assert ($isolationText -match 'restore-cable-count' -and $isolationText -match '\$originalCount') 'matrix restores the original cable count'
@@ -38,6 +43,7 @@ $prepareText = Get-Content -LiteralPath $prepare -Raw
 Assert ($prepareText -match 'm03-cable-quality\.exe') 'bundle preparation builds and stages the analyzer'
 Assert ($prepareText -match 'run-cable-quality\.ps1') 'bundle preparation stages the WP-09b VM entry point'
 Assert ($prepareText -match 'run-cable-isolation-matrix\.ps1') 'bundle preparation stages the isolation matrix runner'
+Assert ($prepareText -match 'run-cable-thdn\.ps1') 'bundle preparation stages the THD+N runner'
 
 if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
     $guard = Invoke-DriverVmProcess -Executable (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `

@@ -1989,6 +1989,17 @@ static std::vector<float> make_noise(UINT64 frames, UINT32 channels, UINT32 seed
     return samples;
 }
 
+static std::vector<float> make_tone(UINT64 frames, UINT32 channels, UINT32 sample_rate, double frequency_hz) {
+    std::vector<float> samples(static_cast<size_t>(frames * channels));
+    for (UINT64 frame = 0; frame < frames; ++frame) {
+        const float sample = static_cast<float>(0.89 * std::sin(2.0 * 3.14159265358979323846 *
+            frequency_hz * static_cast<double>(frame) / sample_rate));
+        for (UINT32 channel = 0; channel < channels; ++channel)
+            samples[static_cast<size_t>(frame * channels + channel)] = sample;
+    }
+    return samples;
+}
+
 static int cable_bitexact_self_test() {
     unsigned checks = 0;
 #define BITEXACT_CHECK(condition) do { if (!(condition)) { std::cerr << "bitexact self-test failed line " << __LINE__ << '\n'; return 1; } ++checks; } while (0)
@@ -2104,7 +2115,8 @@ static int cable_isolation_wav_self_test(const char* output_dir) {
 }
 
 // Plays seeded noise then silence into render_index and records capture_index.
-static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noise_seconds, const char* output_dir) {
+static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noise_seconds,
+                                const char* output_dir, double tone_frequency_hz = 0.0) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -2130,6 +2142,11 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
         render_state.release(); capture_state.release();
         return 1;
     }
+    if (tone_frequency_hz > 0.0 && (!std::isfinite(tone_frequency_hz) || tone_frequency_hz >= rf->nSamplesPerSec / 2.0)) {
+        std::cout << "cable_tone_frequency_out_of_range=1\n";
+        render_state.release(); capture_state.release();
+        return 1;
+    }
     IAudioRenderClient* render_service = nullptr;
     IAudioCaptureClient* capture_service = nullptr;
     hr = render_state.client->GetService(__uuidof(IAudioRenderClient), reinterpret_cast<void**>(&render_service));
@@ -2144,7 +2161,9 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
     const UINT64 rate = rf->nSamplesPerSec;
     const UINT64 noise_frames = static_cast<UINT64>(noise_seconds) * rate;
     const UINT64 silence_frames = rate / 2;
-    const auto noise = make_noise(noise_frames, channels, 20261010u);
+    const auto signal = tone_frequency_hz > 0.0
+        ? make_tone(noise_frames, channels, static_cast<UINT32>(rate), tone_frequency_hz)
+        : make_noise(noise_frames, channels, 20261010u);
     std::vector<float> captured;
     captured.reserve(static_cast<size_t>((noise_frames + silence_frames + 3 * rate) * channels));
     UINT32 render_buffer = 0;
@@ -2164,7 +2183,7 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
             for (UINT32 frame = 0; frame < available; ++frame, ++rendered) {
                 for (UINT32 channel = 0; channel < channels; ++channel)
                     out[static_cast<size_t>(frame) * channels + channel] =
-                        rendered < noise_frames ? noise[static_cast<size_t>(rendered * channels + channel)] : 0.0f;
+                        rendered < noise_frames ? signal[static_cast<size_t>(rendered * channels + channel)] : 0.0f;
             }
             render_service->ReleaseBuffer(available, 0);
         }
@@ -2207,14 +2226,19 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
     std::cout << "bitexact_channels=" << channels << " bitexact_rate=" << rate << " bitexact_rendered_frames=" << rendered
               << " bitexact_captured_frames=" << captured.size() / channels << " bitexact_capture_dropped_frames=" << capture_dropped
               << " bitexact_capture_flagged_packets=" << capture_flagged << " bitexact_capture_overflow_packets=" << capture_overflow << '\n';
-    const BitExactReport report = compare_bitexact(noise, captured, channels, silence_frames);
-    print_bitexact_report(report, silence_frames);
+    if (tone_frequency_hz > 0.0) {
+        std::cout << "cable_tone_frequency_hz=" << tone_frequency_hz
+                  << " cable_tone_frames=" << noise_frames << " cable_tone_sample_rate_hz=" << rate << '\n';
+    } else {
+        const BitExactReport report = compare_bitexact(signal, captured, channels, silence_frames);
+        print_bitexact_report(report, silence_frames);
+    }
     if (output_dir) {
-        const std::string prefix = std::string(output_dir) + "\\cable-bitexact";
-        const bool reference_written = write_float_wav(prefix + "-reference.wav", noise, static_cast<UINT32>(rate), static_cast<UINT16>(channels));
+        const std::string prefix = std::string(output_dir) + (tone_frequency_hz > 0.0 ? "\\cable-tone" : "\\cable-bitexact");
+        const bool reference_written = write_float_wav(prefix + "-reference.wav", signal, static_cast<UINT32>(rate), static_cast<UINT16>(channels));
         const bool capture_written = write_float_wav(prefix + "-capture.wav", captured, static_cast<UINT32>(rate), static_cast<UINT16>(channels));
-        std::cout << "bitexact_reference_wav_written=" << reference_written
-                  << " bitexact_capture_wav_written=" << capture_written << '\n';
+        std::cout << "cable_sample_reference_wav_written=" << reference_written
+                  << " cable_sample_capture_wav_written=" << capture_written << '\n';
         if (!reference_written || !capture_written) {
             render_state.release(); capture_state.release();
             return 1;
@@ -3029,6 +3053,19 @@ int main(int argc, char** argv) {
         UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
         if (seconds < 1 || seconds > 120) { std::cout << "bitexact_seconds_out_of_range=1\n"; CoUninitialize(); return 2; }
         int result = cable_bitexact_probe(render_index, capture_index, seconds, argc > 5 ? argv[5] : nullptr);
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "cable-tone") == 0) {
+        DWORD seconds = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 10;
+        UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
+        UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
+        const char* output_dir = argc > 5 ? argv[5] : nullptr;
+        double frequency_hz = argc > 6 ? std::strtod(argv[6], nullptr) : 997.0;
+        if (seconds < 1 || seconds > 120 || !output_dir || !std::isfinite(frequency_hz) || frequency_hz <= 0.0) {
+            std::cout << "cable_tone_arguments_invalid=1\n"; CoUninitialize(); return 2;
+        }
+        int result = cable_bitexact_probe(render_index, capture_index, seconds, output_dir, frequency_hz);
         CoUninitialize();
         return result;
     }
