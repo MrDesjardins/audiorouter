@@ -1,8 +1,13 @@
 # Stream Deck control
 
-Status: plan written 2026-10-04 at the user's request ("control AudioRouter
-from my Elgato Stream Deck while playing, without reaching the window").
-Not authorized for implementation; each phase below needs the user's go-ahead.
+Status (updated 2026-10-11): the core Stream Deck integration is implemented,
+packaged with AudioRouter, and the user confirms it works well. The plugin has
+controls for toggles, meters, privacy mute, Play/Stop, session switching,
+recording, and value stepping. The phase history below is retained as design
+and implementation context; it does not mean core implementation is pending.
+Possible future work is limited to separately selected extensions such as
+dials, reduced-scope pairing/grants, faster change notifications, atomic
+scenes, and profiles. No extension is authorized merely by being listed here.
 Related: [hardware control panel](hardware-control-panel.md) (same API, a
 different surface), [external app integrations](external-app-integrations.md)
 (scenes and temporary overrides).
@@ -286,13 +291,13 @@ Each is optional: phase 1 works without them.
   in a real match. Elgato's software has no headless emulator; its virtual
   Stream Deck (if available in the user's version) helps for layout checks.
 
-## Decisions needed from the user
+## Resolved original decisions (2026-10-04)
 
-1. Which Stream Deck model(s): MK.2 / XL / Mini, Stream Deck +, Neo, Mobile.
-2. Default addressing: follow the selected session (recommended) or pin.
-3. Privacy unmute hold (recommended 0.5 s) or a plain press.
-4. Personal plugin from AudioRouter releases, or also the Elgato Marketplace.
-5. Approve phase 0 (spike), and later the backend helpers.
+The user selected Stream Deck MK.2, follow-selected-session addressing, a
+deliberate privacy-unmute hold, and release-bundled distribution; phase 0 was
+approved. Those choices are historical context, not pending questions.
+Marketplace distribution and any optional extension listed above remain
+separate future decisions.
 
 ## Risks
 

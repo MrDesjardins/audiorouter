@@ -1,8 +1,10 @@
 # Siege footstep and drone EQ (measured)
 
-Status: user-requested 2026-10-03; recording step pending. Uses existing
-tools only (Recorder, Advanced EQ, Compressor, Limiter, Input Switch, Audio
-File). No new DSP is in scope unless the analysis shows a gap.
+Status (updated 2026-10-11): the reference takes were recorded and analyzed;
+the measured EQ/dynamics chain was applied to the user's session. After the
+user found v1 muffled, v2 raised the presence bands and slowed compressor
+attack. The remaining item is to tune only if the user reports a v2 listening
+issue or requests a change. No new DSP is currently indicated.
 
 ## Objective
 
@@ -126,5 +128,7 @@ target. Hearing safety: the Limiter is mandatory on this path.
 
 ## Next action
 
-User records the reference takes (checklist in the active conversation and
-this plan's step 1); then build the analysis tool.
+No implementation work is currently identified. The measured v2 chain is
+applied; revisit this plan only if the user reports a listening issue or asks
+for a tuning change. Keep the user's private reference recordings out of the
+repository.
