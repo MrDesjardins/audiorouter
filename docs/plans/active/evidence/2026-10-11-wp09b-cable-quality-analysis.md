@@ -257,9 +257,10 @@ passes, and documentation validation remains 149 Markdown files / 858 links.
 
 Added `-ChannelMatrix` to the guarded quality entry point for float32, integer
 PCM and sweep cases. It runs the selected case at 1, 2 and 8 channels in order,
-stops on the first failed child run, and preserves each child runner's separate
-evidence package. Host-safe acceptance and parser checks cover the wiring; no
-VM route has been started.
+stops on the first failed child run, and writes JSON and CSV summaries linking
+each verdict and exit code to its child evidence archive. The archive retains
+the per-run numeric metrics. Host-safe acceptance and parser checks cover the
+wiring; no VM route has been started.
 
 Updated the analyzer README with the supported PCM rate and channel matrix,
 float64 PCM32 capture and remaining VM gate. Bundle preparation now rejects a

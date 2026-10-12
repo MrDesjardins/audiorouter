@@ -22,12 +22,51 @@ if ($ChannelMatrix) {
     if ($Case -notlike 'float32-*' -and $Case -notlike 'pcm*' -and $Case -notlike 'sweep-*') {
         throw '-ChannelMatrix is supported for float32, PCM and sweep cases.'
     }
+    $matrixRun = "quality-matrix-$Case-" + [Guid]::NewGuid().ToString('N')
+    $matrixResults = @()
+    $matrixPassed = $true
+    $matrixRate = switch -Regex ($Case) { '-44k1$' { 44100; break } '-96k$' { 96000; break } default { 48000 } }
+    $matrixBits = if ($Case -match '^pcm(16|24|32)-') { [int]$Matches[1] } else { 0 }
+    $matrixFormat = if ($matrixBits -eq 0) { 'float32' } else { "pcm$matrixBits" }
+    $archivePrefix = if ($Case -like 'sweep-*') { "sweep-$matrixRate-hz-" } else { "bitexact-$matrixFormat-$($matrixRate)hz-" }
+    $peer = Join-Path 'Z:\' (Split-Path -Leaf $bundle)
+    New-Item -ItemType Directory -Path 'C:\ar\evidence' -Force | Out-Null
     foreach ($matrixChannels in @(1, 2, 8)) {
         Write-Host "Running $Case with $matrixChannels channel(s)."
-        & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
-            -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Case $Case -Channels $matrixChannels -Seconds $Seconds
-        if ($LASTEXITCODE -ne 0) { throw "$Case failed for $matrixChannels channel(s) (exit $LASTEXITCODE)." }
+        $childStartedUtc = [DateTime]::UtcNow
+        $childOutput = @(& (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+            -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Case $Case -Channels $matrixChannels -Seconds $Seconds 2>&1)
+        $childCode = $LASTEXITCODE
+        foreach ($line in $childOutput) { Write-Host $line }
+        $childText = $childOutput -join [Environment]::NewLine
+        $verdictMatch = [regex]::Match($childText, '(?m)^\d+ channels, [^:]+: (PASS|FAIL)')
+        $childVerdict = if ($verdictMatch.Success) { $verdictMatch.Groups[1].Value }
+            elseif ($Case -like 'sweep-*' -and $childText -match 'Sweep response diagnostic passed:') { 'PASS' }
+            elseif ($Case -like 'sweep-*' -and $childText -match 'Sweep response diagnostic failed') { 'FAIL' }
+            else { 'ERROR' }
+        $archive = Get-ChildItem -LiteralPath $bundle -Filter "$archivePrefix$matrixChannels*ch-*.zip" -File |
+            Where-Object { $_.LastWriteTimeUtc -ge $childStartedUtc.AddSeconds(-2) } |
+            Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+        if (-not $archive) { $childCode = 1; $matrixPassed = $false }
+        $matrixResults += [pscustomobject][ordered]@{
+            Case = $Case; Channels = $matrixChannels; ExitCode = $childCode
+            Verdict = $childVerdict
+            EvidenceArchive = if ($archive) { Join-Path $peer $archive.Name } else { $null }
+        }
+        if ($childCode -ne 0 -or $childVerdict -ne 'PASS') { $matrixPassed = $false; break }
     }
+    $matrixSummary = [pscustomobject][ordered]@{
+        Run = $matrixRun; Case = $Case; Channels = @(1, 2, 8); Results = $matrixResults
+        Passed = $matrixPassed; Qualification = $false; CreatedUtc = [DateTime]::UtcNow.ToString('o')
+    }
+    $summaryPath = Join-Path 'C:\ar\evidence' "$matrixRun.json"
+    $matrixSummary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+    $tablePath = Join-Path 'C:\ar\evidence' "$matrixRun.csv"
+    $matrixResults | Export-Csv -LiteralPath $tablePath -NoTypeInformation -Encoding UTF8
+    Copy-Item -LiteralPath $summaryPath -Destination $peer
+    Copy-Item -LiteralPath $tablePath -Destination $peer
+    Write-Host "Channel matrix summary: $Case ($(if ($matrixPassed) { 'PASS' } else { 'FAIL' })), evidence $summaryPath and $tablePath"
+    if (-not $matrixPassed) { throw "$Case failed within the 1/2/8-channel matrix. See $summaryPath." }
     Write-Host "$Case completed for the 1/2/8-channel matrix. A16 remains incomplete."
     return
 }
