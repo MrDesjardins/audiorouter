@@ -1,4 +1,11 @@
-import type { ApplicationInfo, EntityId, NodeKind, PluginScanEntry, Session } from "@audiorouter/contracts";
+import type {
+  ApplicationInfo,
+  EntityId,
+  NodeKind,
+  PluginScanEntry,
+  Session,
+  VirtualCableStatus,
+} from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import { sameJsonValue } from "./sessionInventory";
 import { cableEndpointName } from "./virtualCableStatus";
@@ -761,6 +768,7 @@ export function appendVirtualBusNode(
   session: Session,
   busId: string,
   direction: "renderSource" | "captureSink",
+  status: VirtualCableStatus | null = null,
 ): Session {
   const normalizedBusId = busId.trim();
   if (!normalizedBusId) throw new Error("An existing virtual bus identity is required");
@@ -780,7 +788,7 @@ export function appendVirtualBusNode(
         id,
         kind,
         typeVersion: 1,
-        name: cableEndpointName(normalizedBusId, direction),
+        name: cableEndpointName(normalizedBusId, direction, status),
         enabled: true,
         bypass: false,
         parameters: { busId: normalizedBusId },
@@ -795,17 +803,27 @@ export function appendVirtualBusNode(
 
 /** Adds the pass-through route: whatever apps play into `sourceBusId`'s
  * Input comes out of `sinkBusId`'s Output (for example Cable A → Cable B). */
-export function appendCablePassThrough(session: Session, sourceBusId: string, sinkBusId: string): Session {
-  const withSource = appendVirtualBusNode(session, sourceBusId, "renderSource");
+export function appendCablePassThrough(
+  session: Session,
+  sourceBusId: string,
+  sinkBusId: string,
+  status: VirtualCableStatus | null = null,
+): Session {
+  const withSource = appendVirtualBusNode(session, sourceBusId, "renderSource", status);
   const source = withSource.nodes.at(-1)!;
-  const withSink = appendVirtualBusNode(withSource, sinkBusId, "captureSink");
+  const withSink = appendVirtualBusNode(withSource, sinkBusId, "captureSink", status);
   const sink = withSink.nodes.at(-1)!;
   return appendDraftConnection(withSink, source.id, "out", sink.id, "in");
 }
 
 /** Moves a cable source/destination to cable `busId`. A node still carrying
  * its default device name follows the new cable; a name the user chose stays. */
-export function setVirtualBusDraftCable(session: Session, nodeId: EntityId, busId: string): Session {
+export function setVirtualBusDraftCable(
+  session: Session,
+  nodeId: EntityId,
+  busId: string,
+  status: VirtualCableStatus | null = null,
+): Session {
   const normalizedBusId = busId.trim();
   if (!normalizedBusId) throw new Error("A cable is required");
   const node = session.nodes.find((candidate) => candidate.id === nodeId);
@@ -815,7 +833,9 @@ export function setVirtualBusDraftCable(session: Session, nodeId: EntityId, busI
   const direction = node.kind === "virtualRenderSource" ? "renderSource" : "captureSink";
   const previous = String(node.parameters.busId ?? "");
   const name =
-    node.name === cableEndpointName(previous, direction) ? cableEndpointName(normalizedBusId, direction) : node.name;
+    node.name === cableEndpointName(previous, direction, status)
+      ? cableEndpointName(normalizedBusId, direction, status)
+      : node.name;
   return {
     ...session,
     nodes: session.nodes.map((candidate) =>

@@ -34,10 +34,20 @@ export function cableLabel(busId: string): string {
   return match ? `Cable ${match[1].toUpperCase()}` : busId;
 }
 
+/** The configured display name or the stable default cable label. */
+export function cableName(status: VirtualCableStatus | null, busId: string): string {
+  return status?.cables.find((cable) => cable.busId === busId)?.name ?? cableLabel(busId);
+}
+
 /** The Windows device name a cable node stands for: apps play into a cable's
  * Input (an AudioRouter source) and record from its Output (a destination). */
-export function cableEndpointName(busId: string, direction: "renderSource" | "captureSink"): string {
-  return `${cableLabel(busId)} ${direction === "renderSource" ? "Input" : "Output"}`;
+export function cableEndpointName(
+  busId: string,
+  direction: "renderSource" | "captureSink",
+  status: VirtualCableStatus | null = null,
+): string {
+  const label = cableName(status, busId);
+  return `${label} ${direction === "renderSource" ? "Input" : "Output"}`;
 }
 
 /** Enabled cables whose two Windows devices are both present. */

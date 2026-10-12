@@ -119,6 +119,22 @@ describe("native host bridge", () => {
     expect(createInitialBackend({ transport, sessionId: "desktop-session" }).registerStartup).toBeUndefined();
   });
 
+  it("exposes cable management only through the native shell bridge", async () => {
+    const transport = { send: async (_request: JsonRpcRequest) => response };
+    const core = {
+      invoke: vi.fn().mockResolvedValue({ ok: true, command: "install" }),
+    };
+    const backend = createInitialBackend(
+      { transport, sessionId: "desktop-session" },
+      core,
+      "desktop-session",
+      "http://tauri.localhost",
+    );
+    await expect(backend.manageVirtualCable?.({ operation: "install" })).resolves.toMatchObject({ ok: true });
+    expect(core.invoke).toHaveBeenCalledWith("manage_virtual_cable", { operation: "install" });
+    expect(createInitialBackend({ transport, sessionId: "desktop-session" }).manageVirtualCable).toBeUndefined();
+  });
+
   it("exposes explicit native startup registration through Tauri", async () => {
     const core = {
       invoke: vi

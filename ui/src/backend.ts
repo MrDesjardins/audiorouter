@@ -74,6 +74,11 @@ export type ClientAuthorizeResult = MethodResult["clients.authorize"];
 export type ClientRevokeResult = MethodResult["clients.revoke"];
 export type GraphHistoryPage = MethodResult["graph.history"];
 export type GraphUndoPlanResult = MethodResult["graph.undoPlan"];
+export type CableManagementRequest =
+  | { operation: "install" | "update" | "repair" | "remove" }
+  | { operation: "setCount"; count: number }
+  | { operation: "setLowLatencyOn" | "setLowLatencyOff" }
+  | { operation: "configure"; names: Array<[number, string]> };
 
 /** Device names from the last device list, so errors can name an exact endpoint. */
 const deviceNames = new Map<string, { name: string; direction: string }>();
@@ -395,6 +400,8 @@ export interface UiBackend {
   getStartup(): Promise<StartupStatus>;
   /** AudioRouter cable driver status (spec 17 §7.1); read-only. */
   getVirtualCableStatus?(): Promise<VirtualCableStatus>;
+  /** Native shell only; requests a UAC prompt for the fixed driver helper. */
+  manageVirtualCable?(request: CableManagementRequest): Promise<unknown>;
   planStartup(enabled: boolean): Promise<StartupPlanResult>;
   applyStartup(planId: string, idempotencyKey: string): Promise<StartupApplyResult>;
   registerStartup?(enabled: boolean): Promise<string>;
@@ -754,6 +761,7 @@ export function createLiveBackend(
   sessionId: string,
   registerStartup?: (enabled: boolean) => Promise<string>,
   startupRegistrationStatus?: () => Promise<"registered" | "unregistered">,
+  manageVirtualCable?: (request: CableManagementRequest) => Promise<unknown>,
 ): UiBackend {
   return {
     connected: true,
@@ -1188,6 +1196,7 @@ export function createLiveBackend(
     },
     ...(registerStartup === undefined ? {} : { registerStartup }),
     ...(startupRegistrationStatus === undefined ? {} : { startupRegistrationStatus }),
+    ...(manageVirtualCable === undefined ? {} : { manageVirtualCable }),
   };
 }
 
@@ -1197,6 +1206,7 @@ export function createLiveBackendFromTransport(
   sessionId: string,
   registerStartup?: (enabled: boolean) => Promise<string>,
   startupRegistrationStatus?: () => Promise<"registered" | "unregistered">,
+  manageVirtualCable?: (request: CableManagementRequest) => Promise<unknown>,
 ): UiBackend {
   // Each request carries a correlation ID; failures are summarized (method,
   // category, ID) in the client diagnostics so they can be matched in the logs.
@@ -1205,5 +1215,6 @@ export function createLiveBackendFromTransport(
     sessionId,
     registerStartup,
     startupRegistrationStatus,
+    manageVirtualCable,
   );
 }

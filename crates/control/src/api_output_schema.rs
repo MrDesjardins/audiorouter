@@ -289,6 +289,7 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "state": { "enum": ["notInstalled", "installed", "needsRepair", "needsRestart", "incompatible"] },
                 "driverVersion": { "type": ["string", "null"], "maxLength": 32 },
                 "protocol": { "type": ["string", "null"], "maxLength": 16 },
+                "defaultPeriodFrames": { "type": ["integer", "null"], "minimum": 0, "maximum": 960 },
                 "cableCount": { "type": "integer", "minimum": 0, "maximum": 8 },
                 "cables": {
                     "type": "array",
@@ -297,16 +298,17 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                         "type": "object",
                         "properties": {
                             "busId": { "type": "string", "pattern": "^cable-[a-h]$" },
+                            "name": { "type": "string", "minLength": 1, "maxLength": 48 },
                             "renderEndpointId": { "type": ["string", "null"], "maxLength": 512 },
                             "captureEndpointId": { "type": ["string", "null"], "maxLength": 512 },
                             "present": { "type": "boolean" }
                         },
-                        "required": ["busId", "renderEndpointId", "captureEndpointId", "present"],
+                        "required": ["busId", "name", "renderEndpointId", "captureEndpointId", "present"],
                         "additionalProperties": false
                     }
                 }
             },
-            "required": ["state", "driverVersion", "protocol", "cableCount", "cables"],
+            "required": ["state", "driverVersion", "protocol", "defaultPeriodFrames", "cableCount", "cables"],
             "additionalProperties": false
         }),
         "startup.get" => json!({
@@ -1830,9 +1832,10 @@ pub(crate) fn active_device_item_schema() -> Value {
                     "channels": { "type": "integer", "minimum": 1 },
                     "bitsPerSample": { "type": "integer", "minimum": 1 },
                     "formatTag": { "type": "integer", "minimum": 0 },
+                    "isFloat32": { "type": "boolean" },
                     "bytesPerFrame": { "type": "integer", "minimum": 1 }
                 },
-                "required": ["sampleRateHz", "channels", "bitsPerSample", "formatTag", "bytesPerFrame"],
+                "required": ["sampleRateHz", "channels", "bitsPerSample", "formatTag", "isFloat32", "bytesPerFrame"],
                 "additionalProperties": false
             },
             "periods": {

@@ -930,10 +930,10 @@ export function CableBinding({
         disabled={disabled || cables.length === 0}
         onChange={(event) => onChange(event.target.value)}
       >
-        {!listed && <option value={value}>{cableEndpointName(value, direction)} (not installed)</option>}
+        {!listed && <option value={value}>{cableEndpointName(value, direction, status)} (not installed)</option>}
         {cables.map((cable) => (
           <option key={cable.busId} value={cable.busId} disabled={!cable.present && cable.busId !== value}>
-            {cableEndpointName(cable.busId, direction)}
+            {cableEndpointName(cable.busId, direction, status)}
             {cable.present ? "" : " (missing)"}
           </option>
         ))}
@@ -941,8 +941,8 @@ export function CableBinding({
       <p className="muted">
         {unavailable ??
           (direction === "renderSource"
-            ? `In the app, choose ${cableEndpointName(value, direction)} as its speaker.`
-            : `In the app, choose ${cableEndpointName(value, direction)} as its microphone.`)}
+            ? `In the app, choose ${cableEndpointName(value, direction, status)} as its speaker.`
+            : `In the app, choose ${cableEndpointName(value, direction, status)} as its microphone.`)}
       </p>
     </div>
   );

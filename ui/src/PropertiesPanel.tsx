@@ -239,7 +239,10 @@ export function PropertiesPanel({
             disabled={sessionRunning}
             onChange={(busId) => {
               try {
-                recordDraftChange(setVirtualBusDraftCable(draft, selectedNode.id, busId), selectedNode.id + ":busId");
+                recordDraftChange(
+                  setVirtualBusDraftCable(draft, selectedNode.id, busId, cableStatus),
+                  selectedNode.id + ":busId",
+                );
                 setActionMessage("Cable changed. Save to keep it.");
               } catch (error) {
                 setActionMessage(error instanceof Error ? error.message : "Unable to change the cable.");

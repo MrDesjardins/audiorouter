@@ -1,5 +1,10 @@
 import type { JsonRpcRequest, JsonRpcResponse, RpcTransport } from "@audiorouter/contracts";
-import { createDisconnectedBackend, createLiveBackendFromTransport, type UiBackend } from "./backend";
+import {
+  createDisconnectedBackend,
+  createLiveBackendFromTransport,
+  type CableManagementRequest,
+  type UiBackend,
+} from "./backend";
 
 /** The narrow object a native shell may inject before loading the UI bundle. */
 export type AudioRouterHostBridge = {
@@ -261,6 +266,16 @@ function shellStartupRegistration(core: TauriCore) {
   ] as const;
 }
 
+/** Cable mutations are deliberately available only through the native shell. */
+function shellCableManagement(core: TauriCore) {
+  return async (request: CableManagementRequest): Promise<unknown> => {
+    const result = await core.invoke("manage_virtual_cable", request);
+    if (typeof result !== "object" || result === null || (result as { ok?: unknown }).ok !== true)
+      throw new Error("The cable helper returned an invalid result.");
+    return result;
+  };
+}
+
 /** Select the injected native backend, or remain safely disconnected. */
 export function createInitialBackend(
   host: unknown,
@@ -273,7 +288,12 @@ export function createInitialBackend(
   // it the Start at sign-in panel reported "unavailable in this host".
   if (isHostBridge(host)) {
     return isTauriCore(webview)
-      ? createLiveBackendFromTransport(host.transport, host.sessionId, ...shellStartupRegistration(webview))
+      ? createLiveBackendFromTransport(
+          host.transport,
+          host.sessionId,
+          ...shellStartupRegistration(webview),
+          shellCableManagement(webview),
+        )
       : createLiveBackendFromTransport(host.transport, host.sessionId);
   }
   if (isTauriCore(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {
@@ -281,6 +301,7 @@ export function createInitialBackend(
       new TauriRpcTransport(webview),
       sessionId,
       ...shellStartupRegistration(webview),
+      shellCableManagement(webview),
     );
   }
   if (isWebView2Webview(webview) && typeof sessionId === "string" && sessionId.length > 0 && sessionId.length <= 128) {

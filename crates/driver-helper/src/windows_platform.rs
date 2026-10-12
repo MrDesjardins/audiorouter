@@ -757,7 +757,7 @@ impl Platform for WindowsPlatform {
         }
     }
 
-    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32)> {
+    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32, u32)> {
         let client = audiorouter_windows_audio::NativeBridgeControlClient::open(
             r"\\.\AudioRouterVirtualBridge",
         )
@@ -768,6 +768,7 @@ impl Platform for WindowsPlatform {
             info.protocol_minor,
             info.capabilities,
             info.cable_count,
+            info.default_period_frames,
         ))
     }
 

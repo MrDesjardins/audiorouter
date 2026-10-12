@@ -1958,16 +1958,17 @@ the next guest run must confirm bridge `driver_version: [0, 1, 4, 0]`).
 
 **Order for the UI (WP-10).** WP-10 depends on WP-08: the cable status the
 panel shows (`virtualCable.status`), library node availability, and the
-install/update/repair/remove shell commands are not started. The spec's
+install/update/repair/remove shell commands. The spec's
 "Game → Discord" template mixes cables with physical devices, which needs
 WP-09 mixed-clock routes (cable plus physical device), also not started.
 Proposed order: (1) WP-08 status detection and API, read-only, standard
 user; (2) WP-10 first slice (done 2026-10-11, see WP-10 slice 1): Setup → Virtual cables panel (status, driver
 version, counters), cable nodes available in the library when installed,
 and the "Pass-through" template (Cable A → Cable B, which works today);
-(3) later: elevated helper commands from the UI, the cable count and
-names, the low-latency switch, and mixed routes plus the Game → Discord
-template.
+(3) slice 2 implementation: elevated helper commands, cable count and names,
+endpoint format hint and low-latency switch (2026-10-11; app/package gate
+pending below); (4) mixed routes plus the Game → Discord template after the
+WP-09 mixed-clock route work.
 
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
@@ -2014,8 +2015,9 @@ template.
   written to `testInfo.outputPath` (lesson 2026-10-03).
 - **Acceptance:** UI conventions in AGENTS.md; no layout shift while status
   changes.
-- **Status:** first slice implemented 2026-10-11 (below); helper commands,
-  rename, cable count, format hints and the low-latency switch remain.
+- **Status:** slice 1 committed 2026-10-11; slice 2 implementation is in
+  progress below. The UI actions still need WP-11 to bundle the helper and
+  signed package, followed by an attended app/VM check.
 
 ### WP-10 slice 1 — cable status in the UI (2026-10-11)
 
@@ -2070,6 +2072,65 @@ the first review showed low contrast, and the button label was shortened
 so it fits on one line. Not checked: the Windows shell (no change there),
 the guest VM (the UI reads the same `virtualCable.status` that the WP-08
 acceptance verified as `installed`).
+
+### WP-10 slice 2 — cable management controls (implementation complete; app gate pending, 2026-10-11)
+
+Objective: expose the elevated helper's install, update, repair, remove,
+cable-count, naming and low-latency operations from Setup, following spec 17
+§7.2 and §7.4. Show endpoint format and a fixed-slot 48 kHz float hint.
+Requirement IDs: VCAB-02, VCAB-05, VCAB-25, VDEV-10, SEC-08, UI-17.
+Prerequisite evidence: WP-07 helper operations exist and have host unit
+coverage; WP-08 read-only status was verified in the VM at driver 0.1.4.0;
+WP-10 slice 1 is committed as `6aaf4b6d`. The shell bridge and controls are
+implemented. The repository currently has no helper executable at the
+resolver's app-adjacent fallback and the release config does not bundle the
+helper or signed package. Therefore the current installer cannot yet execute
+these actions; WP-11 packaging and an attended VM run remain gates.
+
+Ordered work:
+1. Add shell-only Tauri commands that locate the helper and driver package
+   beside the installed app, validate fixed operation arguments, run the
+   helper with `runas`, wait for its bounded result file, and never expose
+   these actions over MCP/HTTP/backend RPC. Cover executable/package path
+   resolution and operation results in shell tests.
+2. Extend the UI host bridge with typed cable-management actions; preserve
+   the disconnected and non-shell behavior. Add status refresh after each
+   completed action and retain last-good status during transient gaps.
+3. Add Setup controls for install/update/repair/remove, cable count 1–8 and
+   per-cable names. Reserve action/status/error slots for UI-17. Before a
+   count reduction, show affected session names and require explicit
+   confirmation. Show endpoint formats from `devices.list` and the 48 kHz
+   float hint. The low-latency switch writes `DefaultPeriodFrames=128` and
+   restores 480 when off; its checked state comes from bridge QUERY.
+4. Add focused host tests, then run required UI formatting/lint/typecheck and
+   relevant Rust formatting/Clippy/tests, inspect the exact diff, update the
+   traceability record, and record the Edge three-theme/layout evidence.
+   Leave real-helper UAC and installed-driver app verification as a clearly
+   marked VM/attended gate; do not install or remove a driver during agent
+   validation.
+
+Validation (host, 2026-10-11): UI full unit suite 522/522; targeted cable
+panel/host suite 34/34; UI typecheck and formatting pass; lint has 0 errors
+and the same 25 existing warnings. Driver-helper tests 28/28 pass when
+`TEMP`/`TMP` point to workspace temp (the default sandbox temp denied writes).
+Control suite: 246 passed, 9 ignored, 0 failed (the first sandboxed run
+blocked its local UDP/siege fixtures; the full suite passed with the required
+local socket access). Shell helper tests 3/3 pass. Clippy passes for
+control, helper and shell; both Rust format checks pass. Edge cable suite
+4/4 passes in dark, light and high-contrast themes; it asserts a non-48 kHz
+float hint and samples stable layout while status and counters change.
+The dark, light and high-contrast format-hint screenshots were reviewed; the
+hint now occupies its own reserved line so the full sentence remains visible.
+Screenshots are in the ignored Playwright output under
+`target/e2e-temp/audiorouter-playwright-results/`.
+
+Remaining gates: helper executable and signed driver package must be shipped
+beside the app (WP-11); real UAC operations, app status refresh and three-theme
+Edge layout test remain unverified. Do not install/remove the driver on the
+host. Rollback: revert only WP-10 slice 2 paths; helper and installed driver
+state remain untouched. Next action: prepare the helper/package wiring as part
+of WP-11, then run the attended VM management flow before treating the Setup
+actions as release-ready.
 
 ## WP-11 — Installer, update and uninstall (17 §7.5)
 

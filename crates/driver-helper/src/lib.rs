@@ -889,7 +889,7 @@ pub trait Platform {
         description: &str,
     ) -> Result<(), Failure>;
     /// Bridge QUERY: (protocol major, minor, capabilities, enabled cables).
-    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32)>;
+    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32, u32)>;
     fn sleep_ms(&mut self, ms: u64);
     fn now_utc(&mut self) -> String;
 }
@@ -1068,6 +1068,10 @@ pub struct StatusReport {
     pub installed_driver_version: Option<String>,
     pub device_instance_id: Option<String>,
     pub cable_count: u8,
+    /// Configured preferred route block size from the bridge QUERY response.
+    pub default_period_frames: Option<u32>,
+    /// User names committed by `configure`, even while an endpoint is absent.
+    pub cable_names: BTreeMap<u8, String>,
     /// Bridge protocol `major.minor` and capability bits, when it answers.
     pub protocol: Option<String>,
     pub capabilities: Option<u32>,
@@ -1101,8 +1105,12 @@ pub fn status_report(
         installed_driver_version: installed_version.map(|v| v.to_string()),
         device_instance_id: device,
         cable_count: count,
-        protocol: query.map(|(major, minor, _, _)| format!("{major}.{minor}")),
-        capabilities: query.map(|(_, _, caps, _)| caps),
+        default_period_frames: query.map(|(_, _, _, _, frames)| frames),
+        cable_names: state
+            .map(|state| state.cable_names.clone())
+            .unwrap_or_default(),
+        protocol: query.map(|(major, minor, _, _, _)| format!("{major}.{minor}")),
+        capabilities: query.map(|(_, _, caps, _, _)| caps),
         endpoints,
     })
 }
@@ -1119,6 +1127,7 @@ pub fn status(platform: &mut dyn Platform, context: &Context) -> Result<Outcome,
             "installedDriverVersion": report.installed_driver_version,
             "deviceInstanceId": report.device_instance_id,
             "cableCount": report.cable_count,
+            "defaultPeriodFrames": report.default_period_frames,
             "protocol": report.protocol,
             "capabilities": report.capabilities,
             "endpoints": endpoints_json(&report.endpoints),
@@ -1131,7 +1140,7 @@ pub fn classify_status(
     has_state: bool,
     has_device: bool,
     endpoints_ok: bool,
-    query: Option<(u16, u16, u32, u32)>,
+    query: Option<(u16, u16, u32, u32, u32)>,
 ) -> &'static str {
     const SAMPLE_FLOAT64: u32 = 0x20;
     if !has_state && !has_device {
@@ -1141,7 +1150,9 @@ pub fn classify_status(
         return "needsRepair";
     }
     match query {
-        Some((major, minor, caps, _)) if major != 1 || minor < 1 || caps & SAMPLE_FLOAT64 == 0 => {
+        Some((major, minor, caps, _, _))
+            if major != 1 || minor < 1 || caps & SAMPLE_FLOAT64 == 0 =>
+        {
             "incompatible"
         }
         Some(_) if endpoints_ok => "installed",

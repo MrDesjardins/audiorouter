@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DiagnosticsSnapshot, VirtualCableStatus } from "@audiorouter/contracts";
-import { cableStatusPill, VirtualCablePanel } from "./VirtualCablePanel";
+import { cableStatusPill, isCableNameValid, VirtualCablePanel } from "./VirtualCablePanel";
 import { CableBinding } from "./NodeEditors";
 import { applyCableAvailability, libraryEntries } from "./library";
 import { appendCablePassThrough, appendVirtualBusNode, setVirtualBusDraftCable } from "./draft";
@@ -18,6 +18,7 @@ import {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   setVirtualCableStatus(null);
 });
 
@@ -26,11 +27,13 @@ function status(state: VirtualCableStatus["state"], present = [true, true]): Vir
     state,
     driverVersion: state === "notInstalled" ? null : "0.1.4.0",
     protocol: state === "notInstalled" ? null : "1.1",
+    defaultPeriodFrames: state === "notInstalled" ? null : 480,
     cableCount: present.length,
     cables: present.map((isPresent, index) => {
       const busId = `cable-${String.fromCharCode(97 + index)}`;
       return {
         busId,
+        name: `Cable ${String.fromCharCode(65 + index)}`,
         renderEndpointId: isPresent ? `{render-${busId}}` : null,
         captureEndpointId: isPresent ? `{capture-${busId}}` : null,
         present: isPresent,
@@ -161,6 +164,38 @@ describe("VirtualCablePanel", () => {
     expect(screen.getByText((12345).toLocaleString())).toBeTruthy();
   });
 
+  it("shows endpoint formats and a reserved hint for formats outside 48 kHz float", () => {
+    setVirtualCableStatus(status("installed"));
+    render(
+      <VirtualCablePanel
+        connected
+        cableRoute={null}
+        devices={[
+          {
+            id: "{render-cable-a}",
+            name: "Cable A Input",
+            direction: "render",
+            state: "active",
+            defaultRoles: [],
+            format: { sampleRateHz: 44_100, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 },
+            periods: { default100ns: 100_000, minimum100ns: 26_666 },
+          },
+          {
+            id: "{capture-cable-a}",
+            name: "Cable A Output",
+            direction: "capture",
+            state: "active",
+            defaultRoles: [],
+            format: { sampleRateHz: 48_000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 },
+            periods: { default100ns: 100_000, minimum100ns: 26_666 },
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText(/44,100 Hz, 2 ch, 32-bit float/)).toBeTruthy();
+    expect(screen.getAllByText("Use 48 kHz float for the best match.")).toHaveLength(1);
+  });
+
   it("keeps the counter slots while no route plays and follows status changes", () => {
     render(<VirtualCablePanel connected cableRoute={null} />);
     expect(screen.getByRole("status").textContent).toBe("Checking");
@@ -181,6 +216,75 @@ describe("VirtualCablePanel", () => {
     expect(button).toHaveProperty("disabled", false);
     fireEvent.click(button);
     expect(add).toHaveBeenCalledOnce();
+  });
+
+  it("enables only the management action that matches the current status", () => {
+    setVirtualCableStatus(status("needsRepair"));
+    render(<VirtualCablePanel connected cableRoute={null} manageVirtualCable={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Repair" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Install" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Update" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Remove" })).toHaveProperty("disabled", false);
+  });
+
+  it("writes the selected low-latency period through the shell helper", () => {
+    setVirtualCableStatus(status("installed"));
+    const manage = vi.fn().mockResolvedValue({ ok: true });
+    render(<VirtualCablePanel connected cableRoute={null} manageVirtualCable={manage} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Low latency cable blocks" }));
+    expect(manage).toHaveBeenCalledWith({ operation: "setLowLatencyOn" });
+  });
+
+  it("lists affected sessions before confirming a cable-count reduction", () => {
+    vi.useFakeTimers();
+    setVirtualCableStatus(status("installed", [true, true, true]));
+    const manage = vi.fn().mockResolvedValue({ ok: true });
+    const refresh = vi.fn().mockResolvedValue(status("installed", [true, true]));
+    render(
+      <VirtualCablePanel
+        connected
+        cableRoute={null}
+        manageVirtualCable={manage}
+        refreshVirtualCableStatus={refresh}
+        sessions={[
+          {
+            id: "session-1",
+            name: "Game and chat",
+            nodes: [{ kind: "virtualRenderSource", parameters: { busId: "cable-c" } }],
+          },
+        ]}
+      />,
+    );
+    fireEvent.change(screen.getByRole("combobox", { name: "Number of cables" }), { target: { value: "2" } });
+    expect(screen.getByText("Game and chat")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm and remove cables" }));
+    expect(manage).toHaveBeenCalledWith({ operation: "setCount", count: 2 });
+  });
+
+  it("validates the helper's cable-name limits before saving", () => {
+    expect(isCableNameValid("Discord")).toBe(true);
+    expect(isCableNameValid("")).toBe(false);
+    expect(isCableNameValid("bad(name)")).toBe(false);
+    expect(isCableNameValid("x".repeat(49))).toBe(false);
+    expect(isCableNameValid("bad\nname")).toBe(false);
+  });
+
+  it("saves a validated cable name through the shell operation", async () => {
+    vi.useFakeTimers();
+    setVirtualCableStatus(status("installed"));
+    const manage = vi.fn().mockResolvedValue({ ok: true });
+    const renamed = status("installed");
+    renamed.cables[0].name = "Discord";
+    const refresh = vi.fn().mockResolvedValue(renamed);
+    render(
+      <VirtualCablePanel connected cableRoute={null} manageVirtualCable={manage} refreshVirtualCableStatus={refresh} />,
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Cable A name" }), { target: { value: "Discord" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Save name" })[0]);
+    expect(manage).toHaveBeenCalledWith({ operation: "configure", names: [[1, "Discord"]] });
+    await act(async () => vi.advanceTimersByTimeAsync(2100));
+    expect(refresh).toHaveBeenCalledOnce();
+    expect((screen.getByRole("textbox", { name: "Discord name" }) as HTMLInputElement).value).toBe("Discord");
   });
 });
 

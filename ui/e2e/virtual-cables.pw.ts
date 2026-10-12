@@ -12,10 +12,12 @@ function cableStatus(state: VirtualCableStatus["state"]): VirtualCableStatus {
     state,
     driverVersion: installed ? "0.1.4.0" : null,
     protocol: installed ? "1.1" : null,
+    defaultPeriodFrames: installed ? 480 : null,
     cableCount: installed ? 2 : 0,
     cables: installed
       ? ["cable-a", "cable-b"].map((busId) => ({
           busId,
+          name: `Cable ${busId.endsWith("a") ? "A" : "B"}`,
           renderEndpointId: `{0.0.0.00000000}.{render-${busId}}`,
           captureEndpointId: `{0.0.1.00000000}.{capture-${busId}}`,
           present: state !== "needsRepair" || busId === "cable-a",
@@ -59,6 +61,47 @@ async function fakeCables(page: Page, backend: RealBackend) {
       });
       return;
     }
+    if (request.method === "devices.list") {
+      const rows = [
+        {
+          id: "{0.0.0.00000000}.{render-cable-a}",
+          name: "Cable A Input",
+          direction: "render",
+          state: "active",
+          defaultRoles: [],
+          format: {
+            sampleRateHz: 44_100,
+            channels: 2,
+            bitsPerSample: 32,
+            formatTag: 0xfffe,
+            isFloat32: true,
+            bytesPerFrame: 8,
+          },
+          periods: { default100ns: 100_000, minimum100ns: 26_666 },
+        },
+        {
+          id: "{0.0.1.00000000}.{capture-cable-a}",
+          name: "Cable A Output",
+          direction: "capture",
+          state: "active",
+          defaultRoles: [],
+          format: {
+            sampleRateHz: 48_000,
+            channels: 2,
+            bitsPerSample: 32,
+            formatTag: 3,
+            isFloat32: true,
+            bytesPerFrame: 8,
+          },
+          periods: { default100ns: 100_000, minimum100ns: 26_666 },
+        },
+      ];
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({ jsonrpc: "2.0", id: request.id, result: rows }),
+      });
+      return;
+    }
     if ((request.method === "system.diagnostics" || request.method === "system.snapshot") && fake.route) {
       const response = await backend.send(request);
       if (response.result?.diagnostics)
@@ -97,9 +140,17 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(pill).toHaveText("Installed");
     await expect(panel).toContainText("Driver 0.1.4.0 · protocol 1.1");
     await expect(panel).toContainText("Cable A Input → Cable A Output");
+    await expect(panel).toContainText("Input: 44,100 Hz, 2 ch, 32-bit float");
+    await expect(panel).toContainText("Use 48 kHz float for the best match.");
     await expect(panel.getByRole("button", { name: /Add route: Cable A → Cable B/ })).toBeEnabled();
     await panel.scrollIntoViewIfNeeded();
     await panel.screenshot({ path: testInfo.outputPath(`${theme}-cables-installed.png`) });
+    await panel
+      .locator(".virtual-cable-formats")
+      .first()
+      .screenshot({
+        path: testInfo.outputPath(`${theme}-cable-format-hint.png`),
+      });
 
     // Content below the panel and the pill's size must not move while the
     // status changes state (same cables) and a route starts, counts and fails.

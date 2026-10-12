@@ -92,7 +92,7 @@ committed, recovery state remains unchanged.
 Finalized node-targeted recording rows from `recordings.list` and
 `recordings.get` include the persisted `nodeId`; legacy rows return `null`.
 | `startup.get` | `read` | read-only |
-| `virtualCable.status` | `read` | read-only; cable driver state, version and cables (2 s cache) |
+| `virtualCable.status` | `read` | read-only; cable driver state, version, configured cable names, preferred block size and endpoints (2 s cache) |
 | `startup.plan` | `startupWrite` | plan-only |
 | `startup.apply` | `startupWrite` | mutating; requires an idempotency key |
 | `devices.list` | `read` | read-only |

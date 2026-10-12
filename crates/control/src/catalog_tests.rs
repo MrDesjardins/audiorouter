@@ -593,6 +593,7 @@ fn describe_exposes_input_and_output_schemas_for_methods() {
             "channels",
             "bitsPerSample",
             "formatTag",
+            "isFloat32",
             "bytesPerFrame"
         ])
     );

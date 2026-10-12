@@ -636,7 +636,7 @@ button:disabled {
   gap: 0.6rem;
   align-items: start;
 }
-.setup-status-list li > span:last-child {
+.setup-status-list li > :last-child {
   display: grid;
   gap: 0.1rem;
   min-width: 0;
@@ -2796,7 +2796,7 @@ button.primary {
   width: fit-content;
   max-width: 100%;
   padding: 0.16rem 0.42rem;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--panel-border);
   border-radius: 999px;
   color: var(--text-muted);
   font-size: 0.65rem;
@@ -6374,6 +6374,38 @@ input[type="color"] {
 .virtual-cable-detail {
   min-height: 2.6em;
 }
+.virtual-cable-formats {
+  display: grid;
+  height: 4.4em;
+  overflow: hidden;
+  font-size: 0.75rem;
+}
+.virtual-cable-format-line {
+  display: grid;
+  grid-template-rows: 1.1em 1.1em;
+  min-height: 2.2em;
+  overflow: hidden;
+}
+.virtual-cable-format-hint {
+  display: block;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--warning-text, var(--text-soft));
+}
+.virtual-cable-low-latency {
+  grid-template-columns: 1.4rem minmax(0, 1fr);
+  align-items: center;
+}
+.virtual-cable-low-latency > span,
+.virtual-cable-low-latency > small {
+  grid-column: 1 / -1;
+}
+.virtual-cable-low-latency > input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
 .virtual-cable-route {
   display: grid;
   gap: 0.35rem;
@@ -6406,4 +6438,47 @@ input[type="color"] {
 .virtual-cable-actions {
   display: grid;
   margin-top: 0.75rem;
+}
+
+.virtual-cable-management {
+  min-height: 340px;
+}
+
+.virtual-cable-action-message {
+  height: 2.6em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+.virtual-cable-configuration {
+  display: grid;
+  gap: 10px;
+  align-items: end;
+}
+
+.virtual-cable-configuration > label,
+.virtual-cable-name-list label {
+  display: grid;
+  gap: 6px;
+}
+
+.virtual-cable-name-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.virtual-cable-name-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.virtual-cable-count-confirmation {
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
 }

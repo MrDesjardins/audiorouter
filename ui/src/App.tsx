@@ -70,7 +70,7 @@ import {
 import { applyCableAvailability, filterLibraryEntries, libraryEntries } from "./library";
 import {
   cableEndpointName,
-  cableLabel,
+  cableName,
   defaultCable,
   getVirtualCableStatus,
   setVirtualCableStatus,
@@ -2016,7 +2016,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return undefined;
     }
     try {
-      const next = appendVirtualBusNode(draft, busId, direction);
+      const next = appendVirtualBusNode(draft, busId, direction, getVirtualCableStatus());
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
@@ -2038,9 +2038,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const source = defaultCable(status, "renderSource");
     const sink = defaultCable(status, "captureSink");
     try {
-      recordDraftChange(appendCablePassThrough(draft, source, sink));
+      recordDraftChange(appendCablePassThrough(draft, source, sink, status));
       setActionMessage(
-        `Added ${cableLabel(source)} → ${cableLabel(sink)} to the draft. Save, then Play; apps playing into ${cableEndpointName(source, "renderSource")} are heard on ${cableEndpointName(sink, "captureSink")}.`,
+        `Added ${cableName(status, source)} → ${cableName(status, sink)} to the draft. Save, then Play; apps playing into ${cableEndpointName(source, "renderSource", status)} are heard on ${cableEndpointName(sink, "captureSink", status)}.`,
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add the pass-through route."));
@@ -2662,6 +2662,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       availableUpdate={availableUpdate}
       cableRoute={snapshot?.diagnostics?.cableRoute}
       onAddCablePassThrough={addCablePassThrough}
+      sessions={availableSessions}
     />
   );
   const devicesWorkbenchContent = (

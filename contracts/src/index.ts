@@ -309,6 +309,8 @@ export interface DeviceInfo {
     channels: number;
     bitsPerSample: number;
     formatTag: number;
+    /** True only when the endpoint mix format is IEEE float32. */
+    isFloat32?: boolean;
     bytesPerFrame: number;
   };
   periods: {
@@ -865,9 +867,13 @@ export interface VirtualCableStatus {
   state: "notInstalled" | "installed" | "needsRepair" | "needsRestart" | "incompatible";
   driverVersion: string | null;
   protocol: string | null;
+  /** Driver preferred bridge period in frames, when the bridge QUERY is available. */
+  defaultPeriodFrames: number | null;
   cableCount: number;
   cables: {
     busId: string;
+    /** User-facing cable name set in Setup; defaults to Cable A through H. */
+    name: string;
     renderEndpointId: string | null;
     captureEndpointId: string | null;
     present: boolean;

@@ -237,10 +237,10 @@ impl Platform for Fake {
             .insert(endpoint_id.into(), description.into());
         Ok(())
     }
-    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32)> {
+    fn query_driver(&mut self) -> Option<(u16, u16, u32, u32, u32)> {
         self.device
             .as_ref()
-            .map(|_| (1, 1, 0x3f, u32::from(self.count())))
+            .map(|_| (1, 1, 0x3f, u32::from(self.count()), 480))
     }
     fn sleep_ms(&mut self, ms: u64) {
         self.slept += ms;
@@ -617,24 +617,24 @@ fn status_has_the_five_states() {
     assert_eq!(classify_status(false, false, false, None), "notInstalled");
     assert_eq!(classify_status(true, false, false, None), "needsRepair");
     assert_eq!(
-        classify_status(true, true, true, Some((1, 1, 0x20, 2))),
+        classify_status(true, true, true, Some((1, 1, 0x20, 2, 480))),
         "installed"
     );
     assert_eq!(
-        classify_status(true, true, false, Some((1, 1, 0x20, 2))),
+        classify_status(true, true, false, Some((1, 1, 0x20, 2, 480))),
         "needsRepair"
     );
     assert_eq!(classify_status(true, true, true, None), "needsRestart");
     assert_eq!(
-        classify_status(true, true, true, Some((2, 0, 0x20, 2))),
+        classify_status(true, true, true, Some((2, 0, 0x20, 2, 480))),
         "incompatible"
     );
     assert_eq!(
-        classify_status(true, true, true, Some((1, 1, 0, 2))),
+        classify_status(true, true, true, Some((1, 1, 0, 2, 480))),
         "incompatible"
     );
     assert_eq!(
-        classify_status(false, true, true, Some((1, 1, 0x20, 2))),
+        classify_status(false, true, true, Some((1, 1, 0x20, 2, 480))),
         "installed",
         "installed without the helper"
     );

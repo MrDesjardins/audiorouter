@@ -31,6 +31,7 @@ mod shell_settings;
 mod startup;
 mod support_bundle;
 mod tray_playback;
+mod virtual_cable_shell;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
 
@@ -1865,7 +1866,8 @@ fn main() {
             install_streamdeck_plugin,
             mcp_setup_info,
             startup_register,
-            startup_status
+            startup_status,
+            virtual_cable_shell::manage_virtual_cable
         ])
         .setup(move |app| {
             let session_script = session_script.clone();

@@ -624,11 +624,12 @@ Rules:
 
 `crates/windows-audio`: new `virtual_cable_status()` returning
 `{ state: "notInstalled" | "installed" | "needsRepair" | "needsRestart" |
-"incompatible", driverVersion, protocol, cables: [{ busId, renderEndpointId,
-captureEndpointId, present }] }`, from SetupAPI/CfgMgr (device + driver
+"incompatible", driverVersion, protocol, defaultPeriodFrames, cableCount,
+cables: [{ busId, name, renderEndpointId, captureEndpointId, present }] }`, from SetupAPI/CfgMgr (device + driver
 version), MMDevice enumeration (endpoints by device instance, not by
 friendly name, because users can rename endpoints in Sound settings) and
-`IOCTL_AUDIOROUTER_BRIDGE_QUERY`. Cached for 2 s; refreshed on device-change
+`IOCTL_AUDIOROUTER_BRIDGE_QUERY`; `defaultPeriodFrames` is null if QUERY is
+unavailable. Cached for 2 s; refreshed on device-change
 notifications that the backend already watches.
 
 ### 7.2 API (spec 10) and CLI/MCP
@@ -644,6 +645,11 @@ notifications that the backend already watches.
   `virtual-cable install|remove` that does the same (shows UAC). MCP and the
   HTTP API expose status only: an AI client or a LAN device can never trigger
   a driver install.
+- The desktop shell also exposes set-count, rename and low-latency
+  configuration through fixed Tauri commands that invoke the helper with
+  UAC; they are not backend RPC methods. The UI low-latency switch writes
+  `DefaultPeriodFrames=128`; turning it off restores 480 frames. It is
+  disabled when QUERY cannot read the current value.
 - Shell command `virtual_cable_set_count` (and CLI `virtual-cable set-count
   <n>`) runs the helper `set-cables` elevated; before lowering the count it
   lists sessions that use the cables to be removed and requires
@@ -719,6 +725,9 @@ notifications that the backend already watches.
   overruns) in reserved slots, buttons Install / Update /
   Repair / Remove (only the valid ones enabled, others disabled, no layout
   shift), and a "Create pass-through session" action.
+  Endpoint formats come from `devices.list`; non-48 kHz float formats carry
+  a reserved hint. The low-latency switch changes the configured bridge block
+  to 128 frames and explains that Windows briefly restarts the cable device.
 - **Library** (`ui/src/library.ts`): `virtual-render-source` and
   `virtual-capture-sink` lose their `unavailableReason` when installed; when
   not installed, the reason becomes "Install AudioRouter cables in Setup, or

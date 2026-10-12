@@ -35,7 +35,7 @@ import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/
 import { readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels } from "./graphView";
 import { applyCableAvailability, libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
-import { cableLabel, useVirtualCableStatus } from "./virtualCableStatus";
+import { cableName, useVirtualCableStatus } from "./virtualCableStatus";
 import {
   DEFAULT_NETWORK_AUDIO_PORT,
   GAIN_MAX_DB,
@@ -1608,13 +1608,14 @@ function EndpointLoopbackVisual({ node, telemetry }: { node: Node; telemetry: Re
 function VirtualBusVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor> }) {
   const busId = String(node.parameters.busId ?? "Unbound");
   const isSource = node.kind === "virtualRenderSource";
+  const cableStatus = useVirtualCableStatus();
   return (
     <div className="node-virtual-bus-wrap">
       <div className="node-virtual-bus" title={busId}>
         <span className="node-virtual-bus-icon" aria-hidden="true">
           {isSource ? "↦" : "↤"}
         </span>
-        <span>{cableLabel(busId)}</span>
+        <span>{cableName(cableStatus, busId)}</span>
       </div>
       {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
     </div>

@@ -257,6 +257,7 @@ impl ControlPlane {
                         "channels": endpoint.channels,
                         "bitsPerSample": endpoint.bits_per_sample,
                         "formatTag": endpoint.format_tag,
+                        "isFloat32": endpoint.is_ieee_float32(),
                         "bytesPerFrame": bytes_per_frame,
                     },
                     "periods": {
