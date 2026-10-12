@@ -2023,7 +2023,8 @@ WP-09 mixed-clock route work.
   `C:\ar` bundle). The native probe now produces a 20 Hz–20 kHz sweep;
   48-point Hann-windowed relative magnitude analysis has a ±0.05 dB metric and
   guarded cases at 44.1/48/96 kHz. The quality entry point also exposes the
-  existing 997/47 Hz continuity runner with a duration selector. Sweep analysis
+  existing 997/47 Hz and four-route eight-cable continuity runners with a
+  duration selector. Sweep analysis
   measures passband magnitude only; phase, aliasing and imaging remain open.
   Exercise the PCM and sweep cases in the disposable VM and use returned
   metrics to verify analyzer/probe agreement. Keep PCM32 blocked until the

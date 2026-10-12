@@ -236,6 +236,9 @@ route; aliasing, imaging and phase remain unmeasured, and the runner has not
 been run in the VM. `-Case tone-continuity -Minutes 1` reuses the guarded
 997/47 Hz product-route continuity runner for one minute per tone; this is a
 diagnostic duration, not the one-hour eight-cable VCAB-24 gate. The
+`-Case eight-cable-continuity -Minutes 1` entry point reuses the guarded four-
+route runner, enables eight cables and restores the previous count afterward;
+one minute is still only diagnostic. The
 ordered pairwise isolation runner is `-Case isolation-all-pairs`; it enables
 eight cables for the diagnostic and restores the original count. No VM run has
 been recorded yet. Do not mark A16 passed until every required case has run on

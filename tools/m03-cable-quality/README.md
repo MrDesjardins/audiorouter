@@ -41,6 +41,11 @@ The `tone-continuity` VM case reuses `run-cable-tone.ps1` for the product-route
 choose the duration per tone. It is a diagnostic run; A16's one-hour and
 eight-cable gates still require their full execution and evidence.
 
+The `eight-cable-continuity` case reuses the guarded four-route runner for
+Cable A→B, C→D, E→F and G→H with identity-coded impulses. Its `-Minutes`
+argument controls the run length and the runner restores the VM's prior cable
+count in `finally`. Short runs are diagnostic only.
+
 Portable analyzer tests run with:
 
 ```powershell

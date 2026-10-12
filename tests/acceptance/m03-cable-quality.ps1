@@ -36,6 +36,7 @@ Assert ($qualityText -match 'isolation-A-to-B' -and $qualityText -match "'silenc
 Assert ($qualityText -match 'isolation-all-pairs' -and $qualityText -match 'run-cable-isolation-matrix') 'VM entry point wires the ordered isolation matrix'
 Assert ($qualityText -match 'thdn-997-48k' -and $qualityText -match 'run-cable-thdn\.ps1') 'VM entry point wires the product-route THD+N diagnostic'
 Assert ($qualityText -match 'tone-continuity' -and $qualityText -match 'run-cable-tone\.ps1' -and $qualityText -match '-Minutes \$Minutes') 'VM entry point exposes the existing 997/47 Hz continuity runner'
+Assert ($qualityText -match 'eight-cable-continuity' -and $qualityText -match 'run-cable-continuity\.ps1') 'VM entry point exposes the guarded eight-cable continuity runner'
 Assert ($qualityText -match 'sweep-44k1.*sweep-48k.*sweep-96k' -and $qualityText -match 'run-cable-sweep\.ps1') 'VM entry point wires logarithmic sweep cases'
 $sweepText = Get-Content -LiteralPath $sweepRunner -Raw
 Assert ($sweepText -match "'cable-sweep'" -and $sweepText -match "'sweep'.*'20'.*'20000'") 'sweep runner captures and analyzes the 20 Hz-20 kHz product route'

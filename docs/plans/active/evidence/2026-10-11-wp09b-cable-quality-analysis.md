@@ -188,3 +188,8 @@ Checks on Windows host `PATRICK5080`:
 - `tests/acceptance/m03-cable-quality.ps1` — 34 host-safe checks passed.
 - `tests/acceptance/docs.ps1` — 149 Markdown files and 858 local links passed.
 - No continuity or endpoint run was performed.
+
+The same quality entry point now exposes `eight-cable-continuity`, forwarding
+`-Minutes` to the existing four-route runner. That runner enables eight cables
+and restores the prior cable count in `finally`. The host-safe acceptance
+checks the case and runner wiring only; no helper or driver operation ran.
