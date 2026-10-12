@@ -19,12 +19,25 @@ The `isolation` probe case writes the captured Cable B Output to float32 WAV;
 RMS, DC and a VCAB-26 threshold verdict. The VM wrapper's Cable A-to-B case is
 one pair only and does not close the all-pairs isolation requirement.
 
+PCM16 and PCM24-in-32 WAV fixture codecs are available through the library.
+The `pcm` analyzer mode accepts float32 reference/capture WAVs and reports the
+VCAB-21 one-LSB measurement for valid bits 16 or 24. Guarded VM cases
+`pcm16-48k` and `pcm24-48k` use the native probe's actual shared mix format;
+the endpoints must already be configured to the requested format and 48 kHz.
+The runner rejects a mismatch and fails on dropped, flagged, or overflowed
+capture packets. These cases are diagnostic and have not yet been measured in
+the VM.
+
 Portable analyzer tests run with:
 
 ```powershell
 cargo test --locked --manifest-path tools/m03-cable-quality/Cargo.toml
 ```
 
-WAV decoding intentionally accepts only canonical interleaved IEEE float32
-WAV. It rejects integer and extensible WAVs until explicit decoders and
-fixtures exist; channel-count and integer-format cases remain unimplemented.
+The sample comparison and THD+N modes consume canonical interleaved IEEE
+float32 WAVs. The dedicated PCM fixture decoder accepts classic PCM16 and
+PCM24-in-32 WAVEFORMATEXTENSIBLE and rejects other encodings. PCM32 remains
+deferred because the current analyzer sample representation cannot establish
+its one-LSB target. The VM runner can be invoked for 1, 2, or 8 channels, but
+no channel matrix has been measured yet; each endpoint format must be set
+before a run.

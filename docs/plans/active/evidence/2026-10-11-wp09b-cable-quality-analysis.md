@@ -130,3 +130,22 @@ Checks on Windows host `AR-DriverTest`, pinned Rust 1.96.0:
 The first Clippy run found one unnecessary same-type cast in the new PCM
 verdict regression; it was removed and all checks passed. No driver, endpoint,
 VM or device setting was changed.
+
+## Channel-count alignment regression
+
+Added an analyzer regression for 1-, 2-, and 8-channel float32 captures.
+Each case uses independent deterministic channel signals, applies one shared
+frame offset, verifies per-channel exactness, and injects corruption into the
+last channel to ensure shared alignment does not hide channel-specific
+errors. The tool README now documents the available PCM codec and runner
+boundary, and states that the VM matrix remains unmeasured.
+
+Checks on Windows host `AR-DriverTest`, pinned Rust 1.96.0:
+
+- Analyzer unit tests — 11 passed; standalone Clippy (`-D warnings`) — passed.
+- Cable quality host acceptance — 27 checks passed.
+- Documentation validation — 149 Markdown files and 858 local links passed.
+- `git diff --check` — passed.
+
+This is portable analyzer evidence only. The A16 1/2/8-channel endpoint
+matrix remains unrun in the VM.

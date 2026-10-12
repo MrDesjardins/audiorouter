@@ -798,6 +798,49 @@ mod tests {
     }
 
     #[test]
+    fn wav_pair_analysis_aligns_all_required_channel_counts_together() {
+        let root =
+            std::env::temp_dir().join(format!("m03-quality-channel-matrix-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let reference_path = root.join("reference.wav");
+        let capture_path = root.join("capture.wav");
+        for channels in [1u16, 2, 8] {
+            let mono = (0..channels)
+                .map(|channel| seeded_noise(2048, 0x1234 + u64::from(channel)))
+                .collect::<Vec<_>>();
+            let mut reference = Vec::with_capacity(2048 * usize::from(channels));
+            for frame in 0..2048 {
+                for channel in &mono {
+                    reference.push(channel[frame]);
+                }
+            }
+            let mut capture = vec![0.0; 5 * usize::from(channels)];
+            capture.extend_from_slice(&reference);
+            write_test_wav(&reference_path, channels, &reference);
+            write_test_wav(&capture_path, channels, &capture);
+            let report = analyze_wav_pair(&reference_path, &capture_path, 16, None).unwrap();
+            assert_eq!(report["alignmentOffsetFrames"], 5);
+            assert_eq!(report["bitExact"], true);
+            assert_eq!(
+                report["channelsMetrics"].as_array().unwrap().len(),
+                usize::from(channels)
+            );
+            let mut corrupted = capture;
+            corrupted[(5 + 1500) * usize::from(channels) + usize::from(channels - 1)] += 0.01;
+            write_test_wav(&capture_path, channels, &corrupted);
+            let report = analyze_wav_pair(&reference_path, &capture_path, 16, None).unwrap();
+            assert_eq!(report["bitExact"], false);
+            assert!(
+                report["channelsMetrics"][usize::from(channels - 1)]["maxAbsoluteError"]
+                    .as_f64()
+                    .unwrap()
+                    > 0.0
+            );
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn wav_decoder_rejects_non_finite_samples() {
         let path = std::env::temp_dir().join(format!("m03-quality-nan-{}.wav", std::process::id()));
         write_test_wav(&path, 1, &[f32::NAN]);
