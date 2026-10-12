@@ -48,6 +48,7 @@ import type {
   SessionFileExportResult,
   SessionFileImportResult,
   StartupStatus,
+  VirtualCableStatus,
   StartupPlanResult,
   StartupApplyResult,
   OsTransition,
@@ -392,6 +393,8 @@ export interface UiBackend {
   planSessionImport(session: Session): Promise<SessionImportPlanResult>;
   commitSessionImport(planId: string, idempotencyKey: string): Promise<SessionImportCommitResult>;
   getStartup(): Promise<StartupStatus>;
+  /** AudioRouter cable driver status (spec 17 §7.1); read-only. */
+  getVirtualCableStatus?(): Promise<VirtualCableStatus>;
   planStartup(enabled: boolean): Promise<StartupPlanResult>;
   applyStartup(planId: string, idempotencyKey: string): Promise<StartupApplyResult>;
   registerStartup?(enabled: boolean): Promise<string>;
@@ -691,6 +694,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async getStartup() {
       return { enabled: false, registration: "unavailable", reason: "The control backend is disconnected." };
+    },
+    async getVirtualCableStatus() {
+      throw new Error("The backend is disconnected; cable status is unavailable.");
     },
     async planStartup() {
       throw new Error("The backend is disconnected; startup planning is unavailable.");
@@ -1155,6 +1161,9 @@ export function createLiveBackend(
     },
     async getStartup() {
       return client.request("startup.get", undefined);
+    },
+    async getVirtualCableStatus() {
+      return client.request("virtualCable.status", undefined);
     },
     async planStartup(enabled) {
       return client.request("startup.plan", { enabled });

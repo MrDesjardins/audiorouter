@@ -1962,7 +1962,7 @@ install/update/repair/remove shell commands are not started. The spec's
 "Game → Discord" template mixes cables with physical devices, which needs
 WP-09 mixed-clock routes (cable plus physical device), also not started.
 Proposed order: (1) WP-08 status detection and API, read-only, standard
-user; (2) WP-10 first slice: Setup → Virtual cables panel (status, driver
+user; (2) WP-10 first slice (done 2026-10-11, see WP-10 slice 1): Setup → Virtual cables panel (status, driver
 version, counters), cable nodes available in the library when installed,
 and the "Pass-through" template (Cable A → Cable B, which works today);
 (3) later: elevated helper commands from the UI, the cable count and
@@ -2014,7 +2014,62 @@ template.
   written to `testInfo.outputPath` (lesson 2026-10-03).
 - **Acceptance:** UI conventions in AGENTS.md; no layout shift while status
   changes.
-- **Status:** not started.
+- **Status:** first slice implemented 2026-10-11 (below); helper commands,
+  rename, cable count, format hints and the low-latency switch remain.
+
+### WP-10 slice 1 — cable status in the UI (2026-10-11)
+
+Requirement IDs: VCAB-29 (guidance, partial), UI-17; spec 17 §7.1, §7.4.
+
+- **Status store** (`ui/src/virtualCableStatus.ts`): App polls
+  `virtualCable.status` every 2 s while connected (the backend caches 2 s)
+  and publishes it through a `useSyncExternalStore` store. A failed poll
+  keeps the last answer (UI-17); a disconnect clears it. A backend without
+  the method never answers, so cables stay unavailable.
+- **Library:** the two entries are now "Cable input" (an app plays into
+  Cable X Input) and "Cable output" (an app records from Cable X Output),
+  category "AudioRouter cable". `applyCableAvailability` enables them only
+  when the state is `installed` with at least one present cable; otherwise
+  each state gives its own reason. Both the canvas shelf and the Tools
+  sidebar use it; the sidebar cards now add cable nodes too.
+- **Adding a node** no longer prompts for a bus ID: sources start on the
+  first present cable, destinations on the second (Cable A → Cable B).
+  Nodes are enabled and named after their Windows device ("Cable A
+  Input"). The canvas card shows "Cable A".
+- **Properties:** a Cable select (`CableBinding`) lists the status cables
+  (missing ones disabled) and always shows the node's own cable, marked
+  "(not installed)" when the status does not list it (lesson 2026-10-03,
+  saved value). Moving a node renames it only while it still has its
+  default name (`setVirtualBusDraftCable`).
+- **Setup → AudioRouter cables** (`VirtualCablePanel.tsx`): fixed-width
+  status pill, state explanation, driver version and protocol, one row per
+  cable, an "Add route: Cable A → Cable B" button (the pass-through
+  template, appended to the draft with its connection), and the live cable
+  route line plus Forwarded/Silence/Dropped/Trimmed counters in reserved
+  slots. The route counters come from `system.diagnostics`, which refreshes
+  only while playing.
+- **Template decision:** `ui/src/templates.ts` is not reachable from the UI
+  (tests only), so the pass-through is a Setup button rather than a new
+  template ID.
+- **Wording:** the first-run guide now says AudioRouter never installs
+  audio drivers on its own (it said it installs none).
+
+Validation (host, 2026-10-11):
+
+| Check | Result |
+| --- | --- |
+| `npm --prefix ui run typecheck` | pass |
+| `npm --prefix ui run lint` | 0 errors, 25 existing warnings (none in new code) |
+| `npm --prefix ui test` | 515/515 pass; one earlier full run failed `undoes the last committed change` once, which passed alone, in two file runs and in the next full run (load timing; the test backends do not implement the status call) |
+| `ui/e2e/virtual-cables.pw.ts` (Edge) | 4/4 pass: dark, light and high-contrast panels with status changes (Installed → Restart needed → Update needed → Installed) and route states (running, failed, not playing) sampled for layout shift, one offset each; node availability, default cables, Properties picker field style and the Add route button |
+| Full e2e suite (`playwright.config.ts`) | first run: 5 failed. Three `audio-tools` tests clicked `.tool-card` with `hasText: "Input device"`, which now also matches the Cable input card's reason ("…use Input device with…"); they now match the card title exactly. Two others (`canvas-live-performance` meter ticks, `undo-eq-points` dark) passed on rerun. Final run: 236 passed, 9 skipped, 0 failed |
+
+Screenshots (`testInfo.outputPath`, not committed) were reviewed in the
+three themes; the light-theme pill took the node-state badge colours after
+the first review showed low contrast, and the button label was shortened
+so it fits on one line. Not checked: the Windows shell (no change there),
+the guest VM (the UI reads the same `virtualCable.status` that the WP-08
+acceptance verified as `installed`).
 
 ## WP-11 — Installer, update and uninstall (17 §7.5)
 

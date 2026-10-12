@@ -1,6 +1,6 @@
 // Content of the Setup side-panel tab (moved from App.tsx).
 import type { Dispatch, SetStateAction } from "react";
-import type { DeviceListItem } from "@audiorouter/contracts";
+import type { DeviceListItem, DiagnosticsSnapshot } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import type { WorkbenchTab } from "./Workbench";
 import type { SetupStep } from "./setup";
@@ -12,6 +12,7 @@ import { FlowAnimationSetting } from "./FlowAnimationSetting";
 import { ThisPcDevices } from "./ThisPcDevices";
 import { FirstRunGuide } from "./FirstRunGuide";
 import { DeviceAccessSetting } from "./DeviceAccess";
+import { VirtualCablePanel } from "./VirtualCablePanel";
 
 export function SetupWorkbench({
   backend,
@@ -24,6 +25,8 @@ export function SetupWorkbench({
   updateChecks,
   setUpdateChecks,
   availableUpdate,
+  cableRoute,
+  onAddCablePassThrough,
 }: {
   backend: UiBackend;
   devices: DeviceListItem[];
@@ -35,6 +38,8 @@ export function SetupWorkbench({
   updateChecks: boolean;
   setUpdateChecks: Dispatch<SetStateAction<boolean>>;
   availableUpdate: AvailableUpdate | null;
+  cableRoute?: DiagnosticsSnapshot["cableRoute"];
+  onAddCablePassThrough?: () => void;
 }) {
   return (
     <>
@@ -59,6 +64,11 @@ export function SetupWorkbench({
           ))}
         </ul>
       </section>
+      <VirtualCablePanel
+        connected={backend.connected}
+        cableRoute={cableRoute}
+        onAddPassThrough={onAddCablePassThrough}
+      />
       <ThisPcDevices devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} />
       <section className="panel setup-panel" aria-labelledby="setup-other-apps-heading">
         <h3 id="setup-other-apps-heading">Use with other apps</h3>

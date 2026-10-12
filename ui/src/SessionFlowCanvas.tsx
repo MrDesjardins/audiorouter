@@ -34,7 +34,8 @@ import { useLiveDiagnostics, type TelemetryStore } from "./liveTelemetry";
 import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/contracts";
 import { readLayout, writeLayout, type LayoutPositions } from "./layout";
 import { nodePortLabels } from "./graphView";
-import { libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
+import { applyCableAvailability, libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
+import { cableLabel, useVirtualCableStatus } from "./virtualCableStatus";
 import {
   DEFAULT_NETWORK_AUDIO_PORT,
   GAIN_MAX_DB,
@@ -318,8 +319,8 @@ const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
   physicalOutput: "Physical Output",
   applicationCapture: "App Capture",
   endpointLoopback: "Endpoint Loopback",
-  virtualRenderSource: "Virtual Source",
-  virtualCaptureSink: "Virtual Sink",
+  virtualRenderSource: "Cable Input",
+  virtualCaptureSink: "Cable Output",
   testSignal: "Test Signal",
   audioFile: "Audio File",
   parametricEq: "Advanced EQ",
@@ -1603,8 +1604,7 @@ function EndpointLoopbackVisual({ node, telemetry }: { node: Node; telemetry: Re
   );
 }
 
-/** Deferred virtual-bus source/sink still shows which existing bus identity
- * it targets, even while managed provisioning remains unavailable. */
+/** A cable source/destination shows which AudioRouter cable it uses. */
 function VirtualBusVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor> }) {
   const busId = String(node.parameters.busId ?? "Unbound");
   const isSource = node.kind === "virtualRenderSource";
@@ -1614,7 +1614,7 @@ function VirtualBusVisual({ node, telemetry }: { node: Node; telemetry: ReturnTy
         <span className="node-virtual-bus-icon" aria-hidden="true">
           {isSource ? "↦" : "↤"}
         </span>
-        <span>Bus {busId}</span>
+        <span>{cableLabel(busId)}</span>
       </div>
       {telemetry?.meter && <MiniMeter telemetry={telemetry} />}
     </div>
@@ -2315,6 +2315,7 @@ export function SessionFlowCanvas({
   };
   // Fit after React Flow has the new positions (two frames after render).
   const [fitRequest, setFitRequest] = useState(0);
+  const cableStatus = useVirtualCableStatus();
   useEffect(() => {
     if (!fitRequest) return;
     let second = 0;
@@ -2797,7 +2798,7 @@ export function SessionFlowCanvas({
           <div className="canvas-library" aria-label="Drag processors to canvas">
             <strong>Drag or select to add</strong>
             {FLOW_GROUPS.map((group) => {
-              const entries = libraryEntries
+              const entries = applyCableAvailability(libraryEntries, cableStatus)
                 .filter(
                   (entry) => entry.flow === group && (entry.kind !== undefined || entry.virtualKind !== undefined),
                 )

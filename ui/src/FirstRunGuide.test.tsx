@@ -20,7 +20,7 @@ describe("FirstRunGuide", () => {
     const onRefresh = vi.fn();
     render(<FirstRunGuide devices={[]} connected onRefresh={onRefresh} onOpenTools={vi.fn()} />);
     expect(screen.getByRole("status").textContent).toContain("No complete input-and-output pair");
-    expect(screen.getByText(/does not install virtual audio drivers/i)).toBeTruthy();
+    expect(screen.getByText(/never installs audio drivers on its own/i)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Refresh devices" }));
     expect(onRefresh).toHaveBeenCalledOnce();
   });

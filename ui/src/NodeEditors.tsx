@@ -13,6 +13,8 @@ import { NumberField } from "./NumberField";
 import { AdvancedEqEditor } from "./AdvancedEqEditor";
 import { EqBackendContext, PluginParameterContext } from "./appContext";
 import { deviceChoiceLabel, sortDevicesAlphabetically } from "./endpointBinding";
+import type { VirtualCableStatus } from "@audiorouter/contracts";
+import { cableEndpointName, cableUnavailableReason } from "./virtualCableStatus";
 
 /** Duck settings the Duck editor owns (trigger mode and Siege phases). */
 export const DUCK_EDITOR_PARAMETERS = new Set(["trigger", "duckMenu", "duckPrep", "duckBetweenRounds"]);
@@ -892,6 +894,56 @@ export function PhysicalOutputBinding({
       <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
         Refresh available outputs
       </button>
+    </div>
+  );
+}
+
+/** Chooses the AudioRouter cable a cable source/destination uses. The node's
+ * own cable is always shown, even when the status does not list it. */
+export function CableBinding({
+  status,
+  value,
+  direction,
+  disabled,
+  onChange,
+}: {
+  status: VirtualCableStatus | null;
+  value: string;
+  direction: "renderSource" | "captureSink";
+  disabled: boolean;
+  onChange: (busId: string) => void;
+}) {
+  const cables = status?.cables ?? [];
+  const listed = cables.some((cable) => cable.busId === value);
+  const unavailable = cableUnavailableReason(status);
+  return (
+    <div className="node-binding-editor" aria-label="Cable binding">
+      <div>
+        <p className="eyebrow">{direction === "renderSource" ? "Cable source" : "Cable destination"}</p>
+        <strong>
+          {direction === "renderSource" ? "Choose the cable an app plays into" : "Choose the cable an app records from"}
+        </strong>
+      </div>
+      <select
+        aria-label="Cable"
+        value={value}
+        disabled={disabled || cables.length === 0}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {!listed && <option value={value}>{cableEndpointName(value, direction)} (not installed)</option>}
+        {cables.map((cable) => (
+          <option key={cable.busId} value={cable.busId} disabled={!cable.present && cable.busId !== value}>
+            {cableEndpointName(cable.busId, direction)}
+            {cable.present ? "" : " (missing)"}
+          </option>
+        ))}
+      </select>
+      <p className="muted">
+        {unavailable ??
+          (direction === "renderSource"
+            ? `In the app, choose ${cableEndpointName(value, direction)} as its speaker.`
+            : `In the app, choose ${cableEndpointName(value, direction)} as its microphone.`)}
+      </p>
     </div>
   );
 }

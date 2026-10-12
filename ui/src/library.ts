@@ -1,4 +1,5 @@
-import type { NodeKind } from "@audiorouter/contracts";
+import { cableUnavailableReason } from "./virtualCableStatus";
+import type { NodeKind, VirtualCableStatus } from "@audiorouter/contracts";
 
 /** Where an entry sits in the source -> tool -> destination signal-flow
  * mental model, independent of its finer-grained `category` label. Drives
@@ -62,6 +63,9 @@ const INPUT_DEVICE_NOTE =
 const OUTPUT_DEVICE_NOTE =
   "Send sound to speakers, headphones, or a virtual cable (for example CABLE Input) that another app uses as its input. Choose the device in Properties.";
 
+const CABLES_NOT_INSTALLED =
+  "Install AudioRouter cables in Setup, or use Input device with a virtual cable such as CABLE Output.";
+
 export const libraryEntries: LibraryEntry[] = [
   {
     id: "physical-input",
@@ -89,11 +93,12 @@ export const libraryEntries: LibraryEntry[] = [
   },
   {
     id: "virtual-render-source",
-    label: "Virtual render source",
-    category: "Virtual bus",
+    label: "Cable input",
+    category: "AudioRouter cable",
     flow: "input",
-    unavailableReason:
-      "Not available: AudioRouter does not install its own virtual devices. Use Input device with a virtual cable such as CABLE Output.",
+    note: "Sound that another app plays into an AudioRouter cable (for example a game set to output to Cable A Input). Choose the cable in Properties.",
+    // Until the cable status says otherwise (applyCableAvailability).
+    unavailableReason: CABLES_NOT_INSTALLED,
     virtualKind: "virtualRenderSource",
   },
   {
@@ -122,11 +127,11 @@ export const libraryEntries: LibraryEntry[] = [
   },
   {
     id: "virtual-capture-sink",
-    label: "Virtual capture sink",
-    category: "Virtual bus",
+    label: "Cable output",
+    category: "AudioRouter cable",
     flow: "output",
-    unavailableReason:
-      "Not available: AudioRouter does not install its own virtual devices. Use Output device with a virtual cable such as CABLE Input.",
+    note: "Send sound into an AudioRouter cable that another app records from (for example Discord's microphone set to Cable B Output). Choose the cable in Properties.",
+    unavailableReason: CABLES_NOT_INSTALLED,
     virtualKind: "virtualCaptureSink",
   },
   {
@@ -244,6 +249,20 @@ export const libraryEntries: LibraryEntry[] = [
   { id: "graphic-eq", label: "Graphic EQ", category: "Effect", flow: "tool", kind: "graphicEq" },
   { id: "pitch", label: "Pitch shift", category: "Effect", flow: "tool", kind: "pitch" },
 ];
+
+/** Cable entries become available once the cable status reports installed
+ * cables; otherwise they carry the status's reason (spec 17 §7.4). */
+export function applyCableAvailability(entries: LibraryEntry[], status: VirtualCableStatus | null): LibraryEntry[] {
+  const reason = cableUnavailableReason(status);
+  return entries.map((entry) => {
+    if (!entry.virtualKind) return entry;
+    if (reason === null) {
+      const { unavailableReason: _unused, ...available } = entry;
+      return available;
+    }
+    return { ...entry, unavailableReason: reason };
+  });
+}
 
 export function filterLibraryEntries(entries: LibraryEntry[], query: string): LibraryEntry[] {
   const normalized = query.trim().toLocaleLowerCase();

@@ -33,6 +33,7 @@ import { recorderHasCaptureSource } from "./RecordingPanels";
 import { PluginEditorControls, PluginNodeInspector } from "./PluginPanels";
 import {
   ApplicationCaptureBinding,
+  CableBinding,
   DenoiseLearnEditor,
   FirFilterEditor,
   InspectorChangeSummary,
@@ -43,6 +44,8 @@ import {
   ProcessorParameterEditor,
 } from "./NodeEditors";
 import { AudioFileNodeEditor } from "./AudioFileNodeEditor";
+import { setVirtualBusDraftCable } from "./draft";
+import { useVirtualCableStatus } from "./virtualCableStatus";
 
 export function PropertiesPanel({
   selectedGroup,
@@ -131,6 +134,7 @@ export function PropertiesPanel({
   togglePrivacyMute: () => Promise<void>;
   privacyMuted: boolean;
 }) {
+  const cableStatus = useVirtualCableStatus();
   return selectedGroup ? (
     <CanvasGroupInspector
       group={selectedGroup}
@@ -226,6 +230,22 @@ export function PropertiesPanel({
           />
         ) : (
           <NodeTelemetryPanel node={selectedNode} snapshot={liveDiagnostics ?? null} running={sessionRunning} />
+        )}
+        {(selectedNode.kind === "virtualRenderSource" || selectedNode.kind === "virtualCaptureSink") && (
+          <CableBinding
+            status={cableStatus}
+            value={String(selectedNode.parameters.busId ?? "")}
+            direction={selectedNode.kind === "virtualRenderSource" ? "renderSource" : "captureSink"}
+            disabled={sessionRunning}
+            onChange={(busId) => {
+              try {
+                recordDraftChange(setVirtualBusDraftCable(draft, selectedNode.id, busId), selectedNode.id + ":busId");
+                setActionMessage("Cable changed. Save to keep it.");
+              } catch (error) {
+                setActionMessage(error instanceof Error ? error.message : "Unable to change the cable.");
+              }
+            }}
+          />
         )}
         {selectedNode.kind === "physicalInput" && (
           <PhysicalInputBinding

@@ -616,12 +616,12 @@ describe("canvas library drop positions", () => {
     expect(shelf.getByRole("button", { name: "Gain" })).toBeTruthy();
     expect(shelf.getByRole("button", { name: "Input device" })).toBeTruthy();
     expect(shelf.getByRole("button", { name: "Output device" })).toBeTruthy();
-    expect(shelf.getByRole("button", { name: "Virtual capture sink" })).toBeTruthy();
-    expect(shelf.getByRole("button", { name: "Virtual render source" })).toBeTruthy();
+    expect(shelf.getByRole("button", { name: "Cable output" })).toBeTruthy();
+    expect(shelf.getByRole("button", { name: "Cable input" })).toBeTruthy();
     expect(shelf.getByRole("button", { name: "Recorder" })).toBeTruthy();
   });
 
-  it("keeps deferred managed virtual entries visible but unavailable", () => {
+  it("keeps cable entries visible but unavailable without installed cables", () => {
     const onConnect = vi.fn();
     const { getByLabelText } = render(
       createElement(SessionFlowCanvas, {
@@ -633,8 +633,8 @@ describe("canvas library drop positions", () => {
       }),
     );
     const shelf = within(getByLabelText("Drag processors to canvas"));
-    expect(shelf.getByRole("button", { name: "Virtual capture sink" })).toHaveProperty("disabled", true);
-    expect(shelf.getByRole("button", { name: "Virtual render source" })).toHaveProperty("disabled", true);
+    expect(shelf.getByRole("button", { name: "Cable output" })).toHaveProperty("disabled", true);
+    expect(shelf.getByRole("button", { name: "Cable input" })).toHaveProperty("disabled", true);
     expect(onConnect).not.toHaveBeenCalled();
   });
 

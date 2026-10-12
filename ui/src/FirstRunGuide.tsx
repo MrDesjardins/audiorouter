@@ -32,7 +32,7 @@ export function FirstRunGuide({
       ) : (
         <p className="muted" role="status">
           No complete input-and-output pair is available yet. Connect or enable your audio devices, then refresh this
-          list. AudioRouter does not install virtual audio drivers.
+          list. AudioRouter never installs audio drivers on its own.
         </p>
       )}
       <ol>

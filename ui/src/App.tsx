@@ -37,6 +37,7 @@ import {
   appendPluginPlaceholderNode,
   appendVirtualBusNode,
   appendVoiceChainPreset,
+  appendCablePassThrough,
   applyGraphDraft,
   duplicateDraftNode,
   insertDraftMixer,
@@ -66,7 +67,15 @@ import {
   undoDraft as undoDraftHistory,
   type DraftHistory,
 } from "./history";
-import { filterLibraryEntries, libraryEntries } from "./library";
+import { applyCableAvailability, filterLibraryEntries, libraryEntries } from "./library";
+import {
+  cableEndpointName,
+  cableLabel,
+  defaultCable,
+  getVirtualCableStatus,
+  setVirtualCableStatus,
+  useVirtualCableStatus,
+} from "./virtualCableStatus";
 import {
   readFlowAnimation,
   readLastSession,
@@ -482,6 +491,30 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useEffect(() => {
     writeTheme(typeof window === "undefined" ? null : window.localStorage, theme);
   }, [theme]);
+  // AudioRouter cable status (spec 17 §7.1), published to the library,
+  // canvas palette, cable properties and Setup. The backend caches it for
+  // 2 s, so polling at that rate costs one enumeration per poll at most.
+  useEffect(() => {
+    const getStatus = backend.getVirtualCableStatus?.bind(backend);
+    if (!backend.connected || !getStatus) {
+      setVirtualCableStatus(null);
+      return;
+    }
+    let active = true;
+    const poll = () => {
+      getStatus()
+        .then((status) => active && setVirtualCableStatus(status))
+        // Keep the last answer through a failed poll (UI-17); a backend
+        // without the method never answers, so the status stays unknown.
+        .catch(() => undefined);
+    };
+    poll();
+    const timer = window.setInterval(poll, 2000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [backend, backend.connected]);
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
       const rawName = event.error instanceof Error ? event.error.name : "unknown";
@@ -891,7 +924,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       .filter((value): value is string => value !== null)
       .some((value) => value.toLocaleLowerCase().includes(query));
   });
-  const visibleLibraryEntries = filterLibraryEntries(libraryEntries, librarySearch);
+  const cableStatus = useVirtualCableStatus();
+  const visibleLibraryEntries = filterLibraryEntries(
+    applyCableAvailability(libraryEntries, cableStatus),
+    librarySearch,
+  );
   const setupSteps = setupChecklist({
     connected: backend.connected,
     audio: snapshot?.status.audio ?? null,
@@ -1992,6 +2029,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return undefined;
     }
   };
+  const addCablePassThrough = () => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing the draft.");
+      return;
+    }
+    const status = getVirtualCableStatus();
+    const source = defaultCable(status, "renderSource");
+    const sink = defaultCable(status, "captureSink");
+    try {
+      recordDraftChange(appendCablePassThrough(draft, source, sink));
+      setActionMessage(
+        `Added ${cableLabel(source)} → ${cableLabel(sink)} to the draft. Save, then Play; apps playing into ${cableEndpointName(source, "renderSource")} are heard on ${cableEndpointName(sink, "captureSink")}.`,
+      );
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to add the pass-through route."));
+    }
+  };
   const addPluginToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
     if (!backend.connected) {
       setActionMessage("Connect the backend before changing the draft.");
@@ -2026,10 +2080,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(error instanceof Error ? error.message : "Could not add plugin placeholder.");
     }
   };
-  const addDroppedVirtualBusNode = (direction: "renderSource" | "captureSink", _position: { x: number; y: number }) => {
-    const busId = window.prompt("Existing virtual bus ID", "virtual-bus")?.trim();
-    return busId ? addVirtualBusNode(busId, direction) : undefined;
-  };
+  // A new cable node starts on a present cable (sources Cable A, outputs
+  // Cable B by default); its Properties choose another.
+  const addDroppedVirtualBusNode = (direction: "renderSource" | "captureSink", _position: { x: number; y: number }) =>
+    addVirtualBusNode(defaultCable(getVirtualCableStatus(), direction), direction);
   const tryDraftConnection = (
     sourceNode: string,
     sourcePort: string,
@@ -2260,10 +2314,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [backend, draft]);
   const addDroppedCanvasNode = (kind: string, _dropPosition?: { x: number; y: number }) => {
     if (kind === "virtualRenderSource" || kind === "virtualCaptureSink") {
-      const busId = window.prompt("Existing virtual bus ID", "virtual-bus")?.trim();
-      return busId
-        ? addVirtualBusNode(busId, kind === "virtualRenderSource" ? "renderSource" : "captureSink")
-        : undefined;
+      const direction = kind === "virtualRenderSource" ? "renderSource" : "captureSink";
+      return addVirtualBusNode(defaultCable(getVirtualCableStatus(), direction), direction);
     }
     return addLibraryNode(kind as LibraryNodeKind);
   };
@@ -2608,6 +2660,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       updateChecks={updateChecks}
       setUpdateChecks={setUpdateChecks}
       availableUpdate={availableUpdate}
+      cableRoute={snapshot?.diagnostics?.cableRoute}
+      onAddCablePassThrough={addCablePassThrough}
     />
   );
   const devicesWorkbenchContent = (
@@ -3078,6 +3132,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 tools={visibleLibraryEntries}
                 connected={backend.connected}
                 onAdd={addLibraryNode}
+                onAddCable={(direction) =>
+                  addVirtualBusNode(defaultCable(getVirtualCableStatus(), direction), direction)
+                }
                 onApplicationPicker={openApplicationPicker}
                 librarySearch={librarySearch}
                 onLibrarySearch={(value) => setLibrarySearch(value.slice(0, 80))}

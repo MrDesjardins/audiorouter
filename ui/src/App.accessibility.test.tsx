@@ -1510,10 +1510,10 @@ describe("keyboard connection dialog", () => {
     );
   });
 
-  it("keeps managed virtual-bus drops unavailable in the VB-Cable-first profile", async () => {
+  it("keeps cable nodes unavailable until the cable status reports installed cables", async () => {
     await renderReady(<App backend={connectedPreviewBackend()} />);
-    expect(await screen.findByRole("button", { name: "Virtual capture sink" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Virtual render source" })).toHaveProperty("disabled", true);
+    expect(await screen.findByRole("button", { name: "Cable output" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Cable input" })).toHaveProperty("disabled", true);
   });
 
   it("rejects canvas library drops while disconnected", async () => {

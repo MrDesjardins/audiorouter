@@ -35,8 +35,8 @@ describe("node library search", () => {
     expect(libraryEntries.filter((entry) => entry.kind === "physicalOutput")).toHaveLength(1);
   });
 
-  it("keeps virtual bus entries discoverable and typed for drag-and-drop", () => {
-    expect(filterLibraryEntries(libraryEntries, "virtual bus").map((entry) => entry.id)).toEqual([
+  it("keeps cable entries discoverable and typed for drag-and-drop", () => {
+    expect(filterLibraryEntries(libraryEntries, "audiorouter cable").map((entry) => entry.id)).toEqual([
       "virtual-render-source",
       "virtual-capture-sink",
     ]);
@@ -45,8 +45,8 @@ describe("node library search", () => {
     expect(renderSource?.virtualKind).toBe("virtualRenderSource");
     expect(captureSink?.virtualKind).toBe("virtualCaptureSink");
     expect(renderSource?.kind).toBeUndefined();
-    expect(captureSink?.unavailableReason).toContain("does not install its own virtual devices");
-    expect(captureSink?.unavailableReason).toContain("Output device");
+    expect(captureSink?.unavailableReason).toContain("Install AudioRouter cables in Setup");
+    expect(captureSink?.unavailableReason).toContain("virtual cable such as CABLE Output");
   });
 
   it("points unavailable virtual devices at the existing virtual-cable alternative in short notes", () => {

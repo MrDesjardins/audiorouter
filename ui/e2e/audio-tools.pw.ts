@@ -211,7 +211,11 @@ test("every sender has blue start handles and only orange receivers appear durin
 test("a second source to a physical output gets an undoable visible mixer", async ({ page }) => {
   await page.goto("/route-harness.html");
   await page.getByRole("tab", { name: "Tools" }).click();
-  await page.locator(".tool-card").filter({ hasText: "Input device" }).first().click();
+  await page
+    .locator(".tool-card")
+    .filter({ has: page.getByText("Input device", { exact: true }) })
+    .first()
+    .click();
   await page.locator(".tool-card").filter({ hasText: "Test Signal" }).first().click();
   const editor = page.locator(".workbench-connection-editor");
   await openConnectionForm(page);
@@ -241,7 +245,11 @@ test("EQ can fan out through Mixer and that Mixer can take over the same physica
   await page.goto("/route-harness.html");
   await page.getByRole("tab", { name: "Tools" }).click();
   for (const label of ["Input device", "Input device", "Advanced EQ", "Mixer", "Output device"]) {
-    await page.locator(".tool-card").filter({ hasText: label }).first().click();
+    await page
+      .locator(".tool-card")
+      .filter({ has: page.getByText(label, { exact: true }) })
+      .first()
+      .click();
   }
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
   const node = (name: string) => page.locator(".react-flow__node").filter({ hasText: name }).last();
@@ -302,7 +310,11 @@ test("a processing output can feed more than one destination", async ({ page }) 
   await page.goto("/route-harness.html");
   await page.getByRole("tab", { name: "Tools" }).click();
   for (const label of ["Input device", "Gain", "Output device", "Output device"]) {
-    await page.locator(".tool-card").filter({ hasText: label }).first().click();
+    await page
+      .locator(".tool-card")
+      .filter({ has: page.getByText(label, { exact: true }) })
+      .first()
+      .click();
   }
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
   const node = (name: string) => page.locator(".react-flow__node").filter({ hasText: name }).last();
@@ -470,7 +482,11 @@ test("Audio File imports WAV media through the upload contract and exposes loop 
   await inspector.getByLabel("Loop").check();
   await expect(inspector.getByLabel("Loop")).toBeChecked();
   await page.getByRole("tab", { name: "Tools" }).click();
-  await page.locator(".tool-card").filter({ hasText: "Output device" }).first().click();
+  await page
+    .locator(".tool-card")
+    .filter({ has: page.getByText("Output device", { exact: true }) })
+    .first()
+    .click();
   await openConnectionForm(page);
   const setup = page.locator(".right-workbench");
   await setup.getByLabel("Source output port").selectOption({ label: "Audio file 1 · out · 2ch" });
@@ -766,9 +782,9 @@ test("device tools accept installed virtual endpoints while managed-driver tools
   await add("Output device");
   await expect(page.getByTestId("rf__node-physicalOutput-1")).toBeVisible();
   await page.getByRole("tab", { name: "Tools" }).click();
-  await expect(tools.getByRole("button", { name: /Virtual render source/ })).toBeDisabled();
-  await expect(tools.getByRole("button", { name: /Virtual capture sink/ })).toBeDisabled();
-  await expect(tools.getByRole("button", { name: /Virtual render source/ })).toHaveAttribute("title", /Input device/);
+  await expect(tools.getByRole("button", { name: /^Cable input/ })).toBeDisabled();
+  await expect(tools.getByRole("button", { name: /^Cable output/ })).toBeDisabled();
+  await expect(tools.getByRole("button", { name: /^Cable input/ })).toHaveAttribute("title", /Input device/);
   const setup = async (source: string, destination: string) => {
     await openConnectionForm(page);
     const editor = page.locator(".workbench-connection-editor");

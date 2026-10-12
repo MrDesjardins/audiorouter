@@ -6330,3 +6330,80 @@ input[type="color"] {
 .error-boundary-status {
   min-height: 1.4em;
 }
+.virtual-cable-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.virtual-cable-heading h3 {
+  margin: 0;
+}
+/* Fixed width: the label changes with the status (UI-17). */
+.virtual-cable-pill {
+  flex: none;
+  width: 8.5rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--ambient-edge);
+  text-align: center;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+/* The node-state badge colours, light-theme variants included. */
+.virtual-cable-pill.is-ready {
+  color: #aaffc7;
+  border-color: rgb(114 227 162 / 45%);
+  background: rgb(63 167 105 / 22%);
+}
+.virtual-cable-pill.is-attention {
+  color: #ffd889;
+  border-color: rgb(246 169 40 / 45%);
+  background: rgb(246 169 40 / 16%);
+}
+.theme-light .virtual-cable-pill.is-ready {
+  color: #1d6b43;
+  border-color: rgb(29 107 67 / 45%);
+  background: rgb(63 167 105 / 16%);
+}
+.theme-light .virtual-cable-pill.is-attention {
+  color: #8a5a00;
+  border-color: rgb(138 90 0 / 45%);
+  background: rgb(246 169 40 / 18%);
+}
+.virtual-cable-detail {
+  min-height: 2.6em;
+}
+.virtual-cable-route {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+.virtual-cable-route-title {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+}
+.virtual-cable-counters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0;
+}
+.virtual-cable-counters dt {
+  font-size: 0.75rem;
+  color: var(--text-soft);
+}
+.virtual-cable-counters dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.virtual-cable-failure {
+  min-height: 1.4em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.virtual-cable-actions {
+  display: grid;
+  margin-top: 0.75rem;
+}

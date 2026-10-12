@@ -363,19 +363,21 @@ describe("appendEndpointLoopbackNode", () => {
 });
 
 describe("appendVirtualBusNode", () => {
-  it("adds stopped source and sink nodes bound to the exact bus identity", () => {
-    const source = appendVirtualBusNode(demoSession, " bus-1 ", "renderSource");
-    const sink = appendVirtualBusNode(source, "bus-1", "captureSink");
+  it("adds enabled cable source and destination nodes named after their Windows devices", () => {
+    const source = appendVirtualBusNode(demoSession, " cable-a ", "renderSource");
+    const sink = appendVirtualBusNode(source, "cable-b", "captureSink");
     expect(source.nodes.at(-1)).toMatchObject({
       kind: "virtualRenderSource",
-      enabled: false,
-      parameters: { busId: "bus-1" },
+      name: "Cable A Input",
+      enabled: true,
+      parameters: { busId: "cable-a" },
       ports: [{ name: "out", direction: "output", channels: 2 }],
     });
     expect(sink.nodes.at(-1)).toMatchObject({
       kind: "virtualCaptureSink",
-      enabled: false,
-      parameters: { busId: "bus-1" },
+      name: "Cable B Output",
+      enabled: true,
+      parameters: { busId: "cable-b" },
       ports: [{ name: "in", direction: "input", channels: 2 }],
     });
     expect(sink.edges).toEqual(demoSession.edges);

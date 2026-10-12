@@ -93,6 +93,7 @@ export function Workbench({
   tools,
   connected,
   onAdd,
+  onAddCable,
   onApplicationPicker,
   librarySearch,
   onLibrarySearch,
@@ -127,6 +128,8 @@ export function Workbench({
   tools: LibraryEntry[];
   connected: boolean;
   onAdd: (kind: NonNullable<LibraryEntry["kind"]>) => void;
+  /** Adds a cable source or destination on its default cable. */
+  onAddCable?: (direction: "renderSource" | "captureSink") => void;
   onNewSession: () => void;
   onDuplicate: () => void;
   onApplicationPicker: () => void;
@@ -263,8 +266,15 @@ export function Workbench({
                         if (entry.kind) startLibraryDrag(event, entry.kind, entry.label);
                       }}
                       onDragEnd={endLibraryDrag}
-                      onClick={() => entry.kind && onAdd(entry.kind)}
-                      disabled={!connected || !entry.kind}
+                      onClick={() => {
+                        if (entry.kind) onAdd(entry.kind);
+                        else if (entry.virtualKind)
+                          onAddCable?.(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink");
+                      }}
+                      disabled={
+                        !connected ||
+                        (!entry.kind && !(entry.virtualKind && onAddCable && entry.unavailableReason === undefined))
+                      }
                       title={help}
                       aria-description={help}
                     >
