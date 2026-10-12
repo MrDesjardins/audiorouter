@@ -860,7 +860,7 @@ test("workspace and recording tab fit desktop viewports without page scrolling",
   await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/recording-tab-current.png` });
 });
 
-test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reachable", async ({ page }) => {
+test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reachable", async ({ page }, testInfo) => {
   await page.goto("/");
   await expect(page.locator(".topbar h1")).toBeVisible();
   await expect(page.getByLabel("Sessions")).toBeHidden();
@@ -914,23 +914,37 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
     await page.screenshot({ path: `${shotBase}/workspace-${tab.toLowerCase()}.png`, fullPage: false });
   }
   await page.getByRole("tab", { name: "MCP" }).click();
-  await expect(page.getByRole("heading", { name: "Incoming tool calls" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Use this installation" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Connect ChatGPT" })).toBeVisible();
+  await expect(page.getByText("Not connected", { exact: true })).toBeVisible();
+  const chatgptConnectorLink = page.getByRole("link", { name: "Open ChatGPT connector settings" });
+  await expect(chatgptConnectorLink).toHaveAttribute("href", "https://chatgpt.com/#settings/Connectors");
+  const card = page.locator(".mcp-chatgpt-card");
+  const originalBounds = await card.evaluate((element) => {
+    const { width, height } = element.getBoundingClientRect();
+    return { width, height };
+  });
+  for (const theme of ["dark", "light", "high-contrast"]) {
+    await page.getByLabel("Color theme").selectOption(theme);
+    await expect(card).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`mcp-${theme}.png`) });
+    const colors = await chatgptConnectorLink.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { color: style.color, background: style.backgroundColor };
+    });
+    expect(colors.color).not.toBe("rgb(0, 0, 255)");
+    const bounds = await card.evaluate((element) => {
+      const { width, height } = element.getBoundingClientRect();
+      return { width, height };
+    });
+    expect(bounds).toEqual(originalBounds);
+  }
+  await page.getByText("Other MCP apps (Codex and Claude Code)").click();
   await expect(page.getByLabel("Assistant client ID")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open ChatGPT apps" })).toHaveAttribute(
-    "href",
-    "https://chatgpt.com/apps",
-  );
-  await expect(
-    page.getByText(/Secure MCP Tunnel because this AudioRouter server runs locally over stdio/),
-  ).toBeVisible();
   await page.getByText("Codex config.toml").click();
   await expect(page.locator(".mcp-command").first()).toContainText("mcp_servers.audiorouter");
   await page.getByRole("button", { name: "Copy Codex config" }).click();
   await expect(page.getByRole("status").filter({ hasText: /Copied|Clipboard unavailable/ })).toBeVisible();
-  await page.locator(".mcp-howto").scrollIntoViewIfNeeded();
-  await expect(page.locator(".mcp-howto")).toBeInViewport();
-  await page.screenshot({ path: `${process.env.TEMP}/audiorouter-designer-review/workspace-mcp.png`, fullPage: false });
+  await page.screenshot({ path: testInfo.outputPath("workspace-mcp.png"), fullPage: false });
   await page.getByRole("tab", { name: "Logs" }).click();
   await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
   await page.getByLabel("Color theme").selectOption("dark");

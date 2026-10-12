@@ -1,39 +1,58 @@
 # Active plan — post-0.0.8 maintenance
 
-## MCP setup UX follow-up (2026-10-11)
+## ChatGPT MCP connection and setup UX (2026-10-11, in progress)
 
-User asked for a direct ChatGPT setup button and clarity about the displayed
-client ID. The ID is AudioRouter's local enrolled-client name, not a ChatGPT
-or Claude application ID. ChatGPT custom MCP connections need an HTTP MCP
-endpoint or Secure MCP Tunnel; the existing AudioRouter adapter is local
-stdio. OpenAI's documented local plugin marketplace flow targets ChatGPT Work
-mode/Codex in Desktop and does not directly install this stdio server into
-ordinary ChatGPT. Keep the existing adapter and grants unchanged; add a link
-to ChatGPT's app directory and clear tunnel prerequisites/instructions in
-the MCP tab. Requirement: AUTO-13. Verify UI tests, typecheck, format/lint,
-and visual layout in all three themes. Rollback: revert the UI/docs commit.
+User explicitly requested an easy ChatGPT connection, with AudioRouter
+managing the OpenAI Secure MCP Tunnel instead of asking users to configure
+the tunnel. Requirements: AUTO-16, SEC-14; decision DEC-19. This is remote
+MCP access to the local backend, so it must preserve client enrollment and
+grants, store only the runtime credential under current-user protection, keep
+the connection off until an explicit Connect action, and never expose the
+credential in UI text, process arguments, logs, or support bundles. Startup
+requires a separate opt-in.
 
-Implemented in `ui/src/Workbench.tsx`: clarifies the AudioRouter client ID,
-adds an **Open ChatGPT apps** link and links the official Secure MCP Tunnel
-guide. The help text explains that this stdio server needs a tunnel for
-ChatGPT's custom MCP flow and distinguishes regular ChatGPT from local Work
-mode/Codex plugins. `ui/e2e/audio-tools.pw.ts` checks the link and tunnel note.
+Confirmed constraints: AudioRouter currently offers local stdio MCP only.
+OpenAI's official flow requires a tunnel ID and runtime API key; tunnel
+provisioning needs Tunnels Read + Manage, and running it needs Tunnels Read +
+Use. The Platform tunnel page opened to login, there is no tunnel-client in
+PATH, and no OpenAI Platform key is present in the process environment. The
+ChatGPT plan/workspace feature tier is unknown; OpenAI documents read/fetch
+only for Pro, while full MCP read/write requires Business/Enterprise/Edu.
+Do not claim a connection works until a tunnel is running and the ChatGPT app
+has been attached. Creating the remote tunnel and persistent runtime key is a
+security-sensitive account action; get action-time confirmation immediately
+before that operation. Do not ask the user to paste a key into chat.
 
-Checks on 2026-10-11 (Windows): `npm --prefix ui run format` completed;
-`npm --prefix ui run lint` had 0 errors and the existing 25 warnings;
-`npm --prefix ui run typecheck` passed; `git diff --check` passed. Vitest was
-attempted twice but failed to load transformed modules from ephemeral
-`AppData\\Local\\Packages\\sandbox.*\\Temp` paths (ENOENT), including with
-two workers and a workspace temp override; no code test result is claimed.
-The UI run spawned 57 workers and the user reported sudden Firefox audio
-echo/static during this task. The test process was stopped to remove load.
-Three-theme visual/e2e verification remains pending; do it when it will not
-compete with the user's audio session. This task changes setup guidance only,
-not MCP transport, grants, or audio processing.
+The first UI attempt (`6ba18803`) added a ChatGPT link but left the tab
+confusing; the user rejected it. Current revision makes ChatGPT primary and
+moves other clients, permissions and activity into collapsible sections. It
+uses a theme-aware neutral action color instead of a bright blue link. The
+updated Edge test checks the link, three theme screenshots, and stable card
+bounds. On 2026-10-11 (Windows), Prettier format check and TypeScript
+typecheck passed; ESLint had 0 errors and the existing 25 warnings; the
+production UI build and release shell build passed. `git diff --check` passed.
+Focused Edge verification was attempted twice: the first run failed before
+browser startup because Vite could not rename its temp dependency cache
+(EPERM); the retry used a workspace cache but stalled before producing
+browser/test output and was stopped. No visual pass or screenshot evidence is
+claimed; rerun the focused Edge test when its browser harness starts reliably.
 
-Next: after recording the three-theme UI evidence, commit this UI/docs change
-with exact paths, then resume the driver gate below without changing its
-acceptance criteria.
+Ordered work:
+1. Finish the MCP tab cleanup and three-theme browser evidence; record exact
+   checks and screenshots in evidence.
+2. Integrate the official tunnel-client into the app lifecycle, with secure
+   runtime-key storage, bounded status, explicit connect/disconnect, robust
+   child cleanup and redaction tests. Do not retain the admin key.
+3. Build the least-privileged Platform provisioning flow supported by OpenAI;
+   if it requires admin credentials that cannot be acquired through an
+   approved sign-in, stop before key creation and request action-time approval.
+4. Verify ChatGPT can discover tools and exercise read and denied/write scopes
+   against AudioRouter. Confirm plan/workspace compatibility. No audio data.
+5. Commit exact paths, then proceed to the next authorized non-driver work.
+
+Rollback: disable/disconnect tunnel first, revoke its remote association and
+runtime credential when authorized, then revert the UI/process integration.
+Keep the local stdio MCP path unchanged.
 
 ## Release 0.0.15 — 2026-10-10 (in progress)
 

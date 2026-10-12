@@ -417,113 +417,113 @@ export function Workbench({
         </section>
       )}
       {tab === "mcp" && (
-        <section className="workbench-page" role="tabpanel">
-          <p className="eyebrow">Local assistant connection</p>
-          <h2>Incoming tool calls</h2>
-          <p className="muted">
-            Only the tool name, authorized client ID, safe field names, and outcome are shown. Audio and argument values
-            are excluded.
-          </p>
-          {mcpActivity.length === 0 ? (
-            <p className="muted">No MCP tool calls have been recorded on this computer yet.</p>
-          ) : (
-            <ol className="diagnostic-list" aria-label="MCP tool activity">
-              {mcpActivity.map((entry, index) => (
-                <li key={`${entry.timeUnixMs}-${index}`}>
-                  <strong>
-                    {new Date(entry.timeUnixMs).toLocaleTimeString()} · {entry.tool}
-                  </strong>
-                  <small>
-                    {" "}
-                    {entry.outcome}
-                    {entry.errorKind ? ` (${entry.errorKind})` : ""} · client {entry.clientId} · fields:{" "}
-                    {entry.argumentFields.join(", ") || "none"}
-                  </small>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-      )}
-      {tab === "mcp" && (
-        <section className="workbench-page mcp-setup-card">
-          <h3>Use this installation</h3>
-          <p className="muted">
-            This client ID is AudioRouter's local authorization name. It does not identify ChatGPT or Claude. In the
-            desktop app, the connection paths below are filled automatically.
-          </p>
-          <label>
-            Client ID
-            <input
-              aria-label="Assistant client ID"
-              value={mcpClientId}
-              maxLength={128}
-              onChange={(event) => setMcpClientId(event.target.value.trim())}
-            />
-          </label>
-          {mcpSetupInfo && (
-            <details>
-              <summary>Connection paths</summary>
-              <p>
-                <code>{mcpSetupInfo.cliPath}</code>
-              </p>
-              <p>
-                <code>{mcpSetupInfo.databasePath}</code>
-              </p>
-              <p>
-                <code>{mcpSetupInfo.pipeName}</code>
-              </p>
-              {!mcpSetupInfo.cliAvailable && <p role="status">CLI executable is missing from this installation.</p>}
-            </details>
-          )}
-          <details>
-            <summary>Codex config.toml</summary>
-            <pre className="mcp-command">{codexConfig}</pre>
-            <button className="secondary" onClick={() => copy(codexConfig)}>
-              Copy Codex config
-            </button>
-          </details>
-          <details>
-            <summary>Claude Code in PowerShell</summary>
-            <pre className="mcp-command">{claudeCommand}</pre>
-            <button className="secondary" onClick={() => copy(claudeCommand)}>
-              Copy Claude command
-            </button>
-          </details>
-          <div className="mcp-chatgpt-setup">
-            <h4>Connect ChatGPT</h4>
-            <p className="muted">
-              ChatGPT's custom MCP connection needs a Secure MCP Tunnel because this AudioRouter server runs locally
-              over stdio. Set up a tunnel for this server first, then add it as a custom MCP server in ChatGPT. The
-              ChatGPT Windows app uses the same account's apps; a local plugin marketplace is for Work mode/Codex and
-              does not install this server into regular ChatGPT.
+        <section className="workbench-page mcp-page" role="tabpanel">
+          <header className="mcp-heading">
+            <p className="eyebrow">MCP connection</p>
+            <h2>Connect ChatGPT</h2>
+            <p className="muted">Use AudioRouter tools from the ChatGPT Windows app.</p>
+          </header>
+
+          <section className="mcp-chatgpt-card" aria-labelledby="mcp-chatgpt-title">
+            <div className="mcp-card-heading">
+              <div>
+                <h3 id="mcp-chatgpt-title">ChatGPT</h3>
+                <p className="muted">The local connection is not set up yet.</p>
+              </div>
+              <span className="mcp-status">Not connected</span>
+            </div>
+            <p>
+              AudioRouter needs a private OpenAI tunnel to reach ChatGPT. Once connected, requests still use the client
+              permissions you approve below.
             </p>
-            <a className="mcp-chatgpt-open" href="https://chatgpt.com/apps" target="_blank" rel="noreferrer">
-              Open ChatGPT apps
-            </a>
             <a
-              className="mcp-chatgpt-doc-link"
-              href="https://developers.openai.com/api/docs/guides/secure-mcp-tunnels"
+              className="mcp-chatgpt-open"
+              href="https://chatgpt.com/#settings/Connectors"
               target="_blank"
               rel="noreferrer"
             >
-              Secure MCP Tunnel setup guide
+              Open ChatGPT connector settings
             </a>
-          </div>
-          {copyMessage && <p role="status">{copyMessage}</p>}
-          <details>
-            <summary>Authorize or revoke a client</summary>
+          </section>
+
+          <details className="mcp-secondary-section">
+            <summary>Other MCP apps (Codex and Claude Code)</summary>
+            <p className="muted">
+              This client ID is AudioRouter's local authorization name. It does not identify an assistant app.
+            </p>
+            <label>
+              Client ID
+              <input
+                aria-label="Assistant client ID"
+                value={mcpClientId}
+                maxLength={128}
+                onChange={(event) => setMcpClientId(event.target.value.trim())}
+              />
+            </label>
+            {mcpSetupInfo && (
+              <details>
+                <summary>Connection paths</summary>
+                <p>
+                  <code>{mcpSetupInfo.cliPath}</code>
+                </p>
+                <p>
+                  <code>{mcpSetupInfo.databasePath}</code>
+                </p>
+                <p>
+                  <code>{mcpSetupInfo.pipeName}</code>
+                </p>
+                {!mcpSetupInfo.cliAvailable && <p role="status">CLI executable is missing from this installation.</p>}
+              </details>
+            )}
+            <details>
+              <summary>Codex config.toml</summary>
+              <pre className="mcp-command">{codexConfig}</pre>
+              <button className="secondary" onClick={() => copy(codexConfig)}>
+                Copy Codex config
+              </button>
+            </details>
+            <details>
+              <summary>Claude Code in PowerShell</summary>
+              <pre className="mcp-command">{claudeCommand}</pre>
+              <button className="secondary" onClick={() => copy(claudeCommand)}>
+                Copy Claude command
+              </button>
+            </details>
+            {copyMessage && <p role="status">{copyMessage}</p>}
+          </details>
+
+          <details className="mcp-secondary-section">
+            <summary>Client permissions</summary>
+            <p className="muted">
+              Start with observer access. Grant write access only for actions you want assistants to perform.
+            </p>
             {clientsPanel}
           </details>
+
+          <details className="mcp-secondary-section">
+            <summary>Recent MCP activity</summary>
+            <p className="muted">Tool names and outcomes only. Audio and argument values are excluded.</p>
+            {mcpActivity.length === 0 ? (
+              <p className="muted mcp-empty">No MCP calls yet.</p>
+            ) : (
+              <ol className="diagnostic-list" aria-label="MCP tool activity">
+                {mcpActivity.map((entry, index) => (
+                  <li key={`${entry.timeUnixMs}-${index}`}>
+                    <strong>
+                      {new Date(entry.timeUnixMs).toLocaleTimeString()} · {entry.tool}
+                    </strong>
+                    <small>
+                      {" "}
+                      {entry.outcome}
+                      {entry.errorKind ? ` (${entry.errorKind})` : ""} · client {entry.clientId} · fields:{" "}
+                      {entry.argumentFields.join(", ") || "none"}
+                    </small>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </details>
         </section>
-      )}
-      {tab === "mcp" && (
-        <p className="muted mcp-howto">
-          Authorize the same client ID above. Start with observer access. Copy the Codex TOML to{" "}
-          <code>%USERPROFILE%\.codex\config.toml</code>, or run the Claude Code PowerShell command. For ChatGPT, create
-          and run a Secure MCP Tunnel that launches the same local stdio command, then add that tunnel in ChatGPT apps.
-          After connecting, ask the assistant to list AudioRouter capabilities.
-        </p>
       )}
       {tab === "diagnostics" && (
         <section className="workbench-page" role="tabpanel">
