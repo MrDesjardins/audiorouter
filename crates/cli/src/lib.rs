@@ -1797,7 +1797,7 @@ fn request(method: &str) -> audiorouter_protocol::JsonRpcRequest {
 }
 
 fn help_value() -> Value {
-    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list [--limit N] [--cursor ID]", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N] [--cursor REVISION]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> [--idempotency-key <key>] --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "backend serve --database <path> [--pipe \\\\.\\pipe\\audiorouter-control] [--connections 1..500]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter is pinned to protocol 2025-06-18 and requires an enrolled client; the bounded backend server requires the current Windows user to be enrolled in the database." });
+    let mut value = json!({ "commands": ["help", "status", "diagnostics [--database <path>]", "schema", "devices list [--limit N] [--cursor ID]", "apps list", "applications list", "nodes types", "nodes describe", "routes inspect <session-id> <destination-node> --database <path>", "history <session-id> --database <path> [--limit N] [--cursor REVISION]", "graph plan <session-id> --base-revision <n> --file <candidate.json> --output <plan.json> --database <path>", "graph inspect <plan.json>", "graph apply <plan.json> --idempotency-key <key> --database <path>", "node set <session-id> <node-id> <parameter> --value <json-scalar> [--idempotency-key <key>] --database <path>", "operation get <operation-id> --database <path>", "session <get|list|create|start|stop|delete|duplicate> [<session-id>] --database <path> [--limit N] [--cursor ID]", "api methods", "api call <method> [<params-json-file|->] [--database <path>]", "backend serve --database <path> [--pipe \\\\.\\pipe\\audiorouter-control] [--connections 1..500]", "mcp serve --client-id <enrolled-client> --database <path> [--pipe \\\\.\\pipe\\audiorouter]", "export <session-id> --database <path>", "import <document-path> --database <path>", "export-bundle <session-id> --database <path> --output <path>", "import-bundle <bundle-path> --database <path> --staging <directory>"], "globalOptions": ["--json"], "note": "Graph plans are versioned local files; apply revalidates the current revision before committing. The local MCP stdio adapter supports stateless protocol 2026-07-28 and legacy initialize-handshake clients; all require an enrolled client; the bounded backend server requires the current Windows user to be enrolled in the database." });
     value["commands"][2] =
         json!("diagnostics [export] [--database <path>] [--output <absolute-path>]");
     value["commands"]
@@ -2097,7 +2097,7 @@ fn render_human(command: &str, value: &Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| "{}".into())
 }
 
-/// Run the local MCP stdio adapter using the pinned 2025-06-18 protocol.
+/// Run the local MCP stdio adapter for modern stateless and legacy MCP clients.
 /// stdout is reserved for newline-delimited JSON-RPC; diagnostics go to stderr.
 pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
     // The OpenAI tunnel runtime uses this credential only to authenticate its
@@ -2165,12 +2165,54 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             continue;
         };
         let id = message.get("id").cloned();
-        let response = match method {
+        let modern_meta = message.get("params").and_then(|params| params.get("_meta"));
+        let modern_request = modern_meta.is_some();
+        let modern_version = modern_meta
+            .and_then(|meta| meta.get("io.modelcontextprotocol/protocolVersion"))
+            .and_then(Value::as_str);
+        let modern_valid = if modern_request {
+            match modern_version {
+                Some("2026-07-28") => modern_meta
+                    .and_then(|meta| meta.get("io.modelcontextprotocol/clientCapabilities"))
+                    .is_some_and(Value::is_object),
+                _ => false,
+            }
+        } else {
+            false
+        };
+        let mut response = if modern_request && modern_version != Some("2026-07-28") {
+            Some(mcp_unsupported_protocol_error(
+                id.clone(),
+                modern_version.unwrap_or(""),
+            ))
+        } else if modern_request && !modern_valid {
+            Some(mcp_error(
+                id.clone(),
+                -32602,
+                "modern MCP requests require protocolVersion 2026-07-28 and an object clientCapabilities",
+            ))
+        } else {
+            match method {
+            "server/discover" if modern_valid => Some(json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "result": {
+                    "resultType": "complete",
+                    "supportedVersions": ["2026-07-28"],
+                    "capabilities": { "tools": {}, "resources": {} },
+                    "_meta": { "io.modelcontextprotocol/serverInfo": {
+                        "name": "audiorouter", "version": env!("CARGO_PKG_VERSION")
+                    } },
+                    "instructions": "AudioRouter tools use the enrolled client's existing permissions. No audio payloads are exposed.",
+                    "ttlMs": 3600000,
+                    "cacheScope": "public"
+                }
+            })),
             "initialize" => {
                 let requested = message["params"]["protocolVersion"]
                     .as_str()
                     .unwrap_or_default();
-                if requested != "2025-06-18" && requested != "2025-03-26" {
+                if requested != "2025-11-25" && requested != "2025-06-18" && requested != "2025-03-26" {
                     Some(mcp_error(id, -32602, "unsupported MCP protocol version"))
                 } else {
                     initialized = true;
@@ -2178,7 +2220,7 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
                         "jsonrpc": "2.0",
                         "id": id,
                         "result": {
-                            "protocolVersion": "2025-06-18",
+                            "protocolVersion": requested,
                             "capabilities": { "tools": { "listChanged": false }, "resources": { "subscribe": false, "listChanged": false } },
                             "serverInfo": { "name": "audiorouter", "version": env!("CARGO_PKG_VERSION") }
                         }
@@ -2186,11 +2228,14 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
                 }
             }
             "notifications/initialized" => None,
-            "tools/list" if initialized => Some(json!({
+            "ping" if initialized && !modern_request => Some(json!({
+                "jsonrpc": "2.0", "id": id, "result": {}
+            })),
+            "tools/list" if modern_valid || initialized => Some(json!({
                 "jsonrpc": "2.0", "id": id, "result": { "tools": mcp_listed_tools(advanced_tools) }
             })),
             "tools/call"
-                if initialized
+                if (modern_valid || initialized)
                     && !advanced_tools
                     && !message["params"]["name"]
                         .as_str()
@@ -2201,7 +2246,7 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
                     "This is an advanced AudioRouter tool. Start the MCP server with --advanced-tools to use it.",
                 ))
             }
-            "tools/call" if initialized => {
+            "tools/call" if modern_valid || initialized => {
                 // One correlation ID per tool call: every backend request the
                 // tool makes carries it, and the activity record names it.
                 let request_id = audiorouter_protocol::diagnostics::new_correlation_id();
@@ -2217,10 +2262,10 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
                 log_mcp_tool_activity(&client_id, &message, &response, &request_id);
                 Some(response)
             }
-            "resources/list" if initialized => Some(json!({
+            "resources/list" if modern_valid || initialized => Some(json!({
                 "jsonrpc": "2.0", "id": id, "result": { "resources": mcp_resources() }
             })),
-            "resources/read" if initialized => Some(mcp_resource_read(
+            "resources/read" if modern_valid || initialized => Some(mcp_resource_read(
                 &mut plane,
                 &client_id,
                 &grant,
@@ -2229,14 +2274,20 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
             )),
             _ => Some(mcp_error(
                 id,
-                -32002,
-                if initialized {
-                    "unsupported MCP method"
+                if modern_valid || initialized {
+                    -32601
                 } else {
-                    "MCP session is not initialized"
+                    -32002
                 },
+                if modern_valid || initialized { "method not found" } else { "MCP session is not initialized" },
             )),
+            }
         };
+        if modern_valid && method != "server/discover" {
+            if let Some(value) = response.as_mut() {
+                mcp_add_modern_result_metadata(value, method);
+            }
+        }
         if let Some(response) = response {
             write_mcp_message(&mut stdout, &response)?;
         }
@@ -2517,6 +2568,51 @@ fn optional_option_value_owned(args: &[String], option: &str) -> Result<Option<S
 
 fn mcp_error(id: Option<Value>, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+}
+
+fn mcp_unsupported_protocol_error(id: Option<Value>, requested: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": {
+            "code": -32022,
+            "message": "Unsupported protocol version",
+            "data": { "supported": ["2026-07-28"], "requested": requested }
+        }
+    })
+}
+
+fn mcp_add_modern_result_metadata(response: &mut Value, method: &str) {
+    let Some(result) = response.get_mut("result").and_then(Value::as_object_mut) else {
+        return;
+    };
+    result
+        .entry("resultType")
+        .or_insert_with(|| json!("complete"));
+    result.insert(
+        "_meta".into(),
+        json!({ "io.modelcontextprotocol/serverInfo": {
+            "name": "audiorouter", "version": env!("CARGO_PKG_VERSION")
+        } }),
+    );
+    if matches!(method, "tools/list" | "resources/list" | "resources/read") {
+        result.insert(
+            "ttlMs".into(),
+            json!(if method == "resources/read" {
+                0
+            } else {
+                300000
+            }),
+        );
+        result.insert(
+            "cacheScope".into(),
+            json!(if method == "resources/read" {
+                "private"
+            } else {
+                "public"
+            }),
+        );
+    }
 }
 
 fn mcp_tool_annotations(name: &str) -> Value {

@@ -75,6 +75,147 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
     let stdout = child.stdout.take().unwrap();
     let mut output = BufReader::new(stdout);
 
+    // Modern MCP is stateless: discovery, catalogs and calls work before any
+    // legacy initialize handshake, and retain the same enrolled-client grant.
+    let modern_meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": { "name": "interop-test", "version": "1" }
+    });
+    let discovered = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "discover", "method": "server/discover",
+            "params": { "_meta": modern_meta }
+        }),
+    );
+    assert_eq!(discovered["result"]["supportedVersions"][0], "2026-07-28");
+    assert_eq!(discovered["result"]["resultType"], "complete");
+    assert_eq!(
+        discovered["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
+        "audiorouter"
+    );
+
+    let modern_tools = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "modern-tools", "method": "tools/list",
+            "params": { "_meta": modern_meta }
+        }),
+    );
+    assert_eq!(
+        modern_tools["result"]["tools"].as_array().unwrap().len(),
+        76
+    );
+    assert_eq!(modern_tools["result"]["resultType"], "complete");
+    assert_eq!(modern_tools["result"]["cacheScope"], "public");
+
+    let modern_call = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "modern-call", "method": "tools/call",
+            "params": {
+                "name": "list_processors", "arguments": {}, "_meta": modern_meta
+            }
+        }),
+    );
+    assert_eq!(modern_call["result"]["isError"], false);
+    assert_eq!(modern_call["result"]["resultType"], "complete");
+    assert_eq!(
+        modern_call["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
+        "audiorouter"
+    );
+
+    let denied_modern_write = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "modern-denied-write", "method": "tools/call",
+            "params": {
+                "name": "create_session", "arguments": { "name": "must stay denied" },
+                "_meta": modern_meta
+            }
+        }),
+    );
+    assert_eq!(denied_modern_write["result"]["isError"], true);
+    assert_eq!(
+        denied_modern_write["result"]["structuredContent"]["error"]["code"],
+        -32001
+    );
+
+    let modern_resources = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "modern-resources", "method": "resources/list",
+            "params": { "_meta": modern_meta }
+        }),
+    );
+    assert_eq!(
+        modern_resources["result"]["resources"]
+            .as_array()
+            .unwrap()
+            .len(),
+        5
+    );
+    assert_eq!(modern_resources["result"]["cacheScope"], "public");
+
+    let modern_resource = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "modern-resource", "method": "resources/read",
+            "params": { "uri": "audiorouter://workflow/headless", "_meta": modern_meta }
+        }),
+    );
+    assert_eq!(
+        modern_resource["result"]["contents"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(modern_resource["result"]["cacheScope"], "private");
+
+    let missing_capabilities = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "missing-capabilities", "method": "tools/list",
+            "params": { "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "2026-07-28"
+            } }
+        }),
+    );
+    assert_eq!(missing_capabilities["error"]["code"], -32602);
+
+    let unsupported = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "unsupported", "method": "tools/list",
+            "params": { "_meta": {
+                "io.modelcontextprotocol/protocolVersion": "1900-01-01",
+                "io.modelcontextprotocol/clientCapabilities": {}
+            } }
+        }),
+    );
+    assert_eq!(unsupported["error"]["code"], -32022);
+    assert_eq!(unsupported["error"]["data"]["supported"][0], "2026-07-28");
+
+    let modern_ping = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "modern-ping", "method": "ping",
+            "params": { "_meta": modern_meta }
+        }),
+    );
+    assert_eq!(modern_ping["error"]["code"], -32601);
+
     let initialized = send(
         &mut input,
         &mut output,
@@ -83,13 +224,20 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
             "id": 1,
             "method": "initialize",
             "params": {
-                "protocolVersion": "2025-06-18",
+                "protocolVersion": "2025-11-25",
                 "capabilities": {},
                 "clientInfo": { "name": "interop-test", "version": "1" }
             }
         }),
     );
-    assert_eq!(initialized["result"]["protocolVersion"], "2025-06-18");
+    assert_eq!(initialized["result"]["protocolVersion"], "2025-11-25");
+
+    let legacy_ping = send(
+        &mut input,
+        &mut output,
+        json!({ "jsonrpc": "2.0", "id": "legacy-ping", "method": "ping" }),
+    );
+    assert_eq!(legacy_ping["result"], json!({}));
 
     writeln!(
         input,

@@ -230,6 +230,11 @@ audiorouter mcp serve --client-id enrolled-client --database C:\path\audiorouter
 
 Use `--pipe \\.\pipe\audiorouter-control` when the desktop app is running (its MCP tab shows the exact command). Without `--pipe`, `mcp serve` refuses to start on the app's own database while the app is running, so two control planes never edit the same data. MCP stdout is reserved for newline-delimited JSON-RPC; diagnostics belong on stderr. A malformed line is answered with a JSON-RPC parse error (`-32700`) and the session continues.
 
+The adapter supports modern stateless MCP (`2026-07-28`, including
+`server/discover` and per-request protocol metadata) and legacy
+initialize-handshake clients (`2025-11-25`, `2025-06-18`, and `2025-03-26`).
+All versions use the same enrolled-client grants and backend authorization.
+
 By default `tools/list` shows the task-level tools (sessions, adding and connecting tools, settings, play, mute, levels, devices, recordings). Add `--advanced-tools` to also list and allow the internal ones: native pumps and bridges, virtual-device plans and provisioning, low-level recorder steps, OS transitions, raw graph plans and `call_api`. The adapter exposes read tools/resources and forwards API calls through enrolled permissions. It does not accept remote HTTP connections or stream raw audio to tools.
 
 The resource catalog includes capabilities, node schemas, bounded session

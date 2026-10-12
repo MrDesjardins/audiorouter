@@ -1,5 +1,56 @@
 # Active plan — post-0.0.8 maintenance
 
+## ChatGPT MCP setup failure — protocol compatibility (2026-10-11, account verification pending)
+
+### Objective, reproduction and affected requirements
+
+Fix ChatGPT's custom MCP setup failure for the user's ready Secure MCP tunnel
+`tunnel_6acc5b1bf6c8819195497c541c696b80`. ChatGPT reports: “The server
+couldn't complete MCP setup. Check that the endpoint supports MCP and returns
+valid initialization and tool responses.” The tunnel runtime is ready, but
+this is not evidence that ChatGPT completed protocol setup. Reproduction is
+the user's current custom-server setup attempt; the affected local server is
+the CLI MCP stdio adapter in release 0.0.15. Requirements: AUTO-06, AUTO-16,
+SEC-14.
+
+The adapter currently requires legacy `initialize` and advertises only
+2025-06-18, rejecting 2025-11-25 and 2026-07-28 requests. The current MCP
+specification (2026-07-28) uses stateless per-request metadata and
+`server/discover`; this is the leading cause, not yet confirmed against the
+user's live ChatGPT account. Implement dual-era protocol support while
+preserving enrollment, grants, and legacy clients.
+
+### Ordered work, validation and rollback
+
+1. Add dual-era requirements to AUTO-06 and this reproduction/acceptance
+   record before implementation. Keep modern stateless discovery and calls
+   separate from the legacy initialized-session gate.
+2. Implement `server/discover`, per-request protocol metadata validation,
+   supported-version error data, cacheable list/read responses, modern
+   response metadata, and version-appropriate ping behavior. Preserve the
+   existing authorized API dispatch and legacy handshake.
+3. Add process-level MCP stdio regression coverage: modern discovery,
+   tools/list and tools/call without initialize; unsupported version; legacy
+   initialize and authorized call continue to work.
+4. Run MCP stdio integration tests, Rust formatting checks, relevant CLI and
+   workspace tests/Clippy, docs validation, and rebuild the CLI/shell. Record
+   environment and outcomes in dated evidence. Retry setup in ChatGPT only
+   if its local tunnel remains available; otherwise report that account-side
+   verification remains pending.
+
+Acceptance: both protocol eras pass process-level interoperability tests;
+modern responses follow the pinned spec and existing permission checks remain
+in force. ChatGPT account setup is separately qualified only by an actual
+successful setup attempt. Roll back by reverting the adapter, regression and
+spec/plan edits together; local legacy MCP remains available.
+
+Implementation and local verification are complete; see [protocol
+compatibility evidence](evidence/2026-10-11-mcp-protocol-compatibility.md).
+Next action: package the updated CLI with the signed driver release payload,
+then retry ChatGPT setup through the user's actual tunnel and record the
+initialization and tool-discovery result. Local tunnel readiness is not
+account-side verification.
+
 ## ChatGPT MCP integration plan (2026-10-11, active)
 
 ### Objective and scope
