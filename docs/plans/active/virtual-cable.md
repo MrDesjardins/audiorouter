@@ -1996,8 +1996,19 @@ WP-09 mixed-clock route work.
   signals of known THD+N, delay and crosstalk (portable, runs on any OS).
 - **Acceptance:** VM run of all cable-only cases recorded (indicative);
   every metric has a value; failures are listed with numbers, not hidden.
-- **Status:** not started; WP-12 preflight confirms the harness and acceptance
-  runner are absent. This is a required prerequisite to A16.
+- **Status:** in progress (2026-10-11). Evidence: [portable analysis core
+  implementation](evidence/2026-10-11-wp09b-cable-quality-analysis.md). Added the portable analysis core at
+  `tools/m03-cable-quality/`: deterministic seeded noise, tone/log-sweep/
+  impulse generation, bounded offset alignment, error metrics and sine-fit
+  THD+N. Three synthetic tests and standalone Clippy pass offline on the
+  Windows host. This is only the signal-analysis layer; it opens no endpoint
+  and creates no A16 evidence. The Windows WASAPI capture/playback CLI,
+  metrics/WAV writer, VM acceptance runner and A16 evidence remain outstanding.
+  Keep the 8-channel cases required by A16; the plan's recorded channel-count
+  deferral is an unresolved prerequisite, not a reason to reduce test coverage.
+  Next: implement the real shared-mode endpoint path and output contract, then
+  the guarded VM runner; run A16 only after the channel-count decision and VM
+  access gates are resolved.
 
 ## WP-10 — UI (17 §7.4)
 
