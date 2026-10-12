@@ -2105,7 +2105,14 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
     if (!ok) { render_state.release(); capture_state.release(); return 1; }
     const WAVEFORMATEX* rf = render_state.format;
     const WAVEFORMATEX* cf = capture_state.format;
-    if (rf->wBitsPerSample != 32 || cf->wBitsPerSample != 32 || rf->nChannels != cf->nChannels ||
+    const auto is_float32 = [](const WAVEFORMATEX* format) {
+        return format && format->wBitsPerSample == 32 &&
+            (format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+             (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+              format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
+              reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+    };
+    if (!is_float32(rf) || !is_float32(cf) || rf->nChannels != cf->nChannels ||
         rf->nSamplesPerSec != cf->nSamplesPerSec) {
         std::cout << "bitexact_requires_matching_float32_formats=1\n";
         render_state.release(); capture_state.release();

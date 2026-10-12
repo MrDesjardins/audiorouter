@@ -218,11 +218,13 @@ qualifies all 8 cables (`… Cable C …` to `… Cable H …`). Before WP-05 th
 
 | A16 | Sound quality (VM, indicative) | `tools/vm/run-cable-quality.ps1` (WP-09b), all cable-only cases | Bit-exact float path at 44.1/48/96 kHz × 1/2/8 ch (VCAB-20); integer formats ≤ 1 LSB (VCAB-21); resampler targets (VCAB-22); crosstalk ≤ −140 dBFS (VCAB-26); counters zero. Latency and CPU recorded but judged only in stage C |
 
-WP-09b is not complete: the first integrated case is a 48 kHz float32
-bit-exact diagnostic (`tools/vm/run-cable-quality.ps1 -Case float32-48k`). It writes the real
-reference/capture samples and analyzer metrics, but remains marked
-`Qualification = false`. It does not satisfy A16's 44.1/96 kHz, 1/2/8-channel,
-integer-format, resampling, or crosstalk matrix. Do not mark A16 passed until
+WP-09b is not complete: the integrated runner currently measures float32
+bit-exact cases at 44.1, 48 and 96 kHz when both Cable endpoints are configured
+to the requested shared mix rate (for example,
+`tools/vm/run-cable-quality.ps1 -Case float32-48k -Channels 2`). It writes the
+real reference/capture samples and analyzer metrics, but remains marked
+`Qualification = false`. It does not satisfy the 1/2/8-channel matrix,
+integer-format, resampling, or crosstalk cases. Do not mark A16 passed until
 the complete matrix has executed on the same VM build.
 
 Stage A passes when A1–A16 pass on the same build. Only then is the EV

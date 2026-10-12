@@ -2003,10 +2003,11 @@ WP-09 mixed-clock route work.
   WASAPI bit-exact probe can now save reference and captured WAVs, and the
   product-route VM runner sends them through the Rust analyzer; a guarded
   `run-cable-quality.ps1 -Case float32-48k` entry point exposes that diagnostic
-  subset. Five synthetic tests, standalone Clippy, native probe build/self-check,
+  subset at 44.1/48/96 kHz when the guest's Cable formats are set first. Five
+  synthetic tests, standalone Clippy, native probe build/self-check,
   and a cross-tool WAV writer/analyzer check pass on the Windows host. No live
-  endpoint was opened. The complete WASAPI case matrix, formats/rates beyond
-  the existing float32 probe, VM A16 runner and A16 evidence remain outstanding.
+  endpoint was opened. The full channel matrix, integer formats, resampling,
+  crosstalk, VM A16 runner and A16 evidence remain outstanding.
   Keep the 8-channel cases required by A16; the plan's recorded channel-count
   deferral is an unresolved prerequisite, not a reason to reduce test coverage.
   Next: implement the real shared-mode endpoint path and output contract, then

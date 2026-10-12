@@ -23,9 +23,10 @@ $runnerText = Get-Content -LiteralPath $runner -Raw
 Assert ($runnerText -match 'm03-cable-quality\.exe') 'runner requires the Rust analyzer in the bundle'
 Assert ($runnerText -match 'cable-bitexact-reference\.wav' -and $runnerText -match 'cable-bitexact-capture\.wav') 'runner requires both real sample captures'
 Assert ($runnerText -match 'metrics\.json' -and $runnerText -match '\$metrics\.bitExact') 'the machine report contributes to the verdict'
+Assert ($runnerText -match '\$formatRate -ne \$Rate') 'runner refuses a result at the wrong shared mix rate'
 Assert ($runnerText -match 'Qualification = \$false') 'diagnostic runner cannot claim qualification'
 $qualityText = Get-Content -LiteralPath $qualityRunner -Raw
-Assert ($qualityText -match "ValidateSet\('float32-48k'\)") 'VM entry point exposes only the implemented case'
+Assert ($qualityText -match "float32-44k1.*float32-48k.*float32-96k") 'VM entry point exposes only implemented float32 rate cases'
 Assert ($qualityText -match 'does not pass A16' -and $qualityText -match 'A16 remains incomplete') 'VM entry point cannot imply complete matrix coverage'
 $prepareText = Get-Content -LiteralPath $prepare -Raw
 Assert ($prepareText -match 'm03-cable-quality\.exe') 'bundle preparation builds and stages the analyzer'
