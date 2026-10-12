@@ -519,6 +519,29 @@ pub fn analyze_wav_pair(
     }))
 }
 
+pub fn analyze_pcm_pair_wav(
+    reference_path: &std::path::Path,
+    capture_path: &std::path::Path,
+    max_offset: usize,
+    valid_bits: u16,
+) -> Result<serde_json::Value, String> {
+    if !matches!(valid_bits, 16 | 24) {
+        return Err("PCM measurement supports 16 or 24 valid bits".into());
+    }
+    let mut report = analyze_wav_pair(reference_path, capture_path, max_offset, None)?;
+    let max_error = report["maxAbsoluteError"]
+        .as_f64()
+        .ok_or("missing maximum sample error")?;
+    let lsb = 1.0 / 2f64.powi(i32::from(valid_bits) - 1);
+    report["requirement"] = serde_json::json!("VCAB-21");
+    report["target"] =
+        serde_json::json!(format!("PCM{valid_bits} round-trip error <= 1 LSB ({lsb})"));
+    report["pass"] = serde_json::json!(max_error <= lsb);
+    report["validBits"] = serde_json::json!(valid_bits);
+    report["maximumErrorLsb"] = serde_json::json!(max_error / lsb);
+    Ok(report)
+}
+
 pub fn analyze_silence_wav(
     capture_path: &std::path::Path,
     max_peak_dbfs: f64,
@@ -820,6 +843,33 @@ mod tests {
         assert!(write_pcm_wav(&path, 48_000, 2, 16, &[f32::NAN, 0.0]).is_err());
         assert!(write_pcm_wav(&path, 48_000, 2, 16, &[0.0]).is_err());
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn pcm_pair_verdict_uses_the_requested_lsb_limit() {
+        let root =
+            std::env::temp_dir().join(format!("m03-quality-pcm-pair-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let reference_path = root.join("reference.wav");
+        let capture_path = root.join("capture.wav");
+        let reference = tone(4096, 48_000, 997.0, 0.7);
+        let captured = reference
+            .iter()
+            .map(|sample| (*sample * 32768.0).round() / 32768.0)
+            .collect::<Vec<_>>();
+        write_test_wav(&reference_path, 1, &reference);
+        write_test_wav(&capture_path, 1, &captured);
+        let report = analyze_pcm_pair_wav(&reference_path, &capture_path, 32, 16).unwrap();
+        assert_eq!(report["requirement"], "VCAB-21");
+        assert_eq!(report["pass"], true);
+        assert!(report["maximumErrorLsb"].as_f64().unwrap() <= 1.0);
+        let mut outside = captured;
+        outside[100] += 2.0 / 32768.0;
+        write_test_wav(&capture_path, 1, &outside);
+        let report = analyze_pcm_pair_wav(&reference_path, &capture_path, 32, 16).unwrap();
+        assert_eq!(report["pass"], false);
+        assert!(analyze_pcm_pair_wav(&reference_path, &capture_path, 32, 32).is_err());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

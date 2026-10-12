@@ -55,6 +55,8 @@ $sessionCheck = & $cableSessionTool --check 2>&1
 if ($LASTEXITCODE -ne 0) { throw "Cable session tool request check failed: $sessionCheck" }
 $selfTest = & $probe cable-impulse-selftest
 if ($LASTEXITCODE -ne 0) { throw "Probe pairing self-test failed: $selfTest" }
+$sampleFormatTest = & $probe cable-sample-format-selftest
+if ($LASTEXITCODE -ne 0) { throw "Probe integer sample-format self-test failed: $sampleFormatTest" }
 
 New-Item -ItemType Directory -Path $output | Out-Null
 $entries = @(Get-Content -LiteralPath (Join-Path $base 'MANIFEST.txt') | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })

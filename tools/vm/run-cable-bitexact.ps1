@@ -1,12 +1,14 @@
-<# Guest-only bit-exact check of the product cable route at N channels (WP-09 slice 5,
-   VCAB-20): the probe renders float32-grid noise into Cable A Input at its shared mix
-   format and compares Cable B Output sample for sample, while the product route
+<# Guest-only sample check of the product cable route at N channels (WP-09b): the probe
+   renders deterministic noise into Cable A Input at its negotiated shared mix format
+   and compares Cable B Output sample for sample (float32) or against a one-LSB limit
+   (PCM16/PCM24-in-32), while the product route
    (m03_cable_session --channels N: identity map, multichannel direct mapping when N != 2)
    carries it. Both cables' Windows formats must already be N channels, 48 kHz (Sound
    settings); the run refuses to judge otherwise. Diagnostic only, never qualification. #>
 [CmdletBinding()]
 param([ValidateRange(1, 8)][int] $Channels = 8,
     [ValidateSet(44100,48000,96000)][int] $Rate = 48000,
+    [ValidateSet(0,16,24)][int] $PcmBits = 0,
     [ValidateRange(5, 60)][int] $Seconds = 20)
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
@@ -23,7 +25,8 @@ $quality = Join-Path $bundle 'tools\m03-cable-quality.exe'
 $cableSession = Join-Path $bundle 'tools\m03_cable_session.exe'
 if (-not (Test-Path -LiteralPath $cableSession)) { throw 'This bundle has no m03_cable_session.exe.' }
 if (-not (Test-Path -LiteralPath $quality)) { throw 'This bundle has no m03-cable-quality.exe analyzer.' }
-$run = "bitexact-$Rate" + 'hz-' + "$Channels" + 'ch-' + [Guid]::NewGuid().ToString('N')
+$formatLabel = if ($PcmBits -eq 0) { 'float32' } else { "pcm$PcmBits" }
+$run = "bitexact-$formatLabel-$Rate" + 'hz-' + "$Channels" + 'ch-' + [Guid]::NewGuid().ToString('N')
 $evidence = Join-Path 'C:\ar\evidence' $run
 New-Item -ItemType Directory -Path $evidence | Out-Null
 $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -36,7 +39,7 @@ function Get-ProbeValue([string] $Text, [string] $Name) {
     return $null
 }
 try {
-    Write-Host "Cable bit-exact (product route, $Channels channels): $Seconds s of noise. No manual playback needed."
+    Write-Host "Cable sample capture (product route, $Channels channels, $formatLabel): $Seconds s of noise. No manual playback needed."
     $status = Invoke-DriverVmProcess -Executable $powershell -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $bundle 'vm-checks.ps1'),'-Step','status') `
         -Stdout (Join-Path $evidence 'status.txt') -Stderr (Join-Path $evidence 'status-stderr.txt') -TimeoutSeconds 60
     if ($status.Code -ne 0) { throw 'Installed-driver status failed. No audio test started.' }
@@ -65,19 +68,26 @@ try {
     $captureWav = Join-Path $evidence 'cable-bitexact-capture.wav'
     if (-not (Test-Path -LiteralPath $referenceWav) -or -not (Test-Path -LiteralPath $captureWav)) { throw 'The native probe did not produce both sample WAVs.' }
     $analysisPath = Join-Path $evidence 'metrics.json'
-    $analysis = Invoke-DriverVmProcess -Executable $quality -Arguments @('analyze',$referenceWav,$captureWav,$analysisPath) `
+    $analysisMode = if ($PcmBits -eq 0) { 'analyze' } else { 'pcm' }
+    $analysisArguments = if ($PcmBits -eq 0) { @($analysisMode,$referenceWav,$captureWav,$analysisPath) } else { @($analysisMode,$referenceWav,$captureWav,$analysisPath,[string]$PcmBits) }
+    $analysis = Invoke-DriverVmProcess -Executable $quality -Arguments $analysisArguments `
         -Stdout (Join-Path $evidence 'analysis.txt') -Stderr (Join-Path $evidence 'analysis-stderr.txt') -TimeoutSeconds 60
     if ($analysis.Code -ne 0 -or -not (Test-Path -LiteralPath $analysisPath)) { throw 'Rust sample analyzer failed; see analysis-stderr.txt.' }
     $metrics = Get-Content -LiteralPath $analysisPath -Raw | ConvertFrom-Json
     $routeText = Get-Content -LiteralPath $routeOut -Raw
     $formatChannels = Get-ProbeValue $probeText 'bitexact_channels'
     $formatRate = Get-ProbeValue $probeText 'bitexact_rate'
+    $formatEncoding = ([regex]::Match($probeText, '(?m)\bbitexact_encoding=([a-z0-9-]+)')).Groups[1].Value
     $result = [pscustomobject][ordered]@{
-        Channels = $Channels; RequestedRate = $Rate; ProbeCode = $measured.Code; RouteCode = $route.ExitCode
-        FormatChannels = $formatChannels; FormatRate = $formatRate; Pass = Get-ProbeValue $probeText 'bitexact_pass'
+        Channels = $Channels; RequestedRate = $Rate; RequestedEncoding = $formatLabel; ProbeEncoding = $formatEncoding
+        ProbeCode = $measured.Code; RouteCode = $route.ExitCode
+        FormatChannels = $formatChannels; FormatRate = $formatRate; NativeBitExactPass = Get-ProbeValue $probeText 'bitexact_pass'
         AnalyzerBitExact = $metrics.bitExact; AnalyzerMaxError = $metrics.maxAbsoluteError
-        AnalyzerRmsError = $metrics.rmsError; Metrics = $analysisPath
+        AnalyzerRmsError = $metrics.rmsError; AnalyzerPass = $metrics.pass
+        MaximumErrorLsb = $metrics.maximumErrorLsb; Metrics = $analysisPath
         CaptureDropped = Get-ProbeValue $probeText 'bitexact_capture_dropped_frames'
+        CaptureFlagged = Get-ProbeValue $probeText 'bitexact_capture_flagged_packets'
+        CaptureOverflow = Get-ProbeValue $probeText 'bitexact_capture_overflow_packets'
         CableRoute = ([regex]::Match($routeText, '(?m)^final cableRoute=(.*)$')).Groups[1].Value
     }
     if ($formatChannels -ne $Channels) {
@@ -86,10 +96,13 @@ try {
     if ($formatRate -ne $Rate) {
         throw "Cable A Input / Cable B Output run at $formatRate Hz in Windows, not $Rate Hz. Set both endpoints to $Rate Hz, then run again."
     }
-    $verdict = if ($measured.Code -eq 0 -and $route.ExitCode -eq 0 -and $result.Pass -eq 1 -and $metrics.bitExact) { 'PASS' } else { 'FAIL' }
+    if ($formatEncoding -ne $formatLabel) { throw "Windows negotiated $formatEncoding, not requested $formatLabel. Set both Cable endpoints to $formatLabel in Sound settings." }
+    $metricPass = if ($PcmBits -eq 0) { [bool]$metrics.bitExact } else { [bool]$metrics.pass }
+    $captureClean = $result.CaptureDropped -eq 0 -and $result.CaptureFlagged -eq 0 -and $result.CaptureOverflow -eq 0
+    $verdict = if ($measured.Code -eq 0 -and $route.ExitCode -eq 0 -and $metricPass -and $captureClean -and ($PcmBits -ne 0 -or $result.NativeBitExactPass -eq 1)) { 'PASS' } else { 'FAIL' }
     $result | Add-Member NoteProperty Verdict $verdict
-    Write-Host ("{0} channels: {1} (bitexact_pass={2}, capture dropped {3} frames, probe exit {4}, route exit {5})" -f `
-        $Channels, $verdict, $result.Pass, $result.CaptureDropped, $measured.Code, $route.ExitCode)
+    Write-Host ("{0} channels, {1}: {2} (capture dropped {3} frames, flagged {4}, overflow {5}, probe exit {6}, route exit {7})" -f `
+        $Channels, $formatLabel, $verdict, $result.CaptureDropped, $result.CaptureFlagged, $result.CaptureOverflow, $measured.Code, $route.ExitCode)
     Write-Host "  cableRoute=$($result.CableRoute)"
 } catch { $failure = $_ } finally {
     if ($route) {
@@ -97,7 +110,7 @@ try {
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Passed = (-not [bool]$failure); Error = [string]$failure
         Channels = $Channels; Rate = $Rate; Seconds = $Seconds; Result = $result; Qualification = $false
-        Scope = 'Bit-exact float32 noise: Cable A Input -> product cable route (control plane, CableRouteWorker; direct mapping when not stereo) -> Cable B Output at the shared mix format; analyzer metrics plus probe pass; NEM VM, not VCAB-20 qualification' }
+        Scope = "$formatLabel sample check: Cable A Input -> product cable route (control plane, CableRouteWorker; direct mapping when not stereo) -> Cable B Output at the requested shared mix format; diagnostic only, not VCAB-20/21 or A16 qualification" }
     $zip = Join-Path $bundle "$run.zip"
     Compress-Archive -LiteralPath $evidence -DestinationPath $zip
     Copy-Item -LiteralPath $zip -Destination $peer
@@ -105,4 +118,4 @@ try {
     Write-Host "Current-run reports copied to Z:\$(Split-Path -Leaf $bundle)\$run.zip"
 }
 if ($failure) { throw $failure }
-Write-Host 'Bit-exact check measured. Send the output.'
+Write-Host 'Cable sample check measured. Send the output.'

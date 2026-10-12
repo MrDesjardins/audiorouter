@@ -105,3 +105,28 @@ result type was made explicit. The first Clippy pass then identified a complex
 format tuple and manual divisibility check; these were replaced by a named
 format struct and `is_multiple_of`. These were local build/lint issues; no
 endpoint, driver or VM state was touched.
+
+## Native PCM shared-format diagnostic wiring
+
+The native probe now accepts Windows `GetMixFormat` results for float32,
+PCM16, and PCM24-in-32, emits the actual encoding, quantizes render samples,
+and decodes captured samples to normalized float WAV data. The product-route
+runner has a `-PcmBits 16|24` mode that checks the actual format and rate before
+using the analyzer's VCAB-21 one-LSB metric; any dropped frames, flagged
+capture packets, or capture overflow fail the result. The quality entry point exposes
+`pcm16-48k` and `pcm24-48k`; bundle preparation runs the new offline integer
+conversion self-check. PCM32 and other rates/channel counts remain out of this
+path. These are static/host-safe checks only; no endpoint was opened.
+
+Checks on Windows host `AR-DriverTest`, pinned Rust 1.96.0:
+
+- Probe static build — passed; integer conversion self-test — 12 checks;
+  existing bit-exact and isolation self-tests — 10 and 4 checks.
+- Analyzer tests — 10 passed; Clippy (`-D warnings`) — passed.
+- Cable quality acceptance — 27 host-safe checks passed, including script
+  parsing, guarded case wiring, and refusal to start audio on the host.
+- `git diff --check` — passed.
+
+The first Clippy run found one unnecessary same-type cast in the new PCM
+verdict regression; it was removed and all checks passed. No driver, endpoint,
+VM or device setting was changed.

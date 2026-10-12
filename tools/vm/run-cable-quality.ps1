@@ -2,7 +2,7 @@
    diagnostic subsets of A16, never complete A16 qualification. #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','thdn-997-48k','isolation-A-to-B','isolation-all-pairs')][string] $Case,
+    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','pcm16-48k','pcm24-48k','thdn-997-48k','isolation-A-to-B','isolation-all-pairs')][string] $Case,
     [ValidateRange(1, 8)][int] $Channels = 2,
     [ValidateRange(5, 60)][int] $Seconds = 20
 )
@@ -16,14 +16,16 @@ if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') {
 Assert-PairedTraceAdministrator
 Assert-PairedTraceBundle $bundle
 
-if ($Case -like 'float32-*') {
+if ($Case -like 'float32-*' -or $Case -like 'pcm*-48k') {
     $runner = Join-Path $bundle 'run-cable-bitexact.ps1'
     if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) { throw 'The bundle has no bit-exact product-route runner.' }
-    $rate = switch ($Case) { 'float32-44k1' { 44100 } 'float32-48k' { 48000 } 'float32-96k' { 96000 } }
-    Write-Host "WP-09b diagnostic subset: $Case, $Channels channel(s), float32. Set both Cable endpoints to $rate Hz first. This does not pass A16."
+    $rate = switch ($Case) { 'float32-44k1' { 44100 } 'float32-48k' { 48000 } 'float32-96k' { 96000 } default { 48000 } }
+    $pcmBits = switch ($Case) { 'pcm16-48k' { 16 } 'pcm24-48k' { 24 } default { 0 } }
+    $format = if ($pcmBits -eq 0) { 'float32' } else { "PCM$pcmBits" }
+    Write-Host "WP-09b diagnostic subset: $Case, $Channels channel(s), $format. Set both Cable endpoints to $rate Hz and the requested format first. This does not pass A16."
     & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
-        -NoProfile -ExecutionPolicy Bypass -File $runner -Channels $Channels -Rate $rate -Seconds $Seconds
-    if ($LASTEXITCODE -ne 0) { throw "Float32 bit-exact diagnostic failed (exit $LASTEXITCODE)." }
+        -NoProfile -ExecutionPolicy Bypass -File $runner -Channels $Channels -Rate $rate -PcmBits $pcmBits -Seconds $Seconds
+    if ($LASTEXITCODE -ne 0) { throw "$format product-route diagnostic failed (exit $LASTEXITCODE)." }
     Write-Host 'Diagnostic case completed. A16 remains incomplete until every required rate, format, channel count, resampling and crosstalk case is implemented and run.'
     return
 }

@@ -2082,6 +2082,89 @@ static bool write_float_wav(const std::string& path, const std::vector<float>& s
     return file.good();
 }
 
+enum class CableSampleEncoding { Unsupported, Float32, Pcm16, Pcm24In32 };
+
+static CableSampleEncoding cable_sample_encoding(const WAVEFORMATEX* format) {
+    if (!format) return CableSampleEncoding::Unsupported;
+    if (format->wBitsPerSample == 32 &&
+        (format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+         (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+          format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
+          reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)))
+        return CableSampleEncoding::Float32;
+    if (format->wFormatTag == WAVE_FORMAT_PCM && format->wBitsPerSample == 16)
+        return CableSampleEncoding::Pcm16;
+    if (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+        format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)) {
+        const auto* extensible = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format);
+        if (extensible->SubFormat == KSDATAFORMAT_SUBTYPE_PCM) {
+            if (format->wBitsPerSample == 16 && extensible->Samples.wValidBitsPerSample == 16)
+                return CableSampleEncoding::Pcm16;
+            if (format->wBitsPerSample == 32 && extensible->Samples.wValidBitsPerSample == 24)
+                return CableSampleEncoding::Pcm24In32;
+        }
+    }
+    return CableSampleEncoding::Unsupported;
+}
+
+static const char* cable_sample_encoding_name(CableSampleEncoding encoding) {
+    switch (encoding) {
+    case CableSampleEncoding::Float32: return "float32";
+    case CableSampleEncoding::Pcm16: return "pcm16";
+    case CableSampleEncoding::Pcm24In32: return "pcm24-in-32";
+    default: return "unsupported";
+    }
+}
+
+static void cable_write_sample(BYTE* destination, CableSampleEncoding encoding, float sample) {
+    if (encoding == CableSampleEncoding::Float32) {
+        std::memcpy(destination, &sample, sizeof(sample));
+    } else if (encoding == CableSampleEncoding::Pcm16) {
+        const double scaled = std::round(static_cast<double>(sample) * 32768.0);
+        const SHORT value = static_cast<SHORT>(std::clamp(scaled, -32768.0, 32767.0));
+        std::memcpy(destination, &value, sizeof(value));
+    } else if (encoding == CableSampleEncoding::Pcm24In32) {
+        const double scaled = std::round(static_cast<double>(sample) * 8388608.0);
+        const LONG value = static_cast<LONG>(std::clamp(scaled, -8388608.0, 8388607.0)) * 256;
+        std::memcpy(destination, &value, sizeof(value));
+    }
+}
+
+static float cable_read_sample(const BYTE* source, CableSampleEncoding encoding) {
+    if (encoding == CableSampleEncoding::Float32) {
+        float value = 0.0f; std::memcpy(&value, source, sizeof(value)); return value;
+    }
+    if (encoding == CableSampleEncoding::Pcm16) {
+        SHORT value = 0; std::memcpy(&value, source, sizeof(value)); return static_cast<float>(value) / 32768.0f;
+    }
+    LONG value = 0; std::memcpy(&value, source, sizeof(value));
+    return static_cast<float>(value >> 8) / 8388608.0f;
+}
+
+static int cable_sample_format_self_test() {
+    const float values[] = {-1.0f, -0.89f, -0.25f, 0.0f, 0.125f, 0.89f};
+    unsigned checks = 0;
+    for (CableSampleEncoding encoding : {CableSampleEncoding::Pcm16, CableSampleEncoding::Pcm24In32}) {
+        const double lsb = encoding == CableSampleEncoding::Pcm16 ? 1.0 / 32768.0 : 1.0 / 8388608.0;
+        for (float expected : values) {
+            BYTE encoded[4]{};
+            cable_write_sample(encoded, encoding, expected);
+            const float actual = cable_read_sample(encoded, encoding);
+            if (std::fabs(static_cast<double>(expected) - actual) > lsb) {
+                std::cerr << "cable sample format self-test exceeded one LSB\n";
+                return 1;
+            }
+            if (encoding == CableSampleEncoding::Pcm24In32 && (encoded[0] != 0)) {
+                std::cerr << "cable PCM24 padding bits are not zero\n";
+                return 1;
+            }
+            ++checks;
+        }
+    }
+    std::cout << checks << " cable integer sample conversion checks pass\n";
+    return 0;
+}
+
 static int cable_bitexact_wav_self_test(const char* output_dir) {
     if (!output_dir) { std::cerr << "output directory is required\n"; return 2; }
     std::vector<float> reference;
@@ -2129,16 +2212,13 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
     if (!ok) { render_state.release(); capture_state.release(); return 1; }
     const WAVEFORMATEX* rf = render_state.format;
     const WAVEFORMATEX* cf = capture_state.format;
-    const auto is_float32 = [](const WAVEFORMATEX* format) {
-        return format && format->wBitsPerSample == 32 &&
-            (format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
-             (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
-              format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
-              reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
-    };
-    if (!is_float32(rf) || !is_float32(cf) || rf->nChannels != cf->nChannels ||
-        rf->nSamplesPerSec != cf->nSamplesPerSec) {
-        std::cout << "bitexact_requires_matching_float32_formats=1\n";
+    const CableSampleEncoding render_encoding = cable_sample_encoding(rf);
+    const CableSampleEncoding capture_encoding = cable_sample_encoding(cf);
+    if (render_encoding == CableSampleEncoding::Unsupported || render_encoding != capture_encoding ||
+        rf->nChannels != cf->nChannels || rf->nSamplesPerSec != cf->nSamplesPerSec) {
+        std::cout << "cable_requires_matching_supported_mix_formats=1 render_encoding="
+                  << cable_sample_encoding_name(render_encoding) << " capture_encoding="
+                  << cable_sample_encoding_name(capture_encoding) << '\n';
         render_state.release(); capture_state.release();
         return 1;
     }
@@ -2179,11 +2259,12 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
             if (available == 0) continue;
             BYTE* data = nullptr;
             if (FAILED(render_service->GetBuffer(available, &data))) continue;
-            auto* out = reinterpret_cast<float*>(data);
             for (UINT32 frame = 0; frame < available; ++frame, ++rendered) {
                 for (UINT32 channel = 0; channel < channels; ++channel)
-                    out[static_cast<size_t>(frame) * channels + channel] =
-                        rendered < noise_frames ? signal[static_cast<size_t>(rendered * channels + channel)] : 0.0f;
+                    cable_write_sample(data + static_cast<size_t>(frame) * rf->nBlockAlign +
+                                           static_cast<size_t>(channel) * (rf->wBitsPerSample / 8),
+                                       render_encoding,
+                                       rendered < noise_frames ? signal[static_cast<size_t>(rendered * channels + channel)] : 0.0f);
             }
             render_service->ReleaseBuffer(available, 0);
         }
@@ -2203,7 +2284,11 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
                 const size_t samples = static_cast<size_t>(frames) * channels;
                 if (captured.size() + samples > captured.capacity()) { ++capture_overflow; }
                 else if ((flags & AUDCLNT_BUFFERFLAGS_SILENT) || !data) { captured.insert(captured.end(), samples, 0.0f); }
-                else { const auto* in = reinterpret_cast<const float*>(data); captured.insert(captured.end(), in, in + samples); }
+                else {
+                    const size_t sample_bytes = cf->wBitsPerSample / 8;
+                    for (size_t i = 0; i < samples; ++i)
+                        captured.push_back(cable_read_sample(data + i * sample_bytes, capture_encoding));
+                }
                 capture_service->ReleaseBuffer(frames);
             }
         }
@@ -2223,7 +2308,8 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
     print_hr("bitexact_capture_stop", capture_state.client->Stop());
     render_service->Release();
     capture_service->Release();
-    std::cout << "bitexact_channels=" << channels << " bitexact_rate=" << rate << " bitexact_rendered_frames=" << rendered
+    std::cout << "bitexact_channels=" << channels << " bitexact_rate=" << rate
+              << " bitexact_encoding=" << cable_sample_encoding_name(render_encoding) << " bitexact_rendered_frames=" << rendered
               << " bitexact_captured_frames=" << captured.size() / channels << " bitexact_capture_dropped_frames=" << capture_dropped
               << " bitexact_capture_flagged_packets=" << capture_flagged << " bitexact_capture_overflow_packets=" << capture_overflow << '\n';
     if (tone_frequency_hz > 0.0) {
@@ -3039,6 +3125,11 @@ int main(int argc, char** argv) {
     }
     if (argc > 1 && std::strcmp(argv[1], "cable-bitexact-selftest") == 0) {
         int result = cable_bitexact_self_test();
+        CoUninitialize();
+        return result;
+    }
+    if (argc > 1 && std::strcmp(argv[1], "cable-sample-format-selftest") == 0) {
+        int result = cable_sample_format_self_test();
         CoUninitialize();
         return result;
     }

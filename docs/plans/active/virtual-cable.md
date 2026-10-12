@@ -2015,8 +2015,12 @@ WP-09 mixed-clock route work.
   integer formats, resampling, VM A16 runner and A16 evidence remain open.
   Keep the 8-channel cases required by A16; the plan's recorded channel-count
   deferral is an unresolved prerequisite, not a reason to reduce test coverage.
-  Next: extend the native probe to negotiate and report PCM shared formats,
-  then connect these codecs to actual captures; keep PCM32 blocked until the
+  Native probe now identifies the Windows `GetMixFormat` encoding and supports
+  float32, PCM16 and PCM24-in-32 capture/conversion; guarded cases
+  `pcm16-48k` and `pcm24-48k` reject a mismatched negotiated format and apply
+  the analyzer's ≤1-LSB metric. This is host-checked wiring only; no VM route
+  run has happened. Next: exercise these two cases in the disposable VM and
+  use the returned metrics to verify codec/probe agreement; keep PCM32 blocked until the
   analyzer preserves its ≤1-LSB target. Afterward add per-channel-count cases
   and cover sweep/resampling and continuity metrics. Keep A16 blocked until
   the channel-count decision and VM access gates are resolved; never count

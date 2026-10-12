@@ -27,8 +27,10 @@ Assert ($runnerText -match 'cable-bitexact-reference\.wav' -and $runnerText -mat
 Assert ($runnerText -match 'metrics\.json' -and $runnerText -match '\$metrics\.bitExact') 'the machine report contributes to the verdict'
 Assert ($runnerText -match '\$formatRate -ne \$Rate') 'runner refuses a result at the wrong shared mix rate'
 Assert ($runnerText -match 'Qualification = \$false') 'diagnostic runner cannot claim qualification'
+Assert ($runnerText -match '\$PcmBits' -and $runnerText -match 'bitexact_encoding') 'product runner verifies the actual negotiated PCM encoding'
 $qualityText = Get-Content -LiteralPath $qualityRunner -Raw
 Assert ($qualityText -match "float32-44k1.*float32-48k.*float32-96k") 'VM entry point exposes only implemented float32 rate cases'
+Assert ($qualityText -match 'pcm16-48k.*pcm24-48k' -and $qualityText -match '-PcmBits \$pcmBits') 'VM entry point routes implemented PCM diagnostic cases'
 Assert ($qualityText -match 'isolation-A-to-B' -and $qualityText -match "'silence'.*'-140'") 'VM entry point records a cable isolation measurement against VCAB-26'
 Assert ($qualityText -match 'isolation-all-pairs' -and $qualityText -match 'run-cable-isolation-matrix') 'VM entry point wires the ordered isolation matrix'
 Assert ($qualityText -match 'thdn-997-48k' -and $qualityText -match 'run-cable-thdn\.ps1') 'VM entry point wires the product-route THD+N diagnostic'
@@ -43,6 +45,7 @@ $prepareText = Get-Content -LiteralPath $prepare -Raw
 Assert ($prepareText -match 'm03-cable-quality\.exe') 'bundle preparation builds and stages the analyzer'
 Assert ($prepareText -match 'run-cable-quality\.ps1') 'bundle preparation stages the WP-09b VM entry point'
 Assert ($prepareText -match 'run-cable-isolation-matrix\.ps1') 'bundle preparation stages the isolation matrix runner'
+Assert ($prepareText -match 'cable-sample-format-selftest') 'bundle preparation checks the integer sample conversion helpers'
 Assert ($prepareText -match 'run-cable-thdn\.ps1') 'bundle preparation stages the THD+N runner'
 
 if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
