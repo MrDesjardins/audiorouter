@@ -2016,19 +2016,20 @@ WP-09 mixed-clock route work.
   Keep the 8-channel cases required by A16; the plan's recorded channel-count
   deferral is an unresolved prerequisite, not a reason to reduce test coverage.
   Native probe now identifies the Windows `GetMixFormat` encoding and supports
-  float32, PCM16 and PCM24-in-32 capture/conversion; guarded cases
-  `pcm16-48k` and `pcm24-48k` reject a mismatched negotiated format and apply
-  the analyzer's ≤1-LSB metric. This is host-checked wiring only; no VM route
-  run has happened (current host `PATRICK5080` is not the guarded VM and has no
+  float32, PCM16, PCM24-in-32 and PCM32 capture/conversion; guarded integer cases
+  reject a mismatched negotiated format and apply the analyzer's ≤1-LSB metric.
+  This is host-checked wiring only; no VM route run has happened (current host
+  `PATRICK5080` is not the guarded VM and has no
   `C:\ar` bundle). The native probe now produces a 20 Hz–20 kHz sweep;
   48-point Hann-windowed relative magnitude analysis has a ±0.05 dB metric and
   guarded cases at 44.1/48/96 kHz. The quality entry point also exposes the
   existing 997/47 Hz and four-route eight-cable continuity runners with a
   duration selector. Sweep analysis
   measures passband magnitude only; phase, aliasing and imaging remain open.
-  PCM32 has analyzer and native-probe float64 WAV paths plus a guarded 48 kHz
-  case. Next exercise PCM and sweep cases in the disposable VM. Afterward add
-  per-channel-count cases
+  PCM32 has analyzer and native-probe float64 WAV paths plus guarded cases at
+  44.1/48/96 kHz. PCM16/24/32 cases now share that rate matrix and accept the
+  required 1/2/8 channel counts. Next exercise PCM and sweep cases in the
+  disposable VM; then add per-channel-count summary runs
   and cover sweep/resampling and continuity metrics. Keep A16 blocked until
   the channel-count decision and VM access gates are resolved; never count
   synthetic checks as Stage A evidence.
@@ -2038,12 +2039,11 @@ WP-09 mixed-clock route work.
 Requirement IDs: VCAB-12, VCAB-20/21; specification 17 §3 and §11.2.
 Completed 2026-10-11: strict PCM16 and extensible PCM24-in-32 WAV read/write,
 validation, sign extension, channel preservation, and ≤1-LSB tests. The
-analyzer's PCM32 mode now accepts float64 WAV pairs, retains sub-float32
-precision, aligns frames and applies the PCM32 ≤1-LSB verdict. The native
-precision, aligns frames and applies the PCM32 ≤1-LSB verdict. The native
-probe recognizes plain/extensible PCM32, generates full-resolution noise,
+analyzer's PCM32 mode accepts float64 WAV pairs, retains sub-float32 precision,
+aligns frames and applies the PCM32 ≤1-LSB verdict. The native probe recognizes
+plain/extensible PCM32, generates full-resolution noise,
 preserves capture in double precision and writes float64 WAVs. The guarded
-`pcm32-48k` case verifies the negotiated format and rejects dropped, flagged
+PCM16/24/32 cases verify the negotiated format and reject dropped, flagged
 or overflowed captures. Host checks and a probe-to-analyzer WAV self-test pass;
 no PCM endpoint run has been measured. Next action: exercise the PCM and sweep
 cases in the disposable driver VM, then add per-channel-count cases and cover

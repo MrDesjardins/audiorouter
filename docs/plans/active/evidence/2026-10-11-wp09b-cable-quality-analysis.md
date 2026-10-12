@@ -241,3 +241,13 @@ Host checks on `PATRICK5080`:
 - Documentation validation — 149 Markdown files and 858 local links passed.
 - No endpoint or driver test was run: this host is not the guarded VM and has
   no `C:\ar` bundle. The PCM32 route case is wired, not measured.
+
+## PCM rate-matrix wiring
+
+Extended the guarded product-route cases to PCM16, PCM24-in-32 and PCM32 at
+44.1, 48 and 96 kHz. Each case accepts the selected channel count (1 through 8;
+the required A16 points are 1, 2 and 8), passes it to the route runner, and
+checks Windows' actual negotiated sample rate and encoding before reporting a
+pass. This is wiring coverage only; no VM format/rate/channel measurement ran.
+The host-safe cable quality acceptance now passes 36 checks, PowerShell parsing
+passes, and documentation validation remains 149 Markdown files / 858 links.
