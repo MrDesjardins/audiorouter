@@ -62,7 +62,7 @@ New-Item -ItemType Directory -Path $output | Out-Null
 $entries = @(Get-Content -LiteralPath (Join-Path $base 'MANIFEST.txt') | Where-Object { $_ -match '^[a-fA-F0-9]{64}  ' })
 foreach ($entry in $entries) {
     $relative = $entry.Substring(66)
-    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe', 'tools\m03_cable_session.exe', 'tools\audiorouter-cli.exe', 'run-cable-kill.ps1', 'run-cable-tone.ps1', 'run-cable-bitexact.ps1', 'run-cable-thdn.ps1', 'run-cable-sweep.ps1')) { throw 'Base already contains latency or continuity tools; use a standard candidate base.' }
+    if ($relative -in @('run-cable-latency.ps1', 'run-cable-latency-starts.ps1', 'run-cable-continuity.ps1', 'quiet-guest.ps1', 'tools\m00-probe.exe', 'tools\m03_cable_session.exe', 'tools\audiorouter-cli.exe', 'run-cable-kill.ps1', 'run-cable-tone.ps1', 'run-cable-bitexact.ps1', 'run-cable-quality.ps1', 'run-cable-isolation-matrix.ps1', 'run-cable-thdn.ps1', 'run-cable-sweep.ps1')) { throw 'Base already contains cable diagnostic tools; use a standard candidate base.' }
     $file = [IO.Path]::GetFullPath((Join-Path $output $relative))
     if (-not $file.StartsWith($output + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Manifest path escapes output.' }
     New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null

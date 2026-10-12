@@ -22,11 +22,13 @@ one pair only and does not close the all-pairs isolation requirement.
 PCM16 and PCM24-in-32 WAV fixture codecs are available through the library.
 The `pcm` analyzer mode accepts float32 reference/capture WAVs and reports the
 VCAB-21 one-LSB measurement for valid bits 16 or 24. For 32 bits it requires
-float64 reference/capture WAVs. Guarded VM cases
-`pcm16-48k` and `pcm24-48k` use the native probe's actual shared mix format;
-the endpoints must already be configured to the requested format and 48 kHz.
-The runner rejects a mismatch and fails on dropped, flagged, or overflowed
-capture packets. These cases are diagnostic and have not yet been measured in
+float64 reference/capture WAVs. Guarded VM cases cover PCM16, PCM24-in-32 and
+PCM32 at 44.1, 48 and 96 kHz. Set both endpoints to the requested rate and
+format first; the runner checks the native probe's negotiated shared mix
+format and fails on dropped, flagged, or overflowed capture packets. Add
+`-ChannelMatrix` to run a supported format/rate case at 1, 2 and 8 channels in
+sequence. PCM32 uses deterministic full-resolution integer-grid noise and
+float64 captures. These cases are diagnostic and have not yet been measured in
 the VM.
 
 The `sweep` analyzer mode compares 48 logarithmically spaced local magnitude
@@ -55,10 +57,9 @@ cargo test --locked --manifest-path tools/m03-cable-quality/Cargo.toml
 
 The sample comparison and THD+N modes consume canonical interleaved IEEE
 float32 WAVs. The dedicated PCM fixture decoder accepts classic PCM16 and
-PCM24-in-32 WAVEFORMATEXTENSIBLE and rejects other encodings. PCM32 remains
-analyzer-only: the `pcm ... 32` mode accepts float64 reference/capture WAVs so
-the one-LSB metric retains precision below float32 resolution. The native
-probe and guarded VM runner do not emit PCM32 captures yet. The VM runner can
-be invoked for 1, 2, or 8 channels, but
-no channel matrix has been measured yet; each endpoint format must be set
-before a run.
+PCM24-in-32 WAVEFORMATEXTENSIBLE and rejects other encodings. PCM32 analysis
+accepts float64 reference/capture WAVs so the one-LSB metric retains precision
+below float32 resolution. The native probe recognizes plain and extensible
+PCM32 and writes full-precision captures. The VM runner accepts channel counts
+1 through 8; use `-ChannelMatrix` for the required 1/2/8 points. The matrix has
+not been measured in the VM; each endpoint format must be set before a run.

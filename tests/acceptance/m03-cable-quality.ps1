@@ -54,6 +54,7 @@ Assert ($qualityText -match 'does not pass A16' -and $qualityText -match 'A16 re
 $prepareText = Get-Content -LiteralPath $prepare -Raw
 Assert ($prepareText -match 'm03-cable-quality\.exe') 'bundle preparation builds and stages the analyzer'
 Assert ($prepareText -match 'run-cable-quality\.ps1') 'bundle preparation stages the WP-09b VM entry point'
+Assert ($prepareText -match "'run-cable-quality\.ps1'.*'run-cable-isolation-matrix\.ps1'") 'bundle preparation refuses stale cable quality runner files in its base'
 Assert ($prepareText -match 'run-cable-isolation-matrix\.ps1') 'bundle preparation stages the isolation matrix runner'
 Assert ($prepareText -match 'cable-sample-format-selftest') 'bundle preparation checks the integer sample conversion helpers'
 Assert ($prepareText -match 'run-cable-sweep\.ps1') 'bundle preparation stages the sweep runner'

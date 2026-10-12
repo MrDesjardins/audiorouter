@@ -260,3 +260,8 @@ PCM and sweep cases. It runs the selected case at 1, 2 and 8 channels in order,
 stops on the first failed child run, and preserves each child runner's separate
 evidence package. Host-safe acceptance and parser checks cover the wiring; no
 VM route has been started.
+
+Updated the analyzer README with the supported PCM rate and channel matrix,
+float64 PCM32 capture and remaining VM gate. Bundle preparation now rejects a
+base containing stale cable quality runner files before staging the current
+scripts, avoiding a mixed-version evidence bundle.
