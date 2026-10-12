@@ -1,58 +1,137 @@
 # Active plan — post-0.0.8 maintenance
 
-## ChatGPT MCP connection and setup UX (2026-10-11, in progress)
+## ChatGPT MCP integration plan (2026-10-11, active)
 
-User explicitly requested an easy ChatGPT connection, with AudioRouter
-managing the OpenAI Secure MCP Tunnel instead of asking users to configure
-the tunnel. Requirements: AUTO-16, SEC-14; decision DEC-20. This is remote
-MCP access to the local backend, so it must preserve client enrollment and
-grants, store only the runtime credential under current-user protection, keep
-the connection off until an explicit Connect action, and never expose the
-credential in UI text, process arguments, logs, or support bundles. Startup
-requires a separate opt-in.
+### Objective and scope
 
-Confirmed constraints: AudioRouter currently offers local stdio MCP only.
-OpenAI's official flow requires a tunnel ID and runtime API key; tunnel
-provisioning needs Tunnels Read + Manage, and running it needs Tunnels Read +
-Use. The Platform tunnel page opened to login, there is no tunnel-client in
-PATH, and no OpenAI Platform key is present in the process environment. The
-ChatGPT plan/workspace feature tier is unknown; OpenAI documents read/fetch
-only for Pro, while full MCP read/write requires Business/Enterprise/Edu.
-Do not claim a connection works until a tunnel is running and the ChatGPT app
-has been attached. Creating the remote tunnel and persistent runtime key is a
-security-sensitive account action; get action-time confirmation immediately
-before that operation. Do not ask the user to paste a key into chat.
+Make the AudioRouter MCP tools usable from the user's ChatGPT Windows app with
+the fewest setup steps. AudioRouter should install/manage the official OpenAI
+Secure MCP Tunnel client, supervise its local stdio MCP connection, and show
+plain-language connection health. The app must retain the existing backend
+enrollment, per-client scopes, graph validation and audit. This is remote
+control-plane access to the local app, not audio streaming. Requirements:
+AUTO-16, SEC-14, UI-17; decision DEC-20. No public/LAN MCP listener, raw audio,
+automatic tunnel startup, or change to existing local MCP clients is in scope.
 
-The first UI attempt (`6ba18803`) added a ChatGPT link but left the tab
-confusing; the user rejected it. Current revision makes ChatGPT primary and
-moves other clients, permissions and activity into collapsible sections. It
-uses a theme-aware neutral action color instead of a bright blue link. The
-updated Edge test checks the link, three theme screenshots, and stable card
-bounds. On 2026-10-11 (Windows), Prettier format check and TypeScript
-typecheck passed; ESLint had 0 errors and the existing 25 warnings; the
-production UI build and release shell build passed. `git diff --check` passed.
-Focused Edge verification was attempted twice: the first run failed before
-browser startup because Vite could not rename its temp dependency cache
-(EPERM); the retry used a workspace cache but stalled before producing
-browser/test output and was stopped. No visual pass or screenshot evidence is
-claimed; rerun the focused Edge test when its browser harness starts reliably.
+### Verified constraints and unresolved account dependency
 
-Ordered work:
-1. Finish the MCP tab cleanup and three-theme browser evidence; record exact
-   checks and screenshots in evidence.
-2. Integrate the official tunnel-client into the app lifecycle, with secure
-   runtime-key storage, bounded status, explicit connect/disconnect, robust
-   child cleanup and redaction tests. Do not retain the admin key.
-3. Build the least-privileged Platform provisioning flow supported by OpenAI;
-   if it requires admin credentials that cannot be acquired through an
-   approved sign-in, stop before key creation and request action-time approval.
-4. Verify ChatGPT can discover tools and exercise read and denied/write scopes
-   against AudioRouter. Confirm plan/workspace compatibility. No audio data.
-5. Commit exact paths, then proceed to the next authorized non-driver work.
+AudioRouter currently has local stdio MCP only. OpenAI's current official
+Secure MCP Tunnel guide says the setup requires a `tunnel_id`, a runtime API
+key, and a local stdio or HTTP MCP server. Tunnel CRUD needs Tunnels Read +
+Manage; running the daemon and selecting the tunnel in ChatGPT needs Tunnels
+Read + Use. Tunnel visibility also depends on associating the tunnel with the
+target ChatGPT workspace. ChatGPT separately requires the user to add a
+custom MCP app, choose Tunnel, review its warning, and create the app. The
+ChatGPT plan/workspace and custom-app permissions for this account are not
+verified. Sources checked 2026-10-11: [OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels),
+[official tunnel-client configuration](https://github.com/openai/tunnel-client/blob/master/docs/configuration.md),
+[official end-user guide](https://github.com/openai/tunnel-client/blob/master/docs/end-user-guide.md).
 
-Rollback: disable/disconnect tunnel first, revoke its remote association and
-runtime credential when authorized, then revert the UI/process integration.
-Keep the local stdio MCP path unchanged.
+The OpenAI docs expose admin-key tunnel CRUD and separate runtime keys; they
+do not document a user-delegated OAuth flow that would let AudioRouter silently
+create organization resources. This PC has no configured OpenAI Platform key,
+the Platform page was logged out, and no tunnel client was installed during
+the prior investigation. Never scrape browser cookies or ask for a secret in
+chat. If the supported flow still requires an admin key, the app may accept it
+only in a clearly labeled native secure prompt for one-time tunnel creation,
+hold it in memory only, redact it, and discard it immediately. Stop before
+creating a remote tunnel or key until the user authorizes that exact account
+operation. A user must also approve the remote tool-access warning and create
+the ChatGPT custom app in ChatGPT; do not claim this final click can be
+automated unless OpenAI documents a supported API for it.
+
+### Intended user flow
+
+1. In Setup → MCP, show one primary **Connect ChatGPT** action, a stable
+   connection-status slot, and a short disclosure that ChatGPT can call the
+   granted AudioRouter tools. Keep other clients, permissions and activity
+   secondary. No manual command, path, or tunnel-ID entry in the normal path.
+2. On Connect, check supported Windows architecture, packaged tunnel-client,
+   current-user storage availability, and the target ChatGPT custom-MCP
+   capability. Explain only the specific item that prevents setup.
+3. Reuse an already authorized AudioRouter tunnel if its workspace association
+   and credentials validate; otherwise prepare the minimum-scope Platform
+   authorization flow. Get explicit confirmation immediately before remote
+   resource/key creation. Do not persist the admin credential.
+4. Create/select the OpenAI tunnel associated with the intended ChatGPT
+   workspace. Create or obtain a restricted runtime key with Tunnels Read +
+   Use only. Persist that runtime key using current-user DPAPI; persist the
+   tunnel ID and minimal non-secret state separately.
+5. Enroll a distinct `audiorouter-chatgpt` MCP client and obtain the same
+   owner-approved scopes used by other clients. Launch the official
+   `tunnel-client` with a fixed AudioRouter CLI stdio target and the local
+   named pipe/database. Supply runtime credentials through a child-only
+   environment or a more protective supported input; never arguments,
+   browser storage, logs, crash text, or support bundles. No arbitrary command
+   execution surface.
+6. Supervise readiness, connection loss, process exit, app shutdown and
+   explicit Disconnect. Display bounded states such as Checking, Needs
+   authorization, Connecting, Connected, and Action needed; reserve dimensions
+   so live status does not shift layout. Disconnect stops the process and
+   offers remote revocation where the official API supports it. Startup stays
+   off unless the user separately enables it.
+7. Open the official ChatGPT connector settings at the point the tunnel is
+   ready. Guide the user to add a custom MCP app, select this tunnel, review
+   access, and create it. Afterward, verify a read-only capability call and
+   surface actionable errors without exposing credentials.
+
+### Implementation sequence
+
+1. **Pin and package the official client.** Review its Windows release
+   artifacts, license, provenance/checksum/SBOM, architecture and update
+   policy. Prefer a reviewed, pinned artifact bundled with the app; if managed
+   download is necessary, verify signed/checksummed bytes before execution and
+   keep install/rollback atomic. Record the selected version and hashes in
+   evidence. Do not use an ambient PATH binary.
+2. **Build the native tunnel service.** Add a small Windows-only service
+   module for DPAPI runtime-key storage, tunnel metadata, secure setup input,
+   client enrollment, child lifecycle, readiness polling and disconnect.
+   Child process handles must be owned and reaped; arguments are fixed; secrets
+   are supplied without command-line exposure; logs contain state/error codes
+   only. Register narrow Tauri commands and no generic shell bridge.
+3. **Implement authorization and provisioning.** Confirm OpenAI's supported
+   admin/runtime key creation path and workspace association behavior. Build
+   one-time, least-privileged setup with explicit disclosure/confirmation.
+   Admin credentials are never persisted. If the user cannot authorize the
+   required scope, preserve the local MCP service and leave status at Needs
+   authorization. Never substitute a broader key or silently reuse a personal
+   tunnel.
+4. **Wire the MCP UI.** Replace the static Not connected/link-only card with
+   actual service state and Connect/Disconnect actions. Keep the existing
+   Codex/Claude, permissions and activity sections. Add error recovery,
+   retry, workspace/tunnel identity confirmation, setup progress and reserved
+   status geometry in dark, light and high-contrast themes.
+5. **Qualify and document.** Add portable state-machine, redaction and grant
+   tests; Windows DPAPI/process supervision tests; mocked tunnel-client
+   protocol tests; and three-theme Edge tests for no layout movement. Then,
+   on an authorized Windows account, qualify tunnel creation, workspace
+   association, ChatGPT discovery, read success, denied write, approved write,
+   disconnect/restart, key revocation, and no key/audio leakage. Record account
+   plan, versions, commands, results and redacted evidence. No real audio
+   content is used.
+
+### Acceptance, risks, rollback, next action
+
+Complete only when the packaged app has reproducible install-free local
+prerequisites, actual tunnel supervision, recoverable connection status,
+least-privilege grants, redaction/process-shutdown tests, three-theme UI
+evidence, and authorized ChatGPT end-to-end evidence. Until the OpenAI account
+and workspace gates pass, label the feature as unconnected/incomplete; mocks
+and local builds are not proof of ChatGPT connectivity. Risks include OpenAI
+changing the tunnel-client contract, organization/workspace mismatch, account
+role restrictions, and revocation behavior. Roll back by disconnecting the
+local process, revoking the runtime key/tunnel association when authorized,
+then reverting the native/UI integration; local stdio MCP remains available.
+
+Next action: evaluate the official Windows client distribution/license and
+design a fake-client native lifecycle prototype before adding account-specific
+provisioning. Then implement the supervisor and tests, keeping the external
+resource-creation step gated. Existing UI revision is `c8e1c92a`; format,
+typecheck, production UI build and release build passed on Windows on
+2026-10-11; lint had 0 errors and 25 existing warnings. The focused Edge test
+did not produce a result because its harness stalled before browser/test
+output, so three-theme screenshots remain unverified and must be rerun.
+
 
 ## Release 0.0.15 — 2026-10-10 (in progress)
 
