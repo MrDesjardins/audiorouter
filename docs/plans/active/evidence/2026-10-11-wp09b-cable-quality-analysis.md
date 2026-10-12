@@ -149,3 +149,28 @@ Checks on Windows host `AR-DriverTest`, pinned Rust 1.96.0:
 
 This is portable analyzer evidence only. The A16 1/2/8-channel endpoint
 matrix remains unrun in the VM.
+
+## Log-sweep passband response diagnostic
+
+Added `analyze_sweep_pair_wav` and CLI `sweep` mode. It aligns reference and
+capture, samples 48 logarithmically spaced local Hann-windowed projections
+from 20 Hz to 20 kHz, and reports per-channel relative magnitude deviation
+against the VCAB-22 ±0.05 dB passband target. A synthetic 0.03 dB gain passes;
+0.10 dB fails, and a request above Nyquist is rejected. The native probe now
+generates a matching logarithmic sweep and saves float32 reference/capture
+WAVs. The guarded product-route runner exposes 44.1/48/96 kHz cases and checks
+the negotiated rate, channel count, float32 format, and clean capture counters.
+Each report states that aliasing, imaging and phase are outside this slice.
+
+Checks on Windows host `PATRICK5080`, pinned Rust 1.96.0:
+
+- Analyzer tests — 12 passed; standalone Clippy (`-D warnings`) — passed.
+- Probe static build, sample-format self-test (12), and bit-exact self-test
+  (10) — passed.
+- Cable quality acceptance — 33 host-safe checks passed, including parsing
+  the new runner and refusing audio use outside the VM.
+- Documentation validation — 149 Markdown files and 858 local links passed.
+- `git diff --check` — passed.
+
+No endpoint, driver or VM state was touched. The sweep measurement remains
+synthetic/host-checked until its guarded runner is executed in the VM.

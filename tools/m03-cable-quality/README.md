@@ -28,6 +28,14 @@ The runner rejects a mismatch and fails on dropped, flagged, or overflowed
 capture packets. These cases are diagnostic and have not yet been measured in
 the VM.
 
+The `sweep` analyzer mode compares 48 logarithmically spaced local magnitude
+projections from a reference/capture pair. Guarded VM cases
+`sweep-44k1`, `sweep-48k`, and `sweep-96k` generate a 20 Hz–20 kHz sweep through
+the product route and report the worst channel deviation against ±0.05 dB.
+This slice measures passband magnitude only; it does not measure aliasing,
+imaging, phase, or group delay. The diagnostic cases have not been run in the
+VM.
+
 Portable analyzer tests run with:
 
 ```powershell

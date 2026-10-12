@@ -15,11 +15,12 @@ $runner = Join-Path $workspace 'tools\vm\run-cable-bitexact.ps1'
 $qualityRunner = Join-Path $workspace 'tools\vm\run-cable-quality.ps1'
 $isolationRunner = Join-Path $workspace 'tools\vm\run-cable-isolation-matrix.ps1'
 $thdnRunner = Join-Path $workspace 'tools\vm\run-cable-thdn.ps1'
+$sweepRunner = Join-Path $workspace 'tools\vm\run-cable-sweep.ps1'
 $prepare = Join-Path $workspace 'tools\vm\prepare-cable-latency-update.ps1'
-foreach ($scriptPath in @($runner,$qualityRunner,$isolationRunner,$thdnRunner,$prepare)) {
+foreach ($scriptPath in @($runner,$qualityRunner,$isolationRunner,$thdnRunner,$sweepRunner,$prepare)) {
     $tokens = $null; $parseErrors = $null
     [void][Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors)
-    Assert (-not $parseErrors) "PowerShell parses: $([IO.Path]::GetFileName($scriptPath))"
+    Assert (($null -eq $parseErrors) -or ($parseErrors.Count -eq 0)) "PowerShell parses: $([IO.Path]::GetFileName($scriptPath))"
 }
 $runnerText = Get-Content -LiteralPath $runner -Raw
 Assert ($runnerText -match 'm03-cable-quality\.exe') 'runner requires the Rust analyzer in the bundle'
@@ -34,6 +35,11 @@ Assert ($qualityText -match 'pcm16-48k.*pcm24-48k' -and $qualityText -match '-Pc
 Assert ($qualityText -match 'isolation-A-to-B' -and $qualityText -match "'silence'.*'-140'") 'VM entry point records a cable isolation measurement against VCAB-26'
 Assert ($qualityText -match 'isolation-all-pairs' -and $qualityText -match 'run-cable-isolation-matrix') 'VM entry point wires the ordered isolation matrix'
 Assert ($qualityText -match 'thdn-997-48k' -and $qualityText -match 'run-cable-thdn\.ps1') 'VM entry point wires the product-route THD+N diagnostic'
+Assert ($qualityText -match 'sweep-44k1.*sweep-48k.*sweep-96k' -and $qualityText -match 'run-cable-sweep\.ps1') 'VM entry point wires logarithmic sweep cases'
+$sweepText = Get-Content -LiteralPath $sweepRunner -Raw
+Assert ($sweepText -match "'cable-sweep'" -and $sweepText -match "'sweep'.*'20'.*'20000'") 'sweep runner captures and analyzes the 20 Hz-20 kHz product route'
+Assert ($sweepText -match 'CaptureDropped' -and $sweepText -match 'CaptureFlagged' -and $sweepText -match 'CaptureOverflow') 'sweep runner rejects discontinuous or overflowed captures'
+Assert ($sweepText -match 'Qualification=\$false' -and $sweepText -match 'aliasing/phase not measured') 'sweep runner keeps its partial diagnostic scope explicit'
 $thdnText = Get-Content -LiteralPath $thdnRunner -Raw
 Assert ($thdnText.Contains("'cable-tone'") -and $thdnText.Contains("'tone',`$reference,`$captureWav")) 'THD+N runner captures and analyzes native tone WAVs'
 Assert ($thdnText -match '\$metrics\.pass' -and $thdnText -match 'Qualification=\$false') 'THD+N metric gates only a diagnostic result'
@@ -46,6 +52,7 @@ Assert ($prepareText -match 'm03-cable-quality\.exe') 'bundle preparation builds
 Assert ($prepareText -match 'run-cable-quality\.ps1') 'bundle preparation stages the WP-09b VM entry point'
 Assert ($prepareText -match 'run-cable-isolation-matrix\.ps1') 'bundle preparation stages the isolation matrix runner'
 Assert ($prepareText -match 'cable-sample-format-selftest') 'bundle preparation checks the integer sample conversion helpers'
+Assert ($prepareText -match 'run-cable-sweep\.ps1') 'bundle preparation stages the sweep runner'
 Assert ($prepareText -match 'run-cable-thdn\.ps1') 'bundle preparation stages the THD+N runner'
 
 if ($env:COMPUTERNAME -ine 'AR-DriverTest') {

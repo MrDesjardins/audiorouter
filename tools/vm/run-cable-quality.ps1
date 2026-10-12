@@ -2,7 +2,7 @@
    diagnostic subsets of A16, never complete A16 qualification. #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','pcm16-48k','pcm24-48k','thdn-997-48k','isolation-A-to-B','isolation-all-pairs')][string] $Case,
+    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','pcm16-48k','pcm24-48k','sweep-44k1','sweep-48k','sweep-96k','thdn-997-48k','isolation-A-to-B','isolation-all-pairs')][string] $Case,
     [ValidateRange(1, 8)][int] $Channels = 2,
     [ValidateRange(5, 60)][int] $Seconds = 20
 )
@@ -15,6 +15,17 @@ if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') {
 . (Join-Path $bundle 'repo\tests\acceptance\m03-driver-vm-support.ps1')
 Assert-PairedTraceAdministrator
 Assert-PairedTraceBundle $bundle
+
+if ($Case -like 'sweep-*') {
+    $runner = Join-Path $bundle 'run-cable-sweep.ps1'
+    if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) { throw 'The bundle has no product-route sweep runner.' }
+    $rate = switch ($Case) { 'sweep-44k1' { 44100 } 'sweep-48k' { 48000 } 'sweep-96k' { 96000 } }
+    Write-Host "WP-09b diagnostic subset: 20 Hz-20 kHz float32 sweep through the product route at $rate Hz, $Channels channel(s). A16 remains incomplete."
+    & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+        -NoProfile -ExecutionPolicy Bypass -File $runner -Channels $Channels -Rate $rate -Seconds $Seconds
+    if ($LASTEXITCODE -ne 0) { throw "Sweep response diagnostic failed (exit $LASTEXITCODE)." }
+    return
+}
 
 if ($Case -like 'float32-*' -or $Case -like 'pcm*-48k') {
     $runner = Join-Path $bundle 'run-cable-bitexact.ps1'

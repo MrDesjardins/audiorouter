@@ -35,6 +35,17 @@ fn run() -> Result<(), String> {
                 .map_err(|_| "PCM valid bit count must be an integer".to_string())?;
             (m03_cable_quality::analyze_pcm_pair_wav(&first, &capture, 96_000, valid_bits)?, output)
         }
+        "sweep" => {
+            let capture = PathBuf::from(args.next().ok_or("capture WAV is required")?);
+            let output = PathBuf::from(args.next().ok_or("metrics output path is required")?);
+            let start_hz = args.next().ok_or("sweep start frequency is required")?.parse::<f64>()
+                .map_err(|_| "sweep start frequency must be numeric".to_string())?;
+            let end_hz = args.next().ok_or("sweep end frequency is required")?.parse::<f64>()
+                .map_err(|_| "sweep end frequency must be numeric".to_string())?;
+            let tolerance = args.next().ok_or("sweep response tolerance is required")?.parse::<f64>()
+                .map_err(|_| "sweep response tolerance must be numeric".to_string())?;
+            (m03_cable_quality::analyze_sweep_pair_wav(&first, &capture, start_hz, end_hz, tolerance)?, output)
+        }
         "analyze" => {
             let capture = PathBuf::from(args.next().ok_or("capture WAV is required")?);
             let output = PathBuf::from(args.next().ok_or("metrics output path is required")?);
@@ -45,7 +56,7 @@ fn run() -> Result<(), String> {
                 .map_err(|_| "frequency must be numeric".to_string())).transpose()?;
             (m03_cable_quality::analyze_wav_pair(&first, &capture, max_offset, frequency)?, output)
         }
-        _ => return Err("usage: m03-cable-quality analyze <reference.wav> <capture.wav> <metrics.json> [max-offset-frames] [frequency-hz] | silence <capture.wav> <metrics.json> [max-peak-dbfs] | tone <reference.wav> <capture.wav> <metrics.json> <frequency-hz> <max-thdn-db> | pcm <reference-float.wav> <capture-float.wav> <metrics.json> <valid-bits:16|24>".into()),
+        _ => return Err("usage: m03-cable-quality analyze <reference.wav> <capture.wav> <metrics.json> [max-offset-frames] [frequency-hz] | silence <capture.wav> <metrics.json> [max-peak-dbfs] | tone <reference.wav> <capture.wav> <metrics.json> <frequency-hz> <max-thdn-db> | pcm <reference-float.wav> <capture-float.wav> <metrics.json> <valid-bits:16|24> | sweep <reference.wav> <capture.wav> <metrics.json> <start-hz> <end-hz> <tolerance-db>".into()),
     };
     if args.next().is_some() {
         return Err("too many arguments".into());

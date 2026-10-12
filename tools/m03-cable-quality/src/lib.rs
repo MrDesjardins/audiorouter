@@ -634,6 +634,129 @@ pub fn analyze_tone_pair_wav(
     )
 }
 
+/// Compare a captured logarithmic sweep to its reference using local
+/// Hann-windowed single-frequency projections. This measures relative
+/// passband magnitude only; aliasing and phase response need separate cases.
+pub fn analyze_sweep_pair_wav(
+    reference_path: &std::path::Path,
+    capture_path: &std::path::Path,
+    start_hz: f64,
+    end_hz: f64,
+    max_deviation_db: f64,
+) -> Result<serde_json::Value, String> {
+    if !start_hz.is_finite()
+        || !end_hz.is_finite()
+        || start_hz <= 0.0
+        || end_hz <= start_hz
+        || !max_deviation_db.is_finite()
+        || max_deviation_db <= 0.0
+    {
+        return Err("sweep range and positive response tolerance must be finite and valid".into());
+    }
+    let (rate, channels, reference) = read_float_wav(reference_path)?;
+    let (capture_rate, capture_channels, capture) = read_float_wav(capture_path)?;
+    if rate != capture_rate || channels != capture_channels {
+        return Err("reference and capture WAV formats do not match".into());
+    }
+    if end_hz >= f64::from(rate) / 2.0 {
+        return Err("sweep end frequency must be below Nyquist".into());
+    }
+    let channel_count = usize::from(channels);
+    let reference_frames = reference.len() / channel_count;
+    let capture_frames = capture.len() / channel_count;
+    let window = (rate as usize / 4).max(256);
+    if reference_frames < window * 2 {
+        return Err("sweep WAV is too short for response analysis".into());
+    }
+    let first_reference = reference
+        .iter()
+        .step_by(channel_count)
+        .copied()
+        .collect::<Vec<_>>();
+    let first_capture = capture
+        .iter()
+        .step_by(channel_count)
+        .copied()
+        .collect::<Vec<_>>();
+    let (offset, _) = align(&first_reference, &first_capture, 96_000)
+        .ok_or("could not align sweep reference and capture")?;
+    let half = window / 2;
+    if offset
+        .checked_add(reference_frames)
+        .is_none_or(|end| end > capture_frames)
+    {
+        return Err("capture ended before the reference sweep finished".into());
+    }
+    let duration = reference_frames as f64 / f64::from(rate);
+    let logarithmic_range = (end_hz / start_hz).ln();
+    let first_time = half as f64 / f64::from(rate);
+    let last_time = (reference_frames - half) as f64 / f64::from(rate);
+    let first_hz = start_hz * (logarithmic_range * first_time / duration).exp();
+    let last_hz = start_hz * (logarithmic_range * last_time / duration).exp();
+    let points = 48usize;
+    let frequencies = (0..points)
+        .map(|index| first_hz * (last_hz / first_hz).powf(index as f64 / (points - 1) as f64))
+        .collect::<Vec<_>>();
+    let mut per_channel = Vec::with_capacity(channel_count);
+    let mut worst = 0.0f64;
+    for channel in 0..channel_count {
+        let mut response = Vec::with_capacity(points);
+        let mut channel_worst = 0.0f64;
+        for &frequency in &frequencies {
+            let center_time = duration * (frequency / start_hz).ln() / logarithmic_range;
+            let center = (center_time * f64::from(rate)).round() as usize;
+            let begin = center.saturating_sub(half);
+            let ref_mono = (begin..begin + window)
+                .map(|frame| reference[frame * channel_count + channel])
+                .collect::<Vec<_>>();
+            let capture_begin = offset + begin;
+            let captured_mono = (capture_begin..capture_begin + window)
+                .map(|frame| capture[frame * channel_count + channel])
+                .collect::<Vec<_>>();
+            let reference_amplitude = projected_amplitude(&ref_mono, rate, frequency);
+            let capture_amplitude = projected_amplitude(&captured_mono, rate, frequency);
+            if reference_amplitude <= f64::MIN_POSITIVE || capture_amplitude <= f64::MIN_POSITIVE {
+                return Err("sweep response contains silence at an analysis frequency".into());
+            }
+            let deviation_db = 20.0 * (capture_amplitude / reference_amplitude).log10();
+            channel_worst = channel_worst.max(deviation_db.abs());
+            response
+                .push(serde_json::json!({"frequencyHz": frequency, "deviationDb": deviation_db}));
+        }
+        worst = worst.max(channel_worst);
+        per_channel.push(serde_json::json!({"channel": channel, "maxAbsoluteDeviationDb": channel_worst, "points": response}));
+    }
+    Ok(serde_json::json!({
+        "requirement": "VCAB-22",
+        "target": format!("sweep passband magnitude deviation <= {max_deviation_db} dB"),
+        "pass": worst <= max_deviation_db,
+        "format": {"sampleRateHz": rate, "channels": channels, "encoding": "float32"},
+        "frames": reference_frames,
+        "alignmentOffsetFrames": offset,
+        "frequencyRangeHz": {"start": start_hz, "end": end_hz},
+        "analysisPointsPerChannel": points,
+        "maxDeviationDb": max_deviation_db,
+        "worstDeviationDb": worst,
+        "channelsMetrics": per_channel,
+        "scope": "relative passband magnitude only; aliasing and phase response are not measured"
+    }))
+}
+
+fn projected_amplitude(samples: &[f32], sample_rate: u32, frequency_hz: f64) -> f64 {
+    let mut real = 0.0;
+    let mut imaginary = 0.0;
+    let mut window_sum = 0.0;
+    let length = samples.len();
+    for (index, sample) in samples.iter().enumerate() {
+        let window = 0.5 - 0.5 * (std::f64::consts::TAU * index as f64 / (length - 1) as f64).cos();
+        let phase = std::f64::consts::TAU * frequency_hz * index as f64 / f64::from(sample_rate);
+        real += f64::from(*sample) * window * phase.cos();
+        imaginary += f64::from(*sample) * window * phase.sin();
+        window_sum += window;
+    }
+    2.0 * real.hypot(imaginary) / window_sum
+}
+
 fn analyze_tone_samples(
     capture_path: &std::path::Path,
     sample_rate: u32,
@@ -912,6 +1035,43 @@ mod tests {
         let report = analyze_pcm_pair_wav(&reference_path, &capture_path, 32, 16).unwrap();
         assert_eq!(report["pass"], false);
         assert!(analyze_pcm_pair_wav(&reference_path, &capture_path, 32, 32).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sweep_response_metric_reports_passband_gain_and_tolerance() {
+        let root = std::env::temp_dir().join(format!("m03-quality-sweep-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let reference_path = root.join("reference.wav");
+        let capture_path = root.join("capture.wav");
+        let mono = log_sweep(48_000 * 4, 48_000, 10.0, 20_000.0, 0.8);
+        let mut reference = Vec::with_capacity(mono.len() * 2);
+        let mut capture = vec![0.0; 26];
+        let gain = 10f64.powf(0.03 / 20.0) as f32;
+        for sample in &mono {
+            reference.extend([*sample, *sample]);
+            capture.extend([*sample * gain, *sample * gain]);
+        }
+        write_test_wav(&reference_path, 2, &reference);
+        write_test_wav(&capture_path, 2, &capture);
+        let report =
+            analyze_sweep_pair_wav(&reference_path, &capture_path, 20.0, 20_000.0, 0.05).unwrap();
+        assert_eq!(report["requirement"], "VCAB-22");
+        assert_eq!(report["pass"], true);
+        assert_eq!(report["alignmentOffsetFrames"], 13);
+        assert_eq!(report["channelsMetrics"].as_array().unwrap().len(), 2);
+        let gain = 10f64.powf(0.10 / 20.0) as f32;
+        let outside = mono
+            .iter()
+            .flat_map(|sample| [*sample * gain, *sample * gain])
+            .collect::<Vec<_>>();
+        write_test_wav(&capture_path, 2, &outside);
+        let report =
+            analyze_sweep_pair_wav(&reference_path, &capture_path, 20.0, 20_000.0, 0.05).unwrap();
+        assert_eq!(report["pass"], false);
+        assert!(
+            analyze_sweep_pair_wav(&reference_path, &capture_path, 20.0, 24_000.0, 0.05).is_err()
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
