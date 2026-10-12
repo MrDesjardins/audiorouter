@@ -2252,6 +2252,33 @@ failure-to-silence behavior, and stop/restart ownership. Do not change the
 kernel driver. Keep the VM sound-quality, continuity, latency, signing and
 installer gates open; no synthetic result closes those gates.
 
+### WP-09 mixed-clock implementation record (2026-10-11)
+
+Objective: allow `VirtualRenderSource` and `VirtualCaptureSink` to participate
+in the existing multi-path user-mode route compiler alongside physical
+endpoints, preserving the engine's 48 kHz conversion and per-path drift
+handling. Requirement IDs: VCAB-22/23, VCAB-03/04, VDEV-04/12; design:
+`docs/spec/17-virtual-cable.md` §7.3. Prerequisites: WP-08 status/API and the
+WP-09 cable-only worker are implemented; native bridge bindings are staged by
+the shell as for current cable routes. No kernel or driver files may change.
+
+Ordered tasks: (1) map the current multi-path compiler, worker lifecycle and
+bridge-binding ownership; (2) design the smallest source/sink binding extension
+that admits virtual sources/sinks through the same compiled graph without
+special-case audio processing; (3) implement portable compilation, channel and
+rate conversion, silence-on-failure, and stop/restart tests; (4) add Windows
+binding/service coverage where it is host-testable; (5) run required formatting,
+lint, Clippy and relevant tests; (6) inspect the exact diff and record evidence.
+
+Validation matrix: portable engine/control tests for cable plus physical
+capture/render path shapes and conversion; controller tests for missing/stale
+leases and stop/restart ownership; Windows build checks for bridge worker
+integration. Real endpoint, driver, 10-minute tone, drift and VM continuity
+evidence are separate required gates and remain open when unavailable. Rollback:
+revert only the mixed-route implementation commit; the established cable-only
+`CableRouteWorker` path remains intact. Current action: step 1, map compiler,
+bindings and worker service before code changes.
+
 The 2026-10-07 failure and repaired-package replay are recorded in
 [the crash follow-up evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
 The repaired package identity matched in the VM and Windows completed the
