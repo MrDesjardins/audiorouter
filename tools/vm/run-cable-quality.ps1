@@ -15,6 +15,7 @@ if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') {
 }
 . (Join-Path $bundle 'paired-trace-support.ps1')
 . (Join-Path $bundle 'repo\tests\acceptance\m03-driver-vm-support.ps1')
+. (Join-Path $bundle 'cable-quality-metrics.ps1')
 Assert-PairedTraceAdministrator
 Assert-PairedTraceBundle $bundle
 
@@ -51,10 +52,28 @@ if ($ChannelMatrix) {
         $archive = Get-ChildItem -LiteralPath $bundle -Filter "$archivePrefix$matrixChannels*ch-*.zip" -File |
             Where-Object { $_.LastWriteTimeUtc -ge $childStartedUtc.AddSeconds(-2) } |
             Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-        if (-not $archive) { $childCode = 1; $matrixPassed = $false }
+        $measurement = $null
+        if ($archive) {
+            try { $measurement = Read-CableQualityArchiveMetric -ArchivePath $archive.FullName }
+            catch {
+                Write-Host "Could not read measurement from $($archive.Name): $_"
+                $childCode = 1
+                $childVerdict = 'ERROR'
+                $matrixPassed = $false
+            }
+        }
+        else { $childCode = 1; $matrixPassed = $false }
+        if ($measurement -and $measurement.AnalyzerPass -eq $false) {
+            $childVerdict = 'FAIL'
+            $matrixPassed = $false
+        }
         $matrixResults += [pscustomobject][ordered]@{
             Case = $Case; Channels = $matrixChannels; ExitCode = $childCode
             Verdict = $childVerdict
+            Metric = if ($measurement) { $measurement.Name } else { $null }
+            Value = if ($measurement) { $measurement.Value } else { $null }
+            Units = if ($measurement) { $measurement.Units } else { $null }
+            AnalyzerPass = if ($measurement) { $measurement.AnalyzerPass } else { $null }
             EvidenceArchive = if ($archive) { Join-Path $peer $archive.Name } else { $null }
         }
         if ($childCode -ne 0 -or $childVerdict -ne 'PASS') { $matrixPassed = $false; break }

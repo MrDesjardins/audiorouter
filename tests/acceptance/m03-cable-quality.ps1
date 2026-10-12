@@ -16,8 +16,9 @@ $qualityRunner = Join-Path $workspace 'tools\vm\run-cable-quality.ps1'
 $isolationRunner = Join-Path $workspace 'tools\vm\run-cable-isolation-matrix.ps1'
 $thdnRunner = Join-Path $workspace 'tools\vm\run-cable-thdn.ps1'
 $sweepRunner = Join-Path $workspace 'tools\vm\run-cable-sweep.ps1'
+$metricReader = Join-Path $workspace 'tools\vm\cable-quality-metrics.ps1'
 $prepare = Join-Path $workspace 'tools\vm\prepare-cable-latency-update.ps1'
-foreach ($scriptPath in @($runner,$qualityRunner,$isolationRunner,$thdnRunner,$sweepRunner,$prepare)) {
+foreach ($scriptPath in @($runner,$qualityRunner,$isolationRunner,$thdnRunner,$sweepRunner,$metricReader,$prepare)) {
     $tokens = $null; $parseErrors = $null
     [void][Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$parseErrors)
     Assert (($null -eq $parseErrors) -or ($parseErrors.Count -eq 0)) "PowerShell parses: $([IO.Path]::GetFileName($scriptPath))"
@@ -37,6 +38,8 @@ Assert ($qualityText -match '\[ValidateRange\(1, 8\)\]\[int\] \$Channels' -and $
 Assert ($qualityText -match '\[switch\] \$ChannelMatrix' -and $qualityText -match '@\(1, 2, 8\)' -and $qualityText -match '\-File \$PSCommandPath -Case \$Case -Channels \$matrixChannels' -and $qualityText -match "Case -eq 'thdn-997-48k'") 'VM entry point runs guarded sample, sweep and THD+N channel matrices'
 Assert ($qualityText -match 'quality-matrix-\$Case' -and $qualityText -match 'EvidenceArchive' -and $qualityText -match 'Qualification = \$false' -and $qualityText -match 'Copy-Item -LiteralPath \$summaryPath') 'channel matrix writes and copies a non-qualification summary'
 Assert ($qualityText -match '\$matrixResults \| Export-Csv' -and $qualityText -match 'Copy-Item -LiteralPath \$tablePath') 'channel matrix creates a shareable CSV summary table'
+Assert ($qualityText -match 'Read-CableQualityArchiveMetric' -and $qualityText -match 'Metric = if \(\$measurement\)' -and $qualityText -match 'Value = if \(\$measurement\)' -and $qualityText -match 'Units = if \(\$measurement\)') 'channel matrix summaries include measured values and units'
+Assert ((Get-Content -LiteralPath $metricReader -Raw) -match 'worstDeviationDb[\s\S]*worstThdnDb[\s\S]*maximumErrorLsb[\s\S]*maxAbsoluteError') 'archive reader extracts sweep, THD+N, PCM and sample error metrics'
 Assert ($qualityText -match 'Sweep response diagnostic passed:' -and $qualityText -match 'THD\\\+N diagnostic passed:' -and $qualityText -match '\$archivePrefix\$matrixChannels\*ch-\*\.zip' -and $qualityText -match 'LastWriteTimeUtc') 'channel summary resolves sweep/THD+N verdicts and evidence archives'
 Assert ($qualityText -match "Case -eq 'thdn-997-48k'.*'thdn-997-hz-'" -and $qualityText -match 'THD\\\+N diagnostic failed') 'channel summary maps THD+N archives and failures'
 Assert ($qualityText -match 'isolation-A-to-B' -and $qualityText -match "'silence'.*'-140'") 'VM entry point records a cable isolation measurement against VCAB-26'
@@ -64,6 +67,16 @@ Assert ($prepareText -match 'run-cable-isolation-matrix\.ps1') 'bundle preparati
 Assert ($prepareText -match 'cable-sample-format-selftest') 'bundle preparation checks the integer sample conversion helpers'
 Assert ($prepareText -match 'run-cable-sweep\.ps1') 'bundle preparation stages the sweep runner'
 Assert ($prepareText -match 'run-cable-thdn\.ps1') 'bundle preparation stages the THD+N runner'
+Assert ($prepareText -match 'cable-quality-metrics\.ps1') 'bundle preparation stages the matrix metric reader'
+
+$zipFixture = Join-Path $root 'metric-fixture.zip'
+$fixtureDir = Join-Path $root 'metric-fixture'
+New-Item -ItemType Directory -Path $fixtureDir | Out-Null
+@{ pass = $true; worstDeviationDb = 0.031 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureDir 'metrics.json') -Encoding UTF8
+[IO.Compression.ZipFile]::CreateFromDirectory($fixtureDir, $zipFixture)
+. $metricReader
+$fixtureMetric = Read-CableQualityArchiveMetric -ArchivePath $zipFixture
+Assert ($fixtureMetric.Name -eq 'Worst response deviation' -and $fixtureMetric.Value -eq 0.031 -and $fixtureMetric.Units -eq 'dB' -and $fixtureMetric.AnalyzerPass) 'archive reader recovers a measurement from a synthetic evidence ZIP'
 
 if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
     $guard = Invoke-DriverVmProcess -Executable (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `

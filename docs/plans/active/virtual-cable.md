@@ -2045,6 +2045,10 @@ WP-09 mixed-clock route work.
   actual cable matrix execution, driver resampling response, aliasing, imaging,
   phase/group delay, continuity, and A16 evidence still require the disposable
   VM or physical loopback and remain unmeasured.
+  The guarded channel-matrix JSON/CSV summary now also reads each child
+  archive's metrics and includes the numeric worst response, THD+N, PCM-LSB,
+  or sample-error value with units. A synthetic ZIP fixture verifies the
+  archive reader without starting the device runner.
 
 #### Integer PCM analyzer codecs — progress
 

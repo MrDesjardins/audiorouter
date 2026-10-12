@@ -297,3 +297,18 @@ Checks on Windows host PATRICK5080 (not AR-DriverTest), pinned Rust 1.96.0:
 
 No driver, VM, endpoint, or physical loopback was used. The 56 ordered-pair
 matrix and all device-dependent acceptance remain unmeasured.
+
+## Numeric channel-matrix summary — 2026-10-11
+
+The guarded 1/2/8-channel matrix now reads each child's evidence archive and
+adds the primary measured value, units, and analyzer verdict to both JSON and
+CSV rows. Supported summaries include worst sweep deviation (dB), worst
+THD+N (dB), maximum PCM error (LSB), and maximum float sample error (FS).
+Missing archives or missing/unreadable metrics fail the matrix rather than
+producing an incomplete summary. A host-safe synthetic ZIP fixture exercises
+the archive parser; no cable runner is launched.
+
+On PATRICK5080, the cable quality acceptance passed 49 host-safe checks,
+including PowerShell parsing, the synthetic archive fixture and the disposable
+VM guard. Documentation validation passed (149 Markdown files, 858 local
+links). No live endpoint or driver test was run.

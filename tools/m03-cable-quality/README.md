@@ -34,8 +34,9 @@ integer-grid noise and float64 captures. A failed measurement exits
 unsuccessfully, so a channel
 matrix stops at its first bad case. `-ChannelMatrix` writes JSON and CSV
 summaries with each channel count's verdict, exit code and evidence archive
-path; the archive's `metrics.json` contains the measured values. These cases
-are diagnostic and have not yet been measured in the VM.
+path, plus the primary measured value and units extracted from the archive's
+`metrics.json`. These cases are diagnostic and have not yet been measured in
+the VM.
 
 The `sweep` analyzer mode compares 48 logarithmically spaced local magnitude
 projections from a reference/capture pair. Guarded VM cases
