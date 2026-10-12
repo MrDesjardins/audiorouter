@@ -193,3 +193,29 @@ The same quality entry point now exposes `eight-cable-continuity`, forwarding
 `-Minutes` to the existing four-route runner. That runner enables eight cables
 and restores the prior cable count in `finally`. The host-safe acceptance
 checks the case and runner wiring only; no helper or driver operation ran.
+
+## PCM32 float64 analyzer path
+
+Added strict IEEE float64 WAV read/write and a PCM32 one-LSB comparison path.
+The analyzer aligns on a float32 projection only to locate the frame offset,
+then computes all errors in float64. A synthetic stereo fixture contains
+values below float32 resolution, passes after PCM32 quantization, and fails
+when one channel is corrupted by two LSBs. This proves the portable analyzer
+can evaluate the target without collapsing samples to float32. The native
+probe and VM runner still do not produce PCM32 captures, so there is no
+end-to-end PCM32 evidence.
+
+Checks on Windows host `PATRICK5080`, pinned Rust 1.96.0:
+
+- Analyzer tests — 13 passed; standalone Clippy (`-D warnings`) — passed.
+- The initial regression used a sample whose float32 rounding happened to be
+  within one PCM32 LSB; it was corrected to require at least one sample whose
+  float32 projection loses more than one LSB.
+- Cable quality acceptance — 35 host-safe checks passed; documentation
+  validation — 149 Markdown files and 858 local links passed.
+- `cargo fmt --manifest-path tools/m03-cable-quality/Cargo.toml -- --check`
+  and `git diff --check` — passed.
+
+The first format check requested one rustfmt line wrap; formatting was applied
+and the complete portable checks then passed. Native PCM32 endpoint evidence
+remains unavailable because the probe still does not preserve PCM32 data.

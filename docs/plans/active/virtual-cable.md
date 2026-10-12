@@ -2026,31 +2026,27 @@ WP-09 mixed-clock route work.
   existing 997/47 Hz and four-route eight-cable continuity runners with a
   duration selector. Sweep analysis
   measures passband magnitude only; phase, aliasing and imaging remain open.
-  Exercise the PCM and sweep cases in the disposable VM and use returned
-  metrics to verify analyzer/probe agreement. Keep PCM32 blocked until the
-  analyzer preserves its ≤1-LSB target. Afterward add per-channel-count cases
+  PCM32 now has an analyzer-only float64 WAV path and a sub-float32 one-LSB
+  regression; the native probe still cannot preserve PCM32 captures. Next:
+  extend native sample generation/capture/WAV output for PCM32, then exercise
+  PCM and sweep cases in the disposable VM. Afterward add per-channel-count cases
   and cover sweep/resampling and continuity metrics. Keep A16 blocked until
   the channel-count decision and VM access gates are resolved; never count
   synthetic checks as Stage A evidence.
 
-#### Next implementation slice — integer PCM analyzer codecs
+#### Integer PCM analyzer codecs — progress
 
 Requirement IDs: VCAB-12, VCAB-20/21; specification 17 §3 and §11.2.
-Prerequisite evidence: the analyzer currently accepts IEEE float32 WAV only;
-the native probe's existing shared-mode capture path also requests float32.
-Ordered work: (1) add strict PCM16 and PCM24-in-32 WAV decoding/encoding
-with rounding and sign-extension tests; (2) add per-channel quantization/error
-metrics and host-generated WAV fixtures; (3) keep PCM32 deferred until the
-analyzer's internal sample representation preserves its ≤1-LSB target;
-(4) extend the guarded runner only when the native probe can negotiate and
-report the requested Windows shared format. Validation: unit tests, format,
-Clippy, docs and host-safe acceptance; inspect emitted headers and bytes.
-Windows evidence remains required for endpoint negotiation and route capture.
-Rollback: revert this slice's codec commit. Completed 2026-10-11: strict
-portable PCM16 and extensible PCM24-in-32 WAV read/write with validation,
-sign extension, channel preservation and ≤1-LSB round-trip tests. The codec is
-not wired to native endpoint capture. Next action: add explicit native shared
-format negotiation and format reporting before any PCM endpoint run.
+Completed 2026-10-11: strict PCM16 and extensible PCM24-in-32 WAV read/write,
+validation, sign extension, channel preservation, and ≤1-LSB tests. The
+analyzer's PCM32 mode now accepts float64 WAV pairs, retains sub-float32
+precision, aligns frames and applies the PCM32 ≤1-LSB verdict. The native
+probe/runner still supports only float32, PCM16 and PCM24-in-32; no PCM endpoint
+matrix has been measured. Next: add raw high-precision PCM32 generation and
+capture/WAV output to the native probe, then expose a guarded PCM32 route case.
+Validation: host unit tests, format, Clippy, docs and acceptance; guest run
+required before any endpoint claim. Rollback: revert the dedicated analyzer or
+native probe commit; no data migration.
 
 ## WP-10 — UI (17 §7.4)
 

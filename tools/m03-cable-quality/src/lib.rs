@@ -267,6 +267,103 @@ pub fn read_float_wav(path: &std::path::Path) -> Result<(u32, u16, Vec<f32>), St
     Ok((rate, channels, samples))
 }
 
+pub fn read_float64_wav(path: &std::path::Path) -> Result<(u32, u16, Vec<f64>), String> {
+    let bytes = std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err("expected a RIFF/WAVE file".into());
+    }
+    let mut format = None;
+    let mut data = None;
+    let mut cursor = 12usize;
+    while cursor.checked_add(8).is_some_and(|end| end <= bytes.len()) {
+        let id = &bytes[cursor..cursor + 4];
+        let size = u32::from_le_bytes(bytes[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
+        let start = cursor + 8;
+        let end = start.checked_add(size).ok_or("WAV chunk size overflow")?;
+        if end > bytes.len() {
+            return Err("truncated WAV chunk".into());
+        }
+        match id {
+            b"fmt " if size >= 16 => {
+                format = Some((
+                    u16::from_le_bytes(bytes[start..start + 2].try_into().unwrap()),
+                    u16::from_le_bytes(bytes[start + 2..start + 4].try_into().unwrap()),
+                    u32::from_le_bytes(bytes[start + 4..start + 8].try_into().unwrap()),
+                    u16::from_le_bytes(bytes[start + 14..start + 16].try_into().unwrap()),
+                ))
+            }
+            b"data" => data = Some(&bytes[start..end]),
+            _ => {}
+        }
+        cursor = end + (size & 1);
+    }
+    let (tag, channels, rate, bits) = format.ok_or("WAV fmt chunk is missing")?;
+    if tag != 3 || channels == 0 || rate == 0 || bits != 64 {
+        return Err("expected interleaved IEEE float64 WAV".into());
+    }
+    let raw = data.ok_or("WAV data chunk is missing")?;
+    if raw.len() % 8 != 0 || raw.len() % (usize::from(channels) * 8) != 0 {
+        return Err("WAV data is not a whole number of frames".into());
+    }
+    let samples = raw
+        .chunks_exact(8)
+        .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+        .collect::<Vec<_>>();
+    if samples.iter().any(|sample| !sample.is_finite()) {
+        return Err("WAV contains non-finite samples".into());
+    }
+    Ok((rate, channels, samples))
+}
+
+pub fn write_float64_wav(
+    path: &std::path::Path,
+    sample_rate: u32,
+    channels: u16,
+    samples: &[f64],
+) -> Result<(), String> {
+    if sample_rate == 0
+        || channels == 0
+        || samples.is_empty()
+        || !samples.len().is_multiple_of(usize::from(channels))
+    {
+        return Err(
+            "float64 WAV requires a positive rate, channels, and whole nonempty frames".into(),
+        );
+    }
+    if samples.iter().any(|sample| !sample.is_finite()) {
+        return Err("float64 samples must be finite".into());
+    }
+    let data_size = samples
+        .len()
+        .checked_mul(8)
+        .ok_or("float64 WAV data size overflow")?;
+    let data_size = u32::try_from(data_size).map_err(|_| "float64 WAV exceeds RIFF size limit")?;
+    let riff_size = data_size
+        .checked_add(36)
+        .ok_or("float64 WAV exceeds RIFF size limit")?;
+    let block_align = channels.checked_mul(8).ok_or("channel count overflow")?;
+    let byte_rate = sample_rate
+        .checked_mul(u32::from(block_align))
+        .ok_or("float64 WAV byte rate overflow")?;
+    let mut bytes = Vec::with_capacity(riff_size as usize + 8);
+    bytes.extend_from_slice(b"RIFF");
+    bytes.extend_from_slice(&riff_size.to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&3u16.to_le_bytes());
+    bytes.extend_from_slice(&channels.to_le_bytes());
+    bytes.extend_from_slice(&sample_rate.to_le_bytes());
+    bytes.extend_from_slice(&byte_rate.to_le_bytes());
+    bytes.extend_from_slice(&block_align.to_le_bytes());
+    bytes.extend_from_slice(&64u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&data_size.to_le_bytes());
+    for sample in samples {
+        bytes.extend_from_slice(&sample.to_le_bytes());
+    }
+    std::fs::write(path, bytes).map_err(|error| format!("{}: {error}", path.display()))
+}
+
 /// Read PCM16 or PCM24 stored left-aligned in a 32-bit WAVEFORMATEXTENSIBLE
 /// container. The returned values are normalized by 2^(valid_bits - 1).
 struct PcmWavFormat {
@@ -525,8 +622,11 @@ pub fn analyze_pcm_pair_wav(
     max_offset: usize,
     valid_bits: u16,
 ) -> Result<serde_json::Value, String> {
+    if valid_bits == 32 {
+        return analyze_pcm32_pair_wav(reference_path, capture_path, max_offset);
+    }
     if !matches!(valid_bits, 16 | 24) {
-        return Err("PCM measurement supports 16 or 24 valid bits".into());
+        return Err("PCM measurement supports 16, 24, or 32 valid bits".into());
     }
     let mut report = analyze_wav_pair(reference_path, capture_path, max_offset, None)?;
     let max_error = report["maxAbsoluteError"]
@@ -540,6 +640,65 @@ pub fn analyze_pcm_pair_wav(
     report["validBits"] = serde_json::json!(valid_bits);
     report["maximumErrorLsb"] = serde_json::json!(max_error / lsb);
     Ok(report)
+}
+
+fn analyze_pcm32_pair_wav(
+    reference_path: &std::path::Path,
+    capture_path: &std::path::Path,
+    max_offset: usize,
+) -> Result<serde_json::Value, String> {
+    let (rate, channels, reference) = read_float64_wav(reference_path)?;
+    let (capture_rate, capture_channels, capture) = read_float64_wav(capture_path)?;
+    if rate != capture_rate || channels != capture_channels {
+        return Err("reference and capture WAV formats do not match".into());
+    }
+    let channel_count = usize::from(channels);
+    let reference_frames = reference.len() / channel_count;
+    let capture_frames = capture.len() / channel_count;
+    if reference_frames == 0 || capture_frames == 0 {
+        return Err("WAV files contain no samples".into());
+    }
+    let ref_alignment = reference
+        .iter()
+        .step_by(channel_count)
+        .map(|x| *x as f32)
+        .collect::<Vec<_>>();
+    let cap_alignment = capture
+        .iter()
+        .step_by(channel_count)
+        .map(|x| *x as f32)
+        .collect::<Vec<_>>();
+    let (offset, frames) = align(&ref_alignment, &cap_alignment, max_offset)
+        .ok_or("could not align PCM32 reference and capture")?;
+    let mut channels_report = Vec::with_capacity(channel_count);
+    let mut max_error = 0.0f64;
+    let mut squared_error = 0.0f64;
+    for channel in 0..channel_count {
+        let mut channel_max = 0.0f64;
+        let mut channel_squared = 0.0f64;
+        for frame in 0..frames {
+            let expected = reference[frame * channel_count + channel];
+            let actual = capture[(offset + frame) * channel_count + channel];
+            let error = (expected - actual).abs();
+            channel_max = channel_max.max(error);
+            channel_squared += error * error;
+        }
+        let rms = (channel_squared / frames as f64).sqrt();
+        max_error = max_error.max(channel_max);
+        squared_error += channel_squared;
+        channels_report.push(serde_json::json!({"channel": channel, "maxAbsoluteError": channel_max, "rmsError": rms}));
+    }
+    let lsb = 1.0 / 2f64.powi(31);
+    let pass = max_error <= lsb;
+    Ok(serde_json::json!({
+        "requirement": "VCAB-21", "target": "PCM32 round-trip error <= 1 LSB",
+        "pass": pass, "validBits": 32,
+        "format": {"sampleRateHz": rate, "channels": channels, "encoding": "float64 analysis of PCM32 values"},
+        "referenceFrames": reference_frames, "captureFrames": capture_frames,
+        "alignmentOffsetFrames": offset, "alignedFrames": frames,
+        "maxAbsoluteError": max_error, "rmsError": (squared_error / (frames * channel_count) as f64).sqrt(),
+        "maximumErrorLsb": max_error / lsb, "channelsMetrics": channels_report
+    }))
 }
 
 pub fn analyze_silence_wav(
@@ -1035,6 +1194,47 @@ mod tests {
         let report = analyze_pcm_pair_wav(&reference_path, &capture_path, 32, 16).unwrap();
         assert_eq!(report["pass"], false);
         assert!(analyze_pcm_pair_wav(&reference_path, &capture_path, 32, 32).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pcm32_pair_keeps_sub_float32_precision_for_the_lsb_verdict() {
+        let root = std::env::temp_dir().join(format!("m03-quality-pcm32-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let reference_path = root.join("reference.wav");
+        let capture_path = root.join("capture.wav");
+        let reference = (0..512)
+            .flat_map(|index| {
+                let left = ((index as f64 * 0.618_033_988_749_894_8).sin() * 0.75).clamp(-1.0, 1.0);
+                let right = ((index as f64 * 0.414_213_562_373_095).cos() * 0.65).clamp(-1.0, 1.0);
+                [left, right]
+            })
+            .collect::<Vec<_>>();
+        let captured = reference
+            .iter()
+            .map(|sample| (sample * 2_147_483_648.0).round() / 2_147_483_648.0)
+            .collect::<Vec<_>>();
+        write_float64_wav(&reference_path, 48_000, 2, &reference).unwrap();
+        let mut shifted = vec![0.0; 6];
+        shifted.extend_from_slice(&captured);
+        shifted.extend([0.0; 4]);
+        write_float64_wav(&capture_path, 48_000, 2, &shifted).unwrap();
+        let (_, _, decoded) = read_float64_wav(&reference_path).unwrap();
+        assert_eq!(decoded[0], reference[0]);
+        assert!(reference
+            .iter()
+            .any(|sample| { (*sample as f32 as f64 - *sample).abs() > 1.0 / 2_147_483_648.0 }));
+        let report = analyze_pcm_pair_wav(&reference_path, &capture_path, 16, 32).unwrap();
+        assert_eq!(report["alignmentOffsetFrames"], 3);
+        assert_eq!(report["pass"], true);
+        assert!(report["maximumErrorLsb"].as_f64().unwrap() <= 1.0);
+        let mut outside = shifted;
+        outside[3 * 2 + 1] += 2.0 / 2_147_483_648.0;
+        write_float64_wav(&capture_path, 48_000, 2, &outside).unwrap();
+        assert_eq!(
+            analyze_pcm_pair_wav(&reference_path, &capture_path, 16, 32).unwrap()["pass"],
+            false
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 

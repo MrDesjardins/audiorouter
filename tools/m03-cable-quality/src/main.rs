@@ -56,7 +56,7 @@ fn run() -> Result<(), String> {
                 .map_err(|_| "frequency must be numeric".to_string())).transpose()?;
             (m03_cable_quality::analyze_wav_pair(&first, &capture, max_offset, frequency)?, output)
         }
-        _ => return Err("usage: m03-cable-quality analyze <reference.wav> <capture.wav> <metrics.json> [max-offset-frames] [frequency-hz] | silence <capture.wav> <metrics.json> [max-peak-dbfs] | tone <reference.wav> <capture.wav> <metrics.json> <frequency-hz> <max-thdn-db> | pcm <reference-float.wav> <capture-float.wav> <metrics.json> <valid-bits:16|24> | sweep <reference.wav> <capture.wav> <metrics.json> <start-hz> <end-hz> <tolerance-db>".into()),
+        _ => return Err("usage: m03-cable-quality analyze <reference.wav> <capture.wav> <metrics.json> [max-offset-frames] [frequency-hz] | silence <capture.wav> <metrics.json> [max-peak-dbfs] | tone <reference.wav> <capture.wav> <metrics.json> <frequency-hz> <max-thdn-db> | pcm <reference.wav> <capture.wav> <metrics.json> <valid-bits:16|24|32> | sweep <reference.wav> <capture.wav> <metrics.json> <start-hz> <end-hz> <tolerance-db>".into()),
     };
     if args.next().is_some() {
         return Err("too many arguments".into());

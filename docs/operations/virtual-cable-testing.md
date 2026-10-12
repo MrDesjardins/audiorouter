@@ -228,8 +228,8 @@ analyzer metrics, but remain marked `Qualification = false`. They do not
 satisfy the 1/2/8-channel matrix or resampling cases. Guarded PCM16 and
 PCM24-in-32 diagnostics (`-Case pcm16-48k` / `pcm24-48k`) now check the actual
 Windows shared mix format and apply the one-LSB metric, but have not been run
-in the VM and remain unmeasured. PCM32 is not implemented because the current
-analyzer's float32 sample representation cannot establish its one-LSB target.
+in the VM and remain unmeasured. The analyzer now has a float64 PCM32 verdict
+path, but the native probe and VM runner do not yet produce PCM32 captures.
 Log-sweep cases (`-Case sweep-44k1`, `sweep-48k`, and `sweep-96k`) now measure
 relative 20 Hz–20 kHz passband magnitude against ±0.05 dB through the product
 route; aliasing, imaging and phase remain unmeasured, and the runner has not
