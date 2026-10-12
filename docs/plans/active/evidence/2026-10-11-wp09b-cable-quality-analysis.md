@@ -257,10 +257,11 @@ passes, and documentation validation remains 149 Markdown files / 858 links.
 
 Added `-ChannelMatrix` to the guarded quality entry point for float32, integer
 PCM, sweep and 997 Hz THD+N cases. It runs the selected case at 1, 2 and 8
-channels in order, stops on the first failed child run, and writes JSON and CSV summaries linking
-each verdict and exit code to its child evidence archive. The archive retains
-the per-run numeric metrics. Host-safe acceptance and parser checks cover the
-wiring; no VM route has been started.
+channels in order, stops on the first failed child run, and writes JSON and CSV
+summaries linking each verdict and exit code to its child evidence archive. The
+archive retains the per-run numeric metrics. Host-safe acceptance invokes the
+matrix from `PATRICK5080` and confirms the VM guard stops it before child
+execution; no VM route has been started. The harness acceptance passes 44 checks.
 
 Updated the analyzer README with the supported PCM rate and channel matrix,
 float64 PCM32 capture and remaining VM gate. Bundle preparation now rejects a

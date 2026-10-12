@@ -70,5 +70,9 @@ if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
         -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$runner) `
         -Stdout (Join-Path $root 'guard.txt') -Stderr (Join-Path $root 'guard-stderr.txt') -TimeoutSeconds 10
     Assert ($guard.Code -eq 1 -and (Get-Content -LiteralPath (Join-Path $root 'guard-stderr.txt') -Raw) -match 'Run inside AR-DriverTest') 'real runner rejects host before opening audio or starting processes'
+    $matrixGuard = Invoke-DriverVmProcess -Executable (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+        -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$qualityRunner,'-Case','float32-48k','-ChannelMatrix') `
+        -Stdout (Join-Path $root 'matrix-guard.txt') -Stderr (Join-Path $root 'matrix-guard-stderr.txt') -TimeoutSeconds 10
+    Assert ($matrixGuard.Code -eq 1 -and (Get-Content -LiteralPath (Join-Path $root 'matrix-guard-stderr.txt') -Raw) -match 'Run inside AR-DriverTest') 'channel matrix refuses to start outside the disposable VM'
 }
 Write-Host "$checks cable quality harness checks passed. No audio stream or driver tool was opened. Evidence: $root"
