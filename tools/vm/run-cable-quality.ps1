@@ -2,7 +2,7 @@
    diagnostic subsets of A16, never complete A16 qualification. #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','isolation-A-to-B')][string] $Case,
+    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','isolation-A-to-B','isolation-all-pairs')][string] $Case,
     [ValidateRange(1, 8)][int] $Channels = 2,
     [ValidateRange(5, 60)][int] $Seconds = 20
 )
@@ -25,6 +25,14 @@ if ($Case -like 'float32-*') {
         -NoProfile -ExecutionPolicy Bypass -File $runner -Channels $Channels -Rate $rate -Seconds $Seconds
     if ($LASTEXITCODE -ne 0) { throw "Float32 bit-exact diagnostic failed (exit $LASTEXITCODE)." }
     Write-Host 'Diagnostic case completed. A16 remains incomplete until every required rate, format, channel count, resampling and crosstalk case is implemented and run.'
+    return
+}
+if ($Case -eq 'isolation-all-pairs') {
+    $matrix = Join-Path $bundle 'run-cable-isolation-matrix.ps1'
+    if (-not (Test-Path -LiteralPath $matrix -PathType Leaf)) { throw 'The bundle has no ordered isolation matrix runner.' }
+    & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+        -NoProfile -ExecutionPolicy Bypass -File $matrix -Seconds $Seconds
+    if ($LASTEXITCODE -ne 0) { throw "Cable isolation matrix failed (exit $LASTEXITCODE)." }
     return
 }
 

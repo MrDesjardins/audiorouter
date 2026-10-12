@@ -81,6 +81,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-kill.ps1') -Destinati
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-tone.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-bitexact.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-quality.ps1') -Destination $output
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-isolation-matrix.ps1') -Destination $output
 if ($TimingDriverPackage) {
     $timingPackage = Get-Content -LiteralPath (Join-Path $TimingDriverPackage 'package.json') -Raw | ConvertFrom-Json
     if (-not $timingPackage.timingDiagnostics -or $timingPackage.signed -ne 'test' -or

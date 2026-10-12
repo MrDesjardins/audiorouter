@@ -8,8 +8,10 @@ THD+N fit. The native WASAPI bit-exact probe writes its real reference and
 captured samples as float32 WAVs on request; the product-route VM script calls
 the Rust analyzer and preserves `metrics.json` in its evidence bundle. A
 guarded VM entry point exposes float32 cases at 44.1/48/96 kHz (guest Cable
-formats must be set to match) and a single unrouted Cable A-to-B isolation
-case. Both report that the full A16 gate remains incomplete.
+formats must be set to match), a single unrouted Cable A-to-B isolation case,
+and a 56 ordered-pair isolation runner that temporarily enables eight cables
+and restores the initial count in `finally`. Every case is marked diagnostic;
+the full A16 gate remains incomplete.
 Synthetic tests cover reproducibility, alignment, channel-specific corruption
 detection, sine distortion and rejection of non-finite WAV samples.
 
@@ -22,7 +24,7 @@ Checks on Windows host `AR-DriverTest`, pinned Rust 1.96.0:
 - `cargo clippy --offline --manifest-path tools/m03-cable-quality/Cargo.toml
   --all-targets -- -D warnings` — passed.
 - `tests/acceptance/docs.ps1` — 149 Markdown files and 858 local links passed.
-- `tests/acceptance/m03-cable-quality.ps1` — 14 host-safe checks passed.
+- `tests/acceptance/m03-cable-quality.ps1` — 19 host-safe checks passed.
 - `tests/acceptance/m03-cable-bitexact.ps1` — 7 host-safe checks passed.
 - Native probe `cable-bitexact-selftest` — 10 passed. Cross-tool WAV writer →
   Rust analyzer self-test — bit exact, 2 channels, four-frame alignment.

@@ -225,9 +225,11 @@ to the requested shared mix rate (for example,
 unrouted Cable A-to-B isolation pair at −140 dBFS
 (`-Case isolation-A-to-B`). These cases write real captured samples and
 analyzer metrics, but remain marked `Qualification = false`. They do not
-satisfy the 1/2/8-channel matrix, integer-format, resampling, or pairwise
-eight-cable crosstalk cases. Do not mark A16 passed until the complete matrix
-has executed on the same VM build.
+satisfy the 1/2/8-channel matrix, integer-format, or resampling cases. The
+ordered pairwise isolation runner is `-Case isolation-all-pairs`; it enables
+eight cables for the diagnostic and restores the original count. No VM run has
+been recorded yet. Do not mark A16 passed until every required case has run on
+the same VM build.
 
 Stage A passes when A1–A16 pass on the same build. Only then is the EV
 certificate bought (user go-ahead).
