@@ -1996,7 +1996,8 @@ WP-09 mixed-clock route work.
   signals of known THD+N, delay and crosstalk (portable, runs on any OS).
 - **Acceptance:** VM run of all cable-only cases recorded (indicative);
   every metric has a value; failures are listed with numbers, not hidden.
-- **Status:** not started.
+- **Status:** not started; WP-12 preflight confirms the harness and acceptance
+  runner are absent. This is a required prerequisite to A16.
 
 ## WP-10 — UI (17 §7.4)
 
@@ -2189,7 +2190,51 @@ the install → update → uninstall keep/remove sequence in the disposable VM.
   `docs/plans/active/evidence/<date>-virtual-cable-stage-a.md`.
 - **Gate:** all pass → ask the user for the go-ahead to buy the EV
   certificate (WP-13).
-- **Status:** not started.
+- **Status:** preflight in progress; no Stage A checks run. A16 tooling is
+  missing, the plan requires 8-channel cases currently deferred by decision,
+  and VirtualBox control is unavailable in this session.
+
+### WP-12 preflight — Stage A gates (2026-10-11)
+
+Objective: qualify A1–A16 on one VM build; requirement IDs VCAB-01–05,
+VCAB-10/11, VCAB-20–30, VDEV-01/03/04/07/11/12, SEC-08 and NFR-02.
+Prerequisites: WP-07 driver helper, WP-08 status, WP-09 product cable route,
+WP-09b quality harness, and a verified test-signed package with matching tools.
+Rollback: Stage A is VM-only; restore `02-test-signing-ready` after each run and
+remove only the exact package/root device owned by the run. Never use the host
+for test-signing or driver installation.
+
+Preflight found three independent gates. First, `tools/m03-cable-quality/` and
+`tests/acceptance/m03-cable-quality.ps1` do not exist although WP-09b and A16
+require them. Second, A16 still requires 8-channel measurements; the user
+decision above deferred 8-channel cables because Windows exposes only stereo
+for the named endpoints. Do not relax the A16 criterion or use 2-channel results
+to claim it. Third, `VBoxManage list runningvms` and `list vms` return COM
+`E_ACCESSDENIED`; no VirtualBox VM process is running, so no guest test was
+started.
+
+Host-safe preflight evidence: the 0.1.4.0 test-signed r20 driver package is
+verified (33 package checks) at
+`C:\VMs\ar-share\diagnostics-20261011-notification-lock-r20\driver`; its
+metadata identifies clean source `6b2b915a`. The top-level
+`C:\VMs\ar-share\driver` package is stale (0.1.0, dirty source
+`083cf4d8`) and must not be used. The existing product-route bit-exact runner
+self-check passes 7 checks and the continuity runner self-check passes 189;
+both explicitly use fake process boundaries and opened no audio or driver
+device. Outputs: `target/cable-bitexact-tests-059e4043d1c84d5f84a9d9ba413b13df`,
+`target/cable-continuity-tests-b0dc5eac4c924fc79cfc9eeb5635e279`, and
+`target/driver-package-test-28c13504a20049858729fb58bd0416ba`. These are not
+Stage A results.
+
+Ordered next steps: (1) complete WP-09b's missing quality harness and unit-tested
+analysis without changing targets; (2) reconcile the explicit 8-channel deferral
+with A16 through an approved implementation/decision before the full gate; (3)
+prepare a fresh immutable Stage A bundle from one clean revision, with driver,
+helper, app, harness and manifest versions aligned; (4) run A1–A16 only inside
+the disposable VM, record each result and preserve failures; (5) seek the EV
+certificate go-ahead only if every required check passes. Current action:
+continue WP-09b as the unmet prerequisite; WP-12 remains in preflight and no
+qualification is claimed.
 
 ## WP-13 — Microsoft signing and stage B (user, costs money)
 
