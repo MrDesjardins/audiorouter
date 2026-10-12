@@ -1,5 +1,40 @@
 # Active plan — post-0.0.8 maintenance
 
+## MCP setup UX follow-up (2026-10-11)
+
+User asked for a direct ChatGPT setup button and clarity about the displayed
+client ID. The ID is AudioRouter's local enrolled-client name, not a ChatGPT
+or Claude application ID. ChatGPT custom MCP connections need an HTTP MCP
+endpoint or Secure MCP Tunnel; the existing AudioRouter adapter is local
+stdio. OpenAI's documented local plugin marketplace flow targets ChatGPT Work
+mode/Codex in Desktop and does not directly install this stdio server into
+ordinary ChatGPT. Keep the existing adapter and grants unchanged; add a link
+to ChatGPT's app directory and clear tunnel prerequisites/instructions in
+the MCP tab. Requirement: AUTO-13. Verify UI tests, typecheck, format/lint,
+and visual layout in all three themes. Rollback: revert the UI/docs commit.
+
+Implemented in `ui/src/Workbench.tsx`: clarifies the AudioRouter client ID,
+adds an **Open ChatGPT apps** link and links the official Secure MCP Tunnel
+guide. The help text explains that this stdio server needs a tunnel for
+ChatGPT's custom MCP flow and distinguishes regular ChatGPT from local Work
+mode/Codex plugins. `ui/e2e/audio-tools.pw.ts` checks the link and tunnel note.
+
+Checks on 2026-10-11 (Windows): `npm --prefix ui run format` completed;
+`npm --prefix ui run lint` had 0 errors and the existing 25 warnings;
+`npm --prefix ui run typecheck` passed; `git diff --check` passed. Vitest was
+attempted twice but failed to load transformed modules from ephemeral
+`AppData\\Local\\Packages\\sandbox.*\\Temp` paths (ENOENT), including with
+two workers and a workspace temp override; no code test result is claimed.
+The UI run spawned 57 workers and the user reported sudden Firefox audio
+echo/static during this task. The test process was stopped to remove load.
+Three-theme visual/e2e verification remains pending; do it when it will not
+compete with the user's audio session. This task changes setup guidance only,
+not MCP transport, grants, or audio processing.
+
+Next: after recording the three-theme UI evidence, commit this UI/docs change
+with exact paths, then resume the driver gate below without changing its
+acceptance criteria.
+
 ## Release 0.0.15 — 2026-10-10 (in progress)
 
 Driver r16 preparation: bounded opt-in timer/notification/fetch records,

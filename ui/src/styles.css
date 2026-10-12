@@ -3454,6 +3454,36 @@ button.primary {
   overflow-wrap: anywhere;
   box-sizing: border-box;
 }
+.mcp-chatgpt-setup {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+}
+.mcp-chatgpt-setup h4 {
+  margin: 0 0 0.35rem;
+}
+.mcp-chatgpt-setup p {
+  max-width: 56rem;
+}
+.mcp-chatgpt-doc-link {
+  display: inline-block;
+  margin-left: 0.75rem;
+}
+.mcp-chatgpt-open {
+  display: inline-block;
+  border: 1px solid #384458;
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  color: inherit;
+  background: transparent;
+  text-decoration: none;
+}
+.mcp-chatgpt-open:hover,
+.mcp-chatgpt-open:focus-visible {
+  border-color: #70a8ff;
+  outline: 2px solid #70a8ff;
+  outline-offset: 2px;
+}
 .mcp-howto code {
   overflow-wrap: anywhere;
 }

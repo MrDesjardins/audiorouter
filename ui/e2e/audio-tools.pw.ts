@@ -917,6 +917,13 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await expect(page.getByRole("heading", { name: "Incoming tool calls" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Use this installation" })).toBeVisible();
   await expect(page.getByLabel("Assistant client ID")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open ChatGPT apps" })).toHaveAttribute(
+    "href",
+    "https://chatgpt.com/apps",
+  );
+  await expect(
+    page.getByText(/Secure MCP Tunnel because this AudioRouter server runs locally over stdio/),
+  ).toBeVisible();
   await page.getByText("Codex config.toml").click();
   await expect(page.locator(".mcp-command").first()).toContainText("mcp_servers.audiorouter");
   await page.getByRole("button", { name: "Copy Codex config" }).click();

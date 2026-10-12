@@ -449,8 +449,8 @@ export function Workbench({
         <section className="workbench-page mcp-setup-card">
           <h3>Use this installation</h3>
           <p className="muted">
-            Authorize this client ID below, then copy a setup snippet into your assistant. In the desktop shell, paths
-            are filled automatically; browser previews show placeholders.
+            This client ID is AudioRouter's local authorization name. It does not identify ChatGPT or Claude. In the
+            desktop app, the connection paths below are filled automatically.
           </p>
           <label>
             Client ID
@@ -490,6 +490,26 @@ export function Workbench({
               Copy Claude command
             </button>
           </details>
+          <div className="mcp-chatgpt-setup">
+            <h4>Connect ChatGPT</h4>
+            <p className="muted">
+              ChatGPT's custom MCP connection needs a Secure MCP Tunnel because this AudioRouter server runs locally
+              over stdio. Set up a tunnel for this server first, then add it as a custom MCP server in ChatGPT. The
+              ChatGPT Windows app uses the same account's apps; a local plugin marketplace is for Work mode/Codex and
+              does not install this server into regular ChatGPT.
+            </p>
+            <a className="mcp-chatgpt-open" href="https://chatgpt.com/apps" target="_blank" rel="noreferrer">
+              Open ChatGPT apps
+            </a>
+            <a
+              className="mcp-chatgpt-doc-link"
+              href="https://developers.openai.com/api/docs/guides/secure-mcp-tunnels"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Secure MCP Tunnel setup guide
+            </a>
+          </div>
           {copyMessage && <p role="status">{copyMessage}</p>}
           <details>
             <summary>Authorize or revoke a client</summary>
@@ -500,8 +520,9 @@ export function Workbench({
       {tab === "mcp" && (
         <p className="muted mcp-howto">
           Authorize the same client ID above. Start with observer access. Copy the Codex TOML to{" "}
-          <code>%USERPROFILE%\.codex\config.toml</code>, or run the Claude Code PowerShell command. Restart the
-          assistant and ask it to list AudioRouter capabilities.
+          <code>%USERPROFILE%\.codex\config.toml</code>, or run the Claude Code PowerShell command. For ChatGPT, create
+          and run a Secure MCP Tunnel that launches the same local stdio command, then add that tunnel in ChatGPT apps.
+          After connecting, ask the assistant to list AudioRouter capabilities.
         </p>
       )}
       {tab === "diagnostics" && (
