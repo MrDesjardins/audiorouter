@@ -69,14 +69,34 @@ Assert ($prepareText -match 'run-cable-sweep\.ps1') 'bundle preparation stages t
 Assert ($prepareText -match 'run-cable-thdn\.ps1') 'bundle preparation stages the THD+N runner'
 Assert ($prepareText -match 'cable-quality-metrics\.ps1') 'bundle preparation stages the matrix metric reader'
 
-$zipFixture = Join-Path $root 'metric-fixture.zip'
-$fixtureDir = Join-Path $root 'metric-fixture'
-New-Item -ItemType Directory -Path $fixtureDir | Out-Null
-@{ pass = $true; worstDeviationDb = 0.031 } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureDir 'metrics.json') -Encoding UTF8
-[IO.Compression.ZipFile]::CreateFromDirectory($fixtureDir, $zipFixture)
 . $metricReader
-$fixtureMetric = Read-CableQualityArchiveMetric -ArchivePath $zipFixture
-Assert ($fixtureMetric.Name -eq 'Worst response deviation' -and $fixtureMetric.Value -eq 0.031 -and $fixtureMetric.Units -eq 'dB' -and $fixtureMetric.AnalyzerPass) 'archive reader recovers a measurement from a synthetic evidence ZIP'
+$fixtureCases = @(
+    @{ Name = 'Worst response deviation'; Key = 'worstDeviationDb'; Value = 0.031; Units = 'dB'; Pass = $true }
+    @{ Name = 'Worst THD+N'; Key = 'worstThdnDb'; Value = -112.5; Units = 'dB'; Pass = $true }
+    @{ Name = 'Maximum PCM error'; Key = 'maximumErrorLsb'; Value = 0.75; Units = 'LSB'; Pass = $true }
+    @{ Name = 'Maximum sample error'; Key = 'maxAbsoluteError'; Value = 0.0001; Units = 'FS'; Pass = $false }
+)
+for ($fixtureIndex = 0; $fixtureIndex -lt $fixtureCases.Count; $fixtureIndex++) {
+    $fixture = $fixtureCases[$fixtureIndex]
+    $fixtureDir = Join-Path $root "metric-fixture-$fixtureIndex"
+    $zipFixture = Join-Path $root "metric-fixture-$fixtureIndex.zip"
+    New-Item -ItemType Directory -Path $fixtureDir | Out-Null
+    $metricJson = @{ pass = $fixture.Pass }; $metricJson[$fixture.Key] = $fixture.Value
+    $metricJson | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureDir 'metrics.json') -Encoding UTF8
+    [IO.Compression.ZipFile]::CreateFromDirectory($fixtureDir, $zipFixture)
+    $fixtureMetric = Read-CableQualityArchiveMetric -ArchivePath $zipFixture
+    Assert ($fixtureMetric.Name -eq $fixture.Name -and $fixtureMetric.Value -eq $fixture.Value -and
+        $fixtureMetric.Units -eq $fixture.Units -and $fixtureMetric.AnalyzerPass -eq $fixture.Pass) "archive reader extracts $($fixture.Name) from a synthetic evidence ZIP"
+}
+$missingMetricDir = Join-Path $root 'metric-fixture-missing'
+$missingMetricZip = Join-Path $root 'metric-fixture-missing.zip'
+New-Item -ItemType Directory -Path $missingMetricDir | Out-Null
+@{ pass = $true } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $missingMetricDir 'metrics.json') -Encoding UTF8
+[IO.Compression.ZipFile]::CreateFromDirectory($missingMetricDir, $missingMetricZip)
+$missingMetricRejected = $false
+try { $null = Read-CableQualityArchiveMetric -ArchivePath $missingMetricZip }
+catch { $missingMetricRejected = $_.Exception.Message -match 'No supported numeric measurement' }
+Assert $missingMetricRejected 'archive reader rejects a report with no supported numeric measurement'
 
 if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
     $guard = Invoke-DriverVmProcess -Executable (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `

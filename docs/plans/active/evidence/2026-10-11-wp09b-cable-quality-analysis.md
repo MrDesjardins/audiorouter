@@ -308,7 +308,8 @@ Missing archives or missing/unreadable metrics fail the matrix rather than
 producing an incomplete summary. A host-safe synthetic ZIP fixture exercises
 the archive parser; no cable runner is launched.
 
-On PATRICK5080, the cable quality acceptance passed 49 host-safe checks,
-including PowerShell parsing, the synthetic archive fixture and the disposable
-VM guard. Documentation validation passed (149 Markdown files, 858 local
-links). No live endpoint or driver test was run.
+On PATRICK5080, the cable quality acceptance passed 53 host-safe checks,
+including PowerShell parsing, synthetic archive fixtures for all four metric
+types, missing-metric rejection, and the disposable VM guard. Documentation
+validation passed (149 Markdown files, 858 local links). No live endpoint or
+driver test was run.
