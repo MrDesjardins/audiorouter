@@ -1,0 +1,40 @@
+<# Host-safe checks for the WP-09b sample analyzer and guarded VM runner.
+   Does not open audio streams, inspect/install drivers, or start test tools. #>
+$ErrorActionPreference = 'Stop'
+$workspace = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+. (Join-Path $workspace 'tests\acceptance\m03-driver-vm-support.ps1')
+$root = Join-Path $workspace ('target\cable-quality-tests-' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $root | Out-Null
+$script:checks = 0
+function Assert([bool] $Value, [string] $Name) {
+    if (-not $Value) { throw "FAIL: $Name; evidence $root" }
+    $script:checks++
+}
+
+$runner = Join-Path $workspace 'tools\vm\run-cable-bitexact.ps1'
+$qualityRunner = Join-Path $workspace 'tools\vm\run-cable-quality.ps1'
+$prepare = Join-Path $workspace 'tools\vm\prepare-cable-latency-update.ps1'
+foreach ($scriptPath in @($runner,$qualityRunner,$prepare)) {
+    $tokens = $null; $errors = $null
+    [void][Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$errors)
+    Assert (-not $errors) "PowerShell parses: $([IO.Path]::GetFileName($scriptPath))"
+}
+$runnerText = Get-Content -LiteralPath $runner -Raw
+Assert ($runnerText -match 'm03-cable-quality\.exe') 'runner requires the Rust analyzer in the bundle'
+Assert ($runnerText -match 'cable-bitexact-reference\.wav' -and $runnerText -match 'cable-bitexact-capture\.wav') 'runner requires both real sample captures'
+Assert ($runnerText -match 'metrics\.json' -and $runnerText -match '\$metrics\.bitExact') 'the machine report contributes to the verdict'
+Assert ($runnerText -match 'Qualification = \$false') 'diagnostic runner cannot claim qualification'
+$qualityText = Get-Content -LiteralPath $qualityRunner -Raw
+Assert ($qualityText -match "ValidateSet\('float32-48k'\)") 'VM entry point exposes only the implemented case'
+Assert ($qualityText -match 'does not pass A16' -and $qualityText -match 'A16 remains incomplete') 'VM entry point cannot imply complete matrix coverage'
+$prepareText = Get-Content -LiteralPath $prepare -Raw
+Assert ($prepareText -match 'm03-cable-quality\.exe') 'bundle preparation builds and stages the analyzer'
+Assert ($prepareText -match 'run-cable-quality\.ps1') 'bundle preparation stages the WP-09b VM entry point'
+
+if ($env:COMPUTERNAME -ine 'AR-DriverTest') {
+    $guard = Invoke-DriverVmProcess -Executable (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+        -Arguments @('-NoProfile','-ExecutionPolicy','Bypass','-File',$runner) `
+        -Stdout (Join-Path $root 'guard.txt') -Stderr (Join-Path $root 'guard-stderr.txt') -TimeoutSeconds 10
+    Assert ($guard.Code -eq 1 -and (Get-Content -LiteralPath (Join-Path $root 'guard-stderr.txt') -Raw) -match 'Run inside AR-DriverTest') 'real runner rejects host before opening audio or starting processes'
+}
+Write-Host "$checks cable quality harness checks passed. No audio stream or driver tool was opened. Evidence: $root"

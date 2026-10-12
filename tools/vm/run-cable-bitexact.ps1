@@ -18,8 +18,10 @@ if (Get-Process -Name 'm03_bridge_tone','m03_cable_session','m03_direct_audio','
 $peer = Join-Path 'Z:\' (Split-Path -Leaf $bundle)
 if (-not (Test-Path -LiteralPath $peer -PathType Container)) { throw 'Copy the complete bundle from Z: first; evidence destination is missing.' }
 $probe = Join-Path $bundle 'tools\m00-probe.exe'
+$quality = Join-Path $bundle 'tools\m03-cable-quality.exe'
 $cableSession = Join-Path $bundle 'tools\m03_cable_session.exe'
 if (-not (Test-Path -LiteralPath $cableSession)) { throw 'This bundle has no m03_cable_session.exe.' }
+if (-not (Test-Path -LiteralPath $quality)) { throw 'This bundle has no m03-cable-quality.exe analyzer.' }
 $run = "bitexact-$Channels" + 'ch-' + [Guid]::NewGuid().ToString('N')
 $evidence = Join-Path 'C:\ar\evidence' $run
 New-Item -ItemType Directory -Path $evidence | Out-Null
@@ -54,22 +56,32 @@ try {
         Start-Sleep -Milliseconds 50
     }
     Start-Sleep -Milliseconds 1500
-    $measured = Invoke-DriverVmProcess -Executable $probe -Arguments @('cable-bitexact',[string]$Seconds,$render[0].Groups[1].Value,$capture[0].Groups[1].Value) `
+    $measured = Invoke-DriverVmProcess -Executable $probe -Arguments @('cable-bitexact',[string]$Seconds,$render[0].Groups[1].Value,$capture[0].Groups[1].Value,$evidence) `
         -Stdout (Join-Path $evidence 'probe.txt') -Stderr (Join-Path $evidence 'probe-stderr.txt') -TimeoutSeconds ($Seconds + 60)
     if (-not $route.WaitForExit(($Seconds + 60) * 1000)) { throw 'The route did not finish within its watchdog.' }
     $probeText = Get-Content -LiteralPath (Join-Path $evidence 'probe.txt') -Raw
+    $referenceWav = Join-Path $evidence 'cable-bitexact-reference.wav'
+    $captureWav = Join-Path $evidence 'cable-bitexact-capture.wav'
+    if (-not (Test-Path -LiteralPath $referenceWav) -or -not (Test-Path -LiteralPath $captureWav)) { throw 'The native probe did not produce both sample WAVs.' }
+    $analysisPath = Join-Path $evidence 'metrics.json'
+    $analysis = Invoke-DriverVmProcess -Executable $quality -Arguments @('analyze',$referenceWav,$captureWav,$analysisPath) `
+        -Stdout (Join-Path $evidence 'analysis.txt') -Stderr (Join-Path $evidence 'analysis-stderr.txt') -TimeoutSeconds 60
+    if ($analysis.Code -ne 0 -or -not (Test-Path -LiteralPath $analysisPath)) { throw 'Rust sample analyzer failed; see analysis-stderr.txt.' }
+    $metrics = Get-Content -LiteralPath $analysisPath -Raw | ConvertFrom-Json
     $routeText = Get-Content -LiteralPath $routeOut -Raw
     $formatChannels = Get-ProbeValue $probeText 'bitexact_channels'
     $result = [pscustomobject][ordered]@{
         Channels = $Channels; ProbeCode = $measured.Code; RouteCode = $route.ExitCode
         FormatChannels = $formatChannels; Pass = Get-ProbeValue $probeText 'bitexact_pass'
+        AnalyzerBitExact = $metrics.bitExact; AnalyzerMaxError = $metrics.maxAbsoluteError
+        AnalyzerRmsError = $metrics.rmsError; Metrics = $analysisPath
         CaptureDropped = Get-ProbeValue $probeText 'bitexact_capture_dropped_frames'
         CableRoute = ([regex]::Match($routeText, '(?m)^final cableRoute=(.*)$')).Groups[1].Value
     }
     if ($formatChannels -ne $Channels) {
         throw "Cable A Input / Cable B Output run at $formatChannels channels in Windows, not $Channels. Set both to $Channels channels, 48000 Hz in Sound settings, then run again."
     }
-    $verdict = if ($measured.Code -eq 0 -and $route.ExitCode -eq 0 -and $result.Pass -eq 1) { 'PASS' } else { 'FAIL' }
+    $verdict = if ($measured.Code -eq 0 -and $route.ExitCode -eq 0 -and $result.Pass -eq 1 -and $metrics.bitExact) { 'PASS' } else { 'FAIL' }
     $result | Add-Member NoteProperty Verdict $verdict
     Write-Host ("{0} channels: {1} (bitexact_pass={2}, capture dropped {3} frames, probe exit {4}, route exit {5})" -f `
         $Channels, $verdict, $result.Pass, $result.CaptureDropped, $measured.Code, $route.ExitCode)
@@ -80,7 +92,7 @@ try {
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Passed = (-not [bool]$failure); Error = [string]$failure
         Channels = $Channels; Seconds = $Seconds; Result = $result; Qualification = $false
-        Scope = 'Bit-exact float32 noise: Cable A Input -> product cable route (control plane, CableRouteWorker; direct mapping when not stereo) -> Cable B Output at the shared mix format; NEM VM, not VCAB-20 qualification' }
+        Scope = 'Bit-exact float32 noise: Cable A Input -> product cable route (control plane, CableRouteWorker; direct mapping when not stereo) -> Cable B Output at the shared mix format; analyzer metrics plus probe pass; NEM VM, not VCAB-20 qualification' }
     $zip = Join-Path $bundle "$run.zip"
     Compress-Archive -LiteralPath $evidence -DestinationPath $zip
     Copy-Item -LiteralPath $zip -Destination $peer

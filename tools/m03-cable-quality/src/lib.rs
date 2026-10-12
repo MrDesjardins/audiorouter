@@ -75,26 +75,60 @@ pub fn align(reference: &[f32], capture: &[f32], max_offset: usize) -> Option<(u
     if reference.is_empty() || capture.is_empty() {
         return None;
     }
-    let mut best: Option<(f64, usize, usize)> = None;
-    for offset in 0..=max_offset.min(capture.len().saturating_sub(1)) {
-        let count = reference.len().min(capture.len() - offset);
-        if count == 0 {
-            continue;
-        }
-        let error = reference
-            .iter()
-            .zip(&capture[offset..offset + count])
-            .map(|(a, b)| {
-                let d = *a as f64 - *b as f64;
-                d * d
-            })
-            .sum::<f64>()
-            / count as f64;
-        if best.is_none_or(|(current, _, _)| error < current) {
-            best = Some((error, offset, count));
+    let limit = max_offset.min(capture.len().saturating_sub(1));
+    // Prefer an exact 32-sample signature. This is linear in the search range
+    // and preserves exact frame offsets for deterministic noise and impulses.
+    let signature_len = reference.len().min(32);
+    if signature_len > 0 {
+        let signature_limit = max_offset.min(capture.len().saturating_sub(signature_len));
+        for offset in 0..=signature_limit {
+            if capture[offset..offset + signature_len] == reference[..signature_len] {
+                return Some((offset, reference.len().min(capture.len() - offset)));
+            }
         }
     }
-    best.map(|(_, offset, count)| (offset, count))
+    let coarse_step = 16usize;
+    let coarse_stride = 16usize;
+    let window = reference.len().min(capture.len()).min(4096);
+    let error_at = |offset: usize, stride: usize| {
+        let count = window.min(capture.len().saturating_sub(offset));
+        let mut error = 0.0;
+        let mut samples = 0usize;
+        for index in (0..count).step_by(stride) {
+            let difference = f64::from(reference[index]) - f64::from(capture[offset + index]);
+            error += difference * difference;
+            samples += 1;
+        }
+        if samples == 0 {
+            f64::INFINITY
+        } else {
+            error / samples as f64
+        }
+    };
+    let mut coarse_best = 0usize;
+    let mut coarse_error = f64::INFINITY;
+    for offset in (0..=limit).step_by(coarse_step) {
+        let error = error_at(offset, coarse_stride);
+        if error < coarse_error {
+            coarse_best = offset;
+            coarse_error = error;
+        }
+    }
+    let refine_start = coarse_best.saturating_sub(coarse_step);
+    let refine_end = coarse_best.saturating_add(coarse_step).min(limit);
+    let mut best_offset = coarse_best;
+    let mut best_error = f64::INFINITY;
+    for offset in refine_start..=refine_end {
+        let error = error_at(offset, 1);
+        if error < best_error {
+            best_offset = offset;
+            best_error = error;
+        }
+    }
+    let count = reference
+        .len()
+        .min(capture.len().saturating_sub(best_offset));
+    (count > 0).then_some((best_offset, count))
 }
 
 pub fn compare(
@@ -183,6 +217,124 @@ pub fn thdn_db(samples: &[f32], sample_rate: u32, frequency_hz: f64) -> Option<f
     Some(20.0 * (noise_rms / fundamental_rms).log10())
 }
 
+/// Read the canonical IEEE float32 WAV format emitted by the native WASAPI
+/// probe. Reject extensible/PCM WAVs rather than silently mis-decoding them.
+pub fn read_float_wav(path: &std::path::Path) -> Result<(u32, u16, Vec<f32>), String> {
+    let bytes = std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err("expected a RIFF/WAVE file".into());
+    }
+    let mut format = None;
+    let mut data = None;
+    let mut cursor = 12usize;
+    while cursor.checked_add(8).is_some_and(|end| end <= bytes.len()) {
+        let id = &bytes[cursor..cursor + 4];
+        let size = u32::from_le_bytes(bytes[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
+        let start = cursor + 8;
+        let end = start.checked_add(size).ok_or("WAV chunk size overflow")?;
+        if end > bytes.len() {
+            return Err("truncated WAV chunk".into());
+        }
+        match id {
+            b"fmt " if size >= 16 => {
+                format = Some((
+                    u16::from_le_bytes(bytes[start..start + 2].try_into().unwrap()),
+                    u16::from_le_bytes(bytes[start + 2..start + 4].try_into().unwrap()),
+                    u32::from_le_bytes(bytes[start + 4..start + 8].try_into().unwrap()),
+                    u16::from_le_bytes(bytes[start + 14..start + 16].try_into().unwrap()),
+                ))
+            }
+            b"data" => data = Some(&bytes[start..end]),
+            _ => {}
+        }
+        cursor = end + (size & 1);
+    }
+    let (tag, channels, rate, bits) = format.ok_or("WAV fmt chunk is missing")?;
+    if tag != 3 || channels == 0 || rate == 0 || bits != 32 {
+        return Err("expected interleaved IEEE float32 WAV".into());
+    }
+    let raw = data.ok_or("WAV data chunk is missing")?;
+    if raw.len() % 4 != 0 || raw.len() % (usize::from(channels) * 4) != 0 {
+        return Err("WAV data is not a whole number of frames".into());
+    }
+    let samples: Vec<f32> = raw
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
+        .collect();
+    if samples.iter().any(|sample| !sample.is_finite()) {
+        return Err("WAV contains non-finite samples".into());
+    }
+    Ok((rate, channels, samples))
+}
+
+pub fn analyze_wav_pair(
+    reference_path: &std::path::Path,
+    capture_path: &std::path::Path,
+    max_offset: usize,
+    frequency_hz: Option<f64>,
+) -> Result<serde_json::Value, String> {
+    let (reference_rate, reference_channels, reference) = read_float_wav(reference_path)?;
+    let (capture_rate, capture_channels, capture) = read_float_wav(capture_path)?;
+    if reference_rate != capture_rate || reference_channels != capture_channels {
+        return Err("reference and capture WAV formats do not match".into());
+    }
+    let channels = usize::from(reference_channels);
+    let reference_frames = reference.len() / channels;
+    let capture_frames = capture.len() / channels;
+    if reference_frames == 0 || capture_frames == 0 {
+        return Err("WAV files contain no samples".into());
+    }
+    // Align on channel zero, then compare all channels at that same frame
+    // offset so channel swaps and isolated channel corruption stay visible.
+    let reference_first = reference
+        .iter()
+        .step_by(channels)
+        .copied()
+        .collect::<Vec<_>>();
+    let capture_first = capture
+        .iter()
+        .step_by(channels)
+        .copied()
+        .collect::<Vec<_>>();
+    let (offset, aligned_frames) = align(&reference_first, &capture_first, max_offset)
+        .ok_or("could not align reference and capture")?;
+    let mut channel_metrics = Vec::with_capacity(channels);
+    let mut equal = true;
+    let mut max_error = 0.0f64;
+    let mut squared_error = 0.0f64;
+    for channel in 0..channels {
+        let expected = (0..aligned_frames)
+            .map(|frame| reference[frame * channels + channel])
+            .collect::<Vec<_>>();
+        let actual = (0..aligned_frames)
+            .map(|frame| capture[(offset + frame) * channels + channel])
+            .collect::<Vec<_>>();
+        let (channel_max, channel_rms) = compare(&expected, &actual, 0, aligned_frames)
+            .ok_or("aligned channel range is invalid")?;
+        equal &= channel_max == 0.0;
+        max_error = max_error.max(channel_max);
+        squared_error += channel_rms * channel_rms * aligned_frames as f64;
+        channel_metrics.push(serde_json::json!({
+            "channel": channel,
+            "maxAbsoluteError": channel_max,
+            "rmsError": channel_rms,
+            "thdnDb": frequency_hz.and_then(|frequency| thdn_db(&actual, reference_rate, frequency))
+        }));
+    }
+    let rms_error = (squared_error / (aligned_frames * channels) as f64).sqrt();
+    Ok(serde_json::json!({
+        "format": {"sampleRateHz": reference_rate, "channels": reference_channels, "encoding": "float32"},
+        "referenceFrames": reference_frames, "captureFrames": capture_frames,
+        "alignmentOffsetFrames": offset, "alignedFrames": aligned_frames,
+        "maxAbsoluteError": max_error, "rmsError": rms_error,
+        "requirement": "VCAB-20",
+        "target": "float32 samples equal after frame alignment",
+        "bitExact": equal, "pass": equal, "channelsMetrics": channel_metrics,
+        "reference": reference_path.file_name().and_then(|name| name.to_str()),
+        "capture": capture_path.file_name().and_then(|name| name.to_str())
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,5 +379,76 @@ mod tests {
             })
             .collect();
         assert!(thdn_db(&distorted[100..47_900], 48_000, 997.0).unwrap() > -70.0);
+    }
+
+    fn write_test_wav(path: &std::path::Path, channels: u16, samples: &[f32]) {
+        let data_len = (samples.len() * 4) as u32;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(data_len + 36).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&3u16.to_le_bytes());
+        bytes.extend_from_slice(&channels.to_le_bytes());
+        bytes.extend_from_slice(&48_000u32.to_le_bytes());
+        bytes.extend_from_slice(&(48_000u32 * u32::from(channels) * 4).to_le_bytes());
+        bytes.extend_from_slice(&(channels * 4).to_le_bytes());
+        bytes.extend_from_slice(&32u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        for sample in samples {
+            bytes.extend_from_slice(&sample.to_le_bytes());
+        }
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn wav_pair_analysis_keeps_channels_separate() {
+        let unique = format!(
+            "m03-quality-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(unique);
+        std::fs::create_dir_all(&root).unwrap();
+        let reference_path = root.join("reference.wav");
+        let capture_path = root.join("capture.wav");
+        let left = tone(512, 48_000, 997.0, 0.4);
+        let right = tone(512, 48_000, 997.0, 0.2);
+        let mut reference = Vec::with_capacity(1024);
+        for (a, b) in left.iter().zip(right.iter()) {
+            reference.extend([*a, *b]);
+        }
+        let mut shifted = vec![0.0, 0.0, 0.0, 0.0];
+        shifted.extend_from_slice(&reference);
+        write_test_wav(&reference_path, 2, &reference);
+        write_test_wav(&capture_path, 2, &shifted);
+        let report = analyze_wav_pair(&reference_path, &capture_path, 8, Some(997.0)).unwrap();
+        assert_eq!(report["alignmentOffsetFrames"], 2);
+        assert_eq!(report["bitExact"], true);
+        assert_eq!(report["channelsMetrics"].as_array().unwrap().len(), 2);
+        let mut broken = shifted;
+        broken[(2 + 100) * 2 + 1] += 0.01;
+        write_test_wav(&capture_path, 2, &broken);
+        let report = analyze_wav_pair(&reference_path, &capture_path, 8, None).unwrap();
+        assert_eq!(report["bitExact"], false);
+        assert!(
+            report["channelsMetrics"][1]["maxAbsoluteError"]
+                .as_f64()
+                .unwrap()
+                > 0.0
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn wav_decoder_rejects_non_finite_samples() {
+        let path = std::env::temp_dir().join(format!("m03-quality-nan-{}.wav", std::process::id()));
+        write_test_wav(&path, 1, &[f32::NAN]);
+        assert!(read_float_wav(&path).unwrap_err().contains("non-finite"));
+        std::fs::remove_file(path).unwrap();
     }
 }

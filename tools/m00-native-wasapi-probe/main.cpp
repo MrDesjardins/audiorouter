@@ -24,6 +24,7 @@
 #include <vector>
 #include <algorithm>
 #include <numeric>
+#include <limits>
 #include <ksmedia.h>
 #include <wrl.h>
 #include <wrl/implements.h>
@@ -2044,8 +2045,54 @@ static int cable_bitexact_self_test() {
     return 0;
 }
 
+// Writes the canonical float32 WAV consumed by tools/m03-cable-quality.
+static bool write_float_wav(const std::string& path, const std::vector<float>& samples,
+                            UINT32 sample_rate, UINT16 channels) {
+    if (channels == 0 || sample_rate == 0 || samples.size() % channels != 0 ||
+        samples.size() > (std::numeric_limits<UINT32>::max() - 36) / sizeof(float)) return false;
+    const UINT32 data_bytes = static_cast<UINT32>(samples.size() * sizeof(float));
+    const UINT32 byte_rate = sample_rate * channels * static_cast<UINT32>(sizeof(float));
+    const UINT16 block_align = static_cast<UINT16>(channels * sizeof(float));
+    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+    if (!file) return false;
+    auto u16 = [&](UINT16 value) { file.put(static_cast<char>(value & 0xff)); file.put(static_cast<char>((value >> 8) & 0xff)); };
+    auto u32 = [&](UINT32 value) {
+        for (unsigned shift = 0; shift < 32; shift += 8) file.put(static_cast<char>((value >> shift) & 0xff));
+    };
+    file.write("RIFF", 4); u32(data_bytes + 36); file.write("WAVEfmt ", 8);
+    u32(16); u16(3); u16(channels); u32(sample_rate); u32(byte_rate); u16(block_align); u16(32);
+    file.write("data", 4); u32(data_bytes);
+    // Windows targets are little-endian; serialize each IEEE float's bits as
+    // little-endian explicitly rather than relying on host byte order.
+    for (float sample : samples) {
+        UINT32 bits = 0; std::memcpy(&bits, &sample, sizeof(bits)); u32(bits);
+    }
+    file.flush();
+    return file.good();
+}
+
+static int cable_bitexact_wav_self_test(const char* output_dir) {
+    if (!output_dir) { std::cerr << "output directory is required\n"; return 2; }
+    std::vector<float> reference;
+    for (UINT32 frame = 0; frame < 256; ++frame) {
+        reference.push_back(static_cast<float>(static_cast<INT32>((frame * 7919u) % 65521u) - 32760) / 65536.0f);
+        reference.push_back(static_cast<float>(static_cast<INT32>((frame * 15401u) % 65519u) - 32759) / 65536.0f);
+    }
+    std::vector<float> capture(8, 0.0f);
+    capture.insert(capture.end(), reference.begin(), reference.end());
+    capture.insert(capture.end(), 128, 0.0f);
+    const std::string prefix = std::string(output_dir) + "\\cable-bitexact";
+    if (!write_float_wav(prefix + "-reference.wav", reference, 48000, 2) ||
+        !write_float_wav(prefix + "-capture.wav", capture, 48000, 2)) {
+        std::cerr << "float WAV self-test write failed\n";
+        return 1;
+    }
+    std::cout << "reference=" << prefix << "-reference.wav\ncapture=" << prefix << "-capture.wav\n";
+    return 0;
+}
+
 // Plays seeded noise then silence into render_index and records capture_index.
-static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noise_seconds) {
+static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noise_seconds, const char* output_dir) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -2143,6 +2190,17 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
               << " bitexact_capture_flagged_packets=" << capture_flagged << " bitexact_capture_overflow_packets=" << capture_overflow << '\n';
     const BitExactReport report = compare_bitexact(noise, captured, channels, silence_frames);
     print_bitexact_report(report, silence_frames);
+    if (output_dir) {
+        const std::string prefix = std::string(output_dir) + "\\cable-bitexact";
+        const bool reference_written = write_float_wav(prefix + "-reference.wav", noise, static_cast<UINT32>(rate), static_cast<UINT16>(channels));
+        const bool capture_written = write_float_wav(prefix + "-capture.wav", captured, static_cast<UINT32>(rate), static_cast<UINT16>(channels));
+        std::cout << "bitexact_reference_wav_written=" << reference_written
+                  << " bitexact_capture_wav_written=" << capture_written << '\n';
+        if (!reference_written || !capture_written) {
+            render_state.release(); capture_state.release();
+            return 1;
+        }
+    }
     std::cout << "Scope: Cable A Input render to Cable B Output capture through the driver bridge and the "
                  "diagnostic pass-through relay at the endpoints' shared float32 mix format; an AudioRouter "
                  "route proxy, not the product engine.\n";
@@ -2920,12 +2978,17 @@ int main(int argc, char** argv) {
         CoUninitialize();
         return result;
     }
+    if (argc > 1 && std::strcmp(argv[1], "cable-bitexact-wav-selftest") == 0) {
+        int result = cable_bitexact_wav_self_test(argc > 2 ? argv[2] : nullptr);
+        CoUninitialize();
+        return result;
+    }
     if (argc > 1 && std::strcmp(argv[1], "cable-bitexact") == 0) {
         DWORD seconds = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 10;
         UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
         UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
         if (seconds < 1 || seconds > 120) { std::cout << "bitexact_seconds_out_of_range=1\n"; CoUninitialize(); return 2; }
-        int result = cable_bitexact_probe(render_index, capture_index, seconds);
+        int result = cable_bitexact_probe(render_index, capture_index, seconds, argc > 5 ? argv[5] : nullptr);
         CoUninitialize();
         return result;
     }

@@ -1997,13 +1997,16 @@ WP-09 mixed-clock route work.
 - **Acceptance:** VM run of all cable-only cases recorded (indicative);
   every metric has a value; failures are listed with numbers, not hidden.
 - **Status:** in progress (2026-10-11). Evidence: [portable analysis core
-  implementation](evidence/2026-10-11-wp09b-cable-quality-analysis.md). Added the portable analysis core at
-  `tools/m03-cable-quality/`: deterministic seeded noise, tone/log-sweep/
-  impulse generation, bounded offset alignment, error metrics and sine-fit
-  THD+N. Three synthetic tests and standalone Clippy pass offline on the
-  Windows host. This is only the signal-analysis layer; it opens no endpoint
-  and creates no A16 evidence. The Windows WASAPI capture/playback CLI,
-  metrics/WAV writer, VM acceptance runner and A16 evidence remain outstanding.
+  and real-sample bridge](evidence/2026-10-11-wp09b-cable-quality-analysis.md).
+  Added deterministic signal generation, float32 WAV decoding, bounded frame
+  alignment, per-channel error metrics and sine-fit THD+N. The existing native
+  WASAPI bit-exact probe can now save reference and captured WAVs, and the
+  product-route VM runner sends them through the Rust analyzer; a guarded
+  `run-cable-quality.ps1 -Case float32-48k` entry point exposes that diagnostic
+  subset. Five synthetic tests, standalone Clippy, native probe build/self-check,
+  and a cross-tool WAV writer/analyzer check pass on the Windows host. No live
+  endpoint was opened. The complete WASAPI case matrix, formats/rates beyond
+  the existing float32 probe, VM A16 runner and A16 evidence remain outstanding.
   Keep the 8-channel cases required by A16; the plan's recorded channel-count
   deferral is an unresolved prerequisite, not a reason to reduce test coverage.
   Next: implement the real shared-mode endpoint path and output contract, then

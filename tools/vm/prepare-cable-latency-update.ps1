@@ -33,15 +33,19 @@ try {
     # The CLI, for WP-08's `virtual-cable status` acceptance in the guest.
     & cargo build --locked --release --target-dir $vmTarget -p audiorouter-cli
     if ($LASTEXITCODE -ne 0) { throw 'Static CLI build failed.' }
+    $qualityManifest = Join-Path $workspace 'tools\m03-cable-quality\Cargo.toml'
+    & cargo build --locked --release --manifest-path $qualityManifest --target-dir $vmTarget
+    if ($LASTEXITCODE -ne 0) { throw 'Static cable quality analyzer build failed.' }
 } finally { $env:RUSTFLAGS = $previousFlags }
 $toneTool = Join-Path $vmTarget 'release\examples\m03_bridge_tone.exe'
 $cableSessionTool = Join-Path $vmTarget 'release\examples\m03_cable_session.exe'
 $cliTool = Join-Path $vmTarget 'release\audiorouter-cli.exe'
+$qualityTool = Join-Path $vmTarget 'release\m03-cable-quality.exe'
 $probe = Join-Path $workspace 'target\m00-probe-cable\m00-probe.exe'
 New-Item -ItemType Directory -Path (Split-Path -Parent $probe) -Force | Out-Null
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tools\m00-native-wasapi-probe\build.ps1') -Output $probe -StaticRuntime
 if ($LASTEXITCODE -ne 0) { throw 'Static impulse probe build failed.' }
-foreach ($tool in @($toneTool, $cableSessionTool, $cliTool, $probe)) { $null = Assert-PortableVmTool $tool }
+foreach ($tool in @($toneTool, $cableSessionTool, $cliTool, $qualityTool, $probe)) { $null = Assert-PortableVmTool $tool }
 # Every request the product tool makes, except session.start (no driver here).
 # The CLI's cable status must run as a standard user and parse; on the host
 # (no AudioRouter driver) it reports notInstalled.
@@ -68,6 +72,7 @@ Copy-Item -LiteralPath $toneTool -Destination (Join-Path $output 'tools\m03_brid
 Copy-Item -LiteralPath $probe -Destination (Join-Path $output 'tools\m00-probe.exe')
 Copy-Item -LiteralPath $cableSessionTool -Destination (Join-Path $output 'tools\m03_cable_session.exe')
 Copy-Item -LiteralPath $cliTool -Destination (Join-Path $output 'tools\audiorouter-cli.exe')
+Copy-Item -LiteralPath $qualityTool -Destination (Join-Path $output 'tools\m03-cable-quality.exe')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-latency-starts.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-continuity.ps1') -Destination $output
@@ -75,6 +80,7 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-scheduling.ps1') -Des
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-kill.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-tone.ps1') -Destination $output
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-bitexact.ps1') -Destination $output
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'run-cable-quality.ps1') -Destination $output
 if ($TimingDriverPackage) {
     $timingPackage = Get-Content -LiteralPath (Join-Path $TimingDriverPackage 'package.json') -Raw | ConvertFrom-Json
     if (-not $timingPackage.timingDiagnostics -or $timingPackage.signed -ne 'test' -or

@@ -216,7 +216,14 @@ qualifies all 8 cables (`… Cable C …` to `… Cable H …`). Before WP-05 th
 
 | A15 | All 8 cables | Helper `set-cables --count 8`; run 8 pass-through sessions (Cable X Input → Cable X Output) at once with distinct tones, 30 min; then `--count 2` | 16 endpoints present; every cable carries its own tone, crosstalk below −90 dBFS, zero glitches; backend CPU recorded; after `--count 2` Cable A/B keep their endpoint IDs and C–H are gone |
 
-| A16 | Sound quality (VM, indicative) | `tests/acceptance/m03-cable-quality.ps1` (WP-09b), all cable-only cases | Bit-exact float path at 44.1/48/96 kHz × 1/2/8 ch (VCAB-20); integer formats ≤ 1 LSB (VCAB-21); resampler targets (VCAB-22); crosstalk ≤ −140 dBFS (VCAB-26); counters zero. Latency and CPU recorded but judged only in stage C |
+| A16 | Sound quality (VM, indicative) | `tools/vm/run-cable-quality.ps1` (WP-09b), all cable-only cases | Bit-exact float path at 44.1/48/96 kHz × 1/2/8 ch (VCAB-20); integer formats ≤ 1 LSB (VCAB-21); resampler targets (VCAB-22); crosstalk ≤ −140 dBFS (VCAB-26); counters zero. Latency and CPU recorded but judged only in stage C |
+
+WP-09b is not complete: the first integrated case is a 48 kHz float32
+bit-exact diagnostic (`tools/vm/run-cable-quality.ps1 -Case float32-48k`). It writes the real
+reference/capture samples and analyzer metrics, but remains marked
+`Qualification = false`. It does not satisfy A16's 44.1/96 kHz, 1/2/8-channel,
+integer-format, resampling, or crosstalk matrix. Do not mark A16 passed until
+the complete matrix has executed on the same VM build.
 
 Stage A passes when A1–A16 pass on the same build. Only then is the EV
 certificate bought (user go-ahead).
