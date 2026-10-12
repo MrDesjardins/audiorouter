@@ -267,6 +267,190 @@ pub fn read_float_wav(path: &std::path::Path) -> Result<(u32, u16, Vec<f32>), St
     Ok((rate, channels, samples))
 }
 
+/// Read PCM16 or PCM24 stored left-aligned in a 32-bit WAVEFORMATEXTENSIBLE
+/// container. The returned values are normalized by 2^(valid_bits - 1).
+struct PcmWavFormat {
+    tag: u16,
+    channels: u16,
+    rate: u32,
+    bits: u16,
+    valid_bits: u16,
+    subformat: Option<[u8; 16]>,
+}
+
+pub fn read_pcm_wav(path: &std::path::Path) -> Result<(u32, u16, u16, Vec<f32>), String> {
+    let bytes = std::fs::read(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    if bytes.len() < 44 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"WAVE" {
+        return Err("expected a RIFF/WAVE file".into());
+    }
+    let mut fmt: Option<PcmWavFormat> = None;
+    let mut data = None;
+    let mut cursor = 12usize;
+    while cursor.checked_add(8).is_some_and(|end| end <= bytes.len()) {
+        let id = &bytes[cursor..cursor + 4];
+        let size = u32::from_le_bytes(bytes[cursor + 4..cursor + 8].try_into().unwrap()) as usize;
+        let start = cursor + 8;
+        let end = start.checked_add(size).ok_or("WAV chunk size overflow")?;
+        if end > bytes.len() {
+            return Err("truncated WAV chunk".into());
+        }
+        match id {
+            b"fmt " if size >= 16 => {
+                let tag = u16::from_le_bytes(bytes[start..start + 2].try_into().unwrap());
+                let channels = u16::from_le_bytes(bytes[start + 2..start + 4].try_into().unwrap());
+                let rate = u32::from_le_bytes(bytes[start + 4..start + 8].try_into().unwrap());
+                let bits = u16::from_le_bytes(bytes[start + 14..start + 16].try_into().unwrap());
+                let (valid_bits, subformat) = if tag == 0xfffe && size >= 40 {
+                    let extension_size =
+                        u16::from_le_bytes(bytes[start + 16..start + 18].try_into().unwrap());
+                    if extension_size < 22 {
+                        return Err("invalid extensible WAV format size".into());
+                    }
+                    let valid =
+                        u16::from_le_bytes(bytes[start + 18..start + 20].try_into().unwrap());
+                    let mut guid = [0u8; 16];
+                    guid.copy_from_slice(&bytes[start + 24..start + 40]);
+                    (valid, Some(guid))
+                } else {
+                    (bits, None)
+                };
+                fmt = Some(PcmWavFormat {
+                    tag,
+                    channels,
+                    rate,
+                    bits,
+                    valid_bits,
+                    subformat,
+                });
+            }
+            b"data" => data = Some(&bytes[start..end]),
+            _ => {}
+        }
+        cursor = end + (size & 1);
+    }
+    let PcmWavFormat {
+        tag,
+        channels,
+        rate,
+        bits,
+        valid_bits,
+        subformat,
+    } = fmt.ok_or("WAV fmt chunk is missing")?;
+    if channels == 0 || rate == 0 {
+        return Err("WAV channel count and sample rate must be positive".into());
+    }
+    let pcm_guid = [1, 0, 0, 0, 0, 0, 16, 0, 128, 0, 0, 170, 0, 56, 155, 113];
+    let (bytes_per_sample, shift) = match (tag, bits, valid_bits, subformat) {
+        (1, 16, 16, None) => (2usize, 0),
+        (0xfffe, 32, 24, Some(guid)) if guid == pcm_guid => (4usize, 8),
+        _ => return Err("expected PCM16 or PCM24-in-32 WAVE data".into()),
+    };
+    let raw = data.ok_or("WAV data chunk is missing")?;
+    if raw.len() % bytes_per_sample != 0
+        || raw.len() % (usize::from(channels) * bytes_per_sample) != 0
+    {
+        return Err("WAV data is not a whole number of frames".into());
+    }
+    let samples = if shift == 0 {
+        raw.chunks_exact(2)
+            .map(|chunk| i16::from_le_bytes(chunk.try_into().unwrap()) as f32 / 32768.0)
+            .collect()
+    } else {
+        raw.chunks_exact(4)
+            .map(|chunk| {
+                let packed = i32::from_le_bytes(chunk.try_into().unwrap());
+                if packed & 0xff != 0 {
+                    return Err("PCM24-in-32 sample has nonzero padding bits".into());
+                }
+                Ok::<f32, String>((packed >> 8) as f32 / 8_388_608.0)
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    Ok((rate, channels, valid_bits, samples))
+}
+
+/// Write PCM16 or left-aligned PCM24-in-32 WAV data for portable fixtures.
+pub fn write_pcm_wav(
+    path: &std::path::Path,
+    sample_rate: u32,
+    channels: u16,
+    valid_bits: u16,
+    samples: &[f32],
+) -> Result<(), String> {
+    if sample_rate == 0
+        || channels == 0
+        || samples.is_empty()
+        || !samples.len().is_multiple_of(usize::from(channels))
+    {
+        return Err("PCM WAV requires a positive rate, channels, and whole nonempty frames".into());
+    }
+    if samples.iter().any(|sample| !sample.is_finite()) {
+        return Err("PCM samples must be finite".into());
+    }
+    let pcm24 = valid_bits == 24;
+    if valid_bits != 16 && !pcm24 {
+        return Err("only PCM16 and PCM24-in-32 are supported".into());
+    }
+    let (tag, bits, block_align, fmt_size) = if pcm24 {
+        (
+            0xfffeu16,
+            32u16,
+            channels.checked_mul(4).ok_or("channel count overflow")?,
+            40u32,
+        )
+    } else {
+        (
+            1u16,
+            16u16,
+            channels.checked_mul(2).ok_or("channel count overflow")?,
+            16u32,
+        )
+    };
+    let sample_bytes = if pcm24 { 4usize } else { 2usize };
+    let data_size = samples
+        .len()
+        .checked_mul(sample_bytes)
+        .ok_or("PCM WAV data size overflow")?;
+    let riff_size = 4usize + 8 + fmt_size as usize + 8 + data_size;
+    let riff_size = u32::try_from(riff_size).map_err(|_| "PCM WAV exceeds RIFF size limit")?;
+    let data_size = u32::try_from(data_size).map_err(|_| "PCM WAV exceeds RIFF size limit")?;
+    let mut out = Vec::with_capacity(riff_size as usize + 8);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&riff_size.to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&fmt_size.to_le_bytes());
+    out.extend_from_slice(&tag.to_le_bytes());
+    out.extend_from_slice(&channels.to_le_bytes());
+    out.extend_from_slice(&sample_rate.to_le_bytes());
+    out.extend_from_slice(
+        &(sample_rate
+            .checked_mul(u32::from(block_align))
+            .ok_or("PCM WAV byte rate overflow")?)
+        .to_le_bytes(),
+    );
+    out.extend_from_slice(&block_align.to_le_bytes());
+    out.extend_from_slice(&bits.to_le_bytes());
+    if pcm24 {
+        out.extend_from_slice(&22u16.to_le_bytes());
+        out.extend_from_slice(&24u16.to_le_bytes());
+        out.extend_from_slice(&0u32.to_le_bytes());
+        out.extend_from_slice(&[1, 0, 0, 0, 0, 0, 16, 0, 128, 0, 0, 170, 0, 56, 155, 113]);
+    }
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data_size.to_le_bytes());
+    for sample in samples {
+        if pcm24 {
+            let value =
+                ((*sample as f64 * 8_388_608.0).round() as i64).clamp(-8_388_608, 8_388_607) as i32;
+            out.extend_from_slice(&(value << 8).to_le_bytes());
+        } else {
+            let value = ((*sample as f64 * 32_768.0).round() as i64).clamp(-32_768, 32_767) as i16;
+            out.extend_from_slice(&value.to_le_bytes());
+        }
+    }
+    std::fs::write(path, out).map_err(|error| format!("{}: {error}", path.display()))
+}
+
 pub fn analyze_wav_pair(
     reference_path: &std::path::Path,
     capture_path: &std::path::Path,
@@ -596,6 +780,46 @@ mod tests {
         write_test_wav(&path, 1, &[f32::NAN]);
         assert!(read_float_wav(&path).unwrap_err().contains("non-finite"));
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn pcm16_and_pcm24_in_32_round_trip_with_separate_channels() {
+        let root = std::env::temp_dir().join(format!("m03-quality-pcm-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let input = [-1.0, 0.0, 0.25, 0.89, -0.89, 0.5];
+        for valid_bits in [16, 24] {
+            let path = root.join(format!("pcm{valid_bits}.wav"));
+            write_pcm_wav(&path, 48_000, 2, valid_bits, &input).unwrap();
+            let (rate, channels, decoded_bits, decoded) = read_pcm_wav(&path).unwrap();
+            assert_eq!((rate, channels, decoded_bits), (48_000, 2, valid_bits));
+            let lsb = 1.0 / 2f64.powi(i32::from(valid_bits) - 1);
+            for (source, captured) in input.iter().zip(decoded.iter()) {
+                assert!((f64::from(*source) - f64::from(*captured)).abs() <= lsb);
+            }
+            assert_ne!(decoded[2], decoded[3]);
+        }
+        let pcm24 = root.join("pcm24.wav");
+        let mut bytes = std::fs::read(&pcm24).unwrap();
+        let data = bytes
+            .windows(4)
+            .position(|window| window == b"data")
+            .unwrap()
+            + 8;
+        bytes[data] = 1;
+        std::fs::write(&pcm24, bytes).unwrap();
+        assert!(read_pcm_wav(&pcm24).unwrap_err().contains("padding bits"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn pcm_writer_rejects_non_finite_or_partial_frames() {
+        let path = std::env::temp_dir().join(format!(
+            "m03-quality-pcm-invalid-{}.wav",
+            std::process::id()
+        ));
+        assert!(write_pcm_wav(&path, 48_000, 2, 16, &[f32::NAN, 0.0]).is_err());
+        assert!(write_pcm_wav(&path, 48_000, 2, 16, &[0.0]).is_err());
+        assert!(!path.exists());
     }
 
     #[test]

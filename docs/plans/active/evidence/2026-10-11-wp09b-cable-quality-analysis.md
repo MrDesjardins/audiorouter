@@ -80,3 +80,28 @@ by variable expansion; the assertion now uses literal substring checks and
 the full acceptance script passes. Static probe compilation does not exercise
 WASAPI. Native endpoint capture, route THD+N, and all other A16 cases remain
 unmeasured.
+
+## Portable integer PCM WAV codecs
+
+Added strict `read_pcm_wav` / `write_pcm_wav` support for classic PCM16 and
+PCM24-in-32 WAVEFORMATEXTENSIBLE. The 24-bit reader checks the PCM subformat
+GUID, valid/container bit widths, whole frames, and zero low padding bits;
+the writer rounds to nearest, clamps to the representable range, and stores
+24-bit signed values left-aligned in the 32-bit sample. Synthetic stereo
+round-trips preserve channel distinctions and stay within one LSB. Non-finite
+samples, partial frames and malformed padding are rejected. PCM32 remains
+deferred because the analyzer currently stores decoded samples as f32; no
+integer format has been negotiated with a live endpoint.
+
+Checks on Windows host `AR-DriverTest`, pinned Rust 1.96.0:
+
+- Analyzer unit tests — 9 passed; standalone Clippy with `-D warnings` —
+  passed.
+- Documentation validation — 149 Markdown files and 858 local links passed.
+- `git diff --check` — passed.
+
+The first build found a Rust type inference error in the rejection path; the
+result type was made explicit. The first Clippy pass then identified a complex
+format tuple and manual divisibility check; these were replaced by a named
+format struct and `is_multiple_of`. These were local build/lint issues; no
+endpoint, driver or VM state was touched.

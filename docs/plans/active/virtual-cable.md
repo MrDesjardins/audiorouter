@@ -2015,10 +2015,31 @@ WP-09 mixed-clock route work.
   integer formats, resampling, VM A16 runner and A16 evidence remain open.
   Keep the 8-channel cases required by A16; the plan's recorded channel-count
   deferral is an unresolved prerequisite, not a reason to reduce test coverage.
-  Next: add integer PCM decode/encode and per-channel-count cases, then cover
-  sweep/resampling and continuity metrics. Keep A16 blocked until the channel-
-  count decision and VM access gates are resolved; never count synthetic
-  checks as Stage A evidence.
+  Next: extend the native probe to negotiate and report PCM shared formats,
+  then connect these codecs to actual captures; keep PCM32 blocked until the
+  analyzer preserves its ≤1-LSB target. Afterward add per-channel-count cases
+  and cover sweep/resampling and continuity metrics. Keep A16 blocked until
+  the channel-count decision and VM access gates are resolved; never count
+  synthetic checks as Stage A evidence.
+
+#### Next implementation slice — integer PCM analyzer codecs
+
+Requirement IDs: VCAB-12, VCAB-20/21; specification 17 §3 and §11.2.
+Prerequisite evidence: the analyzer currently accepts IEEE float32 WAV only;
+the native probe's existing shared-mode capture path also requests float32.
+Ordered work: (1) add strict PCM16 and PCM24-in-32 WAV decoding/encoding
+with rounding and sign-extension tests; (2) add per-channel quantization/error
+metrics and host-generated WAV fixtures; (3) keep PCM32 deferred until the
+analyzer's internal sample representation preserves its ≤1-LSB target;
+(4) extend the guarded runner only when the native probe can negotiate and
+report the requested Windows shared format. Validation: unit tests, format,
+Clippy, docs and host-safe acceptance; inspect emitted headers and bytes.
+Windows evidence remains required for endpoint negotiation and route capture.
+Rollback: revert this slice's codec commit. Completed 2026-10-11: strict
+portable PCM16 and extensible PCM24-in-32 WAV read/write with validation,
+sign extension, channel preservation and ≤1-LSB round-trip tests. The codec is
+not wired to native endpoint capture. Next action: add explicit native shared
+format negotiation and format reporting before any PCM endpoint run.
 
 ## WP-10 — UI (17 §7.4)
 
