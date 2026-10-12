@@ -3454,6 +3454,19 @@ button.primary {
   border-radius: 10px;
   background: var(--ambient-surface-hi);
 }
+.mcp-remote-info {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--ambient-edge);
+  border-radius: 10px;
+  background: var(--ambient-surface);
+}
+.mcp-remote-info > p {
+  max-width: 55rem;
+  line-height: 1.45;
+}
 .mcp-card-heading {
   display: flex;
   flex-wrap: wrap;
@@ -3464,6 +3477,9 @@ button.primary {
 .mcp-card-heading > div {
   display: grid;
   gap: 0.2rem;
+}
+.mcp-remote-info .mcp-card-heading h3 {
+  margin: 0;
 }
 .mcp-chatgpt-card > p {
   max-width: 55rem;
@@ -3512,6 +3528,9 @@ button.primary {
   gap: 0.55rem;
   min-width: 0;
 }
+.mcp-tunnel-actions {
+  grid-template-rows: minmax(2.4rem, auto) 5.2rem minmax(2.4rem, auto);
+}
 .mcp-tunnel-setup > p {
   line-height: 1.45;
 }
@@ -3525,8 +3544,15 @@ button.primary {
   min-width: 0;
 }
 .mcp-tunnel-setup > button,
-.mcp-tunnel-actions > button {
+.mcp-tunnel-primary-action > button,
+.mcp-tunnel-handoff-slot > button {
   justify-self: start;
+}
+.mcp-tunnel-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: start;
+  gap: 0.55rem;
 }
 .mcp-tunnel-message {
   overflow-wrap: anywhere;

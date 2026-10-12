@@ -861,6 +861,41 @@ test("workspace and recording tab fit desktop viewports without page scrolling",
 });
 
 test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reachable", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    const state = window as typeof window & {
+      __mcpTunnelFixture: {
+        status: string;
+        configured: boolean;
+        tunnelId: string | null;
+        runtimeAvailable: boolean;
+      };
+      __mcpCliAvailable: boolean;
+    };
+    state.__mcpCliAvailable = true;
+    state.__mcpTunnelFixture = {
+      status: "disconnected",
+      configured: true,
+      tunnelId: "tunnel_fixture",
+      runtimeAvailable: true,
+    };
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {
+        invoke: async (command: string) => {
+          if (command === "mcp_setup_info")
+            return {
+              cliPath: "C:\\AudioRouter\\audiorouter.exe",
+              cliAvailable: state.__mcpCliAvailable,
+              databasePath: "C:\\AudioRouter\\audiorouter.sqlite",
+              pipeName: "\\\\.\\pipe\\audiorouter-control",
+              transport: "stdio",
+            };
+          if (command === "mcp_tunnel_status") return { ...state.__mcpTunnelFixture };
+          return [];
+        },
+      },
+    });
+  });
   await page.goto("/");
   await expect(page.locator(".topbar h1")).toBeVisible();
   await expect(page.getByLabel("Sessions")).toBeHidden();
@@ -914,10 +949,15 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
     await page.screenshot({ path: `${shotBase}/workspace-${tab.toLowerCase()}.png`, fullPage: false });
   }
   await page.getByRole("tab", { name: "MCP" }).click();
-  await expect(page.getByRole("heading", { name: "Connect ChatGPT" })).toBeVisible();
-  await expect(page.getByText("Not connected", { exact: true })).toBeVisible();
-  const chatgptConnectorLink = page.getByRole("link", { name: "Open ChatGPT connector settings" });
-  await expect(chatgptConnectorLink).toHaveAttribute("href", "https://chatgpt.com/#settings/Connectors");
+  await expect(page.getByRole("heading", { name: "MCP connections" })).toBeVisible();
+  expect(await page.locator(".right-workbench").evaluate((element) => element.scrollTop)).toBe(0);
+  await expect(page.locator(".mcp-chatgpt-card .mcp-status")).toHaveText("Disconnected");
+  await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open ChatGPT connector settings" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Cowork" })).toBeVisible();
+  await expect(
+    page.getByText(/Cowork connects from Anthropic's cloud and cannot launch a command on this PC/),
+  ).toBeVisible();
   const card = page.locator(".mcp-chatgpt-card");
   const originalBounds = await card.evaluate((element) => {
     const { width, height } = element.getBoundingClientRect();
@@ -927,24 +967,40 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
     await page.getByLabel("Color theme").selectOption(theme);
     await expect(card).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`mcp-${theme}.png`) });
-    const colors = await chatgptConnectorLink.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return { color: style.color, background: style.backgroundColor };
-    });
-    expect(colors.color).not.toBe("rgb(0, 0, 255)");
     const bounds = await card.evaluate((element) => {
       const { width, height } = element.getBoundingClientRect();
       return { width, height };
     });
     expect(bounds).toEqual(originalBounds);
   }
-  await page.getByText("Other MCP apps (Codex and Claude Code)").click();
+  await page.getByText("Local MCP apps (standard stdio)").click();
   await expect(page.getByLabel("Assistant client ID")).toBeVisible();
   await page.getByText("Codex config.toml").click();
   await expect(page.locator(".mcp-command").first()).toContainText("mcp_servers.audiorouter");
   await page.getByRole("button", { name: "Copy Codex config" }).click();
   await expect(page.getByRole("status").filter({ hasText: /Copied|Clipboard unavailable/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("workspace-mcp.png"), fullPage: false });
+  await page.evaluate(() => {
+    const state = window as typeof window & { __mcpTunnelFixture: { status: string } };
+    state.__mcpTunnelFixture.status = "connected";
+  });
+  await expect(page.getByRole("button", { name: "Open ChatGPT connector settings" })).toBeVisible({ timeout: 5000 });
+  await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
+  await page.locator(".right-workbench").evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await page.screenshot({ path: testInfo.outputPath("mcp-connected.png") });
+  expect(await card.evaluate((element) => element.getBoundingClientRect().height)).toBe(originalBounds.height);
+  await page.evaluate(() => {
+    const state = window as typeof window & { __mcpCliAvailable: boolean };
+    state.__mcpCliAvailable = false;
+  });
+  await page.getByRole("tab", { name: "Logs" }).click();
+  await page.getByRole("tab", { name: "MCP" }).click();
+  await page.getByText("Local MCP apps (standard stdio)").click();
+  await expect(page.getByText("The local MCP command is missing from this installation.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy Codex config" })).toHaveCount(0);
   await page.getByRole("tab", { name: "Logs" }).click();
   await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
   await page.getByLabel("Color theme").selectOption("dark");

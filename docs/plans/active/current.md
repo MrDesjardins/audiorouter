@@ -51,7 +51,16 @@ then retry ChatGPT setup through the user's actual tunnel and record the
 initialization and tool-discovery result. Local tunnel readiness is not
 account-side verification.
 
+MCP UI correction completed and archived: [execution record](../archived/2026-10-11-generic-mcp-ui-flow.md),
+[evidence](evidence/2026-10-11-generic-mcp-ui-flow.md). ChatGPT account
+verification remains pending below. A vendor-neutral cloud endpoint and
+relay/service have not been deployed; architecture recommendation and gates
+are in [generic remote MCP future work](../future/generic-remote-mcp.md).
+
 ## ChatGPT MCP integration plan (2026-10-11, active)
+
+OpenAI Secure MCP Tunnel transport only; generic cloud MCP is tracked in
+[future work](../future/generic-remote-mcp.md).
 
 ### Objective and scope
 
@@ -66,7 +75,7 @@ automatic tunnel startup, or change to existing local MCP clients is in scope.
 
 ### Verified constraints and unresolved account dependency
 
-AudioRouter currently has local stdio MCP only. OpenAI's current official
+AudioRouter currently has local stdio MCP. OpenAI's current official
 Secure MCP Tunnel guide says the setup requires a `tunnel_id`, a runtime API
 key, and a local stdio or HTTP MCP server. Tunnel CRUD needs Tunnels Read +
 Manage; running the daemon and selecting the tunnel in ChatGPT needs Tunnels
@@ -100,10 +109,10 @@ app until release evidence records the artifact hash and verification.
 
 ### Intended user flow
 
-1. In Setup → MCP, show one primary **Connect ChatGPT** action, a stable
-   connection-status slot, and a short disclosure that ChatGPT can call the
-   granted AudioRouter tools. Keep other clients, permissions and activity
-   secondary. No manual command, path, or tunnel-ID entry in the normal path.
+1. The MCP tab now separates the standard local stdio server from the optional
+   OpenAI tunnel. Keep other clients, permissions and activity secondary.
+   Cowork requires a future remote endpoint and must not be presented as
+   connected or configured by this OpenAI-specific path.
 2. On Connect, check supported Windows architecture, packaged tunnel-client,
    current-user storage availability, and the target ChatGPT custom-MCP
    capability. Explain only the specific item that prevents setup.
@@ -189,15 +198,18 @@ role restrictions, and revocation behavior. Roll back by disconnecting the
 local process, revoking the runtime key/tunnel association when authorized,
 then reverting the native/UI integration; local stdio MCP remains available.
 
-Next action: complete native/fake-client tests and three-theme screenshot
-review; then package with the required signed driver payload and qualify on an
-authorized Platform/ChatGPT workspace. No remote resources were created.
-Local process health must not be reported as proof of ChatGPT workspace
-authorization. UI typecheck/format/build and Rust Clippy pass; lint has 0
-errors and the same 25 existing warnings. The local Vite preview could not be
-opened through the available browser, so screenshots remain unverified. The
-final local shell rebuild includes the external-link opener fix; see the
-managed runtime evidence for its hash.
+The user now prefers a vendor-neutral remote MCP solution for ChatGPT and
+Cowork over relying on the OpenAI-only tunnel. The MCP UI flow was updated and
+verified in the browser harness in all three themes; this does not verify the
+user's ChatGPT account or tunnel. The generic remote plan recommends an
+AudioRouter-managed outbound relay as the future product architecture and
+records the hosting, privacy, OAuth, reliability and cost decisions it needs.
+No public listener, relay or remote resource has been deployed. Keep the
+OpenAI tunnel as an optional ChatGPT transport, not the cross-client solution.
+Next: move the remote MCP architecture from future plan into an implementation
+milestone only after choosing the service/hosting and privacy operating model.
+The one stale idempotency test failure and detailed UI evidence are recorded in
+[the archived flow correction](../archived/2026-10-11-generic-mcp-ui-flow.md).
 
 
 ## Release 0.0.15 — 2026-10-10 (in progress)

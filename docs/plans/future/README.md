@@ -14,6 +14,14 @@ to M08 by DEC-17. Its current status is in the
 
 These ideas are recorded for later prioritization. They are not authorized implementation tasks and do not delay v1 unless the user explicitly changes scope. Core user requests—routing, built-in voice effects including pitch, VST3, recording, virtual devices, visual editing, and API/CLI/MCP parity—remain in the v1 milestones. The VST2 row is now promoted to an explicitly authorized, gated M06 extension by the 2026-09-08 decision recorded in the active plan and delivery register.
 
+The user has explicitly requested that MCP remain vendor-neutral and
+authorized evaluation of remote ChatGPT/Cowork support. The immediate UI
+clarity correction is archived; an authenticated remote MCP endpoint and
+secure relay/hosting remain planned work in
+[Generic remote MCP](generic-remote-mcp.md), because the security and operating
+model, service ownership and ongoing cost must be designed before public
+reachability is enabled.
+
 ## Delivered features that were previously listed here
 
 These are implemented; only the specific follow-ups in the table below remain
@@ -30,6 +38,7 @@ future work:
 
 | Candidate | User value | Reconsider only when |
 | --- | --- | --- |
+| [Generic remote MCP](generic-remote-mcp.md) | Vendor-neutral remote MCP for ChatGPT, Cowork and other cloud clients; recommended AudioRouter-managed outbound relay architecture | Decide service ownership, hosting budget, account identity, privacy/retention and operational support; then schedule OAuth, relay and Streamable HTTP implementation |
 | [Code review 2026-10-07](code-review-2026-10-07.md) | Prioritized (P0–P3) fixes for performance, reliability, tests, debuggability, UX and security across backend, API, MCP and UI | Each item is picked up individually with the user's go-ahead; start with P0 |
 | [External app integrations](external-app-integrations.md) | Extensions to the delivered request builder: temporary overrides, atomic scenes/batches, integration-specific grants, and affected-output/preparation hints | Define temporary-state restoration and atomic batch behavior; approve any new grant scope |
 | [Android phone audio companion](android-phone-audio.md) | Send a phone microphone into an AudioRouter Network Receive node over the trusted local network | Approve an Android app milestone; confirm supported Android versions, connection UX, and distribution channel before implementation |
