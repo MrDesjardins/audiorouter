@@ -265,3 +265,8 @@ Updated the analyzer README with the supported PCM rate and channel matrix,
 float64 PCM32 capture and remaining VM gate. Bundle preparation now rejects a
 base containing stale cable quality runner files before staging the current
 scripts, avoiding a mixed-version evidence bundle.
+
+Review found that the bit-exact route runner wrote `Verdict = FAIL` but still
+returned success when setup completed. It now throws after persisting the
+failed result, allowing `-ChannelMatrix` to stop at the failing measurement.
+Host-safe acceptance covers the failure branch's wiring; no live route ran.

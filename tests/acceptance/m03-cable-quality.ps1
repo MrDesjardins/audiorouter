@@ -29,6 +29,7 @@ Assert ($runnerText -match 'metrics\.json' -and $runnerText -match '\$metrics\.b
 Assert ($runnerText -match '\$formatRate -ne \$Rate') 'runner refuses a result at the wrong shared mix rate'
 Assert ($runnerText -match 'Qualification = \$false') 'diagnostic runner cannot claim qualification'
 Assert ($runnerText -match '\$PcmBits' -and $runnerText -match 'bitexact_encoding') 'product runner verifies the actual negotiated PCM encoding'
+Assert ($runnerText -match "\$verdict -ne 'PASS'.*throw") 'product runner exits unsuccessfully on a failed analyzer verdict'
 $qualityText = Get-Content -LiteralPath $qualityRunner -Raw
 Assert ($qualityText -match "float32-44k1.*float32-48k.*float32-96k") 'VM entry point exposes only implemented float32 rate cases'
 Assert ($qualityText -match 'pcm16-44k1.*pcm16-48k.*pcm16-96k.*pcm24-44k1.*pcm24-48k.*pcm24-96k.*pcm32-44k1.*pcm32-48k.*pcm32-96k') 'VM entry point exposes PCM16/24/32 at 44.1/48/96 kHz'

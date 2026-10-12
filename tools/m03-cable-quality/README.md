@@ -28,8 +28,9 @@ format first; the runner checks the native probe's negotiated shared mix
 format and fails on dropped, flagged, or overflowed capture packets. Add
 `-ChannelMatrix` to run a supported format/rate case at 1, 2 and 8 channels in
 sequence. PCM32 uses deterministic full-resolution integer-grid noise and
-float64 captures. These cases are diagnostic and have not yet been measured in
-the VM.
+float64 captures. A failed measurement exits unsuccessfully, so a channel
+matrix stops at its first bad case. These cases are diagnostic and have not yet
+been measured in the VM.
 
 The `sweep` analyzer mode compares 48 logarithmically spaced local magnitude
 projections from a reference/capture pair. Guarded VM cases

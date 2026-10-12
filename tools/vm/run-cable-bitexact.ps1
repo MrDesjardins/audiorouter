@@ -104,6 +104,7 @@ try {
     Write-Host ("{0} channels, {1}: {2} (capture dropped {3} frames, flagged {4}, overflow {5}, probe exit {6}, route exit {7})" -f `
         $Channels, $formatLabel, $verdict, $result.CaptureDropped, $result.CaptureFlagged, $result.CaptureOverflow, $measured.Code, $route.ExitCode)
     Write-Host "  cableRoute=$($result.CableRoute)"
+    if ($verdict -ne 'PASS') { throw "Cable sample diagnostic failed for $Channels channels at $Rate Hz ($formatLabel). See result.json and metrics.json." }
 } catch { $failure = $_ } finally {
     if ($route) {
         try { if (-not $route.HasExited) { $route.Kill(); [void]$route.WaitForExit(5000) } } finally { $route.Dispose() }

@@ -2045,7 +2045,9 @@ aligns frames and applies the PCM32 ≤1-LSB verdict. The native probe recognize
 plain/extensible PCM32, generates full-resolution noise,
 preserves capture in double precision and writes float64 WAVs. The guarded
 PCM16/24/32 cases verify the negotiated format and reject dropped, flagged
-or overflowed captures. Host checks and a probe-to-analyzer WAV self-test pass;
+or overflowed captures. Failed analyzer verdicts now exit with failure so the
+sequential channel matrix stops at the first bad measurement. Host checks and
+a probe-to-analyzer WAV self-test pass;
 no PCM endpoint run has been measured. Next action: exercise the PCM and sweep
 cases in the disposable driver VM and cover resampling and continuity metrics.
 Validation: portable tests, format, Clippy, docs and acceptance passed; VM
