@@ -1,8 +1,12 @@
 [CmdletBinding()]
-param()
+param([string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
+$DriverPackage = [string]$DriverPackage
+if ([string]::IsNullOrWhiteSpace($DriverPackage)) {
+    throw "Set AUDIOROUTER_SIGNED_DRIVER_PACKAGE to the Microsoft-signed driver payload directory before M08 release acceptance."
+}
 $output = Join-Path ([IO.Path]::GetTempPath()) "audiorouter-m08-release-$PID"
 if (Test-Path -LiteralPath $output) {
     throw "Refusing to reuse an existing release output directory: $output"
@@ -10,7 +14,7 @@ if (Test-Path -LiteralPath $output) {
 
 Push-Location $repoRoot
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\prepare-artifacts.ps1 -OutputDirectory $output
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\prepare-artifacts.ps1 -OutputDirectory $output -DriverPackage $DriverPackage
     if ($LASTEXITCODE -ne 0) { throw "release preparation failed with exit code $LASTEXITCODE" }
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\verify-artifacts.ps1 -ManifestPath (Join-Path $output "release-manifest.json")
@@ -37,6 +41,10 @@ try {
         "sbom.cargo.json",
         "sbom.npm.json",
         "sbom.npm.package-lock.json",
+        "audioroutervirtual.inf",
+        "audioroutervirtual.sys",
+        "audioroutervirtual.cat",
+        "LICENSE-MS-PL.txt",
         "THIRD-PARTY-NOTICES.txt",
         "SHA256SUMS.txt"
     )) {

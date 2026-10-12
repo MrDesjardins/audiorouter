@@ -2,12 +2,19 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
-    [string]$ReleaseTag
+    [string]$ReleaseTag,
+    [string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE
 )
 
 $ErrorActionPreference = "Stop"
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $output = [IO.Path]::GetFullPath($OutputDirectory)
+if ([string]::IsNullOrWhiteSpace($DriverPackage)) {
+    throw "Set AUDIOROUTER_SIGNED_DRIVER_PACKAGE to the Microsoft-signed Partner Center driver payload directory."
+}
+$driverInput = [IO.Path]::GetFullPath($DriverPackage)
+$driverStage = Join-Path $workspace "target/release/driver"
+$driverStageCreated = $false
 
 if (Test-Path -LiteralPath $output) {
     throw "Output directory already exists; refusing to overwrite release artifacts: $output"
@@ -29,10 +36,60 @@ while (-not [string]::IsNullOrWhiteSpace($parentPath)) {
 
 . (Join-Path $PSScriptRoot "pe-validation.ps1")
 
+function Assert-NoReparsePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $cursor = [IO.Path]::GetFullPath($Path)
+    while (-not [string]::IsNullOrWhiteSpace($cursor)) {
+        if (Test-Path -LiteralPath $cursor) {
+            $item = Get-Item -LiteralPath $cursor -Force
+            if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Release input path must not traverse a reparse point: $cursor"
+            }
+        }
+        $parent = Split-Path -Parent $cursor
+        if ($parent -eq $cursor) { break }
+        $cursor = $parent
+    }
+}
+
 Push-Location $workspace
 $bundleRoot = Join-Path $workspace "src-tauri/target/release/bundle/nsis"
 $cleanupNsis = $false
 try {
+    if (-not (Test-Path -LiteralPath $driverInput -PathType Container)) {
+        throw "Microsoft-signed driver package directory is missing: $driverInput"
+    }
+    Assert-NoReparsePath $driverInput
+    $driverFiles = @("audioroutervirtual.inf", "audioroutervirtual.sys", "audioroutervirtual.cat")
+    foreach ($name in $driverFiles) {
+        $file = Join-Path $driverInput $name
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+            throw "Signed driver package is missing a regular $($name): $file"
+        }
+        Assert-NoReparsePath $file
+    }
+    if (Test-Path -LiteralPath $driverStage) {
+        throw "Driver staging directory already exists; refusing to overwrite it: $driverStage"
+    }
+    $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if (-not $signtool) { throw "signtool.exe is required to verify the Microsoft-signed driver catalog." }
+    foreach ($member in @("audioroutervirtual.inf", "audioroutervirtual.sys")) {
+        $verification = @(& $signtool.Source verify /kp /v /c (Join-Path $driverInput "audioroutervirtual.cat") (Join-Path $driverInput $member) 2>&1 | ForEach-Object { "$_" })
+        $verifyExit = $LASTEXITCODE
+        if ($verifyExit -ne 0 -or ($verification -join "`n") -notmatch "Microsoft Windows Hardware Compatibility Publisher") {
+            throw "Production catalog verification failed for $($member): $($verification -join "`n")"
+        }
+    }
+    $infText = Get-Content -LiteralPath (Join-Path $driverInput "audioroutervirtual.inf") -Raw
+    $versionMatch = [regex]::Match($infText, '(?im)^DriverVer\s*=\s*\d{2}/\d{2}/\d{4},\s*(\d+\.\d+\.\d+\.\d+)\s*$')
+    if (-not $versionMatch.Success) { throw "Driver INF has no valid four-part DriverVer." }
+    New-Item -ItemType Directory -Path $driverStage | Out-Null
+    $driverStageCreated = $true
+    foreach ($name in $driverFiles) { Copy-Item -LiteralPath (Join-Path $driverInput $name) -Destination (Join-Path $driverStage $name) }
+    Copy-Item -LiteralPath (Join-Path $workspace "drivers/audiorouter-virtual/LICENSE-MS-PL.txt") -Destination (Join-Path $driverStage "LICENSE-MS-PL.txt")
+    $packageJson = [ordered]@{ platform = "x64"; signed = "microsoft"; driverVersion = $versionMatch.Groups[1].Value } | ConvertTo-Json
+    [IO.File]::WriteAllText((Join-Path $driverStage "package.json"), $packageJson, [Text.UTF8Encoding]::new($false))
+
     $dirty = & git status --porcelain --untracked-files=all
     if ($LASTEXITCODE -ne 0) {
         throw "could not inspect Git working-tree state"
@@ -44,6 +101,8 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "cargo release build failed with exit code $LASTEXITCODE"
     }
+    & cargo build --release --locked -p audiorouter-driver-helper
+    if ($LASTEXITCODE -ne 0) { throw "elevated driver helper release build failed with exit code $LASTEXITCODE" }
     & npm.cmd run build --prefix ui
     if ($LASTEXITCODE -ne 0) {
         throw "UI build for native shell embedding failed with exit code $LASTEXITCODE"
@@ -121,6 +180,7 @@ try {
     $binaries = @(
         @{ Name = "audiorouter-cli.exe"; Source = (Join-Path $workspace "target/release/audiorouter-cli.exe") }
         @{ Name = "audiorouter-plugin-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe") }
+        @{ Name = "audiorouter-driver-helper.exe"; Source = (Join-Path $workspace "target/release/audiorouter-driver-helper.exe") }
         @{ Name = "audiorouter-shell.exe"; Source = (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe") }
     )
     foreach ($binary in $binaries) {
@@ -180,6 +240,9 @@ try {
     & node.exe (Join-Path $workspace "tools/release/generate-npm-sbom.mjs") (Join-Path $workspace "tools/streamdeck/package-lock.json") (Join-Path $output "sbom.streamdeck.json")
     if ($LASTEXITCODE -ne 0) { throw "Stream Deck npm SBOM generation failed" }
 
+    foreach ($name in @("audioroutervirtual.inf", "audioroutervirtual.sys", "audioroutervirtual.cat", "LICENSE-MS-PL.txt")) {
+        Copy-Item -LiteralPath (Join-Path $driverStage $name) -Destination (Join-Path $output $name)
+    }
     $files = Get-ChildItem -LiteralPath $output -File | Sort-Object Name
     $checksums = @(foreach ($file in $files) {
         $hash = Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256
@@ -235,6 +298,13 @@ finally {
             throw "generated NSIS bundle path is not a regular directory: $bundleRoot"
         }
         Remove-Item -LiteralPath $bundleRoot -Recurse -Force
+    }
+    if ($driverStageCreated -and (Test-Path -LiteralPath $driverStage)) {
+        $stageItem = Get-Item -LiteralPath $driverStage -Force
+        if (-not $stageItem.PSIsContainer -or (($stageItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+            throw "generated driver staging path is not a regular directory: $driverStage"
+        }
+        Remove-Item -LiteralPath $driverStage -Recurse -Force
     }
     Pop-Location
 }

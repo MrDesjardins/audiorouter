@@ -5,11 +5,18 @@
     "resources": {
       "../target/release/audiorouter-cli.exe": "audiorouter-cli.exe",
       "../target/release/audiorouter-plugin-worker.exe": "audiorouter-plugin-worker.exe",
+      "../target/release/audiorouter-driver-helper.exe": "audiorouter-driver-helper.exe",
+      "../target/release/driver/audioroutervirtual.inf": "driver/audioroutervirtual.inf",
+      "../target/release/driver/audioroutervirtual.sys": "driver/audioroutervirtual.sys",
+      "../target/release/driver/audioroutervirtual.cat": "driver/audioroutervirtual.cat",
+      "../target/release/driver/LICENSE-MS-PL.txt": "driver/LICENSE-MS-PL.txt",
+      "../target/release/driver/package.json": "driver/package.json",
       "../tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin": "com.mrdesjardins.audiorouter.streamDeckPlugin"
     },
     "windows": {
       "nsis": {
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "installerHooks": "installer-hooks.nsh"
       },
       "webviewInstallMode": {
         "type": "downloadBootstrapper",

@@ -9,6 +9,13 @@ its published assets downloaded and verified; see the
 clean-machine install/upgrade/uninstall and missing-WebView2 checks remain
 open.
 
+The next managed-cable installer flow is under WP-11. Its release preparer now
+requires a Microsoft-signed driver payload, verifies its catalog, bundles the
+elevated helper and four driver/license files, and records the payload hashes.
+This does not change already-published installers. Until that payload exists
+and the VM install/upgrade/uninstall smoke passes, do not claim the current
+release installs AudioRouter cables.
+
 ## What a release contains (from 0.0.14)
 
 One download installs everything. `AudioRouter_<version>_x64-setup.exe` is a

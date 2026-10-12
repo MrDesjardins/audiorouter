@@ -1,59 +1,45 @@
 [CmdletBinding()]
-param()
+param([string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE)
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
-$manifestPath = Join-Path $repositoryRoot 'src-tauri/Cargo.toml'
-$bundleRoot = Join-Path $repositoryRoot 'src-tauri/target/release/bundle/nsis'
-$installerPath = Join-Path $bundleRoot 'AudioRouter_0.1.0_x64-setup.exe'
-$manifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash
+$hookChecks = Join-Path $repositoryRoot 'tools/release/test-installer-hooks.ps1'
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $hookChecks
+if ($LASTEXITCODE -ne 0) { throw "WP-11 installer resource/hook checks failed: $LASTEXITCODE" }
 
+if ([string]::IsNullOrWhiteSpace($DriverPackage)) {
+    Write-Output 'SKIP: no Microsoft-signed driver package supplied; static installer wiring checks passed, NSIS generation and VM install qualification were not run.'
+    return
+}
+
+$outputParent = Join-Path $repositoryRoot 'target'
+$output = Join-Path $outputParent ('m08-installer-smoke-' + [guid]::NewGuid().ToString('N'))
+$prepare = Join-Path $repositoryRoot 'tools/release/prepare-artifacts.ps1'
+$verify = Join-Path $repositoryRoot 'tools/release/verify-artifacts.ps1'
 try {
-    if (Test-Path -LiteralPath $bundleRoot) {
-        throw "Refusing to reuse an existing disposable NSIS output directory: $bundleRoot"
-    }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $prepare -OutputDirectory $output -DriverPackage $DriverPackage
+    if ($LASTEXITCODE -ne 0) { throw "signed-driver NSIS preparation failed: $LASTEXITCODE" }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $verify -ManifestPath (Join-Path $output 'release-manifest.json')
+    if ($LASTEXITCODE -ne 0) { throw "prepared artifact verification failed: $LASTEXITCODE" }
 
-    Push-Location $repositoryRoot
-    try {
-        & cargo build --release --locked -p audiorouter-cli -p audiorouter-plugin-host
-        if ($LASTEXITCODE -ne 0) {
-            throw "CLI and plugin-worker release build failed with exit code $LASTEXITCODE"
-        }
-        # tauri.release.conf.json bundles the packed Stream Deck plugin.
-        & npm.cmd ci --prefix tools/streamdeck
-        if ($LASTEXITCODE -ne 0) { throw "Stream Deck locked dependency installation failed" }
-        & npm.cmd run pack --prefix tools/streamdeck
-        if ($LASTEXITCODE -ne 0) { throw "Stream Deck plugin packing failed" }
-        $tauriCli = Join-Path $repositoryRoot 'ui/node_modules/.bin/tauri.cmd'
-        if (-not (Test-Path -LiteralPath $tauriCli -PathType Leaf)) {
-            throw "Tauri CLI is missing; install locked UI dependencies with npm ci --prefix ui: $tauriCli"
-        }
-        & $tauriCli build --no-sign --ci --bundles nsis --config src-tauri/tauri.release.conf.json
-        if ($LASTEXITCODE -ne 0) {
-            throw "unsigned NSIS bundler failed with exit code $LASTEXITCODE"
+    $manifest = Get-Content -LiteralPath (Join-Path $output 'release-manifest.json') -Raw | ConvertFrom-Json
+    foreach ($name in @('audioroutervirtual.inf', 'audioroutervirtual.sys', 'audioroutervirtual.cat', 'LICENSE-MS-PL.txt')) {
+        if (@($manifest.artifacts | Where-Object { $_.file -eq $name }).Count -ne 1) {
+            throw "release manifest must contain exactly one $name entry"
         }
     }
-    finally {
-        Pop-Location
+    $installerName = "AudioRouter_$($manifest.version)_x64-setup.exe"
+    if (-not (Test-Path -LiteralPath (Join-Path $output $installerName) -PathType Leaf)) {
+        throw "release preparation did not produce the NSIS installer: $installerName"
     }
-
-    if (-not (Test-Path -LiteralPath $installerPath -PathType Leaf)) {
-        throw "unsigned NSIS bundler did not produce the expected x64 installer: $installerPath"
-    }
-    $installer = Get-Item -LiteralPath $installerPath
-    if ($installer.Length -le 0) {
-        throw "unsigned NSIS bundler produced an empty installer: $installerPath"
-    }
-    $afterManifestHash = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash
-    if ($afterManifestHash -ne $manifestHash) {
-        throw 'Tauri bundling modified src-tauri/Cargo.toml; keep the manifest reproducible.'
-    }
-
-    Write-Output "M08 unsigned NSIS installer smoke passed: $($installer.Length) bytes"
-    Write-Output 'Scope: disposable unsigned installer generation only; no installer execution, installation, signing, driver, or audio configuration action.'
+    Write-Output 'M08 signed-driver installer preparation smoke passed. The installer was not executed; VM installation, update and uninstall remain separate gates.'
 }
 finally {
-    if (Test-Path -LiteralPath $bundleRoot) {
-        Remove-Item -LiteralPath $bundleRoot -Recurse -Force
+    if (Test-Path -LiteralPath $output) {
+        $resolved = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $output).Path)
+        if ([IO.Path]::GetDirectoryName($resolved) -ne [IO.Path]::GetFullPath($outputParent)) {
+            throw "Refusing to remove smoke output outside target: $resolved"
+        }
+        Remove-Item -LiteralPath $resolved -Recurse -Force
     }
 }

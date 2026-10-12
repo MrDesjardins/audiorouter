@@ -44,7 +44,7 @@ try {
 
     $missing = Join-Path $root 'missing\output'
     try {
-        & $prepare -OutputDirectory $missing | Out-Null
+        & $prepare -OutputDirectory $missing -DriverPackage $root | Out-Null
         throw 'prepare script accepted an output directory with a missing parent'
     } catch {
         if ($_.Exception.Message -eq 'prepare script accepted an output directory with a missing parent') { throw }
@@ -53,11 +53,21 @@ try {
 
     $target = Join-Path $root 'target'
     New-Item -ItemType Directory -Path $target | Out-Null
+    $missingPayloadOutput = Join-Path $root 'missing-payload-output'
+    try {
+        & $prepare -OutputDirectory $missingPayloadOutput -DriverPackage $root | Out-Null
+        throw 'prepare script accepted a signed driver directory without the catalog payload'
+    } catch {
+        if ($_.Exception.Message -eq 'prepare script accepted a signed driver directory without the catalog payload') { throw }
+        if ($_.Exception.Message -notmatch 'missing a regular audioroutervirtual\.inf') { throw }
+    }
+    if (Test-Path -LiteralPath $missingPayloadOutput) { throw 'prepare script created output before rejecting the missing driver payload' }
+
     $link = Join-Path $root 'redirected-parent'
     try {
         New-Item -ItemType SymbolicLink -Path $link -Target $target -ErrorAction Stop | Out-Null
         try {
-            & $prepare -OutputDirectory (Join-Path $link 'output') | Out-Null
+            & $prepare -OutputDirectory (Join-Path $link 'output') -DriverPackage $root | Out-Null
             throw 'prepare script accepted a reparse-point output parent'
         } catch {
             if ($_.Exception.Message -eq 'prepare script accepted a reparse-point output parent') { throw }

@@ -31,20 +31,25 @@ clean-machine and missing-WebView2 checks remain open. The app and installer
 are intentionally unsigned for the first release; this is separate from the
 AudioRouter driver signing decision.
 
-The reproducible preparation flow is:
+The managed-cable release preparation flow requires the Microsoft-signed driver
+package returned from Partner Center (never the test-signed VM package):
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\release\prepare-artifacts.ps1 -OutputDirectory <new-absolute-directory>
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\release\prepare-artifacts.ps1 -OutputDirectory <new-absolute-directory> -DriverPackage <signed-driver-directory>
     powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\release\verify-artifacts.ps1 -ManifestPath <prepared-directory>\release-manifest.json
 
-Preparation requires a clean worktree, locked Cargo inputs, and a new output
-directory. It produces unsigned x64 CLI, native-shell, and disposable-worker
-artifacts, the disposable VB-Cable desktop launcher, a disposable zipped UI bundle, locked Cargo SBOM metadata, the authoritative UI
-`package-lock.json` plus a deterministic CycloneDX npm SBOM generated from the
-lockfile, and checksums. Before copying the three executables, preparation reads
-bounded DOS/PE headers and rejects malformed, reparse-point, or non-x64 files.
-The standard preparation flow does not install a
-driver or generate an installer. An optional transient unsigned NSIS smoke can
-exercise the native bundler without installation:
+Preparation requires a clean worktree, locked Cargo inputs, the Microsoft
+catalog signature on the INF and SYS, and a new output directory. It builds
+the elevated helper, stages the signed INF/SYS/CAT plus license and package
+metadata in the NSIS resources, then records the four distributable files in
+the SHA-256 manifest. The current-user installer still never installs the
+driver itself; Setup invokes the helper only after a user action. Windows
+installer execution and cable install/update/remove remain VM qualification
+gates.
+
+For an app-only development build, use the existing UI and shell build checks;
+do not substitute a test-signed cable package into this release flow. An
+optional transient unsigned NSIS smoke can exercise the native bundler without
+installation:
 
     npm.cmd exec --yes --package @tauri-apps/cli@2.11.4 -- tauri build --debug --no-sign --ci --bundles nsis --config src-tauri/tauri.conf.json
 
@@ -52,9 +57,11 @@ That smoke writes only to the native Cargo target directory and must be
 cleaned afterward; it is not production signing, installer, or clean-machine
 qualification.
 
-The checked-in wrapper `tests/acceptance/m08-installer-smoke.ps1` runs this
-smoke, verifies that Tauri does not modify `src-tauri/Cargo.toml`, and removes
-its exact disposable NSIS bundle directory on completion.
+The checked-in wrapper `tests/acceptance/m08-installer-smoke.ps1` checks the
+resource/hook contract first. With `AUDIOROUTER_SIGNED_DRIVER_PACKAGE` set, it
+prepares and verifies the signed-driver NSIS artifacts; without it, the package
+step is explicitly skipped. It does not execute the installer or establish the
+WP-11 VM install, upgrade, or uninstall gates.
 
 ## Current qualification snapshot
 

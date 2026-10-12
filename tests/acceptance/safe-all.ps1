@@ -17,7 +17,7 @@ $steps = @(
     @{ Name = 'M06 VST2 fixture'; Script = Join-Path $acceptanceRoot 'm06-vst2-state-fixture.ps1' },
     @{ Name = 'M07 headless'; Script = Join-Path $acceptanceRoot 'm07-headless.ps1' },
     @{ Name = 'M08 release'; Script = Join-Path $acceptanceRoot 'm08-release.ps1' },
-    @{ Name = 'M08 unsigned installer smoke'; Script = Join-Path $acceptanceRoot 'm08-installer-smoke.ps1' },
+    @{ Name = 'M08 installer resource and optional packaging smoke'; Script = Join-Path $acceptanceRoot 'm08-installer-smoke.ps1' },
     @{ Name = 'M07 frontend-owned shell RPC'; Script = Join-Path $acceptanceRoot 'm07-shell-rpc.ps1' },
     @{ Name = 'M08 traceability'; Script = Join-Path $acceptanceRoot 'm08-traceability.ps1' },
     @{ Name = 'Documentation'; Script = Join-Path $acceptanceRoot 'docs.ps1' }

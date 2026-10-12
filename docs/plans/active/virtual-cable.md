@@ -2142,7 +2142,43 @@ actions as release-ready.
   from Setup (one UAC), upgrade app with newer driver → Update shown → one
   UAC → endpoint IDs unchanged; uninstall app with "keep" and with
   "remove"; verify-artifacts checks driver hashes.
-- **Status:** not started.
+- **Status:** in progress; helper/resource and opt-in uninstall wiring implemented,
+  signed package and Windows VM lifecycle gate pending.
+
+### WP-11 execution — packaging preparation (2026-10-11)
+
+Objective: wire the elevated helper and signed cable package into the current-user
+NSIS release without installing a driver from the installer, then qualify explicit
+Setup install/update and opt-in uninstall. Requirement IDs: VCAB-02, VCAB-05,
+VCAB-10, SEC-08, DIST-01, DIST-02, ENG-05. Prerequisites: WP-10 slice 2 is
+committed and pushed as `314c75c1`; host tests cover the shell bridge. The
+repository has no production-signed driver payload in a release-input directory.
+The signed files therefore remain a hard packaging/installer smoke gate; the
+test-signed VM package must never enter a product installer.
+
+Ordered work: (1) bundle the release helper beside the shell and make release
+preparation fail closed if the signed package is absent or not the exact four-file
+payload; (2) add safe hash/manifest verification and NSIS uninstall consent with
+default Keep, invoking only the adjacent helper for Remove; (3) add acceptance
+tests for helper/package presence, checksum tamper/missing-file rejection and
+uninstall hook contract; (4) run script tests, format/lint/build checks and inspect
+the diff; (5) leave signed-driver install/update and NSIS install/upgrade/uninstall
+VM runs blocked until a Microsoft-signed payload and attended VM run are available.
+Rollback is limited to the new release wiring and hook; existing installer output
+and installed driver state are not modified.
+
+Validation (host, 2026-10-11): release helper builds with
+`cargo build --release --locked -p audiorouter-driver-helper`. PowerShell parser
+checks pass for edited release/acceptance scripts. `test-installer-hooks.ps1`,
+`test-verify-artifacts.ps1`, and `test-prepare-artifacts.ps1` pass. The M08
+installer wrapper passes its static resource/hook checks and correctly reports
+the signed-payload packaging stage skipped because
+`AUDIOROUTER_SIGNED_DRIVER_PACKAGE` was not supplied. `git diff --check` passes.
+This is host packaging evidence only: no NSIS bundle was generated, no driver was
+installed/removed, and no app install, upgrade, UAC, endpoint identity, or VM
+uninstall behavior was exercised. Next action: obtain the Microsoft-signed
+Partner Center payload, run the clean-tree packaging/verifier flow, then execute
+the install → update → uninstall keep/remove sequence in the disposable VM.
 
 ## WP-12 — Stage A full qualification
 

@@ -15,7 +15,11 @@ try {
             "sbom.npm.package-lock.json",
             "com.mrdesjardins.audiorouter.streamDeckPlugin",
             "sbom.streamdeck.package-lock.json",
-            "sbom.streamdeck.json"
+            "sbom.streamdeck.json",
+            "audioroutervirtual.inf",
+            "audioroutervirtual.sys",
+            "audioroutervirtual.cat",
+            "LICENSE-MS-PL.txt"
         )) {
             $path = Join-Path $Directory $name
             [IO.File]::WriteAllBytes($path, [byte[]](9, 8, 7))
@@ -70,6 +74,15 @@ try {
     $manifestPath = Join-Path $root "release-manifest.json"
     $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath -Encoding utf8
     & $verifier $manifestPath | Out-Null
+
+    $driverArtifact = Join-Path $root "audioroutervirtual.sys"
+    [IO.File]::AppendAllText($driverArtifact, "tamper")
+    try {
+        & $verifier $manifestPath | Out-Null
+        throw "verifier accepted a tampered signed-driver artifact"
+    } catch {
+        if ($_.Exception.Message -eq "verifier accepted a tampered signed-driver artifact") { throw }
+    }
 
     [IO.File]::AppendAllText($artifactPath, "tamper")
     try {

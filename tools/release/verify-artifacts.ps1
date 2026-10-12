@@ -116,6 +116,10 @@ $requiredArtifacts = @(
     "com.mrdesjardins.audiorouter.streamDeckPlugin",
     "sbom.streamdeck.package-lock.json",
     "sbom.streamdeck.json",
+    "audioroutervirtual.inf",
+    "audioroutervirtual.sys",
+    "audioroutervirtual.cat",
+    "LICENSE-MS-PL.txt",
     "THIRD-PARTY-NOTICES.txt",
     "SHA256SUMS.txt"
 )
