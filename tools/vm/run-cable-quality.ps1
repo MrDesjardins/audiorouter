@@ -19,8 +19,8 @@ Assert-PairedTraceAdministrator
 Assert-PairedTraceBundle $bundle
 
 if ($ChannelMatrix) {
-    if ($Case -notlike 'float32-*' -and $Case -notlike 'pcm*' -and $Case -notlike 'sweep-*') {
-        throw '-ChannelMatrix is supported for float32, PCM and sweep cases.'
+    if ($Case -notlike 'float32-*' -and $Case -notlike 'pcm*' -and $Case -notlike 'sweep-*' -and $Case -ne 'thdn-997-48k') {
+        throw '-ChannelMatrix is supported for float32, PCM, sweep and THD+N cases.'
     }
     $matrixRun = "quality-matrix-$Case-" + [Guid]::NewGuid().ToString('N')
     $matrixResults = @()
@@ -28,7 +28,9 @@ if ($ChannelMatrix) {
     $matrixRate = switch -Regex ($Case) { '-44k1$' { 44100; break } '-96k$' { 96000; break } default { 48000 } }
     $matrixBits = if ($Case -match '^pcm(16|24|32)-') { [int]$Matches[1] } else { 0 }
     $matrixFormat = if ($matrixBits -eq 0) { 'float32' } else { "pcm$matrixBits" }
-    $archivePrefix = if ($Case -like 'sweep-*') { "sweep-$matrixRate-hz-" } else { "bitexact-$matrixFormat-$($matrixRate)hz-" }
+    $archivePrefix = if ($Case -like 'sweep-*') { "sweep-$matrixRate-hz-" }
+        elseif ($Case -eq 'thdn-997-48k') { 'thdn-997-hz-' }
+        else { "bitexact-$matrixFormat-$($matrixRate)hz-" }
     $peer = Join-Path 'Z:\' (Split-Path -Leaf $bundle)
     New-Item -ItemType Directory -Path 'C:\ar\evidence' -Force | Out-Null
     foreach ($matrixChannels in @(1, 2, 8)) {
@@ -43,6 +45,8 @@ if ($ChannelMatrix) {
         $childVerdict = if ($verdictMatch.Success) { $verdictMatch.Groups[1].Value }
             elseif ($Case -like 'sweep-*' -and $childText -match 'Sweep response diagnostic passed:') { 'PASS' }
             elseif ($Case -like 'sweep-*' -and $childText -match 'Sweep response diagnostic failed') { 'FAIL' }
+            elseif ($Case -eq 'thdn-997-48k' -and $childText -match 'THD\+N diagnostic passed:') { 'PASS' }
+            elseif ($Case -eq 'thdn-997-48k' -and $childText -match 'THD\+N diagnostic failed') { 'FAIL' }
             else { 'ERROR' }
         $archive = Get-ChildItem -LiteralPath $bundle -Filter "$archivePrefix$matrixChannels*ch-*.zip" -File |
             Where-Object { $_.LastWriteTimeUtc -ge $childStartedUtc.AddSeconds(-2) } |

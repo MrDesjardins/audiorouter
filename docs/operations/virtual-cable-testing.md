@@ -228,10 +228,10 @@ analyzer metrics, but remain marked `Qualification = false`. They do not
 satisfy the 1/2/8-channel matrix or resampling cases. Guarded integer PCM cases
 now cover PCM16, PCM24-in-32 and PCM32 at 44.1/48/96 kHz, for example
 `-Case pcm32-96k -Channels 8`. Add `-ChannelMatrix` to run the selected
-float32, integer PCM or sweep case at 1, 2 and 8 channels sequentially. Each
-run checks the actual Windows shared mix format and applies the one-LSB metric
-for integer PCM. PCM32 capture uses float64 WAVs so analysis retains the
-integer's low bits. The matrix writes JSON and CSV summaries with each verdict
+float32, integer PCM, sweep or 997 Hz THD+N case at 1, 2 and 8 channels
+sequentially. Each run checks the actual Windows shared mix format and applies
+the one-LSB metric for integer PCM. PCM32 capture uses float64 WAVs so analysis
+retains the integer's low bits. The matrix writes JSON and CSV summaries with each verdict
 and its evidence archive; the archive holds the measured `metrics.json`. These
 are runner cases only: the PCM and channel matrix has not been run in the VM
 and remains unmeasured.

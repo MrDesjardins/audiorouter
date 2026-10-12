@@ -256,8 +256,8 @@ passes, and documentation validation remains 149 Markdown files / 858 links.
 ## Sequential channel matrix option
 
 Added `-ChannelMatrix` to the guarded quality entry point for float32, integer
-PCM and sweep cases. It runs the selected case at 1, 2 and 8 channels in order,
-stops on the first failed child run, and writes JSON and CSV summaries linking
+PCM, sweep and 997 Hz THD+N cases. It runs the selected case at 1, 2 and 8
+channels in order, stops on the first failed child run, and writes JSON and CSV summaries linking
 each verdict and exit code to its child evidence archive. The archive retains
 the per-run numeric metrics. Host-safe acceptance and parser checks cover the
 wiring; no VM route has been started.

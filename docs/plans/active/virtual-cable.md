@@ -2028,9 +2028,9 @@ WP-09 mixed-clock route work.
   measures passband magnitude only; phase, aliasing and imaging remain open.
   PCM32 has analyzer and native-probe float64 WAV paths plus guarded cases at
   44.1/48/96 kHz. PCM16/24/32 cases now share that rate matrix and accept the
-  required 1/2/8 channel counts. `-ChannelMatrix` runs any float32, integer
-  PCM or sweep case at 1/2/8 channels sequentially and writes JSON/CSV summaries
-  linking each verdict to its metric archive. Next exercise PCM and sweep
+  required 1/2/8 channel counts. `-ChannelMatrix` runs float32, integer PCM,
+  sweep and 997 Hz THD+N cases at 1/2/8 channels sequentially and writes JSON/CSV
+  summaries linking each verdict to its metric archive. Next exercise PCM and sweep
   cases in the disposable VM
   and cover sweep/resampling and continuity metrics. Keep A16 blocked until
   the channel-count decision and VM access gates are resolved; never count

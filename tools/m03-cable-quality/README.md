@@ -26,9 +26,10 @@ float64 reference/capture WAVs. Guarded VM cases cover PCM16, PCM24-in-32 and
 PCM32 at 44.1, 48 and 96 kHz. Set both endpoints to the requested rate and
 format first; the runner checks the native probe's negotiated shared mix
 format and fails on dropped, flagged, or overflowed capture packets. Add
-`-ChannelMatrix` to run a supported format/rate case at 1, 2 and 8 channels in
-sequence. PCM32 uses deterministic full-resolution integer-grid noise and
-float64 captures. A failed measurement exits unsuccessfully, so a channel
+`-ChannelMatrix` to run a float32, integer PCM, sweep or 997 Hz THD+N case at
+1, 2 and 8 channels in sequence. PCM32 uses deterministic full-resolution
+integer-grid noise and float64 captures. A failed measurement exits
+unsuccessfully, so a channel
 matrix stops at its first bad case. `-ChannelMatrix` writes JSON and CSV
 summaries with each channel count's verdict, exit code and evidence archive
 path; the archive's `metrics.json` contains the measured values. These cases
