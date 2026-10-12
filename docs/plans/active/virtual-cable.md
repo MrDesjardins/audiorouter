@@ -1,30 +1,24 @@
 # Active plan — AudioRouter virtual cable (DEC-18)
 
-**Resuming with Claude or another agent:** start with the
-[detailed handoff](virtual-cable-agent-handoff.md). The 2026-10-10 candidate is
-prepared; two clean smokes and install/status passed; the r3 direct audio
-run failed (packet-validity silence regression); the slot-provenance
-candidate `492d8ca8` passed its smokes and 30-second direct run (see
-Objective). Older dated
-next-action notes below are historical when superseded by that handoff.
+Status 2026-10-11: driver 0.1.4.0 (r20) remains installed only in the test VM.
+VM continuity and latency results do not meet qualification; VCAB-24/25 remain
+open. Read the [general active plan](current.md) for the latest driver evidence
+and blocker state. Do not install the test-signed driver on the development PC.
 
-Updated 2026-10-09. The driver is installed only in AR-DriverTest. Smoke,
-active format inventory and short tone checks pass; reported Cable B hiss and
-sustained audio loss still block qualification. Direct recordings have been
-reviewed, including the guest speaker-loopback capture. The current next
-action is the committed-render-packet repair under Objective below;
-do not repeat the completed diagnostics unchanged.
-All implementation and testing happens on
-the user's Windows 11 development PC and its VirtualBox test VM, with the
-host's Hyper-V/WSL capability preserved.
+- WP-09b portable capture-analysis and reporting code is in place; the required
+  endpoint measurement matrix has not been run.
+- WP-10 host implementation is archived. The attended app gate needs the signed
+  package and disposable VM.
+- WP-11 host packaging preparation is recorded below. The production-signed
+  driver payload and NSIS install/update/uninstall VM sequence remain open.
+- Next authorized non-driver implementation: WP-09 mixed-clock cable plus
+  physical-device route support in the user-mode engine, prerequisite to the
+  Game → Discord route template. Do not change kernel-driver code in that work.
 
-- Decision: DEC-18 in [15-delivery](../../spec/15-delivery.md).
-- Design (what to build): [17 Virtual cable](../../spec/17-virtual-cable.md).
-- Testing (how to prove it): [virtual cable testing](../../operations/virtual-cable-testing.md).
-- Signing (human steps, costs): [virtual cable signing](../../operations/virtual-cable-signing.md).
-- Background, costs and gap analysis: [driver track](../future/M03-driver-signing.md).
-
-## Active task — engine cable route (step 1 of the single-PC path, 2026-10-10)
+Older driver investigations below are preserved as execution history. Follow
+only tasks explicitly labelled as current in the active plan and resume from
+its next-action section.
+## Historical driver investigation notes — superseded
 
 ### Execution queue after r12 — 2026-10-10
 
@@ -482,7 +476,7 @@ supervision, UI), which stays in WP-09. Requirement IDs: VCAB-20, VCAB-26,
 VCAB-25 (indicative), VDEV-12. Rollback: revert these commits; the driver
 and the proxy route are unchanged.
 
-## Active repair — 2026-10-09 render publication review
+## Completed render publication review — historical record
 
 User confirmed playback was already running and requested source analysis and
 an owning-layer repair before any further VM retry. This supersedes the final
@@ -525,7 +519,7 @@ Runtime/latency/long-run gates remain pending; no further user test requested.
 
 ## Objective
 
-### Active repair: committed render packet validity (2026-10-10)
+### Committed repair: render packet validity (2026-10-10)
 
 User requests the next engineering step before another VM test. Scope:
 VCAB-12/20/24/27/28, VDEV-12; event-driven render DMA underflow handling.
@@ -1956,19 +1950,13 @@ endpoints, 60 formats, min period ≤ 128 frames: PASS (evidence folder
 `20261011-161011-status`; its timestamp precedes the 16:10:24 install, so
 the next guest run must confirm bridge `driver_version: [0, 1, 4, 0]`).
 
-**Order for the UI (WP-10).** WP-10 depends on WP-08: the cable status the
-panel shows (`virtualCable.status`), library node availability, and the
-install/update/repair/remove shell commands. The spec's
-"Game → Discord" template mixes cables with physical devices, which needs
-WP-09 mixed-clock routes (cable plus physical device), also not started.
-Proposed order: (1) WP-08 status detection and API, read-only, standard
-user; (2) WP-10 first slice (done 2026-10-11, see WP-10 slice 1): Setup → Virtual cables panel (status, driver
-version, counters), cable nodes available in the library when installed,
-and the "Pass-through" template (Cable A → Cable B, which works today);
-(3) slice 2 implementation: elevated helper commands, cable count and names,
-endpoint format hint and low-latency switch (2026-10-11; app/package gate
-pending below); (4) mixed routes plus the Game → Discord template after the
-WP-09 mixed-clock route work.
+**WP-10 status and dependent work.** WP-08 status/API and both WP-10 UI
+implementation slices are complete; the implementation record is archived
+above. The attended app gate remains pending the signed package and disposable
+VM. The Game → Discord template is still not implemented: it requires
+WP-09 mixed-clock routes between cable and physical-device paths. That
+user-mode engine work remains an active implementation task and does not
+require changing the driver.
 
 ## WP-09b — Sound-quality and performance harness (17 §11)
 
@@ -2086,122 +2074,24 @@ dedicated probe and runner change; no data migration.
   written to `testInfo.outputPath` (lesson 2026-10-03).
 - **Acceptance:** UI conventions in AGENTS.md; no layout shift while status
   changes.
-- **Status:** slice 1 committed 2026-10-11; slice 2 implementation is in
-  progress below. The UI actions still need WP-11 to bundle the helper and
-  signed package, followed by an attended app/VM check.
+- **Status:** host implementation for slices 1 and 2 is archived in
+  [the WP-10 execution record](../archived/2026-10-11-WP-10-virtual-cable-ui.md).
+  The attended app/VM acceptance remains open pending WP-11's signed package.
 
-### WP-10 slice 1 — cable status in the UI (2026-10-11)
+### WP-10 implementation archived; attended gate remains active
 
-Requirement IDs: VCAB-29 (guidance, partial), UI-17; spec 17 §7.1, §7.4.
+The host implementation for both UI slices is archived in the
+[WP-10 execution record](../archived/2026-10-11-WP-10-virtual-cable-ui.md).
+This closes implementation only, not WP-10 acceptance. The installed app has
+not been verified with the real adjacent helper and signed package. Remaining
+checks are real UAC operation results, status refresh, cable count/name and
+low-latency changes, and the integrated three-theme layout test. The
+development host must not be used to install or remove the driver.
 
-- **Status store** (`ui/src/virtualCableStatus.ts`): App polls
-  `virtualCable.status` every 2 s while connected (the backend caches 2 s)
-  and publishes it through a `useSyncExternalStore` store. A failed poll
-  keeps the last answer (UI-17); a disconnect clears it. A backend without
-  the method never answers, so cables stay unavailable.
-- **Library:** the two entries are now "Cable input" (an app plays into
-  Cable X Input) and "Cable output" (an app records from Cable X Output),
-  category "AudioRouter cable". `applyCableAvailability` enables them only
-  when the state is `installed` with at least one present cable; otherwise
-  each state gives its own reason. Both the canvas shelf and the Tools
-  sidebar use it; the sidebar cards now add cable nodes too.
-- **Adding a node** no longer prompts for a bus ID: sources start on the
-  first present cable, destinations on the second (Cable A → Cable B).
-  Nodes are enabled and named after their Windows device ("Cable A
-  Input"). The canvas card shows "Cable A".
-- **Properties:** a Cable select (`CableBinding`) lists the status cables
-  (missing ones disabled) and always shows the node's own cable, marked
-  "(not installed)" when the status does not list it (lesson 2026-10-03,
-  saved value). Moving a node renames it only while it still has its
-  default name (`setVirtualBusDraftCable`).
-- **Setup → AudioRouter cables** (`VirtualCablePanel.tsx`): fixed-width
-  status pill, state explanation, driver version and protocol, one row per
-  cable, an "Add route: Cable A → Cable B" button (the pass-through
-  template, appended to the draft with its connection), and the live cable
-  route line plus Forwarded/Silence/Dropped/Trimmed counters in reserved
-  slots. The route counters come from `system.diagnostics`, which refreshes
-  only while playing.
-- **Template decision:** `ui/src/templates.ts` is not reachable from the UI
-  (tests only), so the pass-through is a Setup button rather than a new
-  template ID.
-- **Wording:** the first-run guide now says AudioRouter never installs
-  audio drivers on its own (it said it installs none).
-
-Validation (host, 2026-10-11):
-
-| Check | Result |
-| --- | --- |
-| `npm --prefix ui run typecheck` | pass |
-| `npm --prefix ui run lint` | 0 errors, 25 existing warnings (none in new code) |
-| `npm --prefix ui test` | 515/515 pass; one earlier full run failed `undoes the last committed change` once, which passed alone, in two file runs and in the next full run (load timing; the test backends do not implement the status call) |
-| `ui/e2e/virtual-cables.pw.ts` (Edge) | 4/4 pass: dark, light and high-contrast panels with status changes (Installed → Restart needed → Update needed → Installed) and route states (running, failed, not playing) sampled for layout shift, one offset each; node availability, default cables, Properties picker field style and the Add route button |
-| Full e2e suite (`playwright.config.ts`) | first run: 5 failed. Three `audio-tools` tests clicked `.tool-card` with `hasText: "Input device"`, which now also matches the Cable input card's reason ("…use Input device with…"); they now match the card title exactly. Two others (`canvas-live-performance` meter ticks, `undo-eq-points` dark) passed on rerun. Final run: 236 passed, 9 skipped, 0 failed |
-
-Screenshots (`testInfo.outputPath`, not committed) were reviewed in the
-three themes; the light-theme pill took the node-state badge colours after
-the first review showed low contrast, and the button label was shortened
-so it fits on one line. Not checked: the Windows shell (no change there),
-the guest VM (the UI reads the same `virtualCable.status` that the WP-08
-acceptance verified as `installed`).
-
-### WP-10 slice 2 — cable management controls (implementation complete; app gate pending, 2026-10-11)
-
-Objective: expose the elevated helper's install, update, repair, remove,
-cable-count, naming and low-latency operations from Setup, following spec 17
-§7.2 and §7.4. Show endpoint format and a fixed-slot 48 kHz float hint.
-Requirement IDs: VCAB-02, VCAB-05, VCAB-25, VDEV-10, SEC-08, UI-17.
-Prerequisite evidence: WP-07 helper operations exist and have host unit
-coverage; WP-08 read-only status was verified in the VM at driver 0.1.4.0;
-WP-10 slice 1 is committed as `6aaf4b6d`. The shell bridge and controls are
-implemented. The repository currently has no helper executable at the
-resolver's app-adjacent fallback and the release config does not bundle the
-helper or signed package. Therefore the current installer cannot yet execute
-these actions; WP-11 packaging and an attended VM run remain gates.
-
-Ordered work:
-1. Add shell-only Tauri commands that locate the helper and driver package
-   beside the installed app, validate fixed operation arguments, run the
-   helper with `runas`, wait for its bounded result file, and never expose
-   these actions over MCP/HTTP/backend RPC. Cover executable/package path
-   resolution and operation results in shell tests.
-2. Extend the UI host bridge with typed cable-management actions; preserve
-   the disconnected and non-shell behavior. Add status refresh after each
-   completed action and retain last-good status during transient gaps.
-3. Add Setup controls for install/update/repair/remove, cable count 1–8 and
-   per-cable names. Reserve action/status/error slots for UI-17. Before a
-   count reduction, show affected session names and require explicit
-   confirmation. Show endpoint formats from `devices.list` and the 48 kHz
-   float hint. The low-latency switch writes `DefaultPeriodFrames=128` and
-   restores 480 when off; its checked state comes from bridge QUERY.
-4. Add focused host tests, then run required UI formatting/lint/typecheck and
-   relevant Rust formatting/Clippy/tests, inspect the exact diff, update the
-   traceability record, and record the Edge three-theme/layout evidence.
-   Leave real-helper UAC and installed-driver app verification as a clearly
-   marked VM/attended gate; do not install or remove a driver during agent
-   validation.
-
-Validation (host, 2026-10-11): UI full unit suite 522/522; targeted cable
-panel/host suite 34/34; UI typecheck and formatting pass; lint has 0 errors
-and the same 25 existing warnings. Driver-helper tests 28/28 pass when
-`TEMP`/`TMP` point to workspace temp (the default sandbox temp denied writes).
-Control suite: 246 passed, 9 ignored, 0 failed (the first sandboxed run
-blocked its local UDP/siege fixtures; the full suite passed with the required
-local socket access). Shell helper tests 3/3 pass. Clippy passes for
-control, helper and shell; both Rust format checks pass. Edge cable suite
-4/4 passes in dark, light and high-contrast themes; it asserts a non-48 kHz
-float hint and samples stable layout while status and counters change.
-The dark, light and high-contrast format-hint screenshots were reviewed; the
-hint now occupies its own reserved line so the full sentence remains visible.
-Screenshots are in the ignored Playwright output under
-`target/e2e-temp/audiorouter-playwright-results/`.
-
-Remaining gates: helper executable and signed driver package must be shipped
-beside the app (WP-11); real UAC operations, app status refresh and three-theme
-Edge layout test remain unverified. Do not install/remove the driver on the
-host. Rollback: revert only WP-10 slice 2 paths; helper and installed driver
-state remain untouched. Next action: prepare the helper/package wiring as part
-of WP-11, then run the attended VM management flow before treating the Setup
-actions as release-ready.
+Next action: finish WP-11's signed-package prerequisite and then run the
+attended WP-10 management flow in the disposable VM. See the WP-11 execution
+record below; no attended or driver gate is waived by archiving the UI
+implementation.
 
 ## WP-11 — Installer, update and uninstall (17 §7.5)
 
@@ -2260,9 +2150,10 @@ the install → update → uninstall keep/remove sequence in the disposable VM.
   `docs/plans/active/evidence/<date>-virtual-cable-stage-a.md`.
 - **Gate:** all pass → ask the user for the go-ahead to buy the EV
   certificate (WP-13).
-- **Status:** preflight in progress; no Stage A checks run. A16 tooling is
-  missing, the plan requires 8-channel cases currently deferred by decision,
-  and VirtualBox control is unavailable in this session.
+- **Status:** preflight in progress; no Stage A checks run. The WP-09b
+  analyzer and runners exist, but the endpoint matrix is unmeasured. The plan
+  requires 8-channel cases currently deferred by decision, and VirtualBox
+  control was unavailable during the 2026-10-11 preflight.
 
 ### WP-12 preflight — Stage A gates (2026-10-11)
 
@@ -2274,37 +2165,21 @@ Rollback: Stage A is VM-only; restore `02-test-signing-ready` after each run and
 remove only the exact package/root device owned by the run. Never use the host
 for test-signing or driver installation.
 
-Preflight found three independent gates. First, `tools/m03-cable-quality/` and
-`tests/acceptance/m03-cable-quality.ps1` do not exist although WP-09b and A16
-require them. Second, A16 still requires 8-channel measurements; the user
-decision above deferred 8-channel cables because Windows exposes only stereo
-for the named endpoints. Do not relax the A16 criterion or use 2-channel results
-to claim it. Third, `VBoxManage list runningvms` and `list vms` return COM
-`E_ACCESSDENIED`; no VirtualBox VM process is running, so no guest test was
-started.
+WP-09b portable analysis, the rate/format/channel runners, and host-safe
+acceptance are now implemented. The endpoint measurement matrix has not been
+run. Stage A remains blocked by the user's 8-channel deferral (Windows exposes
+only 1- and 2-channel formats for the named cable endpoints) and unavailable
+VirtualBox control. These are acceptance gates; synthetic host checks do not
+substitute for the VM run.
 
-Host-safe preflight evidence: the 0.1.4.0 test-signed r20 driver package is
-verified (33 package checks) at
-`C:\VMs\ar-share\diagnostics-20261011-notification-lock-r20\driver`; its
-metadata identifies clean source `6b2b915a`. The top-level
-`C:\VMs\ar-share\driver` package is stale (0.1.0, dirty source
-`083cf4d8`) and must not be used. The existing product-route bit-exact runner
-self-check passes 7 checks and the continuity runner self-check passes 189;
-both explicitly use fake process boundaries and opened no audio or driver
-device. Outputs: `target/cable-bitexact-tests-059e4043d1c84d5f84a9d9ba413b13df`,
-`target/cable-continuity-tests-b0dc5eac4c924fc79cfc9eeb5635e279`, and
-`target/driver-package-test-28c13504a20049858729fb58bd0416ba`. These are not
-Stage A results.
-
-Ordered next steps: (1) complete WP-09b's missing quality harness and unit-tested
-analysis without changing targets; (2) reconcile the explicit 8-channel deferral
-with A16 through an approved implementation/decision before the full gate; (3)
-prepare a fresh immutable Stage A bundle from one clean revision, with driver,
-helper, app, harness and manifest versions aligned; (4) run A1–A16 only inside
-the disposable VM, record each result and preserve failures; (5) seek the EV
-certificate go-ahead only if every required check passes. Current action:
-continue WP-09b as the unmet prerequisite; WP-12 remains in preflight and no
-qualification is claimed.
+Ordered next steps: (1) implement the independent user-mode WP-09 mixed-clock
+cable/physical route path and its portable tests; (2) keep the 8-channel
+acceptance blocked unless a supported endpoint-format path is authorized and
+verified; (3) obtain the production-signed payload through WP-13; (4) prepare a
+fresh immutable Stage A bundle with driver, helper, app, and harness versions
+aligned; and (5) run A1–A16 in the disposable VM, retaining all failures.
+Current action: WP-09 mixed-clock route implementation. WP-12 remains in
+preflight; no Stage A qualification is claimed.
 
 ## WP-13 — Microsoft signing and stage B (user, costs money)
 
@@ -2370,17 +2245,12 @@ published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
 
-**VM Session 2 (user action, two smoke runs verified):** continue in the
-current clean VM using package `repair-20261008-render-enabled`. Run the
-Session 2 preflight/install/status block in the
-[VM guide](../../operations/virtual-cable-vm-guide.md), then inspect the
-format/period inventory before tone or Verifier. The second smoke removed
-the driver and restored the baseline; Session 2 installs and keeps it.
-
-After two clean A1–A3/A14 runs show the four Cable A/B Input/Output names,
-continue sessions 2–5: WP-04 (Verifier + fuzz, second user), WP-05 (60
-formats, ≤128-frame period, 2→8→2 IDs), WP-06 (tone both ways, counters,
-8 ch/96 kHz) and WP-07 (helper install/status/set-cables/configure/remove).
+Host implementation task: plan and implement WP-09 mixed-clock route support
+between virtual cables and physical devices in the user-mode engine, with
+portable tests for route compilation, rate conversion, channel mapping,
+failure-to-silence behavior, and stop/restart ownership. Do not change the
+kernel driver. Keep the VM sound-quality, continuity, latency, signing and
+installer gates open; no synthetic result closes those gates.
 
 The 2026-10-07 failure and repaired-package replay are recorded in
 [the crash follow-up evidence](evidence/2026-10-07-virtual-cable-ks-enumeration-crash.md).
