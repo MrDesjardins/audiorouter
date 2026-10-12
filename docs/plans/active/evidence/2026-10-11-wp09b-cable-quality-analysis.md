@@ -272,3 +272,28 @@ Review found that the bit-exact route runner wrote `Verdict = FAIL` but still
 returned success when setup completed. It now throws after persisting the
 failed result, allowing `-ChannelMatrix` to stop at the failing measurement.
 Host-safe acceptance covers the failure branch's wiring; no live route ran.
+
+## Per-channel isolation metrics — 2026-10-11
+
+The float32 silence/isolation analyzer now emits peak, RMS, DC, dBFS, and a
+threshold verdict for each interleaved channel as well as the aggregate
+measurement. The aggregate verdict remains unchanged. A stereo synthetic
+regression verifies that leakage is attributed to its channel and that a
+silent channel reports the zero-signal floor. This improves the diagnostic
+report; it does not replace the required ordered cable-pair measurements.
+
+Checks on Windows host PATRICK5080 (not AR-DriverTest), pinned Rust 1.96.0:
+
+- `cargo test --offline --manifest-path tools/m03-cable-quality/Cargo.toml` —
+  14 passed.
+- `cargo clippy --offline --manifest-path tools/m03-cable-quality/Cargo.toml
+  --all-targets -- -D warnings` — passed.
+- `cargo fmt --manifest-path tools/m03-cable-quality/Cargo.toml -- --check` —
+  passed.
+- `tests/acceptance/m03-cable-quality.ps1` — 44 host-safe checks passed; no
+  audio stream or driver tool was opened.
+- `tests/acceptance/docs.ps1` — 149 Markdown files and 858 local links passed.
+- `git diff --check` — passed.
+
+No driver, VM, endpoint, or physical loopback was used. The 56 ordered-pair
+matrix and all device-dependent acceptance remain unmeasured.

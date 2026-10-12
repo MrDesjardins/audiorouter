@@ -2036,6 +2036,16 @@ WP-09 mixed-clock route work.
   the channel-count decision and VM access gates are resolved; never count
   synthetic checks as Stage A evidence.
 
+  Portable follow-up (2026-10-11): the silence/isolation analyzer now reports
+  peak, RMS, DC, and a threshold verdict for each interleaved channel in
+  addition to the aggregate result. This makes multichannel leakage visible
+  without changing the VCAB-26 aggregate threshold. A synthetic regression
+  verifies a silent channel and a distinct low-level channel are reported
+  separately. The portable harness can be maintained and tested on the host;
+  actual cable matrix execution, driver resampling response, aliasing, imaging,
+  phase/group delay, continuity, and A16 evidence still require the disposable
+  VM or physical loopback and remain unmeasured.
+
 #### Integer PCM analyzer codecs — progress
 
 Requirement IDs: VCAB-12, VCAB-20/21; specification 17 §3 and §11.2.

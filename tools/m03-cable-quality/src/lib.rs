@@ -713,12 +713,40 @@ pub fn analyze_silence_wav(
         return Err("WAV files contain no samples".into());
     }
     let observed = metrics(&samples);
+    let channel_count = usize::from(channels);
+    let channel_metrics = (0..channel_count)
+        .map(|channel| {
+            let values = samples
+                .iter()
+                .skip(channel)
+                .step_by(channel_count)
+                .copied()
+                .collect::<Vec<_>>();
+            let channel_observed = metrics(&values);
+            let peak_dbfs = if channel_observed.peak == 0.0 {
+                -1000.0
+            } else {
+                20.0 * channel_observed.peak.log10()
+            };
+            serde_json::json!({
+                "channel": channel,
+                "peak": channel_observed.peak,
+                "peakDbfs": peak_dbfs,
+                "rms": channel_observed.rms,
+                "dc": channel_observed.dc,
+                "pass": peak_dbfs <= max_peak_dbfs
+            })
+        })
+        .collect::<Vec<_>>();
     let peak_dbfs = if observed.peak == 0.0 {
         -1000.0
     } else {
         20.0 * observed.peak.log10()
     };
-    let pass = peak_dbfs <= max_peak_dbfs;
+    let pass = peak_dbfs <= max_peak_dbfs
+        && channel_metrics
+            .iter()
+            .all(|channel| channel["pass"] == true);
     Ok(serde_json::json!({
         "requirement": "VCAB-26",
         "target": format!("unrouted cable isolation peak <= {max_peak_dbfs} dBFS"),
@@ -729,6 +757,7 @@ pub fn analyze_silence_wav(
         "peakDbfs": peak_dbfs,
         "rms": observed.rms,
         "dc": observed.dc,
+        "channelsMetrics": channel_metrics,
         "capture": capture_path.file_name().and_then(|name| name.to_str())
     }))
 }
@@ -1286,6 +1315,22 @@ mod tests {
         assert!(report["peakDbfs"].as_f64().unwrap() <= -140.0);
         let report = analyze_silence_wav(&path, -170.0).unwrap();
         assert_eq!(report["pass"], false);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn silence_metric_reports_leakage_per_channel() {
+        let path = std::env::temp_dir().join(format!(
+            "m03-quality-crosstalk-channels-{}.wav",
+            std::process::id()
+        ));
+        write_test_wav(&path, 2, &[0.0, 1.0e-8, 0.0, -2.0e-8]);
+        let report = analyze_silence_wav(&path, -140.0).unwrap();
+        assert_eq!(report["channelsMetrics"].as_array().unwrap().len(), 2);
+        assert_eq!(report["channelsMetrics"][0]["pass"], true);
+        assert_eq!(report["channelsMetrics"][0]["peakDbfs"], -1000.0);
+        assert_eq!(report["channelsMetrics"][1]["pass"], true);
+        assert!(report["channelsMetrics"][1]["peakDbfs"].as_f64().unwrap() < -140.0);
         std::fs::remove_file(path).unwrap();
     }
 

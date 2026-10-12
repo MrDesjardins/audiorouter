@@ -15,9 +15,11 @@ configured to that rate. It runs the product cable route and saves the probe's
 real endpoint samples. Its result remains diagnostic, not VCAB-20 qualification.
 
 The `isolation` probe case writes the captured Cable B Output to float32 WAV;
-`m03-cable-quality.exe silence capture.wav metrics.json -140` reports peak,
-RMS, DC and a VCAB-26 threshold verdict. The VM wrapper's Cable A-to-B case is
-one pair only and does not close the all-pairs isolation requirement.
+`m03-cable-quality.exe silence capture.wav metrics.json -140` reports overall
+and per-channel peak, RMS, DC, and a VCAB-26 threshold verdict. Each channel
+has its own pass result, so a multichannel capture identifies which channel
+contains leakage. The VM wrapper's Cable A-to-B case is one pair only and does
+not close the all-pairs isolation requirement.
 
 PCM16 and PCM24-in-32 WAV fixture codecs are available through the library.
 The `pcm` analyzer mode accepts float32 reference/capture WAVs and reports the
