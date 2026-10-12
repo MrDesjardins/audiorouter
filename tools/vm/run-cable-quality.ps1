@@ -2,9 +2,10 @@
    diagnostic subsets of A16, never complete A16 qualification. #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','pcm16-48k','pcm24-48k','sweep-44k1','sweep-48k','sweep-96k','thdn-997-48k','isolation-A-to-B','isolation-all-pairs')][string] $Case,
+    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','pcm16-48k','pcm24-48k','sweep-44k1','sweep-48k','sweep-96k','thdn-997-48k','tone-continuity','isolation-A-to-B','isolation-all-pairs')][string] $Case,
     [ValidateRange(1, 8)][int] $Channels = 2,
-    [ValidateRange(5, 60)][int] $Seconds = 20
+    [ValidateRange(5, 60)][int] $Seconds = 20,
+    [ValidateRange(1, 60)][int] $Minutes = 1
 )
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
@@ -48,6 +49,15 @@ if ($Case -eq 'thdn-997-48k') {
         -NoProfile -ExecutionPolicy Bypass -File $runner -Channels $Channels -Seconds $Seconds
     if ($LASTEXITCODE -ne 0) { throw "THD+N diagnostic failed (exit $LASTEXITCODE)." }
     Write-Host 'Diagnostic case completed. A16 remains incomplete.'
+    return
+}
+if ($Case -eq 'tone-continuity') {
+    $runner = Join-Path $bundle 'run-cable-tone.ps1'
+    if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) { throw 'The bundle has no product-route tone continuity runner.' }
+    Write-Host "WP-09b diagnostic subset: 997 Hz and 47 Hz product-route continuity, $Minutes minute(s) each. This does not pass A16."
+    & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+        -NoProfile -ExecutionPolicy Bypass -File $runner -Minutes $Minutes
+    if ($LASTEXITCODE -ne 0) { throw "Tone continuity diagnostic failed (exit $LASTEXITCODE)." }
     return
 }
 if ($Case -eq 'isolation-all-pairs') {

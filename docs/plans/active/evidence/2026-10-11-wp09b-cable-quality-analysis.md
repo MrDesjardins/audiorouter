@@ -174,3 +174,17 @@ Checks on Windows host `PATRICK5080`, pinned Rust 1.96.0:
 
 No endpoint, driver or VM state was touched. The sweep measurement remains
 synthetic/host-checked until its guarded runner is executed in the VM.
+
+## Continuity case entry point
+
+`run-cable-quality.ps1` now exposes `tone-continuity` and forwards the selected
+`-Minutes` value to the existing guarded product-route runner for its 997 Hz
+and 47 Hz checks. This reuses the established sample-level glitch detector
+and Cable A loopback reference. The new host acceptance parses both scripts
+and checks the forwarding; it does not start them or open audio.
+
+Checks on Windows host `PATRICK5080`:
+
+- `tests/acceptance/m03-cable-quality.ps1` — 34 host-safe checks passed.
+- `tests/acceptance/docs.ps1` — 149 Markdown files and 858 local links passed.
+- No continuity or endpoint run was performed.

@@ -233,7 +233,9 @@ analyzer's float32 sample representation cannot establish its one-LSB target.
 Log-sweep cases (`-Case sweep-44k1`, `sweep-48k`, and `sweep-96k`) now measure
 relative 20 Hz–20 kHz passband magnitude against ±0.05 dB through the product
 route; aliasing, imaging and phase remain unmeasured, and the runner has not
-been run in the VM. The
+been run in the VM. `-Case tone-continuity -Minutes 1` reuses the guarded
+997/47 Hz product-route continuity runner for one minute per tone; this is a
+diagnostic duration, not the one-hour eight-cable VCAB-24 gate. The
 ordered pairwise isolation runner is `-Case isolation-all-pairs`; it enables
 eight cables for the diagnostic and restores the original count. No VM run has
 been recorded yet. Do not mark A16 passed until every required case has run on

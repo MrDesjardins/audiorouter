@@ -2020,13 +2020,13 @@ WP-09 mixed-clock route work.
   `pcm16-48k` and `pcm24-48k` reject a mismatched negotiated format and apply
   the analyzer's ≤1-LSB metric. This is host-checked wiring only; no VM route
   run has happened (current host `PATRICK5080` is not the guarded VM and has no
-  `C:\ar` bundle). Continue independent portable work with a logarithmic sweep
-  response analyzer. The native probe now produces a 20 Hz–20 kHz sweep;
+  `C:\ar` bundle). The native probe now produces a 20 Hz–20 kHz sweep;
   48-point Hann-windowed relative magnitude analysis has a ±0.05 dB metric and
-  guarded cases at 44.1/48/96 kHz. It measures passband magnitude only; phase,
-  aliasing and imaging remain open. Exercise the PCM and sweep cases in the
-  disposable VM and use returned metrics to verify analyzer/probe agreement.
-  Keep PCM32 blocked until the
+  guarded cases at 44.1/48/96 kHz. The quality entry point also exposes the
+  existing 997/47 Hz continuity runner with a duration selector. Sweep analysis
+  measures passband magnitude only; phase, aliasing and imaging remain open.
+  Exercise the PCM and sweep cases in the disposable VM and use returned
+  metrics to verify analyzer/probe agreement. Keep PCM32 blocked until the
   analyzer preserves its ≤1-LSB target. Afterward add per-channel-count cases
   and cover sweep/resampling and continuity metrics. Keep A16 blocked until
   the channel-count decision and VM access gates are resolved; never count

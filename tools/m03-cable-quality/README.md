@@ -36,6 +36,11 @@ This slice measures passband magnitude only; it does not measure aliasing,
 imaging, phase, or group delay. The diagnostic cases have not been run in the
 VM.
 
+The `tone-continuity` VM case reuses `run-cable-tone.ps1` for the product-route
+997 Hz and 47 Hz continuity method. Set `-Minutes` on the quality runner to
+choose the duration per tone. It is a diagnostic run; A16's one-hour and
+eight-cable gates still require their full execution and evidence.
+
 Portable analyzer tests run with:
 
 ```powershell
