@@ -1989,6 +1989,18 @@ static std::vector<float> make_noise(UINT64 frames, UINT32 channels, UINT32 seed
     return samples;
 }
 
+static std::vector<double> make_pcm32_noise(UINT64 samples, UINT32 seed) {
+    std::vector<double> result(static_cast<size_t>(samples));
+    UINT32 state = seed ? seed : 1;
+    for (double& sample : result) {
+        state ^= state << 13; state ^= state >> 17; state ^= state << 5;
+        INT32 signed_sample = 0;
+        std::memcpy(&signed_sample, &state, sizeof(signed_sample));
+        sample = static_cast<double>(signed_sample) / 2147483648.0;
+    }
+    return result;
+}
+
 static std::vector<float> make_tone(UINT64 frames, UINT32 channels, UINT32 sample_rate, double frequency_hz) {
     std::vector<float> samples(static_cast<size_t>(frames * channels));
     for (UINT64 frame = 0; frame < frames; ++frame) {
@@ -2238,6 +2250,32 @@ static int cable_sample_format_self_test() {
         std::cerr << "cable PCM32 precision self-test failed\n"; return 1;
     }
     ++checks;
+    const auto noise = make_pcm32_noise(4096, 0x20261011u);
+    const auto repeated = make_pcm32_noise(4096, 0x20261011u);
+    bool low_bits = false, sub_float32 = false, repeatable = noise == repeated;
+    for (double sample : noise) {
+        BYTE encoded[4]{}; cable_write_sample(encoded, CableSampleEncoding::Pcm32, sample);
+        LONG value = 0; std::memcpy(&value, encoded, sizeof(value));
+        low_bits = low_bits || (value & 0xff) != 0;
+        sub_float32 = sub_float32 || std::fabs(sample - static_cast<double>(static_cast<float>(sample))) * 2147483648.0 > 1.0;
+        if (sample < -1.0 || sample >= 1.0) repeatable = false;
+    }
+    if (!repeatable || !low_bits || !sub_float32) {
+        std::cerr << "cable PCM32 noise self-test failed\n"; return 1;
+    }
+    ++checks;
+    cable_write_sample(pcm32, CableSampleEncoding::Pcm32, 1.0);
+    std::memcpy(&raw, pcm32, sizeof(raw));
+    if (raw != std::numeric_limits<LONG>::max() ||
+        std::fabs(1.0 - cable_read_sample(pcm32, CableSampleEncoding::Pcm32)) > 1.0 / 2147483648.0) {
+        std::cerr << "cable PCM32 positive full-scale clamp failed\n"; return 1;
+    }
+    cable_write_sample(pcm32, CableSampleEncoding::Pcm32, -1.0);
+    std::memcpy(&raw, pcm32, sizeof(raw));
+    if (raw != std::numeric_limits<LONG>::min() || cable_read_sample(pcm32, CableSampleEncoding::Pcm32) != -1.0) {
+        std::cerr << "cable PCM32 negative full-scale conversion failed\n"; return 1;
+    }
+    ++checks;
     std::cout << checks << " cable integer sample conversion checks pass\n";
     return 0;
 }
@@ -2355,14 +2393,7 @@ static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noi
     signal.reserve(source_signal.size());
     for (float sample : source_signal) signal.push_back(sample);
     const bool pcm32_mode = render_encoding == CableSampleEncoding::Pcm32 && !tone_mode && !sweep_mode;
-    if (pcm32_mode) {
-        UINT32 state = 0x20261011u;
-        for (double& sample : signal) {
-            state ^= state << 13; state ^= state >> 17; state ^= state << 5;
-            const INT32 signed_sample = static_cast<INT32>(state);
-            sample = static_cast<double>(signed_sample) / 2147483648.0;
-        }
-    }
+    if (pcm32_mode) signal = make_pcm32_noise(signal.size(), 0x20261011u);
     std::vector<double> captured;
     captured.reserve(static_cast<size_t>((noise_frames + silence_frames + 3 * rate) * channels));
     UINT32 render_buffer = 0;

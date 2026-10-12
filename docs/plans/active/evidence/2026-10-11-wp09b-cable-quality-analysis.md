@@ -231,8 +231,9 @@ continuity remain required for PASS.
 
 Host checks on `PATRICK5080`:
 
-- Static MSVC build passed; `cable-sample-format-selftest` — 15 checks passed,
-  including plain and extensible PCM32 format recognition.
+- Static MSVC build passed; `cable-sample-format-selftest` — 17 checks passed,
+  including plain/extensible PCM32 recognition, deterministic full-resolution
+  noise and positive/negative full-scale conversion.
 - Native float64 WAV self-test analyzed by the Rust CLI — 256 frames aligned
   after an 8-frame offset, zero maximum PCM32 LSB error, PASS.
 - Rust quality analyzer — 13 tests passed; standalone Clippy with `-D warnings`
