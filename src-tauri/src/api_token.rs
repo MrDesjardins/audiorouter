@@ -59,7 +59,7 @@ fn crypt(bytes: &[u8], protect: bool) -> Result<Vec<u8>, String> {
         let result = if protect {
             CryptProtectData(
                 &input,
-                w!("AudioRouter local API"),
+                w!("AudioRouter protected credential"),
                 None,
                 None,
                 None,
@@ -113,25 +113,34 @@ pub fn load_or_create(path: &Path) -> Result<String, String> {
     }
 }
 pub fn save(path: &Path, token: &str) -> Result<(), String> {
-    use std::io::Write;
     if !valid(token) {
         return Err("Invalid API token".into());
     }
+    save_secret(path, token.as_bytes())
+}
+
+/// Persist an arbitrary bounded credential using current-user DPAPI. The
+/// caller owns validation and must never log the returned plaintext.
+pub fn save_secret(path: &Path, secret: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    if secret.is_empty() || secret.len() > 4096 {
+        return Err("Invalid protected credential".into());
+    }
     check_path(path)?;
-    let parent = path.parent().ok_or("Invalid API token path")?;
-    std::fs::create_dir_all(parent).map_err(|_| "Cannot create API token storage")?;
+    let parent = path.parent().ok_or("Invalid protected credential path")?;
+    std::fs::create_dir_all(parent).map_err(|_| "Cannot create protected credential storage")?;
     check_path(path)?;
-    let encrypted = crypt(token.as_bytes(), true)?;
-    let temporary = parent.join(format!("api-token-{}.tmp", generate()?));
+    let encrypted = crypt(secret, true)?;
+    let temporary = parent.join(format!("protected-credential-{}.tmp", generate()?));
     let outcome = (|| {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&temporary)
-            .map_err(|_| "Cannot write API token storage")?;
+            .map_err(|_| "Cannot write protected credential storage")?;
         file.write_all(&encrypted)
             .and_then(|_| file.sync_all())
-            .map_err(|_| "Cannot write API token storage")?;
+            .map_err(|_| "Cannot write protected credential storage")?;
         drop(file);
         let from: Vec<u16> = temporary.as_os_str().encode_wide().chain(Some(0)).collect();
         let to: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
@@ -145,13 +154,24 @@ pub fn save(path: &Path, token: &str) -> Result<(), String> {
                 MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
             )
         }
-        .map_err(|_| "Cannot replace API token storage")?;
+        .map_err(|_| "Cannot replace protected credential storage")?;
         Ok(())
     })();
     if outcome.is_err() {
         let _ = std::fs::remove_file(temporary);
     }
     outcome
+}
+
+/// Read and decrypt a bounded current-user DPAPI credential.
+pub fn load_secret(path: &Path) -> Result<Vec<u8>, String> {
+    check_path(path)?;
+    let metadata = std::fs::metadata(path).map_err(|_| "Protected credential is not configured")?;
+    if !metadata.is_file() || metadata.len() > 8192 {
+        return Err("Invalid protected credential storage".into());
+    }
+    let encrypted = std::fs::read(path).map_err(|_| "Cannot read protected credential storage")?;
+    crypt(&encrypted, false)
 }
 use std::os::windows::ffi::OsStrExt;
 

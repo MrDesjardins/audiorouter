@@ -85,6 +85,12 @@ export type McpSetupInfo = {
   pipeName: string;
   transport: string;
 };
+export type McpTunnelStatus = {
+  status: "notConfigured" | "needsSetup" | "disconnected" | "connecting" | "connected" | "actionNeeded";
+  configured: boolean;
+  tunnelId: string | null;
+  runtimeAvailable: boolean;
+};
 
 export function Workbench({
   onAddGroup,
@@ -112,6 +118,12 @@ export function Workbench({
   backendActivity,
   mcpActivity,
   mcpSetupInfo,
+  mcpTunnelStatus,
+  onOpenMcpSetupPage,
+  onMcpTunnelConfigure,
+  onMcpTunnelConnect,
+  onMcpTunnelDisconnect,
+  onMcpTunnelForget,
   clientsPanel,
   setupContent,
   timingContent,
@@ -158,6 +170,12 @@ export function Workbench({
   backendActivity: Record<string, unknown>[];
   mcpActivity: McpActivity[];
   mcpSetupInfo: McpSetupInfo | null;
+  mcpTunnelStatus: McpTunnelStatus | null;
+  onOpenMcpSetupPage: (page: "tunnels" | "apiKeys" | "chatgptConnectors") => Promise<void>;
+  onMcpTunnelConfigure: (tunnelId: string, runtimeKey: string) => Promise<void>;
+  onMcpTunnelConnect: () => Promise<void>;
+  onMcpTunnelDisconnect: () => Promise<void>;
+  onMcpTunnelForget: () => Promise<void>;
   clientsPanel: ReactNode;
   setupContent: ReactNode;
   timingContent?: ReactNode;
@@ -170,6 +188,19 @@ export function Workbench({
 }) {
   const [mcpClientId, setMcpClientId] = useState("audiorouter-local");
   const [copyMessage, setCopyMessage] = useState("");
+  const [tunnelIdInput, setTunnelIdInput] = useState("");
+  const [runtimeKeyInput, setRuntimeKeyInput] = useState("");
+  const openMcpSetupPage = (page: "tunnels" | "apiKeys" | "chatgptConnectors") => {
+    setTunnelMessage("");
+    void onOpenMcpSetupPage(page)
+      .then(() => setTunnelMessage("Opened the setup page in your browser."))
+      .catch((error: unknown) =>
+        setTunnelMessage(error instanceof Error ? error.message : "Could not open the setup page."),
+      );
+  };
+  const [tunnelBusy, setTunnelBusy] = useState(false);
+  const [tunnelMessage, setTunnelMessage] = useState("");
+  const [showTunnelSetup, setShowTunnelSetup] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const cli = mcpSetupInfo?.cliPath ?? "PATH_TO_AUDIOROUTER_CLI";
   const db = mcpSetupInfo?.databasePath ?? "PATH_TO_AUDIOROUTER_DATABASE";
@@ -428,22 +459,190 @@ export function Workbench({
             <div className="mcp-card-heading">
               <div>
                 <h3 id="mcp-chatgpt-title">ChatGPT</h3>
-                <p className="muted">The local connection is not set up yet.</p>
+                <p className="muted mcp-tunnel-description">
+                  {mcpTunnelStatus?.status === "connected"
+                    ? "The AudioRouter tunnel is ready. Finish adding it in ChatGPT connector settings."
+                    : mcpTunnelStatus?.status === "connecting"
+                      ? "Starting the secure connection…"
+                      : mcpTunnelStatus?.status === "actionNeeded"
+                        ? "The tunnel stopped. Check the tunnel ID, key access, and internet connection."
+                        : mcpTunnelStatus?.status === "needsSetup"
+                          ? "Your tunnel ID is saved. Add its restricted runtime key to connect."
+                          : mcpTunnelStatus?.status === "disconnected"
+                            ? "Your OpenAI tunnel is set up and ready to connect."
+                            : mcpTunnelStatus?.status === "notConfigured"
+                              ? "Connect an existing OpenAI tunnel to AudioRouter."
+                              : "Checking the local tunnel…"}
+                </p>
               </div>
-              <span className="mcp-status">Not connected</span>
+              <span className={`mcp-status mcp-status-${mcpTunnelStatus?.status ?? "checking"}`}>
+                {mcpTunnelStatus?.status === "connected"
+                  ? "Tunnel ready"
+                  : mcpTunnelStatus?.status === "connecting"
+                    ? "Connecting"
+                    : mcpTunnelStatus?.status === "actionNeeded"
+                      ? "Action needed"
+                      : mcpTunnelStatus?.status === "needsSetup"
+                        ? "Needs setup"
+                        : mcpTunnelStatus?.status === "disconnected"
+                          ? "Disconnected"
+                          : mcpTunnelStatus?.status === "notConfigured"
+                            ? "Not connected"
+                            : "Checking"}
+              </span>
             </div>
             <p>
-              AudioRouter needs a private OpenAI tunnel to reach ChatGPT. Once connected, requests still use the client
-              permissions you approve below.
+              The separate <code>audiorouter-chatgpt</code> client starts with Observer (read-only) access. Observer can
+              inspect AudioRouter but cannot create or change sessions. To let ChatGPT create a session, expand Client
+              permissions below and change this client to Editor; that grant stays in effect until you change or revoke
+              it. Audio stays on this PC; only MCP requests and results cross the encrypted tunnel.
             </p>
-            <a
-              className="mcp-chatgpt-open"
-              href="https://chatgpt.com/#settings/Connectors"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Open ChatGPT connector settings
-            </a>
+            {!mcpTunnelStatus?.runtimeAvailable && (
+              <p className="mcp-tunnel-error" role="status">
+                The OpenAI tunnel runtime is missing from this AudioRouter installation. Update or reinstall
+                AudioRouter, then try again.
+              </p>
+            )}
+            {(!mcpTunnelStatus?.configured || mcpTunnelStatus.status === "needsSetup" || showTunnelSetup) && (
+              <div className="mcp-tunnel-setup">
+                <p className="muted">
+                  Use an existing tunnel and a restricted runtime key with <strong>Tunnels Read + Use</strong>. The key
+                  is encrypted for your Windows account and is never saved in ChatGPT.
+                </p>
+                <button type="button" className="mcp-chatgpt-open" onClick={() => openMcpSetupPage("tunnels")}>
+                  Open OpenAI tunnel settings
+                </button>
+                <button type="button" className="mcp-chatgpt-open" onClick={() => openMcpSetupPage("apiKeys")}>
+                  Create restricted runtime key
+                </button>
+                <label>
+                  Tunnel ID
+                  <input
+                    aria-label="OpenAI tunnel ID"
+                    autoComplete="off"
+                    value={tunnelIdInput || mcpTunnelStatus?.tunnelId || ""}
+                    onChange={(event) => setTunnelIdInput(event.target.value.trim())}
+                    placeholder="tunnel_…"
+                    disabled={tunnelBusy}
+                  />
+                </label>
+                <label>
+                  Restricted runtime key
+                  <input
+                    aria-label="OpenAI restricted runtime key"
+                    type="password"
+                    autoComplete="new-password"
+                    value={runtimeKeyInput}
+                    onChange={(event) => setRuntimeKeyInput(event.target.value)}
+                    placeholder="Paste the key once"
+                    disabled={tunnelBusy}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={
+                    tunnelBusy || !tunnelIdInput.trim() || !runtimeKeyInput || !mcpTunnelStatus?.runtimeAvailable
+                  }
+                  onClick={() => {
+                    const tunnelId = tunnelIdInput.trim();
+                    const runtimeKey = runtimeKeyInput;
+                    setRuntimeKeyInput("");
+                    setTunnelMessage("");
+                    setTunnelBusy(true);
+                    void onMcpTunnelConfigure(tunnelId, runtimeKey)
+                      .then(() => {
+                        setTunnelIdInput("");
+                        setShowTunnelSetup(false);
+                        return onMcpTunnelConnect();
+                      })
+                      .then(() => setTunnelMessage("Secure tunnel starting."))
+                      .catch((error: unknown) =>
+                        setTunnelMessage(error instanceof Error ? error.message : "Could not connect the tunnel."),
+                      )
+                      .finally(() => setTunnelBusy(false));
+                  }}
+                >
+                  {tunnelBusy ? "Connecting…" : "Save securely and connect"}
+                </button>
+              </div>
+            )}
+            {mcpTunnelStatus?.configured && mcpTunnelStatus.status !== "needsSetup" && !showTunnelSetup && (
+              <div className="mcp-tunnel-actions">
+                {mcpTunnelStatus.status === "connected" || mcpTunnelStatus.status === "connecting" ? (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={tunnelBusy}
+                    onClick={() => {
+                      setTunnelBusy(true);
+                      void onMcpTunnelDisconnect()
+                        .then(() => setTunnelMessage("The local tunnel has stopped."))
+                        .catch(() => setTunnelMessage("Could not stop the local tunnel."))
+                        .finally(() => setTunnelBusy(false));
+                    }}
+                  >
+                    Disconnect
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={tunnelBusy || !mcpTunnelStatus.runtimeAvailable}
+                    onClick={() => {
+                      setTunnelBusy(true);
+                      setTunnelMessage("");
+                      void onMcpTunnelConnect()
+                        .then(() => setTunnelMessage("Secure tunnel starting."))
+                        .catch((error: unknown) =>
+                          setTunnelMessage(error instanceof Error ? error.message : "Could not connect the tunnel."),
+                        )
+                        .finally(() => setTunnelBusy(false));
+                    }}
+                  >
+                    {tunnelBusy ? "Connecting…" : "Connect"}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="mcp-chatgpt-open"
+                  onClick={() => openMcpSetupPage("chatgptConnectors")}
+                >
+                  Open ChatGPT connector settings
+                </button>
+                <p className="muted mcp-tunnel-chat-guidance">
+                  After adding the connector, start a ChatGPT conversation and choose AudioRouter from the add-tools
+                  menu. The connector must be enabled in that conversation before ChatGPT can call it.
+                </p>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={tunnelBusy}
+                  onClick={() => setShowTunnelSetup(true)}
+                >
+                  Update tunnel details
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={tunnelBusy}
+                  onClick={() => {
+                    setTunnelBusy(true);
+                    void onMcpTunnelForget()
+                      .then(() => {
+                        setShowTunnelSetup(false);
+                        setTunnelIdInput("");
+                        setTunnelMessage("Saved details removed from this PC. The OpenAI tunnel and key still exist.");
+                      })
+                      .catch(() => setTunnelMessage("Could not remove the saved tunnel details."))
+                      .finally(() => setTunnelBusy(false));
+                  }}
+                >
+                  Forget saved details
+                </button>
+              </div>
+            )}
+            <p className="mcp-tunnel-message" role="status" aria-live="polite">
+              {tunnelMessage || " "}
+            </p>
           </section>
 
           <details className="mcp-secondary-section">

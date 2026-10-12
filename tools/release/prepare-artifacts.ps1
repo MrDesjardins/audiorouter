@@ -97,6 +97,10 @@ try {
     if ($dirty) {
         throw "release inputs must come from a clean Git working tree"
     }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace "tools/release/stage-openai-tunnel-runtime.ps1") -Workspace $workspace -DestinationDirectory (Join-Path $workspace "target/release")
+    if ($LASTEXITCODE -ne 0) {
+        throw "verified OpenAI tunnel runtime staging failed"
+    }
     & cargo build --release --locked -p audiorouter-cli -p audiorouter-plugin-host
     if ($LASTEXITCODE -ne 0) {
         throw "cargo release build failed with exit code $LASTEXITCODE"
@@ -232,10 +236,21 @@ try {
         "  MIT Media Lab Perceptual Computing Technical Report #280, 1994. Copyright 1994 MIT Media Laboratory;"
         "  provided free with no restrictions on use, provided the authors are cited."
         "  https://sound.media.mit.edu/resources/KEMAR.html"
+        ""
+        "OpenAI Secure MCP Tunnel runtime"
+        "- tunnel-client-runtime v0.0.16, Apache-2.0; LICENSE, NOTICE, license report and SPDX SBOM are included in this release."
+        "- Official source: https://github.com/openai/tunnel-client/releases/tag/v0.0.16"
     )
     $noticeLines | Set-Content -LiteralPath (Join-Path $output "THIRD-PARTY-NOTICES.txt") -Encoding utf8
 
     Copy-Item -LiteralPath $pluginPackage -Destination $output
+    foreach ($name in @("tunnel-client-runtime-LICENSE.txt", "tunnel-client-runtime-NOTICE.txt", "tunnel-client-runtime-licenses.txt", "tunnel-client-runtime.spdx.json")) {
+        $source = Join-Path $workspace "target/release/$name"
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw "Verified OpenAI tunnel runtime metadata is missing from the release stage: $source"
+        }
+        Copy-Item -LiteralPath $source -Destination (Join-Path $output $name)
+    }
     Copy-Item -LiteralPath (Join-Path $workspace "tools/streamdeck/package-lock.json") -Destination (Join-Path $output "sbom.streamdeck.package-lock.json")
     & node.exe (Join-Path $workspace "tools/release/generate-npm-sbom.mjs") (Join-Path $workspace "tools/streamdeck/package-lock.json") (Join-Path $output "sbom.streamdeck.json")
     if ($LASTEXITCODE -ne 0) { throw "Stream Deck npm SBOM generation failed" }

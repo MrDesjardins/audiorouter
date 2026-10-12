@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import type { PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { SignalTimingPanel } from "./SignalTiming";
-import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo } from "./Workbench";
+import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo, type McpTunnelStatus } from "./Workbench";
 import { RequestBuilder } from "./ApiRequestBuilder";
 import { VersionLine } from "./UpdateNotice";
 import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
@@ -268,6 +268,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [uiDiagnostics, setUiDiagnostics] = useState<string[]>(uiDiagnosticsRef.current);
   const [mcpActivity, setMcpActivity] = useState<McpActivity[]>([]);
   const [mcpSetupInfo, setMcpSetupInfo] = useState<McpSetupInfo | null>(null);
+  const [mcpTunnelStatus, setMcpTunnelStatus] = useState<McpTunnelStatus | null>(null);
   const [backendActivity, setBackendActivity] = useState<Record<string, unknown>[]>([]);
   const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() =>
     readShortcuts(typeof window === "undefined" ? null : window.localStorage, defaultShortcutBinding),
@@ -560,6 +561,17 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       .catch(() => {
         if (active) setMcpSetupInfo(null);
       });
+    const refreshTunnelStatus = () => {
+      void window.__TAURI_INTERNALS__
+        ?.invoke?.("mcp_tunnel_status")
+        .then((status) => {
+          if (active) setMcpTunnelStatus(status as McpTunnelStatus);
+        })
+        .catch(() => {
+          if (active) setMcpTunnelStatus(null);
+        });
+    };
+    refreshTunnelStatus();
     void window.__TAURI_INTERNALS__
       .invoke("backend_diagnostics_list")
       .then((items) => {
@@ -580,6 +592,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             recordUiDiagnostic(`MCP activity read failed (${type})`);
           }
         });
+      refreshTunnelStatus();
       void window.__TAURI_INTERNALS__
         ?.invoke?.("backend_diagnostics_list")
         .then((items) => {
@@ -3195,6 +3208,46 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 backendActivity={backendActivity}
                 mcpActivity={mcpActivity}
                 mcpSetupInfo={mcpSetupInfo}
+                mcpTunnelStatus={mcpTunnelStatus}
+                onOpenMcpSetupPage={(page) =>
+                  window.__TAURI_INTERNALS__?.invoke
+                    ? window.__TAURI_INTERNALS__.invoke("mcp_open_setup_page", { page }).then(() => undefined)
+                    : Promise.reject(new Error("OpenAI setup pages can only be opened from the AudioRouter app."))
+                }
+                onMcpTunnelConfigure={(tunnelId, runtimeKey) => {
+                  const invoke = window.__TAURI_INTERNALS__?.invoke;
+                  return invoke
+                    ? invoke("mcp_tunnel_configure", { tunnelId, runtimeKey }).then(() => undefined)
+                    : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                }}
+                onMcpTunnelConnect={() => {
+                  const invoke = window.__TAURI_INTERNALS__?.invoke;
+                  if (!invoke)
+                    return Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                  const clientId = "audiorouter-chatgpt";
+                  return backend
+                    .listClients()
+                    .then((clients) => {
+                      const current = clients.find((client) => client.clientId === clientId);
+                      return !current || current.revoked
+                        ? backend.authorizeClient(clientId, "observer", uiIdempotencyKey(`authorize-${clientId}`))
+                        : undefined;
+                    })
+                    .then(() => invoke("mcp_tunnel_connect"))
+                    .then(() => undefined);
+                }}
+                onMcpTunnelDisconnect={() => {
+                  const invoke = window.__TAURI_INTERNALS__?.invoke;
+                  return invoke
+                    ? invoke("mcp_tunnel_disconnect").then(() => undefined)
+                    : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                }}
+                onMcpTunnelForget={() => {
+                  const invoke = window.__TAURI_INTERNALS__?.invoke;
+                  return invoke
+                    ? invoke("mcp_tunnel_forget").then(() => undefined)
+                    : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                }}
                 clientsPanel={<ClientsPanel backend={backend} />}
                 setupContent={setupWorkbenchContent}
                 timingContent={

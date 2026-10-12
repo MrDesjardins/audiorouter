@@ -31,6 +31,7 @@ audiorouter-windows-audio = { path = "../crates/windows-audio" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.151"
 getrandom = "0.3.4"
+zeroize = "1.9.0"
 # Support bundle archive; same version and features as the workspace storage crate.
 zip = "2.2.2"
 tauri = { version = "2.11.5", features = ["tray-icon"] }

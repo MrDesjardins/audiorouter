@@ -238,6 +238,33 @@ publish read-only, destructive, and idempotency hints, but the backend remains
 the authority for permission and mutation checks. Confirmed recording recycle
 is destructive; preview is read-only.
 
+## ChatGPT Secure MCP Tunnel
+
+In Setup → MCP, enter an existing OpenAI tunnel ID and a restricted runtime
+key with **Tunnels Read + Use**, then choose **Save securely and connect**.
+AudioRouter stores the tunnel settings and runtime key together in a
+current-user DPAPI-protected file and starts the bundled OpenAI runtime only
+after this action. The first connection enrolls `audiorouter-chatgpt` as an
+Observer (read-only) client; change or revoke that grant in Client
+permissions. The app does not create Platform tunnels or keys for you.
+
+When the tunnel status says **Tunnel ready**, open ChatGPT connector settings,
+add a custom MCP app, choose Tunnel, select the matching tunnel, review the
+tools warning, and create the app. Then start a ChatGPT conversation and
+enable AudioRouter from its add-tools menu. A ready local runtime does not
+prove that ChatGPT has completed approval or enabled the connector in that
+conversation. The `audiorouter-chatgpt` client starts as Observer, which is
+read-only; creating a session requires changing it to Editor under Client
+permissions. That grant remains until changed or revoked. Disconnect stops
+the local process and leaves the OpenAI tunnel and runtime key in place;
+revoke or rotate those from OpenAI Platform when no longer needed. **Forget
+saved details** also removes the local protected copy, but does not revoke
+anything in OpenAI. Automatic startup is off.
+
+Use [OpenAI's end-user tunnel guide](https://github.com/openai/tunnel-client/blob/master/docs/end-user-guide.md)
+for the required Platform tunnel and restricted runtime-key setup. Do not use
+an admin key as the runtime key.
+
 Managed-device administration also has focused tools named
 `provision_virtual_device` and `remove_virtual_device`. They require the
 `deviceAdministration` grant and an idempotency key; provisioning additionally

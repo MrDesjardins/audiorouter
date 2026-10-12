@@ -22,6 +22,8 @@ mod http_api;
 mod instance_windows;
 mod lan_addresses;
 #[cfg(windows)]
+mod mcp_tunnel;
+#[cfg(windows)]
 mod os_transition_windows;
 #[cfg(windows)]
 mod plugin_editor_windows;
@@ -1233,6 +1235,98 @@ fn mcp_setup_info(
     }))
 }
 
+#[cfg(windows)]
+fn mcp_tunnel_runtime_path(app: &tauri::AppHandle) -> std::path::PathBuf {
+    const RUNTIME_FILE: &str = "tunnel-client-runtime.exe";
+    app.path()
+        .resource_dir()
+        .ok()
+        .map(|directory| directory.join(RUNTIME_FILE))
+        .filter(|path| path.is_file())
+        .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .map(|path| path.with_file_name(RUNTIME_FILE))
+                .filter(|path| path.is_file())
+        })
+        .unwrap_or_else(|| std::path::PathBuf::from(RUNTIME_FILE))
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn mcp_tunnel_status(
+    app: tauri::AppHandle,
+    service: State<'_, mcp_tunnel::McpTunnelService>,
+) -> mcp_tunnel::TunnelStatus {
+    mcp_tunnel::current_status(&service, &mcp_tunnel_runtime_path(&app))
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn mcp_tunnel_configure(
+    service: State<'_, mcp_tunnel::McpTunnelService>,
+    tunnel_id: String,
+    runtime_key: String,
+) -> Result<(), String> {
+    mcp_tunnel::disconnect(&service)?;
+    mcp_tunnel::configure(tunnel_id, runtime_key)
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn mcp_tunnel_connect(
+    app: tauri::AppHandle,
+    service: State<'_, mcp_tunnel::McpTunnelService>,
+    state: State<'_, ShellState>,
+) -> Result<mcp_tunnel::TunnelStatus, String> {
+    let runtime = mcp_tunnel_runtime_path(&app);
+    let executable = std::env::current_exe()
+        .map_err(|_| "AudioRouter's local MCP executable is unavailable.")?;
+    let sibling_cli = executable.with_file_name("audiorouter-cli.exe");
+    let cli = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|directory| directory.join("audiorouter-cli.exe"))
+        .filter(|path| path.is_file())
+        .unwrap_or(sibling_cli);
+    mcp_tunnel::start(
+        &service,
+        &runtime,
+        &cli,
+        &state.database_path,
+        &state.pipe_name,
+    )
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn mcp_tunnel_disconnect(service: State<'_, mcp_tunnel::McpTunnelService>) -> Result<(), String> {
+    mcp_tunnel::disconnect(&service)
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn mcp_tunnel_forget(service: State<'_, mcp_tunnel::McpTunnelService>) -> Result<(), String> {
+    mcp_tunnel::forget(&service)
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn mcp_open_setup_page(page: String) -> Result<(), String> {
+    let url = match page.as_str() {
+        "tunnels" => "https://platform.openai.com/settings/organization/tunnels",
+        "apiKeys" => "https://platform.openai.com/settings/organization/api-keys",
+        "chatgptConnectors" => "https://chatgpt.com/#settings/Connectors",
+        _ => return Err("That setup page is not supported.".into()),
+    };
+    std::process::Command::new("explorer.exe")
+        .arg(url)
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| "Windows could not open the setup page in your browser.".into())
+}
+
 /// Apply the current user's reversible sign-in registration. This command is
 /// deliberately separate from audio/session control and has no elevation
 /// path; callers must invoke it explicitly after the startup consent flow.
@@ -1844,6 +1938,7 @@ fn main() {
         .manage(state)
         .manage(HttpApiState::default())
         .manage(UiUnsaved::default())
+        .manage(mcp_tunnel::McpTunnelService::default())
         .invoke_handler(tauri::generate_handler![
             rpc_request,
             quit_app,
@@ -1865,6 +1960,12 @@ fn main() {
             export_support_bundle,
             install_streamdeck_plugin,
             mcp_setup_info,
+            mcp_tunnel_status,
+            mcp_tunnel_configure,
+            mcp_tunnel_connect,
+            mcp_tunnel_disconnect,
+            mcp_tunnel_forget,
+            mcp_open_setup_page,
             startup_register,
             startup_status,
             virtual_cable_shell::manage_virtual_cable

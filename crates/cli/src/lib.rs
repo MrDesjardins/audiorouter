@@ -2100,13 +2100,22 @@ fn render_human(command: &str, value: &Value) -> String {
 /// Run the local MCP stdio adapter using the pinned 2025-06-18 protocol.
 /// stdout is reserved for newline-delimited JSON-RPC; diagnostics go to stderr.
 pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
+    // The OpenAI tunnel runtime uses this credential only to authenticate its
+    // control-plane connection. It launches this trusted MCP child with the
+    // inherited environment, so discard the credential before doing any I/O.
+    if std::env::var_os("AUDIOROUTER_TUNNEL_CHILD").is_some() {
+        std::env::remove_var("CONTROL_PLANE_API_KEY");
+        std::env::remove_var("OPENAI_API_KEY");
+        std::env::remove_var("AUDIOROUTER_TUNNEL_CHILD");
+    }
     let database_path = option_value_owned(args, "--database")?;
     let client_id = option_value_owned(args, "--client-id")?;
     let pipe_name = args
         .iter()
         .position(|value| value == "--pipe")
         .and_then(|index| args.get(index + 1))
-        .cloned();
+        .cloned()
+        .or_else(|| std::env::var("AUDIOROUTER_CONTROL_PIPE").ok());
     let database_path = std::path::PathBuf::from(database_path);
     if !database_path.is_absolute() {
         return Err(CliError::InvalidArguments(

@@ -3482,6 +3482,58 @@ button.primary {
   font-size: 0.78rem;
   white-space: nowrap;
 }
+.mcp-status-connected {
+  color: var(--mcp-status-good, #72e3a2);
+  border-color: currentColor;
+}
+.mcp-status-connecting,
+.mcp-status-actionNeeded,
+.mcp-status-needsSetup {
+  color: var(--mcp-status-warning, #ffc768);
+  border-color: currentColor;
+}
+.theme-light {
+  --mcp-status-good: #146b43;
+  --mcp-status-warning: #805000;
+  --mcp-status-error: #9b1c1c;
+}
+.theme-high-contrast {
+  --mcp-status-good: #ffffff;
+  --mcp-status-warning: #ffffff;
+  --mcp-status-error: #ffffff;
+}
+.mcp-tunnel-description,
+.mcp-tunnel-message {
+  min-height: 1.45em;
+}
+.mcp-tunnel-setup,
+.mcp-tunnel-actions {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.mcp-tunnel-setup > p {
+  line-height: 1.45;
+}
+.mcp-tunnel-setup > label {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.mcp-tunnel-setup > label input {
+  width: 100%;
+  min-width: 0;
+}
+.mcp-tunnel-setup > button,
+.mcp-tunnel-actions > button {
+  justify-self: start;
+}
+.mcp-tunnel-message {
+  overflow-wrap: anywhere;
+}
+.mcp-tunnel-error {
+  color: var(--mcp-status-error, #ff6b6b);
+}
 .mcp-chatgpt-open {
   justify-self: start;
   display: inline-flex;

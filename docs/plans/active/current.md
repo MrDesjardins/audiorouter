@@ -27,18 +27,25 @@ verified. Sources checked 2026-10-11: [OpenAI Secure MCP Tunnel guide](https://d
 [official tunnel-client configuration](https://github.com/openai/tunnel-client/blob/master/docs/configuration.md),
 [official end-user guide](https://github.com/openai/tunnel-client/blob/master/docs/end-user-guide.md).
 
-The OpenAI docs expose admin-key tunnel CRUD and separate runtime keys; they
-do not document a user-delegated OAuth flow that would let AudioRouter silently
-create organization resources. This PC has no configured OpenAI Platform key,
-the Platform page was logged out, and no tunnel client was installed during
-the prior investigation. Never scrape browser cookies or ask for a secret in
-chat. If the supported flow still requires an admin key, the app may accept it
-only in a clearly labeled native secure prompt for one-time tunnel creation,
-hold it in memory only, redact it, and discard it immediately. Stop before
-creating a remote tunnel or key until the user authorizes that exact account
-operation. A user must also approve the remote tool-access warning and create
-the ChatGPT custom app in ChatGPT; do not claim this final click can be
-automated unless OpenAI documents a supported API for it.
+The OpenAI docs require a tunnel ID and runtime key for the daemon. The
+restricted runtime key is created in Platform's Runtime API keys UI with
+Tunnels Read + Use; admin keys are only for tunnel CRUD. The current OpenAI
+guide describes ChatGPT's separate add-custom-MCP-app, choose-Tunnel,
+review-warning and Create steps. Thus a fully silent, zero-setup flow is not
+supported: at minimum the owner must supply an existing tunnel ID and
+restricted runtime key and approve the ChatGPT connector. AudioRouter will
+automate local runtime packaging, credential protection, process lifecycle,
+and status, and open the right account screens. No admin-key flow is in this
+slice. This PC has no configured OpenAI Platform key, and the Platform page
+was logged out. Never scrape browser cookies or ask for a secret in chat.
+No remote resource or key is created by local implementation.
+
+The official release page currently marks `tunnel-client` v0.0.16 as latest
+(2026-10-06); its repository is Apache-2.0 and release assets include Windows
+amd64 archives plus license reports, SPDX SBOMs, checksum manifest and
+Sigstore provenance. Review the exact Windows artifact and verification
+procedure before packaging. The tunnel-client version is not hardcoded in the
+app until release evidence records the artifact hash and verification.
 
 ### Intended user flow
 
@@ -53,10 +60,11 @@ automated unless OpenAI documents a supported API for it.
    and credentials validate; otherwise prepare the minimum-scope Platform
    authorization flow. Get explicit confirmation immediately before remote
    resource/key creation. Do not persist the admin credential.
-4. Create/select the OpenAI tunnel associated with the intended ChatGPT
-   workspace. Create or obtain a restricted runtime key with Tunnels Read +
-   Use only. Persist that runtime key using current-user DPAPI; persist the
-   tunnel ID and minimal non-secret state separately.
+4. Use an existing OpenAI tunnel associated with the intended ChatGPT
+   workspace. The owner creates a restricted runtime key with Tunnels Read +
+   Use in Platform and enters the tunnel ID/key in Setup → MCP. AudioRouter
+   does not create remote resources in this slice. Persist the tunnel ID and
+   runtime key together in a current-user DPAPI-protected file.
 5. Enroll a distinct `audiorouter-chatgpt` MCP client and obtain the same
    owner-approved scopes used by other clients. Launch the official
    `tunnel-client` with a fixed AudioRouter CLI stdio target and the local
@@ -65,42 +73,47 @@ automated unless OpenAI documents a supported API for it.
    browser storage, logs, crash text, or support bundles. No arbitrary command
    execution surface.
 6. Supervise readiness, connection loss, process exit, app shutdown and
-   explicit Disconnect. Display bounded states such as Checking, Needs
+   explicit Disconnect. Disconnect stops the local process; Forget saved
+   details removes the local DPAPI copy. OpenAI resource/key revocation
+   remains an explicit Platform action. Display bounded states such as Checking, Needs
    authorization, Connecting, Connected, and Action needed; reserve dimensions
    so live status does not shift layout. Disconnect stops the process and
    offers remote revocation where the official API supports it. Startup stays
    off unless the user separately enables it.
 7. Open the official ChatGPT connector settings at the point the tunnel is
    ready. Guide the user to add a custom MCP app, select this tunnel, review
-   access, and create it. Afterward, verify a read-only capability call and
-   surface actionable errors without exposing credentials.
+   access, and create it. Explain that the connector must then be selected in
+   the ChatGPT conversation's add-tools menu. The default Observer grant is
+   read-only; creating or editing a session requires the owner to change the
+   `audiorouter-chatgpt` grant to Editor in Client permissions. Afterward,
+   verify a read-only capability call and surface actionable errors without
+   exposing credentials.
 
-### Implementation sequence
+### Implementation sequence and progress
 
-1. **Pin and package the official client.** Review its Windows release
-   artifacts, license, provenance/checksum/SBOM, architecture and update
-   policy. Prefer a reviewed, pinned artifact bundled with the app; if managed
-   download is necessary, verify signed/checksummed bytes before execution and
-   keep install/rollback atomic. Record the selected version and hashes in
-   evidence. Do not use an ambient PATH binary.
-2. **Build the native tunnel service.** Add a small Windows-only service
-   module for DPAPI runtime-key storage, tunnel metadata, secure setup input,
-   client enrollment, child lifecycle, readiness polling and disconnect.
-   Child process handles must be owned and reaped; arguments are fixed; secrets
-   are supplied without command-line exposure; logs contain state/error codes
-   only. Register narrow Tauri commands and no generic shell bridge.
-3. **Implement authorization and provisioning.** Confirm OpenAI's supported
-   admin/runtime key creation path and workspace association behavior. Build
-   one-time, least-privileged setup with explicit disclosure/confirmation.
-   Admin credentials are never persisted. If the user cannot authorize the
-   required scope, preserve the local MCP service and leave status at Needs
-   authorization. Never substitute a broader key or silently reuse a personal
-   tunnel.
-4. **Wire the MCP UI.** Replace the static Not connected/link-only card with
-   actual service state and Connect/Disconnect actions. Keep the existing
-   Codex/Claude, permissions and activity sections. Add error recovery,
-   retry, workspace/tunnel identity confirmation, setup progress and reserved
-   status geometry in dark, light and high-contrast themes.
+1. **Pin and package the official client — implemented.** OpenAI
+   `tunnel-client-runtime` v0.0.16 is pinned to archive SHA-256
+   `639fdfe10d91c672d8f8a49386ebf39acaac4e560a88134735b1739a02ddb82d`.
+   Release staging verifies the digest and GitHub attestation before extracting
+   the binary and licensing/SBOM data. Current restricted-network re-verification
+   could not initialize Sigstore; release staging fails closed.
+2. **Build the native tunnel service — implemented.** A Windows-only supervisor
+   stores configuration under current-user DPAPI, starts only on user action,
+   polls loopback readiness, reaps/stops the child and supports local Forget.
+   The OpenAI runtime key is not placed in arguments or logs; the trusted MCP
+   child clears its inherited key variables immediately.
+3. **Authorization/provisioning — local portion implemented; remote part gated.**
+   An explicit first Connect grants the distinct ChatGPT client Observer access.
+   Owner-supplied restricted Platform key and existing tunnel are required.
+   UI idempotency keys are compact so the backend's caller/method scoping stays
+   under the 128-byte durable journal limit. No admin credential or remote
+   resource is created by AudioRouter.
+4. **Wire the MCP UI — implemented, visual gate open.** Connect, Disconnect,
+   Forget, saved-details entry, local status, permission disclosure and the
+   ChatGPT connector handoff are present. Setup-page actions open the fixed
+   OpenAI destinations through the Windows shell and report errors in the UI.
+   Layout reserves status/message height.
+   Three-theme screenshot review is still required.
 5. **Qualify and document.** Add portable state-machine, redaction and grant
    tests; Windows DPAPI/process supervision tests; mocked tunnel-client
    protocol tests; and three-theme Edge tests for no layout movement. Then,
@@ -109,6 +122,8 @@ automated unless OpenAI documents a supported API for it.
    disconnect/restart, key revocation, and no key/audio leakage. Record account
    plan, versions, commands, results and redacted evidence. No real audio
    content is used.
+
+Implementation and build evidence: [managed ChatGPT MCP evidence](evidence/2026-10-11-chatgpt-mcp-managed-runtime.md).
 
 ### Acceptance, risks, rollback, next action
 
@@ -123,14 +138,15 @@ role restrictions, and revocation behavior. Roll back by disconnecting the
 local process, revoking the runtime key/tunnel association when authorized,
 then reverting the native/UI integration; local stdio MCP remains available.
 
-Next action: evaluate the official Windows client distribution/license and
-design a fake-client native lifecycle prototype before adding account-specific
-provisioning. Then implement the supervisor and tests, keeping the external
-resource-creation step gated. Existing UI revision is `c8e1c92a`; format,
-typecheck, production UI build and release build passed on Windows on
-2026-10-11; lint had 0 errors and 25 existing warnings. The focused Edge test
-did not produce a result because its harness stalled before browser/test
-output, so three-theme screenshots remain unverified and must be rerun.
+Next action: complete native/fake-client tests and three-theme screenshot
+review; then package with the required signed driver payload and qualify on an
+authorized Platform/ChatGPT workspace. No remote resources were created.
+Local process health must not be reported as proof of ChatGPT workspace
+authorization. UI typecheck/format/build and Rust Clippy pass; lint has 0
+errors and the same 25 existing warnings. The local Vite preview could not be
+opened through the available browser, so screenshots remain unverified. The
+final local shell rebuild includes the external-link opener fix; see the
+managed runtime evidence for its hash.
 
 
 ## Release 0.0.15 — 2026-10-10 (in progress)

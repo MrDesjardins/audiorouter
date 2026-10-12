@@ -233,6 +233,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "windows 0.62.2",
+ "zeroize",
  "zip",
 ]
 
