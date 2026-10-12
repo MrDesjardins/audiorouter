@@ -221,11 +221,13 @@ qualifies all 8 cables (`… Cable C …` to `… Cable H …`). Before WP-05 th
 WP-09b is not complete: the integrated runner currently measures float32
 bit-exact cases at 44.1, 48 and 96 kHz when both Cable endpoints are configured
 to the requested shared mix rate (for example,
-`tools/vm/run-cable-quality.ps1 -Case float32-48k -Channels 2`). It writes the
-real reference/capture samples and analyzer metrics, but remains marked
-`Qualification = false`. It does not satisfy the 1/2/8-channel matrix,
-integer-format, resampling, or crosstalk cases. Do not mark A16 passed until
-the complete matrix has executed on the same VM build.
+`tools/vm/run-cable-quality.ps1 -Case float32-48k -Channels 2`), and one
+unrouted Cable A-to-B isolation pair at −140 dBFS
+(`-Case isolation-A-to-B`). These cases write real captured samples and
+analyzer metrics, but remain marked `Qualification = false`. They do not
+satisfy the 1/2/8-channel matrix, integer-format, resampling, or pairwise
+eight-cable crosstalk cases. Do not mark A16 passed until the complete matrix
+has executed on the same VM build.
 
 Stage A passes when A1–A16 pass on the same build. Only then is the EV
 certificate bought (user go-ahead).

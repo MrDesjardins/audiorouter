@@ -2091,6 +2091,18 @@ static int cable_bitexact_wav_self_test(const char* output_dir) {
     return 0;
 }
 
+static int cable_isolation_wav_self_test(const char* output_dir) {
+    if (!output_dir) { std::cerr << "output directory is required\n"; return 2; }
+    const std::string path = std::string(output_dir) + "\\cable-isolation-capture.wav";
+    const std::vector<float> silence(48000, 0.0f);
+    if (!write_float_wav(path, silence, 48000, 2)) {
+        std::cerr << "isolation WAV self-test write failed\n";
+        return 1;
+    }
+    std::cout << "capture=" << path << '\n';
+    return 0;
+}
+
 // Plays seeded noise then silence into render_index and records capture_index.
 static int cable_bitexact_probe(UINT render_index, UINT capture_index, DWORD noise_seconds, const char* output_dir) {
     IMMDeviceEnumerator* enumerator = nullptr;
@@ -2264,7 +2276,8 @@ static int cable_isolation_self_test() {
 // drain_index (optional, UINT_MAX = none): another Output recorded and
 // discarded meanwhile, so the cable feeding it is genuinely active; its
 // non-silent frames are reported as proof of that activity.
-static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD seconds, UINT drain_index) {
+static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD seconds, UINT drain_index,
+                                 const char* output_dir) {
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
                                   __uuidof(IMMDeviceEnumerator), reinterpret_cast<void**>(&enumerator));
@@ -2278,8 +2291,16 @@ static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD se
     if (ok && draining) ok = activate_shared_stream(enumerator, eCapture, drain_index, drain_state, "isolation_drain", true, 0, false);
     enumerator->Release();
     if (!ok) { render_state.release(); capture_state.release(); drain_state.release(); return 1; }
-    if (render_state.format->wBitsPerSample != 32 || capture_state.format->wBitsPerSample != 32) {
-        std::cout << "isolation_requires_float32_formats=1\n";
+    const auto is_float32 = [](const WAVEFORMATEX* format) {
+        return format && format->wBitsPerSample == 32 &&
+            (format->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+             (format->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+              format->cbSize >= sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX) &&
+              reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(format)->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+    };
+    if (!is_float32(render_state.format) || !is_float32(capture_state.format) ||
+        render_state.format->nSamplesPerSec != capture_state.format->nSamplesPerSec) {
+        std::cout << "isolation_requires_matching_float32_formats=1\n";
         render_state.release(); capture_state.release();
         return 1;
     }
@@ -2385,10 +2406,16 @@ static int cable_isolation_probe(UINT render_index, UINT capture_index, DWORD se
     std::cout << "isolation_rendered_frames=" << rendered << " isolation_capture_overflow_packets=" << overflow << '\n';
     if (draining) std::cout << "isolation_drain_frames=" << drain_frames << " isolation_drain_active_frames=" << drain_active_frames << '\n';
     print_isolation_report(analyze_isolation(captured, capture_channels));
+    bool capture_written = true;
+    if (output_dir) {
+        const std::string path = std::string(output_dir) + "\\cable-isolation-capture.wav";
+        capture_written = write_float_wav(path, captured, static_cast<UINT32>(rate), static_cast<UINT16>(capture_channels));
+        std::cout << "isolation_capture_wav_written=" << capture_written << " path=" << path << '\n';
+    }
     render_state.release();
     capture_state.release();
     drain_state.release();
-    return rendered == 0 ? 1 : 0;
+    return rendered == 0 || !capture_written ? 1 : 0;
 }
 
 // Captures a stream's own impulse-arrival timestamps: a persistent worker
@@ -2970,13 +2997,19 @@ int main(int argc, char** argv) {
         CoUninitialize();
         return result;
     }
+    if (argc > 1 && std::strcmp(argv[1], "cable-isolation-wav-selftest") == 0) {
+        int result = cable_isolation_wav_self_test(argc > 2 ? argv[2] : nullptr);
+        CoUninitialize();
+        return result;
+    }
     if (argc > 1 && std::strcmp(argv[1], "cable-isolation") == 0) {
         DWORD seconds = argc > 2 ? static_cast<DWORD>(std::strtoul(argv[2], nullptr, 10)) : 5;
         UINT render_index = argc > 3 ? static_cast<UINT>(std::strtoul(argv[3], nullptr, 10)) : 0;
         UINT capture_index = argc > 4 ? static_cast<UINT>(std::strtoul(argv[4], nullptr, 10)) : 0;
         if (seconds < 1 || seconds > 120) { std::cout << "isolation_seconds_out_of_range=1\n"; CoUninitialize(); return 2; }
         UINT drain_index = argc > 5 ? static_cast<UINT>(std::strtoul(argv[5], nullptr, 10)) : UINT_MAX;
-        int result = cable_isolation_probe(render_index, capture_index, seconds, drain_index);
+        int result = cable_isolation_probe(render_index, capture_index, seconds, drain_index,
+                                           argc > 6 ? argv[6] : nullptr);
         CoUninitialize();
         return result;
     }

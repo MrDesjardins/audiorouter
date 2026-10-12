@@ -27,6 +27,7 @@ Assert ($runnerText -match '\$formatRate -ne \$Rate') 'runner refuses a result a
 Assert ($runnerText -match 'Qualification = \$false') 'diagnostic runner cannot claim qualification'
 $qualityText = Get-Content -LiteralPath $qualityRunner -Raw
 Assert ($qualityText -match "float32-44k1.*float32-48k.*float32-96k") 'VM entry point exposes only implemented float32 rate cases'
+Assert ($qualityText -match 'isolation-A-to-B' -and $qualityText -match "'silence'.*'-140'") 'VM entry point records a cable isolation measurement against VCAB-26'
 Assert ($qualityText -match 'does not pass A16' -and $qualityText -match 'A16 remains incomplete') 'VM entry point cannot imply complete matrix coverage'
 $prepareText = Get-Content -LiteralPath $prepare -Raw
 Assert ($prepareText -match 'm03-cable-quality\.exe') 'bundle preparation builds and stages the analyzer'

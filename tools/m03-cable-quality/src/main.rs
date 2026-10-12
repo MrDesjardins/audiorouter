@@ -9,33 +9,31 @@ fn main() {
 
 fn run() -> Result<(), String> {
     let mut args = std::env::args().skip(1);
-    if args.next().as_deref() != Some("analyze") {
-        return Err("usage: m03-cable-quality analyze <reference.wav> <capture.wav> <metrics.json> [max-offset-frames] [frequency-hz]".into());
-    }
-    let reference = PathBuf::from(args.next().ok_or("reference WAV is required")?);
-    let capture = PathBuf::from(args.next().ok_or("capture WAV is required")?);
-    let metrics_path = PathBuf::from(args.next().ok_or("metrics output path is required")?);
-    let max_offset = args
-        .next()
-        .map(|value| {
-            value
-                .parse::<usize>()
-                .map_err(|_| "max offset must be a nonnegative integer".to_string())
-        })
-        .transpose()?
-        .unwrap_or(96_000);
-    let frequency = args
-        .next()
-        .map(|value| {
-            value
-                .parse::<f64>()
-                .map_err(|_| "frequency must be numeric".to_string())
-        })
-        .transpose()?;
+    let mode = args.next().ok_or("analyzer mode is required")?;
+    let first = PathBuf::from(args.next().ok_or("input WAV is required")?);
+    let (report, metrics_path) = match mode.as_str() {
+        "silence" => {
+            let output = PathBuf::from(args.next().ok_or("metrics output path is required")?);
+            let threshold = args.next().map(|value| value.parse::<f64>()
+                .map_err(|_| "peak threshold must be numeric".to_string()))
+                .transpose()?.unwrap_or(-140.0);
+            (m03_cable_quality::analyze_silence_wav(&first, threshold)?, output)
+        }
+        "analyze" => {
+            let capture = PathBuf::from(args.next().ok_or("capture WAV is required")?);
+            let output = PathBuf::from(args.next().ok_or("metrics output path is required")?);
+            let max_offset = args.next().map(|value| value.parse::<usize>()
+                .map_err(|_| "max offset must be a nonnegative integer".to_string()))
+                .transpose()?.unwrap_or(96_000);
+            let frequency = args.next().map(|value| value.parse::<f64>()
+                .map_err(|_| "frequency must be numeric".to_string())).transpose()?;
+            (m03_cable_quality::analyze_wav_pair(&first, &capture, max_offset, frequency)?, output)
+        }
+        _ => return Err("usage: m03-cable-quality analyze <reference.wav> <capture.wav> <metrics.json> [max-offset-frames] [frequency-hz] | silence <capture.wav> <metrics.json> [max-peak-dbfs]".into()),
+    };
     if args.next().is_some() {
         return Err("too many arguments".into());
     }
-    let report = m03_cable_quality::analyze_wav_pair(&reference, &capture, max_offset, frequency)?;
     let parent = metrics_path
         .parent()
         .filter(|path| !path.as_os_str().is_empty())

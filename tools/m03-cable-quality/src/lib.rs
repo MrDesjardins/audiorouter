@@ -335,6 +335,38 @@ pub fn analyze_wav_pair(
     }))
 }
 
+pub fn analyze_silence_wav(
+    capture_path: &std::path::Path,
+    max_peak_dbfs: f64,
+) -> Result<serde_json::Value, String> {
+    if !max_peak_dbfs.is_finite() || max_peak_dbfs > 0.0 {
+        return Err("maximum peak threshold must be a finite dBFS value at or below 0".into());
+    }
+    let (sample_rate, channels, samples) = read_float_wav(capture_path)?;
+    if samples.is_empty() {
+        return Err("WAV files contain no samples".into());
+    }
+    let observed = metrics(&samples);
+    let peak_dbfs = if observed.peak == 0.0 {
+        -1000.0
+    } else {
+        20.0 * observed.peak.log10()
+    };
+    let pass = peak_dbfs <= max_peak_dbfs;
+    Ok(serde_json::json!({
+        "requirement": "VCAB-26",
+        "target": format!("unrouted cable isolation peak <= {max_peak_dbfs} dBFS"),
+        "pass": pass,
+        "format": {"sampleRateHz": sample_rate, "channels": channels, "encoding": "float32"},
+        "frames": observed.frames / usize::from(channels),
+        "peak": observed.peak,
+        "peakDbfs": peak_dbfs,
+        "rms": observed.rms,
+        "dc": observed.dc,
+        "capture": capture_path.file_name().and_then(|name| name.to_str())
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -449,6 +481,20 @@ mod tests {
         let path = std::env::temp_dir().join(format!("m03-quality-nan-{}.wav", std::process::id()));
         write_test_wav(&path, 1, &[f32::NAN]);
         assert!(read_float_wav(&path).unwrap_err().contains("non-finite"));
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn silence_metric_applies_peak_threshold_in_dbfs() {
+        let path =
+            std::env::temp_dir().join(format!("m03-quality-silence-{}.wav", std::process::id()));
+        write_test_wav(&path, 2, &[0.0, 0.0, 1.0e-8, -1.0e-8]);
+        let report = analyze_silence_wav(&path, -140.0).unwrap();
+        assert_eq!(report["requirement"], "VCAB-26");
+        assert_eq!(report["pass"], true);
+        assert!(report["peakDbfs"].as_f64().unwrap() <= -140.0);
+        let report = analyze_silence_wav(&path, -170.0).unwrap();
+        assert_eq!(report["pass"], false);
         std::fs::remove_file(path).unwrap();
     }
 }
