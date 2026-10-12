@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','pcm16-44k1','pcm16-48k','pcm16-96k','pcm24-44k1','pcm24-48k','pcm24-96k','pcm32-44k1','pcm32-48k','pcm32-96k','sweep-44k1','sweep-48k','sweep-96k','thdn-997-48k','tone-continuity','eight-cable-continuity','isolation-A-to-B','isolation-all-pairs')][string] $Case,
     [ValidateRange(1, 8)][int] $Channels = 2,
     [ValidateRange(5, 60)][int] $Seconds = 20,
-    [ValidateRange(1, 60)][int] $Minutes = 1
+    [ValidateRange(1, 60)][int] $Minutes = 1,
+    [switch] $ChannelMatrix
 )
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
@@ -16,6 +17,20 @@ if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') {
 . (Join-Path $bundle 'repo\tests\acceptance\m03-driver-vm-support.ps1')
 Assert-PairedTraceAdministrator
 Assert-PairedTraceBundle $bundle
+
+if ($ChannelMatrix) {
+    if ($Case -notlike 'float32-*' -and $Case -notlike 'pcm*' -and $Case -notlike 'sweep-*') {
+        throw '-ChannelMatrix is supported for float32, PCM and sweep cases.'
+    }
+    foreach ($matrixChannels in @(1, 2, 8)) {
+        Write-Host "Running $Case with $matrixChannels channel(s)."
+        & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
+            -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath -Case $Case -Channels $matrixChannels -Seconds $Seconds
+        if ($LASTEXITCODE -ne 0) { throw "$Case failed for $matrixChannels channel(s) (exit $LASTEXITCODE)." }
+    }
+    Write-Host "$Case completed for the 1/2/8-channel matrix. A16 remains incomplete."
+    return
+}
 
 if ($Case -like 'sweep-*') {
     $runner = Join-Path $bundle 'run-cable-sweep.ps1'

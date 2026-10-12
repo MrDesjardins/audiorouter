@@ -33,6 +33,7 @@ $qualityText = Get-Content -LiteralPath $qualityRunner -Raw
 Assert ($qualityText -match "float32-44k1.*float32-48k.*float32-96k") 'VM entry point exposes only implemented float32 rate cases'
 Assert ($qualityText -match 'pcm16-44k1.*pcm16-48k.*pcm16-96k.*pcm24-44k1.*pcm24-48k.*pcm24-96k.*pcm32-44k1.*pcm32-48k.*pcm32-96k') 'VM entry point exposes PCM16/24/32 at 44.1/48/96 kHz'
 Assert ($qualityText -match '\[ValidateRange\(1, 8\)\]\[int\] \$Channels' -and $qualityText -match '\-44k1\$.*44100' -and $qualityText -match '\-96k\$.*96000' -and $runnerText -match 'ValidateSet\(0,16,24,32\)' -and $qualityText -match '\$Matches\[1\]') 'VM entry point routes selected format, rate and channel count'
+Assert ($qualityText -match '\[switch\] \$ChannelMatrix' -and $qualityText -match '@\(1, 2, 8\)' -and $qualityText -match '\-File \$PSCommandPath -Case \$Case -Channels \$matrixChannels') 'VM entry point runs guarded channel matrix sequentially'
 Assert ($qualityText -match 'isolation-A-to-B' -and $qualityText -match "'silence'.*'-140'") 'VM entry point records a cable isolation measurement against VCAB-26'
 Assert ($qualityText -match 'isolation-all-pairs' -and $qualityText -match 'run-cable-isolation-matrix') 'VM entry point wires the ordered isolation matrix'
 Assert ($qualityText -match 'thdn-997-48k' -and $qualityText -match 'run-cable-thdn\.ps1') 'VM entry point wires the product-route THD+N diagnostic'

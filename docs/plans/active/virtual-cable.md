@@ -2028,8 +2028,9 @@ WP-09 mixed-clock route work.
   measures passband magnitude only; phase, aliasing and imaging remain open.
   PCM32 has analyzer and native-probe float64 WAV paths plus guarded cases at
   44.1/48/96 kHz. PCM16/24/32 cases now share that rate matrix and accept the
-  required 1/2/8 channel counts. Next exercise PCM and sweep cases in the
-  disposable VM; then add per-channel-count summary runs
+  required 1/2/8 channel counts. `-ChannelMatrix` runs any float32, integer
+  PCM or sweep case at 1/2/8 channels sequentially. Next exercise PCM and sweep
+  cases in the disposable VM
   and cover sweep/resampling and continuity metrics. Keep A16 blocked until
   the channel-count decision and VM access gates are resolved; never count
   synthetic checks as Stage A evidence.
@@ -2046,11 +2047,10 @@ preserves capture in double precision and writes float64 WAVs. The guarded
 PCM16/24/32 cases verify the negotiated format and reject dropped, flagged
 or overflowed captures. Host checks and a probe-to-analyzer WAV self-test pass;
 no PCM endpoint run has been measured. Next action: exercise the PCM and sweep
-cases in the disposable driver VM, then add per-channel-count cases and cover
-sweep/resampling and continuity metrics. Validation: portable tests, format,
-Clippy, docs and acceptance passed; VM execution is still required before any
-endpoint claim. Rollback: revert the dedicated probe and runner change; no data
-migration.
+cases in the disposable driver VM and cover resampling and continuity metrics.
+Validation: portable tests, format, Clippy, docs and acceptance passed; VM
+execution is still required before any endpoint claim. Rollback: revert the
+dedicated probe and runner change; no data migration.
 
 ## WP-10 — UI (17 §7.4)
 

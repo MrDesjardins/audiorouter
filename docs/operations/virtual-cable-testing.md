@@ -227,10 +227,12 @@ unrouted Cable A-to-B isolation pair at −140 dBFS
 analyzer metrics, but remain marked `Qualification = false`. They do not
 satisfy the 1/2/8-channel matrix or resampling cases. Guarded integer PCM cases
 now cover PCM16, PCM24-in-32 and PCM32 at 44.1/48/96 kHz, for example
-`-Case pcm32-96k -Channels 8`. They check the actual Windows shared mix format
-and apply the one-LSB metric. PCM32 capture uses float64 WAVs so analysis retains
-the integer's low bits. These are runner cases only: the PCM and channel matrix
-has not been run in the VM and remains unmeasured.
+`-Case pcm32-96k -Channels 8`. Add `-ChannelMatrix` to run the selected
+float32, integer PCM or sweep case at 1, 2 and 8 channels sequentially. Each
+run checks the actual Windows shared mix format and applies the one-LSB metric
+for integer PCM. PCM32 capture uses float64 WAVs so analysis retains the
+integer's low bits. These are runner cases only: the PCM and channel matrix has
+not been run in the VM and remains unmeasured.
 Log-sweep cases (`-Case sweep-44k1`, `sweep-48k`, and `sweep-96k`) now measure
 relative 20 Hz–20 kHz passband magnitude against ±0.05 dB through the product
 route; aliasing, imaging and phase remain unmeasured, and the runner has not
