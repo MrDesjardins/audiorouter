@@ -2026,10 +2026,9 @@ WP-09 mixed-clock route work.
   existing 997/47 Hz and four-route eight-cable continuity runners with a
   duration selector. Sweep analysis
   measures passband magnitude only; phase, aliasing and imaging remain open.
-  PCM32 now has an analyzer-only float64 WAV path and a sub-float32 one-LSB
-  regression; the native probe still cannot preserve PCM32 captures. Next:
-  extend native sample generation/capture/WAV output for PCM32, then exercise
-  PCM and sweep cases in the disposable VM. Afterward add per-channel-count cases
+  PCM32 has analyzer and native-probe float64 WAV paths plus a guarded 48 kHz
+  case. Next exercise PCM and sweep cases in the disposable VM. Afterward add
+  per-channel-count cases
   and cover sweep/resampling and continuity metrics. Keep A16 blocked until
   the channel-count decision and VM access gates are resolved; never count
   synthetic checks as Stage A evidence.
@@ -2041,12 +2040,17 @@ Completed 2026-10-11: strict PCM16 and extensible PCM24-in-32 WAV read/write,
 validation, sign extension, channel preservation, and ≤1-LSB tests. The
 analyzer's PCM32 mode now accepts float64 WAV pairs, retains sub-float32
 precision, aligns frames and applies the PCM32 ≤1-LSB verdict. The native
-probe/runner still supports only float32, PCM16 and PCM24-in-32; no PCM endpoint
-matrix has been measured. Next: add raw high-precision PCM32 generation and
-capture/WAV output to the native probe, then expose a guarded PCM32 route case.
-Validation: host unit tests, format, Clippy, docs and acceptance; guest run
-required before any endpoint claim. Rollback: revert the dedicated analyzer or
-native probe commit; no data migration.
+precision, aligns frames and applies the PCM32 ≤1-LSB verdict. The native
+probe recognizes plain/extensible PCM32, generates full-resolution noise,
+preserves capture in double precision and writes float64 WAVs. The guarded
+`pcm32-48k` case verifies the negotiated format and rejects dropped, flagged
+or overflowed captures. Host checks and a probe-to-analyzer WAV self-test pass;
+no PCM endpoint run has been measured. Next action: exercise the PCM and sweep
+cases in the disposable driver VM, then add per-channel-count cases and cover
+sweep/resampling and continuity metrics. Validation: portable tests, format,
+Clippy, docs and acceptance passed; VM execution is still required before any
+endpoint claim. Rollback: revert the dedicated probe and runner change; no data
+migration.
 
 ## WP-10 — UI (17 §7.4)
 

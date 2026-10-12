@@ -217,5 +217,27 @@ Checks on Windows host `PATRICK5080`, pinned Rust 1.96.0:
   and `git diff --check` — passed.
 
 The first format check requested one rustfmt line wrap; formatting was applied
-and the complete portable checks then passed. Native PCM32 endpoint evidence
-remains unavailable because the probe still does not preserve PCM32 data.
+and the complete portable checks then passed.
+
+## Native PCM32 preservation and guarded route case
+
+The WASAPI probe now recognizes plain and extensible signed PCM32 formats,
+generates deterministic samples on the full 32-bit integer grid, preserves
+captured samples in `double`, and writes IEEE float64 reference/capture WAVs.
+Its native conversion self-check exercises a sample with nonzero low eight
+bits and verifies at most one PCM32 LSB error. The VM runner accepts 32-bit PCM
+and the quality entry point exposes `pcm32-48k`; negotiated format and capture
+continuity remain required for PASS.
+
+Host checks on `PATRICK5080`:
+
+- Static MSVC build passed; `cable-sample-format-selftest` — 15 checks passed,
+  including plain and extensible PCM32 format recognition.
+- Native float64 WAV self-test analyzed by the Rust CLI — 256 frames aligned
+  after an 8-frame offset, zero maximum PCM32 LSB error, PASS.
+- Rust quality analyzer — 13 tests passed; standalone Clippy with `-D warnings`
+  passed.
+- PowerShell parse and cable quality acceptance — 35 checks passed.
+- Documentation validation — 149 Markdown files and 858 local links passed.
+- No endpoint or driver test was run: this host is not the guarded VM and has
+  no `C:\ar` bundle. The PCM32 route case is wired, not measured.

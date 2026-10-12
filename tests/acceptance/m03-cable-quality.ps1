@@ -31,7 +31,7 @@ Assert ($runnerText -match 'Qualification = \$false') 'diagnostic runner cannot 
 Assert ($runnerText -match '\$PcmBits' -and $runnerText -match 'bitexact_encoding') 'product runner verifies the actual negotiated PCM encoding'
 $qualityText = Get-Content -LiteralPath $qualityRunner -Raw
 Assert ($qualityText -match "float32-44k1.*float32-48k.*float32-96k") 'VM entry point exposes only implemented float32 rate cases'
-Assert ($qualityText -match 'pcm16-48k.*pcm24-48k' -and $qualityText -match '-PcmBits \$pcmBits') 'VM entry point routes implemented PCM diagnostic cases'
+Assert ($qualityText -match 'pcm16-48k.*pcm24-48k.*pcm32-48k' -and $qualityText -match "'pcm32-48k' \{ 32 \}" -and $runnerText -match 'ValidateSet\(0,16,24,32\)' -and $qualityText -match '-PcmBits \$pcmBits') 'VM entry point routes PCM16/24/32 cases'
 Assert ($qualityText -match 'isolation-A-to-B' -and $qualityText -match "'silence'.*'-140'") 'VM entry point records a cable isolation measurement against VCAB-26'
 Assert ($qualityText -match 'isolation-all-pairs' -and $qualityText -match 'run-cable-isolation-matrix') 'VM entry point wires the ordered isolation matrix'
 Assert ($qualityText -match 'thdn-997-48k' -and $qualityText -match 'run-cable-thdn\.ps1') 'VM entry point wires the product-route THD+N diagnostic'

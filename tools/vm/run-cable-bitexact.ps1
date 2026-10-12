@@ -8,7 +8,7 @@
 [CmdletBinding()]
 param([ValidateRange(1, 8)][int] $Channels = 8,
     [ValidateSet(44100,48000,96000)][int] $Rate = 48000,
-    [ValidateSet(0,16,24)][int] $PcmBits = 0,
+    [ValidateSet(0,16,24,32)][int] $PcmBits = 0,
     [ValidateRange(5, 60)][int] $Seconds = 20)
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')

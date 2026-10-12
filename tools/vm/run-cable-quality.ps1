@@ -2,7 +2,7 @@
    diagnostic subsets of A16, never complete A16 qualification. #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','pcm16-48k','pcm24-48k','sweep-44k1','sweep-48k','sweep-96k','thdn-997-48k','tone-continuity','eight-cable-continuity','isolation-A-to-B','isolation-all-pairs')][string] $Case,
+    [Parameter(Mandatory = $true)][ValidateSet('float32-44k1','float32-48k','float32-96k','pcm16-48k','pcm24-48k','pcm32-48k','sweep-44k1','sweep-48k','sweep-96k','thdn-997-48k','tone-continuity','eight-cable-continuity','isolation-A-to-B','isolation-all-pairs')][string] $Case,
     [ValidateRange(1, 8)][int] $Channels = 2,
     [ValidateRange(5, 60)][int] $Seconds = 20,
     [ValidateRange(1, 60)][int] $Minutes = 1
@@ -32,7 +32,7 @@ if ($Case -like 'float32-*' -or $Case -like 'pcm*-48k') {
     $runner = Join-Path $bundle 'run-cable-bitexact.ps1'
     if (-not (Test-Path -LiteralPath $runner -PathType Leaf)) { throw 'The bundle has no bit-exact product-route runner.' }
     $rate = switch ($Case) { 'float32-44k1' { 44100 } 'float32-48k' { 48000 } 'float32-96k' { 96000 } default { 48000 } }
-    $pcmBits = switch ($Case) { 'pcm16-48k' { 16 } 'pcm24-48k' { 24 } default { 0 } }
+    $pcmBits = switch ($Case) { 'pcm16-48k' { 16 } 'pcm24-48k' { 24 } 'pcm32-48k' { 32 } default { 0 } }
     $format = if ($pcmBits -eq 0) { 'float32' } else { "PCM$pcmBits" }
     Write-Host "WP-09b diagnostic subset: $Case, $Channels channel(s), $format. Set both Cable endpoints to $rate Hz and the requested format first. This does not pass A16."
     & (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe') `
