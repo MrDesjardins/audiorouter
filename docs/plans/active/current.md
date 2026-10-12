@@ -4,7 +4,7 @@
 
 User explicitly requested an easy ChatGPT connection, with AudioRouter
 managing the OpenAI Secure MCP Tunnel instead of asking users to configure
-the tunnel. Requirements: AUTO-16, SEC-14; decision DEC-19. This is remote
+the tunnel. Requirements: AUTO-16, SEC-14; decision DEC-20. This is remote
 MCP access to the local backend, so it must preserve client enrollment and
 grants, store only the runtime credential under current-user protection, keep
 the connection off until an explicit Connect action, and never expose the
