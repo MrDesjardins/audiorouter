@@ -287,6 +287,40 @@ the app via `IPolicyConfig` (no elevation needed), not Sound settings;
 control and CAP-14 integration, not authorized; (5) Sound settings Advanced
 lists after r32 not yet observed.
 
+**Endpoint ID investigation (2026-10-12).** Guest read-only collection in
+`Z:\repair-20261012-oem-format-r32\id-diagnostics` (MMDevices export,
+pnputil, PnP list, setupapi.dev.log, install evidence). Findings:
+- The helper's upgrade is an in-place `UpdateDriverForPlugAndPlayDevices`
+  on the same devnode `ROOT\MEDIA\0000` (setupapi: "Update Device Driver -
+  ROOT\MEDIA\0000", old 0.1.4.0 → 0.1.7.0; reboot only because "Driver did
+  not unload"). No device was removed or recreated.
+- The IDs changed **twice**: immediately after the install, before the
+  restart (`helper-install-again.json`: `{7eda5309…}`, `{e51eed07…}`,
+  `{c79fb8b3…}`, `{8df95182…}`), and again after the restart (`{7121d5d2…}`
+  set). The four 0.1.4 keys are deleted from MMDevices, not left
+  NOTPRESENT. Stored settings migrated (Cable A Output kept 44.1 kHz/1 ch).
+- Each endpoint key records `{83da6326-97a6-4088-9453-a1923f573b29},3`
+  (device configuration ID) =
+  `oem7.inf:ed86ca112b7e020c:AUDIOROUTERVIRTUAL_SA.NT:0.1.7.0:ROOT\AudioRouterVirtual`,
+  plus the interface path `\\?\root#media#0000#{6994ad04…}\wavecablearender`
+  (unchanged by design). Hypothesis (unproven): AudioEndpointBuilder
+  regenerates endpoints when the driver configuration changes, so every
+  driver update would change the IDs; the second change at restart is not
+  explained by it.
+- No earlier run ever compared IDs across an upgrade, so this is probably
+  not a 0.1.7 regression.
+
+Discriminating test, bundle r33 `C:\VMs\ar-share\diagnostics-20261012-id-stability-r33`
+(source `53728526`; driver source identical to `e95c4bcd`/0.1.7, version
+only: 0.1.8.0, DriverVer 10/12/2026, test-signed, timing diagnostics), SYS
+SHA-256 `7DDEEBF5F4E0B63AA247E851C99B68E02AEBD2FF5747F96E2A99BCE01EC6EBA0`,
+MANIFEST SHA-256 `DC2F6E1AFE2788EB52EDFDBDE487439AC5E67A2126B2AA817DAF32C9F7BA6C33`:
+(A) plain restart on 0.1.7, IDs compared; (B) 0.1.7 → 0.1.8 update, IDs
+before restart and after restart. If (A) is stable and (B) changes IDs,
+every update changes them and VCAB-05 needs a different mechanism or a
+spec decision. The guest stays on 0.1.8 (same source); later bundles must
+be ≥ 0.1.9.
+
 Side finding (pre-existing, not fixed): `generate.ps1 -Check` reports the
 topology header stale on a clean checkout (`core.autocrlf=input` leaves LF;
 the generator writes CRLF in its region). Content is identical; it passes
