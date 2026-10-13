@@ -66,9 +66,10 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
 name = "audiorouter-control"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "audiorouter-domain",
+ "audiorouter-driver-helper",
  "audiorouter-dsp",
  "audiorouter-engine",
  "audiorouter-plugin-host",
@@ -85,15 +86,26 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-domain"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "serde",
  "serde_json",
 ]
 
 [[package]]
+name = "audiorouter-driver-helper"
+version = "0.0.16"
+dependencies = [
+ "audiorouter-windows-audio",
+ "serde",
+ "serde_json",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "audiorouter-dsp"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "bytemuck",
  "microfft",
@@ -102,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-engine"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "arc-swap",
  "audiorouter-domain",
@@ -114,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-plugin-host"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "audiorouter-engine",
  "crossbeam-queue",
@@ -126,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-protocol"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "hmac",
  "serde",
@@ -136,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-recording"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "crossbeam-queue",
  "flac-io",
@@ -147,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-storage"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-recording",
@@ -160,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-windows-audio"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-dsp",

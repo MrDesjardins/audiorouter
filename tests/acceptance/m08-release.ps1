@@ -1,10 +1,10 @@
 [CmdletBinding()]
-param([string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE)
+param([string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE, [switch]$AppOnly)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $DriverPackage = [string]$DriverPackage
-if ([string]::IsNullOrWhiteSpace($DriverPackage)) {
+if (-not $AppOnly -and [string]::IsNullOrWhiteSpace($DriverPackage)) {
     throw "Set AUDIOROUTER_SIGNED_DRIVER_PACKAGE to the Microsoft-signed driver payload directory before M08 release acceptance."
 }
 $output = Join-Path ([IO.Path]::GetTempPath()) "audiorouter-m08-release-$PID"
@@ -14,7 +14,9 @@ if (Test-Path -LiteralPath $output) {
 
 Push-Location $repoRoot
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\prepare-artifacts.ps1 -OutputDirectory $output -DriverPackage $DriverPackage
+    $prepareArguments = @('-OutputDirectory', $output)
+    if ($AppOnly) { $prepareArguments += '-AppOnly' } else { $prepareArguments += @('-DriverPackage', $DriverPackage) }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\prepare-artifacts.ps1 @prepareArguments
     if ($LASTEXITCODE -ne 0) { throw "release preparation failed with exit code $LASTEXITCODE" }
 
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\release\verify-artifacts.ps1 -ManifestPath (Join-Path $output "release-manifest.json")
@@ -35,19 +37,22 @@ try {
     if (@($manifest.blockers).Count -lt 3) {
         throw "unsigned preparation must retain all release blockers"
     }
-    foreach ($required in @(
+    if ($manifest.includesDriver -ne (-not [bool]$AppOnly)) {
+        throw "release manifest does not match the requested app-only/driver profile"
+    }
+    $requiredArtifacts = @(
         "AudioRouter_$($manifest.version)_x64-setup.exe",
         "com.mrdesjardins.audiorouter.streamDeckPlugin",
         "sbom.cargo.json",
         "sbom.npm.json",
         "sbom.npm.package-lock.json",
-        "audioroutervirtual.inf",
-        "audioroutervirtual.sys",
-        "audioroutervirtual.cat",
-        "LICENSE-MS-PL.txt",
         "THIRD-PARTY-NOTICES.txt",
         "SHA256SUMS.txt"
-    )) {
+    )
+    if (-not $AppOnly) {
+        $requiredArtifacts += @('audioroutervirtual.inf', 'audioroutervirtual.sys', 'audioroutervirtual.cat', 'LICENSE-MS-PL.txt')
+    }
+    foreach ($required in $requiredArtifacts) {
         if (@($manifest.artifacts | Where-Object { $_.file -eq $required }).Count -ne 1) {
             throw "release manifest must include exactly one $required artifact"
         }
@@ -87,6 +92,9 @@ try {
 finally {
     Pop-Location
     if (Test-Path -LiteralPath $output) {
-        Remove-Item -LiteralPath $output -Recurse -Force
+        $resolved = [IO.Path]::GetFullPath((Resolve-Path -LiteralPath $output).Path)
+        $expected = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetTempPath()) "audiorouter-m08-release-$PID"))
+        if ($resolved -ne $expected) { throw 'Unexpected release acceptance cleanup path' }
+        Remove-Item -LiteralPath $resolved -Recurse -Force
     }
 }

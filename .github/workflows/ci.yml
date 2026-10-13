@@ -254,11 +254,12 @@ jobs:
           ./tools/release/test-prepare-artifacts.ps1
           ./tools/release/test-verify-artifacts.ps1
           ./tools/release/test-runbook-command.ps1
+          ./tools/release/test-app-only-release.ps1
 
       - name: Build and verify the unsigned installer and release assets
         if: needs.changes.outputs.release == 'true'
         shell: pwsh
-        run: ./tests/acceptance/m08-release.ps1
+        run: ./tests/acceptance/m08-release.ps1 -AppOnly
 
   browser:
     name: UI browser tests (Edge)

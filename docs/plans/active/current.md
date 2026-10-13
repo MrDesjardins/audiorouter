@@ -32,6 +32,14 @@ Next action: owner closes the still-running app (closure question pending),
 run exact-package fresh-install, check CI, then publish the prepared draft and
 verify public downloads. No second shell launch or user process stop.
 
+Owner confirmed quitting; packaged fresh-install passed (backend ready 65 ms,
+consent behavior correct). CI run 38330417041 then exposed a stale standalone
+WASAPI probe lock (AudioRouter entries still 0.0.14). Repair that lock and wire
+CI's existing M08 acceptance to the explicit app-only profile; this changes
+unshipped developer/CI inputs, not the already verified product binaries or
+release source tag. Recheck locked probe and release regressions, push the
+maintenance repair, then publish the draft and verify public downloads.
+
 ## Local Cowork plugin — 2026-10-12, owner authorized
 
 Objective: export a ready-to-upload plugin for the owner's **local** Cowork
