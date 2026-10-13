@@ -100,7 +100,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableACapture.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableACapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableACapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableACapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.TopologyCableACapture]
@@ -108,7 +108,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableACapture.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableACapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableACapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableACapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.WaveCableBRender]
@@ -134,7 +134,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableBCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableBCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableBCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableBCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.TopologyCableBCapture]
@@ -142,7 +142,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableBCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableBCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableBCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableBCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.WaveCableCRender]
@@ -168,7 +168,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableCCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableCCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableCCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableCCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.TopologyCableCCapture]
@@ -176,7 +176,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableCCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableCCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableCCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableCCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.WaveCableDRender]
@@ -202,7 +202,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableDCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableDCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableDCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableDCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.TopologyCableDCapture]
@@ -210,7 +210,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableDCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableDCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableDCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableDCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.WaveCableERender]
@@ -236,7 +236,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableECapture.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableECapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableECapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableECapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.TopologyCableECapture]
@@ -244,7 +244,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableECapture.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableECapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableECapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableECapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.WaveCableFRender]
@@ -270,7 +270,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableFCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableFCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableFCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableFCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.TopologyCableFCapture]
@@ -278,7 +278,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableFCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableFCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableFCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableFCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.WaveCableGRender]
@@ -304,7 +304,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableGCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableGCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableGCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableGCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.TopologyCableGCapture]
@@ -312,7 +312,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableGCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableGCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableGCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableGCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.WaveCableHRender]
@@ -338,7 +338,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.WaveCableHCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.WaveCableHCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.WaveCableHCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableHCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 [AUDIOROUTERVIRTUAL.I.TopologyCableHCapture]
@@ -346,7 +346,7 @@ AddReg=AUDIOROUTERVIRTUAL.I.TopologyCableHCapture.AddReg
 [AUDIOROUTERVIRTUAL.I.TopologyCableHCapture.AddReg]
 HKR,,CLSID,,%Proxy.CLSID%
 HKR,,FriendlyName,,%AUDIOROUTERVIRTUAL.TopologyCableHCapture.szPname%
-HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.CableHCapturePinCategory%
 HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71
 ; END GENERATED CABLE REGISTRY SECTIONS

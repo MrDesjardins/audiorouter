@@ -152,6 +152,39 @@ Any later driver source change invalidates this RC and its Stage A
 evidence. Next: Stage A sessions (step 3), each from the
 `02-test-signing-ready` checkpoint, bundle copied to `C:\ar\rc-0.2.0`.
 
+**RC 0.2.0 Stage A run 1 (2026-10-12, from `02-test-signing-ready`):**
+`preflight` PASS 15; `smoke` PASS twice (A1–A3, A14); `install` PASS
+(exit 0, 4 endpoints, idempotent); `status` PASS (0.2.0.0, 60/60 formats);
+`cables` PASS (2 → 8 → 2, A/B IDs unchanged, C–H gone); **`rename` FAIL**.
+Two defects, the second withdraws RC 0.2.0:
+1. **Helper crash on `configure --name`** (user mode, not the driver):
+   exit `0xC0000374` heap corruption. Full dump (LocalDumps, VM only,
+   removed after) resolved with `cdb` and the matching PDB: `RtlFreeHeap`
+   from dropping the `Vec<u16>` `text` in
+   `WindowsPlatform::set_endpoint_description`; the block was already
+   freed. The endpoint property store's `SetValue` frees the `VT_LPWSTR`
+   it is given, so the Rust-owned buffer was freed twice. Never exercised
+   before (only fake-platform tests). Fix: pass a `CoTaskMemAlloc` copy and
+   never free it in the helper. State had already saved `1: "Discord"`.
+   Evidence `Z:\rc-0.2.0\diag-rename\` (events, WER report, dump).
+2. **Capture cables default to 44.1 kHz mono on a fresh install** (render
+   correctly 48 kHz float stereo; `format-show.txt`). VCAB-11 default
+   violated. Cause (inference, consistent with every observation): the
+   capture `EP\0` sections were associated with `KSNODETYPE_ANY`, while the
+   capture bridge pins use per-cable categories (`CableXCapturePinCategory`),
+   so Windows never applied the capture `OEMFormat` and fell back to the
+   first data range; render associates `KSNODETYPE_ANALOG_CONNECTOR`, which
+   matches its bridge pin, and got the OEM default. Before r32 the
+   proposed default (`PROPOSEDATAFORMAT2`) hid this. Fix: capture `EP\0`
+   association = `%GUID.CableXCapturePinCategory%` (generator, INX,
+   acceptance test). INF change → the package changes → new RC.
+Also fixed: the INF generator now keeps each file's line endings, so
+`-Check` passes on a clean checkout (the topology header no longer churns).
+Host: helper 28 tests, Clippy `-D warnings`, rustfmt clean;
+`m03-inf-gen.ps1` and `m03-driver-build.ps1` pass. Next: RC2 = 0.2.2
+(A13: 0.2.3), Stage A run again from the checkpoint; it must show 48 kHz
+stereo on all four endpoints after `install` and `rename` passing.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each

@@ -91,7 +91,11 @@ foreach ($cable in $cableData.cables) {
                 $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%')
                 $registrySections.Add('HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101')
             } else {
-                $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%')
+                # EP\0 applies to the endpoint whose bridge pin category it
+                # names. Capture bridge pins use per-cable categories, and with
+                # KSNODETYPE_ANY Windows ignored the OEM format: a fresh
+                # install defaulted capture to 44.1 kHz mono (VM, 2026-10-12).
+                $registrySections.Add("HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.Cable${letter}CapturePinCategory%")
             }
             $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1')
             # Default device format (VCAB-11): 48 kHz IEEE float stereo,
@@ -109,7 +113,10 @@ function Replace-MarkedRegion([string] $Source, [string] $Start, [string] $End, 
     $endAt = $Source.IndexOf($End, [StringComparison]::Ordinal)
     if ($startAt -lt 0 -or $endAt -le $startAt) { throw "Missing or reversed generated region markers: $Start / $End" }
     $bodyStart = $startAt + $Start.Length
-    $replacement = "`r`n" + ($Body -join "`r`n") + "`r`n"
+    # Keep the file's own line endings so -Check passes on a clean checkout
+    # (core.autocrlf=input leaves LF) and -Update does not churn the file.
+    $newline = if ($Source.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $replacement = $newline + ($Body -join $newline) + $newline
     return $Source.Substring(0, $bodyStart) + $replacement + $Source.Substring($endAt)
 }
 

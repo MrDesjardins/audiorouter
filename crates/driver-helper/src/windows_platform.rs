@@ -712,8 +712,8 @@ impl Platform for WindowsPlatform {
             PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
         };
         use windows::Win32::System::Com::{
-            CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_ALL, COINIT_MULTITHREADED,
-            STGM_READWRITE,
+            CoCreateInstance, CoInitializeEx, CoTaskMemAlloc, CoUninitialize, CLSCTX_ALL,
+            COINIT_MULTITHREADED, STGM_READWRITE,
         };
         use windows::Win32::System::Variant::VT_LPWSTR;
         // PKEY_Device_FriendlyName is the display label. DeviceDesc retains
@@ -723,10 +723,29 @@ impl Platform for WindowsPlatform {
             pid: 14,
         };
         let id = wide(endpoint_id);
-        let mut text = wide(&format!("{description} (AudioRouter Virtual Cable)"));
+        let text = wide(&format!("{description} (AudioRouter Virtual Cable)"));
+        // The endpoint store's SetValue frees the string it is given: with a
+        // Rust-owned buffer the helper's own drop then double-freed it
+        // (0xC0000374 in the VM, 2026-10-12 crash dump). Hand it a CoTaskMem
+        // copy and never free that copy here; if Windows does not free it,
+        // the bytes live until this short-lived process exits.
+        // SAFETY: CoTaskMemAlloc returns null or a block of the requested
+        // size, filled below with exactly `text.len()` u16 values (NUL
+        // included); nothing in this process reads or frees it afterwards.
+        let name = unsafe {
+            let block = CoTaskMemAlloc(text.len() * std::mem::size_of::<u16>()).cast::<u16>();
+            if block.is_null() {
+                return Err(Failure::windows(
+                    "allocate the endpoint name: out of memory".to_owned(),
+                    windows::Win32::Foundation::E_OUTOFMEMORY.0,
+                ));
+            }
+            std::ptr::copy_nonoverlapping(text.as_ptr(), block, text.len());
+            PWSTR(block)
+        };
         // SAFETY: COM is initialized for this call and uninitialized after;
-        // the PROPVARIANT borrows `text`, which outlives SetValue (the store
-        // copies it), and is never passed to PropVariantClear.
+        // the PROPVARIANT points at the CoTaskMem copy above, which this code
+        // never passes to PropVariantClear or frees itself.
         unsafe {
             CoInitializeEx(None, COINIT_MULTITHREADED)
                 .ok()
@@ -743,9 +762,7 @@ impl Platform for WindowsPlatform {
                             wReserved1: 0,
                             wReserved2: 0,
                             wReserved3: 0,
-                            Anonymous: PROPVARIANT_0_0_0 {
-                                pwszVal: PWSTR(text.as_mut_ptr()),
-                            },
+                            Anonymous: PROPVARIANT_0_0_0 { pwszVal: name },
                         }),
                     },
                 };

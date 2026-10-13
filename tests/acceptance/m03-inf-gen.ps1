@@ -56,8 +56,8 @@ foreach ($letter in 'A','B','C','D','E','F','G','H') {
                     throw "Render endpoint must associate the analog bridge and enable render flow: $section"
                 }
             } elseif ($body.Contains('PKEY_AudioDevice_EnableEndpointByDefault') -or
-                      -not $body.Contains('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%')) {
-                throw "Render visibility policy must not alter capture: $section"
+                      -not $body.Contains("HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%GUID.Cable${letter}CapturePinCategory%")) {
+                throw "Capture endpoint must associate its own bridge pin category and keep render visibility policy out: $section"
             }
         }
     }
