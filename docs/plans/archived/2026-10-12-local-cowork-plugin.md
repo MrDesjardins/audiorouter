@@ -96,6 +96,10 @@ changes. No database migration. Export again after installation path changes.
 
 ## Remaining gate and exact next task
 
+Owner-requested Bugbot review before release found no actionable bugs in the
+staged local Cowork exporter, grants, preflight, UI, tests and documentation.
+Adapter committed as `6d78db23` and pushed with the 0.0.16 source inputs.
+
 No running Claude Desktop/local Cowork account was available for an attended
 check. Import the ZIP exported by the actual app in local Cowork, observe a
 session-list read in MCP activity, then owner-approved stopped-session

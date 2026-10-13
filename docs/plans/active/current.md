@@ -22,7 +22,15 @@ remain open and must be disclosed; actual Cowork attended gate remains open.
 Rollback: retain 0.0.15 installer and compatible configuration backups; no
 database migration, driver or default-device changes. Never replace published
 assets. Build from an isolated clean checkout to preserve shared edits.
-Next action: complete code review while preparing explicit app-only tooling.
+Review completed with no actionable findings; adapter committed `6d78db23`,
+app-only release inputs `8092853c`, main and `v0.0.16` pushed. Full Windows
+workspace (1,100 passed), UI (523), shell (80), Edge (239 passed, 9 skipped),
+format/Clippy/contract/release-script checks pass. Clean tagged installer built,
+local/uploaded/downloaded draft artifacts verified. See the
+[release evidence](evidence/2026-10-12-release-0.0.16.md).
+Next action: owner closes the still-running app (closure question pending),
+run exact-package fresh-install, check CI, then publish the prepared draft and
+verify public downloads. No second shell launch or user process stop.
 
 ## Local Cowork plugin — 2026-10-12, owner authorized
 
