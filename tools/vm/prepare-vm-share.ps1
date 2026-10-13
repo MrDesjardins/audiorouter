@@ -22,6 +22,12 @@
   <Share>\driver-next\ for the A13 upgrade/repair steps, and then requires a
   clean working tree so both packages carry one clean source identity.
 
+  -ReuseDriverShare copies driver\ (and driver-next\, if present) from an
+  earlier share byte for byte instead of building, so a frozen release
+  candidate keeps its exact binaries while the helper, tools and scripts come
+  from the current commit. It requires a clean tree and refuses packages whose
+  driver source differs from the current commit.
+
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-vm-share.ps1 -Share D:\ar-share
 .EXAMPLE
@@ -31,7 +37,8 @@
 param(
     [string] $Share = 'D:\ar-share',
     [string] $Version = '0.1.0',
-    [string] $NextVersion
+    [string] $NextVersion,
+    [string] $ReuseDriverShare
 )
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -39,8 +46,11 @@ $driverRoot = Join-Path $workspace 'drivers\audiorouter-virtual'
 . (Join-Path $driverRoot 'package-tools.ps1')
 
 $Share = Assert-DriverPackagePath $Share
+if ($ReuseDriverShare -and $NextVersion) { throw 'Use -ReuseDriverShare or -NextVersion, not both.' }
 if ($NextVersion) {
     if ([version](ConvertTo-DriverVersion $NextVersion) -le [version](ConvertTo-DriverVersion $Version)) { throw '-NextVersion must be newer than -Version.' }
+}
+if ($NextVersion -or $ReuseDriverShare) {
     if ([bool](& git -C $workspace status --porcelain)) { throw 'A release candidate share needs a clean working tree; commit or stash first.' }
 }
 if (Test-Path -LiteralPath $Share) {
@@ -56,6 +66,31 @@ New-Item -ItemType Directory -Path $tools, $repo | Out-Null
 
 function Step([string] $Text) { Write-Host "`n== $Text" -ForegroundColor Cyan }
 
+if ($ReuseDriverShare) {
+    Step "1/6 Reuse the driver packages of $ReuseDriverShare"
+    $source = (Resolve-Path -LiteralPath $ReuseDriverShare).Path
+    $head = (& git -C $workspace rev-parse HEAD).Trim()
+    foreach ($name in 'driver', 'driver-next') {
+        $from = Join-Path $source $name
+        if (-not (Test-Path -LiteralPath (Join-Path $from 'package.json'))) {
+            if ($name -eq 'driver') { throw "No driver package in $source." }
+            continue
+        }
+        $meta = Get-Content -LiteralPath (Join-Path $from 'package.json') -Raw | ConvertFrom-Json
+        if ($meta.dirty -or $meta.timingDiagnostics -or $meta.signed -ne 'test' -or -not $meta.gitCommit) {
+            throw "$name must be a clean, normal, test-signed package."
+        }
+        # The frozen binary stays valid only while its driver source is unchanged.
+        & git -C $workspace diff --quiet $meta.gitCommit $head -- drivers/audiorouter-virtual tools/m03-inf-gen
+        if ($LASTEXITCODE -ne 0) { throw "$name was built from $($meta.gitCommit); the driver source changed since then." }
+        Copy-Item -LiteralPath $from -Destination (Join-Path $Share $name) -Recurse
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tests\acceptance\m03-driver-package.ps1') `
+            -Package (Join-Path $Share $name)
+        if ($LASTEXITCODE -ne 0) { throw "Package verification failed for $name ($LASTEXITCODE)." }
+        if ($name -eq 'driver') { $Version = $meta.version } else { $NextVersion = $meta.version }
+    }
+    Step '2/6 Packages copied byte for byte and verified'
+} else {
 Step "1/6 Test-signed driver package (version $Version)"
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $driverRoot 'build.ps1') `
     -Configuration Release -Platform x64 -Version $Version -TestSign -KeepOutput -Output (Join-Path $Share 'driver')
@@ -65,7 +100,8 @@ Step '2/6 Package integrity checks'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tests\acceptance\m03-driver-package.ps1') `
     -Package (Join-Path $Share 'driver')
 if ($LASTEXITCODE -ne 0) { throw "Package verification failed ($LASTEXITCODE)." }
-if ($NextVersion) {
+}
+if ($NextVersion -and -not $ReuseDriverShare) {
     Write-Host "Same source as version $NextVersion (A13 upgrade/repair)"
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $driverRoot 'build.ps1') `
         -Configuration Release -Platform x64 -Version $NextVersion -TestSign -KeepOutput -Output (Join-Path $Share 'driver-next')

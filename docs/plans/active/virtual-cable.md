@@ -257,6 +257,35 @@ fuzz (A10, A11); session 5 second user (A11); A8 one-hour pool; A12
 Discord/OBS; A15 30-min eight-route run; A16 quality matrix with a VB-Cable
 latency comparison. Open user-mode item: the rename design (spec decision).
 
+**Decision (user, 2026-10-12): rename option (b), names are AudioRouter
+labels.** Recommended over rewriting the INF `MediaCategories` names
+(option a) because (a) changes the `DeviceDesc` the helper identifies
+cables by, needs a UAC prompt plus a device restart per rename, relies on
+undocumented refresh behaviour, and is reset by every driver update.
+Implemented (user mode only; driver and RC3 packages unchanged):
+- Helper: the Windows name write (`set_endpoint_description`) and every
+  `apply_names` call are removed; `configure --name` stores the label only,
+  with no restart; `status` reports `cableNames`; unused `context`
+  parameters dropped. Tests: configure keeps Windows names and stores the
+  label; a simulated Windows Sound-settings rename still classifies the
+  cable; `status` reports labels. 28 helper tests, Clippy (workspace crate
+  and `src-tauri`), rustfmt clean.
+- UI: the Setup cable list gets a fixed note (labels only; how to rename
+  in Windows Sound settings). Lint 0 errors (25 existing warnings),
+  typecheck, 17 panel tests; the three-theme browser test now asserts the
+  note and saves `<theme>-cable-names.png` (checked visually in dark, light
+  and high contrast).
+- Spec 17: VCAB-02 renaming paragraph, `Cables\<n>\Name` row (not used),
+  §5.5 names decision, §6 `configure`, §7.4 Setup panel, §8 VDEV-01 row.
+- `vm-checks.ps1 rename`: label stored (status `cableNames`), Windows names
+  and IDs unchanged.
+- `prepare-vm-share.ps1 -ReuseDriverShare` copies frozen packages byte for
+  byte (clean tree; refuses a package whose driver source differs from
+  HEAD), so remaining Stage A sessions use RC3's exact binaries with the
+  current helper.
+VM still to show: `rename` passes, and a cable renamed in Windows Sound
+settings is still found by the helper (`status`) and AudioRouter.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each

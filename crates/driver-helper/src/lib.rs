@@ -831,14 +831,6 @@ pub fn classify_endpoint_properties(
     classify_endpoint_name(device_description).or_else(|| classify_endpoint_name(friendly))
 }
 
-/// The display name a configured cable name produces (VCAB-02).
-pub fn description_for(name: &str, direction: Direction) -> String {
-    match direction {
-        Direction::Input => format!("AudioRouter {name} Input"),
-        Direction::Output => format!("AudioRouter {name} Output"),
-    }
-}
-
 /// Windows-side operations. Each returns a [`Failure`] carrying the HRESULT
 /// when Windows refuses; implementations never touch other drivers.
 pub trait Platform {
@@ -883,11 +875,6 @@ pub trait Platform {
     fn default_endpoints(&mut self) -> Vec<(String, String)>;
     /// Present AudioRouter endpoints.
     fn cable_endpoints(&mut self) -> Vec<CableEndpoint>;
-    fn set_endpoint_description(
-        &mut self,
-        endpoint_id: &str,
-        description: &str,
-    ) -> Result<(), Failure>;
     /// Bridge QUERY: (protocol major, minor, capabilities, enabled cables).
     fn query_driver(&mut self) -> Option<(u16, u16, u32, u32, u32)>;
     fn sleep_ms(&mut self, ms: u64);
@@ -918,7 +905,7 @@ pub fn run(request: &Request, platform: &mut dyn Platform, context: &Context) ->
         Request::Install { package } => install(package, platform, context),
         Request::Update { package } => update(package, platform, context),
         Request::Repair { package } => repair(package, platform, context),
-        Request::SetCables { count } => set_cables(*count, platform, context),
+        Request::SetCables { count } => set_cables(*count, platform),
         Request::Configure { names, params } => configure(names, params, platform, context),
         Request::Remove => remove(platform, context),
     };
@@ -1035,23 +1022,6 @@ fn changed_defaults(before: &[(String, String)], after: &[(String, String)]) -> 
     changed
 }
 
-/// Apply configured names as endpoint descriptions (17 §5.5 decision).
-fn apply_names(
-    platform: &mut dyn Platform,
-    names: &BTreeMap<u8, String>,
-    endpoints: &[CableEndpoint],
-) -> Result<(), Failure> {
-    for endpoint in endpoints {
-        if let Some(name) = names.get(&endpoint.cable) {
-            platform.set_endpoint_description(
-                &endpoint.endpoint_id,
-                &description_for(name, endpoint.direction),
-            )?;
-        }
-    }
-    Ok(())
-}
-
 fn endpoints_json(endpoints: &[CableEndpoint]) -> serde_json::Value {
     serde_json::to_value(endpoints).unwrap_or_default()
 }
@@ -1130,6 +1100,9 @@ pub fn status(platform: &mut dyn Platform, context: &Context) -> Result<Outcome,
             "defaultPeriodFrames": report.default_period_frames,
             "protocol": report.protocol,
             "capabilities": report.capabilities,
+            // AudioRouter's labels by cable index (17 §5.5); Windows names
+            // stay the driver's.
+            "cableNames": report.cable_names,
             "endpoints": endpoints_json(&report.endpoints),
         }),
     ))
@@ -1257,7 +1230,6 @@ pub fn install(
     }
     let count = configured_count(platform, &device);
     let endpoints = wait_for_cables(platform, count)?;
-    apply_names(platform, &state.cable_names, &endpoints)?;
     let defaults_after = platform.default_endpoints();
     Ok(success(
         "install",
@@ -1331,7 +1303,6 @@ fn apply_to_existing(
     }
     let count = configured_count(platform, &device);
     let endpoints = wait_for_cables(platform, count)?;
-    apply_names(platform, &state.cable_names, &endpoints)?;
     let defaults_after = platform.default_endpoints();
     Ok(success(
         command,
@@ -1411,7 +1382,6 @@ fn restart_and_wait(
     device: &str,
     count: u8,
     platform: &mut dyn Platform,
-    context: &Context,
     extra: serde_json::Value,
 ) -> Result<Outcome, Failure> {
     if platform.restart_device(device)? {
@@ -1420,23 +1390,13 @@ fn restart_and_wait(
         return Ok(success(command, true, fields));
     }
     let endpoints = wait_for_cables(platform, count)?;
-    let names = context
-        .state
-        .load()?
-        .map(|s| s.cable_names)
-        .unwrap_or_default();
-    apply_names(platform, &names, &endpoints)?;
     let mut fields = extra;
     fields["cableCount"] = count.into();
     fields["endpoints"] = endpoints_json(&endpoints);
     Ok(success(command, false, fields))
 }
 
-pub fn set_cables(
-    count: u8,
-    platform: &mut dyn Platform,
-    context: &Context,
-) -> Result<Outcome, Failure> {
+pub fn set_cables(count: u8, platform: &mut dyn Platform) -> Result<Outcome, Failure> {
     let device = require_device(platform)?;
     let previous = configured_count(platform, &device);
     platform.write_device_dword(&device, "CableCount", u32::from(count))?;
@@ -1445,7 +1405,6 @@ pub fn set_cables(
         &device,
         count,
         platform,
-        context,
         serde_json::json!({ "previousCableCount": previous }),
     )
 }
@@ -1497,9 +1456,8 @@ pub fn configure(
     }
     let count = configured_count(platform, &device);
     if params.is_empty() {
-        // Names only: no restart needed, apply to present endpoints now.
-        let endpoints = wait_for_cables(platform, count)?;
-        apply_names(platform, names, &endpoints)?;
+        // Names only: a name is AudioRouter's label for the cable (17 §5.5);
+        // Windows names stay the driver's, so nothing restarts or changes.
         return Ok(success(
             "configure",
             false,
@@ -1517,7 +1475,6 @@ pub fn configure(
         &device,
         count,
         platform,
-        context,
         serde_json::json!({ "parameters": written }),
     )
 }

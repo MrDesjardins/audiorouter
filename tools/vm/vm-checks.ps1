@@ -18,7 +18,8 @@
     tone-stall    bridge tone tool with a deliberate stall (counters must rise)
     tone-8ch      8-channel 96 kHz lease
     cables        2 -> 8 -> 2 cables; Cable A/B endpoint IDs must not change (A15 count)
-    rename        rename cable B; its endpoint IDs must not change
+    rename        label cable B "Discord" for AudioRouter; Windows names and
+                  endpoint IDs must not change (17 §5.5)
     update        A13: mark Cable B Output with a 96 kHz device format, then helper
                   update to driver-next\ (version N+1); restart if it says so
     update-verify A13 after update (and restart): same device instance, N+1
@@ -298,11 +299,15 @@ try {
         }
         'rename' {
             $before = Get-CableIds (Invoke-Inventory 2 'inventory-before-rename') @('B')
+            # 17 §5.5 (decision 2026-10-12): a name is AudioRouter's label; the
+            # Windows names stay the driver's (users rename those in Sound settings).
             $r = Invoke-Helper @('configure', '--name', '2=Discord') 'configure-rename'
             Check 'configure --name 2=Discord' ($r.Code -eq 0) "exit $($r.Code) $($r.Json.error)"
+            $status = Invoke-Helper @('status') 'helper-status-after-rename'
+            Check 'Label stored for AudioRouter (status cableNames)' ($status.Json.cableNames.'1' -eq 'Discord') "$($status.Json.cableNames | ConvertTo-Json -Compress)"
             $inventory = Invoke-Inventory 2 'inventory-after-rename'
             $names = @($inventory.Json.endpoints | ForEach-Object { $_.name })
-            Check 'New name visible' (@($names | Where-Object { $_ -like '*Discord*' }).Count -eq 2) ($names -join '; ')
+            Check 'Windows names unchanged' (@($names | Where-Object { $_ -like '*Discord*' }).Count -eq 0 -and $inventory.Code -eq 0) ($names -join '; ')
             $after = Get-CableIds $inventory @('B')
             Check 'Cable B endpoint IDs unchanged by the rename' ($before.Count -eq 2 -and $before['B Input'] -eq $after['B Input'] -and $before['B Output'] -eq $after['B Output'])
         }

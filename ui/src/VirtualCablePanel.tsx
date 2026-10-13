@@ -357,6 +357,11 @@ export function VirtualCablePanel({
                 </li>
               ))}
             </ul>
+            <small className="virtual-cable-name-note">
+              These names are AudioRouter&apos;s labels. Other apps keep seeing &quot;AudioRouter Cable A Input&quot;
+              and so on; to rename a cable there, use Windows Sound settings → Playback or Recording → the cable →
+              Properties.
+            </small>
           </div>
         )}
       </div>

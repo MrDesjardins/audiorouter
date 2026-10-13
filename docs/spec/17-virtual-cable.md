@@ -62,6 +62,14 @@ passes audio when AudioRouter is not running.
   | Cable B playback | `AudioRouter Cable B Input` | Virtual Render Source, `busId = "cable-b"` | Music or second app |
   | Cable B recording | `AudioRouter Cable B Output` | Virtual Capture Sink, `busId = "cable-b"` | Discord microphone |
 
+  **Renaming (user decision 2026-10-12).** A name the user gives a cable in
+  AudioRouter is AudioRouter's label (sessions, Setup, canvas); the Windows
+  names above stay fixed. Windows refuses third-party writes of an
+  endpoint's name even from an elevated process (VM, RC2), so users who
+  want another name in other apps rename the endpoint in Windows Sound
+  settings, as Setup explains. AudioRouter must keep identifying the cable
+  after such a rename.
+
   Device description: `AudioRouter Virtual Cable`. Provider and manufacturer:
   `AudioRouter Project`. These replace the prototype names
   `AudioRouter - Desktop In` / `AudioRouter - Voice Chat`.
@@ -518,7 +526,7 @@ takes effect when the helper restarts the device (about 1 s pause).
 | Value | Type | Range | Default | Purpose |
 | --- | --- | --- | --- | --- |
 | `CableCount` | DWORD | 1–8 | 2 | Enabled cables (VCAB-01) |
-| `Cables\<n>\Name` | REG_SZ, ≤ 48 chars | printable, no control chars | `Cable A` … `Cable H` | Display name; the driver sets the endpoint names `AudioRouter <Name> Input` / `Output` (VCAB-02) |
+| `Cables\<n>\Name` | REG_SZ, ≤ 48 chars | printable, no control chars | `Cable A` … `Cable H` | Not used: the driver does not read it (Names decision below); AudioRouter's labels live in the helper state (VCAB-02) |
 | `MinPeriodFrames` | DWORD | 64–480 | 128 | Smallest shared-mode period offered |
 | `DefaultPeriodFrames` | DWORD | 128–960 | 480 | Default period |
 | `MaxLeaseMs` | DWORD | 500–60 000 | 60 000 | Upper bound for lease requests |
@@ -558,13 +566,14 @@ takes effect when the helper restarts the device (about 1 s pause).
   cable from that stable description, with a composed-name fallback for older
   test packages, and counts only active endpoints whose actual data flow
   matches the cable direction.
-  Custom user names are written by the
-  elevated helper as the endpoint's `PKEY_Device_FriendlyName`, preserving
-  the driver-provided `PKEY_Device_DeviceDesc` category identity and endpoint
-  ID; for example
-  `AudioRouter Discord Output (AudioRouter Virtual Cable)`. The driver
-  interface names remain stable across user renames and driver updates. The
-  root PnP device description is `AudioRouter Virtual Cable`.
+  Custom user names are AudioRouter labels only (user decision 2026-10-12,
+  VCAB-02): `configure --name` stores them in the helper state, `status`
+  reports them as `cableNames`, and the backend shows them. The helper never
+  writes Windows endpoint names: the endpoint store refused
+  `PKEY_Device_FriendlyName` writes even elevated, and an earlier attempt
+  crashed the helper (RC 0.2.0/0.2.2 Stage A). The driver interface names
+  remain stable across user renames and driver updates. The root PnP device
+  description is `AudioRouter Virtual Cable`.
 - **Observed VM defect (2026-10-08):** the first category-based package
   created four healthy endpoints and correctly named both capture endpoints,
   but Windows still returned `Speakers (AudioRouter Virtual Cable)` for both
@@ -609,7 +618,7 @@ through a pipe by its non-elevated parent when started with `runas`):
 | `update --package <dir>` | Same as install when the device exists: newer `DriverVer` is applied with `UpdateDriverForPlugAndPlayDevicesW`; the device instance stays. Windows assigns new endpoint IDs and migrates their settings (VCAB-05), so report the new IDs per cable. Report if Windows requires a restart. |
 | `repair --package <dir>` | Reinstall the same version; recreate the device if missing. |
 | `set-cables --count <1-8>` | Write `CableCount` to the device's hardware key, then restart the device (`SetupDiCallClassInstaller(DIF_PROPERTYCHANGE)` with `DICS_PROPCHANGE`); wait (bounded, 30 s) until exactly the first N cables' endpoints are present. Reports a pending restart if Windows cannot restart the device while it is in use. |
-| `configure --name <n>=<text> --param <Value>=<n>` | Write cable names and §5.5 parameters (validated against the same ranges), then restart the device like `set-cables`. |
+| `configure --name <n>=<text> --param <Value>=<n>` | Store cable labels (AudioRouter only, §5.5; no device restart and no Windows change for names) and write §5.5 parameters (validated against the same ranges), then restart the device like `set-cables` when a parameter changed. |
 | `remove` | Remove the `ROOT\AudioRouterVirtual` device (`DiUninstallDevice`), then the package (`DiUninstallDriverW` / `pnputil` equivalent) for **this** package only (exact `oem*.inf` from state). Never touches other drivers. |
 
 Rules:
@@ -732,8 +741,10 @@ notifications that the backend already watches.
 - **Setup → Virtual cables panel**: status pill (reserved width, UI-17),
   driver version, a **Number of cables** select (1–8; changing it shows the
   UAC note, and lowering it lists affected sessions first), an editable
-  **name per cable** (applied with one UAC prompt and a short device
-  restart), each endpoint's current format (rate, channels, sample type)
+  **name per cable** (AudioRouter's label, applied with one UAC prompt and
+  no device restart; a fixed note under the list says the Windows name stays
+  `AudioRouter Cable X …` and gives the Sound settings path to rename it
+  there), each endpoint's current format (rate, channels, sample type)
   with a hint when it is not 48 kHz float, live counters (underruns,
   overruns) in reserved slots, buttons Install / Update /
   Repair / Remove (only the valid ones enabled, others disabled, no layout
@@ -776,7 +787,7 @@ notifications that the backend already watches.
 
 | Requirement | 06 says | First release | Reason |
 | --- | --- | --- | --- |
-| VDEV-01 | Create/rename/delete up to 8 named buses | Up to 8 cables, enabled as "first N" (1–8); renaming changes only AudioRouter's label, not the Windows name | One root device with static endpoints is far simpler and safer than dynamic per-bus devices; free deletion of a middle cable would need per-bus devices (Software Device seam, `crates/windows-audio/src/software_device.rs`) |
+| VDEV-01 | Create/rename/delete up to 8 named buses | Up to 8 cables, enabled as "first N" (1–8); renaming changes only AudioRouter's label, not the Windows name (accepted by the user 2026-10-12; Windows names change only through Sound settings) | One root device with static endpoints is far simpler and safer than dynamic per-bus devices; free deletion of a middle cable would need per-bus devices (Software Device seam, `crates/windows-audio/src/software_device.rs`) |
 | VDEV-10 | Delete a bus | Lower the count (removes the highest cables) or remove the whole package | Follows from "first N" |
 | VDEV-03 | Endpoint identities survive normal upgrades | Driver updates change endpoint IDs; settings migrate and the user is told to reselect in other apps (accepted by the user 2026-10-12) | Windows assigns new endpoint IDs on every driver update (VM r33, Microsoft documentation); no driver-side alternative exists |
 

@@ -151,6 +151,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       .screenshot({
         path: testInfo.outputPath(`${theme}-cable-format-hint.png`),
       });
+    // 17 §5.5: names are AudioRouter labels; the note says how to rename in Windows.
+    const nameNote = panel.locator(".virtual-cable-name-note");
+    await expect(nameNote).toContainText("These names are AudioRouter's labels.");
+    await nameNote.scrollIntoViewIfNeeded();
+    await nameNote.locator("..").screenshot({ path: testInfo.outputPath(`${theme}-cable-names.png`) });
 
     // Content below the panel and the pill's size must not move while the
     // status changes state (same cables) and a route starts, counts and fails.

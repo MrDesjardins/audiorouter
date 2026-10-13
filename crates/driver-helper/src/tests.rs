@@ -228,15 +228,6 @@ impl Platform for Fake {
         }
         result
     }
-    fn set_endpoint_description(
-        &mut self,
-        endpoint_id: &str,
-        description: &str,
-    ) -> Result<(), Failure> {
-        self.descriptions
-            .insert(endpoint_id.into(), description.into());
-        Ok(())
-    }
     fn query_driver(&mut self) -> Option<(u16, u16, u32, u32, u32)> {
         self.device
             .as_ref()
@@ -578,10 +569,6 @@ fn endpoint_names_are_recognised_through_renames() {
     ] {
         assert_eq!(classify_endpoint_name(other), None, "{other}");
     }
-    assert_eq!(
-        description_for("Discord", Direction::Input),
-        "AudioRouter Discord Input"
-    );
 }
 
 #[test]
@@ -985,16 +972,44 @@ fn configure_writes_parameters_and_names_without_new_endpoint_ids() {
             .collect::<Vec<_>>(),
         ids_before
     );
+    // 17 §5.5: the name is AudioRouter's label only. It is stored for the
+    // backend, and the Windows endpoint name stays the driver's.
+    assert_eq!(
+        env.context
+            .state
+            .load()
+            .unwrap()
+            .unwrap()
+            .cable_names
+            .get(&1)
+            .map(String::as_str),
+        Some("Discord")
+    );
+    assert!(fake.descriptions.is_empty());
     let cable_b_input = endpoints
         .iter()
         .find(|e| e.cable == 1 && e.direction == Direction::Input)
         .unwrap();
     assert_eq!(
-        cable_b_input.friendly_name,
-        "AudioRouter Discord Input (AudioRouter Cable B Input)"
+        classify_endpoint_name(&cable_b_input.friendly_name),
+        Some((1, Direction::Input))
+    );
+
+    // A user may rename the endpoint in Windows Sound settings; the helper
+    // still finds the cable through the driver's interface name.
+    fake.descriptions
+        .insert(cable_b_input.endpoint_id.clone(), "Voice chat".into());
+    let renamed = fake
+        .cable_endpoints()
+        .into_iter()
+        .find(|e| e.cable == 1 && e.direction == Direction::Input)
+        .unwrap();
+    assert_eq!(
+        renamed.friendly_name,
+        "Voice chat (AudioRouter Cable B Input)"
     );
     assert_eq!(
-        classify_endpoint_name(&cable_b_input.friendly_name),
+        classify_endpoint_name(&renamed.friendly_name),
         Some((1, Direction::Input))
     );
 
@@ -1061,6 +1076,20 @@ fn status_reports_install_state_and_endpoints() {
     assert_eq!(outcome.json["state"], "installed");
     assert_eq!(outcome.json["protocol"], "1.1");
     assert_eq!(outcome.json["installedDriverVersion"], "0.1.0.0");
+    assert_eq!(outcome.json["cableNames"], serde_json::json!({}));
+    run(
+        &Request::Configure {
+            names: BTreeMap::from([(1_u8, "Discord".to_owned())]),
+            params: BTreeMap::new(),
+        },
+        &mut fake,
+        &env.context,
+    );
+    let outcome = run(&Request::Status, &mut fake, &env.context);
+    assert_eq!(
+        outcome.json["cableNames"],
+        serde_json::json!({ "1": "Discord" })
+    );
 }
 
 #[test]
