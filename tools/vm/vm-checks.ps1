@@ -245,8 +245,12 @@ try {
                 Check 'Four endpoints reported' (@($r.Json.endpoints).Count -eq 4) (@($r.Json.endpoints | ForEach-Object { $_.friendlyName }) -join '; ')
             }
             if ($r.Json.defaultsChanged) { Write-Host "Note: Windows changed default devices: $($r.Json.defaultsChanged -join ', ') (recorded, see 17 §9.4)" -ForegroundColor Yellow }
-            $again = Invoke-Helper @('install', '--package', $package) 'helper-install-again'
-            Check 'Second install is a no-op (idempotent)' ($again.Code -eq 0 -and $again.Json.alreadyInstalled) "exit $($again.Code)"
+            # Until the restart completes the driver version is not live, so a
+            # second install cannot report alreadyInstalled; check it only after exit 0.
+            if ($r.Code -eq 0) {
+                $again = Invoke-Helper @('install', '--package', $package) 'helper-install-again'
+                Check 'Second install is a no-op (idempotent)' ($again.Code -eq 0 -and $again.Json.alreadyInstalled) "exit $($again.Code)"
+            }
         }
         'status' {
             $r = Invoke-Helper @('status') 'helper-status'
