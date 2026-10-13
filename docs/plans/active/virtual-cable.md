@@ -131,6 +131,84 @@ parses. `cargo fmt --check` is clean. Not run: the tool against a real
 endpoint, and the bundle preparer itself. No AudioRouter endpoint exists on
 the host, and the driver must not be installed there.
 
+Bundle r31 built (2026-10-12, host, clean tree at `47cd09cf`): driver
+`target\r31-driver-47cd09cf` (0.1.4.0, test-signed, timing diagnostics,
+`dirty: false`; build exit 0), then
+`C:\VMs\ar-share\diagnostics-20261012-eight-channel-r31`, MANIFEST.txt SHA-256
+`E150948909E72E1297C999976614C6E68339C4361E376AC5C1CCDA53A48E4CDA`. The
+bundled `tools\m03_cable_format.exe` has no VCRUNTIME140.dll import; on the
+host `show` exits 1 with "no active AudioRouter endpoint", as expected. Step 1
+below is done; step 2 (guest) is next.
+
+Guest result so far (2026-10-12, non-elevated shell, `set --channels 8`):
+both endpoints accept 48 kHz/8 ch float32 in an exclusive `IsFormatSupported`
+check (S_OK) and `SetDeviceFormat` returns S_OK without elevation; the stored
+device format becomes 8 ch, mask 0x63F. But the shared mix format re-read
+500 ms later stays 2 ch, mask 0x3, on both the render and capture endpoint
+(tool exit FAIL). `PKEY_AudioEndpoint_PhysicalSpeakers` is not set. Next
+diagnostic: re-read after a delay and after an `audiosrv` restart, before any
+code or driver change.
+
+Follow-up (2026-10-12): a later `show` and a full guest restart (elevated
+shell confirmed; `Restart-Service audiosrv` was refused) leave every cable's
+mix format at 48 kHz, 2 ch, mask 0x3. Decisive: Cable A Output's stored
+device format is 44.1 kHz, 1 ch (set earlier, presumably in Sound settings),
+yet its mix format is also 48 kHz stereo. Windows ignores the stored device
+format on these endpoints entirely, so the Sound settings Default Format is
+ineffective too. Probable cause (code inspection, unproven): the cable wave
+filters implement `KSPROPERTY_PIN_PROPOSEDATAFORMAT2` (GET), inherited from
+SYSVAD, which returns the per-mode default `CableSupportedModes` =
+`CableSupportedFormats[19]` (48 kHz float stereo); the engine takes the
+driver's proposed default for the mode over the stored format. A fix is a
+driver change and needs the user's decision: drop the GET handler on the
+cable filters (with an INF OEM default of 48 kHz float stereo), or make it
+return the stored or helper-chosen format.
+
+Guest restored (2026-10-12): `set --channels 2` returns S_OK and PASS on
+Cable A Input and Cable B Output; both device formats are back to 48 kHz,
+2 ch, mask 0x3. Cable A Output (44.1 kHz, 1 ch, pre-existing) was left as
+found. Outputs: `Z:\diagnostics-20261012-eight-channel-r31\*.txt`. The
+8-channel bit-exact run was not attempted (the mix format never reached 8 ch).
+
+**Decision (user, 2026-10-12): option 1, drop the proposed default.** The
+user was told this is necessary but not sufficient for 8-channel cables:
+render endpoints still have no Windows speaker setup (line-level connector),
+so 8 channels are set by the app through `IPolicyConfig` (works without
+elevation), which needs a spec 17 §8 / VCAB-11 update once proven; games
+may also need `PKEY_AudioEndpoint_PhysicalSpeakers` (untested); the app
+control and CAP-14 on AudioRouter cables are not authorized yet; VCAB-01
+(eight cables) is unaffected.
+
+**Repair r32 (driver 0.1.7).** 0.1.5/0.1.6 were the reverted r28/r29
+packages, so this source takes 0.1.7 to keep package identities distinct.
+- `Source/Filters/cablewavtable.h`: the cable wave filters no longer list
+  `KSPROPERTY_PIN_PROPOSEDATAFORMAT2`; `PROPOSEDATAFORMAT` (SET, format
+  support) stays. Speaker/mic SYSVAD tables are untouched.
+- `tools/m03-inf-gen/generate.ps1` and the regenerated INX: every cable
+  endpoint section (8 cables × render/capture × wave/topology) writes
+  `PKEY_AudioEngine_OEMFormat` = 48 kHz IEEE float stereo
+  WAVEFORMATEXTENSIBLE (40 bytes; key `{E4870E26-…ED04},3`, checked against
+  the 10.0.28000.0 `mmdeviceapi.h`). It only seeds an endpoint without a
+  stored format; existing endpoints keep theirs.
+- `tests/acceptance/m03-inf-gen.ps1` asserts the key identity and the exact
+  line in all 32 sections.
+
+Host (2026-10-12): `m03-inf-gen.ps1` passes; driver unit tests 88,167 checks
+pass; `m03-driver-build.ps1` (x64 compile, signability, catalog) passes. Not
+host-testable: whether Windows then honours the stored format.
+
+VM procedure (guest, elevated, from the r32 bundle):
+1. `vm-checks.ps1 -Step install` (upgrade 0.1.4 → 0.1.7, exit 5 = restart
+   required), restart, `-Step status` (expect `driver=0.1.7.0`, PASS).
+2. `m03_cable_format show`. Decisive check: Cable A Output's stored
+   44.1 kHz/1 ch should now be its mix format. If every mix format is
+   still 48 kHz stereo, the hypothesis is wrong: stop, roll back.
+3. `set --channels 8` must PASS; then `run-cable-bitexact.ps1 -Channels 8`.
+4. Note Sound settings → Advanced lists (render and capture).
+5. Restore `set --channels 2`, and Cable A Output to 48 kHz stereo.
+Rollback: `-Step remove`, then `-Step install` from the r31 bundle (0.1.4,
+same source as r20), restart.
+
 **Resume on Windows (next action):**
 
 1. Host, in the repo, after `git pull` on a clean tree: build the bundle the

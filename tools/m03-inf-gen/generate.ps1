@@ -33,6 +33,8 @@ foreach ($cable in $cableData.cables) {
     }
 }
 
+$oemFormat = 'FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,' +
+    '03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71'
 $inf = Get-Content -LiteralPath $InputInf -Raw
 $header = Get-Content -LiteralPath $topologyHeader -Raw
 $interfaceLines = [System.Collections.Generic.List[string]]::new()
@@ -92,6 +94,10 @@ foreach ($cable in $cableData.cables) {
                 $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%')
             }
             $registrySections.Add('HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1')
+            # Default device format (VCAB-11): 48 kHz IEEE float stereo,
+            # WAVEFORMATEXTENSIBLE. The wave filters propose no default, so
+            # this is what a new endpoint starts with and users can change it.
+            $registrySections.Add("HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,$oemFormat")
             $stringLines.Add("KSNAME_$name=`"$name`"")
             $stringLines.Add("$nameString=`"$friendly`"")
         }

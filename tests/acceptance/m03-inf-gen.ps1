@@ -33,9 +33,12 @@ foreach ($expected in @(
 }
 $invalid = Join-Path $output 'invalid-cables.json'
 if (-not $generated.Contains('KSNODETYPE_ANALOG_CONNECTOR = "{DFF21FE1-F70F-11D0-B917-00A0C9223196}"') -or
-    -not $generated.Contains('PKEY_AudioDevice_EnableEndpointByDefault    = "{F3E80BEF-1723-4FF2-BCC4-7F83DC5E46D4},4"')) {
-    throw 'Render category and endpoint enable property must match the Windows SDK identities.'
+    -not $generated.Contains('PKEY_AudioDevice_EnableEndpointByDefault    = "{F3E80BEF-1723-4FF2-BCC4-7F83DC5E46D4},4"') -or
+    -not $generated.Contains('PKEY_AudioEngine_OEMFormat                  = "{E4870E26-3CC5-4CD2-BA46-CA0A9A70ED04},3"')) {
+    throw 'Render category, endpoint enable and OEM format properties must match the Windows SDK identities.'
 }
+# 48 kHz IEEE float stereo WAVEFORMATEXTENSIBLE (40 bytes), VCAB-11 default.
+$oemFormatLine = 'HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71'
 foreach ($letter in 'A','B','C','D','E','F','G','H') {
     foreach ($role in 'Render','Capture') {
         foreach ($filter in 'Wave','Topology') {
@@ -44,6 +47,9 @@ foreach ($letter in 'A','B','C','D','E','F','G','H') {
             $match = [regex]::Match($generated, $pattern)
             if (-not $match.Success) { throw "Missing endpoint registry section: $section" }
             $body = $match.Groups['body'].Value
+            if (-not $body.Contains($oemFormatLine)) {
+                throw "Endpoint must default to 48 kHz float stereo through the OEM format: $section"
+            }
             if ($role -eq 'Render') {
                 if (-not $body.Contains('HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANALOG_CONNECTOR%') -or
                     -not $body.Contains('HKR,EP\0,%PKEY_AudioDevice_EnableEndpointByDefault%,0x00010001,0x00000101')) {

@@ -141,11 +141,14 @@ static PCCONNECTION_DESCRIPTOR CableRenderConnections[] = {
 static PCCONNECTION_DESCRIPTOR CableCaptureConnections[] = {
     { PCFILTER_NODE, KSPIN_WAVE_BRIDGE, PCFILTER_NODE, KSPIN_WAVEIN_HOST }
 };
+// No KSPROPERTY_PIN_PROPOSEDATAFORMAT2: when a driver proposes a per-mode
+// default, Windows uses it as the shared mix format and ignores the stored
+// device format, so neither Sound settings nor IPolicyConfig could change a
+// cable's rate or channel count (VM, 2026-10-12). The stereo default comes
+// from PKEY_AudioEngine_OEMFormat in the INF instead.
 static PCPROPERTY_ITEM CableWaveProperties[] = {
     { &KSPROPSETID_Pin, KSPROPERTY_PIN_PROPOSEDATAFORMAT,
-      KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_BASICSUPPORT, PropertyHandler_WaveFilter },
-    { &KSPROPSETID_Pin, KSPROPERTY_PIN_PROPOSEDATAFORMAT2,
-      KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT, PropertyHandler_WaveFilter }
+      KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_BASICSUPPORT, PropertyHandler_WaveFilter }
 };
 DEFINE_PCAUTOMATION_TABLE_PROP(AutomationCableWaveFilter, CableWaveProperties);
 
