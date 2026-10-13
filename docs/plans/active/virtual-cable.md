@@ -185,6 +185,19 @@ Host: helper 28 tests, Clippy `-D warnings`, rustfmt clean;
 (A13: 0.2.3), Stage A run again from the checkpoint; it must show 48 kHz
 stereo on all four endpoints after `install` and `rename` passing.
 
+**RC2 0.2.2 frozen (2026-10-12).** Source `6fc8e669` (clean). Share
+`C:\VMs\ar-share\rc-0.2.2` (base `rc-0.2.2-base`); both packages: 33
+package checks, `timingDiagnostics: false`, test-signed; the packaged INF
+has 16 capture associations to `CableXCapturePinCategory`. Helper SHA-256
+`93EF5E7105CFF1551BBF81AB73994B838035EEE01A4A8BBEC68BBBEEE56D444D`.
+
+| Package | SYS SHA-256 | CAT SHA-256 | INF SHA-256 |
+| --- | --- | --- | --- |
+| `driver` 0.2.2.0 | `3B2BE1E6DCCF5005FDFB23B9DC42F479F68C980243FF3867CAD0CBC567E7004B` | `4FF0EE5721D838877CA5B662975A69AA434C9381DDBDF0BA105CF3DBEACA91CD` | `D9C06F7ED3E3BE53B2A0A2474EFCA6B391E0102F655ED82B06A5EEE202B5786C` |
+| `driver-next` 0.2.3.0 | `721E99BD608B093C158F677A65CC88F1FF4290558FE06B8DBDD71DB53E8FA09A` | `C6A4DAAF08ED0A6ACCDB7EED7C90870295C4696E872E92439E129004BA09FF56` | `4877E64A103CC5A75122D36B438A90F8C76A01A5E473DC8A972DEF1DE97E294E` |
+
+MANIFEST SHA-256 `1BE8E244DC6CFEBCD74E94B9BA316EC15F73ADA20E9BA38FE69B40B4051E8F94`.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
