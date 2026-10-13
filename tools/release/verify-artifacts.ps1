@@ -108,6 +108,12 @@ if ($names.Count -eq 0) {
 if (-not $names.Contains("THIRD-PARTY-NOTICES.txt")) {
     throw "release manifest does not include THIRD-PARTY-NOTICES.txt"
 }
+$includesDriver = $true
+if ($manifest.PSObject.Properties.Name -contains "includesDriver") {
+    if ($manifest.includesDriver -isnot [bool]) { throw "includesDriver must be a boolean" }
+    $includesDriver = $manifest.includesDriver
+}
+$driverArtifacts = @("audioroutervirtual.inf", "audioroutervirtual.sys", "audioroutervirtual.cat", "LICENSE-MS-PL.txt")
 $requiredArtifacts = @(
     "AudioRouter_$($manifest.version)_x64-setup.exe",
     "sbom.cargo.json",
@@ -116,13 +122,19 @@ $requiredArtifacts = @(
     "com.mrdesjardins.audiorouter.streamDeckPlugin",
     "sbom.streamdeck.package-lock.json",
     "sbom.streamdeck.json",
-    "audioroutervirtual.inf",
-    "audioroutervirtual.sys",
-    "audioroutervirtual.cat",
-    "LICENSE-MS-PL.txt",
     "THIRD-PARTY-NOTICES.txt",
     "SHA256SUMS.txt"
 )
+if ($includesDriver) {
+    $requiredArtifacts += $driverArtifacts
+} else {
+    foreach ($driver in $driverArtifacts + @("audiorouter-driver-helper.exe")) {
+        if ($names.Contains($driver)) { throw "app-only release contains driver content: $driver" }
+    }
+}
+if ($manifest.PSObject.Properties.Name -contains "includesDriver") {
+    $requiredArtifacts += @("tunnel-client-runtime-LICENSE.txt", "tunnel-client-runtime-NOTICE.txt", "tunnel-client-runtime-licenses.txt", "tunnel-client-runtime.spdx.json")
+}
 foreach ($required in $requiredArtifacts) {
     if (-not $names.Contains($required)) {
         throw "release manifest is missing required artifact: $required"

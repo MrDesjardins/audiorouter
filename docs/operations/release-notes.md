@@ -1,5 +1,35 @@
 # AudioRouter release notes
 
+## 0.0.16 — 2026-10-12 (unsigned experimental preview)
+
+- **ChatGPT connection:** clearer MCP setup, managed optional OpenAI Secure
+  MCP Tunnel, protected saved credentials and matching installed CLI. Fixed
+  initialization compatibility, oversized idempotency keys and orphaned
+  tunnel processes. Actual session listing and route creation are documented
+  with owner-supplied screenshots. Start with read-only access; grant Editor
+  explicitly for session/graph edits.
+- **Local Claude Cowork:** export a configured plugin ZIP from the MCP tab,
+  then upload it in local Cowork → Customize → Plugins. The export checks the
+  real local MCP connection and uses a separate Observer client. Existing
+  grants are preserved. Plugin/CLI checks pass; actual Cowork import/tool use
+  remains unverified. Cloud Cowork tasks need future remote MCP support.
+- **Cables UI preparation:** cable status, node cable selection, route shortcut,
+  management controls and format/latency guidance are present. This app-only
+  installer contains no AudioRouter driver or elevated driver helper, so
+  installation/update/repair of AudioRouter cables is unavailable in this
+  release. Existing third-party endpoints remain supported. Driver timing,
+  multichannel and signing qualification remain on their separate track.
+- The release explicitly uses app-only packaging while preserving signed
+  driver requirements for cable-enabled packages. Stream Deck and the optional
+  verified tunnel runtime are included in the installer.
+
+Windows 11 x64; app and installer unsigned. Experimental prerelease, not a
+fully M08-qualified consumer release. No database migration, driver installation
+or Windows default-device changes. Close AudioRouter before upgrading and keep
+0.0.15 plus compatible configuration/recording backups for rollback. Cowork
+deployment/policy, remote lifecycle/security, clean-machine install/upgrade,
+missing-WebView2, accessibility and hardware gates remain open.
+
 ## 0.0.15 — 2026-10-10 (unsigned experimental preview)
 
 - **Fixed: switching sessions while one was playing.** Choosing another

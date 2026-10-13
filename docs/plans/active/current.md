@@ -1,5 +1,29 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.16 — 2026-10-12, owner authorized review/commit/push/release
+
+Scope: unsigned experimental Windows x64 **app-only** prerelease, including
+ChatGPT MCP repair and local Cowork plugin export. DIST-01–08, AUTO-06/13/16,
+SEC-02/14 and UI-17. No signed driver exists; retain cable-enabled release
+signature gates and explicitly add app-only packaging rather than substitute
+a test-signed driver. Existing unrelated 0.0.15 evidence edit is preserved.
+
+Tasks: review staged code and resolve substantiated defects; commit the local
+adapter; restore explicit app-only preparation/manifest verification; bump
+only AudioRouter packages to 0.0.16 and write known-issue/rollback notes; run
+Windows regression/format/Clippy/UI/contract/release-script checks; create a
+clean tagged checkout, package verified official tunnel runtime/CLI/worker/UI
+and Stream Deck resources; qualify exact-package fresh-install with no other
+app running; push source/tag; create an unsigned experimental prerelease and
+download/verify published artifacts. User explicitly requested the release,
+so no repeated publication approval is needed. M08 full consumer/driver gates
+remain open and must be disclosed; actual Cowork attended gate remains open.
+
+Rollback: retain 0.0.15 installer and compatible configuration backups; no
+database migration, driver or default-device changes. Never replace published
+assets. Build from an isolated clean checkout to preserve shared edits.
+Next action: complete code review while preparing explicit app-only tooling.
+
 ## Local Cowork plugin — 2026-10-12, owner authorized
 
 Objective: export a ready-to-upload plugin for the owner's **local** Cowork

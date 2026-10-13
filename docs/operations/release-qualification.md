@@ -53,6 +53,14 @@ installation:
 
     npm.cmd exec --yes --package @tauri-apps/cli@2.11.4 -- tauri build --debug --no-sign --ci --bundles nsis --config src-tauri/tauri.conf.json
 
+For an explicitly app-only experimental release, use
+`prepare-artifacts.ps1 -AppOnly -OutputDirectory <new-absolute-directory> -ReleaseTag v0.0.16`.
+The separate app-only bundle config excludes the driver/helper and cable
+uninstall hook. The manifest explicitly records `includesDriver: false`;
+verification rejects driver assets in that profile. Cable-enabled preparation
+still requires the verified Microsoft-signed payload. Both profiles include
+the pinned, provenance-verified optional OpenAI tunnel runtime and notices.
+
 That smoke writes only to the native Cargo target directory and must be
 cleaned afterward; it is not production signing, installer, or clean-machine
 qualification.

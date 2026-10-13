@@ -3,16 +3,17 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
     [string]$ReleaseTag,
-    [string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE
+    [string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE,
+    [switch]$AppOnly
 )
 
 $ErrorActionPreference = "Stop"
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $output = [IO.Path]::GetFullPath($OutputDirectory)
-if ([string]::IsNullOrWhiteSpace($DriverPackage)) {
+if (-not $AppOnly -and [string]::IsNullOrWhiteSpace($DriverPackage)) {
     throw "Set AUDIOROUTER_SIGNED_DRIVER_PACKAGE to the Microsoft-signed Partner Center driver payload directory."
 }
-$driverInput = [IO.Path]::GetFullPath($DriverPackage)
+$driverInput = if ($AppOnly) { $null } else { [IO.Path]::GetFullPath($DriverPackage) }
 $driverStage = Join-Path $workspace "target/release/driver"
 $driverStageCreated = $false
 
@@ -56,6 +57,7 @@ Push-Location $workspace
 $bundleRoot = Join-Path $workspace "src-tauri/target/release/bundle/nsis"
 $cleanupNsis = $false
 try {
+    if (-not $AppOnly) {
     if (-not (Test-Path -LiteralPath $driverInput -PathType Container)) {
         throw "Microsoft-signed driver package directory is missing: $driverInput"
     }
@@ -89,6 +91,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $workspace "drivers/audiorouter-virtual/LICENSE-MS-PL.txt") -Destination (Join-Path $driverStage "LICENSE-MS-PL.txt")
     $packageJson = [ordered]@{ platform = "x64"; signed = "microsoft"; driverVersion = $versionMatch.Groups[1].Value } | ConvertTo-Json
     [IO.File]::WriteAllText((Join-Path $driverStage "package.json"), $packageJson, [Text.UTF8Encoding]::new($false))
+    }
 
     $dirty = & git status --porcelain --untracked-files=all
     if ($LASTEXITCODE -ne 0) {
@@ -105,8 +108,10 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "cargo release build failed with exit code $LASTEXITCODE"
     }
-    & cargo build --release --locked -p audiorouter-driver-helper
-    if ($LASTEXITCODE -ne 0) { throw "elevated driver helper release build failed with exit code $LASTEXITCODE" }
+    if (-not $AppOnly) {
+        & cargo build --release --locked -p audiorouter-driver-helper
+        if ($LASTEXITCODE -ne 0) { throw "elevated driver helper release build failed with exit code $LASTEXITCODE" }
+    }
     & npm.cmd run build --prefix ui
     if ($LASTEXITCODE -ne 0) {
         throw "UI build for native shell embedding failed with exit code $LASTEXITCODE"
@@ -138,7 +143,8 @@ try {
     if (-not (Test-Path -LiteralPath $tauriCli -PathType Leaf)) {
         throw "Tauri CLI is missing; install locked UI dependencies with npm ci --prefix ui: $tauriCli"
     }
-    & $tauriCli build --no-sign --ci --bundles nsis --config src-tauri/tauri.release.conf.json
+    $bundleConfig = if ($AppOnly) { "src-tauri/tauri.app-only.release.conf.json" } else { "src-tauri/tauri.release.conf.json" }
+    & $tauriCli build --no-sign --ci --bundles nsis --config $bundleConfig
     if ($LASTEXITCODE -ne 0) {
         throw "unsigned per-user NSIS bundle build failed with exit code $LASTEXITCODE"
     }
@@ -184,9 +190,11 @@ try {
     $binaries = @(
         @{ Name = "audiorouter-cli.exe"; Source = (Join-Path $workspace "target/release/audiorouter-cli.exe") }
         @{ Name = "audiorouter-plugin-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe") }
-        @{ Name = "audiorouter-driver-helper.exe"; Source = (Join-Path $workspace "target/release/audiorouter-driver-helper.exe") }
         @{ Name = "audiorouter-shell.exe"; Source = (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe") }
     )
+    if (-not $AppOnly) {
+        $binaries += @{ Name = "audiorouter-driver-helper.exe"; Source = (Join-Path $workspace "target/release/audiorouter-driver-helper.exe") }
+    }
     foreach ($binary in $binaries) {
         $source = $binary.Source
         if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
@@ -255,8 +263,10 @@ try {
     & node.exe (Join-Path $workspace "tools/release/generate-npm-sbom.mjs") (Join-Path $workspace "tools/streamdeck/package-lock.json") (Join-Path $output "sbom.streamdeck.json")
     if ($LASTEXITCODE -ne 0) { throw "Stream Deck npm SBOM generation failed" }
 
-    foreach ($name in @("audioroutervirtual.inf", "audioroutervirtual.sys", "audioroutervirtual.cat", "LICENSE-MS-PL.txt")) {
+    if (-not $AppOnly) {
+      foreach ($name in @("audioroutervirtual.inf", "audioroutervirtual.sys", "audioroutervirtual.cat", "LICENSE-MS-PL.txt")) {
         Copy-Item -LiteralPath (Join-Path $driverStage $name) -Destination (Join-Path $output $name)
+      }
     }
     $files = Get-ChildItem -LiteralPath $output -File | Sort-Object Name
     $checksums = @(foreach ($file in $files) {
@@ -289,6 +299,7 @@ try {
         releaseTag = if ([string]::IsNullOrWhiteSpace($ReleaseTag)) { $null } else { $ReleaseTag }
         architecture = "x64"
         sourceRevision = $revision
+        includesDriver = -not [bool]$AppOnly
         build = [ordered]@{
             profile = "release"
             target = $rustcHost

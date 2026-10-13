@@ -7,12 +7,13 @@ param(
     [string]$NotesPath,
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
-    [string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE
+    [string]$DriverPackage = $env:AUDIOROUTER_SIGNED_DRIVER_PACKAGE,
+    [switch]$AppOnly
 )
 
 $ErrorActionPreference = "Stop"
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
-if ([string]::IsNullOrWhiteSpace($DriverPackage)) {
+if (-not $AppOnly -and [string]::IsNullOrWhiteSpace($DriverPackage)) {
     throw "Set AUDIOROUTER_SIGNED_DRIVER_PACKAGE to the Microsoft-signed Partner Center driver payload directory before preparing a cable-enabled release."
 }
 $notes = [IO.Path]::GetFullPath($NotesPath)
@@ -69,7 +70,9 @@ try {
         throw "release output directory already exists; refusing to overwrite: $output"
     }
 
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "prepare-artifacts.ps1") -OutputDirectory $output -ReleaseTag $Tag -DriverPackage $DriverPackage
+    $prepareArguments = @("-OutputDirectory", $output, "-ReleaseTag", $Tag)
+    if ($AppOnly) { $prepareArguments += "-AppOnly" } else { $prepareArguments += @("-DriverPackage", $DriverPackage) }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "prepare-artifacts.ps1") @prepareArguments
     if ($LASTEXITCODE -ne 0) { throw "release artifact preparation failed with exit code $LASTEXITCODE" }
     $manifestPath = Join-Path $output "release-manifest.json"
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "verify-artifacts.ps1") -ManifestPath $manifestPath

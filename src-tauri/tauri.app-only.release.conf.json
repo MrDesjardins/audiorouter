@@ -1,0 +1,20 @@
+{
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": {
+      "../target/release/audiorouter-cli.exe": "audiorouter-cli.exe",
+      "../target/release/audiorouter-plugin-worker.exe": "audiorouter-plugin-worker.exe",
+      "../target/release/tunnel-client-runtime.exe": "tunnel-client-runtime.exe",
+      "../target/release/tunnel-client-runtime-LICENSE.txt": "tunnel-client-runtime-LICENSE.txt",
+      "../target/release/tunnel-client-runtime-NOTICE.txt": "tunnel-client-runtime-NOTICE.txt",
+      "../target/release/tunnel-client-runtime-licenses.txt": "tunnel-client-runtime-licenses.txt",
+      "../target/release/tunnel-client-runtime.spdx.json": "tunnel-client-runtime.spdx.json",
+      "../tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin": "com.mrdesjardins.audiorouter.streamDeckPlugin"
+    },
+    "windows": {
+      "nsis": { "installMode": "currentUser" },
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true }
+    }
+  }
+}
