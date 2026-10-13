@@ -46,6 +46,7 @@ try {
         }
         Invoke-Checked 'npm.cmd' @('run', 'build', '--prefix', (Join-Path $workspace 'ui'))
         Invoke-Checked 'cargo.exe' @('build', '--manifest-path', (Join-Path $workspace 'src-tauri/Cargo.toml'))
+        Invoke-Checked 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $workspace 'tools/stage-mcp-cli.ps1'), '-Profile', 'debug', '-Build')
     }
     if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) {
         throw "missing CLI binary: $cli (run with -Build)"

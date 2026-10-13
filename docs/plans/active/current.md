@@ -1,5 +1,58 @@
 # Active plan — post-0.0.8 maintenance
 
+## Live ChatGPT tunnel repair — 2026-10-12 (local repair complete; account gate pending)
+
+Objective: make the existing tunnel `tunnel_6acc5b1bf6c8819195497c541c696b80`
+serve the actual updated MCP adapter, and prevent app exits leaving competing
+pollers. Requirements AUTO-06, AUTO-16, SEC-14, UI-17. The owner explicitly
+authorized repair and use of this existing tunnel; no remote resource/key is
+created. Preserve the unrelated release evidence edit and running audio.
+
+Reproduction: host inspection found two tunnel runtimes using this ID, one
+orphaned after its shell exited. Both launched the stale shell-side CLI
+(`DF977C7C...`); the updated workspace CLI is `09F78979...`. Runtime readiness
+does not check the MCP setup handshake. Sandbox process enumeration sees only
+the sandbox, so host diagnostics require the approved host execution context.
+
+Ordered work:
+1. Disconnect the current tunnel through the UI, stop only its verified orphan
+   runtime/stdio child, stage the updated CLI beside the shell, reconnect and
+   verify MCP initialization, tools discovery and a read through the real pipe.
+2. Add a bounded local MCP preflight before starting the tunnel; fail with an
+   actionable error for stale/incompatible CLI or unavailable backend.
+   A focused compatibility check reproduced another failure: valid legacy
+   `_meta` was mistaken for modern negotiation. Fix detection and cover legacy
+   initialization and tools/list with progress/extension metadata.
+3. Contain the runtime and its child in a Windows kill-on-close job so app
+   exit and Disconnect cannot leave another poller. Add focused real-process
+   regressions and a standalone sidecar staging workflow independent of the
+   driver installer gate.
+4. Run Rust format, focused MCP/supervisor tests, relevant Clippy/build and docs
+   checks; attempt ChatGPT setup through the actual account/browser if available.
+
+Acceptance: current sidecar successfully serves both MCP protocol eras and a
+read against the running backend; failed preflight never starts a tunnel;
+runtime descendants stop when the supervising process exits. Record ChatGPT
+plugin setup only if observed. Rollback: Disconnect, restore the sidecar backup
+and revert source/tooling changes; keep saved tunnel credentials protected and
+audio/session state intact.
+
+Local repair and prevention are complete; see [live repair evidence](evidence/2026-10-12-chatgpt-tunnel-repair.md).
+The exact staged CLI passed modern discovery, legacy initialization, tools
+listing and a real backend capability read; the stale backup was rejected.
+One real tunnel runtime is ready and successfully polling. A valid legacy
+metadata regression reproduced and fixed another initialization failure; the
+final staged CLI passed the stronger read-only host probe and both old CLI
+versions were rejected. Native descendant
+cleanup tests, MCP interop, formatting, Clippy, production UI/shell build and
+docs checks pass. The rebuilt shell is staged at the existing launch path;
+the running audio shell was preserved, so prevention loads next launch.
+ChatGPT plugin creation is still a separate open gate: Firefox automation was
+blocked by the runtime's browser URL policy and the in-app browser is logged
+out. Next: Disconnect the current tunnel, quit/reopen the staged app, Connect,
+then owner retries plugin creation with the existing tunnel and No
+authentication, followed by an observed read and denied Observer write.
+
 ## ChatGPT MCP setup failure — protocol compatibility (2026-10-11, account verification pending)
 
 ### Objective, reproduction and affected requirements

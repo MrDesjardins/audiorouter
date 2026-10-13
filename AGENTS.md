@@ -91,6 +91,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-12 — Verify the sidecar the running shell actually launches.**
+  Evidence: [live ChatGPT tunnel repair](docs/plans/active/evidence/2026-10-12-chatgpt-tunnel-repair.md).
+  Scope: local desktop builds and MCP repairs. Consequence: rebuilding the CLI
+  in `target/release` left the shell's separately copied CLI stale while the
+  tunnel reported ready. Stage with `tools/stage-mcp-cli.ps1`, compare hashes,
+  and probe the actual sidecar through the real backend; transport readiness
+  alone is not MCP discovery or ChatGPT acceptance evidence.
+
 - **2026-10-10 — A re-blocking stage must emit one block per block in, at a constant delay.**
   Evidence: [VM runs r7 and r8](docs/plans/active/evidence/2026-10-10-m03-cable-latency-preparation.md#third-vm-run-bundle-r7-engine-route--2026-10-10-nem-vm-guest-quieted),
   `cable_route` unit tests. Scope: any adapter between a bridge or endpoint

@@ -2,11 +2,11 @@
 //! No tunnel is started at app launch and no remote resource is created here.
 
 use std::{
-    io::{Read, Write},
+    io::{BufRead, BufReader, Read, Write},
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::Mutex,
+    sync::{mpsc, Mutex},
     time::Duration,
 };
 
@@ -40,7 +40,7 @@ impl Drop for TunnelConfig {
 
 #[derive(Default)]
 struct RuntimeState {
-    child: Option<Child>,
+    child: Option<SupervisedChild>,
     phase: &'static str,
 }
 
@@ -205,6 +205,10 @@ pub fn start(
     }
     stop_child(&mut state.child);
 
+    // Read-only setup and a real backend call must work before the poller can
+    // advertise readiness. The probe never receives the OpenAI credential.
+    verify_local_mcp(cli, database, pipe)?;
+
     let health_url = health_path()?;
     check_local_path(&health_url)?;
     if health_url.exists() {
@@ -215,7 +219,8 @@ pub fn start(
         quote_command(cli),
         quote_command(database)
     );
-    let spawn_result = Command::new(runtime_executable)
+    let mut runtime_command = Command::new(runtime_executable);
+    runtime_command
         .arg("run")
         .arg(format!("--control-plane.tunnel-id={}", config.tunnel_id))
         .arg("--control-plane.api-key=env:CONTROL_PLANE_API_KEY")
@@ -229,10 +234,10 @@ pub fn start(
         .env("AUDIOROUTER_CONTROL_PIPE", pipe)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
+        .stderr(Stdio::null());
+    let spawn_result = SupervisedChild::spawn(&mut runtime_command);
     config.runtime_key.zeroize();
-    let child = spawn_result.map_err(|_| "Could not start the OpenAI tunnel runtime.")?;
+    let child = spawn_result?;
     state.child = Some(child);
     state.phase = "connecting";
     Ok(TunnelStatus {
@@ -306,11 +311,234 @@ fn quote_command(value: &Path) -> String {
     format!("\"{}\"", value.replace('"', "\\\""))
 }
 
-fn stop_child(child: &mut Option<Child>) {
-    if let Some(mut process) = child.take() {
-        let _ = process.kill();
-        let _ = process.wait();
+fn stop_child(child: &mut Option<SupervisedChild>) {
+    drop(child.take());
+}
+
+/// The job handle belongs only to the shell, never to the runtime. Windows
+/// closes it even when Tauri exits without running Rust destructors, killing
+/// the runtime and its stdio child together. Suspend at creation so no child
+/// can escape the job before assignment.
+struct SupervisedChild {
+    child: Child,
+    job: std::os::windows::io::OwnedHandle,
+}
+
+impl SupervisedChild {
+    fn spawn(command: &mut Command) -> Result<Self, String> {
+        use std::os::windows::{
+            io::{AsRawHandle, FromRawHandle, OwnedHandle},
+            process::CommandExt,
+        };
+        use windows::{
+            core::PCWSTR,
+            Win32::{
+                Foundation::HANDLE,
+                System::{
+                    JobObjects::{
+                        AssignProcessToJobObject, CreateJobObjectW,
+                        JobObjectExtendedLimitInformation, SetInformationJobObject,
+                        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                    },
+                    Threading::{CREATE_NO_WINDOW, CREATE_SUSPENDED},
+                },
+            },
+        };
+        // SAFETY: null attributes create a non-inheritable anonymous job. Its
+        // successful owned handle is transferred once and closed by OwnedHandle.
+        let job = unsafe { CreateJobObjectW(None, PCWSTR::null()) }
+            .map_err(|_| "Cannot create tunnel process containment.")?;
+        // SAFETY: CreateJobObjectW returned a unique, valid owning HANDLE.
+        let job = unsafe { OwnedHandle::from_raw_handle(job.0) };
+        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        // SAFETY: the job lives through this call; the pointer and size refer
+        // to the complete initialized limit structure, which Windows copies.
+        unsafe {
+            SetInformationJobObject(
+                HANDLE(job.as_raw_handle()),
+                JobObjectExtendedLimitInformation,
+                &limits as *const _ as *const _,
+                std::mem::size_of_val(&limits) as u32,
+            )
+        }
+        .map_err(|_| "Cannot configure tunnel process containment.")?;
+        let child = command
+            .creation_flags(CREATE_SUSPENDED.0 | CREATE_NO_WINDOW.0)
+            .spawn()
+            .map_err(|_| "Could not start the OpenAI tunnel runtime.")?;
+        let process = Self { child, job };
+        // SAFETY: both handles remain owned and valid. The new process's only
+        // thread is suspended, so it cannot spawn descendants before assignment.
+        unsafe {
+            AssignProcessToJobObject(
+                HANDLE(process.job.as_raw_handle()),
+                HANDLE(process.child.as_raw_handle()),
+            )
+        }
+        .map_err(|_| "Cannot contain the tunnel process; it was stopped.")?;
+        resume_initial_thread(process.child.id())?;
+        Ok(process)
     }
+
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+}
+
+impl Drop for SupervisedChild {
+    fn drop(&mut self) {
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::{Foundation::HANDLE, System::JobObjects::TerminateJobObject};
+        // SAFETY: the exclusively owned job remains valid through termination;
+        // only processes this supervisor created and assigned belong to it.
+        let _ = unsafe { TerminateJobObject(HANDLE(self.job.as_raw_handle()), 0) };
+        // Also reap a child that could not be assigned to the job.
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+fn resume_initial_thread(process_id: u32) -> Result<(), String> {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+    use windows::Win32::{
+        Foundation::HANDLE,
+        System::{
+            Diagnostics::ToolHelp::{
+                CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD,
+                THREADENTRY32,
+            },
+            Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME},
+        },
+    };
+    // SAFETY: read-only system thread snapshot; successful handle is uniquely owned.
+    let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) }
+        .map_err(|_| "Cannot inspect the suspended tunnel thread.")?;
+    // SAFETY: snapshot is a successful owning HANDLE, transferred exactly once.
+    let snapshot = unsafe { OwnedHandle::from_raw_handle(snapshot.0) };
+    let mut entry = THREADENTRY32 {
+        dwSize: std::mem::size_of::<THREADENTRY32>() as u32,
+        ..Default::default()
+    };
+    // SAFETY: valid snapshot and initialized structure with the required dwSize.
+    let mut found = unsafe { Thread32First(HANDLE(snapshot.as_raw_handle()), &mut entry) }.is_ok();
+    while found {
+        if entry.th32OwnerProcessID == process_id {
+            // SAFETY: the child is still owned and suspended; this snapshot
+            // identifies its sole initial thread. Request only suspend/resume.
+            let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME, false, entry.th32ThreadID) }
+                .map_err(|_| "Cannot open the suspended tunnel thread.")?;
+            // SAFETY: successful thread handle is uniquely owned and transferred once.
+            let thread = unsafe { OwnedHandle::from_raw_handle(thread.0) };
+            // SAFETY: this thread was created suspended by this supervisor;
+            // the owned handle lives until the resume call returns.
+            if unsafe { ResumeThread(HANDLE(thread.as_raw_handle())) } == u32::MAX {
+                return Err("Cannot resume the tunnel process.".into());
+            }
+            return Ok(());
+        }
+        // SAFETY: same valid snapshot and output structure as Thread32First.
+        found = unsafe { Thread32Next(HANDLE(snapshot.as_raw_handle()), &mut entry) }.is_ok();
+    }
+    Err("The tunnel's suspended thread was not found.".into())
+}
+
+const MCP_PROBE_INCOMPATIBLE: &str = "AudioRouter's MCP executable is outdated or incompatible. Update the CLI packaged beside the app, then Connect again.";
+const MCP_PROBE_BACKEND: &str = "The MCP server cannot reach AudioRouter's backend with its current client permission. Reconnect the app and check Client permissions, then Connect again.";
+
+fn verify_local_mcp(cli: &Path, database: &Path, pipe: &str) -> Result<(), String> {
+    let mut command = Command::new(cli);
+    command
+        .args([
+            "mcp",
+            "serve",
+            "--client-id",
+            "audiorouter-chatgpt",
+            "--database",
+        ])
+        .arg(database)
+        .args(["--pipe", pipe])
+        .env_remove("CONTROL_PLANE_API_KEY")
+        .env_remove("OPENAI_API_KEY")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    let mut child = SupervisedChild::spawn(&mut command)?;
+    let mut input = child.child.stdin.take().ok_or(MCP_PROBE_INCOMPATIBLE)?;
+    let output = child.child.stdout.take().ok_or(MCP_PROBE_INCOMPATIBLE)?;
+    let (sender, receiver) = mpsc::sync_channel(1);
+    let reader = std::thread::spawn(move || {
+        let mut output = BufReader::new(output);
+        let result = (0..4).try_for_each(|index| {
+            let mut bytes = Vec::new();
+            (&mut output)
+                .take(1024 * 1024 + 1)
+                .read_until(b'\n', &mut bytes)
+                .map_err(|_| MCP_PROBE_INCOMPATIBLE)?;
+            if bytes.len() > 1024 * 1024 || bytes.last() != Some(&b'\n') {
+                return Err(MCP_PROBE_INCOMPATIBLE);
+            }
+            let response = serde_json::from_slice(&bytes).map_err(|_| MCP_PROBE_INCOMPATIBLE)?;
+            validate_probe_response(index, &response)
+        });
+        let _ = sender.send(result);
+    });
+    let requests = [
+        serde_json::json!({"jsonrpc":"2.0","id":"discover","method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":"initialize","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"audiorouter-preflight","version":"1"},"_meta":{"progressToken":"preflight"}}}),
+        serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+        serde_json::json!({"jsonrpc":"2.0","id":"tools","method":"tools/list","params":{}}),
+        serde_json::json!({"jsonrpc":"2.0","id":"backend","method":"tools/call","params":{"name":"describe_capabilities","arguments":{}}}),
+    ];
+    let sent = requests
+        .iter()
+        .try_for_each(|request| writeln!(input, "{request}"));
+    let result = if sent.is_err() || input.flush().is_err() {
+        Err(MCP_PROBE_INCOMPATIBLE)
+    } else {
+        receiver.recv_timeout(Duration::from_secs(5)).unwrap_or(Err("The local MCP server did not answer within five seconds. Update the app or reconnect its backend, then try again."))
+    };
+    drop(input);
+    drop(child); // kills stalled probes and closes stdout before joining its reader
+    let _ = reader.join();
+    result.map_err(str::to_owned)
+}
+
+fn validate_probe_response(index: usize, response: &serde_json::Value) -> Result<(), &'static str> {
+    let expected_id = ["discover", "initialize", "tools", "backend"][index];
+    if response["jsonrpc"] != "2.0"
+        || response["id"] != expected_id
+        || response.get("error").is_some()
+    {
+        return Err(if index == 3 {
+            MCP_PROBE_BACKEND
+        } else {
+            MCP_PROBE_INCOMPATIBLE
+        });
+    }
+    let valid = match index {
+        0 => response["result"]["supportedVersions"]
+            .as_array()
+            .is_some_and(|versions| versions.iter().any(|version| version == "2026-07-28")),
+        1 => response["result"]["protocolVersion"] == "2025-11-25",
+        2 => response["result"]["tools"].as_array().is_some_and(|tools| {
+            tools
+                .iter()
+                .any(|tool| tool["name"] == "describe_capabilities")
+        }),
+        3 => {
+            response["result"]["isError"] == false
+                && response["result"]["content"]
+                    .as_array()
+                    .is_some_and(|content| !content.is_empty())
+        }
+        _ => false,
+    };
+    valid.then_some(()).ok_or(if index == 3 {
+        MCP_PROBE_BACKEND
+    } else {
+        MCP_PROBE_INCOMPATIBLE
+    })
 }
 
 fn ready() -> bool {
@@ -356,6 +584,107 @@ fn loopback_health_address(url: &str) -> Option<SocketAddr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn probe_failures_are_actionable_and_never_echo_server_errors() {
+        let secret_error = serde_json::json!({"jsonrpc":"2.0","id":"discover","error":{"message":"private-token-sentinel"}});
+        assert_eq!(
+            validate_probe_response(0, &secret_error),
+            Err(MCP_PROBE_INCOMPATIBLE)
+        );
+        let backend_error = serde_json::json!({"jsonrpc":"2.0","id":"backend","result":{"isError":true,"content":[{"text":"private-path-sentinel"}]}});
+        assert_eq!(
+            validate_probe_response(3, &backend_error),
+            Err(MCP_PROBE_BACKEND)
+        );
+        assert!(!MCP_PROBE_BACKEND.contains("sentinel"));
+    }
+
+    #[test]
+    #[ignore = "Read-only live host MCP probe; requires explicit CLI/database/pipe environment"]
+    fn live_mcp_sidecar_preflight() {
+        let cli = PathBuf::from(std::env::var_os("AUDIOROUTER_MCP_SMOKE_CLI").expect("CLI"));
+        let database =
+            PathBuf::from(std::env::var_os("AUDIOROUTER_MCP_SMOKE_DATABASE").expect("database"));
+        let pipe = std::env::var("AUDIOROUTER_MCP_SMOKE_PIPE").expect("pipe");
+        let result = verify_local_mcp(&cli, &database, &pipe);
+        if std::env::var_os("AUDIOROUTER_MCP_SMOKE_EXPECT_STALE").is_some() {
+            assert_eq!(result, Err(MCP_PROBE_INCOMPATIBLE.to_owned()));
+        } else {
+            result.expect("modern discovery, legacy initialize, tools/list and backend read");
+        }
+    }
+
+    fn descendant_fixture() -> Command {
+        let mut command = Command::new("powershell.exe");
+        command.args(["-NoProfile", "-Command", "$p = Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 120' -WindowStyle Hidden -PassThru; [Console]::Out.WriteLine($p.Id); Start-Sleep -Seconds 120"])
+            .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+        command
+    }
+
+    #[test]
+    fn job_owner_exit_fixture() {
+        if std::env::var_os("AUDIOROUTER_JOB_EXIT_FIXTURE").is_none() {
+            return;
+        }
+        let mut process =
+            SupervisedChild::spawn(&mut descendant_fixture()).expect("fixture process");
+        let output = process.child.stdout.take().unwrap();
+        let (sender, receiver) = mpsc::sync_channel(1);
+        std::thread::spawn(move || {
+            let mut pid = String::new();
+            BufReader::new(output).read_line(&mut pid).unwrap();
+            let _ = sender.send(pid.trim().parse::<u32>().unwrap());
+        });
+        let descendant = receiver
+            .recv_timeout(Duration::from_secs(10))
+            .expect("descendant PID");
+        println!("JOB_FIXTURE:{},{}", process.child.id(), descendant);
+        std::io::stdout().flush().unwrap();
+        // Deliberately skip Drop, as Tauri process exit/forced termination can.
+        std::process::exit(0);
+    }
+
+    #[test]
+    fn shell_exit_stops_runtime_and_its_descendant_without_destructors() {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+        use windows::Win32::{
+            Foundation::{HANDLE, WAIT_OBJECT_0},
+            System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE},
+        };
+        let mut fixture = Command::new(std::env::current_exe().unwrap());
+        fixture
+            .args([
+                "--exact",
+                "mcp_tunnel::tests::job_owner_exit_fixture",
+                "--nocapture",
+            ])
+            .env("AUDIOROUTER_JOB_EXIT_FIXTURE", "1")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let output = fixture.output().expect("launch job owner");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8(output.stdout).unwrap();
+        let ids = text
+            .lines()
+            .find_map(|line| line.strip_prefix("JOB_FIXTURE:"))
+            .expect("runtime and descendant PID");
+        for id in ids.split(',').map(|id| id.parse::<u32>().unwrap()) {
+            // SAFETY: request wait-only access to the fixture's recorded PID.
+            // A process that has already disappeared is already stopped.
+            if let Ok(handle) = unsafe { OpenProcess(PROCESS_SYNCHRONIZE, false, id) } {
+                // SAFETY: successful uniquely owned process handle, transferred once.
+                let handle = unsafe { OwnedHandle::from_raw_handle(handle.0) };
+                // SAFETY: handle remains live until the bounded wait returns.
+                let stopped = unsafe { WaitForSingleObject(HANDLE(handle.as_raw_handle()), 5000) };
+                assert_eq!(stopped, WAIT_OBJECT_0, "process {id} survived owner exit");
+            }
+        }
+    }
 
     #[test]
     fn accepts_only_supported_tunnel_ids_and_runtime_keys() {

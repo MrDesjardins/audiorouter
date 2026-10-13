@@ -225,6 +225,7 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
             "method": "initialize",
             "params": {
                 "protocolVersion": "2025-11-25",
+                "_meta": { "progressToken": "legacy-setup" },
                 "capabilities": {},
                 "clientInfo": { "name": "interop-test", "version": "1" }
             }
@@ -255,7 +256,7 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
     let tools = send(
         &mut input,
         &mut output,
-        json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
+        json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": { "_meta": { "example.com/trace": "legacy-list" } } }),
     );
     assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 76);
 

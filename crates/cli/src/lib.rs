@@ -2166,7 +2166,19 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
         };
         let id = message.get("id").cloned();
         let modern_meta = message.get("params").and_then(|params| params.get("_meta"));
-        let modern_request = modern_meta.is_some();
+        // Legacy MCP also permits _meta (progress tokens and client extensions).
+        // Only discovery or explicit stateless protocol fields select the modern
+        // envelope; ordinary metadata must not reject a legacy handshake/call.
+        let modern_request = method == "server/discover"
+            || modern_meta.is_some_and(|meta| {
+                [
+                    "io.modelcontextprotocol/protocolVersion",
+                    "io.modelcontextprotocol/clientCapabilities",
+                    "io.modelcontextprotocol/clientInfo",
+                ]
+                .iter()
+                .any(|key| meta.get(key).is_some())
+            });
         let modern_version = modern_meta
             .and_then(|meta| meta.get("io.modelcontextprotocol/protocolVersion"))
             .and_then(Value::as_str);

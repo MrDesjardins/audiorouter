@@ -47,6 +47,7 @@ or packaging it, run from the repository root:
 npm.cmd run build --prefix ui
 cargo build --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target
 cargo build --manifest-path Cargo.toml -p audiorouter-plugin-host --bin audiorouter-plugin-worker --target-dir src-tauri/target
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\stage-mcp-cli.ps1 -Profile debug -Build
 ```
 
 The shell and matching plugin worker are written beside each other in
@@ -54,6 +55,13 @@ The shell and matching plugin worker are written beside each other in
 `audiorouter-plugin-worker.exe`. Keep both executables together; building the
 shell alone leaves plugin nodes unable to start. The shell also explains the
 expected worker locations and repair steps if it is missing.
+MCP also requires the matching `audiorouter-cli.exe` beside the shell. The
+staging command builds the workspace CLI, copies it beside the shell, and
+checks that their SHA-256 hashes match. For a release shell use `-Profile
+release -Build`; no driver package is required for this local repair. Disconnect
+local MCP clients/the ChatGPT tunnel before replacing an in-use CLI. The script
+preserves a backup when changing an existing sidecar. Building only the CLI in
+`target\release` does not update the sidecar in `src-tauri\target\release`.
 This is compile-only evidence; it does not install a driver, register startup,
 open an audio stream, or alter machine audio configuration. The release flow
 rebuilds the UI automatically before its optimized shell build.

@@ -24,6 +24,18 @@ Milestone ownership: M01 usable CLI/discovery; every feature milestone adds comm
 
 ## Command design examples
 
+AUTO-16 connection qualification includes a bounded read-only preflight of
+the actual packaged CLI: modern discovery, legacy initialization, tool listing
+and a backend capability read must pass before starting the tunnel. A stale CLI,
+missing enrollment or unavailable backend produces an actionable local error.
+AUTO-06 must accept legacy request metadata (progress tokens and client
+extensions) without treating it as modern protocol negotiation; explicit
+stateless protocol metadata and server discovery select the modern envelope.
+Tunnel readiness remains separate from ChatGPT plugin acceptance. On Disconnect
+or shell exit, stop both the poller and its MCP descendants, including exits
+that do not run Rust destructors; another poller must not survive and compete
+for requests on the same tunnel.
+
 These are intended commands, not installed executables. M01 creates real help and validates examples; app selection inside Discord/OBS remains external.
 
 ```powershell
