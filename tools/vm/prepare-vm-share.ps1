@@ -18,13 +18,20 @@
   The Rust tools are linked with a static C runtime so the VM needs no
   Visual C++ redistributable.
 
+  -NextVersion builds the same source a second time as version N+1 into
+  <Share>\driver-next\ for the A13 upgrade/repair steps, and then requires a
+  clean working tree so both packages carry one clean source identity.
+
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-vm-share.ps1 -Share D:\ar-share
+.EXAMPLE
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\prepare-vm-share.ps1 -Share C:\VMs\ar-share\rc -Version 0.2.0 -NextVersion 0.2.1
 #>
 [CmdletBinding()]
 param(
     [string] $Share = 'D:\ar-share',
-    [string] $Version = '0.1.0'
+    [string] $Version = '0.1.0',
+    [string] $NextVersion
 )
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -32,6 +39,10 @@ $driverRoot = Join-Path $workspace 'drivers\audiorouter-virtual'
 . (Join-Path $driverRoot 'package-tools.ps1')
 
 $Share = Assert-DriverPackagePath $Share
+if ($NextVersion) {
+    if ([version](ConvertTo-DriverVersion $NextVersion) -le [version](ConvertTo-DriverVersion $Version)) { throw '-NextVersion must be newer than -Version.' }
+    if ([bool](& git -C $workspace status --porcelain)) { throw 'A release candidate share needs a clean working tree; commit or stash first.' }
+}
 if (Test-Path -LiteralPath $Share) {
     if (@(Get-ChildItem -LiteralPath $Share -Force).Count -ne 0) {
         throw "The share folder must be new or empty so no older file is mistaken for this build: $Share"
@@ -54,6 +65,20 @@ Step '2/6 Package integrity checks'
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tests\acceptance\m03-driver-package.ps1') `
     -Package (Join-Path $Share 'driver')
 if ($LASTEXITCODE -ne 0) { throw "Package verification failed ($LASTEXITCODE)." }
+if ($NextVersion) {
+    Write-Host "Same source as version $NextVersion (A13 upgrade/repair)"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $driverRoot 'build.ps1') `
+        -Configuration Release -Platform x64 -Version $NextVersion -TestSign -KeepOutput -Output (Join-Path $Share 'driver-next')
+    if ($LASTEXITCODE -ne 0) { throw "Next-version driver build/test-sign failed ($LASTEXITCODE)." }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'tests\acceptance\m03-driver-package.ps1') `
+        -Package (Join-Path $Share 'driver-next')
+    if ($LASTEXITCODE -ne 0) { throw "Next-version package verification failed ($LASTEXITCODE)." }
+    $first = Get-Content -LiteralPath (Join-Path $Share 'driver\package.json') -Raw | ConvertFrom-Json
+    $second = Get-Content -LiteralPath (Join-Path $Share 'driver-next\package.json') -Raw | ConvertFrom-Json
+    if ($first.gitCommit -ne $second.gitCommit -or $first.dirty -or $second.dirty -or $first.timingDiagnostics -or $second.timingDiagnostics) {
+        throw 'Both packages must be normal builds of one clean commit.'
+    }
+}
 
 Step '3/6 VM tools (static C runtime, separate target folder)'
 $vmTarget = Join-Path $workspace 'target\vm-tools'
@@ -100,7 +125,7 @@ $lines = @(
     "AudioRouter cable VM share",
     "built:   $([DateTime]::UtcNow.ToString('u'))",
     "commit:  $commit$(if ($dirty) { ' (working tree had uncommitted changes)' })",
-    "driver:  $Version (test-signed)",
+    "driver:  $Version (test-signed)$(if ($NextVersion) { "; driver-next: $NextVersion, same source" })",
     ""
 )
 Get-ChildItem -LiteralPath $Share -Recurse -File | Where-Object { $_.Name -ne 'MANIFEST.txt' } | Sort-Object FullName | ForEach-Object {

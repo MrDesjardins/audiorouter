@@ -19,6 +19,12 @@
     tone-8ch      8-channel 96 kHz lease
     cables        2 -> 8 -> 2 cables; Cable A/B endpoint IDs must not change (A15 count)
     rename        rename cable B; its endpoint IDs must not change
+    update        A13: mark Cable B Output with a 96 kHz device format, then helper
+                  update to driver-next\ (version N+1); restart if it says so
+    update-verify A13 after update (and restart): same device instance, N+1
+                  installed, cables present, 96 kHz format migrated; restores 48 kHz.
+                  New endpoint IDs are expected (17 VCAB-05)
+    repair        A13: helper repair with driver-next\ (same version reinstalled)
     verifier-on   enable Driver Verifier for audioroutervirtual.sys (then reboot)
     fuzz          30-minute IOCTL fuzz (run with Driver Verifier on) (A10, A11)
     verifier-off  disable Driver Verifier (then reboot)
@@ -33,7 +39,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('preflight', 'smoke', 'install', 'status', 'tone', 'tone-stall', 'tone-8ch', 'cables', 'rename',
-        'verifier-on', 'fuzz', 'verifier-off', 'remove', 'collect')]
+        'update', 'update-verify', 'repair', 'verifier-on', 'fuzz', 'verifier-off', 'remove', 'collect')]
     [string] $Step,
     [int] $FuzzSeconds = 1800,
     [ValidateRange(1, 3600)][int] $ToneSeconds = 600,
@@ -57,6 +63,10 @@ if ($TraceScheduling -and ($Step -ne 'tone' -or $ToneSeconds -notin @(30,300))) 
 }
 
 $package = Join-Path $root 'driver'
+# A13: the same source built as version N+1 (prepare-vm-share.ps1 -NextVersion).
+$nextPackage = Join-Path $root 'driver-next'
+$formatTool = Join-Path $root 'tools\m03_cable_format.exe'
+$a13State = 'C:\ar\evidence\a13-before.json'
 $helper = Join-Path $root 'tools\audiorouter-driver-helper.exe'
 $tone = Join-Path $root 'tools\m03_bridge_tone.exe'
 $inventoryTool = Join-Path $root 'tools\m03_cable_inventory.exe'
@@ -100,6 +110,25 @@ function Invoke-Inventory([int] $Cables, [string] $Name) {
     $text | Set-Content -LiteralPath (Join-Path $evidence "$Name.txt") -Encoding UTF8
     $json = if (Test-Path -LiteralPath $out) { Get-Content -LiteralPath $out -Raw | ConvertFrom-Json } else { $null }
     return [pscustomobject]@{ Code = $code; Json = $json; Text = $text }
+}
+function Invoke-FormatTool([string[]] $Arguments, [string] $Name) {
+    if (-not (Test-Path -LiteralPath $formatTool -PathType Leaf)) { throw 'This bundle has no m03_cable_format.exe.' }
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $text = & $formatTool @Arguments 2>&1 | Out-String
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    $text | Set-Content -LiteralPath (Join-Path $evidence "$Name.txt") -Encoding UTF8
+    return [pscustomobject]@{ Code = $code; Text = $text }
+}
+# The "device format:" line that follows an endpoint's heading in m03_cable_format output.
+function Get-DeviceFormat([string] $Text, [string] $Endpoint) {
+    $match = [regex]::Match($Text, '(?ms)^' + [regex]::Escape($Endpoint) + '\b[^\r\n]*\r?\n(?:  [^\r\n]*\r?\n)*?  device format: ([^\r\n]*)')
+    if ($match.Success) { return $match.Groups[1].Value.Trim() }
+    return ''
 }
 function Invoke-ToneTool([string[]] $Arguments, [string] $Wav) {
     $secondsIndex = [Array]::IndexOf($Arguments, '--seconds')
@@ -208,8 +237,12 @@ try {
         }
         'install' {
             $r = Invoke-Helper @('install', '--package', $package) 'helper-install'
-            Check 'helper install (exit 0)' ($r.Code -eq 0) "exit $($r.Code) $($r.Json.error)"
-            if ($r.Json) { Check 'Four endpoints reported' (@($r.Json.endpoints).Count -eq 4) (@($r.Json.endpoints | ForEach-Object { $_.friendlyName }) -join '; ') }
+            Check 'helper install (exit 0, or 5 = restart required)' ($r.Code -eq 0 -or $r.Code -eq 5) "exit $($r.Code) $($r.Json.error)"
+            if ($r.Code -eq 5) {
+                Write-Host 'Restart the VM, then run -Step status; endpoints appear after the restart.' -ForegroundColor Yellow
+            } elseif ($r.Json) {
+                Check 'Four endpoints reported' (@($r.Json.endpoints).Count -eq 4) (@($r.Json.endpoints | ForEach-Object { $_.friendlyName }) -join '; ')
+            }
             if ($r.Json.defaultsChanged) { Write-Host "Note: Windows changed default devices: $($r.Json.defaultsChanged -join ', ') (recorded, see 17 §9.4)" -ForegroundColor Yellow }
             $again = Invoke-Helper @('install', '--package', $package) 'helper-install-again'
             Check 'Second install is a no-op (idempotent)' ($again.Code -eq 0 -and $again.Json.alreadyInstalled) "exit $($again.Code)"
@@ -272,6 +305,56 @@ try {
             Check 'New name visible' (@($names | Where-Object { $_ -like '*Discord*' }).Count -eq 2) ($names -join '; ')
             $after = Get-CableIds $inventory @('B')
             Check 'Cable B endpoint IDs unchanged by the rename' ($before.Count -eq 2 -and $before['B Input'] -eq $after['B Input'] -and $before['B Output'] -eq $after['B Output'])
+        }
+        'update' {
+            if (-not (Test-Path -LiteralPath (Join-Path $nextPackage 'package.json'))) { throw 'This bundle has no driver-next package (prepare-vm-share.ps1 -NextVersion).' }
+            $next = Get-Content -LiteralPath (Join-Path $nextPackage 'package.json') -Raw | ConvertFrom-Json
+            $status = Invoke-Helper @('status') 'helper-status-before'
+            Check 'Driver installed before the update' ($status.Json.state -eq 'installed') "driver=$($status.Json.installedDriverVersion)"
+            $inventory = Invoke-Inventory 2 'inventory-before-update'
+            # Migration marker: a non-default device format on one cable (17 VCAB-05).
+            $mark = Invoke-FormatTool @('set', '--channels', '2', '--rate', '96000', '--endpoint', 'AudioRouter Cable B Output') 'format-mark-96k'
+            Check 'Cable B Output set to 96 kHz before the update' ($mark.Code -eq 0) 'format-mark-96k.txt'
+            [ordered]@{
+                deviceInstanceId = $status.Json.deviceInstanceId
+                driverBefore = $status.Json.installedDriverVersion
+                expectedDriver = $next.driverVersion
+                ids = Get-CableIds $inventory @('A', 'B')
+            } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $a13State -Encoding UTF8
+            $r = Invoke-Helper @('update', '--package', $nextPackage) 'helper-update'
+            Check "helper update to $($next.driverVersion) (exit 0, or 5 = restart required)" ($r.Code -eq 0 -or $r.Code -eq 5) "exit $($r.Code) $($r.Json.error)"
+            Check 'Same device instance' ($r.Json.deviceInstanceId -eq $status.Json.deviceInstanceId) "$($r.Json.deviceInstanceId)"
+            $nextStep = if ($r.Code -eq 5) { 'Restart the VM, then run -Step update-verify.' } else { 'Run -Step update-verify now.' }
+            Write-Host $nextStep -ForegroundColor Yellow
+        }
+        'update-verify' {
+            if (-not (Test-Path -LiteralPath $a13State)) { throw 'Run -Step update first.' }
+            $before = Get-Content -LiteralPath $a13State -Raw | ConvertFrom-Json
+            $status = Invoke-Helper @('status') 'helper-status-after'
+            Check 'helper status = installed' ($status.Json.state -eq 'installed') "state=$($status.Json.state)"
+            Check "Driver is now $($before.expectedDriver)" ($status.Json.installedDriverVersion -eq $before.expectedDriver) "was $($before.driverBefore), now $($status.Json.installedDriverVersion)"
+            Check 'Same device instance as before the update' ($status.Json.deviceInstanceId -eq $before.deviceInstanceId) "$($status.Json.deviceInstanceId)"
+            $inventory = Invoke-Inventory 2 'inventory-after-update'
+            Check 'Cable A/B endpoints present with their names and formats' ($inventory.Code -eq 0) 'inventory-after-update.txt'
+            $after = Get-CableIds $inventory @('A', 'B')
+            foreach ($key in 'A Input', 'A Output', 'B Input', 'B Output') {
+                Write-Host ("  {0}: {1} -> {2}" -f $key, $before.ids.$key, $after[$key])
+            }
+            Write-Host '  (New endpoint IDs are expected after a driver update: 17 VCAB-05.)'
+            $show = Invoke-FormatTool @('show') 'format-after-update'
+            $format = Get-DeviceFormat $show.Text 'AudioRouter Cable B Output'
+            Check 'Cable B Output kept its 96 kHz device format (settings migrated)' ($format -like '96000 Hz*') $format
+            $restore = Invoke-FormatTool @('set', '--channels', '2', '--rate', '48000', '--endpoint', 'AudioRouter Cable B Output') 'format-restore-48k'
+            Check 'Cable B Output restored to 48 kHz' ($restore.Code -eq 0) 'format-restore-48k.txt'
+        }
+        'repair' {
+            if (-not (Test-Path -LiteralPath (Join-Path $nextPackage 'package.json'))) { throw 'This bundle has no driver-next package.' }
+            $status = Invoke-Helper @('status') 'helper-status-before-repair'
+            $r = Invoke-Helper @('repair', '--package', $nextPackage) 'helper-repair'
+            Check 'helper repair (exit 0, or 5 = restart required)' ($r.Code -eq 0 -or $r.Code -eq 5) "exit $($r.Code) $($r.Json.error)"
+            Check 'Same device instance after repair' ($r.Json.deviceInstanceId -eq $status.Json.deviceInstanceId) "$($r.Json.deviceInstanceId)"
+            if ($r.Code -eq 0) { Check 'Four endpoints reported' (@($r.Json.endpoints).Count -eq 4) (@($r.Json.endpoints | ForEach-Object { $_.friendlyName }) -join '; ') }
+            else { Write-Host 'Restart the VM, then run -Step status.' -ForegroundColor Yellow }
         }
         'verifier-on' {
             & verifier /standard /driver audioroutervirtual.sys | Set-Content (Join-Path $evidence 'verifier.txt')

@@ -406,6 +406,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step pr
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step install
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step cables
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step rename
+# A13 (needs a share built with -NextVersion). If update prints "Restart the VM",
+# restart, open an Administrator PowerShell in C:\ar again, then continue.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step update
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step update-verify
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step repair
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step remove
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\vm-checks.ps1 -Step collect
 ```
@@ -685,8 +690,15 @@ before configuring Listen and running only the 30-second diagnostic below.
    and checks Cable A and B kept their endpoint IDs.
 3. `rename` — renames cable 2 to "Discord" and checks its endpoint IDs did
    not change. In the Sound panel the endpoints now show "Discord".
-4. `remove` — uninstalls with the helper.
-5. `collect`, copy the zip.
+4. `update` (A13) — sets Cable B Output to 96 kHz, then updates to the
+   `driver-next` package (same source, version N+1). Restart if asked.
+5. `update-verify` — same device, new version, cables present, and Cable B
+   Output still at 96 kHz (Windows migrated the setting). New endpoint IDs
+   are expected after a driver update (17 VCAB-05); they are printed, not
+   checked. Restores 48 kHz.
+6. `repair` — reinstalls the same version; the device must stay the same.
+7. `remove` — uninstalls with the helper.
+8. `collect`, copy the zip.
 
 ### Session 4 — Driver Verifier and hostile input · 50 min · checks A10, A11 (fuzz)
 

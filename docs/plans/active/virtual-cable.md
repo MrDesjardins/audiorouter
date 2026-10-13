@@ -110,6 +110,32 @@ playback side. Today that is VB-Cable set to 7.1. Without 8-channel
 AudioRouter cables, those users would still need VB-Cable, which defeats
 DEC-18.
 
+**Resolved (2026-10-12): no open question forces a driver change.** The
+spike found and fixed the one driver blocker (r32, 0.1.7: Windows honours
+the stored format; 8 ch bit-exact). The rest of 8-channel support is
+user-mode or spec work (app control via `IPolicyConfig`, VCAB-11 wording,
+`PKEY_AudioEndpoint_PhysicalSpeakers` for games, CAP-14) and does not block
+the freeze. VCAB-05 was settled by decision (driver updates change IDs).
+
+### RC freeze (step 2, started 2026-10-12, user request)
+
+- RC = driver **0.2.0**, a normal build (no `AR_TIMING_DIAGNOSTICS`) of the
+  r32 driver source, test-signed for Stage A. A13 uses **0.2.1**, the same
+  commit built again. Agent choice of numbers: above every test build the
+  VM has seen (≤ 0.1.8), and a minor bump marks the first release
+  candidate. Stage A starts from the `02-test-signing-ready` checkpoint, so
+  no downgrade from 0.1.8 is involved.
+- Tooling for it: `prepare-vm-share.ps1 -NextVersion` builds `driver-next\`
+  from the same clean commit (both normal builds, checked);
+  `prepare-cable-latency-update.ps1` then layers the cable runners on that
+  share and keeps both driver packages byte-identical. `vm-checks.ps1`
+  gains `update`, `update-verify`, `repair` (A13: same devnode, N+1
+  installed, cables present, a 96 kHz format on Cable B Output migrates;
+  IDs printed, not compared) and accepts exit 5 on `install`. VM guide
+  session 3 lists them.
+- The signed release later must be built from the same commit as the
+  tested RC (driver source unchanged); only the signature differs.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
