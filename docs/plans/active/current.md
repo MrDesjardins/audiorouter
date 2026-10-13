@@ -1,114 +1,20 @@
 # Active plan — post-0.0.8 maintenance
 
-## Live ChatGPT tunnel repair — 2026-10-12 (local repair complete; account gate pending)
+## ChatGPT MCP setup accepted — 2026-10-12
 
-Objective: make the existing tunnel `tunnel_6acc5b1bf6c8819195497c541c696b80`
-serve the actual updated MCP adapter, and prevent app exits leaving competing
-pollers. Requirements AUTO-06, AUTO-16, SEC-14, UI-17. The owner explicitly
-authorized repair and use of this existing tunnel; no remote resource/key is
-created. Preserve the unrelated release evidence edit and running audio.
+The user confirmed successful connection and supplied the created
+[ChatGPT plugin](https://chatgpt.com/plugins/plugin_asdk_app_6acd77c0830881919e8b719807f198a8).
+The local compatibility/tunnel setup repair is complete and archived in
+[the execution record](../archived/2026-10-12-chatgpt-mcp-setup-repair.md),
+with [live repair evidence](evidence/2026-10-12-chatgpt-tunnel-repair.md).
+This is user-confirmed ChatGPT setup evidence; no AudioRouter MCP tools are
+exposed in this Codex chat, so no remote tool call or session creation is claimed.
 
-Reproduction: host inspection found two tunnel runtimes using this ID, one
-orphaned after its shell exited. Both launched the stale shell-side CLI
-(`DF977C7C...`); the updated workspace CLI is `09F78979...`. Runtime readiness
-does not check the MCP setup handshake. Sandbox process enumeration sees only
-the sandbox, so host diagnostics require the approved host execution context.
+Next task: enable the plugin in a ChatGPT conversation, verify a read such as
+listing sessions through the tunnel, and qualify granted/denied writes and
+reconnect/revocation behavior under the integration plan below. Generic remote
+MCP for Cowork remains [future work](../future/generic-remote-mcp.md).
 
-Ordered work:
-1. Disconnect the current tunnel through the UI, stop only its verified orphan
-   runtime/stdio child, stage the updated CLI beside the shell, reconnect and
-   verify MCP initialization, tools discovery and a read through the real pipe.
-2. Add a bounded local MCP preflight before starting the tunnel; fail with an
-   actionable error for stale/incompatible CLI or unavailable backend.
-   A focused compatibility check reproduced another failure: valid legacy
-   `_meta` was mistaken for modern negotiation. Fix detection and cover legacy
-   initialization and tools/list with progress/extension metadata.
-3. Contain the runtime and its child in a Windows kill-on-close job so app
-   exit and Disconnect cannot leave another poller. Add focused real-process
-   regressions and a standalone sidecar staging workflow independent of the
-   driver installer gate.
-4. Run Rust format, focused MCP/supervisor tests, relevant Clippy/build and docs
-   checks; attempt ChatGPT setup through the actual account/browser if available.
-
-Acceptance: current sidecar successfully serves both MCP protocol eras and a
-read against the running backend; failed preflight never starts a tunnel;
-runtime descendants stop when the supervising process exits. Record ChatGPT
-plugin setup only if observed. Rollback: Disconnect, restore the sidecar backup
-and revert source/tooling changes; keep saved tunnel credentials protected and
-audio/session state intact.
-
-Local repair and prevention are complete; see [live repair evidence](evidence/2026-10-12-chatgpt-tunnel-repair.md).
-The exact staged CLI passed modern discovery, legacy initialization, tools
-listing and a real backend capability read; the stale backup was rejected.
-One real tunnel runtime is ready and successfully polling. A valid legacy
-metadata regression reproduced and fixed another initialization failure; the
-final staged CLI passed the stronger read-only host probe and both old CLI
-versions were rejected. Native descendant
-cleanup tests, MCP interop, formatting, Clippy, production UI/shell build and
-docs checks pass. The rebuilt shell is staged at the existing launch path;
-the running audio shell was preserved, so prevention loads next launch.
-ChatGPT plugin creation is still a separate open gate: Firefox automation was
-blocked by the runtime's browser URL policy and the in-app browser is logged
-out. Next: Disconnect the current tunnel, quit/reopen the staged app, Connect,
-then owner retries plugin creation with the existing tunnel and No
-authentication, followed by an observed read and denied Observer write.
-
-## ChatGPT MCP setup failure — protocol compatibility (2026-10-11, account verification pending)
-
-### Objective, reproduction and affected requirements
-
-Fix ChatGPT's custom MCP setup failure for the user's ready Secure MCP tunnel
-`tunnel_6acc5b1bf6c8819195497c541c696b80`. ChatGPT reports: “The server
-couldn't complete MCP setup. Check that the endpoint supports MCP and returns
-valid initialization and tool responses.” The tunnel runtime is ready, but
-this is not evidence that ChatGPT completed protocol setup. Reproduction is
-the user's current custom-server setup attempt; the affected local server is
-the CLI MCP stdio adapter in release 0.0.15. Requirements: AUTO-06, AUTO-16,
-SEC-14.
-
-The adapter currently requires legacy `initialize` and advertises only
-2025-06-18, rejecting 2025-11-25 and 2026-07-28 requests. The current MCP
-specification (2026-07-28) uses stateless per-request metadata and
-`server/discover`; this is the leading cause, not yet confirmed against the
-user's live ChatGPT account. Implement dual-era protocol support while
-preserving enrollment, grants, and legacy clients.
-
-### Ordered work, validation and rollback
-
-1. Add dual-era requirements to AUTO-06 and this reproduction/acceptance
-   record before implementation. Keep modern stateless discovery and calls
-   separate from the legacy initialized-session gate.
-2. Implement `server/discover`, per-request protocol metadata validation,
-   supported-version error data, cacheable list/read responses, modern
-   response metadata, and version-appropriate ping behavior. Preserve the
-   existing authorized API dispatch and legacy handshake.
-3. Add process-level MCP stdio regression coverage: modern discovery,
-   tools/list and tools/call without initialize; unsupported version; legacy
-   initialize and authorized call continue to work.
-4. Run MCP stdio integration tests, Rust formatting checks, relevant CLI and
-   workspace tests/Clippy, docs validation, and rebuild the CLI/shell. Record
-   environment and outcomes in dated evidence. Retry setup in ChatGPT only
-   if its local tunnel remains available; otherwise report that account-side
-   verification remains pending.
-
-Acceptance: both protocol eras pass process-level interoperability tests;
-modern responses follow the pinned spec and existing permission checks remain
-in force. ChatGPT account setup is separately qualified only by an actual
-successful setup attempt. Roll back by reverting the adapter, regression and
-spec/plan edits together; local legacy MCP remains available.
-
-Implementation and local verification are complete; see [protocol
-compatibility evidence](evidence/2026-10-11-mcp-protocol-compatibility.md).
-Next action: package the updated CLI with the signed driver release payload,
-then retry ChatGPT setup through the user's actual tunnel and record the
-initialization and tool-discovery result. Local tunnel readiness is not
-account-side verification.
-
-MCP UI correction completed and archived: [execution record](../archived/2026-10-11-generic-mcp-ui-flow.md),
-[evidence](evidence/2026-10-11-generic-mcp-ui-flow.md). ChatGPT account
-verification remains pending below. A vendor-neutral cloud endpoint and
-relay/service have not been deployed; architecture recommendation and gates
-are in [generic remote MCP future work](../future/generic-remote-mcp.md).
 
 ## ChatGPT MCP integration plan (2026-10-11, active)
 
@@ -135,8 +41,8 @@ Manage; running the daemon and selecting the tunnel in ChatGPT needs Tunnels
 Read + Use. Tunnel visibility also depends on associating the tunnel with the
 target ChatGPT workspace. ChatGPT separately requires the user to add a
 custom MCP app, choose Tunnel, review its warning, and create the app. The
-ChatGPT plan/workspace and custom-app permissions for this account are not
-verified. Sources checked 2026-10-11: [OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels),
+owner's successful custom-plugin setup was confirmed on 2026-10-12. Account
+plan type and administrative workspace policy were not inventoried. Sources checked 2026-10-11: [OpenAI Secure MCP Tunnel guide](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels),
 [official tunnel-client configuration](https://github.com/openai/tunnel-client/blob/master/docs/configuration.md),
 [official end-user guide](https://github.com/openai/tunnel-client/blob/master/docs/end-user-guide.md).
 
@@ -149,8 +55,10 @@ supported: at minimum the owner must supply an existing tunnel ID and
 restricted runtime key and approve the ChatGPT connector. AudioRouter will
 automate local runtime packaging, credential protection, process lifecycle,
 and status, and open the right account screens. No admin-key flow is in this
-slice. This PC has no configured OpenAI Platform key, and the Platform page
-was logged out. Never scrape browser cookies or ask for a secret in chat.
+slice. Initially the development environment lacked a runtime key and the
+Platform page was logged out; the owner later configured the existing tunnel
+and successfully created the ChatGPT plugin. Never scrape browser cookies or
+ask for a secret in chat.
 No remote resource or key is created by local implementation.
 
 The official release page currently marks `tunnel-client` v0.0.16 as latest
@@ -221,12 +129,12 @@ app until release evidence records the artifact hash and verification.
    UI idempotency keys are compact so the backend's caller/method scoping stays
    under the 128-byte durable journal limit. No admin credential or remote
    resource is created by AudioRouter.
-4. **Wire the MCP UI — implemented, visual gate open.** Connect, Disconnect,
+4. **Wire the MCP UI — implemented and visually verified.** Connect, Disconnect,
    Forget, saved-details entry, local status, permission disclosure and the
    ChatGPT connector handoff are present. Setup-page actions open the fixed
    OpenAI destinations through the Windows shell and report errors in the UI.
    Layout reserves status/message height.
-   Three-theme screenshot review is still required.
+   Three-theme screenshot/layout evidence is in the archived UI flow correction.
 5. **Qualify and document.** Add portable state-machine, redaction and grant
    tests; Windows DPAPI/process supervision tests; mocked tunnel-client
    protocol tests; and three-theme Edge tests for no layout movement. Then,
@@ -259,7 +167,8 @@ AudioRouter-managed outbound relay as the future product architecture and
 records the hosting, privacy, OAuth, reliability and cost decisions it needs.
 No public listener, relay or remote resource has been deployed. Keep the
 OpenAI tunnel as an optional ChatGPT transport, not the cross-client solution.
-Next: move the remote MCP architecture from future plan into an implementation
+Next for this OpenAI integration: qualify a tool read and permission/lifecycle
+behavior through the created plugin. Move the generic remote MCP architecture from future plan into an implementation
 milestone only after choosing the service/hosting and privacy operating model.
 The one stale idempotency test failure and detailed UI evidence are recorded in
 [the archived flow correction](../archived/2026-10-11-generic-mcp-ui-flow.md).

@@ -116,8 +116,15 @@ host execution context. The earlier absence claim is superseded by this evidence
 
 ## Open gate and rollback
 
-ChatGPT-side plugin creation remains unverified. The in-app browser is logged
-out. Native Firefox verification was blocked by the computer-use runtime's
+Update 2026-10-12: the user confirmed successful connection and supplied
+[the created ChatGPT plugin](https://chatgpt.com/plugins/plugin_asdk_app_6acd77c0830881919e8b719807f198a8).
+Plugin setup is now user-confirmed. The earlier unverified statement below
+records the boundary at the end of the repair run. No AudioRouter tools are
+exposed to this Codex chat; remote read/write calls remain unqualified. The
+completed setup execution is [archived](../../archived/2026-10-12-chatgpt-mcp-setup-repair.md).
+
+At the end of the repair run, ChatGPT-side plugin creation remained unverified.
+The in-app browser was logged out. Native Firefox verification was blocked by the computer-use runtime's
 browser URL policy; no cookies, account credentials or browser safety checks
 were bypassed. The owner can retry the existing tunnel with **No authentication**;
 no OAuth server is configured in AudioRouter's local stdio transport. Official
@@ -127,6 +134,6 @@ Rollback: disconnect the tunnel and restore the saved CLI/shell backups, then
 revert these supervisor/tooling/spec changes together. Do not revert grants,
 database contents or tunnel credentials. First Disconnect the current tunnel,
 quit/reopen the staged app and Connect to load all fixes and avoid retaining an
-older poller. Next gate: observe successful ChatGPT
-plugin creation, a read-only MCP call, and denied writes under Observer through
+older poller. Following the user-confirmed setup, the next gate is a read-only
+MCP call and denied writes under Observer through
 the same tunnel. Session creation remains subject to an owner-granted Editor role.
