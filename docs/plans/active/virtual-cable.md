@@ -18,6 +18,153 @@ and blocker state. Do not install the test-signed driver on the development PC.
 Older driver investigations below are preserved as execution history. Follow
 only tasks explicitly labelled as current in the active plan and resume from
 its next-action section.
+
+## Goal: complete the driver (set 2026-10-12, user request)
+
+The user asked to close the loop on the driver. Definition of done: one
+frozen driver build, the **release candidate (RC)**, passes Stage A in the VM
+(A1–A16) and then becomes the Microsoft-signed package. AudioRouter installs it
+with one UAC prompt, and it passes Stage C binding measurements on this PC.
+It never needs a rebuild for a known gap ("sign once", 17 §1). WP-15
+(beta, release) follows from there and is not part of this goal.
+
+### Where the driver actually is (from the evidence below)
+
+The driver and its host-side product are functionally complete. Since
+2026-10-11 the open items are all **qualification**, plus one decision.
+
+| Stage A check | State | Evidence or gap |
+| --- | --- | --- |
+| A1–A3, A14 install/names/remove | Pass ×2 | WP-03 smokes 2026-10-08/10 |
+| A4/A5/A6 audio both ways, clean, silence | Pass on diagnostic builds via tool and product route | r20–r23; not yet on the RC |
+| A7 crash recovery | Pass | r24 |
+| A8 pool leak (1 h), A9 reboot keeps IDs | **Not run** | — |
+| A10 Driver Verifier, A11 fuzzer + second user | **Not run** | WP-04 host-reviewed only |
+| A12 Discord/OBS see the cable | **Not run** | — |
+| A13 upgrade N → N+1 keeps IDs (helper `update`, `repair`) | **Not run** | WP-07 session 3 gap |
+| A15 all 8 cables | **Not run** (count changes only partly exercised) | — |
+| A16 quality matrix | **Not run** | WP-09b runners ready, host-checked |
+| VCAB-24 no glitches (sustained) | **Cannot pass in this VM** | NEM stalls (r12–r26); bound to Stage C |
+| VCAB-25 latency vs VB-Cable | Indicative only | r6/r23; VB-Cable comparison not run |
+
+Every VM run so far used a build with `AR_TIMING_DIAGNOSTICS` compiled in
+(r20–r29). Stage A has never run on a normal build. The RC must be a
+normal build, and Stage A must run on exactly that binary.
+
+### Decision needed first (sign once)
+
+**8-channel cables (VCAB-11, VCAB-20 at 8 ch, A15/A16 8-ch cases).** These
+were deferred on 2026-10-11 because Windows disables speaker setup for the
+line-level cable endpoints. The driver's 8-channel path exists but no endpoint
+can be switched to it. Because the driver is signed once, the only open
+question that could force a driver change has to be settled **before** the
+freeze. Options:
+
+- (a) **Spike, then freeze (recommended).** Run a short VM experiment:
+  can user-mode code (the elevated helper, via `IPolicyConfig::SetDeviceFormat`
+  or the endpoint property store) set a cable endpoint to 8 channels, and
+  does audio then flow bit-exact? If yes, no driver change is needed and
+  8 channels become a helper/app feature after signing. If no, decide
+  whether the RC needs a topology change before freezing.
+- (b) Freeze now with stereo-only endpoints. Record VCAB-11/VCAB-20 at
+  8 ch as accepted deviations in 17 §8, and drop the 8-ch cases from A15/A16
+  for this release. A later fix would need a second signing round.
+
+### Critical path
+
+1. **Decision above**, and the spike if (a). VM, user-run, about 30 min.
+2. **Freeze the RC.** Normal build (no timing diagnostics), new version
+   number, clean tree, checksummed. Also build an N+1 package with the
+   same source and a bumped version, for A13. Add `update`/`repair` to
+   `vm-checks.ps1` session 3. Agent work on the host; no driver source
+   change unless step 1 requires one.
+3. **Stage A on the RC (WP-12)** in the VM, in sessions the user runs from the
+   `02-test-signing-ready` checkpoint. Order: A1–A7 (repeat on the RC);
+   A9 reboot; A13 upgrade/repair; A15 eight cables; A16 quality matrix with
+   a VB-Cable latency comparison in the same VM; A12 apps; A10 Verifier
+   repeating A4–A7; A11 fuzzer and second user; A8 one-hour pool check,
+   which can run alongside the 1-hour 8-cable traced run. VCAB-24 is
+   recorded as a documented VM deviation: every loss must coincide with a
+   traced guest-wide stall and be counted by the driver. It is not a pass.
+4. **Gate: user go-ahead to spend money (WP-13).** EV certificate,
+   Partner Center attestation of the exact RC, then Stage B in a clean VM
+   with Secure Boot and Memory Integrity on.
+5. **WP-11 + WP-10 attended gate** with the signed payload in the VM:
+   NSIS install, Setup → Install cable (one UAC), update, uninstall
+   keep/remove.
+6. **Stage C on this PC (WP-14)** with the signed package only, as a
+   normal user install (restore point first): binding VCAB-24/25/27/28/30
+   measurements, physical-loopback drift (needs WP-09 mixed-clock), and one
+   week of daily use. A missed target needs a fix or a recorded user
+   decision with numbers.
+
+**Parallel, not on the driver's critical path:** WP-09 mixed-clock routes
+(Game → Discord template). This is user-mode only and is needed before
+Stage C's drift case and before release, but not before signing. The
+domain bus set and `virtualDevices.*` deprecation (WP-08) are also
+user-mode follow-ups.
+
+**Decision (user, 2026-10-12): option (a), run the spike.** Reason: the
+app's own Surround to headphones feature (CAP-14) reads a 7.1 virtual cable
+playback side. Today that is VB-Cable set to 7.1. Without 8-channel
+AudioRouter cables, those users would still need VB-Cable, which defeats
+DEC-18.
+
+### 8-channel spike (prepared 2026-10-12)
+
+Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
+AudioRouter endpoint's mix format, stored device format and
+`PKEY_AudioEndpoint_PhysicalSpeakers` (read-only).
+`set --channels N [--rate R] [--endpoint NAME]...` calls the undocumented
+`IPolicyConfig::SetDeviceFormat`, the call the Sound control panel's Default
+Format list uses. It defaults to Cable A Input and Cable B Output at 48 kHz
+float32, then re-reads `GetMixFormat`. Exit 0 only when every endpoint now
+reports N channels, R Hz and the standard mask (0x63F for 8 channels). It
+refuses non-AudioRouter endpoints. `set --channels 2` restores.
+`prepare-cable-latency-update.ps1` builds it with the static CRT and ships it as
+`tools\m03_cable_format.exe`. The existing `run-cable-bitexact.ps1 -Channels 8`
+then measures the 8-channel product route.
+
+Host checks (2026-10-12, Windows cargo from a temporary clone): 3 unit
+tests pass; Clippy with `-D warnings` is clean for the example; the preparer
+parses. `cargo fmt --check` is clean. Not run: the tool against a real
+endpoint, and the bundle preparer itself. No AudioRouter endpoint exists on
+the host, and the driver must not be installed there.
+
+**Resume on Windows (next action):**
+
+1. Host, in the repo, after `git pull` on a clean tree: build the bundle the
+   same way as r20–r30. The driver source is unchanged since r20, so the guest's
+   installed 0.1.4.0 is not reinstalled. The test signer is the already
+   trusted `FF6876FB…AD40`.
+   `powershell -File drivers\audiorouter-virtual\build.ps1 -Version 0.1.4 -TimingDiagnostics -TestSign -Output target\r31-driver-<commit>`
+   (a trailing exit 1 is the expected host trust-chain check), then
+   `powershell -File tools\vm\prepare-cable-latency-update.ps1 -BaseBundle C:\VMs\ar-share\repair-20261010-slot-provenance -Destination C:\VMs\ar-share\diagnostics-20261012-eight-channel-r31 -TimingDriverPackage target\r31-driver-<commit>`.
+   Record the MANIFEST SHA-256 here.
+2. Guest `AR-DriverTest` (driver 0.1.4.0 installed), elevated PowerShell,
+   after copying the bundle to `C:\ar\...`:
+   - `tools\m03_cable_format.exe show` saves the "before" state.
+   - `tools\m03_cable_format.exe set --channels 8` must print PASS for both
+     endpoints. Record the `SetDeviceFormat` HRESULTs. Also try it once from a
+     **non-elevated** shell: it matters whether the app can do this without
+     the elevated helper.
+   - Sound settings → Cable A Input → Properties: note what Windows now
+     shows. Optionally, a 7.1 test file played into Cable A Input.
+   - `.\run-cable-bitexact.ps1 -Channels 8` must report a bit-exact float32
+     8-channel route (VCAB-20 at 8 ch, diagnostic).
+   - Restore: `tools\m03_cable_format.exe set --channels 2`, then `show`.
+     Fallback: helper `remove` and reinstall (endpoints recreated at the INF
+     default), or the `02-test-signing-ready` checkpoint.
+3. Interpret the result:
+   - PASS plus bit-exact: no driver change. 8 channels become a helper/app
+     feature (VCAB-11 via the app, not Sound settings; update 17 §8). Go to
+     step 2 of the critical path (freeze the RC).
+   - `SetDeviceFormat` fails or the mix format stays stereo: stop. Record
+     the HRESULTs and ask the user before any driver topology change.
+
+Rollback: the spike only changes the two endpoints' device format in the VM.
+`set --channels 2` restores it.
+
 ## Historical driver investigation notes — superseded
 
 ### Execution queue after r12 — 2026-10-10
@@ -2244,6 +2391,10 @@ Every WP is a separate commit set. Until WP-15, nothing reaches users: the
 published app keeps the VB-Cable workflow. Reverting DEC-18 restores DEC-16.
 
 ## Next action
+
+Superseded 2026-10-12 by the [driver completion goal](#goal-complete-the-driver-set-2026-10-12-user-request):
+the 8-channel decision, then freezing the RC and running Stage A. The
+mixed-clock task below continues in parallel as user-mode work.
 
 Host implementation task: plan and implement WP-09 mixed-clock route support
 between virtual cables and physical devices in the user-mode engine, with

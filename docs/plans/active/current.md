@@ -481,6 +481,11 @@ advises against it for software. Chosen: `GPL-3.0-only` for versions after
 
 ## Decision (2026-10-05, user): ship AudioRouter's own virtual cable (DEC-18)
 
+**Current goal (2026-10-12): complete the driver.** The definition of done,
+the Stage A gap table, the critical path and the next action are in the
+[driver completion goal](virtual-cable.md#goal-complete-the-driver-set-2026-10-12-user-request).
+The history below is earlier execution state.
+
 Current driver task (2026-10-09): qualify sustained tone continuity after the
 render-publication repair. Latest packet-clock r2: preparation and 30 seconds
 pass, but the five-minute attempt failed and exposed a 38.5-minute synchronous
