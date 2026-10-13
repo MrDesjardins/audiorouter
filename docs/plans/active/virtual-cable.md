@@ -224,6 +224,18 @@ withdrawn.**
   running it saves the name in helper state, which `update` would re-apply.
 Next: RC3 = 0.2.4 (A13: 0.2.5).
 
+**RC3 0.2.4 frozen (2026-10-12).** Source `d2560715` (clean). Share
+`C:\VMs\ar-share\rc-0.2.4` (base `rc-0.2.4-base`); both packages: 33
+package checks, `timingDiagnostics: false`, test-signed; the packaged INF
+has 32 OEM-format lines with the `41,00,00,00,28,00,00,00` header.
+
+| Package | SYS SHA-256 | CAT SHA-256 | INF SHA-256 |
+| --- | --- | --- | --- |
+| `driver` 0.2.4.0 | `AF3B4E5EDEA301220EC0BE0CF1675E1723874A3464BE3ADF517E80D61B1F39B1` | `C755E7AFA9423A8CEECC3FA69870ABBD9E9BD93153615F70945BD087A1F6D0A2` | `E29D89DC95ADDAEAA1C8180868FB6094D0B68E1F5F4FCD30B3453053CDB2E9E4` |
+| `driver-next` 0.2.5.0 | `6184DC57F18AB03EC3B03E3E0FF1B18685AB78AFA0BC486A4FFD681ACD9C6514` | `1AFA9319DFB5F3729FD8375DFF70687F28DFD5CC135A47FF52AED69EB0C3C2DF` | `1558AFC5874D39677F779F4422FF847AFE8FD7715CF59C93CF4D1761A09CF429` |
+
+MANIFEST SHA-256 `6D0E8B8B4AFB9571EFD7051099B679F57791ADED028B1CB9B8621A0640AAA9DB`.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
