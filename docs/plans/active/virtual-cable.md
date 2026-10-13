@@ -401,6 +401,7 @@ status, remove, revert quieting, collect; one summary table and
 for zero-counter, continuity and single-block bit-exact losses (bound to
 Stage C). Host checks: parses; the endpoint-index lookup tested against
 the probe's real inventory (VB-Cable names). First real run is in the VM.
+Bundle `C:\VMs\ar-share\rc-0.2.4-r4` (source `6c7a0be4`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared; contains `run-stage-a.ps1`), MANIFEST SHA-256 `8D70A4C96167BE9F6A1D1764EC83E72C5954C977CA6B483794238085CA5A6552`. It supersedes r3.
 
 ### 8-channel spike (prepared 2026-10-12)
 
