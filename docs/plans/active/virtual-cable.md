@@ -363,6 +363,23 @@ driver behaviour); `tone-stall` reported "no capture consumer acknowledged
 the primed block; enable Listen" because the runbook omitted the Listen
 step. Not a driver finding. Repeat from step 2 with Listen enabled.
 
+Attempt 2 (2026-10-13): with Listen on, a 30-s `tone` streamed but exited
+1, "no render audio recorded; play the Cable A Input test during the run"
+(the tool needs sound played into Cable A Input; add to the runbook: Sound
+panel → Cable A Input → Properties → Advanced → Test during each run).
+Capture underruns 41,664 frames with 163 ms pump gaps. Then
+`quiet-guest.ps1 -Apply` (as in every earlier VM audio run since r5; CPU
+5–8 % for 60 s) and a 30-s `tone` with Test clicks: tool exit 0, WAV
+730,560 frames, but counters non-zero: capture underrun 26,160; render
+underrun 22,560 / overrun 19,344; packets accepted 1,518, late 20, overrun
+13; sequence gaps, non-finite samples and format mismatches 0. Maximum
+pump gaps 112 ms on capture and render and 117 ms on the control loop at
+the same time; capture blocks 2,948 of ~3,000 (≈52 × 480 frames ≈ the
+underrun count). Attribution: guest-wide descheduling (validated lesson
+2026-10-10), every loss counted by the driver, no corruption. Proposed to
+the user: record A5's zero-counter clean run as a VM deviation bound to
+Stage C, like VCAB-24 (awaiting decision); continue the rest of session 2.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
