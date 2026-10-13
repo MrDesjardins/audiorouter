@@ -35,14 +35,14 @@ The driver and its host-side product are functionally complete. Since
 
 | Stage A check | State | Evidence or gap |
 | --- | --- | --- |
-| A1–A3, A14 install/names/remove | Pass ×2 | WP-03 smokes 2026-10-08/10 |
+| A1–A3, A14 install/names/remove | **Pass ×2 on RC3 0.2.4** | Stage A run 3, 2026-10-12 (earlier: WP-03 smokes 2026-10-08/10) |
 | A4/A5/A6 audio both ways, clean, silence | Pass on diagnostic builds via tool and product route | r20–r23; not yet on the RC |
 | A7 crash recovery | Pass | r24 |
 | A8 pool leak (1 h), A9 reboot keeps IDs | **Not run** | — |
 | A10 Driver Verifier, A11 fuzzer + second user | **Not run** | WP-04 host-reviewed only |
 | A12 Discord/OBS see the cable | **Not run** | — |
-| A13 upgrade N → N+1 keeps names and migrated settings (helper `update`, `repair`); endpoint IDs change by design (VCAB-05) | **Partly run** (r32/r33: IDs change, format migrates, same devnode) | WP-07 session 3 gap: `repair` and the session rebind not run |
-| A15 all 8 cables | **Not run** (count changes only partly exercised) | — |
+| A13 upgrade N → N+1 keeps names and migrated settings (helper `update`, `repair`); endpoint IDs change by design (VCAB-05) | **Pass on RC3** (0.2.4 → 0.2.5, same devnode, 96 kHz migrated, repair) | AudioRouter session rebind after the update not yet run |
+| A15 all 8 cables | **Count part passes on RC3** (2 → 8 → 2, 16 endpoints, A/B IDs kept) | 30-min eight-route tone run not yet run |
 | A16 quality matrix | **Not run** | WP-09b runners ready, host-checked |
 | VCAB-24 no glitches (sustained) | **Cannot pass in this VM** | NEM stalls (r12–r26); bound to Stage C |
 | VCAB-25 latency vs VB-Cable | Indicative only | r6/r23; VB-Cable comparison not run |
@@ -235,6 +235,27 @@ has 32 OEM-format lines with the `41,00,00,00,28,00,00,00` header.
 | `driver-next` 0.2.5.0 | `6184DC57F18AB03EC3B03E3E0FF1B18685AB78AFA0BC486A4FFD681ACD9C6514` | `1AFA9319DFB5F3729FD8375DFF70687F28DFD5CC135A47FF52AED69EB0C3C2DF` | `1558AFC5874D39677F779F4422FF847AFE8FD7715CF59C93CF4D1761A09CF429` |
 
 MANIFEST SHA-256 `6D0E8B8B4AFB9571EFD7051099B679F57791ADED028B1CB9B8621A0640AAA9DB`.
+
+**RC3 Stage A run 3 (2026-10-12, from `02-test-signing-ready`): all steps
+pass.** Evidence `C:\VMs\ar-share\rc-0.2.4\evidence-20261012-204816.zip`
+plus `fresh-install-formats.txt`. `preflight` 15/15; `smoke` ×2 (A1–A3,
+A14); `install` 3/3; `status` 2/2 (0.2.4.0, 60/60 formats); **fresh-install
+default: all four cables 48 kHz, 2 ch, float32, mask 0x3** (VCAB-11 default;
+the serialized OEM format works); `cables` 5/5 (A15 count); `update` 4/4
+(Cable B Output marked 96 kHz; helper update to 0.2.5.0 exit 5, same
+devnode `ROOT\MEDIA\0000`, superseded `oem5.inf` removed); restart;
+`update-verify` 6/6 (0.2.5.0, same devnode, cables present, **96 kHz
+migrated**, restored 48 kHz; all four IDs new, as VCAB-05 now allows);
+`repair` 3/3 (exit 0, same devnode, four endpoints); `remove` 2/2;
+`collect`. `rename` skipped (open helper defect above). A13 passes on
+RC3; the AudioRouter session rebind after an update remains to show.
+
+Remaining Stage A on RC3 (same frozen packages, each from the checkpoint):
+session 2 audio (A4–A6 tone/stall/8-ch, product-route bit-exact at 2 and
+8 ch, A7 kill, A9 reboot keeps IDs); session 4 Driver Verifier + 30-min
+fuzz (A10, A11); session 5 second user (A11); A8 one-hour pool; A12
+Discord/OBS; A15 30-min eight-route run; A16 quality matrix with a VB-Cable
+latency comparison. Open user-mode item: the rename design (spec decision).
 
 ### 8-channel spike (prepared 2026-10-12)
 
