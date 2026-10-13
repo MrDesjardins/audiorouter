@@ -209,6 +209,16 @@ VM procedure (guest, elevated, from the r32 bundle):
 Rollback: `-Step remove`, then `-Step install` from the r31 bundle (0.1.4,
 same source as r20), restart.
 
+r32 bundle `C:\VMs\ar-share\repair-20261012-oem-format-r32` (source
+`e95c4bcd`, clean; 0.1.7.0 test-signed with timing diagnostics, DriverVer
+10/12/2026; packaged INF carries 33 `OEMFormat` references), SYS SHA-256
+`42D8B407CAF7EDFC5ED5A8FABE5F87BC42BAE026BE38202AD0D8DB727C783513`,
+MANIFEST SHA-256 `EDCB24A4978B45FA839D0839288B7D77332DC8E6068DEBF72BF081E0EAC6A53A`.
+Side finding (pre-existing, not fixed): `generate.ps1 -Check` reports the
+topology header stale on a clean checkout (`core.autocrlf=input` leaves LF;
+the generator writes CRLF in its region). Content is identical; it passes
+only right after `-Update`.
+
 **Resume on Windows (next action):**
 
 1. Host, in the repo, after `git pull` on a clean tree: build the bundle the
