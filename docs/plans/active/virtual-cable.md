@@ -315,6 +315,13 @@ rc-0.2.4-base`; driver files identical to RC3, compared): helper SHA-256
 MANIFEST SHA-256 `31A3E1F317884EFB029335806AC6183178E4E9122768E00D66BCEB1B9D7F8897`.
 It supersedes r2 for the remaining RC3 sessions.
 
+**r3 rename check (2026-10-12, guest): PASS.** `status` PASS; `rename`
+PASS 4/4 (configure exit 0, label `{"1":"Discord"}` stored, Windows names
+unchanged, Cable B IDs unchanged); the user then renamed Cable B Output to
+"Voice chat" in `mmsys.cpl`; `status` PASS (`installed`, four endpoints,
+"Voice chat (AudioRouter Virtual Cable)" listed, inventory 60/60 formats);
+`remove` PASS. Option (b) and filter-reference identity confirmed on RC3.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each

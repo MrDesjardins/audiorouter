@@ -91,6 +91,19 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-12 — Endpoint INF and naming facts the audio stack enforces silently.**
+  Evidence: [virtual cable plan, RC 0.2.0–0.2.4 Stage A](docs/plans/active/virtual-cable.md).
+  Scope: INF endpoint properties, endpoint names and cable identity.
+  Consequence: (1) `PKEY_AudioEngine_OEMFormat` must be the 48-byte
+  `StgSerializePropVariant` blob (`41,00,00,00,28,00,00,00` + format); the
+  bare structure is ignored with no error, so test the default on a fresh
+  install, render and capture. (2) A driver proposing a default through
+  `KSPROPERTY_PIN_PROPOSEDATAFORMAT2` overrides every stored format.
+  (3) The endpoint property store refuses third-party name writes even
+  elevated, and frees the `VT_LPWSTR` it is given. (4) A Sound-settings
+  rename rewrites the endpoint description; identify cables by the
+  connected filter reference (DeviceTopology), never by names.
+
 - **2026-10-12 — Windows assigns new audio endpoint IDs on every driver update.**
   Evidence: [virtual cable plan, r32/r33 endpoint ID results](docs/plans/active/virtual-cable.md),
   Microsoft's endpoint ID strings documentation. Scope: driver updates,
