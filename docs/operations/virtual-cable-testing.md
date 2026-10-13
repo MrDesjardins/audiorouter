@@ -211,7 +211,7 @@ qualifies all 8 cables (`… Cable C …` to `… Cable H …`). Before WP-05 th
 | A10 | Driver Verifier | `verifier /standard /driver audioroutervirtual.sys`, reboot, repeat A4–A7, then `verifier /reset` | No crash, no verifier stop |
 | A11 | Security | Bridge IOCTL fuzzer; a second Windows user tries to open the bridge | Rejected cleanly, no crash (SEC-08, VDEV-07) |
 | A12 | Apps | Discord and OBS in the VM select the cable | Both see it and receive the tone (VDEV-11) |
-| A13 | Upgrade | Install version N, then N+1 over it | Devices keep their IDs; sessions still bind |
+| A13 | Upgrade | Install version N, then N+1 over it | Same device instance; every cable present with its name; Windows assigns new endpoint IDs (VCAB-05) and migrates each endpoint's device format (set a non-default format on one cable before the update); AudioRouter sessions still bind by bus |
 | A14 | Uninstall | Helper `remove` (or `manage.ps1 -Uninstall -AllowDriverInstall` before WP-07); compare with A1 | Matches baseline: no `oem*.inf` from `AudioRouter Project`, no `ROOT\AudioRouterVirtual` or `SWD\AudioRouter*` devices |
 
 | A15 | All 8 cables | Helper `set-cables --count 8`; run 8 pass-through sessions (Cable X Input → Cable X Output) at once with distinct tones, 30 min; then `--count 2` | 16 endpoints present; every cable carries its own tone, crosstalk below −90 dBFS, zero glitches; backend CPU recorded; after `--count 2` Cable A/B keep their endpoint IDs and C–H are gone |

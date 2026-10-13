@@ -176,7 +176,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | Plugin worker latency/instability | Delayed or interrupted voice | Per-instance containment, measured latency, protected failure policy; M06 |
 | Unavailable Windows hardware here | Cannot verify platform requirements | Record blocked test evidence; never substitute Linux mocks; M00 onward |
 | LLM/client concurrent edits | Lost user change or unintended route | Backend revisions, preview, scopes, idempotency; M01/M07 |
-| Future installer/update changes endpoint IDs | Discord/OBS selections break | Identity-preserving migration and explicit reselection flow before any separately authorized distribution track |
+| Future installer/update changes endpoint IDs | Discord/OBS selections break | Identity-preserving migration and explicit reselection flow before any separately authorized distribution track. Windows itself changes virtual cable endpoint IDs on every driver update (17 VCAB-05, accepted 2026-10-12): settings migrate, driver updates stay rare, and Setup tells the user to reselect |
 | Scope expands to all reference-product features | Delays core application | Future backlog and explicit scope decisions; every milestone |
 
 External prerequisites that agents cannot invent include a Windows test machine, appropriate physical audio equipment, and installed test plugin/app binaries. Driver source/redistribution rights and signing credentials apply only if a future driver track is explicitly authorized. Gather concrete findings before requesting any purchase, account action, or scope decision. This specification authorizes none of those external actions by itself.

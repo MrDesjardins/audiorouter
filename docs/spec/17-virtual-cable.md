@@ -79,8 +79,20 @@ passes audio when AudioRouter is not running.
   within 500 ms (VDEV-12) and never replays old audio.
 - **VCAB-05 — Persistence.** Once installed, the enabled cables' endpoints exist at every
   boot whether AudioRouter runs or not, and keep their Windows endpoint IDs
-  across reboots, AudioRouter updates and driver updates (VDEV-03). Apps that
+  across reboots, cable count changes for the cables that stay, and
+  AudioRouter updates that do not update the driver (VDEV-03). Apps that
   selected them keep their selection.
+  **Driver updates (user decision 2026-10-12).** Windows assigns new
+  endpoint IDs whenever the driver is updated, even from identical source
+  (VM r33; documented in Microsoft's endpoint ID strings page). No driver
+  or API can prevent it. What is required instead: the cable names, the
+  driver's filter reference strings and connector pin IDs never change, so
+  Windows migrates each endpoint's settings (device format, names) to the
+  new ID; driver updates ship only when the driver changes (app releases
+  carry the same driver, DEC-18); AudioRouter resolves cables by bus and
+  name, never by a stored endpoint ID; and the update flow tells the user
+  that apps such as Discord or OBS may need the cable selected again
+  (7.5).
 - **VCAB-06 — Coexistence.** VB-Cable, Voicemeeter and physical devices keep
   working. A session may mix AudioRouter cables and VB-Cable endpoints.
 - **VCAB-07 — No default-device changes.** Installing, updating or removing
@@ -187,8 +199,9 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
   `CableCount` from the device's hardware registry key (`HKR`, written by
   the helper; missing or out of range → 2) and registers subdevices only for
   cables `0 … CableCount-1`. Because each cable always uses the same filter
-  names, its Windows endpoint ID stays the same when the count changes or
-  the driver updates. The INF sets the default with
+  names, its Windows endpoint ID stays the same when the count changes, and
+  a driver update migrates its settings to the new ID Windows assigns
+  (VCAB-05). The INF sets the default with
   `HKR,,CableCount,0x00010001,2` in the `.HW` section.
 - Topology: render = speaker topology without jack detection; capture = a
   simple line-in style topology (no mic-array geometry, no
@@ -593,7 +606,7 @@ through a pipe by its non-elevated parent when started with `runas`):
 | --- | --- |
 | `status` | Read-only: package in driver store (version), device present, endpoints present, protocol via QUERY. Does not need elevation; the backend implements the same logic directly. |
 | `install --package <dir>` | Verify the package (9.1); record current default devices; add the package to the driver store (`DiInstallDriverW` or `SetupCopyOEMInfW` + install); if no `ROOT\AudioRouterVirtual` device exists, create one (`SetupDiCreateDeviceInfoW` + `SPDRP_HARDWAREID` + `SetupDiCallClassInstaller(DIF_REGISTERDEVICE)` + `UpdateDriverForPlugAndPlayDevicesW`); wait (bounded, 30 s) for the enabled cables' endpoints (default 2 cables = 4 endpoints); report defaults that changed. |
-| `update --package <dir>` | Same as install when the device exists: newer `DriverVer` is applied with `UpdateDriverForPlugAndPlayDevicesW`; the device instance and endpoint IDs stay. Report if Windows requires a restart. |
+| `update --package <dir>` | Same as install when the device exists: newer `DriverVer` is applied with `UpdateDriverForPlugAndPlayDevicesW`; the device instance stays. Windows assigns new endpoint IDs and migrates their settings (VCAB-05), so report the new IDs per cable. Report if Windows requires a restart. |
 | `repair --package <dir>` | Reinstall the same version; recreate the device if missing. |
 | `set-cables --count <1-8>` | Write `CableCount` to the device's hardware key, then restart the device (`SetupDiCallClassInstaller(DIF_PROPERTYCHANGE)` with `DICS_PROPCHANGE`); wait (bounded, 30 s) until exactly the first N cables' endpoints are present. Reports a pending restart if Windows cannot restart the device while it is in use. |
 | `configure --name <n>=<text> --param <Value>=<n>` | Write cable names and §5.5 parameters (validated against the same ranges), then restart the device like `set-cables`. |
@@ -746,7 +759,11 @@ notifications that the backend already watches.
   (DIST-01). The NSIS installer never installs the driver.
 - App update with a newer driver in the package: after the app starts, the
   Setup panel shows "Update available for AudioRouter cables" and the user
-  clicks Update (one UAC prompt). Never update silently.
+  clicks Update (one UAC prompt). Never update silently. Before the
+  prompt, and again in the result, Setup says that Windows gives updated
+  cables new device IDs, so apps such as Discord or OBS may need the cable
+  selected again; AudioRouter's own sessions keep working (VCAB-05). The
+  release notes of any release that updates the driver say the same.
 - App uninstall: an NSIS uninstall hook (Tauri 2 `installerHooks`,
   `NSIS_HOOK_PREUNINSTALL`) asks "Also remove AudioRouter virtual cables?"
   (default **No**, because other apps may be set to them). Yes → run the
@@ -761,6 +778,7 @@ notifications that the backend already watches.
 | --- | --- | --- | --- |
 | VDEV-01 | Create/rename/delete up to 8 named buses | Up to 8 cables, enabled as "first N" (1–8); renaming changes only AudioRouter's label, not the Windows name | One root device with static endpoints is far simpler and safer than dynamic per-bus devices; free deletion of a middle cable would need per-bus devices (Software Device seam, `crates/windows-audio/src/software_device.rs`) |
 | VDEV-10 | Delete a bus | Lower the count (removes the highest cables) or remove the whole package | Follows from "first N" |
+| VDEV-03 | Endpoint identities survive normal upgrades | Driver updates change endpoint IDs; settings migrate and the user is told to reselect in other apps (accepted by the user 2026-10-12) | Windows assigns new endpoint IDs on every driver update (VM r33, Microsoft documentation); no driver-side alternative exists |
 
 ## 9. Safety details
 
@@ -800,6 +818,7 @@ happens.
 | Kernel bug crashes PCs | Small driver, Driver Verifier, fuzzing, VM-only development, beta stage D |
 | Clock drift glitches | Per-cable clock domains plus continuity harness |
 | Users expect a stand-alone cable | VCAB-03 text in first run and Setup; pass-through template |
+| A driver update makes Discord/OBS lose the cable | Ship driver updates only when the driver changes; reselect notice in Setup and release notes (VCAB-05, 7.5) |
 
 ## 11. Performance and sound quality
 

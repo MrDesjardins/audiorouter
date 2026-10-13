@@ -91,6 +91,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-12 — Windows assigns new audio endpoint IDs on every driver update.**
+  Evidence: [virtual cable plan, r32/r33 endpoint ID results](docs/plans/active/virtual-cable.md),
+  Microsoft's endpoint ID strings documentation. Scope: driver updates,
+  upgrade tests (A13) and anything that stores an endpoint ID. Consequence:
+  an in-place update of identical source on the same devnode changed all
+  four cable IDs twice (at install and at the restart) and deleted the old
+  keys, while device formats migrated and a plain restart kept every ID.
+  Resolve cables by bus and name, keep filter reference strings and pin IDs
+  fixed so settings migrate, and test migrated settings, not ID equality.
+
 - **2026-10-12 — Verify the sidecar the running shell actually launches.**
   Evidence: [live ChatGPT tunnel repair](docs/plans/active/evidence/2026-10-12-chatgpt-tunnel-repair.md).
   Scope: local desktop builds and MCP repairs. Consequence: rebuilding the CLI

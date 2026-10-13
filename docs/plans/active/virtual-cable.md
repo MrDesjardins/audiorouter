@@ -41,7 +41,7 @@ The driver and its host-side product are functionally complete. Since
 | A8 pool leak (1 h), A9 reboot keeps IDs | **Not run** | — |
 | A10 Driver Verifier, A11 fuzzer + second user | **Not run** | WP-04 host-reviewed only |
 | A12 Discord/OBS see the cable | **Not run** | — |
-| A13 upgrade N → N+1 keeps IDs (helper `update`, `repair`) | **Not run** | WP-07 session 3 gap |
+| A13 upgrade N → N+1 keeps names and migrated settings (helper `update`, `repair`); endpoint IDs change by design (VCAB-05) | **Partly run** (r32/r33: IDs change, format migrates, same devnode) | WP-07 session 3 gap: `repair` and the session rebind not run |
 | A15 all 8 cables | **Not run** (count changes only partly exercised) | — |
 | A16 quality matrix | **Not run** | WP-09b runners ready, host-checked |
 | VCAB-24 no glitches (sustained) | **Cannot pass in this VM** | NEM stalls (r12–r26); bound to Stage C |
@@ -338,6 +338,16 @@ spec 17 change. Driver updates are already decoupled from app releases
 (DEC-18), AudioRouter resolves cables by name/busId, and Windows migrates
 endpoint settings; third-party apps that store an endpoint ID (Discord,
 OBS) will need the cable reselected after a driver update.
+
+**Decision (user, 2026-10-12): accept new endpoint IDs on driver updates.**
+Spec changes: 17 VCAB-05 (IDs persist across reboots, count changes and
+app-only updates; driver updates migrate names and settings to new IDs),
+§5.1, §6 `update` (report the new IDs), §7.5 (Setup and release-note
+reselect notice), §8 deviation row for VDEV-03, §10 risk row; 06 VDEV-03
+note; 15 risk row; testing A13 expectation (same devnode, names present,
+new IDs, migrated device format, sessions bind by bus). Follow-up
+implementation (not started): the Setup update notice and its release-note
+text; confirm the helper's `update`/`install` JSON lists the new IDs.
 
 Side finding (pre-existing, not fixed): `generate.ps1 -Check` reports the
 topology header stale on a clean checkout (`core.autocrlf=input` leaves LF;
@@ -2574,7 +2584,7 @@ preflight; no Stage A qualification is claimed.
 | --- | --- | --- |
 | VCAB-01/02, VDEV-01 (deviation) | WP-05, WP-07, WP-12 | VM endpoint list at 2 and 8 cables; A15 |
 | VCAB-03/04, VDEV-04/12 | WP-06, WP-09 | Tone, silence, crash tests |
-| VCAB-05, VDEV-03 | WP-07, WP-12 | Reboot and update keep endpoint IDs |
+| VCAB-05, VDEV-03 | WP-07, WP-12 | Reboot keeps endpoint IDs; driver update migrates names and settings to new IDs (2026-10-12) |
 | VCAB-07 | WP-07, WP-14 | Default-device snapshot before/after |
 | VCAB-10/11 | WP-05 | Format inventory |
 | SEC-08, VDEV-07 | WP-04 | Unit tests, fuzzer, verifier, second user |
