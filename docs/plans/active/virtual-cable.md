@@ -286,6 +286,13 @@ Implemented (user mode only; driver and RC3 packages unchanged):
 VM still to show: `rename` passes, and a cable renamed in Windows Sound
 settings is still found by the helper (`status`) and AudioRouter.
 
+Bundle `C:\VMs\ar-share\rc-0.2.4-r2` (source `6cb9b6e7`; base
+`rc-0.2.4-r2-base` from `-ReuseDriverShare rc-0.2.4-base`): driver and
+driver-next SYS/CAT/INF byte-identical to RC3 (hashes above, compared);
+helper SHA-256 `E654314AEE4BD57B7A701757E72C1E5EF9B2852DB2823475135EC3A15E71B623`;
+MANIFEST SHA-256 `2BEE7553DA1A0A08B4B1A95463F971517EAAFF6C6128165F7C83652CA1DD570D`.
+Use it for every remaining RC3 Stage A session.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
