@@ -37,8 +37,10 @@ if (-not $generated.Contains('KSNODETYPE_ANALOG_CONNECTOR = "{DFF21FE1-F70F-11D0
     -not $generated.Contains('PKEY_AudioEngine_OEMFormat                  = "{E4870E26-3CC5-4CD2-BA46-CA0A9A70ED04},3"')) {
     throw 'Render category, endpoint enable and OEM format properties must match the Windows SDK identities.'
 }
-# 48 kHz IEEE float stereo WAVEFORMATEXTENSIBLE (40 bytes), VCAB-11 default.
-$oemFormatLine = 'HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71'
+# VCAB-11 default: a serialized PROPVARIANT (VT_BLOB 0x41, size 40) holding
+# 48 kHz IEEE float stereo WAVEFORMATEXTENSIBLE, 48 bytes in all.
+$oemFormatLine = 'HKR,EP\0,%PKEY_AudioEngine_OEMFormat%,0x00000001,41,00,00,00,28,00,00,00,FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71'
+if (($oemFormatLine.Split(',').Count - 4) -ne 48) { throw 'OEM format blob must be 48 bytes.' }
 foreach ($letter in 'A','B','C','D','E','F','G','H') {
     foreach ($role in 'Render','Capture') {
         foreach ($filter in 'Wave','Topology') {

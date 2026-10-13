@@ -198,6 +198,32 @@ has 16 capture associations to `CableXCapturePinCategory`. Helper SHA-256
 
 MANIFEST SHA-256 `1BE8E244DC6CFEBCD74E94B9BA316EC15F73ADA20E9BA38FE69B40B4051E8F94`.
 
+**RC2 Stage A run 2 (2026-10-12):** steps 1–2 passed again, but a fresh
+install still gave both capture cables 44.1 kHz mono
+(`Z:\rc-0.2.2\fresh-install-formats.txt`): the association theory was
+wrong. `cables` PASS; `rename` FAIL cleanly (exit 3, "set the endpoint
+name: Access is denied", no crash: the double-free fix holds). **RC2
+withdrawn.**
+- **Actual cause of the default:** Microsoft's PKEY_AudioEngine_OEMFormat
+  page specifies a 48-byte `StgSerializePropVariant` blob: `41,00,00,00`
+  (VT_BLOB), `28,00,00,00` (size 40), then the WAVEFORMATEXTENSIBLE. r32
+  wrote only the 40-byte structure, so Windows ignored the OEM default on
+  every cable; render was 48 kHz stereo by Windows' own choice, capture fell
+  back to the first data range. Fix: the 8-byte header in the generator and
+  INX; the acceptance test asserts the exact 48-byte line. The per-cable
+  capture association stays (Microsoft documents the association as the
+  endpoint's KS pin category, which it now names).
+- **Rename denied (user mode, not RC-blocking):** writing
+  `PKEY_Device_FriendlyName` through the endpoint property store is refused
+  even elevated, so 17 §5.5's rename design does not work. The driver does
+  not read names (17 §5.5 decision); Windows takes them from the INF's
+  `MediaCategories` entries, so a fix stays in the helper (for example,
+  rewrite the per-cable `MediaCategories` name and restart the device) and
+  needs a spec decision. Also 17 §8 (VDEV-01 row: renaming changes only
+  AudioRouter's label) contradicts §5.5. Stage A skips `rename` until then;
+  running it saves the name in helper state, which `update` would re-apply.
+Next: RC3 = 0.2.4 (A13: 0.2.5).
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each

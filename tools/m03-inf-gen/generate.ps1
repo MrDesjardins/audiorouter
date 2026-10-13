@@ -33,7 +33,13 @@ foreach ($cable in $cableData.cables) {
     }
 }
 
-$oemFormat = 'FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,' +
+# A StgSerializePropVariant blob, 48 bytes: VT_BLOB (0x41) and the size (40)
+# as two little-endian DWORDs, then WAVEFORMATEXTENSIBLE for 48 kHz IEEE float
+# stereo. Microsoft's PKEY_AudioEngine_OEMFormat page shows this layout. The
+# bare 40-byte structure was silently ignored (capture defaulted to 44.1 kHz
+# mono in the VM, 2026-10-12).
+$oemFormat = '41,00,00,00,28,00,00,00,' +
+    'FE,FF,02,00,80,BB,00,00,00,DC,05,00,08,00,20,00,16,00,20,00,03,00,00,00,' +
     '03,00,00,00,00,00,10,00,80,00,00,AA,00,38,9B,71'
 $inf = Get-Content -LiteralPath $InputInf -Raw
 $header = Get-Content -LiteralPath $topologyHeader -Raw
