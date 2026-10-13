@@ -66,9 +66,10 @@ checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
 
 [[package]]
 name = "audiorouter-control"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "audiorouter-domain",
+ "audiorouter-driver-helper",
  "audiorouter-dsp",
  "audiorouter-engine",
  "audiorouter-plugin-host",
@@ -85,15 +86,26 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-domain"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "serde",
  "serde_json",
 ]
 
 [[package]]
+name = "audiorouter-driver-helper"
+version = "0.0.16"
+dependencies = [
+ "audiorouter-windows-audio",
+ "serde",
+ "serde_json",
+ "windows",
+ "windows-core",
+]
+
+[[package]]
 name = "audiorouter-dsp"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "bytemuck",
  "microfft",
@@ -102,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-engine"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "arc-swap",
  "audiorouter-domain",
@@ -114,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-plugin-host"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "audiorouter-engine",
  "crossbeam-queue",
@@ -126,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-protocol"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "hmac",
  "serde",
@@ -136,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-recording"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "crossbeam-queue",
  "flac-io",
@@ -147,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-storage"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-recording",
@@ -160,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-windows-audio"
-version = "0.0.14"
+version = "0.0.16"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-dsp",
@@ -1232,9 +1244,9 @@ checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
 
 [[package]]
 name = "trash"
-version = "5.2.8"
+version = "5.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0cf8ced01d5c32c50f1b71a7256ac3fac5bf38a6c94042206f37292fcf08a49"
+checksum = "be89b3fe156965d29ac4f8522f3a640c655affdd9f21cb4f36857f0c92c00317"
 dependencies = [
  "chrono",
  "libc",
@@ -1523,9 +1535,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.9.0"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 dependencies = [
  "zeroize_derive",
 ]
