@@ -136,6 +136,22 @@ the freeze. VCAB-05 was settled by decision (driver updates change IDs).
 - The signed release later must be built from the same commit as the
   tested RC (driver source unchanged); only the signature differs.
 
+**RC 0.2.0 frozen (2026-10-12).** Source `4b371657` (clean; driver source
+identical to `e95c4bcd`). Share `C:\VMs\ar-share\rc-0.2.0` (base
+`rc-0.2.0-base` from `prepare-vm-share.ps1 -Version 0.2.0 -NextVersion
+0.2.1`, then `prepare-cable-latency-update.ps1`); both packages passed the
+33 package checks; `timingDiagnostics: false`, `signed: test`.
+
+| Package | SYS SHA-256 | CAT SHA-256 | INF SHA-256 |
+| --- | --- | --- | --- |
+| `driver` 0.2.0.0 | `DA85C21DB920A2060887BF9CB46388508161EE584DC3D1430D5C6FEAD65ECB74` | `D2E7859D2683426DE1D44A4557EB89917E11FBED869494FEA05D4D09DD6D1BA8` | `3E2D10E7EB6DB5E792C0DB59133F53FEEC1CE3C6CE7ED6A1F33CBB23DEA1CE37` |
+| `driver-next` 0.2.1.0 | `326935EADF84D2EA80AEB31B15DC96F1570887DF485D48D3CE595225D5B74F08` | `4E80D05D70A1290AE9E7B50BE1498BD167B853CA1F1E7E6A8967659F262213BB` | `CBF4D21D0602A4F8F6E0B25033C5EA7D04AC67EA20764C41A1CFF2E54FBC042E` |
+
+MANIFEST SHA-256 `7ED02337C5B662337E14D134A40259CD26039876A6AEF5CFCF8C3CF635B824A4`.
+Any later driver source change invalidates this RC and its Stage A
+evidence. Next: Stage A sessions (step 3), each from the
+`02-test-signing-ready` checkpoint, bundle copied to `C:\ar\rc-0.2.0`.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
