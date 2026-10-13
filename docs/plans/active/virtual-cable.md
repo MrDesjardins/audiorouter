@@ -379,6 +379,28 @@ underrun count). Attribution: guest-wide descheduling (validated lesson
 2026-10-10), every loss counted by the driver, no corruption. Proposed to
 the user: record A5's zero-counter clean run as a VM deviation bound to
 Stage C, like VCAB-24 (awaiting decision); continue the rest of session 2.
+`tone-stall` PASS (counters rose: capture underrun 22,992, render 960;
+no corruption). `tone-8ch` first FAILED with 33,658 capture
+`format_mismatches` because the cables ran 48 kHz stereo while the tool
+leases 8 ch / 96 kHz (correct driver behaviour since r32 honours the stored
+format); with both cables set to 8 ch / 96 kHz it finished exit 0,
+`format_mismatches` 0, 1,093 render packets accepted, underruns 11,520 /
+8,640 with simultaneous ~131 ms gaps (VM).
+
+**Unattended session runner (user request 2026-10-13).** The user asked for
+more automatic VM sessions. `tools/vm/run-stage-a.ps1 -Session audio`
+(shipped in bundles by `prepare-cable-latency-update.ps1`) runs session 2
+end to end: preflight/install (exit 5 → registers a one-time logon task,
+restarts, resumes), status, quiet guest, the four driver tone steps with
+background `m00-probe` feeders (records Cable B Output, plays a tone into
+Cable A Input; replaces Listen and Test clicks), 8 ch / 96 kHz for
+`tone-8ch` and 8 ch for the 8-ch bit-exact (always restored), product
+continuity, bit-exact 2 and 8 ch, A7 kill, A9 restart with ID comparison,
+status, remove, revert quieting, collect; one summary table and
+`stage-a-audio-*.zip` on Z:. Verdicts: PASS/FAIL for must-pass checks; VM
+for zero-counter, continuity and single-block bit-exact losses (bound to
+Stage C). Host checks: parses; the endpoint-index lookup tested against
+the probe's real inventory (VB-Cable names). First real run is in the VM.
 
 ### 8-channel spike (prepared 2026-10-12)
 
