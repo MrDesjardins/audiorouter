@@ -232,6 +232,7 @@ mod tests {
                 direction: EndpointDirection::Render,
                 device_description: String::new(),
                 driver_inf_section: String::new(),
+                filter_reference: String::new(),
             },
             EndpointInfo {
                 id: "speaker-id".into(),

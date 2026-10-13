@@ -334,6 +334,39 @@ fn arguments_follow_the_command_contract() {
 }
 
 #[test]
+fn filter_references_identify_every_cable_and_nothing_else() {
+    assert_eq!(
+        classify_filter_reference("wavecablearender"),
+        Some((0, Direction::Input))
+    );
+    assert_eq!(
+        classify_filter_reference("topologycablebcapture"),
+        Some((1, Direction::Output))
+    );
+    assert_eq!(
+        classify_filter_reference("topologycablehrender"),
+        Some((7, Direction::Input))
+    );
+    for other in [
+        "",
+        "wavecable",
+        "wavecableirender",
+        "wavecablearenderx",
+        "wavespeaker",
+        "topologycableArender",
+        "vbaudiocable",
+    ] {
+        assert_eq!(classify_filter_reference(other), None, "{other}");
+    }
+    assert_eq!(
+        audiorouter_windows_audio::filter_reference_of(
+            r"{2}.\\?\root#media#0000#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\TopologyCableBCapture"
+        ),
+        "topologycablebcapture"
+    );
+}
+
+#[test]
 fn cable_names_are_bounded_printable_and_parenthesis_free() {
     assert!(validate_cable_name("Discord").is_ok());
     assert!(validate_cable_name(&"x".repeat(48)).is_ok());

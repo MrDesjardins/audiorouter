@@ -85,6 +85,47 @@ pub struct EndpointDisplayInfo {
     /// known virtual cable returns. Friendly names are never binding identity.
     pub device_description: String,
     pub driver_inf_section: String,
+    /// Lowercase reference string of the KS filter the endpoint's connector
+    /// connects to (for example `topologycablebcapture`), or empty. It is the
+    /// driver's fixed filter name, so a rename in Windows Sound settings, which
+    /// rewrites the description, cannot change it.
+    pub filter_reference: String,
+}
+
+/// Reference string of the KS filter connected to an endpoint, read through
+/// the documented DeviceTopology API; empty when unavailable.
+///
+/// # Safety
+/// COM is initialized on this thread.
+unsafe fn connected_filter_reference(device: &windows::Win32::Media::Audio::IMMDevice) -> String {
+    use windows::Win32::Media::Audio::IDeviceTopology;
+    use windows::Win32::System::Com::{CoTaskMemFree, CLSCTX_ALL};
+    // SAFETY: COM is initialized (caller contract); every interface is owned
+    // and released on drop; the CoTaskMem device ID is copied, then freed once.
+    unsafe {
+        let Ok(topology) = device.Activate::<IDeviceTopology>(CLSCTX_ALL, None) else {
+            return String::new();
+        };
+        let Ok(connector) = topology.GetConnector(0) else {
+            return String::new();
+        };
+        let Ok(id) = connector.GetDeviceIdConnectedTo() else {
+            return String::new();
+        };
+        let text = id.to_string().unwrap_or_default();
+        CoTaskMemFree(Some(id.0 as *const core::ffi::c_void));
+        filter_reference_of(&text)
+    }
+}
+
+/// The last `\` component of a KS device interface ID, lowercased.
+pub fn filter_reference_of(device_id: &str) -> String {
+    device_id
+        .rsplit('\\')
+        .next()
+        .filter(|reference| reference.len() <= 64)
+        .unwrap_or_default()
+        .to_ascii_lowercase()
 }
 
 /// Known VB-Cable transport key, classified from driver properties rather
@@ -8630,6 +8671,7 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
                     name,
                     device_description: read_property(&PKEY_Device_DeviceDesc),
                     driver_inf_section: read_property(&PKEY_Device_DriverInfSection),
+                    filter_reference: connected_filter_reference(&device),
                 })
             })? {
                 result.push(info);

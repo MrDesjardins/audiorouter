@@ -291,6 +291,7 @@ mod tests {
             name: "expected".into(),
             device_description: String::new(),
             driver_inf_section: String::new(),
+            filter_reference: String::new(),
         };
         let format = EndpointInfo {
             id: "id".into(),
@@ -336,6 +337,7 @@ mod tests {
             name: "expected".into(),
             device_description: String::new(),
             driver_inf_section: String::new(),
+            filter_reference: String::new(),
         };
         assert!(select_endpoint(
             &[display.clone(), display],

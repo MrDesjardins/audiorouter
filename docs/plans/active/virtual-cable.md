@@ -293,6 +293,23 @@ helper SHA-256 `E654314AEE4BD57B7A701757E72C1E5EF9B2852DB2823475135EC3A15E71B623
 MANIFEST SHA-256 `2BEE7553DA1A0A08B4B1A95463F971517EAAFF6C6128165F7C83652CA1DD570D`.
 Use it for every remaining RC3 Stage A session.
 
+**r2 rename check (2026-10-12, guest):** `install` exit 5 (a restart was
+pending from the previous `remove`; the idempotency check wrongly required
+`alreadyInstalled` before the restart, now skipped after exit 5). After the
+user renamed Cable B Output to "Voice chat" in `mmsys.cpl`, `status` FAILED:
+`needsRepair`, inventory FAIL. The rename rewrote the endpoint
+description, which the helper classified by. Fix (user mode): new
+`EndpointDisplayInfo::filter_reference`, the connected KS filter's
+reference string via the documented DeviceTopology API; the helper
+classifies by it first (`classify_filter_reference`:
+`wavecable|topologycable` + `a–h` + `render|capture`), then by description
+and name; `m03_cable_inventory` matches the same way and reports
+`filterReference`. Host evidence: on VB-Cable endpoints the call returns
+the topology filter reference (`vbaudiovacbwdm2022_in1_topo_…`). Tests:
+helper 30 (new: filter-reference classification, renamed endpoint still
+found), inventory 3, windows-audio 141; Clippy workspace and `src-tauri`,
+rustfmt clean. `remove` passed. Spec 17 §5.5 updated.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each

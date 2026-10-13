@@ -822,6 +822,26 @@ pub fn classify_endpoint_name(friendly: &str) -> Option<(u8, Direction)> {
     None
 }
 
+/// Recognise an AudioRouter endpoint from the reference string of the KS
+/// filter it connects to: `wavecable<a-h><render|capture>` or
+/// `topologycable<a-h><render|capture>` (the driver's fixed filter names,
+/// 17 §5.1). A rename in Windows Sound settings rewrites the description but
+/// never this, so it is the primary identity (VCAB-02, VM 2026-10-12).
+pub fn classify_filter_reference(reference: &str) -> Option<(u8, Direction)> {
+    let rest = reference
+        .strip_prefix("wavecable")
+        .or_else(|| reference.strip_prefix("topologycable"))?;
+    let letter = *rest.as_bytes().first()?;
+    let cable = letter
+        .checked_sub(b'a')
+        .filter(|cable| *cable < MAX_CABLES)?;
+    match &rest[1..] {
+        "render" => Some((cable, Direction::Input)),
+        "capture" => Some((cable, Direction::Output)),
+        _ => None,
+    }
+}
+
 /// Prefer the driver-provided category description so a user-visible rename
 /// cannot erase cable identity. Legacy test packages used the composed name.
 pub fn classify_endpoint_properties(

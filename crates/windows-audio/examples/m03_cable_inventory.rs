@@ -106,6 +106,24 @@ fn name_matches(friendly: &str, expected: &str) -> bool {
             .is_some_and(|rest| rest.ends_with(')') && !rest[..rest.len() - 1].contains(['(', ')']))
 }
 
+/// The driver's fixed filter names for an expected cable name, so a cable
+/// renamed in Windows Sound settings is still found (VM, 2026-10-12).
+fn reference_matches(reference: &str, expected: &str) -> bool {
+    let Some(rest) = expected.strip_prefix("AudioRouter Cable ") else {
+        return false;
+    };
+    let Some((letter, side)) = rest.split_once(' ') else {
+        return false;
+    };
+    let flow = match side {
+        "Input" => "render",
+        "Output" => "capture",
+        _ => return false,
+    };
+    let suffix = format!("cable{}{flow}", letter.to_ascii_lowercase());
+    reference == format!("wave{suffix}") || reference == format!("topology{suffix}")
+}
+
 #[cfg(windows)]
 fn main() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
@@ -185,7 +203,12 @@ fn inventory(
     let needle = matcher.unwrap_or("AudioRouter");
     let ours: Vec<_> = all
         .into_iter()
-        .filter(|info| info.name.contains(needle))
+        .filter(|info| {
+            info.name.contains(needle)
+                || (matcher.is_none()
+                    && (info.filter_reference.starts_with("wavecable")
+                        || info.filter_reference.starts_with("topologycable")))
+        })
         .collect();
     let mut endpoints = Vec::new();
     for expected in if matcher.is_none() {
@@ -195,7 +218,10 @@ fn inventory(
     } {
         let found: Vec<_> = ours
             .iter()
-            .filter(|info| name_matches(&info.name, &expected))
+            .filter(|info| {
+                reference_matches(&info.filter_reference, &expected)
+                    || (info.filter_reference.is_empty() && name_matches(&info.name, &expected))
+            })
             .collect();
         if found.len() != 1 {
             problems.push(format!("{expected}: {} matching endpoints", found.len()));
@@ -317,6 +343,7 @@ fn inventory(
             endpoints.push(serde_json::json!({
                 "name": info.name,
                 "id": info.id,
+                "filterReference": info.filter_reference,
                 "direction": format!("{:?}", info.direction),
                 "mixFormat": mix,
                 "enginePeriodFrames": periods,
@@ -382,5 +409,31 @@ mod tests {
         ] {
             assert!(!name_matches(bad, "AudioRouter Cable A Input"), "{bad}");
         }
+    }
+
+    #[test]
+    fn filter_references_match_the_expected_cable_only() {
+        assert!(reference_matches(
+            "topologycablebcapture",
+            "AudioRouter Cable B Output"
+        ));
+        assert!(reference_matches(
+            "wavecablebcapture",
+            "AudioRouter Cable B Output"
+        ));
+        assert!(reference_matches(
+            "wavecablehrender",
+            "AudioRouter Cable H Input"
+        ));
+        assert!(!reference_matches(
+            "topologycablebrender",
+            "AudioRouter Cable B Output"
+        ));
+        assert!(!reference_matches(
+            "topologycableacapture",
+            "AudioRouter Cable B Output"
+        ));
+        assert!(!reference_matches("", "AudioRouter Cable B Output"));
+        assert!(!reference_matches("topologycablebcapture", "Voice chat"));
     }
 }

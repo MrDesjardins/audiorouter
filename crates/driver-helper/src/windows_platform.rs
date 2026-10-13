@@ -27,8 +27,10 @@ fn select_active_cable_endpoints(
     display
         .into_iter()
         .filter_map(|info| {
-            let (cable, direction) =
-                classify_endpoint_properties(&info.name, &info.device_description)?;
+            // The driver's filter name first: a Windows rename changes the
+            // description and friendly name, never the filter reference.
+            let (cable, direction) = crate::classify_filter_reference(&info.filter_reference)
+                .or_else(|| classify_endpoint_properties(&info.name, &info.device_description))?;
             let expected_flow = match direction {
                 crate::Direction::Input => EndpointDirection::Render,
                 crate::Direction::Output => EndpointDirection::Capture,
@@ -763,6 +765,7 @@ mod tests {
             name: "My renamed endpoint".into(),
             device_description: "AudioRouter Cable A Input".into(),
             driver_inf_section: String::new(),
+            filter_reference: String::new(),
         };
         let states = vec![
             EndpointStateInfo {
@@ -794,6 +797,32 @@ mod tests {
         assert_eq!(result[0].endpoint_id, "active");
         assert_eq!(result[0].cable, 0);
         assert_eq!(result[0].direction, crate::Direction::Input);
+    }
+
+    #[test]
+    fn a_windows_rename_keeps_the_cable_found_by_its_filter_reference() {
+        use audiorouter_windows_audio::{
+            EndpointDirection, EndpointDisplayInfo, EndpointState, EndpointStateInfo,
+        };
+        // VM 2026-10-12: renaming Cable B Output in Sound settings rewrote the
+        // description to "Voice chat" and the helper lost the cable.
+        let renamed = EndpointDisplayInfo {
+            id: "b-out".into(),
+            direction: EndpointDirection::Capture,
+            name: "Voice chat (AudioRouter Virtual Cable)".into(),
+            device_description: "Voice chat".into(),
+            driver_inf_section: String::new(),
+            filter_reference: "topologycablebcapture".into(),
+        };
+        let states = vec![EndpointStateInfo {
+            id: "b-out".into(),
+            direction: EndpointDirection::Capture,
+            state: EndpointState::Active,
+        }];
+        let result = super::select_active_cable_endpoints(vec![renamed], &states);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].cable, 1);
+        assert_eq!(result[0].direction, crate::Direction::Output);
     }
 
     #[test]

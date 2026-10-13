@@ -563,9 +563,13 @@ takes effect when the helper restarts the device (about 1 s pause).
   Capture bridge pins use cable-specific category GUIDs. The INF registers
   these GUID/name pairs in the device software key as
   `AudioRouter Cable <letter> Input` or `Output`. The helper identifies a
-  cable from that stable description, with a composed-name fallback for older
-  test packages, and counts only active endpoints whose actual data flow
-  matches the cable direction.
+  cable by the reference string of the KS filter its endpoint connects to
+  (`topologycable<a-h><render|capture>`, read with the documented
+  DeviceTopology API, `IConnector::GetDeviceIdConnectedTo`), because a
+  rename in Windows Sound settings rewrites the description (VM,
+  2026-10-12: the helper lost a renamed cable). The description and a
+  composed-name fallback remain for older test packages. It counts only
+  active endpoints whose actual data flow matches the cable direction.
   Custom user names are AudioRouter labels only (user decision 2026-10-12,
   VCAB-02): `configure --name` stores them in the helper state, `status`
   reports them as `cableNames`, and the backend shows them. The helper never
