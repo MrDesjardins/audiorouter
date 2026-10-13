@@ -321,6 +321,24 @@ every update changes them and VCAB-05 needs a different mechanism or a
 spec decision. The guest stays on 0.1.8 (same source); later bundles must
 be ≥ 0.1.9.
 
+**r33 result (2026-10-12): every driver update changes the endpoint IDs.**
+(A) Plain restart on 0.1.7: all four IDs unchanged (`A2-ids-after-restart.txt`).
+(B) 0.1.7 → 0.1.8, identical driver source: IDs changed at install
+(A Input `{6ae3ca09…}`, A Output `{fe0a175f…}`, B Input `{aff39ac5…}`,
+B Output `{c364a4df…}`) and again after the restart (`{26c6b736…}`,
+`{6c5c3b90…}`, `{f5446a29…}`, `{f3458ee8…}`); status PASS on 0.1.8.0; the
+0.1.7 keys are deleted. This is documented Windows behaviour: Microsoft's
+endpoint ID strings page states the ID changes when the user upgrades the
+device driver and stays unchanged across restarts; the endpoint builder
+algorithm page says user settings migrate only while the reference string
+and connector pin ID stay the same (ours do; the 44.1 kHz setting migrated).
+No API keeps an ID through a driver update. **VCAB-05's "across driver
+updates" is not achievable as written** and needs a user decision and a
+spec 17 change. Driver updates are already decoupled from app releases
+(DEC-18), AudioRouter resolves cables by name/busId, and Windows migrates
+endpoint settings; third-party apps that store an endpoint ID (Discord,
+OBS) will need the cable reselected after a driver update.
+
 Side finding (pre-existing, not fixed): `generate.ps1 -Check` reports the
 topology header stale on a clean checkout (`core.autocrlf=input` leaves LF;
 the generator writes CRLF in its region). Content is identical; it passes
