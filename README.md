@@ -92,6 +92,10 @@ recording, application capture and two-PC streaming.
 
 ## See it in action
 
+**ChatGPT builds a voice route.** With the optional MCP connection, ask ChatGPT
+to list saved sessions and create a microphone → Advanced EQ → CABLE-A and
+headphones route. See the [setup steps, real request and resulting AudioRouter session](docs/operations/chatgpt-mcp-example.md).
+
 **Two PCs, one stream.** The gaming PC mixes game audio with a cleaned-up
 microphone and sends the mix to the streaming PC, while you keep the game in
 your headphones.

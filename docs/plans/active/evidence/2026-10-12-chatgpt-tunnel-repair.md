@@ -116,11 +116,50 @@ host execution context. The earlier absence claim is superseded by this evidence
 
 ## Open gate and rollback
 
+Update 2026-10-12, successful tool use: the user reported that the connected
+plugin worked and supplied `Mcp_Result.png` and `Mcp_Result2.png` from Downloads
+for documentation. Both images were visually reviewed. The first shows a
+session-list result and ChatGPT reporting creation/opening of **PD200X Radio
+Voice** with PD200X → Advanced EQ → CABLE-A plus Scarlett headphones; the second
+shows the same named session and graph in AudioRouter, with playback stopped.
+This is user-supplied evidence of a real read and permitted session/graph write
+through ChatGPT, not an agent-performed MCP call or an audio-quality check.
+
+The [worked example](../../../operations/chatgpt-mcp-example.md) embeds original,
+unaltered copies in `docs/images/`. SHA-256 comparison confirmed the copies
+match their Downloads sources:
+
+- `chatgpt-mcp-request-response.png`:
+  `4F6244A6C49FEFF9129DCEAAB7E50DBD9EAB69BA2C70CE06A62808DF4E5EA30F`.
+- `chatgpt-mcp-radio-voice-session.png`:
+  `00F39F2664FE8BECC6FCA647ACCC72687B93F20E6D8D7895C5488FBA55D52823`.
+
+The owner also supplied `Mcp_AudioRouter_Setup.png` and `Mcp_ChatGPTPlugin.png`.
+Both were reviewed and copied unaltered for the example's initial setup steps.
+The first shows Tunnel ready in AudioRouter; the second shows the numbered
+ChatGPT plugin form with Tunnel and No authentication selected, before creation.
+Their source/copy SHA-256 hashes match:
+
+- `chatgpt-mcp-audiorouter-setup.png`:
+  `1A06D9C180DB88571B8292DA964F84FE5A2F9554803E762827D5C9753E0098CC`.
+- `chatgpt-mcp-plugin-setup.png`:
+  `FD8637D904A8CEB5D9B040007B3BE13D8B165B86718241A288511EE7755D5B15`.
+
+Remaining remote qualification is denied-scope behavior, reconnect/revocation
+and credential/privacy checks. The default read-only permission and requirement
+for owner-authorized Editor access are retained in the example.
+Documentation acceptance for this example passed: 160 Markdown files and 896
+local links; `git diff --check` passed. All four screenshots were visually
+reviewed and their source/copy hashes matched. Only documentation/assets
+changed, so no new code, audio or UI tests were run for this update.
+
 Update 2026-10-12: the user confirmed successful connection and supplied
 [the created ChatGPT plugin](https://chatgpt.com/plugins/plugin_asdk_app_6acd77c0830881919e8b719807f198a8).
 Plugin setup is now user-confirmed. The earlier unverified statement below
 records the boundary at the end of the repair run. No AudioRouter tools are
-exposed to this Codex chat; remote read/write calls remain unqualified. The
+exposed to this Codex chat. At that initial setup confirmation, remote calls
+were still unqualified; the subsequent screenshots above provide the successful
+read/write example. The
 completed setup execution is [archived](../../archived/2026-10-12-chatgpt-mcp-setup-repair.md).
 
 At the end of the repair run, ChatGPT-side plugin creation remained unverified.

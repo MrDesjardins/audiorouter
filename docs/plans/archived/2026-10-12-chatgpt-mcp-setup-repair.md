@@ -52,9 +52,17 @@ transport. No new tunnel/key or grant is created by this repair.
 
 ## Remaining integration gates and rollback
 
+Follow-up 2026-10-12: the user confirmed actual tool use and supplied the
+ChatGPT request/response plus resulting AudioRouter session screenshots, then
+AudioRouter connection and numbered ChatGPT plugin setup screenshots. All four
+were reviewed and added unaltered to the [worked example](../../operations/chatgpt-mcp-example.md).
+They document session listing and permitted creation of **PD200X Radio Voice**,
+with PD200X → Advanced EQ → CABLE-A and Scarlett headphones, left stopped.
+The evidence records source/copy hashes and the remaining qualification boundary.
+
 No AudioRouter tools are exposed to this Codex chat. Remaining integration
-qualification is a read through the ChatGPT plugin, granted and denied writes,
-Disconnect/reconnect and credential revocation. Session creation requires the
+qualification is denied writes, Disconnect/reconnect, credential revocation
+and privacy checks. Session creation requires the
 owner's Editor grant; plugin creation alone is not evidence of that authority.
 Keep these tasks in [the active integration plan](../active/current.md#chatgpt-mcp-integration-plan-2026-10-11-active).
 

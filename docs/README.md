@@ -51,6 +51,10 @@ code blocks.
 
 The [headless runbook](operations/headless-runbook.md) documents the implemented CLI/MCP plan, backup, restore, and recovery boundaries. It distinguishes portable control-plane evidence from native audio, driver, signing, and installer requirements.
 
+The [ChatGPT MCP example](operations/chatgpt-mcp-example.md) illustrates setup
+in AudioRouter and ChatGPT, then shows a real session-list request, radio voice
+route creation and the resulting session in AudioRouter.
+
 The [SDK and native toolchain setup](operations/sdk-setup.md) explains the
 source-distributed VST3 SDK checkout and the installed Windows SDK/WDK build
 dependencies.

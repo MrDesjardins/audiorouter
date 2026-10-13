@@ -2,17 +2,30 @@
 
 ## ChatGPT MCP setup accepted — 2026-10-12
 
+Documentation example (AUTO-13/AUTO-16, owner request) completed: the supplied
+`Mcp_Result.png`, `Mcp_Result2.png`, `Mcp_AudioRouter_Setup.png` and
+`Mcp_ChatGPTPlugin.png` were reviewed and copied unaltered to stable image paths.
+The [worked example](../../operations/chatgpt-mcp-example.md)
+explains AudioRouter/ChatGPT setup, session listing, voice route creation and stopped playback; README
+and runbook links make it discoverable. Source/copy hashes match and local
+documentation links validate. Rollback removes the copied assets and paired
+links; the Downloads originals and app/session state are untouched.
+
 The user confirmed successful connection and supplied the created
 [ChatGPT plugin](https://chatgpt.com/plugins/plugin_asdk_app_6acd77c0830881919e8b719807f198a8).
 The local compatibility/tunnel setup repair is complete and archived in
 [the execution record](../archived/2026-10-12-chatgpt-mcp-setup-repair.md),
 with [live repair evidence](evidence/2026-10-12-chatgpt-tunnel-repair.md).
-This is user-confirmed ChatGPT setup evidence; no AudioRouter MCP tools are
-exposed in this Codex chat, so no remote tool call or session creation is claimed.
+The user subsequently confirmed tool use and supplied matching ChatGPT/app
+screenshots: sessions were listed and **PD200X Radio Voice** was created with
+PD200X → Advanced EQ → CABLE-A and Scarlett headphones. This is user-supplied
+read/write evidence. No AudioRouter MCP tools are exposed in this Codex chat,
+so the agent does not claim to have performed those calls.
 
-Next task: enable the plugin in a ChatGPT conversation, verify a read such as
-listing sessions through the tunnel, and qualify granted/denied writes and
-reconnect/revocation behavior under the integration plan below. Generic remote
+Next task: qualify denied writes, reconnect/revocation and credential/privacy
+behavior under the integration plan below. The owner's example read and
+permitted session/graph write are confirmed; the broader qualification gates
+remain open. Generic remote
 MCP for Cowork remains [future work](../future/generic-remote-mcp.md).
 
 
@@ -167,8 +180,9 @@ AudioRouter-managed outbound relay as the future product architecture and
 records the hosting, privacy, OAuth, reliability and cost decisions it needs.
 No public listener, relay or remote resource has been deployed. Keep the
 OpenAI tunnel as an optional ChatGPT transport, not the cross-client solution.
-Next for this OpenAI integration: qualify a tool read and permission/lifecycle
-behavior through the created plugin. Move the generic remote MCP architecture from future plan into an implementation
+Next for this OpenAI integration: qualify denied permissions and lifecycle
+behavior through the created plugin. The owner's supplied screenshots now
+document a successful read and permitted route creation. Move the generic remote MCP architecture from future plan into an implementation
 milestone only after choosing the service/hosting and privacy operating model.
 The one stale idempotency test failure and detailed UI evidence are recorded in
 [the archived flow correction](../archived/2026-10-11-generic-mcp-ui-flow.md).
