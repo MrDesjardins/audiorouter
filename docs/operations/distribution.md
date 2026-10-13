@@ -1,8 +1,8 @@
-The latest release is [0.0.14](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.14),
-an unsigned experimental prerelease. Download `AudioRouter_0.0.14_x64-setup.exe`
-from its assets. Every release from 0.0.3 on was built from a clean tag
-with `tools/release/`, passed the exact-package fresh-install check, and had
-its published assets downloaded and verified; see the
+The latest release is [0.0.16](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.16),
+an unsigned experimental app-only prerelease. Download `AudioRouter_0.0.16_x64-setup.exe`
+from its assets. It was built from a clean tag, passed the exact-package
+fresh-install check, and its public downloads were verified. See the
+[0.0.16 execution record](../plans/archived/2026-10-12-release-0.0.16.md), the
 [release notes](release-notes.md) and the evidence files under
 `docs/plans/active/evidence/` (for example
 [0.0.7](../plans/active/evidence/2026-10-03-release-0.0.7.md)). Signing,
@@ -27,6 +27,7 @@ per-user NSIS installer containing:
 | `audiorouter-cli.exe` (CLI and MCP server) | install folder (resource) |
 | `audiorouter-plugin-worker.exe` (isolated VST host) | install folder (resource) |
 | Stream Deck plugin (`com.mrdesjardins.audiorouter.streamDeckPlugin`) | install folder (resource); **API → Install Stream Deck plugin** hands it to the Stream Deck app |
+| Optional verified OpenAI tunnel runtime and notices (from 0.0.16) | install folder; started only through explicit MCP setup |
 
 The release page carries only:
 
@@ -36,6 +37,7 @@ The release page carries only:
 | `com.mrdesjardins.audiorouter.streamDeckPlugin` | a Stream Deck on another PC that controls AudioRouter over the network (the same file is inside the installer) |
 | `SHA256SUMS.txt`, `release-manifest.json` | verifying downloads and provenance |
 | `sbom.cargo.json`, `sbom.npm.json`, `sbom.npm.package-lock.json`, `sbom.streamdeck.json`, `sbom.streamdeck.package-lock.json`, `THIRD-PARTY-NOTICES.txt` | license and supply-chain review |
+| `tunnel-client-runtime-LICENSE.txt`, `tunnel-client-runtime-NOTICE.txt`, `tunnel-client-runtime-licenses.txt`, `tunnel-client-runtime.spdx.json` (from 0.0.16) | bundled optional runtime licensing and supply-chain review |
 
 Up to 0.0.13 the page also listed `audiorouter-shell.exe`,
 `audiorouter-cli.exe`, `audiorouter-plugin-worker.exe`, `audiorouter-ui.zip`,

@@ -1,44 +1,20 @@
 # Active plan — post-0.0.8 maintenance
 
-## Release 0.0.16 — 2026-10-12, owner authorized review/commit/push/release
+## Release 0.0.16 published — 2026-10-12
 
-Scope: unsigned experimental Windows x64 **app-only** prerelease, including
-ChatGPT MCP repair and local Cowork plugin export. DIST-01–08, AUTO-06/13/16,
-SEC-02/14 and UI-17. No signed driver exists; retain cable-enabled release
-signature gates and explicitly add app-only packaging rather than substitute
-a test-signed driver. Existing unrelated 0.0.15 evidence edit is preserved.
+The owner-requested review/commit/push/experimental app-only release is
+complete; [execution record](../archived/2026-10-12-release-0.0.16.md)
+archives source, tests, hashes, known gates and rollback. Full local suites,
+exact packaged fresh-install and public asset verification pass. Qualified
+0.0.16 app and matching companions staged at the existing launch path; old
+binaries retained. No driver payload or default-device changes.
 
-Tasks: review staged code and resolve substantiated defects; commit the local
-adapter; restore explicit app-only preparation/manifest verification; bump
-only AudioRouter packages to 0.0.16 and write known-issue/rollback notes; run
-Windows regression/format/Clippy/UI/contract/release-script checks; create a
-clean tagged checkout, package verified official tunnel runtime/CLI/worker/UI
-and Stream Deck resources; qualify exact-package fresh-install with no other
-app running; push source/tag; create an unsigned experimental prerelease and
-download/verify published artifacts. User explicitly requested the release,
-so no repeated publication approval is needed. M08 full consumer/driver gates
-remain open and must be disclosed; actual Cowork attended gate remains open.
-
-Rollback: retain 0.0.15 installer and compatible configuration backups; no
-database migration, driver or default-device changes. Never replace published
-assets. Build from an isolated clean checkout to preserve shared edits.
-Review completed with no actionable findings; adapter committed `6d78db23`,
-app-only release inputs `8092853c`, main and `v0.0.16` pushed. Full Windows
-workspace (1,100 passed), UI (523), shell (80), Edge (239 passed, 9 skipped),
-format/Clippy/contract/release-script checks pass. Clean tagged installer built,
-local/uploaded/downloaded draft artifacts verified. See the
-[release evidence](evidence/2026-10-12-release-0.0.16.md).
-Next action: owner closes the still-running app (closure question pending),
-run exact-package fresh-install, check CI, then publish the prepared draft and
-verify public downloads. No second shell launch or user process stop.
-
-Owner confirmed quitting; packaged fresh-install passed (backend ready 65 ms,
-consent behavior correct). CI run 38330417041 then exposed a stale standalone
-WASAPI probe lock (AudioRouter entries still 0.0.14). Repair that lock and wire
-CI's existing M08 acceptance to the explicit app-only profile; this changes
-unshipped developer/CI inputs, not the already verified product binaries or
-release source tag. Recheck locked probe and release regressions, push the
-maintenance repair, then publish the draft and verify public downloads.
+CI maintenance follow-up: `7baa1cd6` repairs the stale standalone probe lock
+and selects app-only M08 acceptance in CI. Locked probe and release regressions
+pass locally; replacement run 38333587240 was in progress at publication.
+Next: observe its result and repair substantiated failures. Remaining local
+Cowork and ChatGPT interoperability/security tasks are below; full M08
+consumer/hardware/signing gates are still open.
 
 ## Local Cowork plugin — 2026-10-12, owner authorized
 
