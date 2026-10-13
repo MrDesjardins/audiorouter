@@ -309,6 +309,11 @@ the topology filter reference (`vbaudiovacbwdm2022_in1_topo_…`). Tests:
 helper 30 (new: filter-reference classification, renamed endpoint still
 found), inventory 3, windows-audio 141; Clippy workspace and `src-tauri`,
 rustfmt clean. `remove` passed. Spec 17 §5.5 updated.
+Bundle `C:\VMs\ar-share\rc-0.2.4-r3` (source `19be028f`, `-ReuseDriverShare
+rc-0.2.4-base`; driver files identical to RC3, compared): helper SHA-256
+`3A8B2F226C71059C23EB1DF3A4E39AB29D617FBE0C461E79A7F243DD4BF7D74D`,
+MANIFEST SHA-256 `31A3E1F317884EFB029335806AC6183178E4E9122768E00D66BCEB1B9D7F8897`.
+It supersedes r2 for the remaining RC3 sessions.
 
 ### 8-channel spike (prepared 2026-10-12)
 
