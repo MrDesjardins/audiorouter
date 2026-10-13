@@ -214,6 +214,79 @@ r32 bundle `C:\VMs\ar-share\repair-20261012-oem-format-r32` (source
 10/12/2026; packaged INF carries 33 `OEMFormat` references), SYS SHA-256
 `42D8B407CAF7EDFC5ED5A8FABE5F87BC42BAE026BE38202AD0D8DB727C783513`,
 MANIFEST SHA-256 `EDCB24A4978B45FA839D0839288B7D77332DC8E6068DEBF72BF081E0EAC6A53A`.
+**r32 guest result, part 1 (2026-10-12).** `-Step install` exit 5 (restart
+required, expected for an upgrade), restart, `-Step status` PASS
+(`driver=0.1.7.0`, 4 endpoints, 60/60 formats, min period ≤ 128 frames;
+Cable A Output's periods now 441/118 frames, i.e. 44.1 kHz). `show`: Cable A
+Output's mix format is now 44.1 kHz, 1 ch, matching its stored device
+format. **Hypothesis confirmed: Windows honours the stored format once the
+cable filters stop proposing a default.** New defect to settle before the
+RC freeze: **all four endpoint IDs changed** in the 0.1.4 → 0.1.7 upgrade
+(A Input `{9381b095…}` → `{7121d5d2…}`, A Output `{93873238…}` →
+`{fcb8406b…}`, B Input `{bcba620f…}` → `{207df4b8…}`, B Output
+`{99d4614d…}` → `{3d4d847e…}`), though Cable A Output's stored format
+carried over. VCAB-05 requires stable IDs across driver updates. Unknown
+whether this upgrade's INF endpoint-property change caused it or every
+upgrade does (A13 would show it); investigate with an N → N+1 upgrade of
+identical source.
+
+r32 part 2: `set --channels 8` → S_OK and **PASS on both Cable A Input and
+Cable B Output: mix format 48 kHz, 8 ch, float32, mask 0x63F**, matching the
+device format (`3-set8.txt`). Physical speakers still not set.
+
+r32 part 3: `run-cable-bitexact.ps1 -Channels 8` (product route, Cable A
+Input → Cable B Output, both 48 kHz/8 ch float32 mask 0x63F): **samples
+bit-exact on all 8 channels** (960,000 compared frames, 0 mismatches, max
+error 0.0 in both the native probe and the analyzer; 24,000 silence frames
+all zero; 0 dropped capture frames, 0 overflow). Verdict FAIL only because
+the runner requires zero flagged capture packets and one packet carried
+`DATA_DISCONTINUITY` or `TIMESTAMP_ERROR` (the probe does not record which
+or when; it lies outside the compared window). Route: 2,240 render / 2,219
+capture blocks, 2,200 forwarded, 37 dropped, 19 silence, 0 sequence gaps —
+startup alignment, to compare against a stereo control. Evidence:
+`Z:\repair-20261012-oem-format-r32\bitexact-float32-48000hz-8ch-2a8d4e6a91454d8497677af6631a0b18.zip`
+(SHA-256 `84C5D180…82E6`). Next: one 8-ch repeat and one 2-ch control run
+on the same driver to tell a startup flag from an 8-ch defect.
+
+r32 part 4, 8-ch repeat: **not bit-exact.** Exact up to reference frame
+476,432 (~9.9 s), then every sample differs; a host-side search (inline C#
+over the WAVs) finds the capture shifted by exactly **−480 frames** (one
+10 ms block missing) from there to the end, with 144 all-zero frames near
+the boundary. Values are otherwise exact. Capture flagged 1, dropped 0,
+overflow 0 again; route 36 dropped / 18 silence / 2,201 forwarded, 0
+sequence gaps. The runner's summary line hides sample mismatches (it prints
+only the capture counters). Evidence:
+`bitexact-float32-48000hz-8ch-6aa1044ccf3c4f77a03fd450b8c17d71.zip`
+(SHA-256 `FBD2A797…A1C5`). Open: whether this is the known VirtualBox-NEM
+block loss (lesson 2026-10-10) or 8-ch specific; the 2-ch control decides.
+
+r32 part 5, 2-ch control (same driver, both endpoints restored to 48 kHz
+stereo): **also not bit-exact, and worse**: capture dropped 1,920 frames,
+flagged 3; samples exact to noise frame 500,000, then 920,000 mismatched
+(shifted); route 36 dropped / 19 silence / 2,198 forwarded, 0 sequence gaps.
+Evidence `bitexact-float32-48000hz-2ch-bb29624046dc41faaf4ad6d2dfb28ce0.zip`.
+**Conclusion: the mid-run block loss is not 8-channel specific.** It matches
+the known VirtualBox-NEM scheduling loss (validated lesson 2026-10-10;
+VCAB-24 is already a documented VM deviation). r32 changed no streaming
+code, but no stereo product-route run of this runner on 0.1.4 exists for a
+direct comparison. 8-channel pass-through is therefore shown to work
+(one fully bit-exact 20 s run; the other run exact apart from one lost
+block); clean continuity must be qualified on bare metal (Stage C), as for
+stereo. Restore done: Cable A Input, Cable B Output and Cable A Output all
+48 kHz, 2 ch, mask 0x3 (`5-restore*.txt`). Tooling: `run-cable-bitexact.ps1`
+now prints the mismatched-sample count, first mismatch and analyzer verdict
+in its summary (it previously showed only capture counters).
+
+**8-channel status after r32.** Driver blocker removed: the stored device
+format now applies, 8 ch reaches apps on render and capture, and samples
+pass through exactly. Remaining before CAP-14 can use AudioRouter cables:
+(1) **endpoint IDs changed on the 0.1.4 → 0.1.7 upgrade (VCAB-05)**,
+investigate first; (2) spec 17 §8 / VCAB-11 update: channel count chosen in
+the app via `IPolicyConfig` (no elevation needed), not Sound settings;
+(3) `PKEY_AudioEndpoint_PhysicalSpeakers` for games, untested; (4) app
+control and CAP-14 integration, not authorized; (5) Sound settings Advanced
+lists after r32 not yet observed.
+
 Side finding (pre-existing, not fixed): `generate.ps1 -Check` reports the
 topology header stale on a clean checkout (`core.autocrlf=input` leaves LF;
 the generator writes CRLF in its region). Content is identical; it passes

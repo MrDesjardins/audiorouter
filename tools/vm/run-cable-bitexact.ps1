@@ -88,6 +88,8 @@ try {
         CaptureDropped = Get-ProbeValue $probeText 'bitexact_capture_dropped_frames'
         CaptureFlagged = Get-ProbeValue $probeText 'bitexact_capture_flagged_packets'
         CaptureOverflow = Get-ProbeValue $probeText 'bitexact_capture_overflow_packets'
+        MismatchedSamples = Get-ProbeValue $probeText 'bitexact_mismatched_samples'
+        FirstMismatchFrame = Get-ProbeValue $probeText 'bitexact_first_mismatch_frame'
         CableRoute = ([regex]::Match($routeText, '(?m)^final cableRoute=(.*)$')).Groups[1].Value
     }
     if ($formatChannels -ne $Channels) {
@@ -103,6 +105,9 @@ try {
     $result | Add-Member NoteProperty Verdict $verdict
     Write-Host ("{0} channels, {1}: {2} (capture dropped {3} frames, flagged {4}, overflow {5}, probe exit {6}, route exit {7})" -f `
         $Channels, $formatLabel, $verdict, $result.CaptureDropped, $result.CaptureFlagged, $result.CaptureOverflow, $measured.Code, $route.ExitCode)
+    # The capture counters alone hide a mid-run slip: report the sample compare too.
+    Write-Host ("  samples: {0} mismatched (first at noise frame {1}), analyzer bit-exact {2}, max error {3}" -f `
+        $result.MismatchedSamples, $result.FirstMismatchFrame, $metrics.bitExact, $metrics.maxAbsoluteError)
     Write-Host "  cableRoute=$($result.CableRoute)"
     if ($verdict -ne 'PASS') { throw "Cable sample diagnostic failed for $Channels channels at $Rate Hz ($formatLabel). See result.json and metrics.json." }
 } catch { $failure = $_ } finally {
