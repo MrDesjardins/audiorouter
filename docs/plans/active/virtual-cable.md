@@ -330,8 +330,13 @@ copies its evidence zip to `Z:\rc-0.2.4-r3`.
    `robocopy.exe 'Z:\rc-0.2.4-r3' 'C:\ar\rc-0.2.4-r3' /E /R:1 /W:1`, `cd
    C:\ar\rc-0.2.4-r3`, `vm-checks.ps1 -Step preflight`, `-Step install`
    (restart if it asks), `-Step status`; stop on any FAIL.
-2. Driver tool checks: `-Step tone` (10 min, A4 tool, A5), `-Step
-   tone-stall` (counters must rise), `-Step tone-8ch` (8 ch 96 kHz lease).
+2. Listening (omitted from the first version of this runbook): `mmsys.cpl`
+   → Recording → AudioRouter Cable B Output → Properties → Listen → Listen
+   to this device, playback through the VM's speakers (never a cable). It
+   keeps Cable B's capture side running, which the tone tool needs. Then
+   `-Step tone -ToneSeconds 30` first, then driver tool checks: `-Step tone`
+   (10 min, A4 tool, A5), `-Step tone-stall` (counters must rise), `-Step
+   tone-8ch` (8 ch 96 kHz lease).
 3. Product route: `run-cable-tone.ps1 -Minutes 10` (continuity),
    `run-cable-bitexact.ps1 -Channels 2`, then `tools\m03_cable_format.exe
    set --channels 8`, `run-cable-bitexact.ps1 -Channels 8`,
@@ -347,6 +352,16 @@ with the sample summary (mismatches, first mismatch frame), do not rerun
 unchanged, and keep VCAB-24 bound to Stage C. Any loss pattern that differs
 (repeated offsets, a channel-count-only failure, counter increases in the
 clean `tone`) is a finding to analyse before more sessions.
+
+Session 2 attempt 1 (2026-10-13): `preflight` 15/15, `install` 3/3 (exit
+0, idempotent), `status` 2/2 PASS. `tone`, `tone-stall`, `tone-8ch` FAIL
+with exit 1 and all counters zero (no streaming). Causes (from `tone.txt`):
+the 10-minute run's control loop stalled 3.3 s right after start, beyond
+the 2 s lease, so the driver expired the lease and refused the next call
+(`0x80070016`, the Win32 form of `STATUS_INVALID_DEVICE_STATE`; correct
+driver behaviour); `tone-stall` reported "no capture consumer acknowledged
+the primed block; enable Listen" because the runbook omitted the Listen
+step. Not a driver finding. Repeat from step 2 with Listen enabled.
 
 ### 8-channel spike (prepared 2026-10-12)
 
