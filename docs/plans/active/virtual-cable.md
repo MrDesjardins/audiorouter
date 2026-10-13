@@ -322,6 +322,32 @@ unchanged, Cable B IDs unchanged); the user then renamed Cable B Output to
 "Voice chat (AudioRouter Virtual Cable)" listed, inventory 60/60 formats);
 `remove` PASS. Option (b) and filter-reference identity confirmed on RC3.
 
+**Next action: RC3 Stage A session 2 (audio; A4–A7, A9), prepared
+2026-10-12, user runs it 2026-10-13.** Bundle `rc-0.2.4-r3`, guest
+`AR-DriverTest`, Administrator PowerShell, about 45 minutes. Each runner
+copies its evidence zip to `Z:\rc-0.2.4-r3`.
+1. Restore `02-test-signing-ready`, start the VM, then:
+   `robocopy.exe 'Z:\rc-0.2.4-r3' 'C:\ar\rc-0.2.4-r3' /E /R:1 /W:1`, `cd
+   C:\ar\rc-0.2.4-r3`, `vm-checks.ps1 -Step preflight`, `-Step install`
+   (restart if it asks), `-Step status`; stop on any FAIL.
+2. Driver tool checks: `-Step tone` (10 min, A4 tool, A5), `-Step
+   tone-stall` (counters must rise), `-Step tone-8ch` (8 ch 96 kHz lease).
+3. Product route: `run-cable-tone.ps1 -Minutes 10` (continuity),
+   `run-cable-bitexact.ps1 -Channels 2`, then `tools\m03_cable_format.exe
+   set --channels 8`, `run-cable-bitexact.ps1 -Channels 8`,
+   `m03_cable_format set --channels 2`, then `run-cable-kill.ps1` (A7).
+4. A9: save `m03_cable_format show` IDs to `Z:\rc-0.2.4-r3\a9-before.txt`,
+   restart, save again to `a9-after.txt`, compare (must be equal), then
+   `-Step status`, `-Step remove`, `-Step collect`, copy `evidence-*.zip`
+   to `Z:\rc-0.2.4-r3`.
+Interpretation: install/status/tone-stall/kill/A9 are pass/fail on RC3.
+Continuity and bit-exact losses in this VM are expected only as the known
+NEM stall pattern (single lost blocks, both channel counts); record them
+with the sample summary (mismatches, first mismatch frame), do not rerun
+unchanged, and keep VCAB-24 bound to Stage C. Any loss pattern that differs
+(repeated offsets, a channel-count-only failure, counter increases in the
+clean `tone`) is a finding to analyse before more sessions.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
