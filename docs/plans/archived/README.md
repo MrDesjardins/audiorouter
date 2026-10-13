@@ -16,6 +16,7 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |
+| 2026-10-12 | Local Cowork plugin export | Local implementation and CLI/pipe/UI qualification complete; attended Cowork import/tool-use gate remains active | [Execution record](2026-10-12-local-cowork-plugin.md) |
 | 2026-10-12 | ChatGPT MCP setup repair | Completed local compatibility/runtime repair; user confirmed plugin setup and supplied a successful read/write screenshot example. Denied-scope/lifecycle qualification remains active. | [Execution record](2026-10-12-chatgpt-mcp-setup-repair.md) |
 | 2026-10-11 | Generic MCP UI flow correction | Completed: local MCP, OpenAI tunnel and Cowork boundaries clear; state-aware controls and three-theme UI verified. Remote MCP remains future work. | [Execution record](2026-10-11-generic-mcp-ui-flow.md) |
 | 2026-10-11 | WP-10 virtual-cable UI implementation | Host implementation complete; attended app/VM and signed-package gates remain active | [Execution record](2026-10-11-WP-10-virtual-cable-ui.md) |

@@ -55,6 +55,9 @@ The [ChatGPT MCP example](operations/chatgpt-mcp-example.md) illustrates setup
 in AudioRouter and ChatGPT, then shows a real session-list request, radio voice
 route creation and the resulting session in AudioRouter.
 
+The [local Cowork guide](operations/cowork-mcp.md) explains the exported plugin,
+read-only enrollment, local-versus-cloud boundary and revocation.
+
 The [SDK and native toolchain setup](operations/sdk-setup.md) explains the
 source-distributed VST3 SDK checkout and the installed Windows SDK/WDK build
 dependencies.

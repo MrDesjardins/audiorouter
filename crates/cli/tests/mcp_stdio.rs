@@ -33,6 +33,15 @@ fn send(input: &mut impl Write, output: &mut impl BufRead, message: Value) -> Va
 
 #[test]
 fn mcp_stdio_client_interoperates_with_cli_process() {
+    assert_stdio_client("mcp-stdio-client");
+}
+
+#[test]
+fn local_cowork_identity_interoperates_with_cli_and_observer_writes_are_denied() {
+    assert_stdio_client("audiorouter-cowork-local");
+}
+
+fn assert_stdio_client(client_id: &str) {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -50,7 +59,7 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
     let storage = Storage::open(&database).unwrap();
     let mut plane = ControlPlane::with_storage("mcp-stdio-test", storage);
     plane
-        .enroll_client("mcp-stdio-client", ClientRole::Observer)
+        .enroll_client(client_id, ClientRole::Observer)
         .unwrap();
     drop(plane);
 
@@ -59,7 +68,7 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
             "mcp",
             "serve",
             "--client-id",
-            "mcp-stdio-client",
+            client_id,
             "--database",
             database.to_str().unwrap(),
             // This test drives internal tools (call_api, plan_graph_change).
@@ -460,19 +469,37 @@ fn mcp_stdio_client_interoperates_with_cli_process() {
 #[cfg(windows)]
 #[test]
 fn mcp_pipe_proxy_interoperates_with_authenticated_backend() {
+    assert_pipe_proxy("mcp-pipe-client");
+}
+
+#[cfg(windows)]
+#[test]
+fn local_cowork_stdio_reaches_the_authenticated_pipe_backend() {
+    assert_pipe_proxy("audiorouter-cowork-local");
+}
+
+#[cfg(windows)]
+fn assert_pipe_proxy(client_id: &str) {
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
     let database = std::env::temp_dir().join(format!(
-        "audiorouter-mcp-pipe-{}.sqlite",
+        "audiorouter-mcp-pipe-{}-{stamp}.sqlite",
         std::process::id()
     ));
     let _ = std::fs::remove_file(&database);
     let storage = Storage::open(&database).unwrap();
     let mut plane = ControlPlane::with_storage("mcp-pipe-test", storage);
     plane
-        .enroll_client("mcp-pipe-client", ClientRole::Observer)
+        .enroll_client(client_id, ClientRole::Observer)
         .unwrap();
     drop(plane);
 
-    let pipe_name = format!(r"\\.\pipe\audiorouter-mcp-pipe-{}", std::process::id());
+    let pipe_name = format!(
+        r"\\.\pipe\audiorouter-mcp-pipe-{}-{stamp}",
+        std::process::id()
+    );
     let backend = std::thread::spawn({
         let pipe_name = pipe_name.clone();
         move || {
@@ -491,7 +518,7 @@ fn mcp_pipe_proxy_interoperates_with_authenticated_backend() {
             "mcp",
             "serve",
             "--client-id",
-            "mcp-pipe-client",
+            client_id,
             "--database",
             database.to_str().unwrap(),
             "--pipe",

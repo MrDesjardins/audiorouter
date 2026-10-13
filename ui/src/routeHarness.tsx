@@ -22,6 +22,8 @@ const injected = globalThis as {
   __routeFixtureRecordingLostAudio?: boolean;
   __routeFixtureFreshInstall?: boolean;
   __routeFixtureGameRound?: DiagnosticsSnapshot["gameRound"];
+  __routeFixtureMcpClients?: Awaited<ReturnType<UiBackend["listClients"]>>;
+  __routeFixtureMcpGrants?: string[];
 };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
@@ -163,6 +165,18 @@ const verboseStatus = () => {
 const previewBackend: UiBackend = {
   ...fixtureBackend,
   connected: true,
+  async listClients() {
+    return injected.__routeFixtureMcpClients ?? fixtureBackend.listClients();
+  },
+  async authorizeClient(clientId, role, idempotencyKey) {
+    if (!injected.__routeFixtureMcpClients) return fixtureBackend.authorizeClient(clientId, role, idempotencyKey);
+    injected.__routeFixtureMcpGrants?.push(`${clientId}:${role}`);
+    injected.__routeFixtureMcpClients = [
+      ...injected.__routeFixtureMcpClients.filter((client) => client.clientId !== clientId),
+      { clientId, role, revoked: false },
+    ];
+    return { clientId, role, revoked: false };
+  },
   async getVerboseDiagnostics() {
     return verboseStatus();
   },

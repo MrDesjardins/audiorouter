@@ -1,5 +1,34 @@
 # Active plan — post-0.0.8 maintenance
 
+## Local Cowork plugin — 2026-10-12, owner authorized
+
+Objective: export a ready-to-upload plugin for the owner's **local** Cowork
+deployment. Requirements AUTO-06/10/13 and UI-17; backend grants remain the
+authority. Prerequisites: Windows, matching installed CLI, running backend,
+and a Cowork deployment whose policy permits local plugin MCP servers.
+The owner selected Local. Anthropic's [plugin guidance](https://support.claude.com/en/articles/13837440-use-plugins-in-claude)
+and [architecture overview](https://support.claude.com/en/articles/14479288-claude-cowork-architecture-overview)
+distinguish local plugin MCP from cloud tasks and Desktop chat configuration.
+This supersedes earlier blanket statements that all Cowork needs remote MCP.
+
+Local implementation completed and archived in the
+[execution record](../archived/2026-10-12-local-cowork-plugin.md): plugin ZIP
+export, separate Observer enrollment preserving existing grants, real CLI
+preflight, conditional controls and stable feedback. Claude plugin validator,
+real stdio/Windows pipe/denied-write checks, native export fixture and four
+three-theme UI checks pass. Updated app staged at the existing release path.
+The [runbook](../../operations/cowork-mcp.md) gives the upload steps.
+
+No binaries, keys, database contents or audio are bundled. Plugin configuration
+is specific to this PC. No remote listener, tunnel or cloud hosting is added.
+Validation must distinguish CLI/plugin checks from actual Cowork import and
+tool execution: no running Claude Desktop was found, so that attended gate
+remains open until observed. Risks: Claude deployment/policy changes and moved
+installation paths. Rollback: remove the exported plugin in Cowork, revoke
+`audiorouter-cowork-local`, and revert the adapter/UI change. Next action:
+attended local Cowork import, session-list read, owner-approved stopped-session
+creation and post-revocation denial; capture matching MCP activity and versions.
+
 ## ChatGPT MCP setup accepted — 2026-10-12
 
 Documentation example (AUTO-13/AUTO-16, owner request) completed: the supplied
@@ -26,7 +55,8 @@ Next task: qualify denied writes, reconnect/revocation and credential/privacy
 behavior under the integration plan below. The owner's example read and
 permitted session/graph write are confirmed; the broader qualification gates
 remain open. Generic remote
-MCP for Cowork remains [future work](../future/generic-remote-mcp.md).
+MCP for cloud Cowork remains [future work](../future/generic-remote-mcp.md);
+the owner's local Cowork plugin is the active task above.
 
 
 ## ChatGPT MCP integration plan (2026-10-11, active)
@@ -85,8 +115,8 @@ app until release evidence records the artifact hash and verification.
 
 1. The MCP tab now separates the standard local stdio server from the optional
    OpenAI tunnel. Keep other clients, permissions and activity secondary.
-   Cowork requires a future remote endpoint and must not be presented as
-   connected or configured by this OpenAI-specific path.
+   Cloud Cowork requires a future remote endpoint; local Cowork uses its
+   separate plugin export and is not configured by this OpenAI-specific path.
 2. On Connect, check supported Windows architecture, packaged tunnel-client,
    current-user storage availability, and the target ChatGPT custom-MCP
    capability. Explain only the specific item that prevents setup.

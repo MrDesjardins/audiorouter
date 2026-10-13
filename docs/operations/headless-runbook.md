@@ -7,6 +7,9 @@ qualified separately through the guarded Windows acceptance wrappers.
 
 ## Inspect without side effects
 
+For local Claude Cowork, use the [plugin export guide](cowork-mcp.md).
+Cloud tasks need a separate remote transport.
+
 ```powershell
 audiorouter status --json
 audiorouter schema --json

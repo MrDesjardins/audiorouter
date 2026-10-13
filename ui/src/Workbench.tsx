@@ -81,6 +81,7 @@ export type McpActivity = {
 export type McpSetupInfo = {
   cliPath: string;
   cliAvailable: boolean;
+  coworkPluginAvailable?: boolean;
   databasePath: string;
   pipeName: string;
   transport: string;
@@ -124,6 +125,7 @@ export function Workbench({
   onMcpTunnelConnect,
   onMcpTunnelDisconnect,
   onMcpTunnelForget,
+  onExportCoworkPlugin,
   clientsPanel,
   setupContent,
   timingContent,
@@ -176,6 +178,7 @@ export function Workbench({
   onMcpTunnelConnect: () => Promise<void>;
   onMcpTunnelDisconnect: () => Promise<void>;
   onMcpTunnelForget: () => Promise<void>;
+  onExportCoworkPlugin?: () => Promise<string>;
   clientsPanel: ReactNode;
   setupContent: ReactNode;
   timingContent?: ReactNode;
@@ -188,6 +191,8 @@ export function Workbench({
 }) {
   const [mcpClientId, setMcpClientId] = useState("audiorouter-local");
   const [copyMessage, setCopyMessage] = useState("");
+  const [coworkBusy, setCoworkBusy] = useState(false);
+  const [coworkMessage, setCoworkMessage] = useState("");
   const [tunnelIdInput, setTunnelIdInput] = useState("");
   const [runtimeKeyInput, setRuntimeKeyInput] = useState("");
   const openMcpSetupPage = (page: "tunnels" | "apiKeys" | "chatgptConnectors") => {
@@ -694,12 +699,41 @@ export function Workbench({
           <section className="mcp-remote-info" aria-labelledby="mcp-cowork-title">
             <div className="mcp-card-heading">
               <h3 id="mcp-cowork-title">Cowork</h3>
-              <span className="mcp-status">Not available yet</span>
+              <span className="mcp-status">Local plugin</span>
             </div>
             <p className="muted">
-              Cowork connects from Anthropic's cloud and cannot launch a command on this PC. The OpenAI tunnel above is
-              ChatGPT-only. Cowork needs a generic, securely authenticated remote MCP connection; AudioRouter does not
-              offer that yet.
+              For local Cowork on this PC, export the plugin, then upload it in Cowork → Customize → Plugins. Keep
+              AudioRouter running. Export enables read-only access; choose Editor in Client permissions to allow edits.
+              Cloud Cowork tasks need a remote connection, which is not available yet.
+            </p>
+            <div className="mcp-cowork-action">
+              {mcpSetupInfo?.cliAvailable && mcpSetupInfo.coworkPluginAvailable && onExportCoworkPlugin ? (
+                <button
+                  type="button"
+                  disabled={!connected || coworkBusy}
+                  onClick={() => {
+                    setCoworkBusy(true);
+                    setCoworkMessage("Checking the local MCP connection…");
+                    void onExportCoworkPlugin()
+                      .then((path) =>
+                        setCoworkMessage(`Saved to ${path}. Upload this ZIP in Cowork → Customize → Plugins.`),
+                      )
+                      .catch((error: unknown) =>
+                        setCoworkMessage(error instanceof Error ? error.message : String(error)),
+                      )
+                      .finally(() => setCoworkBusy(false));
+                  }}
+                >
+                  Export Cowork plugin
+                </button>
+              ) : (
+                <p className="muted">
+                  Open the current AudioRouter desktop app with its installed MCP command to export.
+                </p>
+              )}
+            </div>
+            <p className="mcp-cowork-message" role="status" aria-live="polite">
+              {coworkMessage || "The plugin is for this PC and does not include audio or credentials."}
             </p>
           </section>
 

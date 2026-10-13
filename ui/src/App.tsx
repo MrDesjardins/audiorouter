@@ -3242,6 +3242,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     ? invoke("mcp_tunnel_disconnect").then(() => undefined)
                     : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
                 }}
+                onExportCoworkPlugin={async () => {
+                  const invoke = window.__TAURI_INTERNALS__?.invoke;
+                  if (!invoke) throw new Error("Export the plugin from the AudioRouter desktop app.");
+                  const clientId = "audiorouter-cowork-local";
+                  const clients = await backend.listClients();
+                  const current = clients.find((client) => client.clientId === clientId);
+                  if (!current || current.revoked)
+                    await backend.authorizeClient(clientId, "observer", uiIdempotencyKey(`authorize-${clientId}`));
+                  const path = await invoke("mcp_export_cowork_plugin");
+                  if (typeof path !== "string") throw new Error("The app did not return the exported plugin path.");
+                  return path;
+                }}
                 onMcpTunnelForget={() => {
                   const invoke = window.__TAURI_INTERNALS__?.invoke;
                   return invoke

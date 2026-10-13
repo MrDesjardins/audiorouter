@@ -886,11 +886,13 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
             return {
               cliPath: "C:\\AudioRouter\\audiorouter.exe",
               cliAvailable: state.__mcpCliAvailable,
+              coworkPluginAvailable: true,
               databasePath: "C:\\AudioRouter\\audiorouter.sqlite",
               pipeName: "\\\\.\\pipe\\audiorouter-control",
               transport: "stdio",
             };
           if (command === "mcp_tunnel_status") return { ...state.__mcpTunnelFixture };
+          if (command === "mcp_export_cowork_plugin") return "C:\\Users\\Test\\Downloads\\AudioRouter-Cowork.zip";
           return [];
         },
       },
@@ -955,9 +957,11 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open ChatGPT connector settings" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Cowork" })).toBeVisible();
-  await expect(
-    page.getByText(/Cowork connects from Anthropic's cloud and cannot launch a command on this PC/),
-  ).toBeVisible();
+  await expect(page.getByText(/For local Cowork on this PC, export the plugin/)).toBeVisible();
+  const cowork = page.locator(".mcp-remote-info");
+  const coworkHeight = await cowork.evaluate((element) => element.getBoundingClientRect().height);
+  await expect(page.getByRole("button", { name: "Export Cowork plugin" })).toBeDisabled();
+  expect(await cowork.evaluate((element) => element.getBoundingClientRect().height)).toBe(coworkHeight);
   const card = page.locator(".mcp-chatgpt-card");
   const originalBounds = await card.evaluate((element) => {
     const { width, height } = element.getBoundingClientRect();
@@ -972,6 +976,7 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
       return { width, height };
     });
     expect(bounds).toEqual(originalBounds);
+    await cowork.screenshot({ path: testInfo.outputPath(`cowork-${theme}.png`) });
   }
   await page.getByText("Local MCP apps (standard stdio)").click();
   await expect(page.getByLabel("Assistant client ID")).toBeVisible();
@@ -1001,6 +1006,7 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await page.getByText("Local MCP apps (standard stdio)").click();
   await expect(page.getByText("The local MCP command is missing from this installation.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy Codex config" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Export Cowork plugin" })).toHaveCount(0);
   await page.getByRole("tab", { name: "Logs" }).click();
   await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
   await page.getByLabel("Color theme").selectOption("dark");

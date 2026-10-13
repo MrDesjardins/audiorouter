@@ -13,8 +13,12 @@ MCP protocol and cannot carry Cowork traffic.
   scoped grants, backend validation and audit with other clients (AUTO-06).
 - ChatGPT's Secure MCP Tunnel is an OpenAI-specific outbound relay from this
   PC. The current UI supervises that client and explains the connector handoff.
-- Cowork is a cloud client. It cannot launch the local stdio command; its
-  custom connector needs a remotely reachable MCP endpoint.
+- Cloud Cowork tasks cannot launch the local stdio command; their custom
+  connector needs a remotely reachable MCP endpoint. Supported **local**
+  Cowork deployments can use plugin-bundled stdio servers on the Windows host.
+  The owner selected that local path on 2026-10-12; see the
+  [local Cowork guide](../../operations/cowork-mcp.md). Local plugin support
+  does not complete this future cloud transport work.
 - The existing optional HTTP API is REST, not MCP. It is not a safe remote
   MCP substitute: its LAN mode is unencrypted and intentionally bounded to a
   trusted private network (HTTP-09).
@@ -95,8 +99,8 @@ anonymous access, static shared bearer secrets, the REST listener, or OpenAI's
 tunnel as a workaround. When authorized as a milestone, require process-level
 MCP protocol tests, auth/revocation/rate-limit negative tests, three-theme UI
 review, and an attended ChatGPT and Cowork interoperability check. Until then,
-the UI must say Cowork is not connected and explain why without displaying a
-nonfunctional setup button.
+the UI must distinguish local plugin setup from cloud connectivity and avoid
+claiming a connected Cowork session merely because a plugin was exported.
 
 ## Next action
 

@@ -3560,6 +3560,14 @@ button.primary {
 .mcp-tunnel-error {
   color: var(--mcp-status-error, #ff6b6b);
 }
+.mcp-cowork-action {
+  height: 4rem;
+}
+.mcp-cowork-message {
+  height: 7rem;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
 .mcp-chatgpt-open {
   justify-self: start;
   display: inline-flex;

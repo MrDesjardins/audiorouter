@@ -16,6 +16,7 @@ use tauri::{
 #[cfg(windows)]
 mod api_token;
 mod backend_supervisor;
+mod cowork_plugin;
 mod http_accept;
 mod http_api;
 #[cfg(windows)]
@@ -1229,10 +1230,40 @@ fn mcp_setup_info(
     Ok(serde_json::json!({
         "cliPath": cli.to_string_lossy(),
         "cliAvailable": cli.is_file(),
+        "coworkPluginAvailable": cfg!(windows),
         "databasePath": state.database_path.to_string_lossy(),
         "pipeName": state.pipe_name,
         "transport": "local named pipe",
     }))
+}
+
+#[cfg(windows)]
+#[tauri::command]
+async fn mcp_export_cowork_plugin(
+    app: tauri::AppHandle,
+    state: State<'_, ShellState>,
+) -> Result<String, String> {
+    let executable = std::env::current_exe()
+        .map_err(|_| "AudioRouter's local MCP executable is unavailable.")?;
+    let cli = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|directory| directory.join("audiorouter-cli.exe"))
+        .filter(|path| path.is_file())
+        .unwrap_or_else(|| executable.with_file_name("audiorouter-cli.exe"));
+    let folder = app
+        .path()
+        .download_dir()
+        .map_err(|_| "Your Downloads folder is unavailable.")?;
+    let database = state.database_path.clone();
+    let pipe = state.pipe_name.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        cowork_plugin::export(&cli, &database, &pipe, &folder)
+            .map(|path| path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|_| "Could not export the Cowork plugin.")?
 }
 
 #[cfg(windows)]
@@ -1960,6 +1991,7 @@ fn main() {
             export_support_bundle,
             install_streamdeck_plugin,
             mcp_setup_info,
+            mcp_export_cowork_plugin,
             mcp_tunnel_status,
             mcp_tunnel_configure,
             mcp_tunnel_connect,

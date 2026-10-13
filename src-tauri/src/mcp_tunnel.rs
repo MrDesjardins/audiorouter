@@ -447,15 +447,18 @@ const MCP_PROBE_INCOMPATIBLE: &str = "AudioRouter's MCP executable is outdated o
 const MCP_PROBE_BACKEND: &str = "The MCP server cannot reach AudioRouter's backend with its current client permission. Reconnect the app and check Client permissions, then Connect again.";
 
 fn verify_local_mcp(cli: &Path, database: &Path, pipe: &str) -> Result<(), String> {
+    verify_local_mcp_for_client(cli, database, pipe, "audiorouter-chatgpt")
+}
+
+pub(crate) fn verify_local_mcp_for_client(
+    cli: &Path,
+    database: &Path,
+    pipe: &str,
+    client_id: &str,
+) -> Result<(), String> {
     let mut command = Command::new(cli);
     command
-        .args([
-            "mcp",
-            "serve",
-            "--client-id",
-            "audiorouter-chatgpt",
-            "--database",
-        ])
+        .args(["mcp", "serve", "--client-id", client_id, "--database"])
         .arg(database)
         .args(["--pipe", pipe])
         .env_remove("CONTROL_PLANE_API_KEY")
