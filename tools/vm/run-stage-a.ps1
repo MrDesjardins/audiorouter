@@ -43,6 +43,7 @@ $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powersh
 $probe = Join-Path $bundle 'tools\m00-probe.exe'
 $format = Join-Path $bundle 'tools\m03_cable_format.exe'
 $taskName = 'AudioRouter-StageA-Resume'
+$evidenceRoot = 'C:\ar\evidence'
 $work = Join-Path 'C:\ar\stage-a' $Session
 $statePath = Join-Path $work 'state.json'
 New-Item -ItemType Directory -Force -Path $work | Out-Null
@@ -102,15 +103,20 @@ function Invoke-Child([string] $Script, [string[]] $Arguments) {
     Write-Host $text
     return [pscustomobject]@{ Code = $code; Text = $text }
 }
-function Invoke-VmCheck([string] $Step, [string[]] $Extra = @()) {
+# PowerShell 5.1 ConvertFrom-Json emits a JSON array as ONE object; without
+# unrolling, "$checks | Where-Object" saw every check at once and graded a
+# failed counter check as passed (VM run 2026-10-13).
+function Read-Checks($Dir) {
+    if (-not $Dir) { return @() }
+    $path = Join-Path $Dir.FullName 'summary.json'
+    if (-not (Test-Path -LiteralPath $path)) { return @() }
+    return @((Get-Content -LiteralPath $path -Raw | ConvertFrom-Json) | ForEach-Object { $_ })
+}function Invoke-VmCheck([string] $Step, [string[]] $Extra = @()) {
     $started = Get-Date
     $code = (Invoke-Child 'vm-checks.ps1' (@('-Step', $Step) + $Extra)).Code
-    $dir = Get-ChildItem -LiteralPath 'C:\ar\evidence' -Directory -Filter "*-$Step" |
+    $dir = Get-ChildItem -LiteralPath $evidenceRoot -Directory -Filter "*-$Step" |
         Where-Object { $_.CreationTime -ge $started.AddSeconds(-2) } | Sort-Object Name | Select-Object -Last 1
-    $checks = @()
-    if ($dir -and (Test-Path -LiteralPath (Join-Path $dir.FullName 'summary.json'))) {
-        $checks = @(Get-Content -LiteralPath (Join-Path $dir.FullName 'summary.json') -Raw | ConvertFrom-Json)
-    }
+    $checks = Read-Checks $dir
     return [pscustomobject]@{ Code = $code; Checks = $checks; Dir = $dir }
 }
 function Invoke-Native([string] $Executable, [string[]] $Arguments) {
@@ -126,6 +132,23 @@ function Invoke-Native([string] $Executable, [string[]] $Arguments) {
 }
 function Invoke-Runner([string] $Script, [string[]] $Arguments = @()) {
     return Invoke-Child $Script $Arguments
+}
+# The run-cable-* scripts print "...copied to Z:\<bundle>\<run>.zip" and keep
+# C:\ar\evidence\<run>\result.json; grade from that file, never the exit code
+# (run-cable-tone exits 0 after a measured "fail").
+function Get-RunResult($Run) {
+    $match = [regex]::Match($Run.Text, '(?m)copied to Z:\\[^\\]+\\([^\\\r\n]+)\.zip')
+    if (-not $match.Success) { return $null }
+    $path = Join-Path (Join-Path $evidenceRoot $match.Groups[1].Value) 'result.json'
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+}
+function Get-RunMetrics($Run) {
+    $match = [regex]::Match($Run.Text, '(?m)copied to Z:\\[^\\]+\\([^\\\r\n]+)\.zip')
+    if (-not $match.Success) { return $null }
+    $path = Join-Path (Join-Path $evidenceRoot $match.Groups[1].Value) 'metrics.json'
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 }
 function Get-EndpointIndex([string] $Flow, [string] $Name) {
     $text = (Invoke-Native $probe @('inventory')).Text
@@ -179,7 +202,37 @@ function Grade-Tone([string] $Label, $Run, [switch] $Stall) {
     if ($clean -and $clean.passed) { Add-Result $Label 'PASS' "tool exit 0, all counters zero; $evidence" }
     else { Add-Result $Label 'VM' "tool exit 0, no corruption; non-zero glitch counters (VM scheduling, Stage C); $evidence" }
 }
-function Step([string] $Name, [scriptblock] $Body) {
+function Grade-Continuity([string] $Label, $Run) {
+    $result = Get-RunResult $Run
+    if (-not $result) { Add-Result $Label 'FAIL' "no continuity result.json (exit $($Run.Code))"; return }
+    $rows = @($result.Results | ForEach-Object { $_ })
+    $detail = ($rows | ForEach-Object { "$($_.ToneHz) Hz $($_.Verdict): $($_.Glitches) glitches, reference $($_.ReferenceGlitches)" }) -join '; '
+    $clean = $rows.Count -gt 0 -and @($rows | Where-Object { $_.Verdict -ne 'pass' }).Count -eq 0
+    $referenceClean = $rows.Count -gt 0 -and @($rows | Where-Object { $_.ReferenceGlitches -ne 0 }).Count -eq 0
+    if ($clean) { Add-Result $Label 'PASS' $detail }
+    elseif ($referenceClean) { Add-Result $Label 'VM' "$detail (VCAB-24, Stage C)" }
+    else { Add-Result $Label 'FAIL' "$detail (the reference capture glitched too)" }
+}
+function Grade-BitExact([string] $Label, $Run) {
+    $result = Get-RunResult $Run
+    $metrics = Get-RunMetrics $Run
+    if (-not $result -or -not $metrics) { Add-Result $Label 'FAIL' "no bit-exact result (exit $($Run.Code))"; return }
+    $r = $result.Result
+    $detail = "bit-exact $($metrics.bitExact), max error $($metrics.maxAbsoluteError), $($metrics.alignedFrames) frames; dropped $($r.CaptureDropped), flagged $($r.CaptureFlagged), overflow $($r.CaptureOverflow)"
+    # One flagged packet is Windows' discontinuity flag on the first capture
+    # packet; samples, drops and overflows decide.
+    if ($metrics.bitExact -and $r.CaptureDropped -eq 0 -and $r.CaptureOverflow -eq 0 -and $r.CaptureFlagged -le 1) {
+        Add-Result $Label 'PASS' $detail
+    } else {
+        Add-Result $Label 'VM' "$detail (a lost block is the VM stall pattern)"
+    }
+}
+function Grade-Kill([string] $Label, $Run) {
+    $result = Get-RunResult $Run
+    $verdict = if ($result -and $result.Passed) { 'PASS' } else { 'FAIL' }
+    $note = if ($result) { "$(@($result.Results).Count) repeats, error '$($result.Error)'" } else { "no result.json (exit $($Run.Code))" }
+    Add-Result $Label $verdict $note
+}function Step([string] $Name, [scriptblock] $Body) {
     if ($done.Contains($Name)) { return }
     Write-Host "`n== $Name" -ForegroundColor Cyan
     try { & $Body } catch { Add-Result $Name 'FAIL' $_.Exception.Message }
@@ -211,9 +264,13 @@ try {
         Add-Result 'status' 'PASS' (($run.Checks | Select-Object -First 1).detail)
     }
     Step 'quiet guest' {
+        if (Test-Path -LiteralPath 'C:\ar\quiet-guest-state.json') {
+            Add-Result 'quiet guest' 'PASS' 'already applied (reverted at the end)'
+            return
+        }
         $run = Invoke-Runner 'quiet-guest.ps1' @('-Apply', '-SettleSeconds', [string]$SettleSeconds)
         $verdict = if ($run.Code -eq 0) { 'PASS' } else { 'VM' }
-        Add-Result 'quiet guest' $verdict 'Windows Update paused, maintenance off, Defender exclusions (reverted at the end)'
+        Add-Result 'quiet guest' $verdict "exit $($run.Code); Windows Update paused, maintenance off, Defender exclusions (reverted at the end)"
     }
     Step 'tone 30 s (A4 tool, A5)' {
         $script:feeders = Start-Feeders 30
@@ -243,25 +300,18 @@ try {
         } finally { Set-CableFormat 2 48000 }
     }
     Step 'product route continuity 10 min' {
-        $run = Invoke-Runner 'run-cable-tone.ps1' @('-Minutes', '10')
-        $verdict = if ($run.Code -eq 0) { 'PASS' } else { 'VM' }
-        Add-Result 'product route continuity 10 min' $verdict 'VCAB-24 method; losses here are bound to Stage C'
+        Grade-Continuity 'product route continuity 10 min' (Invoke-Runner 'run-cable-tone.ps1' @('-Minutes', '10'))
     }
     foreach ($channels in 2, 8) {
         Step "bit-exact $channels ch" {
             if ($channels -eq 8) { Set-CableFormat 8 48000 }
             try {
-                $run = Invoke-Runner 'run-cable-bitexact.ps1' @('-Channels', [string]$channels)
-                $summary = ([regex]::Match($run.Text, '(?m)^\s*samples: .*$')).Value.Trim()
-                if ($run.Code -eq 0) { Add-Result "bit-exact $channels ch" 'PASS' $summary }
-                else { Add-Result "bit-exact $channels ch" 'VM' "$summary (a single lost block is the VM stall pattern)" }
+                Grade-BitExact "bit-exact $channels ch" (Invoke-Runner 'run-cable-bitexact.ps1' @('-Channels', [string]$channels))
             } finally { if ($channels -eq 8) { Set-CableFormat 2 48000 } }
         }
     }
     Step 'crash recovery (A7)' {
-        $run = Invoke-Runner 'run-cable-kill.ps1'
-        $verdict = if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }
-        Add-Result 'crash recovery (A7)' $verdict "exit $($run.Code)"
+        Grade-Kill 'crash recovery (A7)' (Invoke-Runner 'run-cable-kill.ps1')
     }
     Step 'A9 before restart' {
         (Invoke-Native $format @('show')).Text -split "`r?`n" | Select-String 'id:' | ForEach-Object { $_.Line.Trim() } | Set-Content -LiteralPath (Join-Path $work 'a9-before.txt')

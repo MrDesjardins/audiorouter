@@ -416,6 +416,40 @@ Bundle `C:\VMs\ar-share\rc-0.2.4-r4` (source `6c7a0be4`, `-ReuseDriverShare rc-0
 
 Runner first run (r4, 2026-10-13): install and status PASS, then two runner bugs: `quiet guest` FAIL because a child's stderr warning ("Get-MpPreference : Provider load failure") became a terminating error under `Stop` with `2>&1` (lesson 2026-10-03); all four tone steps FAIL because a trailing comma made the second feeder `Start-Process` part of the first one's `-RedirectStandardError` value. The tone tool never ran; the user stopped the run. Fix: every child script and native tool runs through `Invoke-Child`/`Invoke-Native` with `Continue` and exit codes; feeders start as two statements. Host test of both patterns under `Stop` (scratch script): stderr captured, exit code 3 preserved, two feeders started.
 
+**RC3 Stage A session 2 via the runner (r5, 2026-10-13): complete; graded
+from the evidence, not the runner's table.** The runner printed FAIL 0,
+but its table was wrong in three places (fixed below). Real results
+(`stage-a-audio-20261013-181109.zip`, `evidence-20261013-180926.zip` and
+the run zips in `Z:\rc-0.2.4-r5`):
+
+| Check | Evidence | Verdict |
+| --- | --- | --- |
+| install (driver already present), status | 0.2.4.0, 60/60 formats | PASS |
+| tone 30 s / 10 min (A4 tool, A5) | capture underrun 12,096 / 187,344; all workers paused 271 / 384 ms at once; no corruption | VM |
+| tone stall | counters rose | PASS |
+| **tone 8 ch 96 kHz** | **all counters zero**, worst gap 5.7 ms, 6,000 packets | PASS (clean) |
+| product continuity 10 min each | 96 / 22 glitches (997 / 47 Hz), reference 0; route dropped 1 of 60,200 | VM |
+| bit-exact 2 ch and 8 ch | bit-exact, max error 0.0, 960,000 frames; only the start flag | PASS |
+| A7 kill | `Passed: true`, 3 repeats | PASS |
+| **A9 restart keeps IDs** | 4 IDs equal after the automatic restart | PASS |
+| status after restart, remove | | PASS |
+
+The clean 8-ch run shows the driver produces zero counters whenever the
+guest is not descheduled. `quiet guest` reported "already applied": the
+broken r4 run had applied part of it before Defender's provider failed;
+the final revert restored everything.
+Runner fixes after this run: (1) `Read-Checks` unrolls `summary.json`
+(PowerShell 5.1 `ConvertFrom-Json` returns the array as one object, so a
+failed counter check read as passed); (2) continuity, bit-exact and kill
+are graded from each run's `result.json`/`metrics.json` (`Grade-Continuity`,
+`Grade-BitExact`, `Grade-Kill`), since `run-cable-tone` exits 0 after a
+measured fail; bit-exact passes on exact samples with at most the one
+start flag and no drops or overflow; (3) an existing quiet-guest state
+counts as applied; `quiet-guest.ps1` retries `Get-MpPreference` for a minute
+and skips Defender exclusions with a warning instead of aborting. Host
+test: the runner's own grading functions, loaded from its AST, graded the
+real r5 evidence 9/9 as above (including a missing result → FAIL).
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each

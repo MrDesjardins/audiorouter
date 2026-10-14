@@ -19,6 +19,21 @@ $MaintenanceKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\M
 $ExclusionPaths = @('C:\ar')
 $ExclusionProcesses = @('m03_bridge_tone.exe', 'm03_direct_audio.exe', 'm00-probe.exe', 'audiorouter-driver-helper.exe')
 
+# Defender's WMI provider can still be loading right after a boot
+# ("Provider load failure", VM 2026-10-13). Retry for up to a minute, then
+# carry on without exclusions rather than abort halfway through -Apply.
+function Get-DefenderPreference {
+    for ($attempt = 1; $attempt -le 12; $attempt++) {
+        try { return Get-MpPreference } catch {
+            if ($attempt -eq 12) { Write-Warning "Defender settings unavailable: $($_.Exception.Message)"; return $null }
+            Start-Sleep -Seconds 5
+        }
+    }
+}
+function Invoke-Defender([scriptblock] $Change, [string] $What) {
+    try { & $Change } catch { Write-Warning "Defender $What skipped: $($_.Exception.Message)" }
+}
+
 function Get-RegistryValue([string] $Key, [string] $Name) {
     $item = Get-ItemProperty -Path $Key -Name $Name -ErrorAction SilentlyContinue
     if ($null -eq $item) { return $null }
@@ -28,7 +43,7 @@ function Get-RegistryValue([string] $Key, [string] $Name) {
 function Get-QuietSnapshot {
     $updates = [ordered]@{}
     foreach ($name in $UpdateValues) { $updates[$name] = Get-RegistryValue $UpdateKey $name }
-    $preference = Get-MpPreference
+    $preference = Get-DefenderPreference
     return [pscustomobject]@{
         Updates = [pscustomobject]$updates
         MaintenanceDisabled = Get-RegistryValue $MaintenanceKey 'MaintenanceDisabled'
@@ -62,8 +77,8 @@ function Invoke-QuietApply([datetime] $NowUtc) {
     Set-ItemProperty -Path $MaintenanceKey -Name 'MaintenanceDisabled' -Value 1 -Type DWord
     $addPaths = @($ExclusionPaths | Where-Object { $before.ExclusionPath -notcontains $_ })
     $addProcesses = @($ExclusionProcesses | Where-Object { $before.ExclusionProcess -notcontains $_ })
-    if ($addPaths.Count) { Add-MpPreference -ExclusionPath $addPaths }
-    if ($addProcesses.Count) { Add-MpPreference -ExclusionProcess $addProcesses }
+    if ($addPaths.Count) { Invoke-Defender { Add-MpPreference -ExclusionPath $addPaths } 'path exclusions' }
+    if ($addProcesses.Count) { Invoke-Defender { Add-MpPreference -ExclusionProcess $addProcesses } 'process exclusions' }
     # Fetch signatures now rather than during a measurement.
     try { Update-MpSignature } catch { Write-Warning "Defender signature update failed: $($_.Exception.Message)" }
 }
@@ -81,8 +96,8 @@ function Invoke-QuietRevert {
     # Remove only exclusions this script added.
     $removePaths = @($ExclusionPaths | Where-Object { @($before.ExclusionPath) -notcontains $_ })
     $removeProcesses = @($ExclusionProcesses | Where-Object { @($before.ExclusionProcess) -notcontains $_ })
-    if ($removePaths.Count) { Remove-MpPreference -ExclusionPath $removePaths }
-    if ($removeProcesses.Count) { Remove-MpPreference -ExclusionProcess $removeProcesses }
+    if ($removePaths.Count) { Invoke-Defender { Remove-MpPreference -ExclusionPath $removePaths } 'path exclusion removal' }
+    if ($removeProcesses.Count) { Invoke-Defender { Remove-MpPreference -ExclusionProcess $removeProcesses } 'process exclusion removal' }
     Remove-Item -LiteralPath $StatePath
 }
 
