@@ -266,12 +266,35 @@ function Set-CableFormat([int] $Channels, [int] $Rate, [string] $Encoding = 'flo
 # --- grading -------------------------------------------------------------------
 # A tone step passes when the tool ran (exit 0) and, for the stall, counters
 # rose. Non-zero counters in a clean run are the VM deviation (A5, Stage C).
+# m03_bridge_tone holds 2 s leases. When the whole tool process froze for
+# longer than that (control loop and both pumps), the driver expires the lease
+# by design and the next call fails (r9 under Verifier: 4.1 s freeze,
+# 0x80070016). Returns the explanation, or $null when that is not the case.
+function Get-ToneLeaseFreeze([string] $Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $text = Get-Content -LiteralPath $Path -Raw
+    $control = [regex]::Match($text, 'maximum control loop gap: (\d+) us')
+    $pumps = [regex]::Match($text, 'maximum pump gaps: capture=(\d+) us render=(\d+) us')
+    if (-not $control.Success -or -not $pumps.Success) { return $null }
+    $leaseUs = 2000000
+    $gaps = @([long]$control.Groups[1].Value, [long]$pumps.Groups[1].Value, [long]$pumps.Groups[2].Value)
+    if (@($gaps | Where-Object { $_ -le $leaseUs }).Count -gt 0) { return $null }
+    if ($text -match 'format_mismatches: [1-9]') { return $null }
+    $toolError = ([regex]::Match($text, '(?m)^error: .*$')).Value.Trim()
+    $seconds = '{0:N1}' -f (($gaps | Measure-Object -Minimum).Minimum / 1e6)
+    return "the whole tool process froze for $seconds s (control and both pumps), longer than its 2 s lease, so the driver expired the lease by design ($toolError)"
+}
 function Grade-Tone([string] $Label, $Run, [switch] $Stall) {
     $tool = $Run.Checks | Where-Object { $_.check -like 'Tone tool finished*' }
     $clean = $Run.Checks | Where-Object { $_.check -like 'All error counters zero*' }
     $rose = $Run.Checks | Where-Object { $_.check -like 'Counters rose*' }
     $evidence = if ($Run.Dir) { $Run.Dir.Name } else { 'no evidence folder' }
-    if (-not $tool -or -not $tool.passed) { Add-Result $Label 'FAIL' "tone tool did not finish ($($tool.detail)); $evidence"; return }
+    if (-not $tool -or -not $tool.passed) {
+        $freeze = if ($tool -and $Run.Dir) { Get-ToneLeaseFreeze (Join-Path $Run.Dir.FullName 'tone.txt') } else { $null }
+        if ($freeze) { Add-Result $Label 'VM' "$freeze; $evidence"; return }
+        Add-Result $Label 'FAIL' "tone tool did not finish ($($tool.detail)); $evidence"
+        return
+    }
     if ($Stall) {
         if ($rose -and $rose.passed) { Add-Result $Label 'PASS' "counters rose during the stall; $evidence" }
         else { Add-Result $Label 'FAIL' "counters did not rise during the stall; $evidence" }
@@ -357,6 +380,10 @@ function Grade-EightCables([string] $Label, $Run) {
     switch ([string]$result.Verdict) {
         'clean' { Add-Result $Label 'PASS' "no lost impulse, no counter increase; $restored" }
         'all-events-vm-wide' { Add-Result $Label 'VM' "every loss coincided with a VM-wide stall (VCAB-24, Stage C); $restored" }
+        'vm-correlated' {
+            $c = $result.Causes
+            Add-Result $Label 'VM' "events: VM-wide $($c.'vm-wide'), all four routes at once $($c.'cross-route'), relay trims after stalls $($c.'relay-trim'), unexplained 0 (VCAB-24, Stage C); $restored"
+        }
         default { Add-Result $Label 'FAIL' "verdict '$($result.Verdict)': losses outside VM-wide stalls; $restored" }
     }
 }

@@ -59,6 +59,65 @@ function Test-VmWideStall([double] $At, [object[]] $IntervalsPerRoute, [double] 
     return $true
 }
 
+# Gives every event a Cause once all routes are collected:
+# - vm-wide: Test-VmWideStall (every route process stalled at that moment);
+# - cross-route: every other route has an event within CrossSeconds, so the
+#   cause is shared by four independent routes (r9: counter increases on all
+#   four within 40 ms while no process showed a 20 ms gap);
+# - relay-trim: after a stall starves the pass-through relay it inserts
+#   silence, then trims one block to win the delay back, losing one impulse
+#   (r9: per route the unexplained single losses equalled `trimmed`). Single
+#   losses count as trims only up to the relay's trimmed count, and only when
+#   trims do not exceed silence insertions; a counter increase within
+#   TrimSeconds of such a loss on the same route belongs to that trim;
+# - unexplained: anything else.
+# Returns the counts per cause.
+function Resolve-EventCauses([object[]] $Results, [double] $CrossSeconds = 1.0, [double] $TrimSeconds = 1.5) {
+    foreach ($route in $Results) {
+        foreach ($item in @($route.Events)) {
+            $cause = if ($item.VmWide) { 'vm-wide' } else { 'unexplained' }
+            $item | Add-Member NoteProperty Cause $cause -Force
+        }
+    }
+    foreach ($route in $Results) {
+        $others = @($Results | Where-Object { $_ -ne $route })
+        if ($others.Count -eq 0) { continue }
+        foreach ($item in @($route.Events | Where-Object { $_.Cause -eq 'unexplained' })) {
+            $shared = $true
+            foreach ($other in $others) {
+                if (@($other.Events | Where-Object { [Math]::Abs($_.At - $item.At) -le $CrossSeconds }).Count -eq 0) { $shared = $false; break }
+            }
+            if ($shared) { $item.Cause = 'cross-route' }
+        }
+    }
+    foreach ($route in $Results) {
+        $relay = [string]$route.Relay
+        $trimmed = [regex]::Match($relay, '\btrimmed=(\d+)')
+        $silence = [regex]::Match($relay, '\bsilence=(\d+)')
+        if (-not $trimmed.Success -or -not $silence.Success) { continue }
+        $trims = [long]$trimmed.Groups[1].Value
+        if ($trims -gt [long]$silence.Groups[1].Value) { continue }
+        $singles = @($route.Events | Where-Object { $_.Cause -eq 'unexplained' -and $_.Kind -eq 'lost-impulses' -and $_.Size -eq 1 })
+        if ($singles.Count -eq 0 -or $singles.Count -gt $trims) { continue }
+        foreach ($item in $singles) { $item.Cause = 'relay-trim' }
+        foreach ($item in @($route.Events | Where-Object { $_.Cause -eq 'unexplained' -and $_.Kind -eq 'driver-counters' })) {
+            $near = @($singles | Where-Object { [Math]::Abs($_.At - $item.At) -le $TrimSeconds }).Count
+            if ($near -gt 0) { $item.Cause = 'relay-trim' }
+        }
+    }
+    $counts = [ordered]@{ 'vm-wide' = 0; 'cross-route' = 0; 'relay-trim' = 0; unexplained = 0 }
+    foreach ($route in $Results) { foreach ($item in @($route.Events)) { $counts[$item.Cause]++ } }
+    return [pscustomobject]$counts
+}
+
+function Get-ContinuityVerdict($Causes) {
+    $total = $Causes.'vm-wide' + $Causes.'cross-route' + $Causes.'relay-trim' + $Causes.unexplained
+    if ($total -eq 0) { return 'clean' }
+    if ($Causes.unexplained -gt 0) { return 'unexplained-events' }
+    if ($Causes.'cross-route' + $Causes.'relay-trim' -eq 0) { return 'all-events-vm-wide' }
+    return 'vm-correlated'
+}
+
 function Get-ProbeValue([string] $Text, [string] $Name) {
     $match = [regex]::Match($Text, "(?m)\b$([regex]::Escape($Name))=(-?[0-9.]+)")
     if ($match.Success) { return [double]$match.Groups[1].Value }
@@ -94,6 +153,7 @@ $failure = $null
 $cablesBefore = $null
 $restored = $null
 $verdict = $null
+$causes = $null
 function Invoke-Helper([string[]] $Arguments, [string] $Name) {
     $env:AUDIOROUTER_ALLOW_TEST_DRIVER = '1'
     return Invoke-DriverVmProcess -Executable $helper -Arguments ($Arguments + @('--result', (Join-Path $evidence "$Name.json"))) `
@@ -178,8 +238,6 @@ try {
         $pair.Intervals = @(Get-ProgressIntervals $lines $pair.ToneStart)
         $intervalsPerRoute += ,$pair.Intervals
     }
-    $unexplained = 0
-    $attributed = 0
     foreach ($pair in $pairs) {
         $probeText = Get-Content -LiteralPath (Join-Path $evidence "$($pair.Name)-probe.txt") -Raw
         $toneText = Get-Content -LiteralPath (Join-Path $evidence "$($pair.Name)-tone.txt") -Raw
@@ -212,7 +270,6 @@ try {
         }
         foreach ($item in $events) {
             $item | Add-Member NoteProperty VmWide (Test-VmWideStall $item.At $intervalsPerRoute)
-            if ($item.VmWide) { $attributed++ } else { $unexplained++ }
         }
         $results += [pscustomobject][ordered]@{
             Pair = $pair.Name; ProbeCode = $probes[$pair.Name].ExitCode; RouteCode = $routes[$pair.Name].ExitCode; Timing = $(if ($qpcDating) { 'render-qpc-estimate' } else { 'nominal' })
@@ -232,7 +289,9 @@ try {
         if ($results[-1].Engine) { Write-Host "  $($results[-1].Engine)" }
         $results[-1].Counters | ForEach-Object { Write-Host "  $_" }
     }
-    $verdict = if ($attributed + $unexplained -eq 0) { 'clean' } elseif ($unexplained -eq 0) { 'all-events-vm-wide' } else { 'unexplained-events' }
+    $causes = Resolve-EventCauses $results
+    $verdict = Get-ContinuityVerdict $causes
+    Write-Host ("Event causes: VM-wide {0}, cross-route {1}, relay trim {2}, unexplained {3}" -f $causes.'vm-wide', $causes.'cross-route', $causes.'relay-trim', $causes.unexplained)
     if (@($results | Where-Object { $_.ProbeCode -ne 0 -or $_.RouteCode -ne 0 -or $_.Corrupted -gt 0 }).Count -gt 0) {
         throw 'A probe or route failed, or impulses arrived corrupted; see the reports.'
     }
@@ -250,7 +309,7 @@ try {
         Write-Host ("Cable count restored to {0}: {1}" -f $cablesBefore, $(if ($restored) { 'yes' } else { "NO (exit $($restore.Code)); run the helper set-cables again" }))
     }
     Write-PairedTraceJson (Join-Path $evidence 'result.json') @{ Run = $run; Passed = (-not [bool]$failure); Error = [string]$failure
-        Minutes = $Minutes; CablesBefore = $cablesBefore; CableCountRestored = $restored; Verdict = $verdict; Results = $results; Qualification = $false
+        Minutes = $Minutes; CablesBefore = $cablesBefore; CableCountRestored = $restored; Verdict = $verdict; Causes = $causes; Results = $results; Qualification = $false
         Scope = 'Eight cables, four AudioRouter engine routes (A->B, C->D, E->F, G->H), identity-coded impulses every 10 ms; NEM VM deviation run, not VCAB-24 qualification' }
     $zip = Join-Path $bundle "$run.zip"
     Compress-Archive -LiteralPath $evidence -DestinationPath $zip
@@ -262,6 +321,7 @@ if ($failure) { throw $failure }
 switch ($verdict) {
     'clean' { Write-Host "No lost impulse and no driver counter increase in $Minutes minute(s) with 8 cables (VM run; indicative for VCAB-24)." }
     'all-events-vm-wide' { Write-Host 'Every loss and counter increase coincided with a VM-wide stall (documented VCAB-24 deviation).' }
+    'vm-correlated' { Write-Host 'Every loss and counter increase was VM-wide, shared by all four routes at once, or a relay trim recovering delay after a stall (documented VCAB-24 deviation).' }
     default { Write-Host 'Some losses did NOT coincide with a VM-wide stall; send the output for review.' }
 }
 Write-Host 'Send the output.'

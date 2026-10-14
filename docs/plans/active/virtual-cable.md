@@ -594,7 +594,7 @@ attributed to the VM below.
   `trimmed` count (129/131, 30/32, 156/160, 177/177): the relay inserts
   silence when a stall starves it and later trims one block to win the
   delay back, dropping one impulse each time. Verdict: VM (stall plus its
-  recovery), Stage C. Runner follow-up: attribute trims to stalls.
+  recovery), Stage C.
 - quality (A16): **the r7 product defect is fixed** — every 44.1/96 kHz
   route moves audio. Bit-exact PASS at 44.1 kHz 8 ch, 48 kHz 1/2 ch, 96 kHz
   1 ch. The five VM verdicts were checked sample by sample (scratch
@@ -622,9 +622,26 @@ attributed to the VM below.
   whole tool froze for 4.1 s (capture, render and control pump gaps
   4.07–4.14 s, a minute after the Verifier restart); the driver expired
   the ~1 s lease (deactivated at 15.7 s) and the next IOCTL got
-  0x80070016. That is the lease rule working; verdict VM. Runner
-  follow-up: report a lease lost after a whole-process freeze longer than
-  the lease as VM, with the gap.
+  0x80070016. That is the lease rule working; verdict VM.
+
+Runner repairs after r9 (2026-10-14): `run-cable-continuity.ps1`
+`Resolve-EventCauses` gives each event a cause after all routes are
+collected: `vm-wide` (unchanged test), `cross-route` (every other route has
+an event within 1 s), `relay-trim` (single-impulse losses up to the relay's
+`trimmed` count when trims do not exceed silence insertions, plus counter
+increases within 1.5 s of such a loss on the same route), else
+`unexplained`; new verdict `vm-correlated` when nothing is unexplained but
+some events are cross-route or trims (graded VM with the counts;
+`unexplained-events` stays FAIL). `run-stage-a.ps1` `Get-ToneLeaseFreeze`:
+a failed tone run grades VM only when the control loop and both pumps all
+froze longer than the tool's 2 s lease and no format mismatch was counted.
+Host test (scratch script loading both scripts' functions from their AST),
+18/18: r9 eight-cable run → `vm-correlated` (VM-wide 1,911, cross-route
+43, relay trim 487, unexplained 0 of 2,441 events); r9 Verifier tone → VM
+(4.1 s freeze); still FAIL with no relay counts, trims above silence, more
+single losses than trims, an isolated 12-impulse loss, a 1.5 s freeze, one
+pump frozen, or no tone log. Takes effect in the next bundle; RC3 Stage A
+needs no rerun for it.
 
 Stage A status on RC3 after r9: every automated check passes or has a
 documented VM attribution; open are A12 (Discord/OBS, attended or Stage C)
