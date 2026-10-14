@@ -72,6 +72,7 @@ Embeds: the download page uses GitHub's small Sponsor button
 (`/sponsors/MrDesjardins/card`) was tried and left out: it is a mostly empty
 white 600 × 225 box on the dark site. Both embeds load only over http(s),
 not from a page opened as a local file.
+
 ## Transparency
 
 - Keep the goal and the amount received visible on the Sponsors page.
