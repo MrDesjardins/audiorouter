@@ -449,6 +449,7 @@ counts as applied; `quiet-guest.ps1` retries `Get-MpPreference` for a minute
 and skips Defender exclusions with a warning instead of aborting. Host
 test: the runner's own grading functions, loaded from its AST, graded the
 real r5 evidence 9/9 as above (including a missing result → FAIL).
+Bundle `C:\VMs\ar-share\rc-0.2.4-r6` (source `9afcf670`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared), MANIFEST SHA-256 `B4A38E53F9A7C06B6F73714823AA11666D0876F09F9056D556D651FBF2F6CB68`; supersedes r5. Session 2 needs no rerun.
 
 ### 8-channel spike (prepared 2026-10-12)
 
