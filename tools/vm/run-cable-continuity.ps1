@@ -201,7 +201,10 @@ try {
         }
         $lostTotal = Get-ProbeValue $probeText 'cable_impulses_lost'
         $reportedLosses = [long](($events | Measure-Object -Property Size -Sum).Sum)
-        if ($reportedLosses -ne $lostTotal) { throw 'Lost-run report is incomplete; cannot attribute every loss.' }
+        if ($reportedLosses -ne $lostTotal) {
+            $runsTotal = Get-ProbeValue $probeText 'cable_lost_runs'
+            throw "Lost-run report is incomplete ($($events.Count) of $runsTotal runs listed, $reportedLosses of $lostTotal impulses); cannot attribute every loss."
+        }
         # Driver counter increases inside the measurement window (the route's
         # start-up and its idle tail after the impulses stop are excluded).
         foreach ($interval in $pair.Intervals | Where-Object { $_.Added -gt 0 -and $_.From -ge $windowStart -and $_.To -le $windowEnd }) {

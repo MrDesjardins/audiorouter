@@ -325,6 +325,11 @@ function Grade-EightCables([string] $Label, $Run) {
     if (-not $result) { Add-Result $Label 'FAIL' "no result.json (exit $($Run.Code))"; return }
     $restored = if ($result.CableCountRestored) { 'cable count restored' } else { 'cable count NOT restored' }
     if (-not $result.CableCountRestored) { Add-Result $Label 'FAIL' "verdict $($result.Verdict); $restored"; return }
+    if (-not $result.Verdict) {
+        # The runner stopped before a verdict: report its own error, not a guess.
+        Add-Result $Label 'REVIEW' "no verdict: $($result.Error); $restored"
+        return
+    }
     switch ([string]$result.Verdict) {
         'clean' { Add-Result $Label 'PASS' "no lost impulse, no counter increase; $restored" }
         'all-events-vm-wide' { Add-Result $Label 'VM' "every loss coincided with a VM-wide stall (VCAB-24, Stage C); $restored" }
@@ -494,42 +499,78 @@ function Session-Audio([string] $P) {
 function Session-Users([string] $P) {
     Step-Setup $P
     Step "${P}second user is refused (A11)" {
+        # The driver ties a lease to the Windows session (IoGetRequestorSessionId):
+        # a rival in the same session gets STATUS_SHARING_VIOLATION (0x80070020,
+        # "lease held"); a rival in another session gets STATUS_ACCESS_DENIED
+        # (0x80070005, "in use by another Windows user"). A runas process stays
+        # in this session, so the other-session case runs as a scheduled task
+        # (session 0). The bridge device admits SYSTEM, Administrators and
+        # interactive users only, so that task runs elevated: the device opens
+        # and only the lease's session rule can refuse it.
         $name = 'artest2'
         $chars = [char[]]'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
         $password = -join (1..16 | ForEach-Object { $chars | Get-Random }) + '-7a'
         $secure = ConvertTo-SecureString $password -AsPlainText -Force
+        $task = 'AudioRouter-StageA-A11'
+        $public = 'C:\Users\Public\audiorouter-a11'
         Get-LocalUser -Name $name -ErrorAction SilentlyContinue | Remove-LocalUser
         New-LocalUser -Name $name -Password $secure -Description 'AudioRouter Stage A A11 (temporary)' -AccountNeverExpires | Out-Null
-        $public = 'C:\Users\Public\audiorouter-a11'
         New-Item -ItemType Directory -Force -Path $public | Out-Null
-        $script:feeders = Start-Feeders 100
+        $script:feeders = Start-Feeders 120
         $user1 = $null
         try {
-            # User 1 (this account) holds the cable bridge with a 90-second tone.
-            $user1 = Start-Process -FilePath $toneTool -ArgumentList @('--seconds', '90', '--out', (Join-Path $work 'user1.wav')) `
+            # User 1 (this account, session of the console) holds the bridge.
+            $user1 = Start-Process -FilePath $toneTool -ArgumentList @('--seconds', '100', '--out', (Join-Path $work 'user1.wav')) `
                 -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $work 'user1.txt') `
                 -RedirectStandardError (Join-Path $work 'user1-err.txt')
+            $null = $user1.Handle   # keep a handle so ExitCode is readable later
             Start-Sleep -Seconds 15
-            # User 2, a standard account, tries the same cable.
+
+            # (a) Same session, another account (runas): must be "lease held".
             $credential = [pscredential]::new($name, $secure)
-            $user2 = Start-Process -FilePath $toneTool -ArgumentList @('--seconds', '10', '--out', (Join-Path $public 'user2.wav')) `
+            $same = Start-Process -FilePath $toneTool -ArgumentList @('--seconds', '10', '--out', (Join-Path $public 'same.wav')) `
                 -Credential $credential -LoadUserProfile -WorkingDirectory $public -WindowStyle Hidden -PassThru `
-                -RedirectStandardOutput (Join-Path $public 'user2.txt') -RedirectStandardError (Join-Path $public 'user2-err.txt')
-            if (-not $user2.WaitForExit(90000)) { Stop-Process -Id $user2.Id -Force; throw 'the second user''s tone tool did not exit within 90 s' }
-            $text = (Get-Content -LiteralPath (Join-Path $public 'user2.txt'), (Join-Path $public 'user2-err.txt') -Raw -ErrorAction SilentlyContinue) -join "`n"
-            Copy-Item -Path (Join-Path $public 'user2*.txt') -Destination $work
-            $refused = $text -match 'AccessDenied' -and $text -match 'in use by another Windows user'
-            [void]$user1.WaitForExit(120000)
-            $user1Code = if ($user1.HasExited) { $user1.ExitCode } else { 'still running' }
-            if ($refused -and $user2.ExitCode -ne 0) {
-                Add-Result "${P}second user is refused (A11)" 'PASS' "user 2 exit $($user2.ExitCode): AccessDenied, in use by another Windows user; user 1 exit $user1Code"
+                -RedirectStandardOutput (Join-Path $public 'same.txt') -RedirectStandardError (Join-Path $public 'same-err.txt')
+            $null = $same.Handle
+            if (-not $same.WaitForExit(90000)) { Stop-Process -Id $same.Id -Force }
+            $sameText = (Get-Content -LiteralPath (Join-Path $public 'same.txt'), (Join-Path $public 'same-err.txt') -Raw -ErrorAction SilentlyContinue) -join "`n"
+            $sameLine = ([regex]::Match($sameText, '(?m)^error: .*$')).Value
+            if ($sameText -match '0x80070020' -and $same.ExitCode -ne 0) {
+                Add-Result "${P}same-session second user is refused" 'PASS' "lease held (0x80070020), exit $($same.ExitCode)"
             } else {
-                $line = ([regex]::Match($text, '(?m)^error: .*$')).Value
-                Add-Result "${P}second user is refused (A11)" 'FAIL' "user 2 exit $($user2.ExitCode); '$line'; user 1 exit $user1Code"
+                Add-Result "${P}same-session second user is refused" 'FAIL' "exit $($same.ExitCode); '$sameLine'"
             }
+
+            # (b) Another session (scheduled task, elevated): must be access denied
+            # by the lease rule, after the device opened ("driver:" line).
+            Add-LocalGroupMember -Group 'Administrators' -Member $name -ErrorAction SilentlyContinue
+            $out = Join-Path $public 'other.txt'
+            $command = "`"$toneTool`" --seconds 10 --out `"$(Join-Path $public 'other.wav')`" > `"$out`" 2>&1"
+            $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/d /c `"$command`"" -WorkingDirectory $public
+            Register-ScheduledTask -TaskName $task -Action $action -User $name -Password $password -RunLevel Highest -Force | Out-Null
+            Start-ScheduledTask -TaskName $task
+            $deadline = (Get-Date).AddSeconds(90)
+            do { Start-Sleep -Seconds 2; $info = Get-ScheduledTask -TaskName $task } while ($info.State -eq 'Running' -and (Get-Date) -lt $deadline)
+            Start-Sleep -Seconds 2
+            $otherText = Get-Content -LiteralPath $out -Raw -ErrorAction SilentlyContinue
+            $otherLine = ([regex]::Match([string]$otherText, '(?m)^error: .*$')).Value
+            $opened = [string]$otherText -match '(?m)^driver: '
+            if ([string]$otherText -match '0x80070005' -and $opened) {
+                Add-Result "${P}second user is refused (A11)" 'PASS' 'another Windows session: access denied by the lease''s session rule (device opened, lease refused)'
+            } elseif ([string]$otherText -match '0x80070005') {
+                Add-Result "${P}second user is refused (A11)" 'REVIEW' "access denied before the device opened (device ACL); the lease rule was not reached: '$otherLine'"
+            } else {
+                Add-Result "${P}second user is refused (A11)" 'FAIL' "'$otherLine' (task state $($info.State))"
+            }
+            [void]$user1.WaitForExit(150000)
+            $user1Code = if ($user1.HasExited) { $user1.ExitCode } else { 'still running' }
+            Add-Result "${P}first user kept the cable" $(if ($user1Code -eq 0) { 'PASS' } else { 'REVIEW' }) "user 1 tone tool exit $user1Code"
         } finally {
             if ($user1 -and -not $user1.HasExited) { Stop-Process -Id $user1.Id -Force -ErrorAction SilentlyContinue }
             Stop-Feeders $script:feeders; $script:feeders = $null
+            Copy-Item -Path (Join-Path $public '*.txt') -Destination $work -ErrorAction SilentlyContinue
+            Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
+            Remove-LocalGroupMember -Group 'Administrators' -Member $name -ErrorAction SilentlyContinue
             Get-LocalUser -Name $name -ErrorAction SilentlyContinue | Remove-LocalUser
             Get-CimInstance Win32_UserProfile -ErrorAction SilentlyContinue | Where-Object { $_.LocalPath -like "*\$name" } |
                 Remove-CimInstance -ErrorAction SilentlyContinue

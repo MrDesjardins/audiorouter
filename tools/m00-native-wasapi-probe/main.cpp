@@ -1345,7 +1345,10 @@ static std::vector<CableLostRun> cable_lost_runs(const CableLatencyReport& repor
 static void print_cable_lost_runs(const CableLatencyReport& report, const std::vector<double>* emission = nullptr) {
     const auto runs = cable_lost_runs(report);
     std::cout << "cable_lost_runs=" << runs.size() << '\n';
-    for (size_t index = 0; index < runs.size() && index < 256; ++index) {
+    // Report every run: the continuity runner attributes each loss and refuses
+    // an incomplete list (a 30-min eight-cable VM run had ~1,000 runs per route
+    // and the old 256-line cap stopped the analysis, 2026-10-13).
+    for (size_t index = 0; index < runs.size() && index < 65536; ++index) {
         std::cout << "cable_lost_run first_impulse=" << runs[index].first_impulse << " count=" << runs[index].count;
         if (emission) std::cout << std::fixed << std::setprecision(3)
             << " first_qpc_100ns=" << (*emission)[static_cast<size_t>(runs[index].first_impulse)]

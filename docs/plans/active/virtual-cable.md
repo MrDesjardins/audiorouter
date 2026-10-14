@@ -493,6 +493,35 @@ request).** `run-stage-a.ps1 -Session users|eight|quality|pool|hardening|all`
 VM guide: "Unattended Stage A runner" section.
 Bundle `C:\VMs\ar-share\rc-0.2.4-r7` (source `a24fec7a`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared; the bundled `m03_cable_format` accepts `--encoding`), MANIFEST SHA-256 `F031B488943123A7F75BAF61F453EFCE617D585A9EF9672E8E1AF8EB8986A9D1`; supersedes r6. **Next action:** from `02-test-signing-ready`, `run-stage-a.ps1 -Session all` (about 3½ hours, unattended apart from logging back in after each restart).
 
+**`-Session all` on r7 (2026-10-13, in progress), first findings:**
+- users (A11) FAIL: user 2 got 0x80070020 (sharing violation = "lease
+  held"), not access denied. Cause: the driver keys lease ownership on the
+  Windows session (`IoGetRequestorSessionId`, `bridgeio.h`
+  `AudioRouterOpenOwnershipStatus`): same session → SHARING_VIOLATION,
+  other session → ACCESS_DENIED. The runner's `Start-Process -Credential`
+  (runas) stays in the console session, so the driver correctly answered
+  "lease held"; the A11 cross-session case was never exercised. Also
+  `ExitCode` read empty (no cached process handle). Fix: the users session
+  now checks both: (a) same session via runas → must be 0x80070020; (b)
+  another session via an elevated scheduled task (session 0; elevated
+  because the bridge SDDL admits SY, BA and IU only) → must be 0x80070005
+  after the device opened (`driver:` line), so the lease's session rule is
+  what refuses it; plus user 1's tool must finish (exit 0). The temporary
+  account is added to Administrators only for the batch logon and removed.
+  Note for later (not a defect today): two accounts in one desktop session
+  are isolated only by "lease held", not by user identity.
+- eight (A15) no verdict: `run-cable-continuity` stopped with "Lost-run
+  report is incomplete". The probe printed at most 256 lost runs
+  (`main.cpp`); each route had ~1,000. Per-route totals: lost 1,599 /
+  1,722 / 1,637 / 1,671 of ~137,970 impulses (1.16–1.25 %), corrupted 0,
+  capture-sink counters 0 on all four routes — the same share on every
+  route, the VM-wide stall signature, but unattributed. Fix: the probe lists
+  up to 65,536 runs; the runner's error now states the counts;
+  `Grade-EightCables` reports a missing verdict as REVIEW with the runner's
+  error instead of "losses outside VM-wide stalls". Probe self-test 2,208
+  checks; runner grading test 27/27 (new no-verdict case); the task's
+  `cmd.exe` quoting checked with a stand-in command.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
