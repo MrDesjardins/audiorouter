@@ -568,6 +568,15 @@ with a reason when the driver reports a format mismatch (cable format
 changed while playing); runner: PCM checks the negotiated format first,
 sweeps accept the first-packet flag, feeders wait until the capture feeder
 streams and keep per-step logs, the pool feeder is restarted and counted.
+Checks: control 249 tests pass (new: filter match, common rate, refusals);
+workspace Clippy and `cargo fmt --check` clean; `Grade-BitExact` against the
+19 real r7 results grades every 44.1/96 kHz run FAIL ("route moved no
+audio"), 48 kHz 2/8 ch PASS. Bundle `C:\VMs\ar-share\rc-0.2.4-r9` (source
+`1c87f9ce`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to
+RC3, compared), MANIFEST SHA-256
+`C9B0978031457DF4709974D6164A1B19F661C0F794E333EB739CC8BE3BEF6694`;
+supersedes r8. **Next action:** from `02-test-signing-ready`,
+`run-stage-a.ps1 -Session all` from r9.
 
 ### 8-channel spike (prepared 2026-10-12)
 
