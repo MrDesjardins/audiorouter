@@ -8848,7 +8848,12 @@ fn bridge_path_is_reparse_point(metadata: &std::fs::Metadata) -> bool {
 pub struct NativeBridgeRegion {
     // Retained to keep the mapped file alive for the view's lifetime.
     _file: std::fs::File,
-    map: memmap2::MmapMut,
+    // The driver writes this mapping at any time, so it is a raw map: every
+    // access goes through `load`/`store` or an atomic, never through a Rust
+    // slice or reference to the bytes (an `MmapMut` slice that another writer
+    // changes, or that we write through `as_ptr`, breaks Rust's aliasing
+    // rules).
+    map: memmap2::MmapRaw,
     channels: u16,
     max_frames: u16,
 }
@@ -8876,20 +8881,25 @@ impl NativeBridgeRegion {
         let length = Self::buffer_len(channels, max_frames);
         file.set_len(length as u64)
             .map_err(|error| NativeBridgeRegionError::Io(error.to_string()))?;
-        // SAFETY: the file is resized to the exact mapping length immediately
-        // above and the mapping is kept alive by `self.file` for its lifetime.
-        let mut map = unsafe { memmap2::MmapOptions::new().len(length).map_mut(&file) }
+        // The file is resized to the exact mapping length immediately above
+        // and stays owned by the region while the view exists.
+        let map = memmap2::MmapOptions::new()
+            .len(length)
+            .map_raw(&file)
             .map_err(|error| NativeBridgeRegionError::Io(error.to_string()))?;
-        // Announce the float64 sample size this client negotiates; the driver
-        // rewrites the same value (and resets the counters) at OPEN.
-        map[BRIDGE_SAMPLE_BYTES_OFFSET..BRIDGE_SAMPLE_BYTES_OFFSET + 4]
-            .copy_from_slice(&BRIDGE_SAMPLE_BYTES_FLOAT64.to_le_bytes());
-        Ok(Self {
+        let region = Self {
             _file: file,
             map,
             channels,
             max_frames,
-        })
+        };
+        // Announce the float64 sample size this client negotiates; the driver
+        // rewrites the same value (and resets the counters) at OPEN.
+        region.store(
+            BRIDGE_SAMPLE_BYTES_OFFSET,
+            BRIDGE_SAMPLE_BYTES_FLOAT64.to_le_bytes(),
+        );
+        Ok(region)
     }
 
     pub fn open(
@@ -8921,9 +8931,11 @@ impl NativeBridgeRegion {
         {
             return Err(NativeBridgeRegionError::BufferTooSmall);
         }
-        // SAFETY: the existing file was checked to be at least `length` bytes;
-        // the file handle remains owned by this region while the view exists.
-        let map = unsafe { memmap2::MmapOptions::new().len(length).map_mut(&file) }
+        // The existing file was checked to be at least `length` bytes; the
+        // file handle remains owned by this region while the view exists.
+        let map = memmap2::MmapOptions::new()
+            .len(length)
+            .map_raw(&file)
             .map_err(|error| NativeBridgeRegionError::Io(error.to_string()))?;
         Ok(Self {
             _file: file,
@@ -9003,11 +9015,7 @@ impl NativeBridgeRegion {
             return Err(NativeBridgeRegionError::SequenceExhausted);
         }
         if current != 0 {
-            let previous = u64::from_le_bytes(
-                self.map[BRIDGE_HEADER_OFFSET + 8..BRIDGE_HEADER_OFFSET + 16]
-                    .try_into()
-                    .unwrap(),
-            );
+            let previous = u64::from_le_bytes(self.load(BRIDGE_HEADER_OFFSET + 8));
             if sequence <= previous {
                 return Err(NativeBridgeRegionError::SequenceRegression);
             }
@@ -9023,24 +9031,22 @@ impl NativeBridgeRegion {
             )
         }
         .map_err(|_| NativeBridgeRegionError::Busy)?;
-        // SAFETY: the successful state CAS grants this producer exclusive
-        // access to the payload until the release store below. The mapping
-        // remains alive through `self`, and all offsets are layout-checked.
-        let map =
-            unsafe { std::slice::from_raw_parts_mut(self.map.as_ptr() as *mut u8, self.map.len()) };
-        map[BRIDGE_HEADER_OFFSET..BRIDGE_HEADER_OFFSET + 8]
-            .copy_from_slice(&header.generation.to_le_bytes());
-        map[BRIDGE_HEADER_OFFSET + 8..BRIDGE_HEADER_OFFSET + 16]
-            .copy_from_slice(&header.sequence.to_le_bytes());
-        map[BRIDGE_HEADER_OFFSET + 16..BRIDGE_HEADER_OFFSET + 18]
-            .copy_from_slice(&header.frames.to_le_bytes());
-        map[BRIDGE_HEADER_OFFSET + 18..BRIDGE_HEADER_OFFSET + 20]
-            .copy_from_slice(&header.channels.to_le_bytes());
-        map[BRIDGE_HEADER_OFFSET + 20..BRIDGE_HEADER_OFFSET + 24]
-            .copy_from_slice(&header.payload_bytes.to_le_bytes());
+        // The successful state CAS grants this producer the payload until the
+        // release store below; `frames <= max_frames` keeps every offset
+        // inside the mapping.
+        self.store(BRIDGE_HEADER_OFFSET, header.generation.to_le_bytes());
+        self.store(BRIDGE_HEADER_OFFSET + 8, header.sequence.to_le_bytes());
+        self.store(BRIDGE_HEADER_OFFSET + 16, header.frames.to_le_bytes());
+        self.store(BRIDGE_HEADER_OFFSET + 18, header.channels.to_le_bytes());
+        self.store(
+            BRIDGE_HEADER_OFFSET + 20,
+            header.payload_bytes.to_le_bytes(),
+        );
         for index in 0..sample_count {
-            let offset = BRIDGE_PAYLOAD_OFFSET + index * 8;
-            map[offset..offset + 8].copy_from_slice(&sample_at(index).to_le_bytes());
+            self.store(
+                BRIDGE_PAYLOAD_OFFSET + index * 8,
+                sample_at(index).to_le_bytes(),
+            );
         }
         // SAFETY: the mapping remains owned by `self` until after this store.
         unsafe {
@@ -9134,8 +9140,7 @@ impl NativeBridgeRegion {
         // Copy each shared sample once. On malformed or torn input, clear the
         // destination slice so callers cannot accidentally retain a prefix.
         for index in 0..sample_count {
-            let offset = BRIDGE_PAYLOAD_OFFSET + index * 8;
-            let value = f64::from_le_bytes(self.map[offset..offset + 8].try_into().unwrap());
+            let value = f64::from_le_bytes(self.load(BRIDGE_PAYLOAD_OFFSET + index * 8));
             let Some(converted) = value.is_finite().then(|| convert(value)).flatten() else {
                 samples[..sample_count].fill(T::default());
                 return Err(NativeBridgeRegionError::InvalidFrame);
@@ -9156,15 +9161,10 @@ impl NativeBridgeRegion {
     /// Snapshot of the driver-written stream counters. Each field is read
     /// atomically; the set is not a single consistent snapshot.
     pub fn counters(&self) -> NativeBridgeStreamCounters {
+        // Counters occupy offsets 32..88, inside the header.
         let field = |index: usize| {
-            // SAFETY: the mapping is at least `BRIDGE_PAYLOAD_OFFSET` bytes,
-            // so every counter (offset 32..88) lies inside it; offsets are
-            // multiples of 8 from a page-aligned base, as AtomicU64 requires.
-            unsafe {
-                &*(self.map.as_ptr().add(BRIDGE_COUNTERS_OFFSET + index * 8)
-                    as *const std::sync::atomic::AtomicU64)
-            }
-            .load(std::sync::atomic::Ordering::Acquire)
+            self.atomic_u64(BRIDGE_COUNTERS_OFFSET + index * 8)
+                .load(std::sync::atomic::Ordering::Acquire)
         };
         NativeBridgeStreamCounters {
             underrun_frames: field(0),
@@ -9180,18 +9180,10 @@ impl NativeBridgeRegion {
     /// Snapshot of the driver-written packet outcome counters. Each field is
     /// read atomically; the set is not a single consistent snapshot.
     pub fn packet_counters(&self) -> NativeBridgePacketCounters {
+        // Packet counters occupy offsets 104..128, inside the header.
         let field = |index: usize| {
-            // SAFETY: the mapping is at least `BRIDGE_PAYLOAD_OFFSET` bytes, so
-            // offsets 104..128 lie inside it; they are multiples of 8 from a
-            // page-aligned base, as AtomicU64 requires.
-            unsafe {
-                &*(self
-                    .map
-                    .as_ptr()
-                    .add(BRIDGE_PACKET_COUNTERS_OFFSET + index * 8)
-                    as *const std::sync::atomic::AtomicU64)
-            }
-            .load(std::sync::atomic::Ordering::Acquire)
+            self.atomic_u64(BRIDGE_PACKET_COUNTERS_OFFSET + index * 8)
+                .load(std::sync::atomic::Ordering::Acquire)
         };
         NativeBridgePacketCounters {
             accepted: field(0),
@@ -9209,20 +9201,67 @@ impl NativeBridgeRegion {
     }
 
     fn sample_bytes(&self) -> u32 {
-        // SAFETY: offset 88 is inside the header and 4-byte aligned.
+        const { assert!(BRIDGE_SAMPLE_BYTES_OFFSET % 4 == 0) };
+        // SAFETY: offset 88 lies inside the header of the live mapping owned
+        // by `self` and is 4-byte aligned from a page-aligned base; the
+        // pointer comes from the raw map (no reference covers the bytes) and
+        // the reference lives no longer than `self`.
         unsafe {
-            &*(self.map.as_ptr().add(BRIDGE_SAMPLE_BYTES_OFFSET)
-                as *const std::sync::atomic::AtomicU32)
+            &*self
+                .map
+                .as_ptr()
+                .add(BRIDGE_SAMPLE_BYTES_OFFSET)
+                .cast::<std::sync::atomic::AtomicU32>()
         }
         .load(std::sync::atomic::Ordering::Acquire)
     }
 
     fn reader_sequence(&self) -> &std::sync::atomic::AtomicU64 {
-        // SAFETY: offset 96 is inside the header and 8-byte aligned; the
-        // reference lives no longer than `self`, which owns the mapping.
+        self.atomic_u64(BRIDGE_READER_SEQUENCE_OFFSET)
+    }
+
+    /// The 8-byte atomic word at `offset` (a layout constant inside the
+    /// header).
+    fn atomic_u64(&self, offset: usize) -> &std::sync::atomic::AtomicU64 {
+        debug_assert!(offset % 8 == 0 && offset + 8 <= BRIDGE_PAYLOAD_OFFSET);
+        // SAFETY: `offset` is a header constant (< `BRIDGE_PAYLOAD_OFFSET`,
+        // always mapped) and a multiple of 8 from a page-aligned base, as
+        // `AtomicU64` requires. The pointer comes from the raw map, so no Rust
+        // reference covers these bytes; concurrent driver writes are atomic
+        // operations on the same word. The reference lives no longer than
+        // `self`, which owns the mapping.
         unsafe {
-            &*(self.map.as_ptr().add(BRIDGE_READER_SEQUENCE_OFFSET)
-                as *const std::sync::atomic::AtomicU64)
+            &*self
+                .map
+                .as_ptr()
+                .add(offset)
+                .cast::<std::sync::atomic::AtomicU64>()
+        }
+    }
+
+    /// Copies `N` bytes at `offset` out of the mapping. A torn copy is
+    /// possible while a writer runs; the state word decides whether the
+    /// copy is used.
+    fn load<const N: usize>(&self, offset: usize) -> [u8; N] {
+        debug_assert!(offset + N <= self.map.len());
+        // SAFETY: callers pass layout-checked offsets (header constants, or
+        // payload offsets bounded by `max_frames * channels`), so the range
+        // lies inside the live mapping owned by `self`; `[u8; N]` needs no
+        // alignment, and the volatile read does not assume the bytes are
+        // stable, since the driver may write them.
+        unsafe { std::ptr::read_volatile(self.map.as_ptr().add(offset).cast::<[u8; N]>()) }
+    }
+
+    /// Writes `bytes` at `offset` into the mapping (the caller holds the
+    /// slot through the state word).
+    fn store<const N: usize>(&self, offset: usize, bytes: [u8; N]) {
+        debug_assert!(offset + N <= self.map.len());
+        // SAFETY: as in `load`: the range is layout-checked and inside the
+        // live mapping; the raw map hands out a writable pointer without any
+        // Rust reference to the bytes, so writing through `&self` aliases
+        // nothing.
+        unsafe {
+            std::ptr::write_volatile(self.map.as_mut_ptr().add(offset).cast::<[u8; N]>(), bytes)
         }
     }
 
@@ -9265,40 +9304,16 @@ impl NativeBridgeRegion {
     }
 
     fn state(&self) -> &std::sync::atomic::AtomicU64 {
-        // SAFETY: the mapping is at least `BRIDGE_PAYLOAD_OFFSET` bytes and
-        // the state offset is naturally aligned for AtomicU64.
-        unsafe {
-            &*(self.map.as_ptr().add(BRIDGE_STATE_OFFSET) as *const std::sync::atomic::AtomicU64)
-        }
+        self.atomic_u64(BRIDGE_STATE_OFFSET)
     }
 
     fn header(&self) -> NativeBridgeFloat64BlockHeader {
         NativeBridgeFloat64BlockHeader {
-            generation: u64::from_le_bytes(
-                self.map[BRIDGE_HEADER_OFFSET..BRIDGE_HEADER_OFFSET + 8]
-                    .try_into()
-                    .unwrap(),
-            ),
-            sequence: u64::from_le_bytes(
-                self.map[BRIDGE_HEADER_OFFSET + 8..BRIDGE_HEADER_OFFSET + 16]
-                    .try_into()
-                    .unwrap(),
-            ),
-            frames: u16::from_le_bytes(
-                self.map[BRIDGE_HEADER_OFFSET + 16..BRIDGE_HEADER_OFFSET + 18]
-                    .try_into()
-                    .unwrap(),
-            ),
-            channels: u16::from_le_bytes(
-                self.map[BRIDGE_HEADER_OFFSET + 18..BRIDGE_HEADER_OFFSET + 20]
-                    .try_into()
-                    .unwrap(),
-            ),
-            payload_bytes: u32::from_le_bytes(
-                self.map[BRIDGE_HEADER_OFFSET + 20..BRIDGE_HEADER_OFFSET + 24]
-                    .try_into()
-                    .unwrap(),
-            ),
+            generation: u64::from_le_bytes(self.load(BRIDGE_HEADER_OFFSET)),
+            sequence: u64::from_le_bytes(self.load(BRIDGE_HEADER_OFFSET + 8)),
+            frames: u16::from_le_bytes(self.load(BRIDGE_HEADER_OFFSET + 16)),
+            channels: u16::from_le_bytes(self.load(BRIDGE_HEADER_OFFSET + 18)),
+            payload_bytes: u32::from_le_bytes(self.load(BRIDGE_HEADER_OFFSET + 20)),
         }
     }
 
@@ -12404,11 +12419,12 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
-        let mut region = NativeBridgeRegion::create(&path, 1, 2).unwrap();
+        let region = NativeBridgeRegion::create(&path, 1, 2).unwrap();
         region.write(9, 1, &[0.25, 0.5]).unwrap();
-        region.map[BRIDGE_PAYLOAD_OFFSET + std::mem::size_of::<f64>()
-            ..BRIDGE_PAYLOAD_OFFSET + 2 * std::mem::size_of::<f64>()]
-            .copy_from_slice(&f64::NAN.to_le_bytes());
+        region.store(
+            BRIDGE_PAYLOAD_OFFSET + std::mem::size_of::<f64>(),
+            f64::NAN.to_le_bytes(),
+        );
         let mut output = [9.0, 9.0];
         assert!(matches!(
             region.read_into(9, &mut output),
@@ -12433,9 +12449,8 @@ mod tests {
         let pcm = [1_073_741_889_i32, -1_234_567_891_i32];
         let input = pcm.map(|sample| f64::from(sample) / 2_147_483_648.0);
         region.write_f64(4, 1, &input).unwrap();
-        let payload = &region.map[BRIDGE_PAYLOAD_OFFSET..BRIDGE_PAYLOAD_OFFSET + 16];
         assert_eq!(
-            f64::from_le_bytes(payload[..8].try_into().unwrap()),
+            f64::from_le_bytes(region.load(BRIDGE_PAYLOAD_OFFSET)),
             input[0]
         );
         let mut output = [0.0_f64; 2];
@@ -12445,11 +12460,7 @@ mod tests {
         let recovered = output.map(|sample| (sample * 2_147_483_648.0).round() as i32);
         assert_eq!(recovered, pcm);
         region.write(4, 2, &[0.25_f32, 0.5_f32]).unwrap();
-        let widened = f64::from_le_bytes(
-            region.map[BRIDGE_PAYLOAD_OFFSET..BRIDGE_PAYLOAD_OFFSET + 8]
-                .try_into()
-                .unwrap(),
-        );
+        let widened = f64::from_le_bytes(region.load(BRIDGE_PAYLOAD_OFFSET));
         assert_eq!(widened, f64::from(0.25_f32));
         std::fs::remove_file(path).unwrap();
     }
@@ -12468,7 +12479,7 @@ mod tests {
         // Layout mirrors AR_BRIDGE_SHARED_HEADER's C_ASSERTs in bridgeio.h.
         assert_eq!(region.mapping_bytes(), 128 + 2 * 4 * 8);
         assert_eq!(
-            u32::from_le_bytes(region.map[88..92].try_into().unwrap()),
+            u32::from_le_bytes(region.load(88)),
             8,
             "a new region announces float64 samples"
         );
@@ -12477,7 +12488,7 @@ mod tests {
         let mut output = [0.0_f64; 2];
         region.read_into_f64(9, &mut output).unwrap();
         assert_eq!(
-            u64::from_le_bytes(region.map[96..104].try_into().unwrap()),
+            u64::from_le_bytes(region.load(96)),
             3,
             "the consumer acknowledges the block it read"
         );
@@ -12487,15 +12498,8 @@ mod tests {
             "producers see the same acknowledgement"
         );
         // Simulate the driver-written counters and check each field offset.
-        // SAFETY: the mapping is `region.map.len()` bytes and stays alive with
-        // `region`; no other reference into it is live while `raw` is used (the
-        // temporary header slices above have ended, and `counters` runs after the
-        // loop), and the test is single-threaded with no driver attached.
-        let raw = unsafe {
-            std::slice::from_raw_parts_mut(region.map.as_ptr() as *mut u8, region.map.len())
-        };
         for (index, value) in (1_u64..=7).enumerate() {
-            raw[32 + index * 8..40 + index * 8].copy_from_slice(&value.to_le_bytes());
+            region.store(32 + index * 8, value.to_le_bytes());
         }
         assert_eq!(
             region.counters(),
@@ -12516,7 +12520,7 @@ mod tests {
             NativeBridgePacketCounters::default()
         );
         for (index, value) in (11_u64..=13).enumerate() {
-            raw[104 + index * 8..112 + index * 8].copy_from_slice(&value.to_le_bytes());
+            region.store(104 + index * 8, value.to_le_bytes());
         }
         assert_eq!(
             region.packet_counters(),
@@ -12529,7 +12533,7 @@ mod tests {
         assert_eq!(region.counters().last_qpc_time, 7);
         assert_eq!(region.consumer_sequence(), 3);
         // A header without the negotiated sample size must not be decoded.
-        raw[88..92].copy_from_slice(&4_u32.to_le_bytes());
+        region.store(88, 4_u32.to_le_bytes());
         assert_eq!(
             region.read_into_f64(9, &mut output),
             Err(NativeBridgeRegionError::SampleSizeMismatch)
