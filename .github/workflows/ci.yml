@@ -259,6 +259,10 @@ jobs:
       - name: Build and verify the unsigned installer and release assets
         if: needs.changes.outputs.release == 'true'
         shell: pwsh
+        env:
+          # `gh attestation verify` (OpenAI tunnel runtime provenance) needs a
+          # token even for a public repository's attestations.
+          GH_TOKEN: ${{ github.token }}
         run: ./tests/acceptance/m08-release.ps1 -AppOnly
 
   browser:
