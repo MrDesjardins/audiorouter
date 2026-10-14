@@ -671,6 +671,20 @@ steps per Microsoft's 2026-08-11 page). Two findings:
 Parts 0–4). Agent, meanwhile: the Part 5 CAB tooling (rebuild comparison,
 `.ddf`/`makecab`, hash checks) and keeping each package's `.pdb`.
 
+**Bundle r10 (2026-10-14, stability round):** the user-mode bridge client
+now maps the shared region as `memmap2::MmapRaw` and moves bytes only
+through volatile load/store helpers (`f02aa839`; the P3-1 aliasing item).
+Same protocol and layout; host: windows-audio 141, control 249, Clippy and
+fmt clean. Because the cable route and every bridge tool use this code,
+r10 reruns `-Session all` to requalify it, and also carries the r9 runner
+repairs (relay-trim and lease-freeze attribution) and the 44.1 kHz sweep
+analyzer fix. Bundle `C:\VMs\ar-share\rc-0.2.4-r10` (source `f02aa839`,
+`-ReuseDriverShare rc-0.2.4-base`; driver SYS/CAT/INF hashes equal to
+RC3), MANIFEST SHA-256
+`9D7863C42BCEF6C326301AC7BE59E5DBDE08FFC0F766020F92AA5E2588C7A398`;
+supersedes r9. Pass criterion: the same verdicts as r9 or better (no new
+FAIL, bit-exact runs fail only by inserted silent blocks, no bugcheck).
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each
