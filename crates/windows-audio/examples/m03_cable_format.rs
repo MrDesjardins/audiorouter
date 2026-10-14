@@ -15,7 +15,39 @@
 //!
 //! Build: `cargo build --release -p audiorouter-windows-audio --example m03_cable_format`
 
-const USAGE: &str = "usage: m03_cable_format show\n       m03_cable_format set --channels 1|2|4|6|8 [--rate 44100|48000|96000] [--endpoint \"AudioRouter Cable A Input\"]...";
+const USAGE: &str = "usage: m03_cable_format show\n       m03_cable_format set --channels 1|2|4|6|8 [--rate 44100|48000|96000] [--encoding float32|pcm16|pcm24|pcm32] [--endpoint \"AudioRouter Cable A Input\"]...";
+
+/// Device sample formats VCAB-11 offers: IEEE float32, PCM16, PCM24 in a
+/// 32-bit container, PCM32. Windows may still mix in float32 (shared mode).
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Encoding {
+    Float32,
+    Pcm16,
+    Pcm24,
+    Pcm32,
+}
+
+impl Encoding {
+    fn parse(text: &str) -> Option<Self> {
+        match text {
+            "float32" => Some(Self::Float32),
+            "pcm16" => Some(Self::Pcm16),
+            "pcm24" => Some(Self::Pcm24),
+            "pcm32" => Some(Self::Pcm32),
+            _ => None,
+        }
+    }
+
+    /// (container bits, valid bits, IEEE float)
+    fn layout(self) -> (u16, u16, bool) {
+        match self {
+            Self::Float32 => (32, 32, true),
+            Self::Pcm16 => (16, 16, false),
+            Self::Pcm24 => (32, 24, false),
+            Self::Pcm32 => (32, 32, false),
+        }
+    }
+}
 
 /// Standard KSAUDIO_SPEAKER_* masks (same table as `m03_cable_inventory`).
 fn channel_mask(channels: u16) -> Option<u32> {
@@ -47,6 +79,7 @@ enum Command {
     Set {
         channels: u16,
         rate: u32,
+        encoding: Encoding,
         endpoints: Vec<String>,
     },
 }
@@ -57,6 +90,7 @@ fn parse(arguments: &[String]) -> Option<Command> {
         "show" if rest.is_empty() => Some(Command::Show),
         "set" => {
             let (mut channels, mut rate, mut endpoints) = (None, 48_000_u32, Vec::new());
+            let mut encoding = Encoding::Float32;
             let mut iter = rest.iter();
             while let Some(flag) = iter.next() {
                 let value = iter.next()?;
@@ -70,6 +104,7 @@ fn parse(arguments: &[String]) -> Option<Command> {
                             .ok()
                             .filter(|r| [44_100, 48_000, 96_000].contains(r))?
                     }
+                    "--encoding" => encoding = Encoding::parse(value)?,
                     "--endpoint" if value.starts_with("AudioRouter Cable ") => {
                         endpoints.push(value.clone())
                     }
@@ -85,6 +120,7 @@ fn parse(arguments: &[String]) -> Option<Command> {
             Some(Command::Set {
                 channels: channels?,
                 rate,
+                encoding,
                 endpoints,
             })
         }
@@ -105,7 +141,7 @@ fn main() {
 // The IPolicyConfig declaration keeps its COM method names.
 #[allow(non_snake_case)]
 mod platform {
-    use super::{channel_mask, name_matches, Command};
+    use super::{channel_mask, name_matches, Command, Encoding};
     use windows::core::{interface, IUnknown, IUnknown_Vtbl, GUID, HRESULT, PCWSTR};
     use windows::Win32::Media::Audio::{
         IAudioClient, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -118,6 +154,7 @@ mod platform {
     };
 
     const SUBTYPE_FLOAT: GUID = GUID::from_u128(0x00000003_0000_0010_8000_00aa00389b71);
+    const SUBTYPE_PCM: GUID = GUID::from_u128(0x00000001_0000_0010_8000_00aa00389b71);
     const WAVE_FORMAT_EXTENSIBLE: u16 = 0xFFFE;
     const VT_UI4: u16 = 19;
     /// `CPolicyConfigClient`, the coclass behind the Sound control panel.
@@ -151,6 +188,8 @@ mod platform {
         bits: u16,
         tag: u16,
         mask: Option<u32>,
+        /// "float" or "pcm<valid bits>" for WAVEFORMATEXTENSIBLE, else "".
+        encoding: String,
     }
 
     impl std::fmt::Display for Format {
@@ -160,10 +199,13 @@ mod platform {
                 "{} Hz, {} ch, {} bit, tag 0x{:04X}",
                 self.rate, self.channels, self.bits, self.tag
             )?;
-            match self.mask {
-                Some(mask) => write!(f, ", mask 0x{mask:X}"),
-                None => Ok(()),
+            if let Some(mask) = self.mask {
+                write!(f, ", mask 0x{mask:X}")?;
             }
+            if !self.encoding.is_empty() {
+                write!(f, ", {}", self.encoding)?;
+            }
+            Ok(())
         }
     }
 
@@ -178,13 +220,27 @@ mod platform {
         }
         // SAFETY: per the contract; WAVEFORMATEX is packed, so read unaligned.
         let header: WAVEFORMATEX = unsafe { std::ptr::read_unaligned(pointer) };
-        let mask =
+        let extensible =
             (header.wFormatTag == WAVE_FORMAT_EXTENSIBLE && header.cbSize >= 22).then(|| {
                 // SAFETY: cbSize >= 22 means the allocation is a full
                 // WAVEFORMATEXTENSIBLE.
                 unsafe { std::ptr::read_unaligned(pointer.cast::<WAVEFORMATEXTENSIBLE>()) }
-                    .dwChannelMask
             });
+        let mask = extensible.map(|format| format.dwChannelMask);
+        let encoding = extensible
+            .map(|format| {
+                let sub_format = format.SubFormat;
+                // SAFETY: a union of u16 views; every value is a valid u16.
+                let valid = unsafe { format.Samples.wValidBitsPerSample };
+                if sub_format == SUBTYPE_FLOAT {
+                    "float".to_owned()
+                } else if sub_format == SUBTYPE_PCM {
+                    format!("pcm{valid}")
+                } else {
+                    "other".to_owned()
+                }
+            })
+            .unwrap_or_default();
         // SAFETY: the allocation came from CoTaskMemAlloc and is not used again.
         unsafe { CoTaskMemFree(Some(pointer as *const core::ffi::c_void)) };
         Some(Format {
@@ -193,11 +249,18 @@ mod platform {
             bits: header.wBitsPerSample,
             tag: header.wFormatTag,
             mask,
+            encoding,
         })
     }
 
-    fn float_format(channels: u16, rate: u32, mask: u32) -> WAVEFORMATEXTENSIBLE {
-        let block_align = channels * 4;
+    fn device_format(
+        channels: u16,
+        rate: u32,
+        mask: u32,
+        encoding: Encoding,
+    ) -> WAVEFORMATEXTENSIBLE {
+        let (bits, valid, float) = encoding.layout();
+        let block_align = channels * (bits / 8);
         WAVEFORMATEXTENSIBLE {
             Format: WAVEFORMATEX {
                 wFormatTag: WAVE_FORMAT_EXTENSIBLE,
@@ -205,14 +268,14 @@ mod platform {
                 nSamplesPerSec: rate,
                 nAvgBytesPerSec: rate * u32::from(block_align),
                 nBlockAlign: block_align,
-                wBitsPerSample: 32,
+                wBitsPerSample: bits,
                 cbSize: 22,
             },
             Samples: WAVEFORMATEXTENSIBLE_0 {
-                wValidBitsPerSample: 32,
+                wValidBitsPerSample: valid,
             },
             dwChannelMask: mask,
-            SubFormat: SUBTYPE_FLOAT,
+            SubFormat: if float { SUBTYPE_FLOAT } else { SUBTYPE_PCM },
         }
     }
 
@@ -327,6 +390,7 @@ mod platform {
                 Command::Set {
                     channels,
                     rate,
+                    encoding,
                     endpoints,
                 } => {
                     let Some(policy) = policy.as_ref() else {
@@ -334,7 +398,7 @@ mod platform {
                         return 1;
                     };
                     let mask = channel_mask(*channels).expect("validated by parse");
-                    let format = float_format(*channels, *rate, mask);
+                    let format = device_format(*channels, *rate, mask, *encoding);
                     let mut failures = 0;
                     for expected in endpoints {
                         let found: Vec<_> = ours
@@ -359,7 +423,7 @@ mod platform {
                                 None,
                             );
                             println!(
-                                "{expected}: driver accepts {rate} Hz/{channels} ch float32 (exclusive check): 0x{:08X}",
+                                "{expected}: driver accepts {rate} Hz/{channels} ch {encoding:?} (exclusive check): 0x{:08X}",
                                 supported.0 as u32
                             );
                         }
@@ -419,6 +483,7 @@ mod tests {
             Some(Command::Set {
                 channels: 8,
                 rate: 48_000,
+                encoding: Encoding::Float32,
                 endpoints: vec![
                     "AudioRouter Cable A Input".into(),
                     "AudioRouter Cable B Output".into()
@@ -435,6 +500,7 @@ mod tests {
             "set --channels 3",
             "set --channels 8 --rate 22050",
             "set --channels 8 --endpoint Speakers",
+            "set --channels 2 --encoding pcm8",
             "set --channels",
             "show extra",
             "remove",
@@ -446,6 +512,22 @@ mod tests {
         assert!(
             matches!(parse(&quoted), Some(Command::Set { endpoints, .. }) if endpoints == ["AudioRouter Cable C Input"])
         );
+    }
+
+    #[test]
+    fn encodings_parse_and_lay_out_as_vcab_11_requires() {
+        assert!(matches!(
+            parse(&args("set --channels 2 --rate 96000 --encoding pcm24")),
+            Some(Command::Set {
+                encoding: Encoding::Pcm24,
+                rate: 96_000,
+                ..
+            })
+        ));
+        assert_eq!(Encoding::Float32.layout(), (32, 32, true));
+        assert_eq!(Encoding::Pcm16.layout(), (16, 16, false));
+        assert_eq!(Encoding::Pcm24.layout(), (32, 24, false));
+        assert_eq!(Encoding::Pcm32.layout(), (32, 32, false));
     }
 
     #[test]

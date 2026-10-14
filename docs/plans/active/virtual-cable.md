@@ -453,6 +453,45 @@ Bundle `C:\VMs\ar-share\rc-0.2.4-r6` (source `9afcf670`, `-ReuseDriverShare rc-0
 
 **Decision (user, 2026-10-13): A5's zero-counter clean run is a VM deviation**, recorded like VCAB-24 and proven in Stage C on real hardware. Basis: in the VM, losses occur only during guest-wide descheduling (all workers paused together, 112–384 ms), the driver counts every loss, nothing is corrupted, and a run without such pauses (8 ch 96 kHz) had zero counters. Testing doc A5 row updated.
 
+**Runner extended to all remaining Stage A sessions (2026-10-13, user
+request).** `run-stage-a.ps1 -Session users|eight|quality|pool|hardening|all`
+(audio unchanged):
+- users (A11): a temporary standard account `artest2` (random password)
+  tries `m03_bridge_tone` while this account holds the bridge; PASS needs
+  "AccessDenied … in use by another Windows user" and a non-zero exit; the
+  account and profile are removed afterwards.
+- eight (A15): `vm-checks cables`, `run-cable-continuity -Minutes 30` (eight
+  cables, four routes; `clean` PASS, `all-events-vm-wide` VM, else FAIL;
+  the cable count must be restored), `run-cable-isolation-matrix` (56
+  ordered pairs; PASS when every pair passes −140 dBFS).
+- quality (A16): float32 bit-exact at 44.1/48/96 kHz × 1/2/8 ch; PCM16/24/32
+  at the three rates (N/A when Windows keeps mixing in float32: "negotiated
+  float32"); sweeps at three rates and THD+N (REVIEW on failure); latency
+  recorded (INFO, judged in Stage C); formats restored to 48 kHz stereo.
+- pool (A8): a render-only tone into Cable A Input with nothing reading,
+  `PoolNonpagedBytes` every 30 s for 60 min; least-squares growth after a
+  5-min warm-up: ≤ 1 MiB/h PASS, ≤ 8 MiB/h REVIEW (whole-system counter),
+  else FAIL.
+- hardening (A10, A11): Verifier on → restart → Verifier active → tone,
+  stall, bit-exact 2 ch, kill under Verifier → `fuzz` 30 min → Verifier off
+  → restart.
+- Every session ends with a bugcheck check (System events 1001/41, crash
+  dumps since the run started) and removal. The logon task now stays
+  registered for the whole run; the running step is saved before it runs,
+  so an unplanned restart marks it FAIL, copies dumps, skips later ordinary
+  steps and still runs the `-AlwaysRun` steps (Verifier off, bugcheck
+  check, removal, revert quieting).
+- `m03_cable_format set --encoding float32|pcm16|pcm24|pcm32` sets integer
+  device formats (PCM24 in a 32-bit container) and `show` prints the
+  encoding; 4 tests, Clippy, rustfmt clean.
+- Host test (scratch script loading the runner's own functions from its
+  AST): 26/26 verdicts as expected, real r5 evidence plus synthetic result
+  files for each new grader, the prefix lookup, and the crash skip rule.
+- A12 (Discord/OBS select the cable) is not automated: it needs the apps
+  and accounts in the guest; it is better done with the signed package on
+  real hardware (Stage C) or as a short attended step.
+VM guide: "Unattended Stage A runner" section.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each

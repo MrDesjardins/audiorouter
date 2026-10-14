@@ -372,6 +372,27 @@ Run steps one at a time and read the result before continuing. If a step
 reports `FAIL`, stop that session and follow its recovery instructions; do not
 continue to an install, smoke test, or the next session.
 
+### Unattended Stage A runner (recommended)
+
+Bundles built since 2026-10-13 contain `run-stage-a.ps1`, which runs whole
+sessions without manual steps. Restore `02-test-signing-ready`, copy the
+bundle to `C:\ar\<bundle>`, then in an Administrator PowerShell:
+
+```powershell
+cd C:\ar\<bundle>
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run-stage-a.ps1 -Session all
+```
+
+`-Session` is `audio` (A4–A7, A9), `users` (A11 second user), `eight` (A15),
+`quality` (A16), `pool` (A8), `hardening` (A10, A11 fuzz) or `all` (about
+3½ hours). Background probes replace Listen and the Test button, cable
+formats are set and restored per step, and a logon task resumes the run after
+every restart: just log back in. An unplanned restart is recorded as FAIL for
+the step that was running, with its crash dumps. The run ends with a table
+(PASS, FAIL, VM, N/A, REVIEW, INFO) and `stage-a-<session>-*.zip` on Z:.
+If Driver Verifier makes the VM crash at every boot, restore the checkpoint
+and send the zip of the evidence collected so far.
+
 ### Copy-and-run commands for each session
 
 For every session below, run `Set-Location C:\ar` first in an Administrator
