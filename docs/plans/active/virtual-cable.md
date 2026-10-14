@@ -386,6 +386,17 @@ leases 8 ch / 96 kHz (correct driver behaviour since r32 honours the stored
 format); with both cables set to 8 ch / 96 kHz it finished exit 0,
 `format_mismatches` 0, 1,093 render packets accepted, underruns 11,520 /
 8,640 with simultaneous ~131 ms gaps (VM).
+Product route (same session, quieted guest): continuity 10 min each
+(`tone-8e8aa79e…zip`): 997 Hz 447 glitches / 171 silent runs, 47 Hz 408 /
+147, both clustered in bursts (first glitches all near 235.4 s and 75.7 s);
+reference capture 0 glitches; route forwarded 60,230 / 60,249 blocks with
+0 dropped and 22–23 silence; verdict VM (VCAB-24, Stage C). Bit-exact 2 ch:
+one mid-run shift from noise frame 234,992 (VM pattern). Bit-exact 8 ch
+(both cables 48 kHz / 8 ch): **0 mismatched samples, analyzer bit-exact**;
+FAIL only from the single start-of-stream flag. **A7 kill PASS** (3
+repeats, replacement route running ~3.6 s after each kill; `kill-abbe441b…zip`).
+A9 not yet run; the user repeats session 2 from the checkpoint with
+`run-stage-a.ps1` (r4) as its first real test.
 
 **Unattended session runner (user request 2026-10-13).** The user asked for
 more automatic VM sessions. `tools/vm/run-stage-a.ps1 -Session audio`
