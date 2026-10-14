@@ -521,6 +521,7 @@ Bundle `C:\VMs\ar-share\rc-0.2.4-r7` (source `a24fec7a`, `-ReuseDriverShare rc-0
   error instead of "losses outside VM-wide stalls". Probe self-test 2,208
   checks; runner grading test 27/27 (new no-verdict case); the task's
   `cmd.exe` quoting checked with a stand-in command.
+- Bundle `C:\VMs\ar-share\rc-0.2.4-r8` (source `3901b4ce`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared), MANIFEST SHA-256 `0EB7471377A71AE0E965A320FFE8E267983E8B4A950A4E5423ED00CF32DBBA45`. After the r7 `all` run finishes (its quality, pool and hardening results stay valid), rerun `-Session users` and `-Session eight` from r8.
 
 ### 8-channel spike (prepared 2026-10-12)
 
