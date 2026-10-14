@@ -143,6 +143,19 @@ function recordStoredUiDiagnostic(message: string) {
   appendClientDiagnostic(storage, readClientDiagnostics(storage), message);
 }
 
+/**
+ * The selection after a session list refresh: kept while listed, else the
+ * first listed session. With a backend, the demo placeholder is kept too:
+ * the startup snapshot replaces it with the remembered or active session,
+ * and picking the first listed one here won that race and overwrote the
+ * backend's active session.
+ */
+function keepSelectedSession(current: string, items: { id: string }[], connected: boolean): string {
+  if (items.some((item) => item.id === current)) return current;
+  if (connected && current === demoSession.id) return current;
+  return items[0]?.id ?? current;
+}
+
 export function App({ backend }: { backend?: UiBackend } = {}) {
   const resolvedBackend = backend ?? defaultBackend;
   return (
@@ -173,6 +186,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [snapshotState, setSnapshotState] = useState(snapshotCache.current());
   const [rememberedSessionId] = useState(() => readLastSession(browserDiagnosticStorage()));
   const [selectedSessionId, setSelectedSessionId] = useState(rememberedSessionId ?? demoSession.id);
+  // The backend's active session as last read or written, and this window's
+  // writes still in flight (see the active-session effect below).
+  const backendActiveSessionRef = useRef<string | null>(null);
+  const activeSessionWritesRef = useRef(0);
   const currentSessionIdRef = useRef(selectedSessionId);
   currentSessionIdRef.current = selectedSessionId;
   const [selectedNodeId, setSelectedNodeId] = useState(demoSession.nodes[0].id);
@@ -311,7 +328,21 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const recorderRefreshGeneration = useRef(0);
   useEffect(() => {
     let mounted = true;
-    void snapshotCache.refresh(backend).then((nextState) => {
+    void (async () => {
+      // With nothing remembered (first launch, cleared WebView data), open
+      // the session the backend has active instead of the shell's default:
+      // writing the default back would overwrite the saved choice, which
+      // autoplay then plays.
+      const backendActive =
+        rememberedSessionId || !backend.getActiveSession
+          ? null
+          : await backend.getActiveSession().then(
+              (result) => result.sessionId,
+              () => null,
+            );
+      if (backendActive) backendActiveSessionRef.current = backendActive;
+      return snapshotCache.refresh(backend, rememberedSessionId ?? backendActive ?? undefined);
+    })().then((nextState) => {
       if (mounted) {
         setSnapshotState(nextState);
         if (nextState.snapshot && !rememberedSessionId)
@@ -374,9 +405,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         if (generation !== sessionRefreshGeneration.current) return;
         setListedSessions(items);
         setSessionInventoryError(null);
-        setSelectedSessionId((current) =>
-          items.some((item) => item.id === current) ? current : (items[0]?.id ?? current),
-        );
+        setSelectedSessionId((current) => keepSelectedSession(current, items, backend.connected));
       })
       .catch((error) => {
         if (generation !== sessionRefreshGeneration.current) return;
@@ -626,10 +655,36 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const sessionIsAvailable = availableSessions.some((item) => item.id === session.id);
   useEffect(() => {
     if (!backend.connected || !backend.setActiveSession || !sessionIsAvailable) return;
+    // Until the first snapshot picks the session, the selection is the demo
+    // placeholder and `session` falls back to the first listed one; writing
+    // that would overwrite the backend's saved active session.
+    if (selectedSessionId === demoSession.id) return;
+    // Each write emits `session.selectionChanged`, which this window also
+    // follows; writing a value the backend already has started a loop that
+    // flipped between two sessions at startup.
+    if (backendActiveSessionRef.current === session.id) return;
+    activeSessionWritesRef.current += 1;
     void backend
       .setActiveSession(session.id)
-      .catch((error) => setSessionInventoryError(formatUiError(error, "Active session selection unavailable")));
-  }, [backend, session.id, sessionIsAvailable]);
+      .then(
+        (result) => {
+          backendActiveSessionRef.current = result.sessionId;
+        },
+        (error) => setSessionInventoryError(formatUiError(error, "Active session selection unavailable")),
+      )
+      .finally(() => {
+        activeSessionWritesRef.current -= 1;
+      });
+  }, [backend, session.id, sessionIsAvailable, selectedSessionId]);
+  // Another client (MCP, Stream Deck) changed the active session. While this
+  // window's own write is in flight, a read can return the value it is
+  // replacing; adopting that reverted the user's choice. The write's own
+  // event brings the final value once it lands.
+  const followBackendActiveSession = (sessionId: string) => {
+    if (activeSessionWritesRef.current > 0) return;
+    backendActiveSessionRef.current = sessionId;
+    setSelectedSessionId(sessionId);
+  };
   useEffect(() => {
     if (availableSessions.some((item) => item.id === selectedSessionId)) {
       writeLastSession(browserDiagnosticStorage(), selectedSessionId);
@@ -794,9 +849,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         if (active) {
           setListedSessions(items);
           setSessionInventoryError(null);
-          setSelectedSessionId((current) =>
-            items.some((item) => item.id === current) ? current : (items[0]?.id ?? current),
-          );
+          setSelectedSessionId((current) => keepSelectedSession(current, items, backend.connected));
         }
       })
       .catch((error) => {
@@ -896,7 +949,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     snapshotCache,
     eventCursor,
     setSnapshotState,
-    setSelectedSessionId,
+    followBackendActiveSession,
     setActionMessage,
     refreshApplications,
     refreshDevices,

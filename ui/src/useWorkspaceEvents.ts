@@ -41,7 +41,7 @@ export function useWorkspaceEvents({
   snapshotCache,
   eventCursor,
   setSnapshotState,
-  setSelectedSessionId,
+  followBackendActiveSession,
   setActionMessage,
   refreshApplications,
   refreshDevices,
@@ -57,7 +57,8 @@ export function useWorkspaceEvents({
   snapshotCache: SnapshotCache;
   eventCursor: RefObject<{ backendEpoch: number; sequence: number }>;
   setSnapshotState: Dispatch<SetStateAction<UiSnapshotState>>;
-  setSelectedSessionId: Dispatch<SetStateAction<string>>;
+  /** Adopts an active-session change made elsewhere (MCP, Stream Deck). */
+  followBackendActiveSession: (sessionId: string) => void;
   setActionMessage: Dispatch<SetStateAction<string | null>>;
   refreshApplications: () => void;
   refreshDevices: (options?: { announce?: boolean }) => void;
@@ -86,7 +87,7 @@ export function useWorkspaceEvents({
         const selectionChangedEvent = result.events.find((event) => event.category === "session.selectionChanged");
         const activeSession =
           selectionChangedEvent && backend.getActiveSession ? await backend.getActiveSession() : null;
-        if (activeSession?.sessionId) setSelectedSessionId(activeSession.sessionId);
+        if (activeSession?.sessionId) followBackendActiveSession(activeSession.sessionId);
         const bridgeEvent = result.events.find(
           (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
         );
