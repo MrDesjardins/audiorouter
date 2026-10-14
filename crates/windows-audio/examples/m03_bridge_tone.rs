@@ -671,6 +671,9 @@ fn run(options: &Options) -> Result<(), (i32, String)> {
                 }
                 Ok(())
             })();
+            // A freeze that outlasts the run ends the loop on its condition
+            // before the gap is measured; count the final gap too.
+            control_gap_us = control_gap_us.max(last_control.elapsed().as_micros());
             // Deactivate both native leases before disk flush, output or joins.
             // CLOSE retires/reset the driver's mapping header, so preserve its
             // final raw counters immediately before deactivation.

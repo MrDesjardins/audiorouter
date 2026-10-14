@@ -38,12 +38,12 @@ The driver and its host-side product are functionally complete. Since
 | A1–A3, A14 install/names/remove | **Pass ×2 on RC3 0.2.4** | Stage A run 3, 2026-10-12 (earlier: WP-03 smokes 2026-10-08/10) |
 | A4/A5/A6 audio both ways, clean, silence | **RC3:** tool and product route stream both ways; stall counters rise; 8 ch 96 kHz clean with zero counters; bit-exact 2 and 8 ch; zero-counter 2-ch runs blocked only by VM descheduling | **A5 zero counters: VM deviation, Stage C** (user decision 2026-10-13) |
 | A7 crash recovery | Pass | r24 |
-| A8 pool leak (1 h), A9 reboot keeps IDs | **Pass on RC3** (A8: 0.069 MiB/h over 60 min, r9; A9: 4 IDs equal, r6) | — |
-| A10 Driver Verifier, A11 fuzzer + second user | **Pass on RC3** (r9: 30-min fuzz under Verifier, 47.2 M calls, 0 unexpected; stall, crash recovery 3/3; other-session user refused, same-session "lease held"; no bugcheck) | A10 30 s tone: a 4.1 s guest freeze expired the lease (VM, see r9 results) |
+| A8 pool leak (1 h), A9 reboot keeps IDs | **Pass on RC3** (A8: 0.069 MiB/h r9, −0.293 MiB/h r10, 60 min each; A9: 4 IDs equal, r6) | — |
+| A10 Driver Verifier, A11 fuzzer + second user | **Pass on RC3** (r9 and r10: 30-min fuzz under Verifier, 0 unexpected; crash recovery 3/3; other-session user refused, same-session "lease held"; no bugcheck) | A10 tone runs: a guest freeze after the Verifier restart expired the lease (r9 4.1 s, r10 39.5 s; VM, see results) |
 | A12 Discord/OBS see the cable | **Not run** | — |
 | A13 upgrade N → N+1 keeps names and migrated settings (helper `update`, `repair`); endpoint IDs change by design (VCAB-05) | **Pass on RC3** (0.2.4 → 0.2.5, same devnode, 96 kHz migrated, repair) | AudioRouter session rebind after the update not yet run |
-| A15 all 8 cables | **Count and crosstalk pass on RC3** (2 → 8 → 2; 56 pairs at digital zero, r9) | 30-min four-route run: 0 corrupted, driver counted every loss; losses from VM stalls and the relay's later trims (VM, Stage C) |
-| A16 quality matrix | **RC3 product route, r9:** float32 bit-exact at 44.1/48/96 kHz × 1/2/8 ch (failures are inserted silent blocks only); PCM16/24/32 N/A (Windows mixes float32); sweep 44.1 kHz 0.0 dB; THD+N −153 dB (r7) | 48/96 kHz sweeps and the r9 THD+N had capture drops (VM); VB-Cable comparison not run |
+| A15 all 8 cables | **Count and crosstalk pass on RC3** (2 → 8 → 2; 56 pairs at digital zero, r9 and r10) | 30-min four-route run: 0 corrupted, driver counted every loss; losses from VM stalls and the relay's later trims; r10 also a 125 s guest freeze that expired every lease (VM, Stage C) |
+| A16 quality matrix | **RC3 product route, r9/r10:** float32 bit-exact at 44.1/48/96 kHz × 1/2/8 ch (failures are inserted silent blocks, except one r10 96 kHz removal at a 15 ms route stall); PCM16/24/32 N/A (Windows mixes float32); sweeps 44.1/48 kHz pass (r10); THD+N −153 dB (r7) | 96 kHz sweep and THD+N failed on single stream jumps (r9 drops, r10 inserted blocks; VM); VB-Cable comparison not run |
 | VCAB-24 no glitches (sustained) | **Cannot pass in this VM** | NEM stalls (r12–r26); bound to Stage C |
 | VCAB-25 latency vs VB-Cable | Indicative only | r6/r23; VB-Cable comparison not run |
 
@@ -684,6 +684,63 @@ RC3), MANIFEST SHA-256
 `9D7863C42BCEF6C326301AC7BE59E5DBDE08FFC0F766020F92AA5E2588C7A398`;
 supersedes r9. Pass criterion: the same verdicts as r9 or better (no new
 FAIL, bit-exact runs fail only by inserted silent blocks, no bugcheck).
+
+**`-Session all` on r10 finished (2026-10-14 13:31), results**
+(`stage-a-all-20261014-133148.zip`, `evidence-20261014-132619.zip` and the
+per-test zips in the r10 share). No bugcheck in any session; install, status
+and remove passed in all five; quieting reverted. Runner: FAIL 2, both
+graded VM by hand below; **no regression from the raw map**.
+- users (A11) PASS, as r9.
+- eight (A15): count 2→8→2 PASS; crosstalk 56 pairs at digital zero PASS.
+  Four-route run: runner FAIL `unexplained-events` (VM-wide 4,445,
+  cross-route 116, relay trim 200, unexplained 3; corrupted 0). At ~25.7 min
+  every route process and every probe froze together for 125 s (each
+  route's control loop and pumps 125.2 s; the probes' impulse clocks paused
+  with no index skipped); the 2 s leases expired by design and all four
+  routes exited 0x80070016. One "unexplained" event is that route's lost
+  tail. The other two are borderline: a counter increase inside a VM-wide
+  stall cluster (651–661 s), and a 2-impulse loss beside trims on three
+  routes, 1.06 s from the fourth (window 1.0 s). Verdict: VM, Stage C.
+- quality (A16): bit-exact PASS at 44.1 kHz 2/8 ch, 48 kHz 2 ch, 96 kHz 1 ch;
+  48 kHz 1 ch bit-exact but the probe dropped 22,080 frames (VM). Re-aligned
+  sample by sample (scratch walker): 44.1 kHz 1 ch, 48 kHz 8 ch and 96 kHz 8 ch
+  are each one inserted 480-frame block of digital zero, then exact.
+  **96 kHz 2 ch is the first removal seen on the product route:** at 14.5 s,
+  384 frames of zero, then the stream resumes 960 frames ahead (1,344 frames
+  missing); no probe drop, and the relay counted no silence or drop in the
+  window. It coincides with the route's only large service gap (15 ms at
+  t = 18 s); at 96 kHz a 480-frame block is 5 ms, so a 15 ms stall
+  outlasts the bridge depth and the driver drops (counted, bounded). VM,
+  Stage C; on bare metal check stall headroom at 96 kHz. PCM N/A. Sweeps
+  44.1/48 kHz PASS (the analyzer fix works on real data); 96 kHz REVIEW
+  0.32 dB and THD+N REVIEW −21.5 dB: re-aligned, the sweep has two
+  inserted silent blocks at the start and the tone one at 4.8 s, otherwise
+  bit-exact; a whole-window measure cannot survive one jump (VM). Latency
+  INFO p50 36.7 ms, p95 37.1 ms, jitter 0.9 ms (r9: 39.0 ms).
+- pool (A8) PASS: 110 samples, growth −0.293 MiB/h, range 1.81 MiB.
+- hardening (A10/A11): Verifier on/active/off PASS; crash recovery 3/3 PASS;
+  **IOCTL fuzz 30 min under Verifier PASS** (no crash, no unexpected
+  result). 30 s tone VM (counters). Bit-exact 2 ch: the probe dropped 11,520
+  frames (r9: 10,944), VM. The tone **stall** run FAILED with exit 1: both
+  pumps froze 39.5 s from ~25.5 s, a minute after the hardening restart
+  (r9: 4.1 s in the same place, before the raw map); driver render overrun
+  1,927,680 and capture underrun 1,928,256 frames = 40.2 s (the cable
+  position follows QPC, so the counters run on through a guest freeze).
+  The lease expired and deactivation got 0x80070016. The runner's lease-
+  freeze rule missed it because `m03_bridge_tone` measured its control gap
+  only at the top of the loop: after a freeze longer than the run, the loop
+  ended on its time condition first (reported 279 ms). Fixed: the tool now
+  also counts the gap at loop exit (`m03_bridge_tone` 24 tests pass, Clippy
+  and fmt clean); takes effect in the next bundle. Verdict: VM.
+
+Product finding (no fix yet, decision needed): the app's cable route
+(`cable_routes.rs` `service_cable_route`) stops the session when a lease
+heartbeat fails, with the technical text "cable lease heartbeat failed:
+…", and the user must press Play. Any whole-system freeze over 2 s (a GPU
+driver reset, a long hitch) does this; the driver's `LeaseNotActive` user
+message even says "the route will reconnect", which nothing does. Options:
+reconnect a cable-only route automatically a bounded number of times, or
+keep the stop and show a plain message.
 
 ### 8-channel spike (prepared 2026-10-12)
 
