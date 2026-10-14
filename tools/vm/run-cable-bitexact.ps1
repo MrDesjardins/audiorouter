@@ -67,6 +67,18 @@ try {
     $referenceWav = Join-Path $evidence 'cable-bitexact-reference.wav'
     $captureWav = Join-Path $evidence 'cable-bitexact-capture.wav'
     if (-not (Test-Path -LiteralPath $referenceWav) -or -not (Test-Path -LiteralPath $captureWav)) { throw 'The native probe did not produce both sample WAVs.' }
+    $formatChannels = Get-ProbeValue $probeText 'bitexact_channels'
+    $formatRate = Get-ProbeValue $probeText 'bitexact_rate'
+    $formatEncoding = ([regex]::Match($probeText, '(?m)\bbitexact_encoding=([a-z0-9-]+)')).Groups[1].Value
+    # Check the negotiated format before analysing: Windows mixes PCM device
+    # formats as float32 in shared mode, which the PCM analyzer cannot read.
+    if ($formatChannels -ne $Channels) {
+        throw "Cable A Input / Cable B Output run at $formatChannels channels in Windows, not $Channels. Set both to $Channels channels and $Rate Hz in Sound settings, then run again."
+    }
+    if ($formatRate -ne $Rate) {
+        throw "Cable A Input / Cable B Output run at $formatRate Hz in Windows, not $Rate Hz. Set both endpoints to $Rate Hz, then run again."
+    }
+    if ($formatEncoding -ne $formatLabel) { throw "Windows negotiated $formatEncoding, not requested $formatLabel. Set both Cable endpoints to $formatLabel in Sound settings." }
     $analysisPath = Join-Path $evidence 'metrics.json'
     $analysisMode = if ($PcmBits -eq 0) { 'analyze' } else { 'pcm' }
     $analysisArguments = if ($PcmBits -eq 0) { @($analysisMode,$referenceWav,$captureWav,$analysisPath) } else { @($analysisMode,$referenceWav,$captureWav,$analysisPath,[string]$PcmBits) }
@@ -75,9 +87,6 @@ try {
     if ($analysis.Code -ne 0 -or -not (Test-Path -LiteralPath $analysisPath)) { throw 'Rust sample analyzer failed; see analysis-stderr.txt.' }
     $metrics = Get-Content -LiteralPath $analysisPath -Raw | ConvertFrom-Json
     $routeText = Get-Content -LiteralPath $routeOut -Raw
-    $formatChannels = Get-ProbeValue $probeText 'bitexact_channels'
-    $formatRate = Get-ProbeValue $probeText 'bitexact_rate'
-    $formatEncoding = ([regex]::Match($probeText, '(?m)\bbitexact_encoding=([a-z0-9-]+)')).Groups[1].Value
     $result = [pscustomobject][ordered]@{
         Channels = $Channels; RequestedRate = $Rate; RequestedEncoding = $formatLabel; ProbeEncoding = $formatEncoding
         ProbeCode = $measured.Code; RouteCode = $route.ExitCode
@@ -92,13 +101,6 @@ try {
         FirstMismatchFrame = Get-ProbeValue $probeText 'bitexact_first_mismatch_frame'
         CableRoute = ([regex]::Match($routeText, '(?m)^final cableRoute=(.*)$')).Groups[1].Value
     }
-    if ($formatChannels -ne $Channels) {
-        throw "Cable A Input / Cable B Output run at $formatChannels channels in Windows, not $Channels. Set both to $Channels channels and $Rate Hz in Sound settings, then run again."
-    }
-    if ($formatRate -ne $Rate) {
-        throw "Cable A Input / Cable B Output run at $formatRate Hz in Windows, not $Rate Hz. Set both endpoints to $Rate Hz, then run again."
-    }
-    if ($formatEncoding -ne $formatLabel) { throw "Windows negotiated $formatEncoding, not requested $formatLabel. Set both Cable endpoints to $formatLabel in Sound settings." }
     $metricPass = if ($PcmBits -eq 0) { [bool]$metrics.bitExact } else { [bool]$metrics.pass }
     $captureClean = $result.CaptureDropped -eq 0 -and $result.CaptureFlagged -eq 0 -and $result.CaptureOverflow -eq 0
     $verdict = if ($measured.Code -eq 0 -and $route.ExitCode -eq 0 -and $metricPass -and $captureClean -and ($PcmBits -ne 0 -or $result.NativeBitExactPass -eq 1)) { 'PASS' } else { 'FAIL' }

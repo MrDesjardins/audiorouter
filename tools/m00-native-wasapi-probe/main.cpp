@@ -348,7 +348,8 @@ static int capture_data_probe(UINT target_index, DWORD duration_ms,
         hr = client->Start();
         print_hr("capture_start", hr);
         if (SUCCEEDED(hr)) {
-            std::cout << "capture_start_tick_ms=" << GetTickCount64() << '\n';
+            // Flushed: the VM runner waits for this line while the probe runs.
+            std::cout << "capture_start_tick_ms=" << GetTickCount64() << std::endl;
             REFERENCE_TIME stream_latency = 0;
             const HRESULT latency_hr = client->GetStreamLatency(&stream_latency);
             print_hr("capture_get_stream_latency", latency_hr);
@@ -598,7 +599,8 @@ static int render_data_probe(UINT target_index, DWORD duration_ms, bool tone,
         hr = client->Start();
         print_hr("render_start", hr);
         if (SUCCEEDED(hr)) {
-            std::cout << "render_start_tick_ms=" << GetTickCount64() << '\n';
+            // Flushed: the VM runner waits for this line while the probe runs.
+            std::cout << "render_start_tick_ms=" << GetTickCount64() << std::endl;
             REFERENCE_TIME stream_latency = 0;
             const HRESULT latency_hr = client->GetStreamLatency(&stream_latency);
             print_hr("render_get_stream_latency", latency_hr);

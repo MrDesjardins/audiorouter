@@ -16,6 +16,7 @@ use audiorouter_domain::Node;
 
 /// The driver's bridge device; one device serves every cable.
 pub(crate) const CABLE_BRIDGE_DEVICE: &str = r"\\.\AudioRouterVirtualBridge";
+/// Route rate when Windows reports neither cable endpoint.
 pub(crate) const CABLE_ROUTE_RATE_HZ: u32 = 48_000;
 /// Bridge block when the driver reports no preferred period (0) or one
 /// outside `DefaultPeriodFrames`' range (spec 17 §5.5).
@@ -33,6 +34,136 @@ pub(crate) fn cable_route_block_frames(default_period_frames: u32) -> u16 {
 }
 pub(crate) const CABLE_ROUTE_CHANNELS: u16 = 2;
 pub(crate) const CABLE_ROUTE_LEASE_MS: u32 = 2_000;
+/// Rates a cable offers (VCAB-11); a route runs at its cables' rate.
+const CABLE_ROUTE_RATES: [u32; 3] = [44_100, 48_000, 96_000];
+
+/// A cable endpoint's current Windows shared-mode format (its mix format).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CableEndpointFormat {
+    pub sample_rate_hz: u32,
+    pub channels: u16,
+}
+
+/// Whether `reference`, a lowercase KS filter reference string, is the
+/// filter behind `bus`'s Input (render) or Output (capture) endpoint. The
+/// driver's filter names are fixed, so a rename in Sound settings cannot
+/// change the match (17 §5.5).
+pub(crate) fn is_cable_filter(reference: &str, bus: &str, render: bool) -> bool {
+    let side = format!(
+        "cable{}{}",
+        &bus[6..],
+        if render { "render" } else { "capture" }
+    );
+    reference.strip_prefix("wave") == Some(side.as_str())
+        || reference.strip_prefix("topology") == Some(side.as_str())
+}
+
+fn rate_label(rate: u32) -> String {
+    if rate % 1_000 == 0 {
+        format!("{} kHz", rate / 1_000)
+    } else {
+        format!("{:.1} kHz", f64::from(rate) / 1_000.0)
+    }
+}
+
+/// The rate a cable route runs at: its cables' common Windows rate. The
+/// driver refuses a lease at another rate or channel count (wrong speed is
+/// worse than silence, 17 §5.2), and a cable-only route never resamples
+/// (17 §7.3), so a mismatch is refused with the setting to change. An
+/// endpoint Windows does not report leaves the other side's rate, else
+/// 48 kHz; the running route still stops on a driver format mismatch.
+pub(crate) fn cable_route_rate(
+    shape: &CableRouteShape,
+    render: Option<CableEndpointFormat>,
+    capture: Option<CableEndpointFormat>,
+) -> Result<u32, ControlError> {
+    let refuse = |reason: String| Err(ControlError::InvalidRequest(reason));
+    let sides = [
+        (render, &shape.render_bus, "Input", shape.render_channels),
+        (
+            capture,
+            &shape.capture_bus,
+            "Output",
+            shape.capture_channels,
+        ),
+    ];
+    for (format, bus, side, channels) in sides {
+        if let Some(format) = format {
+            if format.channels != channels {
+                let count = |channels: u16| match channels {
+                    1 => "1 channel".to_owned(),
+                    many => format!("{many} channels"),
+                };
+                return refuse(format!(
+                    "{} {side} is set to {} in Windows but the route uses {}; set the cable to {} in Sound settings, or change the route",
+                    cable_label(bus),
+                    count(format.channels),
+                    count(channels),
+                    count(channels)
+                ));
+            }
+        }
+    }
+    let rate = match (render, capture) {
+        (Some(render), Some(capture)) if render.sample_rate_hz != capture.sample_rate_hz => {
+            return refuse(format!(
+                "{} Input runs at {} and {} Output at {} in Windows; set both cables to the same rate in Sound settings (a cable route does not resample)",
+                cable_label(&shape.render_bus),
+                rate_label(render.sample_rate_hz),
+                cable_label(&shape.capture_bus),
+                rate_label(capture.sample_rate_hz)
+            ));
+        }
+        (Some(format), _) | (None, Some(format)) => format.sample_rate_hz,
+        (None, None) => CABLE_ROUTE_RATE_HZ,
+    };
+    if !CABLE_ROUTE_RATES.contains(&rate) {
+        return refuse(format!(
+            "the cables run at {} Hz; set them to 44.1, 48 or 96 kHz in Sound settings",
+            rate
+        ));
+    }
+    Ok(rate)
+}
+
+/// Both cables' Windows formats, found by filter reference; `None` for an
+/// endpoint Windows does not report (disabled, or the query failed).
+#[cfg(windows)]
+fn cable_endpoint_formats(
+    shape: &CableRouteShape,
+) -> (Option<CableEndpointFormat>, Option<CableEndpointFormat>) {
+    use audiorouter_windows_audio::{
+        enumerate_active_endpoint_display_info, enumerate_active_endpoints, EndpointDirection,
+    };
+    let (Ok(formats), Ok(endpoints)) = (
+        enumerate_active_endpoints(),
+        enumerate_active_endpoint_display_info(),
+    ) else {
+        return (None, None);
+    };
+    let find = |bus: &str, direction: EndpointDirection| {
+        let render = direction == EndpointDirection::Render;
+        endpoints
+            .iter()
+            .filter(|endpoint| {
+                endpoint.direction == direction
+                    && is_cable_filter(&endpoint.filter_reference, bus, render)
+            })
+            .find_map(|endpoint| {
+                formats
+                    .iter()
+                    .find(|format| format.id == endpoint.id && format.direction == direction)
+            })
+            .map(|format| CableEndpointFormat {
+                sample_rate_hz: format.sample_rate_hz,
+                channels: format.channels,
+            })
+    };
+    (
+        find(&shape.render_bus, EndpointDirection::Render),
+        find(&shape.capture_bus, EndpointDirection::Capture),
+    )
+}
 
 /// One-in/one-out built-in tools a cable route may contain (the single-graph
 /// runtime; `crates/engine/tests/cable_route.rs` compiles every chain).
@@ -188,6 +319,7 @@ pub(crate) struct ActiveCableRoute {
     pub generation: u64,
     pub shape: CableRouteShape,
     pub block_frames: u16,
+    pub sample_rate_hz: u32,
     worker: Option<audiorouter_windows_audio::CableRouteWorker>,
     render: Option<audiorouter_windows_audio::NativeBridgeController>,
     capture: Option<audiorouter_windows_audio::NativeBridgeController>,
@@ -250,6 +382,7 @@ impl ActiveCableRoute {
             "renderBus": self.shape.render_bus,
             "captureBus": self.shape.capture_bus,
             "blockFrames": self.block_frames,
+            "sampleRateHz": self.sample_rate_hz,
             "renderChannels": self.shape.render_channels,
             "captureChannels": self.shape.capture_channels,
             "state": if self.is_running() { "running" } else if self.failure.is_some() { "failed" } else { "stopped" },
@@ -398,6 +531,8 @@ impl ControlPlane {
             }
         }
         let frames = cable_route_block_frames(info.default_period_frames);
+        let (render_format, capture_format) = cable_endpoint_formats(&shape);
+        let rate = cable_route_rate(&shape, render_format, capture_format)?;
         let stage = match &shape.direct_matrix {
             Some(matrix) => CableRouteStage::Matrix(
                 CableMatrixRoute::new(
@@ -412,7 +547,7 @@ impl ControlPlane {
                 let graph = audiorouter_engine::compile_session_at_sample_rate(
                     &session,
                     audiorouter_engine::RuntimeGeneration::new(generation),
-                    CABLE_ROUTE_RATE_HZ,
+                    rate,
                 )
                 .map_err(|error| bridge_error("cable route compile", &error))?;
                 CableRouteStage::Engine(Box::new(
@@ -438,7 +573,7 @@ impl ControlPlane {
             bus_id: bus.to_owned(),
             direction,
             generation: lease_generation,
-            sample_rate_hz: CABLE_ROUTE_RATE_HZ,
+            sample_rate_hz: rate,
             channels,
             frames_per_quantum: frames,
             lease_ms: CABLE_ROUTE_LEASE_MS,
@@ -498,6 +633,7 @@ impl ControlPlane {
             generation,
             shape: shape.clone(),
             block_frames: frames,
+            sample_rate_hz: rate,
             worker: None,
             render: None,
             capture: None,
@@ -514,10 +650,8 @@ impl ControlPlane {
                 capture_generation: lease_generation,
                 render_block_samples,
                 capture_block_samples,
-                // Half a block period (5 ms at 480 frames, 48 kHz).
-                silence_holdoff_us: u64::from(frames) * 1_000_000
-                    / u64::from(CABLE_ROUTE_RATE_HZ)
-                    / 2,
+                // Half a block period (5 ms at 480 frames and 48 kHz).
+                silence_holdoff_us: u64::from(frames) * 1_000_000 / u64::from(rate) / 2,
             },
         );
         let worker = match worker {
@@ -603,6 +737,25 @@ impl ControlPlane {
                     failure = Some(format!("cable lease heartbeat failed: {error:?}"));
                     break;
                 }
+            }
+            // The driver plays silence for a lease whose rate or channels no
+            // longer match the cable (format changed in Sound settings while
+            // playing); say so instead of running silent.
+            if failure.is_none() {
+                failure = [
+                    (route.render.as_ref(), &route.shape.render_bus, "Input"),
+                    (route.capture.as_ref(), &route.shape.capture_bus, "Output"),
+                ]
+                .into_iter()
+                .find(|(controller, _, _)| {
+                    controller.is_some_and(|controller| controller.counters().format_mismatches > 0)
+                })
+                .map(|(_, bus, side)| {
+                    format!(
+                        "{} {side} changed format in Windows (sample rate or channels); press Play to start the route at the new format",
+                        cable_label(bus)
+                    )
+                });
             }
         }
         if let Some(failure) = failure {
@@ -763,6 +916,93 @@ mod tests {
         extra.enabled = false;
         nodes.push(extra);
         assert!(cable_route_shape(&session(nodes)).unwrap().is_ok());
+    }
+
+    fn stereo_shape() -> CableRouteShape {
+        CableRouteShape {
+            render_bus: "cable-a".into(),
+            capture_bus: "cable-b".into(),
+            render_channels: 2,
+            capture_channels: 2,
+            direct_matrix: None,
+        }
+    }
+
+    fn format(sample_rate_hz: u32, channels: u16) -> Option<CableEndpointFormat> {
+        Some(CableEndpointFormat {
+            sample_rate_hz,
+            channels,
+        })
+    }
+
+    fn rate_refusal(
+        shape: &CableRouteShape,
+        render: Option<CableEndpointFormat>,
+        capture: Option<CableEndpointFormat>,
+    ) -> String {
+        match cable_route_rate(shape, render, capture) {
+            Err(ControlError::InvalidRequest(reason)) => reason,
+            other => panic!("expected a refusal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cable_filters_match_by_letter_and_side_only() {
+        assert!(is_cable_filter("topologycablearender", "cable-a", true));
+        assert!(is_cable_filter("wavecablearender", "cable-a", true));
+        assert!(is_cable_filter("topologycablebcapture", "cable-b", false));
+        assert!(!is_cable_filter("topologycablebcapture", "cable-b", true));
+        assert!(!is_cable_filter("topologycablearender", "cable-b", true));
+        assert!(!is_cable_filter("topologycablehrender", "cable-a", true));
+        assert!(!is_cable_filter("xtopologycablearender", "cable-a", true));
+        assert!(!is_cable_filter("", "cable-a", true));
+    }
+
+    #[test]
+    fn cable_route_runs_at_the_cables_common_rate() {
+        let shape = stereo_shape();
+        // The r7 Stage A defect: 44.1 and 96 kHz cables got a 48 kHz lease.
+        for rate in [44_100, 48_000, 96_000] {
+            assert_eq!(
+                cable_route_rate(&shape, format(rate, 2), format(rate, 2)).unwrap(),
+                rate
+            );
+        }
+        assert_eq!(
+            cable_route_rate(&shape, None, format(96_000, 2)).unwrap(),
+            96_000
+        );
+        assert_eq!(
+            cable_route_rate(&shape, format(44_100, 2), None).unwrap(),
+            44_100
+        );
+        assert_eq!(
+            cable_route_rate(&shape, None, None).unwrap(),
+            CABLE_ROUTE_RATE_HZ
+        );
+        let mut eight = stereo_shape();
+        eight.render_channels = 8;
+        eight.capture_channels = 8;
+        assert_eq!(
+            cable_route_rate(&eight, format(96_000, 8), format(96_000, 8)).unwrap(),
+            96_000
+        );
+    }
+
+    #[test]
+    fn cable_route_refuses_mismatched_cable_formats_with_the_setting_to_change() {
+        let shape = stereo_shape();
+        assert_eq!(
+            rate_refusal(&shape, format(44_100, 2), format(48_000, 2)),
+            "Cable A Input runs at 44.1 kHz and Cable B Output at 48 kHz in Windows; set both cables to the same rate in Sound settings (a cable route does not resample)"
+        );
+        assert_eq!(
+            rate_refusal(&shape, format(48_000, 8), format(48_000, 2)),
+            "Cable A Input is set to 8 channels in Windows but the route uses 2 channels; set the cable to 2 channels in Sound settings, or change the route"
+        );
+        assert!(rate_refusal(&shape, None, format(48_000, 1))
+            .starts_with("Cable B Output is set to 1 channel in"));
+        assert!(rate_refusal(&shape, format(32_000, 2), None).contains("32000 Hz"));
     }
 
     #[test]

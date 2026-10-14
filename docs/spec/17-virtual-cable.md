@@ -710,7 +710,12 @@ notifications that the backend already watches.
   with matching endpoint rates selects a float64 runtime at that rate
   (44.1/48/96 kHz), preserving samples without rate conversion. Mixed-clock
   or mixed-rate routes use the 48 kHz graph and a high-quality user-mode
-  resampler where needed (VCAB-22). This resolves the former contradictory
+  resampler where needed (VCAB-22). The route reads each cable's rate and
+  channels from its Windows endpoint (found by filter reference, 5.5). Until
+  the resampler covers cable-to-cable routes, a cable-only route whose
+  cables differ in rate, or whose cable channels differ from the route's, is
+  refused with the setting to change; a cable whose format changes while
+  playing stops the route with a reason. It never runs silent. This resolves the former contradictory
   instructions to resample every 44.1/96 kHz cable and also pass those same
   rates bit-exact. The high-precision engine owns prepared float64 buffers,
   matrices and unity/gain/mix stages; no allocation occurs in callbacks.

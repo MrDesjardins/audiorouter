@@ -217,22 +217,39 @@ function Get-EndpointIndex([string] $Flow, [string] $Name) {
 }
 # Feeders replace Listen and the Test button: one probe records Cable B Output
 # (the tone tool's capture consumer), one plays a tone into Cable A Input.
+# Each feeder gets its own log (kept in the results) and counts as started
+# only once the probe prints its stream-start line: a fixed wait was too
+# short right after a Driver Verifier restart (r7 hardening tone).
+function Start-Feeder([string] $Kind, [string[]] $Arguments) {
+    $name = "feeder-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$Kind"
+    $out = Join-Path $work "$name.txt"
+    $process = Start-Process -FilePath $probe -ArgumentList $Arguments -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput $out -RedirectStandardError (Join-Path $work "$name-err.txt")
+    $null = $process.Handle
+    $process | Add-Member NoteProperty FeederLog $name
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    while (-not ((Test-Path -LiteralPath $out) -and ((Get-Content -LiteralPath $out -Raw) -match "(?m)^${Kind}_start_tick_ms="))) {
+        if ($process.HasExited) { throw "The $Kind feeder exited before its stream started (exit $($process.ExitCode)); see $name.txt." }
+        if ($watch.Elapsed.TotalSeconds -ge 30) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            throw "The $Kind feeder did not start its stream within 30 s; see $name.txt."
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    return $process
+}
 function Start-Feeders([int] $Seconds, [switch] $RenderOnly) {
     $milliseconds = [string](($Seconds + 20) * 1000)
     $render = Get-EndpointIndex 'render' 'AudioRouter Cable A Input'
     $feeders = @()
-    if (-not $RenderOnly) {
-        $capture = Get-EndpointIndex 'capture' 'AudioRouter Cable B Output'
-        # Separate statements: a trailing comma after a parameter value would
-        # turn the next Start-Process into part of that value.
-        $feeders += Start-Process -FilePath $probe -ArgumentList @('capture', $capture, $milliseconds) `
-            -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $work 'feeder-capture.txt') `
-            -RedirectStandardError (Join-Path $work 'feeder-capture-err.txt')
-    }
-    $feeders += Start-Process -FilePath $probe -ArgumentList @('tone', $milliseconds, $render) `
-        -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $work 'feeder-render.txt') `
-        -RedirectStandardError (Join-Path $work 'feeder-render-err.txt')
-    Start-Sleep -Seconds 2
+    try {
+        if (-not $RenderOnly) {
+            $capture = Get-EndpointIndex 'capture' 'AudioRouter Cable B Output'
+            $feeders += Start-Feeder 'capture' @('capture', $capture, $milliseconds)
+        }
+        $feeders += Start-Feeder 'render' @('tone', $milliseconds, $render)
+    } catch { Stop-Feeders $feeders; throw }
+    Start-Sleep -Seconds 1
     return $feeders
 }
 function Stop-Feeders($Feeders) {
@@ -282,6 +299,13 @@ function Grade-BitExact([string] $Label, $Run) {
     if (-not $result -or -not $metrics) { Add-Result $Label 'FAIL' "no bit-exact result (exit $($Run.Code))"; return }
     $r = $result.Result
     $detail = "bit-exact $($metrics.bitExact), max error $($metrics.maxAbsoluteError), $($metrics.alignedFrames) frames; dropped $($r.CaptureDropped), flagged $($r.CaptureFlagged), overflow $($r.CaptureOverflow)"
+    # A route that moved nothing is a defect, never a VM stall (r7: every
+    # 44.1/96 kHz run had renderBlocks 0 while reporting "running").
+    $route = if ($r.CableRoute) { try { $r.CableRoute | ConvertFrom-Json } catch { $null } } else { $null }
+    if ($route -and [long]$route.renderBlocks -eq 0) {
+        Add-Result $Label 'FAIL' "$detail; the product route moved no audio (renderBlocks 0, failure '$($route.failure)')"
+        return
+    }
     # One flagged packet is Windows' discontinuity flag on the first capture
     # packet; samples, drops and overflows decide.
     if ($metrics.bitExact -and $r.CaptureDropped -eq 0 -and $r.CaptureOverflow -eq 0 -and $r.CaptureFlagged -le 1) {
@@ -648,20 +672,35 @@ function Session-Pool([string] $P) {
         $script:feeders = Start-Feeders ($PoolMinutes * 60) -RenderOnly
         $samples = [Collections.Generic.List[object]]::new()
         $csv = Join-Path $work 'pool.csv'
-        'minutes,bytes' | Set-Content -LiteralPath $csv
+        'minutes,bytes,feeder' | Set-Content -LiteralPath $csv
         $start = Get-Date
+        # r7: the tone exited before the end, cause unknown (its log was
+        # overwritten). Record each exit and restart it, so the stream
+        # continues and the exits stay in the results.
+        $restarts = [Collections.Generic.List[string]]::new()
         try {
             while (((Get-Date) - $start).TotalMinutes -lt $PoolMinutes) {
-                $bytes = [double](Get-CimInstance Win32_PerfRawData_PerfOS_Memory).PoolNonpagedBytes
                 $minutes = [Math]::Round(((Get-Date) - $start).TotalMinutes, 2)
+                $feeder = @($script:feeders)[0]
+                if ($feeder.HasExited) {
+                    $restarts.Add("$minutes min exit $($feeder.ExitCode) ($($feeder.FeederLog).txt)")
+                    if ($restarts.Count -gt 5) { throw "the tone into Cable A Input stopped $($restarts.Count) times: $($restarts -join '; ')" }
+                    $script:feeders = Start-Feeders ([int][Math]::Ceiling(($PoolMinutes - $minutes) * 60)) -RenderOnly
+                    $feeder = @($script:feeders)[0]
+                }
+                $bytes = [double](Get-CimInstance Win32_PerfRawData_PerfOS_Memory).PoolNonpagedBytes
                 $samples.Add([pscustomobject]@{ Minutes = $minutes; Bytes = $bytes })
-                "$minutes,$bytes" | Add-Content -LiteralPath $csv
+                "$minutes,$bytes,$($feeder.FeederLog)" | Add-Content -LiteralPath $csv
                 Start-Sleep -Seconds 30
             }
-            $alive = @($script:feeders | Where-Object { -not $_.HasExited }).Count
         } finally { Stop-Feeders $script:feeders; $script:feeders = $null }
-        if ($alive -eq 0) { Add-Result "${P}non-paged pool flat for $PoolMinutes min (A8)" 'FAIL' 'the tone into Cable A Input stopped early'; return }
         Grade-Pool "${P}non-paged pool flat for $PoolMinutes min (A8)" $samples
+        if ($restarts.Count -gt 0) {
+            $last = $results[$results.Count - 1]
+            $last.detail = "$($last.detail); tone restarted after: $($restarts -join '; ')"
+            if ($last.verdict -eq 'PASS') { $last.verdict = 'REVIEW' }
+            Write-Host "[$($last.verdict)] $($last.step) $($last.detail)" -ForegroundColor Yellow
+        }
     }
     Step-NoBugcheck $P
     Step-Remove $P

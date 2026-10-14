@@ -523,6 +523,52 @@ Bundle `C:\VMs\ar-share\rc-0.2.4-r7` (source `a24fec7a`, `-ReuseDriverShare rc-0
   `cmd.exe` quoting checked with a stand-in command.
 - Bundle `C:\VMs\ar-share\rc-0.2.4-r8` (source `3901b4ce`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared), MANIFEST SHA-256 `0EB7471377A71AE0E965A320FFE8E267983E8B4A950A4E5423ED00CF32DBBA45`. After the r7 `all` run finishes (its quality, pool and hardening results stay valid), rerun `-Session users` and `-Session eight` from r8.
 
+**`-Session all` on r7 finished (2026-10-13 22:07), results** (`stage-a-all-20261013-215942.zip`, per-test zips in the r7 share). No bugcheck in any session; install, status and remove passed in all six.
+- eight: crosstalk 56 ordered pairs PASS (worst −1000 dBFS, i.e. digital
+  zero); cable count 2→8→2 PASS.
+- hardening: Verifier on and active; tone stall PASS; crash recovery 3/3
+  PASS; **IOCTL fuzz 30 min under Verifier PASS** (33.3 M calls, 0
+  unexpected, leases exercised). The 30 s tone FAILED with "no capture
+  consumer acknowledged the primed block": it is the first step after the
+  Verifier restart and the Cable B capture feeder was not streaming yet
+  after the fixed 2 s wait (runner timing, not the driver). Bit-exact 2 ch
+  under Verifier: VM stall pattern (dropped 21,120 frames).
+- quality: float32 48 kHz 2 ch and 8 ch bit-exact PASS; THD+N −153 dB PASS;
+  latency recorded for Stage C (p50 39.7 ms). Findings:
+  1. **Product defect: a cable route moves no audio at 44.1 or 96 kHz.**
+     All 13 runs at 44.1/96 kHz show the product route "running" with
+     `renderBlocks 0, captureBlocks 0, failure null` for the whole run; the
+     capture is silence (RMS error 0.289 = the noise's own RMS). Cause:
+     `crates/control/src/cable_routes.rs` opens both bridge leases at the
+     fixed `CABLE_ROUTE_RATE_HZ = 48_000`; the driver refuses a lease whose
+     rate differs from the stream's (17 §5.2: wrong speed is worse than
+     silence) and counts `FormatMismatches`, which the route never reads.
+     Spec 17 §7.3 already requires a cable-only route at the cables' rate
+     (44.1/48/96 kHz). Earlier 96 kHz passes used the tone tool's own
+     leases, not the product route.
+  2. PCM32: the runner ran the float64 PCM analyzer before checking the
+     negotiated format; Windows mixes PCM devices as float32 in shared mode,
+     so the analyzer refused the WAV. PCM16/24 were graded N/A for that
+     reason; PCM32 must be too.
+  3. Sweeps: `run-cable-sweep.ps1` required `flagged 0`; every capture
+     flags its first packet (start discontinuity), which the bit-exact
+     grading already accepts. 48 kHz sweep otherwise ran normally.
+  4. 48 kHz 1 ch: one route silence block mid-run (VM late block at 2–3 s,
+     11 ms service gap) shifted the rest; VM pattern, rerun.
+- pool (A8): the 60-min samples are flat (172.0–174.7 MB, no trend), but the
+  render feeder had exited before the end and its log was overwritten by a
+  later step, so the run does not count. Rerun with per-step feeder logs and
+  a restarted feeder.
+- users and eight 30 min: the r7 defects already fixed in r8 (above).
+
+Repairs (2026-10-13): the product route reads both cables' Windows mix
+formats (endpoint found by filter reference), runs at their common rate,
+refuses mismatched rates or channel counts with a clear reason, and stops
+with a reason when the driver reports a format mismatch (cable format
+changed while playing); runner: PCM checks the negotiated format first,
+sweeps accept the first-packet flag, feeders wait until the capture feeder
+streams and keep per-step logs, the pool feeder is restarted and counted.
+
 ### 8-channel spike (prepared 2026-10-12)
 
 Tool: `crates/windows-audio/examples/m03_cable_format.rs`. `show` prints each

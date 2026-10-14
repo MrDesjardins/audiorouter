@@ -60,7 +60,8 @@ try {
     $flagged = Get-ProbeValue $probeText 'bitexact_capture_flagged_packets'
     $overflow = Get-ProbeValue $probeText 'bitexact_capture_overflow_packets'
     if ($formatRate -ne $Rate -or $formatChannels -ne $Channels -or $formatEncoding -ne 'float32') { throw "Probe negotiated $formatChannels channels, $formatRate Hz, $formatEncoding; expected $Channels channels, $Rate Hz, float32." }
-    if ($dropped -ne 0 -or $flagged -ne 0 -or $overflow -ne 0) { throw "Capture was not clean (dropped $dropped, flagged $flagged, overflow $overflow)." }
+    # Every capture flags its first packet (start discontinuity); more is a loss.
+    if ($dropped -ne 0 -or $flagged -gt 1 -or $overflow -ne 0) { throw "Capture was not clean (dropped $dropped, flagged $flagged, overflow $overflow)." }
     $metricsPath = Join-Path $evidence 'metrics.json'
     $analysis = Invoke-DriverVmProcess -Executable $quality -Arguments @('sweep',$reference,$captureWav,$metricsPath,'20','20000',[string]$MaxDeviationDb) `
         -Stdout (Join-Path $evidence 'analysis.txt') -Stderr (Join-Path $evidence 'analysis-stderr.txt') -TimeoutSeconds 120
