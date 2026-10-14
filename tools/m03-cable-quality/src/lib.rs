@@ -893,7 +893,9 @@ pub fn analyze_sweep_pair_wav(
         for &frequency in &frequencies {
             let center_time = duration * (frequency / start_hz).ln() / logarithmic_range;
             let center = (center_time * f64::from(rate)).round() as usize;
-            let begin = center.saturating_sub(half);
+            // An odd window (44.1 kHz: 11,025 frames) ends one frame past
+            // the reference at the last point; keep every window inside it.
+            let begin = center.saturating_sub(half).min(reference_frames - window);
             let ref_mono = (begin..begin + window)
                 .map(|frame| reference[frame * channel_count + channel])
                 .collect::<Vec<_>>();
@@ -1046,6 +1048,10 @@ mod tests {
     }
 
     fn write_test_wav(path: &std::path::Path, channels: u16, samples: &[f32]) {
+        write_test_wav_at(path, 48_000, channels, samples);
+    }
+
+    fn write_test_wav_at(path: &std::path::Path, rate: u32, channels: u16, samples: &[f32]) {
         let data_len = (samples.len() * 4) as u32;
         let mut bytes = Vec::new();
         bytes.extend_from_slice(b"RIFF");
@@ -1054,8 +1060,8 @@ mod tests {
         bytes.extend_from_slice(&16u32.to_le_bytes());
         bytes.extend_from_slice(&3u16.to_le_bytes());
         bytes.extend_from_slice(&channels.to_le_bytes());
-        bytes.extend_from_slice(&48_000u32.to_le_bytes());
-        bytes.extend_from_slice(&(48_000u32 * u32::from(channels) * 4).to_le_bytes());
+        bytes.extend_from_slice(&rate.to_le_bytes());
+        bytes.extend_from_slice(&(rate * u32::from(channels) * 4).to_le_bytes());
         bytes.extend_from_slice(&(channels * 4).to_le_bytes());
         bytes.extend_from_slice(&32u16.to_le_bytes());
         bytes.extend_from_slice(b"data");
@@ -1302,6 +1308,29 @@ mod tests {
             analyze_sweep_pair_wav(&reference_path, &capture_path, 20.0, 24_000.0, 0.05).is_err()
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sweep_response_windows_stay_inside_the_reference_at_every_rate() {
+        // r9: at 44.1 kHz the odd 11,025-frame window read one frame past
+        // the reference at the last analysis point and the analyzer panicked.
+        for rate in [44_100u32, 48_000, 96_000] {
+            let root = std::env::temp_dir()
+                .join(format!("m03-quality-sweep-{rate}-{}", std::process::id()));
+            std::fs::create_dir_all(&root).unwrap();
+            let reference_path = root.join("reference.wav");
+            let capture_path = root.join("capture.wav");
+            let mono = log_sweep(rate as usize * 10, rate, 20.0, 20_000.0, 0.8);
+            let reference = mono.iter().flat_map(|s| [*s, *s]).collect::<Vec<_>>();
+            write_test_wav_at(&reference_path, rate, 2, &reference);
+            write_test_wav_at(&capture_path, rate, 2, &reference);
+            let report =
+                analyze_sweep_pair_wav(&reference_path, &capture_path, 20.0, 20_000.0, 0.05)
+                    .unwrap();
+            assert_eq!(report["pass"], true, "{rate} Hz");
+            assert_eq!(report["format"]["sampleRateHz"], rate);
+            std::fs::remove_dir_all(root).unwrap();
+        }
     }
 
     #[test]

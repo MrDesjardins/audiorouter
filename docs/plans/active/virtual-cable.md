@@ -38,12 +38,12 @@ The driver and its host-side product are functionally complete. Since
 | A1–A3, A14 install/names/remove | **Pass ×2 on RC3 0.2.4** | Stage A run 3, 2026-10-12 (earlier: WP-03 smokes 2026-10-08/10) |
 | A4/A5/A6 audio both ways, clean, silence | **RC3:** tool and product route stream both ways; stall counters rise; 8 ch 96 kHz clean with zero counters; bit-exact 2 and 8 ch; zero-counter 2-ch runs blocked only by VM descheduling | **A5 zero counters: VM deviation, Stage C** (user decision 2026-10-13) |
 | A7 crash recovery | Pass | r24 |
-| A8 pool leak (1 h), A9 reboot keeps IDs | **Not run** | — |
-| A10 Driver Verifier, A11 fuzzer + second user | **Not run** | WP-04 host-reviewed only |
+| A8 pool leak (1 h), A9 reboot keeps IDs | **Pass on RC3** (A8: 0.069 MiB/h over 60 min, r9; A9: 4 IDs equal, r6) | — |
+| A10 Driver Verifier, A11 fuzzer + second user | **Pass on RC3** (r9: 30-min fuzz under Verifier, 47.2 M calls, 0 unexpected; stall, crash recovery 3/3; other-session user refused, same-session "lease held"; no bugcheck) | A10 30 s tone: a 4.1 s guest freeze expired the lease (VM, see r9 results) |
 | A12 Discord/OBS see the cable | **Not run** | — |
 | A13 upgrade N → N+1 keeps names and migrated settings (helper `update`, `repair`); endpoint IDs change by design (VCAB-05) | **Pass on RC3** (0.2.4 → 0.2.5, same devnode, 96 kHz migrated, repair) | AudioRouter session rebind after the update not yet run |
-| A15 all 8 cables | **Count part passes on RC3** (2 → 8 → 2, 16 endpoints, A/B IDs kept) | 30-min eight-route tone run not yet run |
-| A16 quality matrix | **Not run** | WP-09b runners ready, host-checked |
+| A15 all 8 cables | **Count and crosstalk pass on RC3** (2 → 8 → 2; 56 pairs at digital zero, r9) | 30-min four-route run: 0 corrupted, driver counted every loss; losses from VM stalls and the relay's later trims (VM, Stage C) |
+| A16 quality matrix | **RC3 product route, r9:** float32 bit-exact at 44.1/48/96 kHz × 1/2/8 ch (failures are inserted silent blocks only); PCM16/24/32 N/A (Windows mixes float32); sweep 44.1 kHz 0.0 dB; THD+N −153 dB (r7) | 48/96 kHz sweeps and the r9 THD+N had capture drops (VM); VB-Cable comparison not run |
 | VCAB-24 no glitches (sustained) | **Cannot pass in this VM** | NEM stalls (r12–r26); bound to Stage C |
 | VCAB-25 latency vs VB-Cable | Indicative only | r6/r23; VB-Cable comparison not run |
 
@@ -575,8 +575,62 @@ audio"), 48 kHz 2/8 ch PASS. Bundle `C:\VMs\ar-share\rc-0.2.4-r9` (source
 `1c87f9ce`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to
 RC3, compared), MANIFEST SHA-256
 `C9B0978031457DF4709974D6164A1B19F661C0F794E333EB739CC8BE3BEF6694`;
-supersedes r8. **Next action:** from `02-test-signing-ready`,
-`run-stage-a.ps1 -Session all` from r9.
+supersedes r8.
+
+**`-Session all` on r9 finished (2026-10-14 08:34), results**
+(`stage-a-all-20261014-083427.zip`, `evidence-20261014-083105.zip` and the
+per-test zips in the r9 share). No bugcheck in any session; install, status
+and remove passed in all five; quieting reverted. Runner: FAIL 2, both
+attributed to the VM below.
+- users (A11) PASS: same session → 0x80070020 "lease held"; another Windows
+  session → access denied by the lease's session rule after the device
+  opened; user 1's tool finished.
+- eight (A15): cable count 2→8→2 PASS; crosstalk 56 pairs PASS (digital
+  zero). 30-min four-route run: runner FAIL `unexplained-events`. Per route
+  lost 665–819 of ~179,000 impulses (0.4 %), corrupted 0, driver counters
+  non-zero on every route. 1,534 of 2,026 loss events coincide with
+  VM-wide stalls. The other 492 are single impulses at a steady ~5/min per
+  route from minute ~12, and per route they equal the pass-through relay's
+  `trimmed` count (129/131, 30/32, 156/160, 177/177): the relay inserts
+  silence when a stall starves it and later trims one block to win the
+  delay back, dropping one impulse each time. Verdict: VM (stall plus its
+  recovery), Stage C. Runner follow-up: attribute trims to stalls.
+- quality (A16): **the r7 product defect is fixed** — every 44.1/96 kHz
+  route moves audio. Bit-exact PASS at 44.1 kHz 8 ch, 48 kHz 1/2 ch, 96 kHz
+  1 ch. The five VM verdicts were checked sample by sample (scratch
+  re-aligner): each is one or two inserted 480-frame blocks of pure digital
+  silence (route underrun, mostly in the first 0.1 s), after which the
+  capture equals the reference exactly; nothing lost or altered. PCM16/24/32
+  N/A (Windows mixes them as float32). Sweep 44.1 kHz: **analyzer defect**,
+  `m03-cable-quality` panicked (index 882000 of 882000): the 44.1 kHz
+  analysis window is odd (11,025 frames), so the last point's window ended
+  one frame past the reference; 48/96 kHz windows are even. Fixed by
+  clamping the window start; regression
+  `sweep_response_windows_stay_inside_the_reference_at_every_rate` fails
+  without the fix; the real r9 44.1 kHz WAVs now analyze at 0.0 dB
+  deviation (pass). Sweeps 48/96 kHz: capture drops (480 and 111,360
+  frames), VM. THD+N −22 dB: that capture dropped 5,760 frames (one gap
+  ruins a whole-window THD+N; r7 measured −153 dB); VM. Latency INFO p50
+  39.0 ms, p95 39.3 ms, jitter 0.9 ms (Stage C).
+- pool (A8) PASS: 110 samples over 60 min, growth 0.069 MiB/h, range
+  2.01 MiB; the feeder ran throughout.
+- hardening (A10/A11): Verifier on and active; stall PASS; crash recovery
+  3/3 PASS (route 2 running ~3.7 s after each kill); **IOCTL fuzz 30 min
+  under Verifier PASS** (47.2 M calls, 0 unexpected, 23,733 opens);
+  Verifier off; no bugcheck. Bit-exact 2 ch under Verifier: capture
+  dropped 10,944 frames (VM). The 30 s tone FAILED with exit 1: at 11 s the
+  whole tool froze for 4.1 s (capture, render and control pump gaps
+  4.07–4.14 s, a minute after the Verifier restart); the driver expired
+  the ~1 s lease (deactivated at 15.7 s) and the next IOCTL got
+  0x80070016. That is the lease rule working; verdict VM. Runner
+  follow-up: report a lease lost after a whole-process freeze longer than
+  the lease as VM, with the gap.
+
+Stage A status on RC3 after r9: every automated check passes or has a
+documented VM attribution; open are A12 (Discord/OBS, attended or Stage C)
+and the VB-Cable latency comparison (VCAB-25, Stage C). **Next action:**
+user decision on WP-13 (EV certificate and Partner Center attestation of
+RC3), the gate before Stage B.
 
 ### 8-channel spike (prepared 2026-10-12)
 
