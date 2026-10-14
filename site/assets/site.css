@@ -34,3 +34,4 @@
 .hero-art{text-align:center}
 .start-actions .button{flex:1 1 100%}
 }
+.start-steps+.callout{margin-top:17px}

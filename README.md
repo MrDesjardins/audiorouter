@@ -143,6 +143,20 @@ uninstall testing is still open. Releases use existing virtual cables such as
 VB-Cable. AudioRouter's own virtual cable is in development and not shipped
 yet. See [distribution status](docs/operations/distribution.md) for details.
 
+## Support AudioRouter
+
+AudioRouter is free and stays free. Its own virtual cable needs one thing
+money can buy: Windows only installs audio drivers that Microsoft has signed,
+and Microsoft requires an EV code-signing certificate for every driver
+submission, a few hundred dollars a year.
+
+If AudioRouter is useful to you, [sponsor it on GitHub](https://github.com/sponsors/MrDesjardins).
+A **$25 one-time** contribution is the main ask; **$5 a month** helps with
+renewals. Sponsorships pay for the certificate and its renewals, and any
+balance goes to future renewals and project costs. Everyone gets the same
+free software; there are no paid features or priority support. Progress is
+shown on the Sponsors page, with an update once the certificate is bought.
+
 ---
 
 ## For developers
