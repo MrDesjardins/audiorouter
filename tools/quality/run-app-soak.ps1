@@ -39,12 +39,15 @@ param(
     # Play the selected session at launch (the app's Advanced > Autoplay),
     # so the run needs no click. Without it nothing plays until you click.
     [switch] $AutoPlay,
-    [string] $Shell = (Join-Path $PSScriptRoot '..\..\src-tauri\target\release\audiorouter-shell.exe'),
+    # Default: the repository's release build (set below: Windows PowerShell
+    # 5.1 leaves $PSScriptRoot empty while defaults are evaluated).
+    [string] $Shell = '',
     [string] $SourceDatabase = (Join-Path $env:LOCALAPPDATA 'AudioRouter\state.sqlite'),
     [string] $Output = (Join-Path $env:TEMP ('audiorouter-app-soak-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
 )
 $ErrorActionPreference = 'Stop'
 
+if (-not $Shell) { $Shell = Join-Path $PSScriptRoot '..\..\src-tauri\target\release\audiorouter-shell.exe' }
 $Shell = [IO.Path]::GetFullPath($Shell)
 if (-not (Test-Path -LiteralPath $Shell -PathType Leaf)) { throw "Shell not found: $Shell (build it first)" }
 if (-not (Test-Path -LiteralPath $SourceDatabase -PathType Leaf)) { throw "Database not found: $SourceDatabase" }
