@@ -47,12 +47,31 @@ repository.
    Do not add rewards such as priority support, custom features or release
    dates; recognition only.
 
-3. **Goal**: set it from the actual first-year quote: the certificate plus
-   any required hardware token or cloud signing service and shipping. The
-   plan's estimate is $280–$450 for the certificate and $0–$120 for key
-   storage, about **$300–$570**; a quote of $500 is 20 contributions of $25.
-   Monthly pledges alone do not cover the first purchase.
+3. **Goal** (set 2026-10-13): GitHub offers only monthly goals (amount or
+   number of sponsors). The goal is **$45 a month** (about $540 a year),
+   matching the plan's estimate of $280–$450 for the certificate plus $0–$120
+   for key storage. One-time sponsorships do not count toward a monthly goal
+   but fund the first purchase directly; say so on the download page.
 
+Tiers created 2026-10-13 and their direct links (used by the download page;
+a signed-out visitor goes through GitHub sign-in back to the tier):
+
+| Tier | Link |
+| --- | --- |
+| $25 one time, Cable supporter | `https://github.com/sponsors/MrDesjardins/sponsorships?tier_id=667660` |
+| $5 a month, Keep AudioRouter free | `https://github.com/sponsors/MrDesjardins/sponsorships?tier_id=664358` |
+| $5 one time, Say thanks | `https://github.com/sponsors/MrDesjardins/sponsorships?tier_id=664359` |
+| $100 one time, Signing sponsor | `https://github.com/sponsors/MrDesjardins/sponsorships?tier_id=667661` |
+
+The numeric `tier_id` is the last four bytes of each tier's GraphQL node ID
+(`gh api graphql` → `sponsorsListing.tiers`). If a tier is recreated, its
+link changes.
+
+Embeds: the download page uses GitHub's small Sponsor button
+(`/sponsors/MrDesjardins/button`). The larger card
+(`/sponsors/MrDesjardins/card`) was tried and left out: it is a mostly empty
+white 600 × 225 box on the dark site. Both embeds load only over http(s),
+not from a page opened as a local file.
 ## Transparency
 
 - Keep the goal and the amount received visible on the Sponsors page.
@@ -61,10 +80,3 @@ repository.
 - If contributions exceed the goal, say so and state that the balance funds
   renewals and project costs.
 - Acknowledgments list only sponsors who opted in.
-
-## Follow-up after the tiers exist
-
-The download page buttons currently open the Sponsors page with
-`?frequency=one-time` or `?frequency=recurring`. Once the tiers exist,
-replace each button's link with that tier's direct link (on the dashboard,
-each tier has a link with its `tier_id`), so one click preselects the amount.
