@@ -1,5 +1,90 @@
 # Active plan — post-0.0.8 maintenance
 
+## Stability round — 2026-10-14 (user request)
+
+Objective: find and fix stability problems before users hit them, while the
+driver signing waits on funding. Scope: the app (shell, backend, UI); the
+frozen driver is out of scope. Requirements: ARCH-04, NFR-06, UI-17, SEC-01
+(diagnostics), AUTO-15. Method, in order: field logs from the owner's
+install; full local suites as a baseline; long-run behaviour; a code sweep
+for long-uptime failure classes; each fix with a regression test.
+
+Baseline (Windows host, before fixes): Rust workspace 1,105 passed / 0
+failed / 25 ignored (live-device tests); UI Vitest 523/523; lint 0 errors
+(25 reviewed warnings); CI on `main` green at `96fa215f`. Nightly engine
+soak (run 38536990496): 20 min = 10.7 h of audio, heap +0.0 KiB, p99
+202 µs/quantum (budget 1,333 µs). The engine soak covers the engine only;
+nothing soaked the shell, backend service loop, WebView or logs.
+
+Findings and fixes:
+1. **Logs kept ~30 minutes of history.** Owner's 0.0.15/0.0.16 logs:
+   `backend.jsonl` + previous (2 × 5 MB) covered 33 minutes, 9.5 lines/s,
+   ~330 MB/day of writes, because `is_routine_read_rpc` named only
+   `system.diagnostics` and `events.subscribe` while the window now polls
+   `meters.levels`, `sessions.summary`, `recorders.list` and
+   `virtualCable.status`. Fix: the class comes from the API table
+   (`SideEffectClass::ReadOnly`), so new polls cannot drift; failures always
+   log, verbose keeps everything; `sessions.get`, `sessions.list` and
+   `devices.list` stay logged (they follow user actions and carry the graph
+   and device counts support needs); HTTP reads stay unlogged (Stream Deck
+   polls `sessions.list`). Regression
+   `polled_read_successes_stay_out_of_the_backend_log`; transport 32/32,
+   shell 80/80 (its request-ID test caught a first draft that would have
+   logged Stream Deck's polls again).
+2. **Startup flipped between two sessions and overwrote the saved active
+   session.** Seen in a soak dry run with a fresh WebView profile (first
+   launch, cleared data): 24 `sessions.active.set` writes and full reloads
+   in 0.4 s, alternating the owner's 4-node and 19-node sessions. Cause: the
+   initial session list replaced the demo placeholder with the first listed
+   session before the startup snapshot ran; the window wrote it as active
+   (overwriting the backend's saved choice); every write emits
+   `session.selectionChanged`, which the event poll answered by reading the
+   active session back, and a read between two in-flight writes returned
+   the other session. Risk: autoplay plays the active session about a
+   second after launch. Fix (`App.tsx`, `useWorkspaceEvents.ts`): with
+   nothing remembered, the first snapshot opens the backend's active
+   session; list refreshes keep the placeholder while connected; no write
+   of a value the backend already has, none while the placeholder is
+   selected; backend changes are not adopted while this window's own write
+   is in flight. Regression `App.sessionSelection.test.tsx` (fails before
+   the fix: the saved active session ended as `desktop-session`); UI
+   525/525.
+3. **Sweep, no defect found:** no `lock().unwrap()` in product code (mutex
+   poisoning cannot cascade); frame/sample counters are 64-bit (no 24.8 h
+   wrap); `expect`s in thread modules guard length checks.
+4. **Open, scoped separately:** `NativeBridgeRegion` and `SharedAudioRegion`
+   write through pointers from `MmapMut`'s shared slice (undefined
+   behaviour in Rust's model; from the P3-1 audit). Moving to
+   `memmap2::MmapRaw` touches the bridge path Stage A qualified, so it needs
+   its own change and a VM cable rerun.
+
+5. **Developer hygiene (noted, not fixed):** `cargo test --workspace` and
+   the e2e backend write records into the developer's real
+   `%LOCALAPPDATA%\AudioRouter\logs` (`graph.commit` lines from test
+   processes in `backend.jsonl`, MCP tests in `mcp-activity.jsonl`), so log
+   evidence and support bundles from a development PC mix in test records.
+   Follow-up: give tests a temporary log directory.
+
+New tool: `tools/quality/run-app-soak.ps1` runs the release shell for hours
+on a copy of the owner's database with its own `LOCALAPPDATA` and WebView2
+profile (`WEBVIEW2_USER_DATA_FOLDER`; Tauri resolves its WebView folder
+through the known-folder API and ignores `LOCALAPPDATA`, so the first two
+dry runs used the real WebView profile; the remembered last session there
+reads `patrick-main-siege-footstep`, the database's active session). It
+checks that the real AudioRouter and WebView folders were not modified, has
+optional `-AutoPlay`, and samples shell and WebView private bytes, handles,
+threads, CPU and log growth every 30 s; verdicts on slopes after a
+30-minute warm-up and on log history at the measured rate. 6-minute idle
+dry runs: on 0.0.16 logs would hold 9.5 h (backend) and 12.4 h (shell);
+on the fixed build ~500 h each, real folders untouched, and a fresh
+profile starts with 0 active-session writes and opens the saved 19-node
+session (before: 24 writes, 11 flips). Workspace and shell Clippy and
+`cargo fmt --check` clean; UI format, lint (0 errors) and `tsc` clean;
+Playwright e2e 239 passed, 9 skipped.
+
+Next action: owner runs the overnight soak on the fixed build (command in
+the handoff); then grade it and take the `MmapRaw` change.
+
 ## Release 0.0.16 published — 2026-10-12
 
 The owner-requested review/commit/push/experimental app-only release is
