@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 audiorouter-control = { path = "../control" }
+audiorouter-domain = { path = "../domain" }
 audiorouter-protocol = { path = "../protocol" }
 audiorouter-windows-audio = { path = "../windows-audio" }
 serde_json = { workspace = true }
@@ -21,5 +22,4 @@ windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security"
 [dev-dependencies]
 audiorouter-recording = { path = "../recording" }
 audiorouter-engine = { path = "../engine" }
-audiorouter-domain = { path = "../domain" }
 audiorouter-storage = { path = "../storage" }

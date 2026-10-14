@@ -191,13 +191,16 @@ fn write_shell_rpc_log_with(
 ) {
     use std::io::Write;
     let succeeded = matches!(response, Ok(value) if value.error.is_none());
-    // Timer-driven reads succeed many times a second; logging their
-    // successes would rotate useful events out of the 5 MB file in minutes.
-    // HTTP controllers (Stream Deck) poll reads too. Verbose mode keeps them.
+    // Timer-driven reads (from the window or HTTP controllers such as Stream
+    // Deck) succeed many times a second; logging their successes would
+    // rotate useful events out of the 5 MB file in minutes. Verbose mode
+    // keeps them.
     if succeeded && !context.verbose {
         if audiorouter_transport::is_routine_read_rpc(&request.method) {
             return;
         }
+        // Controllers also poll the reads the window logs once per action
+        // (Stream Deck lists sessions on a timer), so no HTTP read is logged.
         if context.source == Some("http")
             && audiorouter_domain::API_METHODS.iter().any(|spec| {
                 spec.name == request.method

@@ -556,6 +556,63 @@ fn verbose_backend_logs_add_routine_reads_and_durations() {
 }
 
 #[test]
+fn polled_read_successes_stay_out_of_the_backend_log() {
+    // 0.0.16 field logs: these polls filled backend.jsonl (5 MB) in 22
+    // minutes because only system.diagnostics and events.subscribe were
+    // skipped.
+    let frame = |method: &str| {
+        audiorouter_protocol::encode_frame(
+            &serde_json::json!({"jsonrpc":"2.0","id":1,"method":method,"params":{}}),
+        )
+        .unwrap()
+    };
+    let ok = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":1,"result":{}}),
+    )
+    .unwrap();
+    let failed = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":1,"error":{"code":-32001,"message":"denied"}}),
+    )
+    .unwrap();
+    for method in [
+        "meters.levels",
+        "sessions.summary",
+        "recorders.list",
+        "virtualCable.status",
+        "status.get",
+    ] {
+        let request = frame(method);
+        assert!(
+            backend_rpc_log_records(&request, std::slice::from_ref(&ok), 1, None).is_empty(),
+            "{method} success was logged"
+        );
+        assert_eq!(
+            backend_rpc_log_records(&request, std::slice::from_ref(&failed), 1, None).len(),
+            1,
+            "{method} failure was not logged"
+        );
+        assert_eq!(
+            backend_rpc_log_records(&request, std::slice::from_ref(&ok), 1, Some(10)).len(),
+            1,
+            "{method} success was not logged in verbose mode"
+        );
+    }
+    // State changes, and the reads that follow user actions, are logged.
+    for method in [
+        "graph.commit",
+        "sessions.get",
+        "sessions.list",
+        "devices.list",
+    ] {
+        assert_eq!(
+            backend_rpc_log_records(&frame(method), std::slice::from_ref(&ok), 1, None).len(),
+            1,
+            "{method} success was not logged"
+        );
+    }
+}
+
+#[test]
 fn device_logs_show_counts_without_names_and_event_errors_remain_visible() {
     let summary = device_inventory_log_summary(
         &serde_json::json!({"items":[{"direction":"capture","state":"active","name":"private mic"},{"direction":"render","state":"unplugged","id":"private id"}],"nextCursor":"private cursor"}),
@@ -581,12 +638,23 @@ fn device_logs_show_counts_without_names_and_event_errors_remain_visible() {
     );
 }
 
-/// Reads the window repeats on a timer (`system.diagnostics` 20 times a
-/// second while playing, `events.subscribe` every second). Their successes
-/// would fill a 5 MB log within minutes and rotate out the events a support
-/// case needs, so only their failures are logged.
+/// Read-only methods are what the window and controllers poll on timers
+/// (`meters.levels` about 10 times a second, `sessions.summary`,
+/// `recorders.list`, `virtualCable.status`, ...). Their successes would fill
+/// a 5 MB log within minutes and rotate out the events a support case needs,
+/// so only their failures are logged (verbose mode keeps them). The class
+/// comes from the API table, not a list of names: a name list went stale
+/// when the window moved to new polls, and 0.0.16 kept only ~30 minutes of
+/// backend history. Three reads stay logged: they follow user actions
+/// (opening a session, the session list, the device list), not timers, and
+/// their records carry the graph and device counts a support case needs.
 pub fn is_routine_read_rpc(method: &str) -> bool {
-    matches!(method, "system.diagnostics" | "events.subscribe")
+    if matches!(method, "sessions.get" | "sessions.list" | "devices.list") {
+        return false;
+    }
+    audiorouter_domain::API_METHODS.iter().any(|spec| {
+        spec.name == method && spec.side_effect == audiorouter_domain::SideEffectClass::ReadOnly
+    })
 }
 
 fn is_high_frequency_rpc(method: &str) -> bool {
