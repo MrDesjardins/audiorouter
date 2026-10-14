@@ -645,9 +645,31 @@ needs no rerun for it.
 
 Stage A status on RC3 after r9: every automated check passes or has a
 documented VM attribution; open are A12 (Discord/OBS, attended or Stage C)
-and the VB-Cable latency comparison (VCAB-25, Stage C). **Next action:**
-user decision on WP-13 (EV certificate and Partner Center attestation of
-RC3), the gate before Stage B.
+and the VB-Cable latency comparison (VCAB-25, Stage C).
+
+**WP-13 preparation (2026-10-14, user request: detailed signing guide).**
+`docs/operations/virtual-cable-signing.md` rewritten as a step-by-step guide
+with facts re-read 2026-10-14 (SSL.com Sole Proprietor EV $359/yr; eSigner
+$100/month or $900/yr with a free first 30 days, YubiKey $379; certificates
+capped at 458 days since March 2026; registration and `Signablefile.bin`
+steps per Microsoft's 2026-08-11 page). Two findings:
+1. Microsoft's driver-signing pages describe attestation signing as "for
+   testing purposes only" (wording since 2023; page dated 2026-03-23). The
+   Code Signing Agreement does not forbid self-distribution: it requires code
+   "ready for release for general public distribution" and licenses
+   distribution of the signature. Risk recorded; the guide has the user ask
+   Partner Center support in writing before the first public release, with
+   WHCP/HLK as the fallback (time, not money).
+2. RC3's `.pdb` was not kept: the 0.2.5 (`driver-next`) build overwrote
+   `Source\Main\x64\Release\AudioRouterVirtual.pdb` (`symchk`: mismatched
+   for the 0.2.4 `.sys`, passes for 0.2.5). Plan for the CAB (Part 5): rebuild
+   0.2.4 from `d2560715` and include its `.pdb` only if the rebuilt `.sys`
+   differs from RC3 only in timestamps and debug identifiers; otherwise
+   submit without symbols. Future packages must keep their own `.pdb`.
+
+**Next action:** the user buys the EV certificate and registers (guide
+Parts 0–4). Agent, meanwhile: the Part 5 CAB tooling (rebuild comparison,
+`.ddf`/`makecab`, hash checks) and keeping each package's `.pdb`.
 
 ### 8-channel spike (prepared 2026-10-12)
 
