@@ -36,7 +36,7 @@ The driver and its host-side product are functionally complete. Since
 | Stage A check | State | Evidence or gap |
 | --- | --- | --- |
 | A1–A3, A14 install/names/remove | **Pass ×2 on RC3 0.2.4** | Stage A run 3, 2026-10-12 (earlier: WP-03 smokes 2026-10-08/10) |
-| A4/A5/A6 audio both ways, clean, silence | Pass on diagnostic builds via tool and product route | r20–r23; not yet on the RC |
+| A4/A5/A6 audio both ways, clean, silence | **RC3:** tool and product route stream both ways; stall counters rise; 8 ch 96 kHz clean with zero counters; bit-exact 2 and 8 ch; zero-counter 2-ch runs blocked only by VM descheduling | **A5 zero counters: VM deviation, Stage C** (user decision 2026-10-13) |
 | A7 crash recovery | Pass | r24 |
 | A8 pool leak (1 h), A9 reboot keeps IDs | **Not run** | — |
 | A10 Driver Verifier, A11 fuzzer + second user | **Not run** | WP-04 host-reviewed only |
@@ -450,6 +450,8 @@ and skips Defender exclusions with a warning instead of aborting. Host
 test: the runner's own grading functions, loaded from its AST, graded the
 real r5 evidence 9/9 as above (including a missing result → FAIL).
 Bundle `C:\VMs\ar-share\rc-0.2.4-r6` (source `9afcf670`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared), MANIFEST SHA-256 `B4A38E53F9A7C06B6F73714823AA11666D0876F09F9056D556D651FBF2F6CB68`; supersedes r5. Session 2 needs no rerun.
+
+**Decision (user, 2026-10-13): A5's zero-counter clean run is a VM deviation**, recorded like VCAB-24 and proven in Stage C on real hardware. Basis: in the VM, losses occur only during guest-wide descheduling (all workers paused together, 112–384 ms), the driver counts every loss, nothing is corrupted, and a run without such pauses (8 ch 96 kHz) had zero counters. Testing doc A5 row updated.
 
 ### 8-channel spike (prepared 2026-10-12)
 
