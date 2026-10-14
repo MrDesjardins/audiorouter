@@ -491,6 +491,7 @@ request).** `run-stage-a.ps1 -Session users|eight|quality|pool|hardening|all`
   and accounts in the guest; it is better done with the signed package on
   real hardware (Stage C) or as a short attended step.
 VM guide: "Unattended Stage A runner" section.
+Bundle `C:\VMs\ar-share\rc-0.2.4-r7` (source `a24fec7a`, `-ReuseDriverShare rc-0.2.4-base`; driver files identical to RC3, compared; the bundled `m03_cable_format` accepts `--encoding`), MANIFEST SHA-256 `F031B488943123A7F75BAF61F453EFCE617D585A9EF9672E8E1AF8EB8986A9D1`; supersedes r6. **Next action:** from `02-test-signing-ready`, `run-stage-a.ps1 -Session all` (about 3½ hours, unattended apart from logging back in after each restart).
 
 ### 8-channel spike (prepared 2026-10-12)
 
