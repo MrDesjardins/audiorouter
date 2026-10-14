@@ -91,6 +91,20 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-14 — Measure canvas cost under controlled telemetry, per process; never animate inside the shared edge SVG.**
+  Evidence: [stability round, finding 6](docs/plans/active/current.md).
+  Scope: React Flow canvas visuals, live meters, any 20 Hz UI animation.
+  Consequence: every connection shares one canvas-sized SVG, so SMIL
+  comets and transitions restarted by each telemetry tick repainted it at
+  60 fps (135 % of a core of GPU with 8 live links). Move travelling
+  effects to compositor transform/opacity animations outside the SVG, step
+  live values without transitions, scale bars with `transform`. On a live
+  route the cost follows the audio, so two measurements there contradicted
+  each other: measure in headed Edge on the route harness with fixed
+  simulated telemetry, read GPU and renderer CPU from browser CDP
+  `SystemInfo.getProcessInfo`, toggle layers with injected CSS, rotate
+  conditions over several rounds.
+
 - **2026-10-12 — Endpoint INF and naming facts the audio stack enforces silently.**
   Evidence: [virtual cable plan, RC 0.2.0–0.2.4 Stage A](docs/plans/active/virtual-cable.md).
   Scope: INF endpoint properties, endpoint names and cable identity.

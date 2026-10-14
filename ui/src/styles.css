@@ -2418,6 +2418,10 @@ button.primary {
   content: "";
   background: repeating-linear-gradient(to top, transparent 0 7px, rgb(12 18 20 / 50%) 8px);
 }
+/* Live bars scale instead of resizing (a height change re-lays out and
+   repaints the canvas), and step at the 20 Hz telemetry rate with no
+   transition: a transition restarted by every tick kept the window drawing
+   at 60 fps (2026-10-14 soak). The peak hold/fall is smoothed in JS. */
 .node-meter-rms,
 .node-meter-peak {
   position: absolute;
@@ -2425,8 +2429,10 @@ button.primary {
   bottom: 0;
   left: 0;
   z-index: 1;
+  height: 100%;
   border-radius: 3px 3px 0 0;
-  transition: height 0.12s linear;
+  transform-origin: bottom;
+  will-change: transform;
 }
 .node-meter-rms {
   background: rgb(255 255 255 / 72%);
@@ -2987,39 +2993,46 @@ button.primary {
   vector-effect: non-scaling-stroke;
   filter: blur(var(--flow-glow-blur));
   pointer-events: none;
-  transition:
-    stroke-width 160ms ease-out,
-    opacity 160ms ease-out,
-    stroke 160ms linear;
 }
+/* Live connections change in level steps without transitions: a transition
+   restarted by every telemetry tick repainted the shared edge SVG at 60 fps
+   (LEVEL_STEP_DB in flowLine.tsx). */
 :is(.session-flow-canvas, .signal-flow-legend) .flow-edge-active .react-flow__edge-path {
   stroke-dasharray: none;
   animation: none;
-  transition: stroke-width 160ms ease-out;
+  transition: none;
 }
-.flow-stop {
-  transition: stop-color 160ms linear;
-}
-.flow-comet {
-  transition: opacity 260ms ease-out;
+/* Travelling lights (FlowComets): HTML in the label layer, moved by
+   compositor transform animations so the edge SVG is never repainted. */
+.flow-comets {
+  position: absolute;
+  inset: 0;
   pointer-events: none;
 }
-.flow-comet-tail {
-  stop-color: var(--flow-comet);
-  stop-opacity: 0;
-}
-.flow-comet-head {
-  stop-color: var(--flow-comet);
-  stop-opacity: 1;
+.flow-comet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+  transition: opacity 260ms ease-out;
 }
 .flow-comet-body {
-  filter: drop-shadow(0 0 2.5px var(--flow-comet));
+  position: absolute;
+  top: -1.9px;
+  left: -7px;
+  width: 14px;
+  height: 3.8px;
+  border-radius: 50%;
+  background: linear-gradient(to right, transparent, var(--flow-comet));
+  box-shadow: 0 0 3px color-mix(in srgb, var(--flow-comet) 70%, transparent);
+  transform: scale(var(--comet-scale, 1));
 }
 .flow-arrow {
   fill: var(--flow-idle);
   stroke: none;
   pointer-events: none;
-  transition: fill 160ms linear;
 }
 .flow-arrow.is-active {
   filter: drop-shadow(0 0 3px rgb(0 0 0 / 35%));
@@ -3037,7 +3050,7 @@ button.primary {
   filter: none;
 }
 .theme-high-contrast .flow-comet-body {
-  filter: none;
+  box-shadow: none;
 }
 .theme-high-contrast .flow-arrow:is(.is-disabled, .is-muted, .is-stale, .is-unavailable, .is-faulted) {
   fill: #fff;
@@ -3052,8 +3065,6 @@ button.primary {
   opacity: 1;
 }
 @media (prefers-reduced-motion: reduce) {
-  .session-flow-canvas .flow-glow,
-  .flow-stop,
   .flow-comet {
     transition: none;
   }
@@ -5923,7 +5934,8 @@ input[type="color"] {
   height: 100%;
   border-radius: inherit;
   background: var(--duck-active, #ff9c3b);
-  transition: width 140ms ease-out;
+  transform-origin: left;
+  will-change: transform;
 }
 .duck-trigger-choice {
   display: grid;
@@ -5981,9 +5993,10 @@ input[type="color"] {
 }
 .duck-bar-fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 0;
   background: var(--duck-trigger);
-  transition: width 80ms linear;
+  transform-origin: left;
+  will-change: transform;
 }
 .duck-bar.is-duck .duck-bar-fill {
   background: var(--duck-active);

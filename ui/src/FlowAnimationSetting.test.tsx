@@ -2,12 +2,12 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { FlowAnimationSetting } from "./FlowAnimationSetting";
-import { FlowActiveLayers, FlowMotionProvider } from "./flowLine";
+import { FlowActiveLayers, FlowComets, FlowMotionProvider } from "./flowLine";
 import { readFlowAnimation, writeFlowAnimation, type FlowAnimationMode } from "./preferences";
 
 afterEach(cleanup);
 
-it("stores the choice, defaulting to on for anything unknown", () => {
+it("stores the choice, defaulting to focus for anything unknown", () => {
   const values = new Map<string, string>();
   const storage = {
     getItem: (key: string) => values.get(key) ?? null,
@@ -15,18 +15,18 @@ it("stores the choice, defaulting to on for anything unknown", () => {
       values.set(key, value);
     },
   };
-  expect(readFlowAnimation(storage)).toBe("on");
-  writeFlowAnimation(storage, "focus");
   expect(readFlowAnimation(storage)).toBe("focus");
-  values.set("audiorouter.ui.flow-animation", "sometimes");
+  writeFlowAnimation(storage, "on");
   expect(readFlowAnimation(storage)).toBe("on");
+  values.set("audiorouter.ui.flow-animation", "sometimes");
+  expect(readFlowAnimation(storage)).toBe("focus");
   expect(
     readFlowAnimation({
       getItem: () => {
         throw new Error("blocked");
       },
     }),
-  ).toBe("on");
+  ).toBe("focus");
   expect(() =>
     writeFlowAnimation(
       {
@@ -37,7 +37,7 @@ it("stores the choice, defaulting to on for anything unknown", () => {
       "off",
     ),
   ).not.toThrow();
-  expect(readFlowAnimation(null)).toBe("on");
+  expect(readFlowAnimation(null)).toBe("focus");
 });
 
 it("offers the three choices and explains the selected one", () => {
@@ -51,8 +51,8 @@ it("offers the three choices and explains the selected one", () => {
 
 function lights(mode: FlowAnimationMode) {
   return render(
-    <svg>
-      <FlowMotionProvider mode={mode}>
+    <FlowMotionProvider mode={mode}>
+      <svg>
         <FlowActiveLayers
           id="e1"
           path="M0,0 C10,0 20,0 30,0"
@@ -62,8 +62,9 @@ function lights(mode: FlowAnimationMode) {
           levelDb={-20}
           core={() => <path className="core" />}
         />
-      </FlowMotionProvider>
-    </svg>,
+      </svg>
+      <FlowComets path="M0,0 C10,0 20,0 30,0" levelDb={-20} />
+    </FlowMotionProvider>,
   );
 }
 

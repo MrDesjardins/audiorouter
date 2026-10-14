@@ -4,7 +4,16 @@
  * travelling with the audio, and a fixed-size arrowhead. Colours come from
  * theme variables (--flow-*), so the same geometry works in every theme.
  */
-import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import type { FlowAnimationMode } from "./preferences";
 
 /** Whether connection comets may move now (Setup → Animated connections). */
@@ -46,6 +55,19 @@ type Point = { x: number; y: number };
 
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 export const MAX_COMETS = 6;
+/**
+ * Connections show the level in steps of this size. Every connection shares
+ * one canvas-sized SVG, so any change repaints all of it; a level that
+ * changed the colour and width on every 20 Hz tick (with 160 ms transitions)
+ * kept that layer repainting at 60 fps (2026-10-14 soak: ~50% of a core of
+ * GPU time with 8 live connections).
+ */
+export const LEVEL_STEP_DB = 3;
+
+/** The level a connection draws: `levelDb` rounded to `LEVEL_STEP_DB`. */
+export function shownLevel(levelDb: number | null): number | null {
+  return levelDb === null || !Number.isFinite(levelDb) ? levelDb : Math.round(levelDb / LEVEL_STEP_DB) * LEVEL_STEP_DB;
+}
 /** Travel speed in canvas pixels per second; constant so a level change never jolts motion. */
 export const COMET_SPEED = 150;
 
@@ -134,9 +156,135 @@ export function bezierLength(path: string): number {
   return length;
 }
 
+/** Points of an "M x,y C ..." path (or a straight "M x,y L x,y"), dense in t. */
+function pathPoints(path: string, count: number): Point[] {
+  const n = path.match(/-?\d+(?:\.\d+)?(?:e-?\d+)?/gi)?.map(Number) ?? [];
+  const [x0 = 0, y0 = 0] = n;
+  if (n.length < 8) {
+    const [x1 = x0, y1 = y0] = n.slice(2);
+    return Array.from({ length: count + 1 }, (_, i) => ({
+      x: x0 + ((x1 - x0) * i) / count,
+      y: y0 + ((y1 - y0) * i) / count,
+    }));
+  }
+  const [, , x1, y1, x2, y2, x3, y3] = n;
+  return Array.from({ length: count + 1 }, (_, i) => {
+    const t = i / count,
+      u = 1 - t;
+    return {
+      x: u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3,
+      y: u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3,
+    };
+  });
+}
+
+/**
+ * Transform keyframes that carry a comet along `path` at constant speed,
+ * turned along the curve. Angles are unwrapped so a curve through ±180°
+ * never spins the comet.
+ */
+export function cometKeyframes(path: string, samples = 32): Keyframe[] {
+  const dense = pathPoints(path, 96);
+  const lengths = [0];
+  for (let i = 1; i < dense.length; i += 1)
+    lengths.push(lengths[i - 1] + Math.hypot(dense[i].x - dense[i - 1].x, dense[i].y - dense[i - 1].y));
+  const total = Math.max(lengths.at(-1)!, 1e-6);
+  const at = (distance: number): Point => {
+    let i = 1;
+    while (i < lengths.length - 1 && lengths[i] < distance) i += 1;
+    const span = lengths[i] - lengths[i - 1] || 1;
+    const f = Math.min(1, Math.max(0, (distance - lengths[i - 1]) / span));
+    return {
+      x: dense[i - 1].x + (dense[i].x - dense[i - 1].x) * f,
+      y: dense[i - 1].y + (dense[i].y - dense[i - 1].y) * f,
+    };
+  };
+  const frames: Keyframe[] = [];
+  let previousAngle: number | null = null;
+  for (let k = 0; k <= samples; k += 1) {
+    const s = (k / samples) * total;
+    const point = at(s);
+    const ahead = at(Math.min(total, s + total / samples / 2));
+    const behind = at(Math.max(0, s - total / samples / 2));
+    let angle = (Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 180) / Math.PI;
+    if (previousAngle !== null) angle = previousAngle + ((((angle - previousAngle) % 360) + 540) % 360) - 180;
+    previousAngle = angle;
+    frames.push({
+      offset: k / samples,
+      transform: `translate(${point.x.toFixed(1)}px, ${point.y.toFixed(1)}px) rotate(${angle.toFixed(1)}deg)`,
+    });
+  }
+  return frames;
+}
+
+/**
+ * The travelling lights of an active connection, as small HTML elements in
+ * React Flow's label layer animated by transform keyframes. The compositor
+ * moves them, so the shared edge SVG is not repainted 60 times a second (as
+ * SMIL animateMotion inside it did: 2026-10-14 soak, ~40% of a core of GPU
+ * time with 8 live connections). Reduced motion or the Animated connections
+ * setting renders none.
+ */
+export function FlowComets({ path, levelDb }: { path: string; levelDb: number | null }) {
+  const prefersReduced = usePrefersReducedMotion();
+  const motionAllowed = useContext(FlowMotionContext);
+  const refs = useRef<(HTMLSpanElement | null)[]>([]);
+  const animations = useRef<(Animation | null)[]>([]);
+  const visual = flowVisual(shownLevel(levelDb));
+  // Round the length so dragging a node does not change the speed per pixel.
+  const length = Math.max(40, Math.round(bezierLength(path) / 40) * 40);
+  const duration = (length / COMET_SPEED) * 1000;
+  const moving = !prefersReduced && motionAllowed;
+  useLayoutEffect(() => {
+    if (!moving) return;
+    const frames = cometKeyframes(path);
+    refs.current.forEach((element, index) => {
+      if (!element || typeof element.animate !== "function") return;
+      const existing = animations.current[index];
+      if (existing) {
+        // A moved node updates the route in place: no comet restarts.
+        (existing.effect as KeyframeEffect | null)?.setKeyframes(frames);
+        existing.effect?.updateTiming({ duration });
+        return;
+      }
+      animations.current[index] = element.animate(frames, {
+        duration,
+        delay: -(index / MAX_COMETS) * duration,
+        iterations: Infinity,
+        easing: "linear",
+      });
+    });
+  }, [moving, path, duration]);
+  useEffect(
+    () => () => {
+      animations.current.forEach((animation) => animation?.cancel());
+      animations.current = [];
+    },
+    [moving],
+  );
+  if (!moving) return null;
+  return (
+    <div className="flow-comets" aria-hidden="true" style={{ "--comet-scale": visual.cometScale } as CSSProperties}>
+      {Array.from({ length: MAX_COMETS }, (_, index) => (
+        <span
+          key={index}
+          ref={(element) => {
+            refs.current[index] = element;
+          }}
+          className="flow-comet"
+          style={{ opacity: index < visual.comets ? 1 : 0 }}
+        >
+          <span className="flow-comet-body" />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Decorative layers for an active connection. The caller draws the core
- * path (the interactive React Flow edge path) with `stroke: url(#gradientId)`.
+ * path (the interactive React Flow edge path) with `stroke: url(#gradientId)`;
+ * the travelling lights are `FlowComets`, in the HTML label layer.
  */
 export function FlowActiveLayers({
   id,
@@ -155,18 +303,10 @@ export function FlowActiveLayers({
   levelDb: number | null;
   core: (style: CSSProperties) => ReactNode;
 }) {
-  // Reduced motion, or the Animated connections setting, keeps colour, glow
-  // and the arrow and stops only the travelling comets.
-  const prefersReduced = usePrefersReducedMotion();
-  const motionAllowed = useContext(FlowMotionContext);
-  const reduced = prefersReduced || !motionAllowed;
-  const visual = flowVisual(levelDb);
-  const color = flowColor(levelDb);
-  // Round the length so dragging a node does not restart every comet.
-  const length = Math.max(40, Math.round(bezierLength(path) / 40) * 40);
-  const duration = length / COMET_SPEED;
+  const level = shownLevel(levelDb);
+  const visual = flowVisual(level);
+  const color = flowColor(level);
   const safe = id.replace(/[^a-zA-Z0-9_-]/g, "_");
-  const pathId = `flow-path-${safe}`;
   return (
     <>
       <defs>
@@ -182,45 +322,13 @@ export function FlowActiveLayers({
           <stop offset="70%" className="flow-stop" style={{ stopColor: color, stopOpacity: 0.95 }} />
           <stop offset="100%" className="flow-stop" style={{ stopColor: color, stopOpacity: 1 }} />
         </linearGradient>
-        <linearGradient id={`flow-comet-${safe}`} x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" className="flow-comet-tail" />
-          <stop offset="100%" className="flow-comet-head" />
-        </linearGradient>
       </defs>
       <path
-        id={pathId}
         d={path}
         className="flow-glow"
         style={{ stroke: color, strokeWidth: visual.glowWidth, opacity: visual.glowOpacity }}
       />
       {core({ stroke: `url(#flow-gradient-${safe})`, strokeWidth: visual.coreWidth })}
-      {/* Reduced motion keeps the colour, glow and arrow; comets only travel. */}
-      {!reduced &&
-        Array.from({ length: MAX_COMETS }, (_, index) => {
-          const visible = index < visual.comets;
-          const phase = (index / MAX_COMETS) * duration;
-          return (
-            <g key={index} className="flow-comet" style={{ opacity: visible ? 1 : 0 }}>
-              <ellipse
-                rx={7 * visual.cometScale}
-                ry={1.9 * visual.cometScale}
-                fill={`url(#flow-comet-${safe})`}
-                className="flow-comet-body"
-              >
-                {
-                  <animateMotion
-                    dur={`${duration.toFixed(2)}s`}
-                    begin={`-${phase.toFixed(2)}s`}
-                    repeatCount="indefinite"
-                    rotate="auto"
-                  >
-                    <mpath href={`#${pathId}`} />
-                  </animateMotion>
-                }
-              </ellipse>
-            </g>
-          );
-        })}
       <FlowArrow at={target} side={targetSide} className="flow-arrow is-active" style={{ fill: color }} />
     </>
   );

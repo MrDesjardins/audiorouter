@@ -128,17 +128,21 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
     await playWithChangingMeters(page);
     const active = page.locator(".react-flow__edges g.flow-line.flow-edge-active");
-    const comets = page.locator(".react-flow__edges .flow-comet");
+    // Comets are HTML in the label layer, moved by the compositor.
+    const comets = page.locator(".react-flow .flow-comet");
     await expect.poll(() => active.count()).toBeGreaterThan(0);
     await expect.poll(() => comets.count()).toBeGreaterThan(0);
     await page.getByRole("tab", { name: "Setup" }).click();
     const panel = page.locator(".flow-animation-panel");
     const choice = panel.getByLabel("Travelling lights on connections");
-    await expect(choice).toHaveValue("on");
+    // Default: only while AudioRouter is the active window.
+    await expect(choice).toHaveValue("focus");
     // Off: no travelling lights; the level still colours the live connections.
     await choice.selectOption("off");
     await expect(comets).toHaveCount(0);
     await expect.poll(() => active.count()).toBeGreaterThan(0);
+    await choice.selectOption("on");
+    await expect.poll(() => comets.count()).toBeGreaterThan(0);
     // Only while focused: pause on blur, resume on focus.
     await choice.selectOption("focus");
     await expect.poll(() => comets.count()).toBeGreaterThan(0);
@@ -154,11 +158,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect.poll(() => comets.count()).toBeGreaterThan(0);
     await panel.scrollIntoViewIfNeeded();
     await panel.screenshot({ path: testInfo.outputPath(`flow-animation-${theme}.png`) });
-    // The choice is remembered.
+    // The choice is remembered (a non-default one, so the check means something).
+    await choice.selectOption("off");
     await page.reload();
     await page.getByRole("tab", { name: "Setup" }).click();
     await expect(page.locator(".flow-animation-panel").getByLabel("Travelling lights on connections")).toHaveValue(
-      "focus",
+      "off",
     );
   });
 }

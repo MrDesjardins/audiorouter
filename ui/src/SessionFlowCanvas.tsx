@@ -50,7 +50,7 @@ import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
 import type { RecorderStatus } from "./backend";
 import { hasLearnedNoise } from "./SpectralGateEditor";
 import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
-import { FlowActiveLayers, FlowArrow, FlowMotionProvider } from "./flowLine";
+import { FlowActiveLayers, FlowArrow, FlowComets, FlowMotionProvider } from "./flowLine";
 import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
 import { appendLibraryNode as appendPreviewNode } from "./draft";
@@ -491,6 +491,7 @@ function AudioEdgeActions({
         )}
       </g>
       <EdgeLabelRenderer>
+        {edgeData?.active && <FlowComets path={path} levelDb={edgeData.levelDb ?? null} />}
         <span
           className="sr-only"
           role="img"
@@ -775,8 +776,8 @@ function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFo
       aria-label={`Peak ${formatDb(peak)}, RMS ${formatDb(rms)}`}
     >
       <div className="node-meter-track">
-        <span className="node-meter-rms" style={{ height: `${dbPercent(rms)}%` }} />
-        <span className="node-meter-peak" style={{ height: `${dbPercent(hold.current.db)}%` }} />
+        <span className="node-meter-rms" style={{ transform: `scaleY(${dbPercent(rms) / 100})` }} />
+        <span className="node-meter-peak" style={{ transform: `scaleY(${dbPercent(hold.current.db) / 100})` }} />
       </div>
       <div className="node-meter-readout">
         <span>RMS {formatDb(rms)}</span>
@@ -1255,7 +1256,7 @@ function DuckVisual({
         {status}
       </span>
       <div className="node-duck-reduction" aria-hidden="true">
-        <span style={{ width: `${amount > 0 ? clamp((reduction / amount) * 100, 0, 100) : 0}%` }} />
+        <span style={{ transform: `scaleX(${amount > 0 ? clamp(reduction / amount, 0, 1) : 0})` }} />
       </div>
       <MiniFader
         label="Amount"

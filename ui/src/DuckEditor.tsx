@@ -170,7 +170,7 @@ function HBar({
         aria-valuenow={value ?? min}
         aria-valuetext={text}
       >
-        {value !== null && <span className="duck-bar-fill" style={{ width: `${percent(value)}%` }} />}
+        {value !== null && <span className="duck-bar-fill" style={{ transform: `scaleX(${percent(value) / 100})` }} />}
         {peak !== undefined && peak !== null && (
           <span className="duck-bar-peak" style={{ left: `${percent(peak)}%` }} />
         )}

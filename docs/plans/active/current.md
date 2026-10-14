@@ -52,11 +52,11 @@ Findings and fixes:
 3. **Sweep, no defect found:** no `lock().unwrap()` in product code (mutex
    poisoning cannot cascade); frame/sample counters are 64-bit (no 24.8 h
    wrap); `expect`s in thread modules guard length checks.
-4. **Open, scoped separately:** `NativeBridgeRegion` and `SharedAudioRegion`
-   write through pointers from `MmapMut`'s shared slice (undefined
-   behaviour in Rust's model; from the P3-1 audit). Moving to
-   `memmap2::MmapRaw` touches the bridge path Stage A qualified, so it needs
-   its own change and a VM cable rerun.
+4. **Shared-mapping aliasing (P3-1 audit):** `NativeBridgeRegion` now uses
+   `memmap2::MmapRaw` with volatile load/store (`f02aa839`), requalified by
+   the r10 VM `-Session all` (no regression; virtual-cable plan).
+   `SharedAudioRegion` (plugin host) still writes through `MmapMut`'s
+   shared slice: open, same fix.
 
 5. **Developer hygiene (noted, not fixed):** `cargo test --workspace` and
    the e2e backend write records into the developer's real
@@ -64,6 +64,40 @@ Findings and fixes:
    processes in `backend.jsonl`, MCP tests in `mcp-activity.jsonl`), so log
    evidence and support bundles from a development PC mix in test records.
    Follow-up: give tests a temporary log directory.
+
+6. **The playing canvas used up to ~2 cores of WebView GPU and renderer
+   time.** First overnight soak attempt (owner's database, window open
+   behind Firefox): WebView CPU rose from ~6 % to bursts of 130–170 % of a
+   core (GPU process ~103 %, renderer ~62 %) while the shell stayed at
+   ~6 %; DOM, listeners and heap were flat (no leak). Bursts followed audio
+   activity, not uptime, so live-route measurements could not separate the
+   causes (two attempts gave contradictory answers). Controlled measurement:
+   headed Edge on the route harness (4 paths, 12 nodes, 8 live links,
+   sinusoidal talk), per-process CPU from browser CDP
+   `SystemInfo.getProcessInfo`, layers switched off by injected CSS, 3
+   rotating rounds (scratch spec, not committed). Before: 135 % GPU + 78 %
+   renderer; canvas hidden 1 %. Causes: every live connection shares one
+   canvas-sized SVG, and (a) SMIL `animateMotion` comets (six per link,
+   hidden ones animating at opacity 0) repainted it at 60 fps (~40 points),
+   (b) 160 ms colour/width transitions restarted by every 20 Hz tick kept
+   it repainting (~50 points), (c) node meters animated `height`. Fixes
+   (`flowLine.tsx`, `SessionFlowCanvas.tsx`, `DuckEditor.tsx`,
+   `styles.css`): comets are HTML in React Flow's label layer moved by
+   Web Animations transform keyframes (compositor; same look, under the
+   nodes); connections draw the level in 3 dB steps without transitions;
+   live bars scale with `transform` and step at 20 Hz; Animated
+   connections defaults to "while AudioRouter is the active window"
+   (stored choices kept). After: 46 % GPU + 43 % renderer with lights
+   moving, 17 % + 24 % paused (the remaining cost is compositing a
+   60 fps or 20 fps window). Tests: `flowLine.test.ts` (level steps,
+   constant-speed keyframes, no 360° spin), Animated connections default;
+   UI 527/527, e2e 238 passed + 1 timing flake in an unrelated top-bar test
+   (passes alone and 69/69 with `--repeat-each 3`), 9 skipped; dark, light
+   and high-contrast canvas screenshots reviewed. Real-app check: the
+   rebuilt shell runs and selects the new default, but no audio flowed
+   during the check, so moving comets were seen only in Edge (same engine).
+   `run-app-soak.ps1` gained `-DebugPort` (diagnosis only) and a 5.1 fix
+   for its default shell path.
 
 New tool: `tools/quality/run-app-soak.ps1` runs the release shell for hours
 on a copy of the owner's database with its own `LOCALAPPDATA` and WebView2
@@ -82,8 +116,10 @@ session (before: 24 writes, 11 flips). Workspace and shell Clippy and
 `cargo fmt --check` clean; UI format, lint (0 errors) and `tsc` clean;
 Playwright e2e 239 passed, 9 skipped.
 
-Next action: owner runs the overnight soak on the fixed build (command in
-the handoff); then grade it and take the `MmapRaw` change.
+Next action: owner runs the overnight soak on the rebuilt shell
+(`run-app-soak.ps1 -Hours 8 -AutoPlay`, AudioRouter closed); then grade it.
+Open decisions: cable route behaviour after a lease loss (reconnect or plain
+message; virtual-cable plan, r10 results).
 
 ## Release 0.0.16 published — 2026-10-12
 

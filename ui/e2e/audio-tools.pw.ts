@@ -699,7 +699,7 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
   await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
   await expect(page.getByRole("button", { name: "Stop Test Signal", exact: true })).toBeEnabled();
   // A light "comet" travels along the playing connection.
-  const comet = page.locator(".react-flow__edges .flow-line .flow-comet-body").first();
+  const comet = page.locator(".react-flow .flow-comet-body").first();
   await expect(comet).toHaveCount(1);
   const initialPosition = await comet.evaluate((element) => {
     const box = element.getBoundingClientRect();

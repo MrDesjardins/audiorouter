@@ -24,16 +24,18 @@ export function writeLastSession(storage: Pick<Storage, "setItem"> | null, sessi
 }
 
 /** Moving lights on live connections: always, only while AudioRouter is the
- * active window, or never. The lights cost most of the canvas's CPU. */
+ * active window, or never. Moving lights keep the window drawing at 60 fps,
+ * so the default pauses them while another program (a game) is in front:
+ * 46% → 17% of a core of GPU time with 8 live connections (2026-10-14). */
 export type FlowAnimationMode = "on" | "focus" | "off";
 const FLOW_ANIMATION_KEY = "audiorouter.ui.flow-animation";
 
 export function readFlowAnimation(storage: Pick<Storage, "getItem"> | null): FlowAnimationMode {
   try {
     const value = storage?.getItem(FLOW_ANIMATION_KEY);
-    return value === "focus" || value === "off" ? value : "on";
+    return value === "on" || value === "off" ? value : "focus";
   } catch {
-    return "on";
+    return "focus";
   }
 }
 
