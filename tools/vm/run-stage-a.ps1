@@ -86,10 +86,25 @@ function Restart-AndResume([string] $Why) {
 }
 
 # --- running the existing steps ----------------------------------------------
+# Child scripts write warnings to stderr; under PowerShell 5.1 with "Stop"
+# those become terminating errors (validated lesson 2026-10-03). Run children
+# with "Continue" and decide on their exit codes only.
+function Invoke-Child([string] $Script, [string[]] $Arguments) {
+    $previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $text = & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $bundle $Script) @Arguments 2>&1 |
+            ForEach-Object { "$_" } | Out-String
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    Write-Host $text
+    return [pscustomobject]@{ Code = $code; Text = $text }
+}
 function Invoke-VmCheck([string] $Step, [string[]] $Extra = @()) {
     $started = Get-Date
-    & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $bundle 'vm-checks.ps1') -Step $Step @Extra | Out-Host
-    $code = $LASTEXITCODE
+    $code = (Invoke-Child 'vm-checks.ps1' (@('-Step', $Step) + $Extra)).Code
     $dir = Get-ChildItem -LiteralPath 'C:\ar\evidence' -Directory -Filter "*-$Step" |
         Where-Object { $_.CreationTime -ge $started.AddSeconds(-2) } | Sort-Object Name | Select-Object -Last 1
     $checks = @()
@@ -98,14 +113,22 @@ function Invoke-VmCheck([string] $Step, [string[]] $Extra = @()) {
     }
     return [pscustomobject]@{ Code = $code; Checks = $checks; Dir = $dir }
 }
+function Invoke-Native([string] $Executable, [string[]] $Arguments) {
+    $previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $text = & $Executable @Arguments 2>&1 | ForEach-Object { "$_" } | Out-String
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    return [pscustomobject]@{ Code = $code; Text = $text }
+}
 function Invoke-Runner([string] $Script, [string[]] $Arguments = @()) {
-    $output = & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $bundle $Script) @Arguments 2>&1 | Out-String
-    $code = $LASTEXITCODE
-    Write-Host $output
-    return [pscustomobject]@{ Code = $code; Text = $output }
+    return Invoke-Child $Script $Arguments
 }
 function Get-EndpointIndex([string] $Flow, [string] $Name) {
-    $text = & $probe inventory 2>&1 | Out-String
+    $text = (Invoke-Native $probe @('inventory')).Text
     $match = [regex]::Match($text, "(?m)^$Flow\[(\d+)\] name=" + [regex]::Escape($Name) + '\b')
     if (-not $match.Success) { throw "Cannot find $Flow endpoint '$Name' in the probe inventory." }
     return $match.Groups[1].Value
@@ -116,14 +139,16 @@ function Start-Feeders([int] $Seconds) {
     $milliseconds = [string](($Seconds + 20) * 1000)
     $capture = Get-EndpointIndex 'capture' 'AudioRouter Cable B Output'
     $render = Get-EndpointIndex 'render' 'AudioRouter Cable A Input'
-    $feeders = @(
-        Start-Process -FilePath $probe -ArgumentList @('capture', $capture, $milliseconds) -WindowStyle Hidden -PassThru `
-            -RedirectStandardOutput (Join-Path $work 'feeder-capture.txt') -RedirectStandardError (Join-Path $work 'feeder-capture-err.txt'),
-        Start-Process -FilePath $probe -ArgumentList @('tone', $milliseconds, $render) -WindowStyle Hidden -PassThru `
-            -RedirectStandardOutput (Join-Path $work 'feeder-render.txt') -RedirectStandardError (Join-Path $work 'feeder-render-err.txt')
-    )
+    # Two separate statements: a trailing comma after a parameter value would
+    # turn the next Start-Process into part of that value.
+    $captureFeeder = Start-Process -FilePath $probe -ArgumentList @('capture', $capture, $milliseconds) `
+        -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $work 'feeder-capture.txt') `
+        -RedirectStandardError (Join-Path $work 'feeder-capture-err.txt')
+    $renderFeeder = Start-Process -FilePath $probe -ArgumentList @('tone', $milliseconds, $render) `
+        -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $work 'feeder-render.txt') `
+        -RedirectStandardError (Join-Path $work 'feeder-render-err.txt')
     Start-Sleep -Seconds 2
-    return $feeders
+    return @($captureFeeder, $renderFeeder)
 }
 function Stop-Feeders($Feeders) {
     foreach ($process in @($Feeders)) {
@@ -132,8 +157,9 @@ function Stop-Feeders($Feeders) {
     Start-Sleep -Seconds 1
 }
 function Set-CableFormat([int] $Channels, [int] $Rate) {
-    $text = & $format set --channels $Channels --rate $Rate 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) { throw "Setting the cables to $Channels ch / $Rate Hz failed:`n$text" }
+    $run = Invoke-Native $format @('set', '--channels', [string]$Channels, '--rate', [string]$Rate)
+    $text = $run.Text
+    if ($run.Code -ne 0) { throw "Setting the cables to $Channels ch / $Rate Hz failed:`n$text" }
 }
 # A tone step passes when the tool ran (exit 0) and, for the stall, counters
 # rose. Non-zero counters in a clean run are the VM deviation (A5, Stage C).
@@ -238,13 +264,13 @@ try {
         Add-Result 'crash recovery (A7)' $verdict "exit $($run.Code)"
     }
     Step 'A9 before restart' {
-        & $format show 2>&1 | Select-String 'id:' | ForEach-Object { $_.Line.Trim() } | Set-Content -LiteralPath (Join-Path $work 'a9-before.txt')
+        (Invoke-Native $format @('show')).Text -split "`r?`n" | Select-String 'id:' | ForEach-Object { $_.Line.Trim() } | Set-Content -LiteralPath (Join-Path $work 'a9-before.txt')
         $done.Add('A9 before restart')
         Restart-AndResume 'A9: restarting to check that the endpoint IDs survive a reboot.'
     }
     Step 'restart keeps IDs (A9)' {
         $before = @(Get-Content -LiteralPath (Join-Path $work 'a9-before.txt'))
-        $after = @(& $format show 2>&1 | Select-String 'id:' | ForEach-Object { $_.Line.Trim() })
+        $after = @((Invoke-Native $format @('show')).Text -split "`r?`n" | Select-String 'id:' | ForEach-Object { $_.Line.Trim() })
         $after | Set-Content -LiteralPath (Join-Path $work 'a9-after.txt')
         $same = $before.Count -eq 4 -and -not (Compare-Object $before $after)
         $verdict = if ($same) { 'PASS' } else { 'FAIL' }
