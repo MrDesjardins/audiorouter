@@ -42,6 +42,9 @@ param(
     # Default: the repository's release build (set below: Windows PowerShell
     # 5.1 leaves $PSScriptRoot empty while defaults are evaluated).
     [string] $Shell = '',
+    # Diagnosis only: open the WebView's DevTools port (127.0.0.1) to profile
+    # the renderer during the run. Never on a daily-use launch.
+    [ValidateRange(0, 65535)][int] $DebugPort = 0,
     [string] $SourceDatabase = (Join-Path $env:LOCALAPPDATA 'AudioRouter\state.sqlite'),
     [string] $Output = (Join-Path $env:TEMP ('audiorouter-app-soak-' + (Get-Date -Format 'yyyyMMdd-HHmmss')))
 )
@@ -90,13 +93,14 @@ $launchUtc = [DateTime]::UtcNow
 
 # Child-only environment: the caller's environment is restored afterwards.
 $saved = @{}
-foreach ($name in 'LOCALAPPDATA', 'WEBVIEW2_USER_DATA_FOLDER', 'AUDIOROUTER_DATABASE', 'AUDIOROUTER_ALLOW_DEVICE_ADMIN') { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+foreach ($name in 'LOCALAPPDATA', 'WEBVIEW2_USER_DATA_FOLDER', 'WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS', 'AUDIOROUTER_DATABASE', 'AUDIOROUTER_ALLOW_DEVICE_ADMIN') { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
 try {
     $env:LOCALAPPDATA = $appData
     # Tauri finds its WebView folder through the Windows known-folder API,
     # which ignores LOCALAPPDATA; without this the soak window used the real
     # profile (found 2026-10-14). WebView2 lets this variable override it.
     $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $appData 'webview'
+    $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = if ($DebugPort) { "--remote-debugging-port=$DebugPort" } else { $null }
     $env:AUDIOROUTER_DATABASE = $database
     $env:AUDIOROUTER_ALLOW_DEVICE_ADMIN = '1'
     $shellProcess = Start-Process -FilePath $Shell -PassThru
@@ -104,7 +108,9 @@ try {
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
 }
 Write-Host "Shell started (PID $($shellProcess.Id)). Output: $Output"
-Write-Host "Click Play on the session to soak within $PlayWaitMinutes minutes." -ForegroundColor Yellow
+if ($DebugPort) { Write-Host "WebView DevTools: http://127.0.0.1:$DebugPort (diagnosis run)" }
+if ($AutoPlay) { Write-Host "Autoplay is on: waiting up to $PlayWaitMinutes minutes for the session to report running." }
+else { Write-Host "Click Play on the session to soak within $PlayWaitMinutes minutes." -ForegroundColor Yellow }
 
 function Get-Descendants([int] $Root) {
     $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name)
