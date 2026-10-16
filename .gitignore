@@ -16,3 +16,6 @@
 
 # Agent worktrees (Claude Code)
 .claude/worktrees/
+
+# Vite dependency cache of the site preview.
+/site/.vite/

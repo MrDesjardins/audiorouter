@@ -619,10 +619,25 @@ mod tests {
     }
 
     fn descendant_fixture() -> Command {
-        let mut command = Command::new("powershell.exe");
-        command.args(["-NoProfile", "-Command", "$p = Start-Process powershell.exe -ArgumentList '-NoProfile','-Command','Start-Sleep -Seconds 120' -WindowStyle Hidden -PassThru; [Console]::Out.WriteLine($p.Id); Start-Sleep -Seconds 120"])
-            .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+        let mut command = Command::new(std::env::current_exe().expect("test executable"));
         command
+            .args([
+                "--exact",
+                "mcp_tunnel::tests::job_descendant_sleep_fixture",
+                "--nocapture",
+            ])
+            .env("AUDIOROUTER_JOB_DESCENDANT_FIXTURE", "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        command
+    }
+
+    #[test]
+    fn job_descendant_sleep_fixture() {
+        if std::env::var_os("AUDIOROUTER_JOB_DESCENDANT_FIXTURE").is_some() {
+            std::thread::sleep(Duration::from_secs(120));
+        }
     }
 
     #[test]
@@ -630,19 +645,9 @@ mod tests {
         if std::env::var_os("AUDIOROUTER_JOB_EXIT_FIXTURE").is_none() {
             return;
         }
-        let mut process =
-            SupervisedChild::spawn(&mut descendant_fixture()).expect("fixture process");
-        let output = process.child.stdout.take().unwrap();
-        let (sender, receiver) = mpsc::sync_channel(1);
-        std::thread::spawn(move || {
-            let mut pid = String::new();
-            BufReader::new(output).read_line(&mut pid).unwrap();
-            let _ = sender.send(pid.trim().parse::<u32>().unwrap());
-        });
-        let descendant = receiver
-            .recv_timeout(Duration::from_secs(10))
-            .expect("descendant PID");
-        println!("JOB_FIXTURE:{},{}", process.child.id(), descendant);
+        let process = SupervisedChild::spawn(&mut descendant_fixture()).expect("fixture process");
+        let descendant = process.child.id();
+        println!("JOB_FIXTURE:{},{}", std::process::id(), descendant);
         std::io::stdout().flush().unwrap();
         // Deliberately skip Drop, as Tauri process exit/forced termination can.
         std::process::exit(0);

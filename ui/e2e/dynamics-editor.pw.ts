@@ -120,9 +120,12 @@ for (const kind of ["compressor", "gate"] as const) {
       await expect(
         editor.getByRole("slider", { name: kind === "limiter" ? "Ceiling line" : "Threshold line" }),
       ).toHaveAttribute("aria-valuenow", String(moved));
-      await expect(
-        page.getByText(`Unsaved: thresholdDb: ${parameters.thresholdDb} → ${moved}. Save to keep it.`),
-      ).toBeVisible();
+      const content = page.getByTestId("rf__node-voice").locator(".flow-node-content");
+      // This fixture deliberately has no connected route, so the debounced
+      // autosave is rejected by planning and must leave an explicit Save marker.
+      await expect(content).toHaveAttribute("data-save-state", "needs-save");
+      await expect(content.locator(".node-save-indicator")).toHaveText("Save required");
+      await expect(page.locator(".topbar").getByRole("button", { name: "Save", exact: true })).toBeEnabled();
       expect(
         await page.evaluate(() =>
           (window as unknown as { __routeFixtureCalls: () => string[] })
@@ -130,6 +133,11 @@ for (const kind of ["compressor", "gate"] as const) {
             .filter((x) => x === "commit"),
         ),
       ).toEqual([]);
+      expect(
+        await page.evaluate(() =>
+          (window as unknown as { __routeFixturePlanCalls: () => number }).__routeFixturePlanCalls(),
+        ),
+      ).toBe(1);
     });
   }
 }

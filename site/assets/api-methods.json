@@ -1,5 +1,5 @@
 {
-  "backendMethods": 108,
+  "backendMethods": 109,
   "operations": [
     {
       "method": "POST",
@@ -413,6 +413,13 @@
       "operation": "recordings.recycle",
       "permission": "Record",
       "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/virtualCable/status",
+      "operation": "virtualCable.status",
+      "permission": "Read",
+      "effect": "ReadOnly"
     },
     {
       "method": "POST",

@@ -30,7 +30,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await picker.selectOption("render-preview");
     await expect(picker).toHaveValue("render-preview");
     await expect(binding).not.toContainText("No device is chosen");
-    await expect(page.getByText(/Unsaved: endpointId/)).toBeVisible();
+    const save = page.locator(".topbar").getByRole("button", { name: "Save", exact: true });
+    await expect(save).toBeEnabled();
+    await expect(save).toHaveAttribute("data-save-required", "true");
+    await expect(page.getByTestId("rf__node-headphones").locator(".node-save-indicator")).toHaveText("Save required");
     expect(
       await page.evaluate(() =>
         (window as unknown as { __routeFixtureCalls: () => string[] })

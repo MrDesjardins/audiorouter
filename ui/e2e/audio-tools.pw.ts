@@ -1008,7 +1008,11 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await page.getByRole("tab", { name: "Logs" }).click();
   await page.getByRole("tab", { name: "MCP" }).click();
   await page.getByText("Connect a local assistant").click();
-  await expect(page.getByText("The local MCP command is missing from this installation.")).toBeVisible();
+  await expect(
+    page.getByText(
+      "The local MCP command is missing. Repair or update your AudioRouter installation before continuing.",
+    ),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy Codex config" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Export Cowork plugin" })).toHaveCount(0);
   await page.getByRole("tab", { name: "Logs" }).click();

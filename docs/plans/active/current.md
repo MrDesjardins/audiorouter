@@ -1,5 +1,43 @@
 # Active plan — post-0.0.8 maintenance
 
+## Repair CI run 38835254406 — local fix complete (2026-10-15)
+
+Objective: repair the Windows build/test workflow failure without changing
+product behavior. Evidence: [GitHub Actions run 38835254406](https://github.com/MrDesjardins/audiorouter/actions/runs/38835254406).
+Affected requirements: UI-17 (parameter autosave and explicit Save state),
+MCP tunnel process containment (SEC-01 / local child-process lifecycle).
+Prerequisites: Windows Edge, Node dependencies and the pinned Rust toolchain;
+the CI run is Windows evidence, while local checks are only supplementary.
+
+Findings: Edge had stale assertions for the retired “Unsaved…” text and an
+outdated MCP missing-install message. The live dynamics editor now debounces
+parameter-only saves while playing; stopped device selection marks Save
+required. The Windows tunnel test relied on nested PowerShell startup to
+print a descendant PID; CI timed out waiting for it, then panicked parsing an
+empty line. Keep the product contract, update the browser assertions, and use
+a deterministic Rust test-binary child fixture to exercise job containment.
+
+Implementation: the device-binding test now checks the enabled header Save
+action and canvas marker. The dynamics test checks that a rejected debounced
+save on its intentionally disconnected fixture leaves Save required; valid
+live autosave is covered by compact-workspace. Updated the MCP status copy
+assertion and replaced PowerShell with a direct test-binary descendant.
+
+Validation on the Windows host: Edge Playwright, focused to the affected
+desktop workspace, three-theme device binding, and three-theme compressor/gate
+cases: 10 passed. The tunnel job-owner/descendant test passed. UI format check,
+TypeScript and production build passed; ESLint passed with 0 errors and 25
+existing hook warnings. Documentation validation passed (171 Markdown files,
+949 local links). `cargo fmt --all -- --check`, the `src-tauri` format check,
+and `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
+--all-features -- -D warnings` passed. The full GitHub workflow has not rerun;
+its Windows runner result remains the authoritative check after this fix is
+pushed.
+
+Rollback: revert only this plan, test and fixture change set. Risks: Windows
+job nesting can depend on runner policy; CI rerun remains required. Next:
+commit and push this fix, then confirm both previously failing Actions jobs.
+
 ## Publish automated quality status in the root README — implemented 2026-10-15
 
 Owner requested visible code coverage and status for the existing performance
