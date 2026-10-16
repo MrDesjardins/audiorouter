@@ -1,5 +1,42 @@
 # AudioRouter release notes
 
+## 0.0.17 — 2026-10-16 (unsigned experimental preview)
+
+- **Fixed: memory growth while a session plays.** The app grew about
+  9 MiB per hour while playing (about 220 MiB a day for an always-on tray
+  app) because it never freed Windows audio endpoint IDs. An 8-hour
+  overnight run of the owner's 19-tool session now stays flat (0.11 MiB/h).
+- **Lighter canvas while audio plays.** Animated connections and live meters
+  now use about a third of the graphics time they did; with 8 live
+  connections the canvas used more than a full core of GPU time. Animated
+  connections default to "while AudioRouter is the active window"; a choice
+  you already made is kept.
+- **Fixed: the active session flipping at startup.** With no remembered
+  session, the window and backend could overwrite each other's choice
+  dozens of times in a second, and autoplay could start the wrong session.
+  The window now opens the backend's saved session.
+- **Longer log history.** The window's routine polls no longer fill
+  `backend.jsonl`; read-only requests are logged only when they fail
+  (verbose logging keeps everything). 0.0.16 kept about 33 minutes of
+  history while playing; this build keeps months.
+- **Workbench:** clearer running/stopped status, click the session name to
+  open Session, rename tools in place, a "Save required" marker on unsaved
+  tool changes, a UI options page with custom themes, a collapsed canvas
+  legend, and links from each tool to its interactive guide on the website.
+  Mute mic left the header and the tray (still in Properties and the
+  shortcut).
+- **Cables (preparation only):** cables are recognized by their driver even
+  after a rename in Windows Sound settings, and cable routes run at the
+  cables' sample rate. This app-only installer still contains no
+  AudioRouter driver, so cable installation is unavailable.
+
+Windows 11 x64; app and installer unsigned. Experimental prerelease, not a
+fully M08-qualified consumer release. No database migration, driver
+installation or Windows default-device changes. Close AudioRouter before
+upgrading and keep 0.0.16 plus compatible configuration/recording backups
+for rollback. Clean-machine install/upgrade, missing-WebView2,
+accessibility, hardware and driver-signing gates remain open.
+
 ## 0.0.16 — 2026-10-12 (unsigned experimental preview)
 
 - **ChatGPT connection:** clearer MCP setup, managed optional OpenAI Secure
