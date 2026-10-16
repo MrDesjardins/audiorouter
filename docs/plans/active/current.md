@@ -1,5 +1,32 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.17 — 2026-10-16, owner requested ("create a new release version and push it")
+
+Scope: unsigned experimental Windows x64 **app-only** prerelease, same
+profile as 0.0.16 (no driver/helper payload, `-AppOnly`). Contents: the
+endpoint-ID leak fix (confirmed by the 8 h owner soak), canvas GPU cut,
+startup active-session flip fix, routine-read log filtering, workbench UX.
+Requirements NFR-06, DIST-01–08, UI-17. Record:
+[release 0.0.17](evidence/2026-10-16-release-0.0.17.md).
+
+Prerequisite CI repairs (same day): `zip` 2.x was yanked in full on
+crates.io, so `cargo deny` failed (run 38852616585). Moved to `zip` 9.0.4
+with only the `deflate` and `time` features (the defaults pulled
+`libbz2-rs-sys`, whose bzip2-1.0.6 license the policy does not allow, plus
+zstd/lzma/AES we never use); entry names became fallible (`name()?`). The
+nightly coverage job (run 38871837715) never wrote
+`ui/coverage/coverage-summary.json`: under PowerShell, `npm … test --
+--coverage` drops the `--`, so the flag reached npm instead of Vitest
+(confirmed: `-- --version` ran the suite). New `test:coverage` script.
+
+Tasks: bump only AudioRouter packages to 0.0.17; full Windows workspace,
+shell, UI, contract, Edge and release-script checks; tag; build from an
+isolated clean checkout of the tag with `create-draft-release.ps1 -AppOnly`;
+`fresh_install_shell` on the packaged shell with no other AudioRouter
+running; verify the uploaded draft; publish as prerelease (owner request
+covers publication). Rollback: keep 0.0.16 and backups; no migration; never
+replace published assets or move the tag.
+
 ## Repair CI run 38835254406 — local fix complete (2026-10-15)
 
 Objective: repair the Windows build/test workflow failure without changing
@@ -351,6 +378,12 @@ Findings and fixes:
    backend logger decodes every response again even for unlogged routine
    reads; (c) one diagnostic `cdb -pv` session left the probe shell's
    threads suspended when killed: keep heap commands short.
+   **Confirmed 2026-10-16 by the owner's 8 h overnight soak** on the fixed
+   build (`87545f1b` plus this fix, SHA-256 `4B9C16DF14707527…`, 951
+   samples, session playing): every check PASS; shell private bytes
+   0.11 MiB/h after warm-up (30.9 MiB at the end; before 9.31 MiB/h and
+   ~105 MiB), WebView −0.22 MiB/h, handles flat at 509, thread spread 2,
+   0 error lines, shell CPU 2,257 s (unchanged).
 
 New tool: `tools/quality/run-app-soak.ps1` runs the release shell for hours
 on a copy of the owner's database with its own `LOCALAPPDATA` and WebView2
@@ -369,9 +402,9 @@ session (before: 24 writes, 11 flips). Workspace and shell Clippy and
 `cargo fmt --check` clean; UI format, lint (0 errors) and `tsc` clean;
 Playwright e2e 239 passed, 9 skipped.
 
-Next action: owner reruns the overnight soak on a build with the
-endpoint-ID fix (`run-app-soak.ps1 -Hours 8 -AutoPlay`, AudioRouter
-closed); shell private bytes must PASS (< 5 MiB/h).
+Next action: the endpoint-ID fix passed the overnight soak (finding 7);
+next, follow-up (a): measure the endpoint monitor's notification rate while
+playing and ignore property keys that cannot change a binding.
 Open decisions: cable route behaviour after a lease loss (reconnect or plain
 message; virtual-cable plan, r10 results).
 

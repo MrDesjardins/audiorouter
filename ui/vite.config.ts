@@ -20,7 +20,7 @@ export default defineConfig({
   // itself remains writable for local UI inspection.
   cacheDir: process.env.AUDIOROUTER_VITE_CACHE ?? path.join(os.tmpdir(), "audiorouter-vite-cache"),
   plugins: [react()],
-  // Used only with `npm test -- --coverage` (nightly quality workflow); the
+  // Used only with `npm run test:coverage` (nightly quality workflow); the
   // report is informational and never gates a change.
   test: {
     coverage: {

@@ -82,7 +82,7 @@ jobs:
         run: |
           npm ci --prefix ui
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          npm --prefix ui test -- --coverage
+          npm --prefix ui run test:coverage
 
       - name: Coverage summary
         if: ${{ !cancelled() }}

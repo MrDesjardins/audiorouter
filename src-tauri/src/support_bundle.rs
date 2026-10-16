@@ -328,7 +328,14 @@ mod tests {
         assert_eq!(path.file_name().unwrap(), "audiorouter-support-42.zip");
         let mut archive = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
         let mut names = (0..archive.len())
-            .map(|index| archive.by_index(index).unwrap().name().to_owned())
+            .map(|index| {
+                archive
+                    .by_index(index)
+                    .unwrap()
+                    .name()
+                    .unwrap()
+                    .into_owned()
+            })
             .collect::<Vec<_>>();
         names.sort();
         assert_eq!(

@@ -256,7 +256,7 @@ When dependencies change, a Linux job checks them against `deny.toml`
 proposes weekly updates (`.github/dependabot.yml`).
 
 A nightly (and manual) `quality.yml` workflow reports Rust (`cargo llvm-cov`)
-and UI (`npm --prefix ui test -- --coverage`) coverage, runs a 20-minute
+and UI (`npm --prefix ui run test:coverage`) coverage, runs a 20-minute
 engine soak and times a fresh-install startup, with a trend table in the
 job summary. Coverage is never a gate. Run the soak locally with
 `cargo run --release -p audiorouter-engine --example soak`

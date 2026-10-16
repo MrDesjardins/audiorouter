@@ -97,10 +97,10 @@ mod tests {
         let mut zip = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
         assert_eq!(zip.len(), 2);
         assert_eq!(
-            zip.by_index(0).unwrap().name(),
+            zip.by_index(0).unwrap().name().unwrap(),
             ".claude-plugin/plugin.json"
         );
-        assert_eq!(zip.by_index(1).unwrap().name(), "README.md");
+        assert_eq!(zip.by_index(1).unwrap().name().unwrap(), "README.md");
         let manifest: serde_json::Value =
             serde_json::from_reader(zip.by_name(".claude-plugin/plugin.json").unwrap()).unwrap();
         let server = &manifest["mcpServers"]["audiorouter"];

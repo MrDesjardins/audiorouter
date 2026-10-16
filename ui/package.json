@@ -11,6 +11,7 @@
     "format": "prettier --write src e2e",
     "format:check": "prettier --check src e2e",
     "test": "vitest run --configLoader runner --exclude \"e2e/**\"",
+    "test:coverage": "vitest run --configLoader runner --exclude \"e2e/**\" --coverage",
     "e2e": "cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && playwright test --config=playwright.config.ts",
     "e2e:production-canvas": "vite build --config vite.canvas-production.config.ts --configLoader runner && playwright test --config=playwright.production.config.ts"
   },

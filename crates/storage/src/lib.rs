@@ -3108,7 +3108,12 @@ impl Storage {
             let mut entry = archive.by_index(index).map_err(|error| {
                 StorageError::InvalidBundle(format!("cannot read ZIP entry: {error}"))
             })?;
-            let name = entry.name().replace('\\', "/");
+            let name = entry
+                .name()
+                .map_err(|error| {
+                    StorageError::InvalidBundle(format!("unreadable ZIP entry name: {error}"))
+                })?
+                .replace('\\', "/");
             let path = std::path::Path::new(&name);
             if name.is_empty()
                 || name.starts_with('/')

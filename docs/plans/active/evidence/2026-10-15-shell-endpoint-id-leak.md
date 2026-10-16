@@ -8,7 +8,8 @@ every `IMMDevice::GetId` call in `crates/windows-audio/src/lib.rs` copied the
 returned CoTaskMem string with `to_string()` and never freed it, leaking about
 150 bytes per endpoint on every endpoint walk. Fix: copy, then
 `CoTaskMemFree`, through one helper (`take_endpoint_id`) at all six call
-sites. With the fix, the same session played for 40 minutes with flat memory.
+sites. With the fix, the same session played for 40 minutes with flat memory,
+and the owner's 8-hour overnight soak passed (0.11 MiB/h, 2026-10-16).
 
 - Requirements: NFR-06 (long-run stability), ARCH-04.
 - Affected versions: every release since the read-only Windows audio adapter
@@ -117,8 +118,22 @@ has no monitor, which fits the flat idle result. The fix covers every caller.
   | 128-byte blocks, minute 10 → 35 | 15,112 → 43,039 | 141 → 141 |
   | Private bytes after warm-up | 8–10 MiB/h | 32.10 → 32.46 MiB over 30 min |
 
-- Pending: an 8-hour owner soak on the fixed build; shell private bytes must
-  PASS (< 5 MiB/h).
+- Owner overnight soak on the fixed build, 2026-10-16:
+  `run-app-soak.ps1 -Hours 8 -AutoPlay -Shell C:\ard\src-tauri\target\release\audiorouter-shell.exe`
+  (`87545f1b` plus only this fix, SHA-256 `4B9C16DF14707527…`), copy of the
+  owner's database, 951 samples every 30 s, session playing. Every check
+  PASS:
+
+  | Check | Before (run 2) | After |
+  | --- | --- | --- |
+  | Shell private bytes slope after warm-up | 9.31 MiB/h, 104.8 MiB at end (REVIEW) | 0.11 MiB/h, 30.9 MiB at end (PASS) |
+  | WebView private bytes slope (6 processes) | −0.27 MiB/h | −0.22 MiB/h, 553.8 MiB |
+  | Shell handles / thread spread | 509, 3 | 509, 2 |
+  | Log history at measured rate | > 30,000 h | 36,359 h backend, 30,469 h shell |
+  | Error lines in logs | 0 / 0 | 0 / 0 |
+  | Shell / WebView CPU over 8 h | 2,263 s / — | 2,257 s / 1,290 s |
+
+  Real AudioRouter and WebView folders were unchanged.
 
 ## Reproduce or re-check
 
@@ -149,4 +164,5 @@ freed once after its only read.
    read its format; ignore property keys that cannot change a binding.
 2. Reduce the 20 Hz refresh's allocation churn; in particular, the backend
    logger should not decode responses of routine reads it does not log.
-3. Confirm with the owner's next overnight soak.
+3. ~~Confirm with the owner's next overnight soak.~~ Done 2026-10-16 (see
+   Verification).
