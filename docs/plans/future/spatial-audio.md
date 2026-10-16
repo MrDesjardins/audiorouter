@@ -1,13 +1,16 @@
-# Spatial audio
+# Spatial audio extensions
 
-Status: first slice implemented 2026-10-02 as **CAP-14 — Surround to
-headphones** ([spec](../../spec/05-windows-capture.md)); execution record in the
+**Implemented:** CAP-14 — Surround to headphones ([spec](../../spec/05-windows-capture.md))
+was delivered 2026-10-02; execution record in the
 [active plan](../active/current.md) and
 [evidence](../active/evidence/2026-10-02-spatial-audio.md). The user chose real
 5.1/7.1 capture rendered with a measured HRTF (MIT KEMAR) over a stereo-only
 virtual-speaker processor.
 
-Still future (not authorized by the first slice):
+The implemented surface also includes speaker mode, room control and graph
+rate conversion for supported endpoint rates. The following extensions and
+attended listening checks remain future; no new feature is authorized merely
+by being listed here:
 
 - ~~Speaker-mode output (crosstalk cancellation)~~ — done 2026-10-03 as
   `spatialMode: "speakers"` (RACE, see [CAP-14](../../spec/05-windows-capture.md)).

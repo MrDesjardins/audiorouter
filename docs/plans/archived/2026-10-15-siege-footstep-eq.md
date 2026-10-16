@@ -1,10 +1,13 @@
-# Siege footstep and drone EQ (measured)
+# Siege footstep and drone EQ (measured; completed session change)
 
-Status (updated 2026-10-11): the reference takes were recorded and analyzed;
+Status (closed 2026-10-15): reference takes were recorded and analyzed, and
 the measured EQ/dynamics chain was applied to the user's session. After the
-user found v1 muffled, v2 raised the presence bands and slowed compressor
-attack. The remaining item is to tune only if the user reports a v2 listening
-issue or requests a change. No new DSP is currently indicated.
+owner found v1 muffled, v2 raised the presence bands and slowed compressor
+attack. The repository records the v2 settings but no explicit post-v2
+listening or real-match confirmation. No product implementation remains;
+revisit the personal tuning only if the owner reports an issue or asks for a
+change. No new DSP is currently indicated. The original recordings are not in
+the repository.
 
 ## Objective
 

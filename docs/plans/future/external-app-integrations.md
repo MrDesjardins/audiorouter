@@ -1,6 +1,6 @@
-# External app integrations and a request builder
+# External app integration extensions
 
-**Status 2026-10-03: request builder implemented (user-authorized)** as
+**Delivered:** the request builder (HTTP-08) is implemented as
 [HTTP-08](../../spec/16-local-http-api.md): session follow/pin, tool and
 setting choice from `nodes.catalog`, Mixer inputs by upstream name, Duck
 trigger by node name (new `"reference": "node"` catalog marker; Duck
@@ -11,8 +11,8 @@ Evidence: `ui/src/requestBuilder.test.ts`, `ui/e2e/api-request-builder.pw.ts`
 scenes/batches of several tools, integration-specific permissions, and the
 "affected output / preparation required" hint; each needs a decision first.
 
-Proposed 2026-10-02 from the user's game-menu/match example. Specification and
-use-case review only; feature implementation is not authorized by this plan.
+This backlog covers only follow-up extensions. No new feature is authorized
+merely by being listed here.
 Requirements: AUTO-15, API-01/07/09/12, HTTP-01/04/05, GRAPH-05/06/08, UI-04.
 
 ## Existing support
@@ -63,9 +63,8 @@ present and prepared where live changes require it; game supplies events via
 its own supported integration. No game hooks, memory reads, remote listener,
 in-process extension execution or automatic detection is implied.
 
-Ordered next task if approved: schema-backed request builder; named Mixer/Duck
-selection; generated-request fixtures and real adapter tests; three-theme UI
-review; prepared synthetic live menu/match test and guarded native continuity.
-Decide temporary overrides, scenes/batches and integration permissions before
-adding those capabilities. Rollback UI/guide changes without saved-graph
-migration. No release or arbitrary-game compatibility claim.
+Still open: temporary overrides, atomic scenes/batches, integration-specific
+permissions, and the affected-output/preparation hint. Decide state-restoration
+and batch atomicity before implementation; approve any new grant scope first.
+No release or arbitrary-game compatibility claim follows from the request
+builder.

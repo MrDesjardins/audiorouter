@@ -1,6 +1,6 @@
 //! Run labelled Siege reference takes through the engine's own Advanced EQ,
 //! Compressor and Limiter, and measure how loud distant steps and drones are
-//! relative to gunfire (docs/plans/future/siege-footstep-eq.md).
+//! relative to gunfire (docs/plans/archived/2026-10-15-siege-footstep-eq.md).
 //!
 //! Usage: cargo run -p audiorouter-dsp --example siege_chain --release -- <folder> [--grid]
 //! Reads `NN-*.wav` (PCM 16/24-bit or float, stereo, 48 kHz). Writes nothing.

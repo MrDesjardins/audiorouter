@@ -8,6 +8,9 @@ result to Discord, monitor it in your headphones and record it, all at once.
 Stream game audio from your gaming PC to your streaming PC over your home
 network. Every route is a picture you can read, and every setting is live.
 
+[![CI](https://github.com/MrDesjardins/audiorouter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MrDesjardins/audiorouter/actions/workflows/ci.yml)
+[![Quality: coverage, soak and startup](https://github.com/MrDesjardins/audiorouter/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/MrDesjardins/audiorouter/actions/workflows/quality.yml)
+
 **[Website](https://audiorouter.org)** ·
 **[Download](https://github.com/MrDesjardins/audiorouter/releases/latest)** ·
 [Manual](https://audiorouter.org/manual.html) ·
@@ -258,6 +261,24 @@ engine soak and times a fresh-install startup, with a trend table in the
 job summary. Coverage is never a gate. Run the soak locally with
 `cargo run --release -p audiorouter-engine --example soak`
 (`AUDIOROUTER_SOAK_SECONDS` sets the duration; default 10).
+
+#### Automated quality and performance
+
+The table is refreshed after successful coverage, engine soak and startup
+runs on `main`. It links to the measured source commit and exact workflow run.
+Coverage is informational: it measures test execution, not audio quality,
+hardware compatibility, or release readiness. The badges above show current
+CI and nightly quality workflow status, including failures.
+
+<!-- quality-stats:start -->
+Coverage and performance statistics will appear after the next successful
+nightly or manually dispatched Windows quality run.
+<!-- quality-stats:end -->
+
+Historical performance (the last 90 successful runs; the full history is in
+[`docs/quality-history.csv`](docs/quality-history.csv)):
+
+![Engine timing, memory growth, and backend startup over successful nightly quality runs](docs/quality-history.svg)
 
 Format with `cargo fmt --all` and
 `cargo fmt --manifest-path src-tauri/Cargo.toml`, and the UI with

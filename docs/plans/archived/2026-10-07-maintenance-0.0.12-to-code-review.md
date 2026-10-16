@@ -183,8 +183,8 @@ Agent work (no hardware or credentials needed):
    of the same cable when the last device list contains it (matched on the
    full "(VB-Audio …)" cable name, so CABLE and CABLE-A stay apart).
    `backend.test.ts` regression added.
-3. Done 2026-10-03 (simulation): [Siege footstep EQ](../future/siege-footstep-eq.md) compressor
-   settings simulated with the engine DSP; Balanced/Maximum proposed, awaiting the user's choice by ear.
+3. Done 2026-10-03 (simulation): [Siege footstep EQ](2026-10-15-siege-footstep-eq.md) compressor
+   settings simulated with the engine DSP. The measured chain was later applied to the owner's session; see the [closed session record](2026-10-15-siege-footstep-eq.md).
 
 4a. Done 2026-10-03: 44.1/96 kHz devices (CAP-14, multi-path inputs, outputs,
    endpoint loopback, surround). New opt-in constructors
@@ -395,7 +395,7 @@ Agent work (no hardware or credentials needed):
    session-list errors were shown only in the removed panels and are now
    unread state (follow-up: show them in Setup and Session); (A3) future
    index corrected (denoise/dehum/declick, Duck, FIR, Time Shift, Input
-   Switch exist) and the [Stream Deck plan](../future/stream-deck.md) added;
+   Switch exist) and the [Stream Deck plan](2026-10-15-stream-deck-core.md) added;
    spec 16 HTTP-07 now states the backend remembers the selected session.
 
 10. Done 2026-10-04 (user report on 0.0.10): Advanced → Start at sign-in

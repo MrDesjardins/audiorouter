@@ -1,5 +1,5 @@
 // Spectral analysis of labelled game-audio reference takes (Siege footstep EQ plan,
-// docs/plans/future/siege-footstep-eq.md). Local only: reads WAV files, prints
+// docs/plans/archived/2026-10-15-siege-footstep-eq.md). Local only: reads WAV files, prints
 // 1/3-octave band levels and writes a JSON summary. No audio leaves the machine.
 //
 // Usage: node tools/siege-eq/analyze.mjs <folder> [out.json]

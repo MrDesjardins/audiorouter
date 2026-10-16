@@ -108,6 +108,9 @@ jobs:
           }
           $lines | Set-Content -Encoding ascii (Join-Path $metrics 'coverage.env')
 
+          node tools/quality/publish-readme-coverage.mjs summarize $workspace $shell ui/coverage/coverage-summary.json (Join-Path $metrics 'readme-coverage.json')
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - name: Upload coverage reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -127,6 +130,53 @@ jobs:
           path: ${{ runner.temp }}/metrics
           if-no-files-found: ignore
           retention-days: 14
+
+  publish-readme-coverage:
+    name: Publish quality stats to README
+    needs: [coverage, soak, startup]
+    if: ${{ github.ref == 'refs/heads/main' && needs.coverage.result == 'success' && needs.soak.result == 'success' && needs.startup.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+
+      - name: Download this run's quality metrics
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: metrics-*
+          path: quality-metrics
+          merge-multiple: true
+
+      - name: Update README with this run's quality results
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          node tools/quality/publish-readme-coverage.mjs update README.md quality-metrics/readme-coverage.json quality-metrics/soak.env quality-metrics/startup.env "$SOURCE_SHA" "$RUN_ID" "$REPOSITORY" "$SERVER_URL" docs/quality-history.csv docs/quality-history.svg
+          if [ -z "$(git status --porcelain -- README.md docs/quality-history.csv docs/quality-history.svg)" ]; then
+            echo "README quality stats and history are already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- README.md docs/quality-history.csv docs/quality-history.svg
+          git commit -m "docs: refresh quality history"
+          git push origin HEAD:main
 
   soak:
     name: Engine soak

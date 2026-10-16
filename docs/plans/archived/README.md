@@ -16,6 +16,8 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |
+| 2026-10-15 | Stream Deck core integration | Core plugin packaged with AudioRouter and confirmed working well by the owner; optional extensions remain separately deferred | [Execution record](2026-10-15-stream-deck-core.md) |
+| 2026-10-15 | Siege footstep and drone EQ | Measured EQ/dynamics chain applied to the owner's session; no product implementation remains | [Session record](2026-10-15-siege-footstep-eq.md) |
 | 2026-10-15 | Graphic EQ guide audio level | Raised monitor gain to 50% with peak protection; focused Edge playback regression passes | [Execution record](2026-10-15-graphic-eq-guide-audio-level.md) |
 | 2026-10-15 | Tool teaching and sidebar spacing | All 35 tutorials/sample examples revised; compact help and measured tab padding; 10 Edge checks pass; desktop packaging pending app close | [Execution record](2026-10-15-tool-teaching-and-sidebar-spacing.md) |
 | 2026-10-15 | Synchronized tool guide playback | One timeline per relevant guide; Recorder/Mixer/Meter examples, ten practical Graphic EQ band explanations, guide audit and Edge suite pass | [Execution record](2026-10-15-synchronized-tool-guide-playback.md) |

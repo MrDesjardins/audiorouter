@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="220" viewBox="0 0 980 220" role="img" aria-labelledby="title desc">
+  <title id="title">AudioRouter nightly performance history</title>
+  <desc id="desc">The graph will be generated after the first successful nightly quality run.</desc>
+  <rect width="980" height="220" rx="16" fill="#f4f6f9"/>
+  <rect x="24" y="24" width="932" height="172" rx="12" fill="#ffffff" stroke="#d7dee8"/>
+  <text x="490" y="97" text-anchor="middle" fill="#172033" font-family="system-ui, Segoe UI, sans-serif" font-size="19" font-weight="700">Nightly performance timeline</text>
+  <text x="490" y="128" text-anchor="middle" fill="#5c6879" font-family="system-ui, Segoe UI, sans-serif" font-size="13">The first chart will appear after a successful quality run on main.</text>
+</svg>

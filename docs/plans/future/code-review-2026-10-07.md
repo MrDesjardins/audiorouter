@@ -68,8 +68,14 @@ and a place in the [active plan](../active/current.md).
 ## Status: P0 and P1 fixed (2026-10-07, user request "Fix all P0 and P1")
 
 All P0 and P1 items were fixed on branch `claude/zealous-archimedes-fz1lbv`.
-The details are in the [active plan](../archived/2026-10-07-maintenance-0.0.12-to-code-review.md#code-review-p0-and-p1-fixes-2026-10-07-user-request).
-P2 and P3 remain a backlog.
+The details are in the [execution record](../archived/2026-10-07-maintenance-0.0.12-to-code-review.md#code-review-p0-and-p1-fixes-2026-10-07-user-request).
+P2-7's portable hot-loop and meter optimizations are implemented and measured;
+its Windows continuity run remains open. P2-8's coverage, engine soak and
+backend-startup automation is implemented. This task adds README status
+publishing for those results; the first successful main-branch quality run is
+still pending. P2/P3 status is item-specific: some work is delivered, some is
+partially verified, and some remains backlog. The old priority order is not a
+current implementation queue.
 
 | ID | Fix | Commit | What remains |
 | --- | --- | --- | --- |

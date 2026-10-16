@@ -1,5 +1,29 @@
 # Active plan — post-0.0.8 maintenance
 
+## Publish automated quality status in the root README — implemented 2026-10-15
+
+Owner requested visible code coverage and status for the existing performance
+and quality automation. README now has CI and quality-workflow badges. After
+successful Rust/UI coverage, engine soak and backend-startup jobs, a separate
+job with only `contents: write` refreshes the marked summary table and appends
+one idempotent row to a durable CSV on `main`. It generates a four-panel SVG
+timeline for the last 90 successful runs (engine p99/p99.9, engine heap,
+Windows process memory and backend readiness); the CSV retains the complete
+history. Coverage remains informational and has no threshold.
+
+Scope: CI/quality README badges, quality workflow, a dependency-free Node
+summary/update/chart script, README, durable quality-history CSV/SVG and this
+plan. No runtime or user data changes.
+The task-specific script and workflow were reviewed in source; execution on
+Windows Actions was not performed locally. The first successful main-branch
+quality run is the required end-to-end evidence. Risk: repository branch
+protection or Actions settings may reject the bot's README/history push.
+Rollback: remove the publisher job, script, README block and generated history
+files; existing Actions summaries remain.
+
+Next: after these changes reach `main`, dispatch `quality.yml` and confirm the
+coverage, soak and startup jobs succeed and the publisher updates README.md.
+
 ## Graphic EQ help playback level — completed 2026-10-15
 
 Raised synthetic guide monitor gain to 50% with the peak-protection compressor
@@ -1044,9 +1068,11 @@ Rollback: revert the commit.
   (`crates/engine/examples/soak.rs`, gates on heap growth, allocations and
   p99 per quantum), and the backend part of NFR-14 timed by
   `fresh_install_shell`. Local: 10 s soak passes; UI coverage 74.5 % of
-  lines; portable-crate coverage 86.5 %. UI-ready startup time is not
-  measured yet. Next action: dispatch `quality.yml` once and record the
-  first numbers.
+  lines; portable-crate coverage 86.5 %. The root README now shows current CI
+  and quality-workflow badges; successful main-branch coverage/soak/startup
+  runs publish linked measurements there. UI-ready startup time is not
+  measured yet. Next action: after this change reaches `main`, dispatch
+  `quality.yml` once and verify the first README refresh.
 
 - **P2-5 network pairing key** (SEC-13, GRAPH-16; branch
   `worktree-agent-ae33fb03459795579`). Network Send/Receive take an

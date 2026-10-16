@@ -1,16 +1,14 @@
-# Stream Deck control
+# Stream Deck core integration
 
-Status (updated 2026-10-11): the core Stream Deck integration is implemented,
-packaged with AudioRouter, and the user confirms it works well. The plugin has
-controls for toggles, meters, privacy mute, Play/Stop, session switching,
-recording, and value stepping. The phase history below is retained as design
-and implementation context; it does not mean core implementation is pending.
-Possible future work is limited to separately selected extensions such as
-dials, reduced-scope pairing/grants, faster change notifications, atomic
-scenes, and profiles. No extension is authorized merely by being listed here.
-Related: [hardware control panel](hardware-control-panel.md) (same API, a
-different surface), [external app integrations](external-app-integrations.md)
-(scenes and temporary overrides).
+Status (2026-10-15): core integration is implemented, included in the
+AudioRouter installer/releases, and confirmed working well by the owner. It
+provides tool toggles, meters, privacy mute, Play/Stop, session switching,
+recording and value stepping. This archive preserves the original design,
+decisions and phase history; those phases are not pending implementation.
+Optional extensions have a separate, unapproved backlog in
+[`stream-deck-extensions.md`](../future/stream-deck-extensions.md). Related
+work: [hardware control panel](../future/hardware-control-panel.md) and
+[external app integration extensions](../future/external-app-integrations.md).
 
 ## Decisions (user, 2026-10-04)
 
