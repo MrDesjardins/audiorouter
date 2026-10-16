@@ -5191,14 +5191,9 @@ impl SharedCapture {
         for index in 0..count {
             // SAFETY: `index` is below the collection's own count.
             let device = unsafe { devices.Item(index)? };
-            // SAFETY: `device` is a live endpoint; `GetId` returns an owned PWSTR that
-            // the windows crate wrapper copies and frees.
-            let id = unsafe {
-                device
-                    .GetId()?
-                    .to_string()
-                    .map_err(|_| AudioError::InvalidUtf16)?
-            };
+            // SAFETY: `device` is a live endpoint; `GetId` returns an owned
+            // CoTaskMem PWSTR, which `take_endpoint_id` copies and frees.
+            let id = unsafe { take_endpoint_id(device.GetId()?)? };
             if id == endpoint_id {
                 selected = Some(device);
                 break;
@@ -5653,14 +5648,9 @@ impl SharedRender {
         for index in 0..count {
             // SAFETY: `index` is below the collection's own count.
             let device = unsafe { devices.Item(index)? };
-            // SAFETY: `device` is a live endpoint; `GetId` returns an owned PWSTR that
-            // the windows crate wrapper copies and frees.
-            let id = unsafe {
-                device
-                    .GetId()?
-                    .to_string()
-                    .map_err(|_| AudioError::InvalidUtf16)?
-            };
+            // SAFETY: `device` is a live endpoint; `GetId` returns an owned
+            // CoTaskMem PWSTR, which `take_endpoint_id` copies and frees.
+            let id = unsafe { take_endpoint_id(device.GetId()?)? };
             if id == endpoint_id {
                 selected = Some(device);
                 break;
@@ -8392,6 +8382,25 @@ fn inventory_operation(operation: &'static str) -> impl FnOnce(windows::core::Er
     move |error| AudioError::WindowsOperation { operation, error }
 }
 
+/// Copy the endpoint ID that `IMMDevice::GetId` returned, then free it.
+/// The `windows` crate hands the CoTaskMem string back as a bare `PWSTR`
+/// with no destructor; copying it without freeing leaked ~150 bytes per
+/// endpoint on every walk (~9 MiB/h while playing, 2026-10-15 app soak).
+///
+/// # Safety
+/// `id` was just returned by a successful `IMMDevice::GetId` and is not
+/// freed or used anywhere else.
+#[cfg(windows)]
+unsafe fn take_endpoint_id(id: windows::core::PWSTR) -> Result<String, AudioError> {
+    // SAFETY: caller contract: `id` is a live, NUL-terminated CoTaskMem
+    // string owned here. It is read once, then freed exactly once.
+    unsafe {
+        let text = id.to_string().map_err(|_| AudioError::InvalidUtf16);
+        windows::Win32::System::Com::CoTaskMemFree(Some(id.0 as *const core::ffi::c_void));
+        text
+    }
+}
+
 fn write_inventory_failure(direction: EndpointDirection, index: u32, error: &AudioError) {
     use std::io::Write;
     static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
@@ -8512,11 +8521,11 @@ unsafe fn enumerate_after_com_init() -> Result<Vec<EndpointInfo>, AudioError> {
                 let device = devices
                     .Item(index)
                     .map_err(inventory_operation("inventory.getEndpoint"))?;
-                let id = device
-                    .GetId()
-                    .map_err(inventory_operation("inventory.getEndpointId"))?
-                    .to_string()
-                    .map_err(|_| AudioError::InvalidUtf16)?;
+                let id = take_endpoint_id(
+                    device
+                        .GetId()
+                        .map_err(inventory_operation("inventory.getEndpointId"))?,
+                )?;
                 let client: IAudioClient = device
                     .Activate(CLSCTX_ALL, None)
                     .map_err(inventory_operation("inventory.activateAudioClient"))?;
@@ -8584,11 +8593,11 @@ unsafe fn enumerate_defaults_after_com_init() -> Result<Vec<DefaultEndpointBindi
             let Ok(device) = enumerator.GetDefaultAudioEndpoint(flow, windows_role) else {
                 continue;
             };
-            let id = device
-                .GetId()
-                .map_err(inventory_operation("inventory.getEndpointId"))?
-                .to_string()
-                .map_err(|_| AudioError::InvalidUtf16)?;
+            let id = take_endpoint_id(
+                device
+                    .GetId()
+                    .map_err(inventory_operation("inventory.getEndpointId"))?,
+            )?;
             bindings.push(DefaultEndpointBinding {
                 direction,
                 role,
@@ -8628,11 +8637,11 @@ unsafe fn enumerate_display_info_after_com_init() -> Result<Vec<EndpointDisplayI
                 let device = devices
                     .Item(index)
                     .map_err(inventory_operation("inventory.getEndpoint"))?;
-                let id = device
-                    .GetId()
-                    .map_err(inventory_operation("inventory.getEndpointId"))?
-                    .to_string()
-                    .map_err(|_| AudioError::InvalidUtf16)?;
+                let id = take_endpoint_id(
+                    device
+                        .GetId()
+                        .map_err(inventory_operation("inventory.getEndpointId"))?,
+                )?;
                 let store = device
                     .OpenPropertyStore(STGM_READ)
                     .map_err(inventory_operation("inventory.openPropertyStore"))?;
@@ -8709,11 +8718,11 @@ unsafe fn enumerate_states_after_com_init() -> Result<Vec<EndpointStateInfo>, Au
                 let device = devices
                     .Item(index)
                     .map_err(inventory_operation("inventory.getEndpoint"))?;
-                let id = device
-                    .GetId()
-                    .map_err(inventory_operation("inventory.getEndpointId"))?
-                    .to_string()
-                    .map_err(|_| AudioError::InvalidUtf16)?;
+                let id = take_endpoint_id(
+                    device
+                        .GetId()
+                        .map_err(inventory_operation("inventory.getEndpointId"))?,
+                )?;
                 let raw_state = device
                     .GetState()
                     .map_err(inventory_operation("inventory.getEndpointState"))?
@@ -13372,6 +13381,47 @@ mod tests {
         assert!(!endpoints.is_empty());
         assert!(endpoints.iter().all(|endpoint| !endpoint.id.is_empty()));
         assert!(endpoints.iter().all(|endpoint| endpoint.sample_rate_hz > 0));
+    }
+
+    /// Each walk copied every `GetId` string without freeing it: ~150 bytes
+    /// per endpoint per walk, ~9 MiB/h while playing (2026-10-15 app soak).
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "needs audio devices; hosted CI runners have none"]
+    fn endpoint_walks_free_every_endpoint_id() {
+        use windows::Win32::System::Memory::{GetProcessHeap, HeapSummary, HEAP_SUMMARY};
+        fn heap_allocated() -> usize {
+            let mut summary = HEAP_SUMMARY {
+                cb: std::mem::size_of::<HEAP_SUMMARY>() as u32,
+                ..Default::default()
+            };
+            // SAFETY: the process heap handle is valid for the process
+            // lifetime; `summary` is a live local with `cb` set.
+            unsafe { HeapSummary(GetProcessHeap().unwrap(), 0, &mut summary).unwrap() };
+            summary.cbAllocated
+        }
+        let walk = || {
+            enumerate_active_endpoints().unwrap();
+            enumerate_default_endpoint_bindings().unwrap();
+            enumerate_active_endpoint_display_info().unwrap();
+            enumerate_endpoint_states().unwrap();
+        };
+        let endpoints = enumerate_endpoint_states().unwrap().len();
+        assert!(endpoints > 0);
+        for _ in 0..20 {
+            walk();
+        }
+        let walks = 500;
+        let before = heap_allocated();
+        for _ in 0..walks {
+            walk();
+        }
+        let grown = heap_allocated().saturating_sub(before);
+        let per_endpoint = grown / (walks * endpoints);
+        assert!(
+            per_endpoint < 16,
+            "{grown} bytes stayed allocated after {walks} walks of {endpoints} endpoints"
+        );
     }
 
     #[cfg(windows)]

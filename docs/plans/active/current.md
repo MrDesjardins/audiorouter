@@ -278,6 +278,42 @@ Findings and fixes:
    `run-app-soak.ps1` gained `-DebugPort` (diagnosis only) and a 5.1 fix
    for its default shell path.
 
+7. **The shell leaked ~9.3 MiB/h while a session played.**
+   [Evidence record](evidence/2026-10-15-shell-endpoint-id-leak.md). Two owner
+   overnight soaks (8 h each, owner's database copy, `-AutoPlay`, build
+   `87545f1b`): every check PASS except shell private bytes, REVIEW at
+   9.31 and 9.26 MiB/h, linear for 8 h (~220 MiB/day for a tray app);
+   WebView flat, handles 509, threads stable. Attribution (scratch probes,
+   database copies, a separate worktree): idle shell flat;
+   777,000 `system.diagnostics` calls through the real window path while
+   idle +1.4 MiB then flat (request path ruled out); a dhat build showed
+   live Rust heap flat at ~6 KB while the process grew 8 MiB/h, so the leak
+   was native. Two `cdb -pv` heap snapshots of the process heap 25 min
+   apart while playing: only the 128-byte LFH bucket grew (15,112 →
+   43,039 blocks, 18.7/s ≈ 8.2 MiB/h), and the blocks were endpoint ID
+   strings (`{0.0.x.00000000}.{…}`), active and inactive endpoints. Cause:
+   all six `IMMDevice::GetId` call sites in `windows-audio` copied the
+   CoTaskMem `PWSTR` with `to_string()` and never freed it (two comments
+   claimed the `windows` crate frees it; it returns a bare pointer).
+   Standalone measurement per call on the owner's PC: active walk 2,263 B,
+   display info 2,064 B, defaults 809 B, all-state walk 8,251 B;
+   application walks 0. Which caller repeats about once a second while
+   playing is not proven; likely the endpoint monitor, which re-walks on
+   every `OnPropertyValueChanged` (follow-up below). Fix: `take_endpoint_id`
+   copies then frees, used at every site. Regression (live, ignored on
+   CI) `endpoint_walks_free_every_endpoint_id`: fails before (5.6 MB left
+   after 500 walks of 62 endpoints), passes after; windows-audio 141/141,
+   Clippy and fmt clean. Real-app check, patched `87545f1b` worktree build,
+   full session playing 40 min: 128-byte blocks 141 → 141 between minutes
+   10 and 35, private bytes 32.10 → 32.46 MiB over 30 min (before: 8–10
+   MiB/h). Follow-ups: (a) the endpoint monitor re-enumerates every
+   endpoint, opening an `IAudioClient` on each, whenever any property
+   changes; check the notification rate while playing and filter keys;
+   (b) the 20 Hz refresh makes ~82,000 short allocations/s (dhat), and the
+   backend logger decodes every response again even for unlogged routine
+   reads; (c) one diagnostic `cdb -pv` session left the probe shell's
+   threads suspended when killed: keep heap commands short.
+
 New tool: `tools/quality/run-app-soak.ps1` runs the release shell for hours
 on a copy of the owner's database with its own `LOCALAPPDATA` and WebView2
 profile (`WEBVIEW2_USER_DATA_FOLDER`; Tauri resolves its WebView folder
@@ -295,8 +331,9 @@ session (before: 24 writes, 11 flips). Workspace and shell Clippy and
 `cargo fmt --check` clean; UI format, lint (0 errors) and `tsc` clean;
 Playwright e2e 239 passed, 9 skipped.
 
-Next action: owner runs the overnight soak on the rebuilt shell
-(`run-app-soak.ps1 -Hours 8 -AutoPlay`, AudioRouter closed); then grade it.
+Next action: owner reruns the overnight soak on a build with the
+endpoint-ID fix (`run-app-soak.ps1 -Hours 8 -AutoPlay`, AudioRouter
+closed); shell private bytes must PASS (< 5 MiB/h).
 Open decisions: cable route behaviour after a lease loss (reconnect or plain
 message; virtual-cable plan, r10 results).
 

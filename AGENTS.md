@@ -91,6 +91,21 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-15 — Free every CoTaskMem string the `windows` crate returns; find native leaks by heap bucket.**
+  Evidence: [endpoint ID leak record](docs/plans/active/evidence/2026-10-15-shell-endpoint-id-leak.md),
+  `endpoint_walks_free_every_endpoint_id`. Scope: Windows interop
+  returning `PWSTR`/`PSTR`/struct pointers (`IMMDevice::GetId`,
+  `GetMixFormat`, session display names) and any long-uptime memory
+  growth. Consequence: `GetId` returns a bare pointer with no destructor;
+  `.to_string()` without `CoTaskMemFree` leaked ~150 bytes per endpoint
+  per walk, ~9 MiB/h while playing, and two comments wrongly claimed the
+  crate frees it. Route such calls through a copy-then-free helper. A dhat
+  (Rust heap) profile shows only Rust allocations: if it stays flat while
+  private bytes grow, take two `cdb -pv` `!heap -s -h <process heap>`
+  snapshots minutes apart, diff the LFH bucket counts, and dump blocks of
+  the growing size (`s -u`, `du`). Keep each attach to a few quick
+  commands: a long one froze the target, and killing cdb left it suspended.
+
 - **2026-10-14 — Measure canvas cost under controlled telemetry, per process; never animate inside the shared edge SVG.**
   Evidence: [stability round, finding 6](docs/plans/active/current.md).
   Scope: React Flow canvas visuals, live meters, any 20 Hz UI animation.
