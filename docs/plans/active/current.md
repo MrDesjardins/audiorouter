@@ -2,6 +2,12 @@
 
 ## Release 0.0.17 — 2026-10-16, owner requested ("create a new release version and push it")
 
+**Published** 2026-10-16 15:20 UTC as an experimental prerelease from tag
+`v0.0.17` (`6ed54e91`); exact-package fresh-install passed (95 ms), draft and
+public assets verified. Remaining: watch CI run 38922347936 on `6ed54e91`
+and the next nightly quality run (coverage summary fix); the two Edge
+flakes recorded in the release record.
+
 Scope: unsigned experimental Windows x64 **app-only** prerelease, same
 profile as 0.0.16 (no driver/helper payload, `-AppOnly`). Contents: the
 endpoint-ID leak fix (confirmed by the 8 h owner soak), canvas GPU cut,

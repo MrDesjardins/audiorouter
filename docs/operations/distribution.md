@@ -1,8 +1,8 @@
-The latest release is [0.0.16](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.16),
-an unsigned experimental app-only prerelease. Download `AudioRouter_0.0.16_x64-setup.exe`
+The latest release is [0.0.17](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.17),
+an unsigned experimental app-only prerelease. Download `AudioRouter_0.0.17_x64-setup.exe`
 from its assets. It was built from a clean tag, passed the exact-package
 fresh-install check, and its public downloads were verified. See the
-[0.0.16 execution record](../plans/archived/2026-10-12-release-0.0.16.md), the
+[0.0.17 execution record](../plans/active/evidence/2026-10-16-release-0.0.17.md), the
 [release notes](release-notes.md) and the evidence files under
 `docs/plans/active/evidence/` (for example
 [0.0.7](../plans/active/evidence/2026-10-03-release-0.0.7.md)). Signing,
