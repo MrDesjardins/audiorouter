@@ -16,6 +16,12 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |
+| 2026-10-15 | Graphic EQ guide audio level | Raised monitor gain to 50% with peak protection; focused Edge playback regression passes | [Execution record](2026-10-15-graphic-eq-guide-audio-level.md) |
+| 2026-10-15 | Tool teaching and sidebar spacing | All 35 tutorials/sample examples revised; compact help and measured tab padding; 10 Edge checks pass; desktop packaging pending app close | [Execution record](2026-10-15-tool-teaching-and-sidebar-spacing.md) |
+| 2026-10-15 | Synchronized tool guide playback | One timeline per relevant guide; Recorder/Mixer/Meter examples, ten practical Graphic EQ band explanations, guide audit and Edge suite pass | [Execution record](2026-10-15-synchronized-tool-guide-playback.md) |
+| 2026-10-15 | All-tool guide visuals and synthetic audio | 35 tool guides aligned to their controls; opt-in synthetic audio and Edge verification pass; no publication or app audio qualification | [Execution record](2026-10-15-all-tool-guide-audio.md) |
+| 2026-10-14 | Workbench organization, themes and visual tool guides | Implementation complete; 535 UI tests, 46 three-theme Edge checks, 82 shell tests (4 ignored), guide coverage audit and rebuilt desktop shell pass; public website publication remains separate | [Execution record](2026-10-14-workbench-organization-and-visual-guides.md) |
+| 2026-10-14 | M05 header/canvas usability and mute controls | Implementation complete; 527 UI tests, 80 shell tests and 13 Edge checks pass; three-theme screenshots reviewed; rebuilt tray observation remains open | [Execution record](2026-10-14-header-canvas-usability.md) |
 | 2026-10-12 | Release 0.0.16 | Published unsigned experimental app-only prerelease; full local suites, fresh-install and public downloads verified; CI maintenance follow-up and attended Cowork/full M08 gates remain active | [Execution record](2026-10-12-release-0.0.16.md) |
 | 2026-10-12 | Local Cowork plugin export | Local implementation and CLI/pipe/UI qualification complete; attended Cowork import/tool-use gate remains active | [Execution record](2026-10-12-local-cowork-plugin.md) |
 | 2026-10-12 | ChatGPT MCP setup repair | Completed local compatibility/runtime repair; user confirmed plugin setup and supplied a successful read/write screenshot example. Denied-scope/lifecycle qualification remains active. | [Execution record](2026-10-12-chatgpt-mcp-setup-repair.md) |

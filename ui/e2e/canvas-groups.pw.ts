@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "@playwright/test";
 import { demoSession } from "../src/fixtures";
 
@@ -32,7 +33,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       },
     );
     await page.goto("/route-harness.html");
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     const nodes = await page.locator(".react-flow__node-flowNode").count();
     const edges = await page.locator(".react-flow__edge").count();
     await page.getByRole("button", { name: "Group A named visual background; no audio routing" }).click();
@@ -63,7 +64,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await page.screenshot({ path: testInfo.outputPath(`2026-09-29-groups-${theme}.png`) });
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
-    await expect(page.getByLabel("Node name", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Rename Voice gain", exact: true })).toBeVisible();
     await page.getByRole("tab", { name: "API", exact: true }).click();
     await expect(page.getByLabel("API port")).toHaveValue("17891");
     await expect(page.getByRole("button", { name: "Start API" })).toBeDisabled();

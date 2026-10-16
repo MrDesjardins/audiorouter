@@ -96,12 +96,6 @@ export function RecordingWorkbench({
         onReveal={revealRecording}
         onRecycle={recycleRecording}
       />
-      <p className="muted">
-        {recordingsError ??
-          (recordings.length === 0
-            ? "No completed recording files yet."
-            : `${recordings.length} recording files are available.`)}
-      </p>
       {/* The recording library: browse, search, preview and edit takes. Until 2026-10-04 it rendered only in an always-hidden panel. */}
       <section className="recording-library" aria-label="Recording library">
         <div className="panel">
@@ -126,9 +120,14 @@ export function RecordingWorkbench({
           {recordingsError ? (
             <p className="muted">Recording library unavailable: {recordingsError}</p>
           ) : recordings.length === 0 ? (
-            <p className="muted">
-              No recording has been armed. Completed recordings will appear here with path and status.
-            </p>
+            <div className="recording-empty">
+              <span aria-hidden="true">◉</span>
+              <h3>No completed recordings yet</h3>
+              <p>
+                Connect a Recorder, choose a recording folder, then press Record while the session is running. Your
+                completed takes will appear here.
+              </p>
+            </div>
           ) : visibleRecordings.length === 0 ? (
             <p className="muted">No recording matches this search.</p>
           ) : (

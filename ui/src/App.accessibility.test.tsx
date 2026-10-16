@@ -708,7 +708,7 @@ describe("VB-Cable endpoint selection", () => {
     expect(screen.getByRole("button", { name: "Clear safe mode" }).hasAttribute("disabled")).toBe(true);
   });
 
-  it("keeps privacy mute in the top bar without rendering Route status", async () => {
+  it("keeps privacy mute in Properties and removes the ambiguous top-bar control", async () => {
     const setPrivacyMute = vi.fn(async (muted: boolean) => ({
       muted,
       persistence: "memory" as const,
@@ -717,11 +717,14 @@ describe("VB-Cable endpoint selection", () => {
     await renderReady(<App backend={{ ...connectedPreviewBackend(), setPrivacyMute }} />);
     expect(screen.queryByRole("region", { name: "Compact route status" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Show status" })).toBeNull();
-    const mute = await screen.findByRole("button", { name: "Microphone muted" });
-    expect(mute.closest("header")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Microphone muted" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mute microphone" })).toBeNull();
+    openTab("Properties");
+    const mute = await screen.findByRole("button", { name: "Privacy mute enabled" });
+    expect(mute.closest("header")).toBeNull();
     fireEvent.click(mute);
     await waitFor(() => expect(setPrivacyMute).toHaveBeenCalledWith(false, expect.any(String)));
-    expect(await screen.findByRole("button", { name: "Mute microphone" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Enable privacy mute" })).toBeTruthy();
   });
 
   it("toggles privacy mute on and off while playing despite a stale full-snapshot status", async () => {
@@ -757,15 +760,16 @@ describe("VB-Cable endpoint selection", () => {
       };
     };
     await renderReady(<App backend={{ ...base, snapshot, setPrivacyMute, startSession, refreshDiagnostics }} />);
-    expect(await screen.findByText("● Audio running")).toBeTruthy();
-    fireEvent.click(await screen.findByRole("button", { name: "Mute microphone" }));
+    expect(await screen.findByText("Audio running")).toBeTruthy();
+    openTab("Properties");
+    fireEvent.click(await screen.findByRole("button", { name: "Enable privacy mute" }));
     await waitFor(() => expect(setPrivacyMute).toHaveBeenLastCalledWith(true, expect.any(String)));
     // Several diagnostics refreshes later the button must still show muted.
     await new Promise((resolve) => setTimeout(resolve, 250));
-    fireEvent.click(await screen.findByRole("button", { name: "Microphone muted" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Privacy mute enabled" }));
     await waitFor(() => expect(setPrivacyMute).toHaveBeenLastCalledWith(false, expect.any(String)));
     await new Promise((resolve) => setTimeout(resolve, 250));
-    expect(screen.getByRole("button", { name: "Mute microphone" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Enable privacy mute" })).toBeTruthy();
     expect(muted).toBe(false);
   });
 
@@ -2371,7 +2375,8 @@ describe("keyboard connection dialog", () => {
     expect((precise as HTMLInputElement).value).toBe("0");
     fireEvent.change(slider, { target: { value: "-6" } });
     expect((precise as HTMLInputElement).value).toBe("-6");
-    expect(screen.getByText("Unsaved: gainDb: 0 → -6. Save to keep it.")).toBeTruthy();
+    expect(screen.getByText("Save required")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Save$/ }).hasAttribute("disabled")).toBe(false);
   });
 
   it("renders the backend-derived EQ response for a draft EQ node", async () => {

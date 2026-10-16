@@ -84,6 +84,8 @@ type SessionFlowCanvasProps = {
   onChangeGroup?: (id: string, patch: Partial<CanvasGroup>) => void;
   onRemoveGroup?: (id: string) => void;
   session: Session;
+  pendingNodeIds?: ReadonlySet<string>;
+  nodeSaveState?: "needs-save" | "autosave" | "saving";
   selectedNodeId: string;
   selectedNodeIds?: string[];
   onSelect: (id: string) => void;
@@ -101,7 +103,7 @@ type SessionFlowCanvasProps = {
   diagnostics?: DiagnosticsSnapshot | null;
   /** Live meter telemetry for `diagnostics`; read only by the views that show it. */
   telemetryStore?: TelemetryStore;
-  /** Setup → Animated connections; comets move only when this allows. */
+  /** UI Options → Animated connections; comets move only when this allows. */
   flowAnimation?: FlowAnimationMode;
   sessionRunning?: boolean;
   sessionActionBusy?: boolean;
@@ -682,50 +684,58 @@ export const SIGNAL_FLOW_LEGEND: ReadonlyArray<{ state: EdgeSignalState["state"]
 
 function SignalFlowLegend() {
   return (
-    <ul className="signal-flow-legend" aria-label="Connection line legend">
-      {SIGNAL_FLOW_LEGEND.map((item) => (
-        <li
-          key={item.state}
-          className={`react-flow__edge flow-edge-${item.state}${item.state === "active" ? " flow-edge-active" : ""}`}
-        >
-          <svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true">
-            {item.state === "active" ? (
-              <>
-                <defs>
-                  <linearGradient id="legend-flow" x1="0" x2="1">
-                    <stop offset="0%" stopColor="var(--flow-cold)" />
-                    <stop offset="55%" stopColor="var(--flow-warm)" />
-                    <stop offset="100%" stopColor="var(--flow-hot)" />
-                  </linearGradient>
-                </defs>
-                <path
-                  className="react-flow__edge-path"
-                  d="M2 6H30"
-                  style={{ stroke: "url(#legend-flow)", strokeWidth: 4 }}
-                />
-                <ellipse cx="18" cy="6" rx="5" ry="1.4" className="legend-comet" />
-                <path
-                  className="flow-arrow is-active"
-                  style={{ fill: "var(--flow-hot)" }}
-                  d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z"
-                  transform="translate(39 6)"
-                />
-              </>
-            ) : (
-              <>
-                <path className="react-flow__edge-path" d="M2 6H30" />
-                <path
-                  className={`flow-arrow is-${item.state}`}
-                  d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z"
-                  transform="translate(39 6)"
-                />
-              </>
-            )}
-          </svg>
-          {item.label}
-        </li>
-      ))}
-    </ul>
+    <details className="canvas-legend">
+      <summary>Canvas legend</summary>
+      <p className="muted canvas-handle-legend">
+        <span className="canvas-handle-legend-dot canvas-handle-legend-dot-target" aria-hidden="true" /> Send (start)
+        <span className="canvas-handle-legend-dot canvas-handle-legend-dot-source" aria-hidden="true" /> Receive (end) -
+        drag from the sending tool's blue dot to the receiving tool's orange dot.
+      </p>
+      <ul className="signal-flow-legend" aria-label="Connection line legend">
+        {SIGNAL_FLOW_LEGEND.map((item) => (
+          <li
+            key={item.state}
+            className={`react-flow__edge flow-edge-${item.state}${item.state === "active" ? " flow-edge-active" : ""}`}
+          >
+            <svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true">
+              {item.state === "active" ? (
+                <>
+                  <defs>
+                    <linearGradient id="legend-flow" x1="0" x2="1">
+                      <stop offset="0%" stopColor="var(--flow-cold)" />
+                      <stop offset="55%" stopColor="var(--flow-warm)" />
+                      <stop offset="100%" stopColor="var(--flow-hot)" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    className="react-flow__edge-path"
+                    d="M2 6H30"
+                    style={{ stroke: "url(#legend-flow)", strokeWidth: 4 }}
+                  />
+                  <ellipse cx="18" cy="6" rx="5" ry="1.4" className="legend-comet" />
+                  <path
+                    className="flow-arrow is-active"
+                    style={{ fill: "var(--flow-hot)" }}
+                    d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z"
+                    transform="translate(39 6)"
+                  />
+                </>
+              ) : (
+                <>
+                  <path className="react-flow__edge-path" d="M2 6H30" />
+                  <path
+                    className={`flow-arrow is-${item.state}`}
+                    d="M-9,-5 L0,0 L-9,5 L-6.5,0 Z"
+                    transform="translate(39 6)"
+                  />
+                </>
+              )}
+            </svg>
+            {item.label}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -2155,6 +2165,8 @@ export function SessionFlowCanvas({
   onChangeGroup,
   onRemoveGroup,
   session,
+  pendingNodeIds,
+  nodeSaveState = "needs-save",
   selectedNodeId,
   selectedNodeIds = [selectedNodeId],
   onSelect,
@@ -2479,6 +2491,7 @@ export function SessionFlowCanvas({
         label: (
           <div
             className={`flow-node-content node-kind-${node.kind}`}
+            data-save-state={pendingNodeIds?.has(node.id) ? nodeSaveState : undefined}
             aria-label={`${node.name}, ${node.kind}`}
             onMouseDownCapture={captureConnectionHandle}
             onPointerDownCapture={captureConnectionHandle}
@@ -2535,6 +2548,22 @@ export function SessionFlowCanvas({
                   );
                 });
               })}
+            {pendingNodeIds?.has(node.id) && (
+              <span
+                className="node-save-indicator"
+                title={
+                  nodeSaveState === "needs-save"
+                    ? "Use Save in the header to keep these changes"
+                    : "Waiting for the backend to save these changes"
+                }
+              >
+                {nodeSaveState === "needs-save"
+                  ? "Save required"
+                  : nodeSaveState === "autosave"
+                    ? "Autosaving…"
+                    : "Saving…"}
+              </span>
+            )}
             <div className="flow-node-kicker">
               <span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>
                 {NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}

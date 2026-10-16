@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import type { Page } from "@playwright/test";
 import { test, expect, type RealBackend } from "./real-backend";
 import type { DiagnosticsSnapshot, VirtualCableStatus } from "../../contracts/src/index";
@@ -119,7 +120,7 @@ async function fakeCables(page: Page, backend: RealBackend) {
 }
 
 async function openSetup(page: Page) {
-  await page.getByRole("tab", { name: "Setup" }).click();
+  await page.getByRole("tab", { name: "Virtual Cables" }).click();
   const panel = page.locator(".virtual-cable-panel");
   await expect(panel).toBeVisible();
   return panel;
@@ -134,7 +135,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const fake = await fakeCables(page, backend);
     await page.goto("/backend-harness.html");
     await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     const panel = await openSetup(page);
     const pill = panel.getByRole("status");
     await expect(pill).toHaveText("Installed");
@@ -157,9 +158,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await nameNote.scrollIntoViewIfNeeded();
     await nameNote.locator("..").screenshot({ path: testInfo.outputPath(`${theme}-cable-names.png`) });
 
-    // Content below the panel and the pill's size must not move while the
-    // status changes state (same cables) and a route starts, counts and fails.
-    const below = page.locator(".this-pc-devices").first();
+    // The route section stays put within the panel while the status changes
+    // and live route counters/failures update. Device inventory now lives in
+    // Status, so it is no longer a sibling below this panel.
+    const below = panel.locator(".virtual-cable-route");
     const samples = new Set<string>();
     const sample = async () => {
       const [panelBox, belowBox, pillBox] = await Promise.all([
@@ -208,7 +210,7 @@ test("cable nodes are offered only with installed cables and take the default ca
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
   const toolCard = (name: string) => page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) });
   await expect(toolCard("Cable input")).toBeDisabled();
-  await expect(toolCard("Cable input")).toContainText("Install AudioRouter cables in Setup");
+  await expect(toolCard("Cable input")).toContainText("Install AudioRouter cables in Virtual Cables");
   const panel = await openSetup(page);
   await expect(panel.getByRole("status")).toHaveText("Not installed");
   await expect(panel.getByRole("button", { name: /Add route:/ })).toBeDisabled();

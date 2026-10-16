@@ -1,4 +1,4 @@
-// Setup → AudioRouter cables (spec 17 §7.4): the cable driver's status, each
+// Virtual Cables → AudioRouter cables (spec 17 §7.4): the cable driver's status, each
 // cable's Windows devices, and the live counters of a playing cable route.
 // Every slot renders at a fixed size so status and counters never move the
 // panel (UI-17).

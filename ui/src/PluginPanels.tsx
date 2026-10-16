@@ -1,3 +1,4 @@
+import { ToolGuideLink } from "./ToolGuideLink";
 // Plug-in scanning, tool list and inspector panels (moved from App.tsx).
 import { useEffect, useRef, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
@@ -334,27 +335,32 @@ export function PluginToolsGroup({
   );
   return (
     <div className="tool-plugin-group" aria-label="Plugins">
-      <h4>Plugins (VST2/VST3)</h4>
+      <div className="tool-library-entry">
+        <h4>Plugins (VST2/VST3)</h4>
+        <ToolGuideLink kind="plugin" compact toolName="VST plugin" />
+      </div>
       {catalog.map((item) => {
         const help = `${item.format}${item.entry.identity?.vendor ? ` · ${item.entry.identity.vendor}` : ""} · ${item.folder}`;
         return (
-          <button
-            key={`${item.entry.identity?.sha256}-${item.entry.path}`}
-            className="tool-card"
-            type="button"
-            disabled={!connected}
-            title={help}
-            aria-description={help}
-            onClick={() => onAdd(item.entry)}
-          >
-            <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">
-              {item.format === "VST3" ? "V3" : "V2"}
-            </span>
-            <span>
-              <strong>{item.name}</strong>
-              <small>{help}</small>
-            </span>
-          </button>
+          <div className="tool-library-entry" key={`${item.entry.identity?.sha256}-${item.entry.path}`}>
+            <button
+              className="tool-card"
+              type="button"
+              disabled={!connected}
+              title={help}
+              aria-description={help}
+              onClick={() => onAdd(item.entry)}
+            >
+              <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">
+                {item.format === "VST3" ? "V3" : "V2"}
+              </span>
+              <span>
+                <strong>{item.name}</strong>
+                <small>{help}</small>
+              </span>
+            </button>
+            <ToolGuideLink kind="plugin" compact toolName={item.name} />
+          </div>
         );
       })}
       {catalog.length === 0 && !query && (

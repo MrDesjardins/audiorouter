@@ -1,10 +1,11 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "./real-backend";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`Advanced EQ Band pass and All pass in ${theme}`, async ({ page }) => {
     await page.goto("/backend-harness.html");
     await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     await page.getByRole("tab", { name: "Tools", exact: true }).click();
     await page
       .locator(".tool-card")

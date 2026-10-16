@@ -1,0 +1,1016 @@
+{
+  "metadata": {
+    "date": "2026-10-14",
+    "scope": "Source, destination, transport and visual grouping user controls",
+    "requirements": [
+      "UI-01",
+      "UI-05",
+      "UI-09",
+      "UI-16",
+      "CAP-02",
+      "CAP-03",
+      "CAP-06",
+      "CAP-08",
+      "CAP-14",
+      "GRAPH-16",
+      "REC-01",
+      "REC-02",
+      "REC-07",
+      "SEC-13"
+    ],
+    "notes": [
+      "Null limits/defaults mean no fixed value is established by the cited UI; render as device-defined, plugin-defined or user-selected as appropriate.",
+      "Application and temporaryRecorder are conceptual picker keys; application selection writes an identity tuple rather than a literal application parameter. recordingRoot is shared configuration.",
+      "Endpoint Loopback currently lacks a dedicated inspector binding editor.",
+      "These demos illustrate routing concepts and are not measured audio or hardware qualification evidence."
+    ]
+  },
+  "tools": [
+    {
+      "kind": "physicalInput",
+      "title": "Physical Input",
+      "purpose": "Bring a microphone, audio interface, or virtual recording endpoint into your route.",
+      "concept": "An input is where samples enter the graph. Its outgoing connection can feed several branches.",
+      "signalBehavior": "Normal capture preserves stereo; mono handling creates the same signal in both ears. Surround rendering produces stereo from a qualified 5.1/7.1 source.",
+      "properties": [
+        {
+          "key": "endpointId",
+          "label": "Audio device",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Binds this node to one exact Windows audio endpoint. The channel layout appears before its friendly name. Similar names can refer to different devices.",
+          "increase": "",
+          "decrease": "",
+          "example": "Choose the exact microphone or capture endpoint, then verify its meter while speaking.",
+          "caution": "No device is selected on a new node. Choose it deliberately and Save; stop playback before changing the device."
+        },
+        {
+          "key": "channelMode",
+          "label": "Channels",
+          "type": "enum",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "stereo",
+          "meaning": "Stereo keeps left and right separate. Mono averages 0.5L + 0.5R into both channels. Left or right uses only that interface channel in both ears.",
+          "increase": "",
+          "decrease": "",
+          "example": "If your microphone occupies interface input 1 and you hear it only on the left, choose Mono: left channel only.",
+          "caution": "Ignored while spatial audio renders surround. Choosing the wrong single channel can remove your voice.",
+          "options": ["stereo", "mono", "left", "right"]
+        },
+        {
+          "key": "spatialMode",
+          "label": "Spatial audio",
+          "type": "enum",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "off",
+          "meaning": "Off captures normally. Headphones renders each 5.1/7.1 speaker into a measured stereo head response. Speakers adds crosstalk cancellation for two speakers around ±30° in front of a centred listener.",
+          "increase": "",
+          "decrease": "",
+          "example": "Choose Surround to headphones for a 7.1 game mix and connect the stereo output to your headphones.",
+          "caution": "Requires the actual selected endpoint to expose 6 or 8 float32 channels at 8–192 kHz with a supported surround mask. A stereo endpoint is refused. Stop and Play to apply changes.",
+          "options": ["off", "headphones", "speakers"]
+        },
+        {
+          "key": "spatialRoomPercent",
+          "label": "Room",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "meaning": "Adds a small simulated room around the virtual speakers. Zero turns the room effect off; higher values sound farther away.",
+          "increase": "Adds more simulated room character and perceived distance.",
+          "decrease": "Emphasizes the direct virtual speaker response.",
+          "example": "Compare 0% and 20% with the same game scene to hear direct positioning versus a little room.",
+          "caution": "Only visible for a surround mode. Changes apply after Stop and Play."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "A centred interface microphone",
+          "steps": [
+            "Choose the exact interface capture endpoint.",
+            "Choose Left or Right to match the socket carrying your microphone.",
+            "Connect to a Meter, then your intended destination. Save and Play."
+          ]
+        },
+        {
+          "title": "Surround game to headphones",
+          "steps": [
+            "Configure the game playback endpoint as 5.1 or 7.1 in Windows.",
+            "Choose Headphones mode, then the corresponding surround Loopback choice.",
+            "Connect to a different headphone endpoint, Save and Play."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A Windows recording endpoint named Output can be the receiving end of a virtual cable; inspect direction and channels.",
+        "Do not route a loopback source back into the same endpoint.",
+        "A missing microphone stays missing; AudioRouter does not silently substitute another."
+      ],
+      "suggestedVisual": {
+        "type": "channels",
+        "caption": "Animate separate left/right lanes merging into two identical mono lanes; offer a surround speaker orbit with a static reduced-motion state."
+      },
+      "sources": [
+        "ui/src/InputChannelsField.tsx",
+        "ui/src/SpatialAudioField.tsx",
+        "ui/src/NodeEditors.tsx",
+        "docs/spec/05-windows-capture.md"
+      ]
+    },
+    {
+      "kind": "physicalOutput",
+      "title": "Physical Output",
+      "purpose": "Hear a route through one selected Windows playback endpoint.",
+      "concept": "The output is a destination for the branch connected to its input.",
+      "signalBehavior": "Consumes routed samples; branch effects change this route rather than Windows master volume.",
+      "properties": [
+        {
+          "key": "endpointId",
+          "label": "Audio device",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Binds this node to one exact Windows audio endpoint. The channel layout appears before its friendly name. Similar names can refer to different devices.",
+          "increase": "",
+          "decrease": "",
+          "example": "Choose your USB microphone for capture, or wired headphones for output.",
+          "caution": "No device is selected on a new node. Choose it deliberately and Save; stop playback before changing the device."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Listen through headphones",
+          "steps": [
+            "Choose your exact headphone playback endpoint.",
+            "Connect the last tool or Mixer to this output.",
+            "Save and Play; confirm its input meter."
+          ]
+        },
+        {
+          "title": "Hear and record independently",
+          "steps": [
+            "Branch the same processed tool to Physical Output and Recorder.",
+            "Play to monitor; start the Recorder only when ready."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Selecting an output does not connect it: add a wire.",
+        "Capturing the same monitor endpoint upstream can create feedback.",
+        "Bluetooth latency and profile changes are device dependent."
+      ],
+      "suggestedVisual": {
+        "type": "route",
+        "caption": "Follow a pulse to headphones and an independent recording branch."
+      },
+      "sources": ["ui/src/NodeEditors.tsx", "docs/spec/05-windows-capture.md"]
+    },
+    {
+      "kind": "applicationCapture",
+      "title": "Application Capture",
+      "purpose": "Capture one chosen application process tree.",
+      "concept": "The picker selects an application identity rather than an interchangeable process number. Normal application playback continues.",
+      "signalBehavior": "Produces the selected app audio; a closed app produces silence while retaining its node.",
+      "properties": [
+        {
+          "key": "application",
+          "label": "Application to capture",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Choose a running application. The selection stores executable/path identity and process creation information; the PID label only helps distinguish current instances.",
+          "increase": "",
+          "decrease": "",
+          "example": "Pick your music player from Using audio now, then connect it to a Mixer.",
+          "caution": "Stop before changing the application. Refresh applications if it has just started. Browser tabs are not separate capture sources.",
+          "parameter": false
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Separate game and voice",
+          "steps": [
+            "Add an Application Capture for the game and a Physical Input for your microphone.",
+            "Route each to its own processing chain.",
+            "Combine them only where you want a mix."
+          ]
+        },
+        {
+          "title": "Troubleshoot a quiet app",
+          "steps": [
+            "Check whether the node says app closed, ambiguous, unsupported, or connected.",
+            "Start audio in the chosen application and refresh its inventory.",
+            "Confirm the actual node meter, rather than assuming connected means audible."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Capturing an app does not mute its normal speaker playback; duplicate monitoring can result.",
+        "Two indistinguishable verified instances require deliberate selection.",
+        "Protected or unusual applications are not guaranteed to capture."
+      ],
+      "suggestedVisual": {
+        "type": "scope",
+        "caption": "Animate one highlighted process tree feeding the route while another app remains outside capture."
+      },
+      "sources": [
+        "ui/src/NodeEditors.tsx",
+        "ui/src/draft.ts",
+        "docs/spec/05-windows-capture.md"
+      ]
+    },
+    {
+      "kind": "endpointLoopback",
+      "title": "Endpoint Loopback",
+      "purpose": "Capture the mix playing to a selected output endpoint.",
+      "concept": "Loopback observes an output device mix, unlike process capture which follows an application tree.",
+      "signalBehavior": "Includes sounds rendered to that endpoint; excludes sound rendered only to other endpoints.",
+      "properties": [],
+      "recipes": [
+        {
+          "title": "Capture a playback mix",
+          "steps": [
+            "Identify which playback endpoint receives the wanted apps.",
+            "Use an explicitly configured loopback source for that endpoint.",
+            "Send capture to a different monitor endpoint to avoid recapturing yourself."
+          ]
+        },
+        {
+          "title": "Choose a narrower source",
+          "steps": [
+            "If you only need one app, use Application Capture.",
+            "If you need a shared playback bus, use a virtual render source or an explicitly configured loopback."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "The current Properties panel has no dedicated Endpoint Loopback endpoint picker; do not assume the Physical Output picker configures this node.",
+        "A desktop mix is not every output device on the PC."
+      ],
+      "suggestedVisual": {
+        "type": "scope",
+        "caption": "Show two output device lanes; only the selected lane enters the loopback."
+      },
+      "sources": [
+        "ui/src/PropertiesPanel.tsx",
+        "docs/spec/05-windows-capture.md"
+      ]
+    },
+    {
+      "kind": "virtualRenderSource",
+      "title": "Virtual Render Source",
+      "purpose": "Bring an app playback stream from an installed AudioRouter cable into the graph.",
+      "concept": "A cable has a playback side chosen as a speaker and a recording side chosen as a microphone.",
+      "signalBehavior": "Receives samples an external app plays into the selected cable.",
+      "properties": [
+        {
+          "key": "busId",
+          "label": "Cable",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Select the installed cable whose playback side receives your app audio.",
+          "increase": "",
+          "decrease": "",
+          "example": "Choose Cable A, then select its shown playback name as the game speaker.",
+          "caution": "The driver must be installed and available; the picker cannot create a missing cable."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "App to processing",
+          "steps": [
+            "Choose an installed cable in Properties.",
+            "Choose the shown speaker name in the source application.",
+            "Connect this source to tools and an intended destination. Save and Play."
+          ]
+        },
+        {
+          "title": "Check the two sides",
+          "steps": [
+            "Read the side name shown by Properties.",
+            "Match playback to an app speaker and capture to an app microphone.",
+            "Use meters to confirm audio before changing other settings."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "The cable picker refers to installed driver capabilities; it is not an install action.",
+        "Do not connect source and destination through the same cable in a feedback loop."
+      ],
+      "suggestedVisual": {
+        "type": "cable",
+        "caption": "Animate app speaker → cable playback → graph, or graph → cable recording → app microphone."
+      },
+      "sources": [
+        "ui/src/NodeEditors.tsx",
+        "ui/src/PropertiesPanel.tsx",
+        "docs/spec/17-virtual-cable.md"
+      ]
+    },
+    {
+      "kind": "virtualCaptureSink",
+      "title": "Virtual Capture Sink",
+      "purpose": "Deliver a graph branch to an installed AudioRouter cable for another app to record.",
+      "concept": "A cable has a playback side chosen as a speaker and a recording side chosen as a microphone.",
+      "signalBehavior": "Sends this branch to the selected cable recording side.",
+      "properties": [
+        {
+          "key": "busId",
+          "label": "Cable",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Select the installed cable whose recording side should expose this branch.",
+          "increase": "",
+          "decrease": "",
+          "example": "Choose Cable B, then select its shown recording name as the chat microphone.",
+          "caution": "The driver must be installed and available; the picker cannot create a missing cable."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Processed voice to chat",
+          "steps": [
+            "Connect your voice chain to this sink.",
+            "Choose an installed cable. Save and Play.",
+            "Choose the shown microphone name in the receiving app."
+          ]
+        },
+        {
+          "title": "Check the two sides",
+          "steps": [
+            "Read the side name shown by Properties.",
+            "Match playback to an app speaker and capture to an app microphone.",
+            "Use meters to confirm audio before changing other settings."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "The cable picker refers to installed driver capabilities; it is not an install action.",
+        "Do not connect source and destination through the same cable in a feedback loop."
+      ],
+      "suggestedVisual": {
+        "type": "cable",
+        "caption": "Animate app speaker → cable playback → graph, or graph → cable recording → app microphone."
+      },
+      "sources": [
+        "ui/src/NodeEditors.tsx",
+        "ui/src/PropertiesPanel.tsx",
+        "docs/spec/17-virtual-cable.md"
+      ]
+    },
+    {
+      "kind": "testSignal",
+      "title": "Test Signal",
+      "purpose": "Generate a predictable tone to check wiring, levels, and destinations.",
+      "concept": "A known signal removes uncertainty about whether a microphone or app is currently producing sound.",
+      "signalBehavior": "Node Play starts its bounded tone through the connected session route; node Stop stops the tone while the route can remain running.",
+      "properties": [
+        {
+          "key": "frequencyHz",
+          "label": "Tone frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 440,
+          "meaning": "Sets the pitch of the tone. 440 Hz is musical A above middle C.",
+          "increase": "Makes the sine wave oscillate faster and sound higher.",
+          "decrease": "Makes the oscillation slower and the pitch lower.",
+          "example": "Use 440 Hz to locate the signal, then try 1000 Hz for a steady midrange reference.",
+          "caution": ""
+        },
+        {
+          "key": "levelDb",
+          "label": "Level",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -60,
+          "maximum": 0,
+          "default": -18,
+          "meaning": "Sets digital tone amplitude. More negative is quieter; 0 dBFS is the digital ceiling.",
+          "increase": "Raises tone amplitude toward the digital ceiling.",
+          "decrease": "Reduces tone amplitude.",
+          "example": "Begin at −18 dBFS and a comfortable headphone volume.",
+          "caution": "Avoid jumping straight to 0 dBFS."
+        },
+        {
+          "key": "durationMs",
+          "label": "Duration",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 1,
+          "maximum": 600000,
+          "default": 1000,
+          "meaning": "Sets how long each press of the node Play button generates the tone.",
+          "increase": "Keeps the tone playing longer after each Play.",
+          "decrease": "Produces a shorter burst.",
+          "example": "1000 ms gives a one-second check; 5000 ms gives time to inspect meters.",
+          "caution": ""
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Find a broken connection",
+          "steps": [
+            "Connect Test Signal → Meter → Physical Output.",
+            "Choose the output and Save.",
+            "Press the node Play button and follow the meters along the route."
+          ]
+        },
+        {
+          "title": "Separate tone and session transport",
+          "steps": [
+            "Start the tone from its node.",
+            "Stop it from the node while keeping the prepared session running.",
+            "Use header Stop to stop the complete session."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A wire alone is configured connectivity; confirm fresh meters for signal.",
+        "Node transport and header session transport have different scopes."
+      ],
+      "suggestedVisual": {
+        "type": "tone",
+        "caption": "Animate a labelled sine wave with frequency, amplitude and a bounded duration gate."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "ui/src/parameterText.ts",
+        "ui/src/draft.ts",
+        "docs/milestones/M05-visual-editor.md"
+      ]
+    },
+    {
+      "kind": "audioFile",
+      "title": "Audio File",
+      "purpose": "Replay a bounded WAV or MP3 through the same processing route.",
+      "concept": "Imported media is a graph source, useful for comparing settings with repeatable material.",
+      "signalBehavior": "Play, Pause and Stop control this source in the prepared native route. Loop restarts the sample rather than changing downstream processing.",
+      "properties": [
+        {
+          "key": "mediaId",
+          "label": "Choose WAV or MP3",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "meaning": "Import a WAV or MP3; the backend stores a media reference and displays its filename. Maximum 64 MiB and 120 seconds.",
+          "increase": "",
+          "decrease": "",
+          "example": "Import a short spoken phrase and compare compressor settings with the same performance.",
+          "caution": "Save the selected source before playback. The filename display is metadata, not a path text field."
+        },
+        {
+          "key": "loop",
+          "label": "Loop",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "meaning": "Repeat the imported audio when it reaches the end.",
+          "increase": "",
+          "decrease": "",
+          "example": "Enable Loop for a repeatable 10-second voice sample while adjusting EQ.",
+          "caution": ""
+        },
+        {
+          "key": "temporaryRecorder",
+          "label": "Already-routed Recorder node",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Choose an enabled Recorder already receiving an existing source. Record temporary take uses that route; it does not open or choose a microphone.",
+          "increase": "",
+          "decrease": "",
+          "example": "Route your mic to a Recorder, start the session, record a phrase, then Stop and use take.",
+          "caution": "Takes stop automatically at 120 seconds; imported temporary samples expire after 24 hours.",
+          "parameter": false
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Tune with a repeatable phrase",
+          "steps": [
+            "Import a short voice WAV or MP3.",
+            "Connect it through the effect chain and to your output.",
+            "Save, enable Loop and Play."
+          ]
+        },
+        {
+          "title": "Create a temporary voice reference",
+          "steps": [
+            "Connect an existing mic or application source to an enabled Recorder.",
+            "Start the session, choose that Recorder in Audio File Properties and record the take.",
+            "Stop and use take, then Save the audio-file source."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "An imported file is not yet connected to an output.",
+        "Pause/Resume lives in Properties; the compact node offers Play/Stop.",
+        "A temporary take cannot pick or open a microphone."
+      ],
+      "suggestedVisual": {
+        "type": "transport",
+        "caption": "Animate a playhead through a sample, freeze on Pause and wrap at the loop boundary."
+      },
+      "sources": [
+        "ui/src/AudioFileNodeEditor.tsx",
+        "ui/src/audioUpload.ts",
+        "docs/milestones/M05-visual-editor.md"
+      ]
+    },
+    {
+      "kind": "recorder",
+      "title": "Recorder",
+      "purpose": "Save the signal reaching one route branch to a file.",
+      "concept": "Recording is a separate sink; monitoring and other branches can continue independently.",
+      "signalBehavior": "Record starts a take from a running, enabled route. Stop drains and saves the file; stopping playback finalizes active recordings.",
+      "properties": [
+        {
+          "key": "format",
+          "label": "File format",
+          "type": "enum",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "wavPcm24",
+          "meaning": "Choose WAV 16/24-bit, WAV 32-bit float, FLAC 16/24-bit, or MP3. WAV PCM24 is the default; MP3 uses the fixed 192 kbps profile.",
+          "increase": "",
+          "decrease": "",
+          "example": "Use WAV 24-bit for an editing master or FLAC 24-bit for lossless compression.",
+          "caution": "MP3 splitting is unsupported in this release. No hidden limiter or normalization is applied.",
+          "options": [
+            "wavPcm24",
+            "wavPcm16",
+            "wavFloat32",
+            "flac24",
+            "flac16",
+            "mp3"
+          ]
+        },
+        {
+          "key": "autoRecord",
+          "label": "Record automatically when Play starts",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "meaning": "Starts a new recording with each session Play after you explicitly enable it. Stop saves it.",
+          "increase": "",
+          "decrease": "",
+          "example": "Turn it on for a dedicated interview session you always want to record.",
+          "caution": "Opening a session or importing it does not itself start recording."
+        },
+        {
+          "key": "splitMinutes",
+          "label": "New file every",
+          "type": "number",
+          "unit": "min",
+          "minimum": 0,
+          "maximum": 240,
+          "default": 0,
+          "meaning": "Starts another file after this duration; zero keeps one file per take subject to operational format limits.",
+          "increase": "Creates longer recording segments before the next file.",
+          "decrease": "Creates shorter segments; zero selects one file per take subject to format limits.",
+          "example": "Choose 30 minutes for smaller chunks during a long session.",
+          "caution": "Use a splitting-capable format; MP3 does not support splitting."
+        },
+        {
+          "key": "recordingRoot",
+          "label": "Recording folder",
+          "type": "folder",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Choose and approve the folder before your first recording. This is shared recording configuration, rather than a per-node audio parameter.",
+          "increase": "",
+          "decrease": "",
+          "example": "Use the suggested Music/AudioRouter Recordings folder or another approved local location.",
+          "caution": "A suggestion is not applied silently; use Use this folder.",
+          "parameter": false
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Record raw and processed voice",
+          "steps": [
+            "Branch the microphone to one Recorder.",
+            "Branch the processed voice chain to another Recorder.",
+            "Choose the folder, Save and Play, then Record each intended branch."
+          ]
+        },
+        {
+          "title": "Record without headphones",
+          "steps": [
+            "Connect your source through the wanted tools to Recorder.",
+            "Choose and approve the folder.",
+            "Save, Play, then Record; Stop saves the take."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "No wire into Recorder means no desired source reaches it.",
+        "Play alone does not record unless automatic recording was deliberately enabled.",
+        "Removing a library entry and recycling its file are separate actions."
+      ],
+      "suggestedVisual": {
+        "type": "recording",
+        "caption": "Show a route branch filling a file while the monitor branch continues; mark a split boundary without duplicating samples."
+      },
+      "sources": [
+        "ui/src/RecorderControls.tsx",
+        "ui/src/parameterText.ts",
+        "crates/control/src/catalog.rs",
+        "docs/spec/08-recording.md"
+      ]
+    },
+    {
+      "kind": "networkSend",
+      "title": "Network Send",
+      "purpose": "Send one branch to another AudioRouter PC over UDP.",
+      "concept": "Network Send waits for Network Receive in a second AudioRouter session on PC B, another computer. Both nodes name the other PC and use the same UDP port and pairing key. After pairing, audio packets cross the IP network into PC B's route.",
+      "signalBehavior": "Consumes graph audio and transmits only to the configured address.",
+      "properties": [
+        {
+          "key": "host",
+          "label": "Receiving computer’s IP address",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Enter the destination PC IPv4 or IPv6 literal. Host names are not resolved.",
+          "increase": "",
+          "decrease": "",
+          "example": "If the second PC is 192.168.1.42, put that address in Network Send.",
+          "caution": "Use the actual network address shown for the other PC; do not exchange source and destination."
+        },
+        {
+          "key": "port",
+          "label": "UDP port",
+          "type": "number",
+          "unit": null,
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 47800,
+          "meaning": "Identifies the receiving UDP listener. Set the same port on both nodes.",
+          "increase": "",
+          "decrease": "",
+          "example": "Keep 47800 on both PCs for a single stream.",
+          "caution": "A firewall or another listener can prevent delivery."
+        },
+        {
+          "key": "pairingKey",
+          "label": "Pairing key",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "meaning": "Use the same generated key on both nodes to authenticate packets. Blank is unpaired; printable ASCII only, without outer spaces.",
+          "increase": "",
+          "decrease": "",
+          "example": "Use Generate, then privately copy the resulting key to the other node.",
+          "caution": "Pairing does not encrypt audio. Use a trusted local network. Never include a real pairing key in examples or diagnostics.",
+          "constraints": "Blank or 16–128 printable ASCII characters, no leading/trailing spaces."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Connect two PCs",
+          "steps": [
+            "On the first PC, connect a source or mix to Network Send.",
+            "Enter the second PC address; on that PC add Network Receive with the first PC address.",
+            "Match port and generated pairing key. Connect Receive to an output, Save and Play both routes."
+          ]
+        },
+        {
+          "title": "Resolve waiting for audio",
+          "steps": [
+            "Check source and destination addresses are in the correct fields.",
+            "Check port and pairing match, including whether either key is blank.",
+            "Inspect node counts and firewall access; a running sender alone does not prove reception."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A matching pairing key authenticates packets but leaves samples unencrypted.",
+        "Host names are unsupported; enter literal IP addresses.",
+        "The receiver buffer trades delay for resilience."
+      ],
+      "suggestedVisual": {
+        "type": "network",
+        "caption": "First show the sender waiting for Network Receive on PC B; after pairing, animate UDP packets crossing the network into PC B's AudioRouter route."
+      },
+      "sources": [
+        "ui/src/NetworkNodeEditor.tsx",
+        "ui/src/draft.ts",
+        "docs/spec/04-graph.md",
+        "docs/spec/13-security.md"
+      ]
+    },
+    {
+      "kind": "networkReceive",
+      "title": "Network Receive",
+      "purpose": "Receive audio from one selected AudioRouter PC.",
+      "concept": "PC B’s Network Receive waits for Network Send in a second AudioRouter session on PC A. It accepts only the configured sender address, UDP port and matching pairing key, then plays packets through a bounded receive buffer. A larger buffer adds a little delay and tolerance for packet timing variation; missing packets become silence.",
+      "signalBehavior": "Accepts the configured sender address and plays through a bounded jitter buffer; missing packets become silence.",
+      "properties": [
+        {
+          "key": "sender",
+          "label": "Sending computer’s IP address",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Enter the source PC IPv4 or IPv6 literal. Audio from other addresses is ignored.",
+          "increase": "",
+          "decrease": "",
+          "example": "If the first PC is 192.168.1.21, put that address in Network Receive.",
+          "caution": "Use the actual network address shown for the other PC; do not exchange source and destination."
+        },
+        {
+          "key": "port",
+          "label": "UDP port",
+          "type": "number",
+          "unit": null,
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 47800,
+          "meaning": "Identifies the receiving UDP listener. Set the same port on both nodes.",
+          "increase": "",
+          "decrease": "",
+          "example": "Keep 47800 on both PCs for a single stream.",
+          "caution": "A firewall or another listener can prevent delivery."
+        },
+        {
+          "key": "bufferMs",
+          "label": "Receive buffer",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 10,
+          "maximum": 500,
+          "default": 40,
+          "meaning": "Keeps a small amount of audio ready to absorb packet timing variation. More buffer adds delay; less leaves less margin before gaps.",
+          "increase": "Keeps more incoming audio ready, adding delay and margin for jitter.",
+          "decrease": "Reduces buffering delay but leaves less tolerance for packet timing variation.",
+          "example": "Start at 40 ms. Increase to 80 ms if a busy local network produces gaps.",
+          "caution": "This changes network buffering, not microphone capture latency."
+        },
+        {
+          "key": "pairingKey",
+          "label": "Pairing key",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "meaning": "Use the same generated key on both nodes to authenticate packets. Blank is unpaired; printable ASCII only, without outer spaces.",
+          "increase": "",
+          "decrease": "",
+          "example": "Use Generate, then privately copy the resulting key to the other node.",
+          "caution": "Pairing does not encrypt audio. Use a trusted local network. Never include a real pairing key in examples or diagnostics.",
+          "constraints": "Blank or 16–128 printable ASCII characters, no leading/trailing spaces."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Connect two PCs",
+          "steps": [
+            "On the first PC, connect a source or mix to Network Send.",
+            "Enter the second PC address; on that PC add Network Receive with the first PC address.",
+            "Match port and generated pairing key. Connect Receive to an output, Save and Play both routes."
+          ]
+        },
+        {
+          "title": "Resolve waiting for audio",
+          "steps": [
+            "Check source and destination addresses are in the correct fields.",
+            "Check port and pairing match, including whether either key is blank.",
+            "Inspect node counts and firewall access; a running sender alone does not prove reception."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A matching pairing key authenticates packets but leaves samples unencrypted.",
+        "Host names are unsupported; enter literal IP addresses.",
+        "The receiver buffer trades delay for resilience."
+      ],
+      "suggestedVisual": {
+        "type": "network",
+        "caption": "Show PC A sending into the IP network and PC B receiving into a short buffer before the destination. Wait for the paired sender, then move packets into the route; include the illustrative buffer delay."
+      },
+      "sources": [
+        "ui/src/NetworkNodeEditor.tsx",
+        "ui/src/draft.ts",
+        "docs/spec/04-graph.md",
+        "docs/spec/13-security.md"
+      ]
+    },
+    {
+      "kind": "plugin",
+      "title": "VST Plugin",
+      "purpose": "Use a compatible installed x64 VST effect in an isolated worker.",
+      "concept": "Each plugin defines its own automatable controls; scanning discovers metadata, while adding and preparing a plugin is a separate action.",
+      "signalBehavior": "An effect processes the branch through its isolated worker. A failed processor on protected voice produces silence until deliberate recovery.",
+      "properties": [
+        {
+          "key": "path",
+          "label": "Scanned plugin",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "Scan an explicitly chosen absolute directory, inspect a supported result, then Add to draft. The selected exact binary identity is preserved.",
+          "increase": "",
+          "decrease": "",
+          "example": "Scan your installed x64 VST3 directory and add the intended effect.",
+          "caution": "Compatibility labels are not a guarantee every plugin works. x64 VST2 remains qualification-gated."
+        },
+        {
+          "key": "pluginParameter:<parameterId>",
+          "label": "Plugin-provided parameter title",
+          "type": "number",
+          "unit": "normalized",
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "meaning": "The scanned plugin provides each title, minimum, maximum and default. The inspector offers a slider and precise value with a 0.001 step.",
+          "increase": "",
+          "decrease": "",
+          "example": "Adjust the plugin-defined threshold control using the range returned for that exact plugin.",
+          "caution": "No universal parameter ranges or physical units can be assumed. Some plugins expose no automatable parameters."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Add one effect safely",
+          "steps": [
+            "Scan the explicit installed plugin directory.",
+            "Inspect a supported result and Add to draft.",
+            "Wire it into the intended branch, Save, then check running telemetry and the output meter."
+          ]
+        },
+        {
+          "title": "Compare with the dry route",
+          "steps": [
+            "Use Bypass for a deliberate dry comparison.",
+            "Match perceived loudness before judging the result.",
+            "If the plugin faults, inspect the error and recover deliberately."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Scan completion does not mean plugin code has been loaded or has processed audio.",
+        "A running session can contain a silent failed plugin path.",
+        "Do not use another plugin’s values as though parameter IDs or scales were shared."
+      ],
+      "suggestedVisual": {
+        "type": "plugin",
+        "caption": "Show the isolated worker boundary and input/output waveforms; a simulated fault closes the protected voice output to silence."
+      },
+      "sources": [
+        "ui/src/PluginPanels.tsx",
+        "ui/src/NodeEditors.tsx",
+        "docs/spec/07-processing.md",
+        "docs/spec/13-security.md"
+      ]
+    },
+    {
+      "kind": "group",
+      "title": "Visual Group",
+      "purpose": "Label and organize regions of your canvas.",
+      "concept": "A group is a presentation rectangle behind nodes and wires, without audio ports.",
+      "signalBehavior": "Moving, resizing or renaming it never changes audio connections.",
+      "properties": [
+        {
+          "key": "name",
+          "label": "Name",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "Group",
+          "meaning": "Names the visual region.",
+          "increase": "",
+          "decrease": "",
+          "example": "Call a group Voice processing or Game audio.",
+          "caution": "Groups are saved locally per session and are not part of exported audio session files.",
+          "constraints": "At most 120 characters."
+        },
+        {
+          "key": "color",
+          "label": "Background color",
+          "type": "color",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "#5599dd",
+          "meaning": "Sets the rectangle color using a six-digit hex color.",
+          "increase": "",
+          "decrease": "",
+          "example": "Use blue for voice and green for desktop while retaining readable labels.",
+          "caution": ""
+        },
+        {
+          "key": "opacity",
+          "label": "Opacity",
+          "type": "number",
+          "unit": "%",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 5,
+          "meaning": "Controls background strength. A small value keeps wires and node controls visible.",
+          "increase": "Makes the rectangle background stronger.",
+          "decrease": "Makes the region subtler while retaining its caption.",
+          "example": "Start at 5%; raise only enough to distinguish regions.",
+          "caution": ""
+        },
+        {
+          "key": "fontSize",
+          "label": "Font size",
+          "type": "number",
+          "unit": "px",
+          "minimum": 12,
+          "maximum": 48,
+          "default": 18,
+          "meaning": "Sets the caption size.",
+          "increase": "Enlarges the caption.",
+          "decrease": "Makes the caption smaller.",
+          "example": "Use 24 px to label a larger canvas region.",
+          "caution": ""
+        },
+        {
+          "key": "locked",
+          "label": "Lock position and size",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "meaning": "Prevents accidental dragging, resizing and canvas deletion. Properties can still edit the group.",
+          "increase": "",
+          "decrease": "",
+          "example": "Lock a finished Voice group while connecting nearby tools.",
+          "caution": "Unlock it to move or resize it."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Organize without rewiring",
+          "steps": [
+            "Add a Group from Tools.",
+            "Move it behind related nodes and resize the border.",
+            "Name it, choose subtle color and lock its position."
+          ]
+        },
+        {
+          "title": "Prepare an overview",
+          "steps": [
+            "Use one group for each understandable processing region.",
+            "Keep captions outside important controls.",
+            "Use fit or tidy layout and check the groups still communicate the route."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Groups do not mix audio and dragging them does not connect nodes.",
+        "Groups use local presentation storage; session export does not carry them."
+      ],
+      "suggestedVisual": {
+        "type": "group",
+        "caption": "Animate a rectangle appearing behind existing nodes while every audio wire remains fixed."
+      },
+      "sources": ["ui/src/CanvasGroups.tsx", "docs/spec/09-interface.md"]
+    }
+  ]
+}

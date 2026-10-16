@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "@playwright/test";
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`API listener controls and address in ${theme}`, async ({ page }, testInfo) => {
@@ -31,7 +32,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       });
     });
     await page.goto("/route-harness.html");
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     await page.getByRole("tab", { name: "API", exact: true }).click();
     await page.getByLabel("API port").fill("17894");
     await page.getByRole("button", { name: "Start API" }).click();

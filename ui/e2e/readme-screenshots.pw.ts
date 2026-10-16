@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import path from "node:path";
 import type { Session } from "../../contracts/src/index";
 import {
@@ -141,8 +142,8 @@ test("README screenshots", async ({ page, backend }) => {
   await shot("gaming-pc-network-send.png");
 
   await open("Streaming PC: receive and record");
-  await page.getByLabel("Color theme").selectOption("light");
+  await setColorTheme(page, "light");
   await page.getByRole("tab", { name: "Session", exact: true }).click();
   await shot("streaming-pc-light.png");
-  await page.getByLabel("Color theme").selectOption("dark");
+  await setColorTheme(page, "dark");
 });

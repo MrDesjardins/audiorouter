@@ -1,3 +1,4 @@
+import { openAppSettings } from "./workbench";
 import { readFileSync } from "node:fs";
 import { test, expect } from "@playwright/test";
 
@@ -40,8 +41,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect((await popup).url()).toBe("https://github.com/MrDesjardins/audiorouter/releases/tag/v9.9.9");
     await (await popup).close();
 
-    // Setup → turning the check off removes the notice.
-    await page.getByRole("tab", { name: "Setup", exact: true }).click();
+    // Advanced → turning the check off removes the notice.
+    await openAppSettings(page);
     const panel = page.getByRole("region", { name: "New versions" });
     await expect(panel).toContainText(`You have AudioRouter ${version}. Version 9.9.9 is available.`);
     await panel.scrollIntoViewIfNeeded();

@@ -87,11 +87,6 @@ export function SignalFlowPanel({
           <h2 id="canvas-heading">Canvas</h2>
         </div>
       </div>
-      <p className="muted canvas-handle-legend">
-        <span className="canvas-handle-legend-dot canvas-handle-legend-dot-target" aria-hidden="true" /> Send (start)
-        <span className="canvas-handle-legend-dot canvas-handle-legend-dot-source" aria-hidden="true" /> Receive (end) -
-        drag from the sending tool's blue dot to the receiving tool's orange dot.
-      </p>
       {flowCanvas}
       <fieldset className="connection-editor" disabled={!backend.connected}>
         <legend>Add connection to draft</legend>

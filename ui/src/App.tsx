@@ -1,3 +1,8 @@
+import { UiOptionsWorkbench } from "./UiOptionsWorkbench";
+import { readCustomTheme, writeCustomTheme, customThemeStyle } from "./customTheme";
+import { UpdatesPanel } from "./UpdateNotice";
+import { setUpdateCheckEnabled } from "./updateCheck";
+import { FirstRunGuide } from "./FirstRunGuide";
 import { useCanvasGroups } from "./CanvasGroups";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { PluginParametersResult } from "@audiorouter/contracts";
@@ -92,7 +97,12 @@ import {
 } from "./preferences";
 import { SidebarResizer } from "./SidebarResizer";
 import { SessionFilePanel } from "./SessionFilePanel";
-import { announceDeviceAccessChanged, DeviceAccessDialog, isDeviceAccessDenied } from "./DeviceAccess";
+import {
+  announceDeviceAccessChanged,
+  DeviceAccessSetting,
+  DeviceAccessDialog,
+  isDeviceAccessDenied,
+} from "./DeviceAccess";
 import { LibraryDragOverlay } from "./libraryDrag";
 import {
   defaultShortcutBinding,
@@ -106,6 +116,7 @@ import { setupChecklist } from "./setup";
 import { uiIdempotencyKey } from "./idempotency";
 import { processorParameterError, type ProcessorDescriptor } from "./processorCatalog";
 import { mergeSessionInventory, reconcileSessionDraft, sameSessionDraft } from "./sessionInventory";
+import { unsavedNodeIds } from "./nodeSaveState";
 import type { Connection } from "@xyflow/react";
 import { decodeTopologyAction } from "./DraftConnectionList";
 import { BackendConnectionContext } from "./backendConnectionContext";
@@ -255,6 +266,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [theme, setTheme] = useState<ThemeMode>(() =>
     readTheme(typeof window === "undefined" ? null : window.localStorage),
   );
+  const [customTheme, setCustomTheme] = useState(() =>
+    readCustomTheme(typeof window === "undefined" ? null : window.localStorage),
+  );
+  const changeCustomTheme = (value: typeof customTheme) => {
+    setCustomTheme(value);
+    writeCustomTheme(typeof window === "undefined" ? null : window.localStorage, value);
+  };
+  const themeClassName = theme === "custom" ? `theme-${customTheme.base} theme-custom` : `theme-${theme}`;
+  const themeStyle = theme === "custom" ? customThemeStyle(customTheme) : undefined;
   const [flowAnimation, setFlowAnimation] = useState<FlowAnimationMode>(() =>
     readFlowAnimation(typeof window === "undefined" ? null : window.localStorage),
   );
@@ -1239,6 +1259,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // after a short pause so the change is heard without Stop/Play. Topology
   // edits still wait for an explicit Save.
   const lastAutoSaveDraft = useRef<string | null>(null);
+  const autoSavePending =
+    sessionRunning &&
+    backend.connected &&
+    !pendingGraphPlan &&
+    isParameterOnlyChange(session, draft) &&
+    (graphBusy || lastAutoSaveDraft.current !== JSON.stringify(draft));
   const planChangesRef = useRef(planChanges);
   planChangesRef.current = planChanges;
   useEffect(() => {
@@ -2634,7 +2660,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   if (backend.connected && !hasSnapshot)
     return (
-      <div className={`app-shell theme-${theme}`}>
+      <div className={`app-shell ${themeClassName}`} style={themeStyle}>
         <main className="panel" aria-label="Loading saved session">
           <h1>AudioRouter</h1>
           <p role="status">
@@ -2665,6 +2691,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       onChangeGroup={groupState.changeGroup}
       onRemoveGroup={groupState.removeGroup}
       session={draft}
+      pendingNodeIds={unsavedNodeIds(session, draft)}
+      nodeSaveState={graphBusy ? "saving" : autoSavePending ? "autosave" : "needs-save"}
       selectedNodeId={selectedNode.id}
       selectedNodeIds={selectedNodeIds}
       diagnostics={snapshot?.diagnostics ?? null}
@@ -2714,21 +2742,36 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       addConnection={addConnection}
     />
   );
-  const setupWorkbenchContent = (
+  const statusWorkbenchContent = (
     <SetupWorkbench
+      section="status"
       backend={backend}
       devices={devices}
       refreshDevices={refreshDevices}
-      setWorkbenchTab={setWorkbenchTab}
       setupSteps={setupSteps}
-      flowAnimation={flowAnimation}
-      changeFlowAnimation={changeFlowAnimation}
-      updateChecks={updateChecks}
-      setUpdateChecks={setUpdateChecks}
-      availableUpdate={availableUpdate}
+      sessions={availableSessions}
+    />
+  );
+  const cableWorkbenchContent = (
+    <SetupWorkbench
+      section="virtualCables"
+      backend={backend}
+      devices={devices}
+      refreshDevices={refreshDevices}
+      setupSteps={setupSteps}
       cableRoute={snapshot?.diagnostics?.cableRoute}
       onAddCablePassThrough={addCablePassThrough}
       sessions={availableSessions}
+    />
+  );
+  const uiOptionsWorkbenchContent = (
+    <UiOptionsWorkbench
+      theme={theme}
+      onTheme={setTheme}
+      customTheme={customTheme}
+      onCustomTheme={changeCustomTheme}
+      flowAnimation={flowAnimation}
+      onFlowAnimation={changeFlowAnimation}
     />
   );
   const devicesWorkbenchContent = (
@@ -2784,6 +2827,25 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   );
   const advancedWorkbenchContent = (
     <AdvancedWorkbench
+      appSettingsContent={
+        <>
+          <DeviceAccessSetting backend={backend} />
+          <UpdatesPanel
+            enabled={updateChecks}
+            onChange={(enabled) => {
+              setUpdateCheckEnabled(enabled);
+              setUpdateChecks(enabled);
+            }}
+            update={availableUpdate}
+          />
+          <FirstRunGuide
+            devices={devices}
+            connected={backend.connected}
+            onRefresh={() => refreshDevices()}
+            onOpenTools={() => setWorkbenchTab("tools")}
+          />
+        </>
+      }
       backend={backend}
       draft={draft}
       selectedNode={selectedNode}
@@ -2816,19 +2878,25 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   );
   return (
     <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}>
-      <div className={`app-shell theme-${theme}`}>
+      <div className={`app-shell ${themeClassName}`} style={themeStyle}>
         <header className="topbar">
           <div>
             <VersionLine update={availableUpdate} />
-            <h1>{draft.name || "Routing workspace"}</h1>
+            <h1>
+              <button
+                type="button"
+                className="header-session-name"
+                title="Open Session"
+                onClick={() => setWorkbenchTab("session")}
+              >
+                {draft.name || "Routing workspace"}
+              </button>
+            </h1>
           </div>
           <div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite">
             <span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">
-              {sessionActionBusy
-                ? "Starting or stopping audio…"
-                : sessionRunning
-                  ? "● Audio running"
-                  : "○ Audio stopped"}
+              <span className="audio-state-dot" aria-hidden="true" />
+              {sessionActionBusy ? "Updating audio…" : sessionRunning ? "Audio running" : "Audio stopped"}
             </span>
             <span className="status-detail" title={statusSummary}>
               {connectionLabel}
@@ -2864,6 +2932,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             <button
               type="button"
               className={routeChanged ? "primary" : "secondary"}
+              title={
+                autoSavePending
+                  ? "Parameter changes save automatically after a short pause"
+                  : routeChanged
+                    ? "Save the marked changes to this session"
+                    : "All changes saved"
+              }
+              data-save-required={routeChanged && !autoSavePending && !graphBusy}
               onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
               disabled={
                 !backend.connected ||
@@ -2881,96 +2957,75 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             >
               {sessionRunning ? "Stop" : "Play"}
             </button>
-            <button
-              type="button"
-              className="secondary privacy-mute-action"
-              aria-pressed={privacyMuted}
-              aria-label={privacyMuted ? "Microphone muted" : "Mute microphone"}
-              onClick={() => void togglePrivacyMute()}
-              disabled={!backend.connected || safetyActionBusyState}
-            >
-              {privacyMuted ? "Mic muted" : "Mute mic"}
-            </button>
-            <label className="theme-picker">
-              Theme
-              <select
-                aria-label="Color theme"
-                value={theme}
-                onChange={(event) => setTheme(event.target.value as ThemeMode)}
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-                <option value="high-contrast">High contrast</option>
-              </select>
-            </label>
             <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
               Reconnect
             </button>
             <QuitButton onMessage={setActionMessage} />
           </div>
         </header>
-        {unfedRouteNodes(draft).length > 0 && (
-          <p className="panel-message is-warning inactive-route-warning" role="status">
-            Warning: no input reaches{" "}
-            {unfedRouteNodes(draft)
-              .map((node) => node.name)
-              .join(", ")}
-            . These nodes are ignored during playback; connected routes can still play.
-          </p>
-        )}
-        {(() => {
-          const text = actionMessage
-            ? actionMessage
-            : !backend.connected
-              ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.`
-              : sessionRunning
-                ? "Audio is running through this session."
-                : "Audio is stopped. Press Play to start this session. To set up a new route, add an input (such as your microphone) and an output (such as your headphones), then connect their ports on the canvas.";
-          const tone = !backend.connected ? "error" : actionMessage ? actionMessageTone(actionMessage) : "info";
-          return (
-            <div
-              className={`global-action-message is-${tone}`}
-              role={tone === "error" ? "alert" : "status"}
-              aria-live={tone === "error" ? "assertive" : "polite"}
-            >
-              <span className="global-action-message-icon" aria-hidden="true">
-                {tone === "error" ? "!" : tone === "warning" ? "!" : tone === "success" ? "✓" : "i"}
-              </span>
-              <span className="global-action-message-text" title={text}>
-                {text}
-              </span>
-              {backend.connected && connectionReplacement && actionMessage?.includes("Replace input connection") && (
-                <button type="button" className="secondary" onClick={replaceInputConnection}>
-                  Replace input connection
-                </button>
-              )}
-              {backend.connected && actionMessage?.includes("Troubleshooting") && workbenchTab !== "advanced" && (
-                <button type="button" className="secondary" onClick={() => setWorkbenchTab("advanced")}>
-                  Open Advanced
-                </button>
-              )}
-              {backend.connected && actionMessage?.includes("Open Session") && workbenchTab !== "session" && (
-                <button type="button" className="secondary" onClick={() => setWorkbenchTab("session")}>
-                  Open Session
-                </button>
-              )}
-              {backend.connected && actionMessage && (
-                <button
-                  type="button"
-                  className="secondary global-action-message-dismiss"
-                  aria-label="Dismiss message"
-                  title="Dismiss message"
-                  onClick={() => {
-                    setActionMessage(null);
-                    setConnectionReplacement(null);
-                  }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          );
-        })()}
+        <aside className="workspace-notifications" aria-label="Notifications">
+          {unfedRouteNodes(draft).length > 0 && (
+            <p className="panel-message is-warning inactive-route-warning" role="status">
+              Warning: no input reaches{" "}
+              {unfedRouteNodes(draft)
+                .map((node) => node.name)
+                .join(", ")}
+              . These nodes are ignored during playback; connected routes can still play.
+            </p>
+          )}
+          {(() => {
+            const text = actionMessage
+              ? actionMessage
+              : !backend.connected
+                ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.`
+                : "";
+            const tone = !backend.connected ? "error" : actionMessage ? actionMessageTone(actionMessage) : "info";
+            return (
+              <div
+                className={`global-action-message is-${tone}${text ? "" : " is-empty"}`}
+                aria-hidden={!text}
+                role={tone === "error" ? "alert" : "status"}
+                aria-live={tone === "error" ? "assertive" : "polite"}
+              >
+                <span className="global-action-message-icon" aria-hidden="true">
+                  {tone === "error" ? "!" : tone === "warning" ? "!" : tone === "success" ? "✓" : "i"}
+                </span>
+                <span className="global-action-message-text" title={text}>
+                  {text}
+                </span>
+                {backend.connected && connectionReplacement && actionMessage?.includes("Replace input connection") && (
+                  <button type="button" className="secondary" onClick={replaceInputConnection}>
+                    Replace input connection
+                  </button>
+                )}
+                {backend.connected && actionMessage?.includes("Troubleshooting") && workbenchTab !== "advanced" && (
+                  <button type="button" className="secondary" onClick={() => setWorkbenchTab("advanced")}>
+                    Open Advanced
+                  </button>
+                )}
+                {backend.connected && actionMessage?.includes("Open Session") && workbenchTab !== "session" && (
+                  <button type="button" className="secondary" onClick={() => setWorkbenchTab("session")}>
+                    Open Session
+                  </button>
+                )}
+                {backend.connected && actionMessage && (
+                  <button
+                    type="button"
+                    className="secondary global-action-message-dismiss"
+                    aria-label="Dismiss message"
+                    title="Dismiss message"
+                    onClick={() => {
+                      setActionMessage(null);
+                      setConnectionReplacement(null);
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+        </aside>
         {pendingGraphPlan && pendingWarnings.length > 0 && (
           <section className="save-warning-review" aria-label="Save warnings">
             <strong>Review before saving</strong>
@@ -3314,7 +3369,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
                 }}
                 clientsPanel={<ClientsPanel backend={backend} />}
-                setupContent={setupWorkbenchContent}
+                statusContent={statusWorkbenchContent}
+                virtualCablesContent={cableWorkbenchContent}
+                uiOptionsContent={uiOptionsWorkbenchContent}
                 timingContent={
                   <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
                     {(liveDiagnostics) => (

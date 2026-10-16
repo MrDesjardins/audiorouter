@@ -24,7 +24,8 @@ test("the start/stop shortcut plays the saved route after Save", async ({ page }
   await expect(page.locator(".topbar").getByRole("button", { name: "Play", exact: true })).toBeVisible();
   await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
   await page.getByRole("tab", { name: "Properties" }).click();
-  const name = page.locator(".inspector-grid").getByLabel("Node name");
+  await page.getByRole("button", { name: "Rename Voice gain", exact: true }).click();
+  const name = page.getByLabel("Node name", { exact: true });
   await name.fill("Voice gain renamed");
   await name.press("Tab");
   await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();

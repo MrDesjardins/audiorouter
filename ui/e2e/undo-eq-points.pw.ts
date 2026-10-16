@@ -1,10 +1,11 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "./real-backend";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`EQ point selection and toolbar history in ${theme}`, async ({ page }) => {
     await page.goto("/backend-harness.html");
     await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     const toolbar = page.locator(".topbar");
     const undo = toolbar.getByRole("button", { name: "Undo", exact: true });
     const redo = toolbar.getByRole("button", { name: "Redo", exact: true });

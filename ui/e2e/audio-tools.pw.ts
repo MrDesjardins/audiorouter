@@ -1,12 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
+import { openConnectionForm, openDeviceTroubleshooting, setColorTheme } from "./workbench";
 
-test("top-bar privacy mute stays visible without Route status in all themes", async ({ page }, testInfo) => {
+test("top-bar audio status stays visible without privacy mute or Route status in all themes", async ({
+  page,
+}, testInfo) => {
   await page.goto("/route-harness.html");
   await page.setViewportSize({ width: 1280, height: 720 });
-  const mute = page.getByRole("button", { name: "Microphone muted" });
-  await expect(mute).toBeVisible();
-  await expect(mute.locator("xpath=ancestor::header")).toBeVisible();
+  const status = page.locator(".audio-run-state");
+  await expect(status).toBeVisible();
+  await expect(page.getByRole("button", { name: "Microphone muted" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Mute microphone" })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Compact route status" })).toHaveCount(0);
   const topBarHeight = (await page.locator(".topbar").boundingBox())?.height;
   await page.getByRole("tab", { name: "Tools" }).click();
@@ -16,10 +19,10 @@ test("top-bar privacy mute stays visible without Route status in all themes", as
   expect(Math.abs((await page.locator(".topbar").boundingBox())!.height - topBarHeight!)).toBeLessThan(1);
   await expect(page.locator(".session-flow-canvas")).toBeInViewport();
   for (const theme of ["dark", "light", "high-contrast"]) {
-    await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
-    await expect(page.getByRole("button", { name: "Microphone muted" })).toBeVisible();
+    await setColorTheme(page, theme);
+    await expect(status).toBeVisible();
     await expect(page.getByRole("region", { name: "Compact route status" })).toHaveCount(0);
-    await page.locator(".topbar").screenshot({ path: testInfo.outputPath(`topbar-mute-${theme}.png`) });
+    await page.locator(".topbar").screenshot({ path: testInfo.outputPath(`topbar-status-${theme}.png`) });
   }
 });
 
@@ -917,7 +920,7 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeVisible();
   const shotBase = `${process.env.TEMP}/audiorouter-designer-review`;
   await page.screenshot({ path: `${shotBase}/workspace-session.png`, fullPage: false });
-  await expect(page.getByRole("button", { name: "Microphone muted" })).toBeVisible();
+  await expect(page.locator(".audio-run-state")).toBeVisible();
   await expect(page.locator(".compact-status-panel")).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Session" })).toHaveAttribute("aria-selected", "true");
   const legacyFullWorkspacePanels = page.locator(".main-content > .panel:not(.inspector):not(.canvas-panel)");
@@ -934,7 +937,9 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await page.screenshot({ path: `${shotBase}/workspace-properties.png`, fullPage: false });
   await page.getByRole("tab", { name: "Session" }).click();
   for (const [tab, heading] of [
-    ["Setup", "Set up this PC"],
+    ["Status", "Status"],
+    ["Virtual Cables", "Virtual Cables"],
+    ["UI Options", "UI Options"],
     ["Recording", "Recording"],
     ["Advanced", "Advanced controls"],
   ]) {
@@ -968,7 +973,7 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
     return { width, height };
   });
   for (const theme of ["dark", "light", "high-contrast"]) {
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     await expect(card).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`mcp-${theme}.png`) });
     const bounds = await card.evaluate((element) => {
@@ -978,9 +983,8 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
     expect(bounds).toEqual(originalBounds);
     await cowork.screenshot({ path: testInfo.outputPath(`cowork-${theme}.png`) });
   }
-  await page.getByText("Local MCP apps (standard stdio)").click();
+  await page.getByText("Connect a local assistant").click();
   await expect(page.getByLabel("Assistant client ID")).toBeVisible();
-  await page.getByText("Codex config.toml").click();
   await expect(page.locator(".mcp-command").first()).toContainText("mcp_servers.audiorouter");
   await page.getByRole("button", { name: "Copy Codex config" }).click();
   await expect(page.getByRole("status").filter({ hasText: /Copied|Clipboard unavailable/ })).toBeVisible();
@@ -1003,17 +1007,17 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   });
   await page.getByRole("tab", { name: "Logs" }).click();
   await page.getByRole("tab", { name: "MCP" }).click();
-  await page.getByText("Local MCP apps (standard stdio)").click();
+  await page.getByText("Connect a local assistant").click();
   await expect(page.getByText("The local MCP command is missing from this installation.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy Codex config" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Export Cowork plugin" })).toHaveCount(0);
   await page.getByRole("tab", { name: "Logs" }).click();
   await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
-  await page.getByLabel("Color theme").selectOption("dark");
+  await setColorTheme(page, "dark");
   await page.screenshot({ path: `${shotBase}/workspace-dark.png`, fullPage: false });
-  await page.getByLabel("Color theme").selectOption("light");
+  await setColorTheme(page, "light");
   await page.screenshot({ path: `${shotBase}/workspace-light.png`, fullPage: false });
-  await page.getByLabel("Color theme").selectOption("high-contrast");
+  await setColorTheme(page, "high-contrast");
   await page.screenshot({ path: `${shotBase}/workspace-high-contrast.png`, fullPage: false });
 });
 

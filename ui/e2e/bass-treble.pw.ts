@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "@playwright/test";
 import { demoSession } from "../src/fixtures";
 import { join } from "node:path";
@@ -39,7 +40,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       session,
     );
     await page.goto("/route-harness.html");
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     const id = session.nodes.find((node) => node.kind === "bassTreble")!.id;
     await page.getByTestId(`rf__node-${id}`).locator(".flow-node-title").click();
     await expect(page.getByLabel("Bass frequency precise value", { exact: true })).toHaveValue("500");

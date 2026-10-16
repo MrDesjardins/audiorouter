@@ -14,7 +14,7 @@ const CHOICES: ReadonlyArray<{ value: FlowAnimationMode; label: string; help: st
   },
 ];
 
-/** Setup → Animated connections: the travelling lights cost most of the
+/** UI Options → Animated connections: the travelling lights cost most of the
  * canvas's CPU while audio plays, so they can pause or stay off. */
 export function FlowAnimationSetting({
   mode,

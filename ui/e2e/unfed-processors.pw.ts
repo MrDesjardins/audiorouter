@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "@playwright/test";
 import { demoSession } from "../src/fixtures";
 import { appendLibraryNode, appendDraftConnection } from "../src/draft";
@@ -16,7 +17,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       session,
     );
     await page.goto("/route-harness.html");
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     await expect(page.locator(".inactive-route-warning")).toContainText("Spectral Gate");
     await expect(page.locator(".inactive-route-warning")).toContainText("ignored during playback");
     await page.locator(".topbar").getByRole("button", { name: "Stop", exact: true }).click();

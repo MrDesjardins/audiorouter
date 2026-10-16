@@ -285,6 +285,7 @@ describe("session refresh and playback regressions", () => {
     await messageBar().findByText(/Audio session is running/);
     fireEvent.click(screen.getByRole("tab", { name: "Properties" }));
     fireEvent.click(view.container.querySelector('[data-id="game-eq"]')!);
+    fireEvent.click(await screen.findByRole("button", { name: "Rename game-eq" }));
     const name = await screen.findByLabelText("Node name");
     fireEvent.change(name, { target: { value: "Unsaved name" } });
     fireEvent.blur(name);
@@ -297,7 +298,7 @@ describe("session refresh and playback regressions", () => {
     const submitted = backend.planGraph.mock.calls[0][0];
     expect(submitted.nodes.find((node) => node.id === "game-eq")).toMatchObject({ name: "game-eq", bypass: true });
     await messageBar().findByText(/applied to the playing audio/);
-    expect((screen.getByLabelText("Node name") as HTMLInputElement).value).toBe("Unsaved name");
+    expect(screen.getByRole("button", { name: "Rename Unsaved name" })).toBeTruthy();
     expect((screen.getByLabelText("Bypass") as HTMLInputElement).checked).toBe(true);
     expect(backend.stopSession).not.toHaveBeenCalled();
     expect(backend.startSession).toHaveBeenCalledTimes(1);

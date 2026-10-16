@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "./real-backend";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
@@ -7,7 +8,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/backend-harness.html");
     await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     // Node cards follow the theme: strong card text is light on the dark
     // themes and dark on the light theme.
     const strongText = { dark: "rgb(246, 248, 251)", light: "rgb(20, 32, 51)", "high-contrast": "rgb(255, 255, 255)" }[

@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "guides": [
+    {
+      "kind": "gain",
+      "title": "Gain",
+      "path": "tools/gain.html",
+      "propertyCount": 1,
+      "audioRelevant": true
+    },
+    {
+      "kind": "volume",
+      "title": "Volume",
+      "path": "tools/volume.html",
+      "propertyCount": 1,
+      "audioRelevant": true
+    },
+    {
+      "kind": "bassTreble",
+      "title": "Bass & Treble",
+      "path": "tools/bass-treble.html",
+      "propertyCount": 4,
+      "audioRelevant": true
+    },
+    {
+      "kind": "graphicEq",
+      "title": "Graphic EQ",
+      "path": "tools/graphic-eq.html",
+      "propertyCount": 10,
+      "audioRelevant": true
+    },
+    {
+      "kind": "parametricEq",
+      "title": "Advanced EQ",
+      "path": "tools/parametric-eq.html",
+      "propertyCount": 5,
+      "audioRelevant": true
+    },
+    {
+      "kind": "compressor",
+      "title": "Compressor",
+      "path": "tools/compressor.html",
+      "propertyCount": 6,
+      "audioRelevant": true
+    },
+    {
+      "kind": "gate",
+      "title": "Gate / Expander",
+      "path": "tools/gate.html",
+      "propertyCount": 7,
+      "audioRelevant": true
+    },
+    {
+      "kind": "limiter",
+      "title": "Limiter",
+      "path": "tools/limiter.html",
+      "propertyCount": 3,
+      "audioRelevant": true
+    },
+    {
+      "kind": "delay",
+      "title": "Sync (delay)",
+      "path": "tools/delay.html",
+      "propertyCount": 1,
+      "audioRelevant": true
+    },
+    {
+      "kind": "pitch",
+      "title": "Pitch",
+      "path": "tools/pitch.html",
+      "propertyCount": 2,
+      "audioRelevant": true
+    },
+    {
+      "kind": "dehum",
+      "title": "Dehum",
+      "path": "tools/dehum.html",
+      "propertyCount": 3,
+      "audioRelevant": true
+    },
+    {
+      "kind": "declick",
+      "title": "Declick",
+      "path": "tools/declick.html",
+      "propertyCount": 1,
+      "audioRelevant": true
+    },
+    {
+      "kind": "denoise",
+      "title": "Denoise",
+      "path": "tools/denoise.html",
+      "propertyCount": 3,
+      "audioRelevant": true
+    },
+    {
+      "kind": "speechDenoise",
+      "title": "Speech Denoise",
+      "path": "tools/speech-denoise.html",
+      "propertyCount": 1,
+      "audioRelevant": true
+    },
+    {
+      "kind": "spectralGate",
+      "title": "Spectral Gate",
+      "path": "tools/spectral-gate.html",
+      "propertyCount": 3,
+      "audioRelevant": true
+    },
+    {
+      "kind": "firFilter",
+      "title": "FIR Filter",
+      "path": "tools/fir-filter.html",
+      "propertyCount": 3,
+      "audioRelevant": true
+    },
+    {
+      "kind": "mute",
+      "title": "Mute",
+      "path": "tools/mute.html",
+      "propertyCount": 1,
+      "audioRelevant": true
+    },
+    {
+      "kind": "inputSwitch",
+      "title": "Input Switch",
+      "path": "tools/input-switch.html",
+      "propertyCount": 2,
+      "audioRelevant": true
+    },
+    {
+      "kind": "duck",
+      "title": "Duck",
+      "path": "tools/duck.html",
+      "propertyCount": 10,
+      "audioRelevant": true
+    },
+    {
+      "kind": "timeShift",
+      "title": "Time Shift",
+      "path": "tools/time-shift.html",
+      "propertyCount": 1,
+      "audioRelevant": true
+    },
+    {
+      "kind": "mixer",
+      "title": "Mixer",
+      "path": "tools/mixer.html",
+      "propertyCount": 1,
+      "audioRelevant": true
+    },
+    {
+      "kind": "meter",
+      "title": "Meter",
+      "path": "tools/meter.html",
+      "propertyCount": 0,
+      "audioRelevant": true
+    },
+    {
+      "kind": "physicalInput",
+      "title": "Physical Input",
+      "path": "tools/physical-input.html",
+      "propertyCount": 4,
+      "audioRelevant": false
+    },
+    {
+      "kind": "physicalOutput",
+      "title": "Physical Output",
+      "path": "tools/physical-output.html",
+      "propertyCount": 1,
+      "audioRelevant": false
+    },
+    {
+      "kind": "applicationCapture",
+      "title": "Application Capture",
+      "path": "tools/application-capture.html",
+      "propertyCount": 1,
+      "audioRelevant": false
+    },
+    {
+      "kind": "endpointLoopback",
+      "title": "Endpoint Loopback",
+      "path": "tools/endpoint-loopback.html",
+      "propertyCount": 0,
+      "audioRelevant": false
+    },
+    {
+      "kind": "virtualRenderSource",
+      "title": "Virtual Render Source",
+      "path": "tools/virtual-render-source.html",
+      "propertyCount": 1,
+      "audioRelevant": false
+    },
+    {
+      "kind": "virtualCaptureSink",
+      "title": "Virtual Capture Sink",
+      "path": "tools/virtual-capture-sink.html",
+      "propertyCount": 1,
+      "audioRelevant": false
+    },
+    {
+      "kind": "testSignal",
+      "title": "Test Signal",
+      "path": "tools/test-signal.html",
+      "propertyCount": 3,
+      "audioRelevant": true
+    },
+    {
+      "kind": "audioFile",
+      "title": "Audio File",
+      "path": "tools/audio-file.html",
+      "propertyCount": 3,
+      "audioRelevant": true
+    },
+    {
+      "kind": "recorder",
+      "title": "Recorder",
+      "path": "tools/recorder.html",
+      "propertyCount": 4,
+      "audioRelevant": true
+    },
+    {
+      "kind": "networkSend",
+      "title": "Network Send",
+      "path": "tools/network-send.html",
+      "propertyCount": 3,
+      "audioRelevant": true
+    },
+    {
+      "kind": "networkReceive",
+      "title": "Network Receive",
+      "path": "tools/network-receive.html",
+      "propertyCount": 4,
+      "audioRelevant": true
+    },
+    {
+      "kind": "plugin",
+      "title": "VST Plugin",
+      "path": "tools/plugin.html",
+      "propertyCount": 2,
+      "audioRelevant": false
+    },
+    {
+      "kind": "group",
+      "title": "Visual Group",
+      "path": "tools/group.html",
+      "propertyCount": 5,
+      "audioRelevant": false
+    }
+  ]
+}

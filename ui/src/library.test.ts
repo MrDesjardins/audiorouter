@@ -45,7 +45,7 @@ describe("node library search", () => {
     expect(renderSource?.virtualKind).toBe("virtualRenderSource");
     expect(captureSink?.virtualKind).toBe("virtualCaptureSink");
     expect(renderSource?.kind).toBeUndefined();
-    expect(captureSink?.unavailableReason).toContain("Install AudioRouter cables in Setup");
+    expect(captureSink?.unavailableReason).toContain("Install AudioRouter cables in Virtual Cables");
     expect(captureSink?.unavailableReason).toContain("virtual cable such as CABLE Output");
   });
 

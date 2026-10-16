@@ -41,7 +41,7 @@ export function DeviceAccessDialog({
         <h2 id="device-access-heading">Allow AudioRouter to use your audio devices?</h2>
         <p id="device-access-description">
           To play this session, AudioRouter opens the microphones, speakers and virtual cables in it. It asks once on
-          this computer. You can change this later under <strong>Setup</strong>.
+          this computer. You can change this later under <strong>Advanced → Device access and version checks</strong>.
         </p>
         {error && (
           <p className="muted" role="alert">
@@ -61,7 +61,7 @@ export function DeviceAccessDialog({
   );
 }
 
-/** Setup: whether this app may open audio devices on Play, with a toggle. */
+/** Advanced settings: whether this app may open audio devices on Play, with a toggle. */
 export function DeviceAccessSetting({
   backend,
 }: {

@@ -1,3 +1,4 @@
+import { ToolGuideLink } from "./ToolGuideLink";
 // The Properties panel: the selected node's (or canvas group's) inspector and editors (moved from App.tsx).
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { DeviceListItem, DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
@@ -10,7 +11,8 @@ import { CanvasGroupInspector, type CanvasGroup, type useCanvasGroups } from "./
 import { SpatialAudioField } from "./SpatialAudioField";
 import { InputChannelsField } from "./InputChannelsField";
 import { libraryEntries, toolDescription } from "./library";
-import { TextField } from "./TextField";
+import { EditableNodeName } from "./EditableNodeName";
+import { HelpDisclosure } from "./HelpDisclosure";
 import { SpectralGateEditor } from "./SpectralGateEditor";
 import { DynamicsEditor } from "./DynamicsEditor";
 import { DuckEditor } from "./DuckEditor";
@@ -36,7 +38,6 @@ import {
   CableBinding,
   DenoiseLearnEditor,
   FirFilterEditor,
-  InspectorChangeSummary,
   MixerInputsEditor,
   NodeTelemetryPanel,
   PhysicalInputBinding,
@@ -148,7 +149,14 @@ export function PropertiesPanel({
           <div>
             <p className="eyebrow">Selected node</p>
             <div className="inspector-title">
-              <h2 id="inspector-heading">{selectedNode.name}</h2>
+              <h2 id="inspector-heading" aria-label={selectedNode.name}>
+                <EditableNodeName
+                  key={selectedNode.id}
+                  name={selectedNode.name}
+                  disabled={!backend.connected}
+                  onRename={changeNodeName}
+                />
+              </h2>
               <NodePropertyStatus
                 node={selectedNode}
                 connected={backend.connected}
@@ -164,14 +172,23 @@ export function PropertiesPanel({
         {toolDescription(selectedNode.kind) && (
           <p className="muted tool-description">{toolDescription(selectedNode.kind)}</p>
         )}
-        <p className="muted">
-          For delay and processing measurements, open Timing while audio plays. Ready means enabled for the next
-          playback; Active does not guarantee an incoming signal.
-        </p>
-        <InspectorChangeSummary
-          draftNode={selectedNode}
-          authoritativeNode={session.nodes.find((node) => node.id === selectedNode.id)}
-        />
+        <ToolGuideLink key={selectedNode.kind} kind={selectedNode.kind} />
+        <HelpDisclosure title="How to edit a node">
+          <p>Click the name to rename this node. Press Enter or click away to finish; Escape cancels.</p>
+          <p>
+            Parameter edits save automatically after a short pause while audio plays. Other changes need Save at the
+            top; the canvas marks tools that need saving.
+          </p>
+          <p>
+            For delay and processing measurements, open Timing while audio plays. Ready means enabled for the next
+            playback; Active does not guarantee an incoming signal.
+          </p>
+          <p>
+            Off silences inputs and outputs; an off effect passes sound without processing. Bypass passes sound around
+            an effect; on a prepared input, output, or Mixer it silences that contribution. Live toggles do not require
+            Save or Stop and keep other draft edits. Off devices remain open until Stop and contribute silence.
+          </p>
+        </HelpDisclosure>
         {selectedNode.kind === "meter" ? (
           <MeterInspector
             key={selectedNode.id}
@@ -482,26 +499,7 @@ export function PropertiesPanel({
             />
           </>
         )}
-        <details className="inspector-help">
-          <summary>How Enabled and Bypass work</summary>
-          <p className="muted">
-            Off silences inputs and outputs; an off effect passes sound without processing. Bypass passes sound around
-            an effect; on a prepared input, output, or Mixer it silences that contribution. Live toggles do not require
-            Save or Stop and keep other draft edits. Use Mute to silence a route. Enabled and Bypass apply to prepared
-            nodes while audio keeps playing. Off devices remain open until Stop and contribute silence.
-          </p>
-        </details>
         <div className="inspector-grid">
-          <label>
-            Node name
-            <TextField
-              key={selectedNode.id}
-              maxLength={120}
-              value={selectedNode.name}
-              disabled={!backend.connected}
-              onValue={changeNodeName}
-            />
-          </label>
           <div className="inspector-toggles">
             <label>
               Enabled

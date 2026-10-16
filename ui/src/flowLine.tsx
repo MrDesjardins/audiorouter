@@ -16,7 +16,7 @@ import {
 } from "react";
 import type { FlowAnimationMode } from "./preferences";
 
-/** Whether connection comets may move now (Setup → Animated connections). */
+/** Whether connection comets may move now (UI Options → Animated connections). */
 const FlowMotionContext = createContext(true);
 
 /** Whether AudioRouter is the active, visible window. */

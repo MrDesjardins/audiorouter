@@ -1,4 +1,4 @@
-export type ThemeMode = "dark" | "light" | "high-contrast";
+export type ThemeMode = "dark" | "light" | "high-contrast" | "custom";
 import type { ShortcutBinding } from "./shortcuts";
 
 const THEME_KEY = "audiorouter.ui.theme";
@@ -49,7 +49,7 @@ export function writeFlowAnimation(storage: Pick<Storage, "setItem"> | null, mod
 
 export function readTheme(storage: Pick<Storage, "getItem"> | null): ThemeMode {
   const value = storage?.getItem(THEME_KEY);
-  return value === "light" || value === "high-contrast" ? value : "dark";
+  return value === "light" || value === "high-contrast" || value === "custom" ? value : "dark";
 }
 
 export function writeTheme(storage: Pick<Storage, "setItem"> | null, theme: ThemeMode): void {

@@ -92,3 +92,26 @@ Feature descriptions reflect the repository specs and current public release
 notes. The site describes compatibility with existing virtual endpoints and
 does not promise every VST plugin is compatible. Third-party plugins are not
 bundled. Download messaging notes that current releases are unsigned.
+
+## Visual tool guides
+
+Open [the guide library](tools/index.html) locally, or use the static site preview. There are 35 pages: 34 audio node kinds plus visual Group. Every page includes a practical setup walkthrough, expected result, troubleshooting check, configuration references and worked examples. Relevant tools have locally generated synthetic audio sharing one Play/Pause/Replay/seek timeline with their illustrations. Device/application selection, arbitrary VST effects and Group remain visual-only.
+
+Content lives in guide-content/processing.json, routing.json and tutorials.json. Source references identify the controls used to establish defaults and bounds. Update them when a control changes, then run:
+
+    node site/generate-catalogs.mjs
+    node site/check-guides.mjs
+
+The catalog generator also generates individual HTML pages, the guide index and manifest. Keep generated pages committed so they can be reviewed as local files without a server. Animations use dependency-free native WAAPI. Controls are keyboard accessible. Reduced-motion visitors start with a static diagram; examples never autoplay. Playback pauses when the entire example leaves view, while its sliders and input references remain part of that example.
+
+`guide-signal.js` produces deterministic PCM fixtures and bounded illustrative processing; `guide-audio.js` plays those samples and `guide-playback.js` shows their waveforms/readings. Mixer and Input Switch have distinct drums/bass and bell tracks; Duck has a separate control-only key. Input reference listening shares the same transport. Browser monitoring uses 50% gain with a peak-protection compressor. Recorder stores only its completed synthetic interval in page memory. No microphone, application capture, personal file, actual network stream or disk recording is used. Each guide explains its simulation limits; these examples are not engine or hardware qualification.
+
+On Windows without Python, preview from the repository root:
+
+```powershell
+node .\ui\node_modules\vite\bin\vite.js .\site --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/tools/`. Vite's site directory is a positional argument.
+
+Tool cards have a compact question mark inside their visual boundary; Properties also links to the corresponding guide. Repository desktop builds open site/tools/<tool>.html locally; installed builds use https://audiorouter.org/tools/<tool>.html. These edits do not change the published site until the existing Pages workflow runs through an authorized push/merge or manual deployment.

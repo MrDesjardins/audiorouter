@@ -69,10 +69,10 @@ and session running. **Quit and stop audio** sends an authenticated
 confirms `stopped`; a refused or failed stop leaves the shell running and
 reports the refusal in the tray status item.
 
-The tray's **Toggle privacy mute** action reads the authoritative backend
-privacy state before changing it. It uses the same scoped API as the editor;
-it does not alter Windows microphone permissions, endpoint mute, or master
-volume.
+The tray menu omits a global mute toggle because sessions may contain several
+inputs. Global physical-capture privacy mute remains available in the editor's
+Properties and through its configured shortcut; it does not alter Windows
+microphone permissions, endpoint mute, or master volume.
 
 For a repeatable control-plane check without manual UI observation, build the
 debug CLI and shell, then run `tests/acceptance/m07-shell-rpc.ps1` from an
@@ -88,3 +88,7 @@ the validated shell executable path; disabling it removes that value. It does
 not require elevation and does not create a service, scheduled task, driver,
 or audio-device change. The command is not invoked by build or unit
 qualification.
+
+### Tool guide links
+
+Tool cards and Properties expose a visual guide. The shell accepts only an allowlisted node kind, then opens its guide in the default browser. A shell built in this checkout uses generated local HTML under site/tools/; an installed shell uses the canonical AudioRouter website. No arbitrary URL, executable or file path can be passed through this command.

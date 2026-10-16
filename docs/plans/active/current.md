@@ -1,5 +1,160 @@
 # Active plan — post-0.0.8 maintenance
 
+## Graphic EQ help playback level — completed 2026-10-15
+
+Raised synthetic guide monitor gain to 50% with the peak-protection compressor
+retained. Source PCM was healthy; the prior 16% monitor gain made all examples
+too quiet on some systems. Regression passes on Graphic EQ and Mixer: generated
+sample RMS is nonzero, AudioContext is running, and the connected monitor gain
+is 0.5. TypeScript, focused ESLint/Prettier, 35-guide audit, and diff checks
+pass. See the [execution record](../archived/2026-10-15-graphic-eq-guide-audio-level.md).
+No microphone/device or desktop build was required; static site publication
+was not performed. Next: reload the local page with Ctrl+F5 and try Play Example.
+
+## Tool teaching and sidebar spacing — implemented 2026-10-15
+
+Requirements UI-11/12/17/20 and the documented DSP/recording/routing contracts.
+All 35 guides now teach tool-specific setup, expected results, fault checks and
+example limitations. Relevant examples use deterministic PCM, named input/output
+sample waveforms and reference listening through one transport. Mixer/Switch
+have distinct tracks; Duck has a control-only key; Delay, cleanup, pitch timing,
+Test Signal level, Meter readings and early Recorder take length are corrected.
+Tool cards (including app capture, Group and VST) use compact keyboard-accessible
+question marks without triggering Add. Properties reserves actual wrapped tab
+height plus 12 px, keeping all bottom tabs visible/clickable.
+
+Windows Edge combined suite: 10/10 pass in 1.5 minutes, including every guide,
+numerical sample checks, mobile/reduced motion and dark/light/high-contrast at
+1440/1120/980 px. Static coverage, TypeScript, focused ESLint, formatting, docs
+and UI production build pass. Initial failed checks and their fixes are in the
+[execution record](../archived/2026-10-15-tool-teaching-and-sidebar-spacing.md).
+No website publication or production DSP/hardware qualification occurred.
+
+Packaging handoff: desktop PID 73136 was running at inventory; it was not
+stopped or replaced. UI assets are rebuilt. Owner has been asked to close the
+app so its executable can be rebuilt; this is the exact remaining task.
+Rollback: revert only this follow-up's listed files, preserving earlier shared
+work. No database/session migration is needed.
+
+## Workbench organization, themes and visual tool guides — completed 2026-10-14
+
+Owner expanded the active UI task: replace Setup with Status (six readiness
+checks and this-PC audio devices), Virtual Cables (all cable management/guidance)
+and UI Options (header theme moved here, create/import/export a local theme).
+Move device access/version preferences into Advanced. Integrate the Recording
+empty state into its library card. Make local assistant setup a step-by-step
+flow. Build a premium static website guide per tool, explaining every exposed
+configuration with examples and accessible animated illustrations, linked
+from tool Properties/Tools. Continue the compact-workspace scope above.
+
+Requirements: UI-01/05/07/11/12/17/18 plus new owner-authorized UI-19 (organized
+workbench/custom themes) and UI-20 (visual tool guides). Existing static
+GitHub Pages source is site/ for audiorouter.org; no new hosting, publication,
+driver, cloud inference or remote-control capability is authorized by this slice.
+
+Ordered phases: (1) finish compact workspace regressions; (2) split settings,
+add validated bounded JSON theme import/export and theme token editor, tidy
+Recording/MCP; (3) research every exposed tool property from source, generate
+individual static guide pages and on-demand animated examples, wire safe
+contextual guide access; (4) verify coverage, links, keyboard/reduced motion,
+three-theme responsive UI and visual website QA; (5) build an owner-testable
+desktop artifact when no executable lock prevents staging.
+
+Use Sites workflow for the existing local checkout. Its explicit bounded
+asset/research delegation instruction permits three agents: processing property
+research, routing property research, and an isolated animation runtime asset.
+Root owns UI, integration and source contracts. HyperFrames guidance routes
+the short instructional animation assets; deliver on-demand HTML/WAAPI with
+static/reduced-motion alternatives, not a bulk video download.
+
+Theme schema must allow only fixed color-token keys and hex colors, a bounded
+name and versioned app format; reject oversized/malformed files without changing
+current theme. Export only theme data, never app/session settings or secrets.
+Guide illustrations are conceptual and must never imply measured response,
+latency, live audio capture or universal VST support. Use actual source ranges
+and defaults; mark dynamic/plugin/device-dependent properties honestly.
+
+Validation and rollback evidence are archived in
+[the completed workbench and guide execution record](../archived/2026-10-14-workbench-organization-and-visual-guides.md).
+Current result: UI and static guide implementation are complete, local tests
+and the custom-protocol desktop build pass, and no external publication was
+performed. The source website is ready for owner review; publication remains a
+separate authorized action.
+
+The 2026-10-15 follow-up reviewed all 35 guide kinds, corrected FIR/EQ/network
+scenes, and added opt-in synthetic audio. Its static audit and five Edge guide
+checks pass; see the [execution record](../archived/2026-10-15-all-tool-guide-audio.md).
+
+Roll back by reverting the archived task's listed
+files; theme import/export has no app/session data migration.
+Next action: owner reviews the built desktop app and local visual guides; then
+decides whether to authorize website publication.
+
+## Synchronized tool guide playback — completed 2026-10-15
+
+Owner request completed for UI-20/UI-17, DSP-01/02 and REC-01/02/07. The static guides now use one Play/Pause, Replay and seek timeline for each audio-relevant tool; controls have reserved widths. Device/application capture, physical output, arbitrary VST and Visual Group pages remain animation-only. Recorder uses Record → Stop → Play recording across Recorder and Audio File stages; Mixer combines two distinct synthetic tracks with independent controls; Meter follows the app's stereo dBFS RMS/current-peak/peak-hold/clip layout; each of the ten Graphic EQ bands explains purpose, examples and cautions.
+
+All sound is locally generated after a user click. Recorder stores only an in-memory synthetic example. No microphone, user's file, session audio, network connection, disk recording, live DSP measurement, desktop app or published site is involved.
+
+Verification: generator and static audit passed (35 pages, 101 properties, 941 local links/assets and UI/native kind parity); TypeScript, focused ESLint, Prettier and diff whitespace checks passed. Microsoft Edge Playwright suite passed 6/6 with offline pages, shared playback/seek/pause, responsive/reduced-motion, Mixer, Meter, Recorder, EQ and Network Send/Receive scenarios. The execution record contains commands, environment, results, screenshot path, limitations and rollback: [synchronized tool guide playback](../archived/2026-10-15-synchronized-tool-guide-playback.md). No hardware/audio-device gate applies. No commit or publication performed.
+
+Next action: owner reviews the updated local guide pages. Website publication remains a separate authorized action.
+
+## Compact workspace follow-up — 2026-10-14 (owner request)
+
+Objective: move notifications into a bottom-right popover without reserving
+workspace height; tighten Canvas heading/selection spacing; use consistent
+question-mark help in every tab; replace the inspector change-summary line
+with clear Save/node markers; rename through the inspector title.
+Requirements: UI-04/05/07/09/11/12/17 (M05 maintenance). Prior header/tray
+changes are uncommitted and must be preserved. Read interface/M05 contracts
+and existing lifecycle/autosave behavior; Windows Edge and dependencies are
+available. No hardware, driver or credentials are needed for UI qualification.
+
+Decisions: notifications remain accessible, nonmodal and dismissible; warnings
+and recovery actions stay visible without moving the workspace. Stopped setup
+guidance moves into help. Retain the existing 400 ms parameter-only autosave
+while running; unsaved topology/name/stopped edits require explicit Save.
+Node indicators distinguish pending autosave/saving from Save required and
+clear only after authoritative save. Use an identical help disclosure/icon;
+rename title supports pointer, keyboard, Enter/blur commit and Escape cancel.
+
+Ordered tasks: update notification layout and canvas spacing; add reusable help
+and inline naming; derive node save markers from saved/draft content and edge
+changes; update contracts/docs and focused regressions; format, lint, typecheck,
+build and run meaningful component/Edge checks in all themes. Measure canvas
+bounds across messages and saves, plus live autosave/manual Save behavior.
+Rebuild the embedded desktop UI for owner testing when its executable is free.
+
+Rollback: revert only this follow-up's edits atop the previous UI slice; keep
+prior desktop binaries. Risks: notifications obscuring controls, stale save
+indicators, focus loss on selection, confidential parameter values in labels.
+No secret values may be displayed in save markers. Evidence: archived with the
+workbench and guide execution record; 535 UI unit tests, 42 sequential Edge
+checks plus four focused Virtual Cables checks passed across dark/light/high-
+contrast themes. Custom theme round-trip, guide interactions, and cable route
+layout all passed. Next action: owner review of the rebuilt desktop app.
+
+## Header and canvas usability — 2026-10-14
+
+Implementation and browser verification complete for the four requested fixes
+and the follow-up removal of header/tray mute toggles (UI-04/09/10/11/12/15/17).
+The [execution record](../archived/2026-10-14-header-canvas-usability.md) records
+files, decisions, reproduction, rollback and evidence: 527 UI tests, 80 shell
+tests (4 ignored), 13 Windows Edge checks, three-theme visual review, both
+Rust format checks, both Clippy checks and UI lint/typecheck/build pass.
+
+Owner-requested test build completed (2026-10-14): optimized custom-protocol
+shell, plugin worker and staged MCP CLI at `src-tauri/target/release/`. Shell
+is newer than the current UI bundle; staged/source CLI hashes match. Previous
+shell and CLI preserved for rollback; hashes and commands are in the record.
+No shell was running at inventory, and the agent did not launch the rebuilt app.
+Next M05 task: owner tests the actual tray menu and embedded UI using the
+rebuilt audiorouter-shell.exe.
+Check for an existing shell before launching. Browser fixtures do not qualify
+real audio or the packaged app. No implementation blocker remains; the
+independent stability task below still awaits the owner's overnight soak.
+
 ## Stability round — 2026-10-14 (user request)
 
 Objective: find and fix stability problems before users hit them, while the
@@ -1018,3 +1173,11 @@ Independent clock drift and queue latency remain limits. Keep the previous
 installer and compatible configuration/recording backups for rollback; no
 migration or driver install. Published assets are immutable; repairs use a new
 version.
+
+## Tool-guide animation asset — 2026-10-14 (bounded website task)
+
+Objective: accessible, locally hosted explanatory animation runtime for the per-tool guides (UI-04/07/09/12/17; M05 documentation). Preserve launch film and unrelated work. Use deterministic native WAAPI, the HyperFrames supported adapter, with static input/output comparisons, finite eight-second motion, Play/Pause/Replay, seek API, offscreen pause and reduced-motion defaults. Source-only website delivery: no publication, dependency changes or MP4 batch. Node 22.22.3 and Windows Edge/Chrome exist; cached HyperFrames 0.8.107 exists; ffmpeg/ffprobe are absent from PATH.
+
+Tasks: add isolated site/assets/guide-animation.js and an embed contract; inspect browser output and controls across representative visual families, keyboard and reduced motion; parent integrates guide pages and runs site checks. Validation is explanatory UI evidence, not actual DSP or latency evidence. Rollback: remove this runtime and guide script references only. Risks: illustrations must remain explicitly illustrative, never claim measured DSP behavior. Next: build and inspect runtime.
+
+Animation runtime evidence (2026-10-14, Windows host): JavaScript parsed with Node vm.Script; headless installed Edge via explicit executablePath exercised all 16 visual types, seek(4) yielded 4000 ms paused state, repeated parameter updates/destroy left no stale figure. Eight parameter families changed actual SVG path geometry (gain, compressor, gate, limiter, duck, EQ, delay, pitch); destroy left zero browser animations. Reduced-motion initially showed static state; deliberate Play/Pause and keyboard ArrowRight on seek worked. Zero browser page errors. At 390 px EQ controls remain in bounds. Reviewed compressor image; scratch browser images at ui/test-results/guide-animation/{compressor,eq-mobile}.png (not committed documentation evidence). Playwright channel discovery initially missed Edge; explicit Program Files (x86) path resolved it. Library source contains no standalone HyperFrames composition; no video render or HyperFrames composition check was performed.

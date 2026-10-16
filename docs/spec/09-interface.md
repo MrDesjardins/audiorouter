@@ -17,7 +17,7 @@ the "Who can connect" choice and network URL (HTTP-09),
 explicit token reveal/copy and a link to its local Swagger documentation.
 See [HTTP acceptance](16-local-http-api.md).
 
-The primary window gives the left-to-right canvas the available space and puts a clearly selected, tabbed workbench on the right. Its tabs provide addable input/processing/output tools, selected-node properties, session actions, MCP setup/activity, and diagnostics. Session selection and revision actions live in the Session tab; do not reserve a permanent session rail or duplicate the same actions in a tall header. Tool cards use an icon, title, and short description; unavailable capabilities say why. Keep start/stop and the microphone privacy-mute action in the top bar, alongside the live run state. Do not add a separate Route status panel: the fixed top bar already shows run state and a second summary has repeatedly destabilized workspace height. At narrow widths, panels may stack without covering the graph. Detailed controls remain grouped under the selected workbench tab; advanced groups use progressive disclosure instead of one unbounded panel wall.
+The primary window gives the left-to-right canvas the available space and puts a clearly selected, tabbed workbench on the right. Its tabs provide addable input/processing/output tools, selected-node properties, session actions, MCP setup/activity, and diagnostics. Session selection and revision actions live in the Session tab; do not reserve a permanent session rail or duplicate the same actions in a tall header. Tool cards use an icon, title, and short description; unavailable capabilities say why. Keep start/stop in the top bar, alongside the live run state. Global microphone privacy mute remains available through Properties and its shortcut; omit the ambiguous "Mute mic" header action and the tray mute toggle. Do not add a separate Route status panel: the fixed top bar already shows run state and a second summary has repeatedly destabilized workspace height. At narrow widths, panels may stack without covering the graph. Detailed controls remain grouped under the selected workbench tab; advanced groups use progressive disclosure instead of one unbounded panel wall.
 
 The MCP tab explains local assistant setup using the installed CLI path, database, named pipe, and an explicitly authorized client ID. It guides least-privilege access and shows a bounded stream of incoming tool-call names, safe argument summaries, and outcomes. Never record audio/media payloads, credentials, or hidden model reasoning. A Diagnostics view exposes recent UI failures and graph node/edge/revision checkpoints; the native backend log records RPC method, outcome, and a privacy-safe state summary in a bounded local file. No diagnostic writer runs in the realtime audio callback.
 
@@ -27,7 +27,15 @@ Device choices show channel layout before the endpoint name so similarly named s
 
 Remember the last selected session as a local workspace preference and restore
 it when it remains available; restoring selection never starts audio. Clicking
-a canvas node or selecting one in the graph list opens Properties immediately.
+the session name in the top-left header opens the Session workbench tab, with
+the same action available from the keyboard. The header run state uses plain
+text and a status dot, without a button-shaped background or border. Avoid a
+second persistent sentence repeating that audio is running. Messages and
+unfed-route warnings appear in a nonmodal bottom-right popover, outside the
+workspace flow, with no empty reserved strip. Keep dismiss/recovery actions
+accessible and long messages readable without moving the canvas. Canvas port guidance and connection-state samples live in a
+"Canvas legend" disclosure that starts collapsed and expands on user action.
+Clicking a canvas node or selecting one in the graph list opens Properties immediately.
 Adding a tool may select the new node while keeping Tools open for repeated
 additions.
 
@@ -69,18 +77,18 @@ as a failed current-profile setup.
 - **UI-07 — Live editing.** Parameter changes use bounded/coalesced requests during dragging and one final committed target. Topology edits use backend plan/commit; the UI presents one Save route action and requests a second confirmation only for warnings. Local UI optimism never overrides a backend conflict. When another client edits, merge nonconflicting presentation state and render the new authoritative graph. Show who changed what using client identity, not guessed person names.
 - **UI-08 — Safety and errors.** Feedback/duplicate warnings identify actual paths and remedies. Missing devices remain on the canvas. Offer rebind, retry, inspect, or stop according to backend capability. No hidden fallback to a new microphone. An emergency privacy mute affects physical capture contributions immediately through the backend; clearing it never starts stopped sessions or recorders.
 - **UI-09 — Sessions/presets.** Create, duplicate, rename, export/import, start/stop, and designate startup sessions. Imports open stopped with unresolved bindings highlighted. Include templates for UC-01, processed mic, app recording, and mix-minus. Presets expand into inspectable ordinary nodes. Header Play/Stop starts or stops the visible canvas route; it does not start a stopped Test Signal or Audio File source. Test Signal Play/Stop controls only that tone through the authorized source transport and may first start a stopped route. A routed, enabled Test Signal Play remains actionable when endpoint readiness is missing so the backend can report the specific start failure. Audio playback still requires the session's exact native endpoint preparation.
-- **UI-10 — Background controls.** Tray controls list session states, mic privacy mute, recording states, and open/quit actions. “Close window” keeps audio running; “Quit and stop audio” explicitly stops the backend after recorder finalization. Offer optional always-on-top compact meters and global shortcuts, with conflict/rebinding support. Shortcuts dispatch API actions.
+- **UI-10 — Background controls.** Tray controls list session states, recording states, and open/quit actions. Omit the global mute toggle; privacy mute remains available through Properties and its shortcut. “Close window” keeps audio running; “Quit and stop audio” explicitly stops the backend after recorder finalization. Offer optional always-on-top compact meters and global shortcuts, with conflict/rebinding support. Shortcuts dispatch API actions.
 - **UI-11 — Accessibility.** All essential actions work without dragging or a mouse. Provide a structured list/tree view of routes, descriptive accessible names, logical focus order, focus restoration after dialogs, high-contrast/light/dark modes, 200% zoom, and non-color status cues. Target WCAG 2.2 AA applicable criteria plus Windows Narrator testing; record the exact audit checklist in M05.
 - **UI-12 — Responsiveness.** Remain usable at 1280×720 and 100–200% Windows scaling; panels may collapse. Long names wrap/truncate with accessible full labels. Virtualize large lists/canvas where needed and throttle meters. No web audio engine or processing in the renderer; browser microphone access is unnecessary.
 - **UI-13 — API availability.** If backend disconnects, display a reconnecting/offline state and retain the last snapshot as stale. Disable dependent mutations, do not queue unbounded audio edits, and resync snapshot/revision on reconnect. Closing/reopening a plugin editor does not affect its audio.
 - **UI-14 — Recorder UI.** Expose record/arm/pause/split/stop, destination, disk error, duration, and file library actions. Clearly separate deleting a node, removing a library entry, and recycling a recording file. Do not bury recording activity when the session sidebar changes.
 - **UI-15 — Signal flow visualization.** On active connected routes, show sound traveling in the edge direction between nodes, including from application-capture and microphone inputs through processing to destinations. Represent recent signal level with a clearly visible, smoothly varying stroke width (bounded by a design-system minimum and maximum), with a restrained moving highlight or pulse; do not use a single 1 px line as the only activity cue. Animate only when fresh backend meter/telemetry reports signal on that route, and keep configured-but-silent, stopped, muted, bypassed, stale, disconnected, and faulted states visually distinct. Base width on bounded peak/RMS meter values using smoothing and hold/decay so ordinary audio is legible without flicker; clamp values and never imply activity from a connection alone. Flow direction follows graph topology. The effect remains legible at supported zoom levels and high contrast, has a reduced-motion/static equivalent, and exposes equivalent text/meter values to assistive technology. It is presentation only: no browser audio processing, inferred routing, or per-frame backend polling; consume the existing bounded meter/event path and respect NFR-08 freshness/rate limits.
-- **UI-17 — Stable layout (UX rule).** Nothing may shift, bounce or push other content up and down because live data, measurements, status or hints change. Content that comes and goes while the user watches (suggestions, live status, pills, warnings, readings) occupies a reserved slot of fixed or minimum size: render the slot always and swap its contents, with a waiting/placeholder text and a disabled action when there is nothing yet. Keep the last good value instead of hiding a box when an estimate briefly becomes unavailable. Fix the width of changing numeric labels (tabular digits, minimum width). Layout may change only in response to a deliberate user action such as opening a section, switching a tab, or resizing. Regress it by sampling the position of content below the changing area during live updates and requiring it to stay put.
-- **UI-18 — Version and new-version notice.** The window title and the header show the running version (for example "AudioRouter 0.0.8"). Unless the user turns it off in Setup → New versions (default on, per-user preference), the app reads the public GitHub releases list of this repository at most once a day (cached; a cached answer for an older app version is ignored after an upgrade). When a published, non-draft release with a higher `vMAJOR.MINOR.PATCH` tag exists (prereleases included), the header line shows "<version> available"; it opens that release page in the default browser through a shell command that accepts only this repository's `…/releases/tag/vX.Y.Z` address. The request sends no identifier or audio information; offline, rate-limited or failed checks show nothing and never block the app. The notice stays on the header line (UI-17). Unit tests and automated browsers never contact GitHub (an injected list is used). User-authorized 2026-10-03; see PROD-06.
+- **UI-17 — Stable layout (UX rule).** Nothing may shift, bounce or push other content up and down because live data, measurements, status or hints change. Content that comes and goes while the user watches (suggestions, live status, pills, warnings, readings) occupies a reserved slot of fixed or minimum size: render the slot always and swap its contents, with a waiting/placeholder text and a disabled action when there is nothing yet. Keep the last good value instead of hiding a box when an estimate briefly becomes unavailable. Fix the width of changing numeric labels (tabular digits, minimum width). Global notifications may instead float outside layout without reserving an empty slot; showing or dismissing them must not move the workspace. Layout may change only in response to a deliberate user action such as opening a section, switching a tab, or resizing. Regress it by sampling the position of content below the changing area during live updates and requiring it to stay put.
+- **UI-18 — Version and new-version notice.** The window title and the header show the running version (for example "AudioRouter 0.0.8"). Unless the user turns it off in Advanced → Device access and version checks → New versions (default on, per-user preference), the app reads the public GitHub releases list of this repository at most once a day (cached; a cached answer for an older app version is ignored after an upgrade). When a published, non-draft release with a higher `vMAJOR.MINOR.PATCH` tag exists (prereleases included), the header line shows "<version> available"; it opens that release page in the default browser through a shell command that accepts only this repository's `…/releases/tag/vX.Y.Z` address. The request sends no identifier or audio information; offline, rate-limited or failed checks show nothing and never block the app. The notice stays on the header line (UI-17). Unit tests and automated browsers never contact GitHub (an injected list is used). User-authorized 2026-10-03; see PROD-06.
 
-Workspace layout must reserve separate space for simultaneous warning/action
-notices; neither the canvas nor sidebar may cover their action or dismiss
-buttons. Long sidebar content (including Timing) scrolls within the workspace
+Stack simultaneous warning/action notices in the bottom-right notification
+popover without reserving workspace height. Neither the canvas nor sidebar may
+cover their action or dismiss buttons. Long sidebar content (including Timing) scrolls within the workspace
 without pushing the canvas down. Connection guidance explains the sending
 blue output to receiving orange input gesture; an occupied-input notice must
 distinguish replacing that input from sending the tool's output elsewhere.
@@ -115,7 +123,24 @@ fields use route undo and immediately display the restored value. Undo of
 a stopped saved route makes an editable draft to Save; parameter-only undo
 while playing follows the same live-apply path as other parameter changes.
 
+- **UI-19 — Focused settings and local themes.** Replace Setup with Status (six readiness checks and Audio devices on this PC), Virtual Cables (cable status, management and third-party app routing guidance), and UI Options (theme and connection animation preferences). Move audio-device consent preferences and version checks into an Advanced disclosure. Remove the header theme selector. Provide one editable custom palette with a dark/light base, bounded name and fixed color keys. Import/export version-1 AudioRouter theme JSON files, at most 32 KB, with six-digit hex colors only; reject invalid files without altering the active palette. Export appearance alone and persist locally. Preserve dark/light/high-contrast modes and the global form style. Recording’s empty library state belongs inside its library card. Local MCP setup guides assistant choice, connection name, explicit client permissions, app-specific setup and a read-only connection check; retain standard stdio terminology only where an app asks for its transport.
+- **UI-20 — Visual tool guides.** Provide a dedicated public static page for every addable built-in tool, source, destination, VST node and visual Group. Each guide explains its purpose, signal behavior, every exposed configuration field (bounds/defaults or honest dynamic-selection limits), actions and concrete examples. Include accessible conceptual signal illustrations with explicit Play/Pause/Replay/seek, keyboard support, static reduced-motion state and offscreen pause. EQ explains all eight shapes including all-pass phase; input channels show stereo/mono/left/right. Never represent illustrative diagrams as measured DSP or live audio. Link visibly from tool cards and Properties; native opening accepts known tool kinds only. Repository desktop builds may open the generated local page for review; installed builds open the canonical public guide. Site publication remains a separate authorized operation.
+
 ## Defaults that reduce work
+
+Tool-card guide access is a compact question-mark target inside the card's
+visual boundary, with an accessible tool-specific name. Help opens the guide
+without adding the node; the add action and help are separate sibling controls.
+Properties reserves the measured height of every wrapped workbench tab row
+plus spacing, so its Selected node heading never covers the bottom tabs.
+
+Each guide teaches a concrete setup sequence, expected result and first fault
+check. Relevant sound examples show named input/output waveforms and reference
+listening through one shared transport. Multiple-input examples use distinct
+sources; Duck's key is control-only. Recorder replays only the completed example
+interval. Example meters derive from the played samples before monitor gain.
+Synthetic simplifications are stated per tool; device selection, arbitrary
+plugins and visual groups do not imply an audible browser demonstration.
 
 Desktop startup detects an existing same-user, same-Windows-session AudioRouter
 instance before opening the database or contacting its backend. Show “There is
@@ -288,6 +313,21 @@ component lanes, measured card spacing and branch-order crossing reduction.
 Disabled edges remain part of layout so audio toggles do not scatter cards.
 Arrange fits the graph in view and never changes graph/audio. Undo arrange
 restores the preceding positions for 15 seconds.
+
+Workbench help uses one collapsed question-mark disclosure style across tabs,
+with context-specific guidance. Tools labels it "How to build a route".
+The Properties node name becomes its own editor on click or keyboard activation;
+show a pencil/underline on hover or focus, use the global field style while
+editing, commit a nonempty trimmed name on Enter/blur, and cancel with Escape.
+Do not duplicate the name in a separate permanent textbox.
+
+The inspector omits the "No unsaved changes" line. The header Save action is
+enabled and visually emphasized for unsaved drafts. Mark affected canvas nodes
+(including changed wiring endpoints) with "Save required" for explicit saves.
+Retain the existing 400 ms debounced parameter-only autosave during playback;
+identify pending autosave/saving distinctly, clear indicators only on an
+authoritative save, and retain Save required after a rejected save. Do not
+expose parameter values or secrets in these indicators.
 
 The Properties header shows the node state beside its name: Off, Bypass,
 Ready (enabled while stopped), Active, Disconnected, or failed plugin state.

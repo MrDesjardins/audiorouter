@@ -1,7 +1,9 @@
+import { ToolGuideLink } from "./ToolGuideLink";
 import { useEffect, useState } from "react";
 import { NodeResizer, type NodeProps } from "@xyflow/react";
 import { NumberField } from "./NumberField";
 import { TextField } from "./TextField";
+import { HelpDisclosure } from "./HelpDisclosure";
 
 /** `locked` stops accidental moving or resizing on the canvas; Properties still edits it. */
 export type CanvasGroup = {
@@ -175,12 +177,15 @@ export function CanvasGroupInspector({
     <section className="panel inspector" aria-labelledby="inspector-heading">
       <p className="eyebrow">Visual group</p>
       <h2 id="inspector-heading">{group.name || "Group"}</h2>
-      <p className="muted">
-        {group.locked
-          ? "Locked: the group cannot be moved, resized or deleted from the canvas. Unlock it to change its place or size."
-          : "Drag the caption or background to move the group; resize its border."}{" "}
-        This group only organizes the canvas; audio connections stay unchanged.
-      </p>
+      <ToolGuideLink kind="group" />
+      <HelpDisclosure title="How to arrange a group">
+        <p className="muted">
+          {group.locked
+            ? "Locked: the group cannot be moved, resized or deleted from the canvas. Unlock it to change its place or size."
+            : "Drag the caption or background to move the group; resize its border."}{" "}
+          This group only organizes the canvas; audio connections stay unchanged.
+        </p>
+      </HelpDisclosure>
       <div className="group-properties">
         <label className="group-lock-toggle">
           Lock position and size

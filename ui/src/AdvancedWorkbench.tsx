@@ -1,5 +1,5 @@
 // Content of the Advanced side-panel tab (moved from App.tsx).
-import type { Dispatch, KeyboardEvent, ReactElement, SetStateAction } from "react";
+import type { Dispatch, KeyboardEvent, ReactElement, ReactNode, SetStateAction } from "react";
 import type { DiscoveryDocument, Node, PluginScanEntry, Session } from "@audiorouter/contracts";
 import type { ApplicationRow, UiBackend, UiBackendSnapshot } from "./backend";
 import type { InsertableProcessorKind } from "./draft";
@@ -21,6 +21,7 @@ import {
 import { PluginScanPanel } from "./PluginPanels";
 
 export function AdvancedWorkbench({
+  appSettingsContent,
   backend,
   draft,
   selectedNode,
@@ -48,6 +49,7 @@ export function AdvancedWorkbench({
   clearRecoverySafeMode,
   safetyActionBusyState,
 }: {
+  appSettingsContent?: ReactNode;
   backend: UiBackend;
   draft: Session;
   selectedNode: Node;
@@ -77,6 +79,10 @@ export function AdvancedWorkbench({
 }) {
   return (
     <div className="workbench-groups">
+      <details className="advanced-group">
+        <summary>Device access and version checks</summary>
+        {appSettingsContent}
+      </details>
       <details className="startup-group">
         <summary>When AudioRouter starts</summary>
         <p className="muted">

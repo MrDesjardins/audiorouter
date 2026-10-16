@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { expect, test, type Page } from "@playwright/test";
 import type { Session } from "../../contracts/src/index";
 
@@ -98,7 +99,7 @@ for (const occupiedOutput of [false, true]) {
     await expect(page.getByTestId("rf__node-mixer")).toContainText("Discord");
     await expect(page.locator(".react-flow__node").filter({ hasText: "Mixer 2" })).toHaveCount(0);
     for (const theme of ["dark", "light", "high-contrast"]) {
-      await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
+      await setColorTheme(page, theme);
       await page.screenshot({ path: testInfo.outputPath(`siege-mixer-${occupiedOutput}-${theme}.png`) });
     }
   });
@@ -138,7 +139,7 @@ test("long Timing content scrolls in the sidebar without pushing the canvas down
     await page.locator(".right-workbench").evaluate((element) => element.scrollHeight > element.clientHeight),
   ).toBe(true);
   for (const theme of ["dark", "light", "high-contrast"]) {
-    await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
+    await setColorTheme(page, theme);
     await page.screenshot({ path: testInfo.outputPath(`long-timing-${theme}.png`) });
   }
 });
@@ -150,7 +151,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       Object.assign(window, { __routeFixtureSession: fixture });
     }, session);
     await page.goto("/route-harness.html");
-    await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
+    await setColorTheme(page, theme);
     const canvas = page.locator(".session-flow-canvas");
     const bounds = await canvas.boundingBox();
     if (!bounds) throw new Error("Missing canvas");
@@ -173,10 +174,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(notice).toContainText("Siege Advanced EQ already receives Siege game");
     await expect(notice).toContainText("blue sending connector");
     await expect(page.locator(".inactive-route-warning")).toBeVisible();
-    const noticeBox = (await notice.boundingBox())!;
-    expect((await page.locator(".workspace-grid").boundingBox())!.y).toBeGreaterThanOrEqual(
-      noticeBox.y + noticeBox.height - 1,
-    );
+    const notifications = page.getByRole("complementary", { name: "Notifications" });
+    await expect(notifications).toHaveCSS("position", "fixed");
+    const noticeBox = (await notifications.boundingBox())!;
+    expect(noticeBox.x + noticeBox.width).toBeLessThanOrEqual(1280);
+    expect(noticeBox.y + noticeBox.height).toBeLessThanOrEqual(720);
     await page.screenshot({ path: testInfo.outputPath(`banners-${theme}.png`) });
     await page.getByRole("button", { name: "Dismiss message", exact: true }).click();
     await expect(notice).not.toContainText("already receives");

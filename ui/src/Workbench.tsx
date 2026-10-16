@@ -1,12 +1,14 @@
+import { ToolGuideLink } from "./ToolGuideLink";
 import { ApiPanel } from "./ApiPanel";
 import { LogFilesPanel, type VerboseLoggingControl } from "./LogFilesPanel";
 import { SessionIdentity } from "./NodeIdentity";
 import { endLibraryDrag, startLibraryDrag } from "./libraryDrag";
 import { TOOL_HELP, type LibraryEntry } from "./library";
 import { TextField } from "./TextField";
+import { HelpDisclosure } from "./HelpDisclosure";
 import { DuckGlyph } from "./DuckGlyph";
 import type { Session } from "@audiorouter/contracts";
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 const TOOL_ICONS: Record<string, ReactNode> = {
   volume: "◖",
@@ -69,7 +71,123 @@ function ApplicationSourceAction({ onClick, disabled }: { onClick: () => void; d
 }
 
 export type WorkbenchTab =
-  "tools" | "properties" | "timing" | "session" | "setup" | "recording" | "advanced" | "mcp" | "api" | "diagnostics";
+  | "tools"
+  | "properties"
+  | "timing"
+  | "session"
+  | "status"
+  | "virtualCables"
+  | "uiOptions"
+  | "recording"
+  | "advanced"
+  | "mcp"
+  | "api"
+  | "diagnostics";
+
+const TAB_HELP: Record<Exclude<WorkbenchTab, "properties">, { title: string; content: ReactNode }> = {
+  tools: {
+    title: "How to build a route",
+    content: (
+      <ol>
+        <li>Add a source: Input Device, Test Signal, Audio File, or an application.</li>
+        <li>Add processing tools such as Gain or Advanced EQ if needed.</li>
+        <li>Add an Output Device and choose your speakers or headphones in Properties.</li>
+        <li>Drag from the sending node's blue dot to the receiving node's orange dot.</li>
+        <li>Press Play to hear it. Use Save at the top when the canvas marks changes that need saving.</li>
+      </ol>
+    ),
+  },
+  timing: {
+    title: "How to read timing",
+    content: (
+      <p>
+        Play the session to see measured delay along each route. Timing shows where audio waits and how much processing
+        adds; it does not prove that an input has signal.
+      </p>
+    ),
+  },
+  session: {
+    title: "How to manage sessions",
+    content: (
+      <p>
+        Switch between saved setups, create or duplicate a session, or export a stopped copy. Save at the top keeps
+        marked edits. Revert edits returns to the saved route.
+      </p>
+    ),
+  },
+  status: {
+    title: "How to read status",
+    content: (
+      <p>
+        Check the six readiness indicators and the audio devices available on this PC. Choose a node’s device in
+        Properties.
+      </p>
+    ),
+  },
+  virtualCables: {
+    title: "How to use virtual cables",
+    content: (
+      <p>
+        A cable joins two apps: send audio to its render endpoint, then select its matching capture endpoint in the
+        receiving app.
+      </p>
+    ),
+  },
+  uiOptions: {
+    title: "How to personalize the UI",
+    content: (
+      <p>
+        Choose a theme, customize its colors, or exchange a theme file. These preferences stay on this PC and do not
+        change your audio.
+      </p>
+    ),
+  },
+  recording: {
+    title: "How to record audio",
+    content: (
+      <p>
+        Connect a Recorder to the audio you want to save, choose a recording folder and format, then start the session
+        and press Record. Recording starts only on your explicit action.
+      </p>
+    ),
+  },
+  advanced: {
+    title: "How to use advanced controls",
+    content: (
+      <p>
+        Use keyboard graph controls to connect nodes without dragging. Troubleshooting provides manual device binding
+        and recovery. Review each action before applying it.
+      </p>
+    ),
+  },
+  mcp: {
+    title: "How to connect an assistant",
+    content: (
+      <p>
+        Choose the setup for your assistant and grant only the access it needs. Client permissions control reads and
+        edits. The activity section shows tool names and outcomes without audio or secret values.
+      </p>
+    ),
+  },
+  api: {
+    title: "How to use the API",
+    content: (
+      <p>
+        Start the optional HTTP listener, choose who can connect, and use its documentation or request builder. Keep the
+        bearer token private; API edits use the same backend as the app.
+      </p>
+    ),
+  },
+  diagnostics: {
+    title: "How to use logs",
+    content: (
+      <p>
+        Open the logs folder or copy a support bundle when investigating a problem. Verbose logging temporarily records
+        more detail. Support bundles are saved locally; they are not uploaded.
+      </p>
+    ),
+  },
+};
 export type McpActivity = {
   timeUnixMs: number;
   clientId: string;
@@ -127,7 +245,9 @@ export function Workbench({
   onMcpTunnelForget,
   onExportCoworkPlugin,
   clientsPanel,
-  setupContent,
+  statusContent,
+  virtualCablesContent,
+  uiOptionsContent,
   timingContent,
   recordingContent,
   advancedContent,
@@ -180,7 +300,9 @@ export function Workbench({
   onMcpTunnelForget: () => Promise<void>;
   onExportCoworkPlugin?: () => Promise<string>;
   clientsPanel: ReactNode;
-  setupContent: ReactNode;
+  statusContent: ReactNode;
+  virtualCablesContent: ReactNode;
+  uiOptionsContent: ReactNode;
   timingContent?: ReactNode;
   recordingContent: ReactNode;
   advancedContent: ReactNode;
@@ -189,6 +311,24 @@ export function Workbench({
   apiBuilder?: (baseUrl: string) => ReactNode;
   verboseLogging?: VerboseLoggingControl;
 }) {
+  const tabsRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const tabs = tabsRef.current;
+    const workspace = tabs?.closest<HTMLElement>(".main-content");
+    if (!tabs || !workspace) return;
+    const measure = () => {
+      const height = Math.ceil(tabs.getBoundingClientRect().height);
+      if (height > 0) workspace.style.setProperty("--workbench-tabs-height", `${height}px`);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(tabs);
+    return () => {
+      observer?.disconnect();
+      workspace.style.removeProperty("--workbench-tabs-height");
+    };
+  }, []);
+  const [localAssistant, setLocalAssistant] = useState("codex");
   const [mcpClientId, setMcpClientId] = useState("audiorouter-local");
   const [copyMessage, setCopyMessage] = useState("");
   const [coworkBusy, setCoworkBusy] = useState(false);
@@ -229,7 +369,9 @@ export function Workbench({
     ["properties", "Properties"],
     ["timing", "Timing"],
     ["session", "Session"],
-    ["setup", "Setup"],
+    ["status", "Status"],
+    ["virtualCables", "Virtual Cables"],
+    ["uiOptions", "UI Options"],
     ["recording", "Recording"],
     ["advanced", "Advanced"],
     ["mcp", "MCP"],
@@ -238,7 +380,7 @@ export function Workbench({
   ];
   return (
     <aside className="right-workbench" aria-label="Tools and settings">
-      <div className="workbench-tabs" role="tablist" aria-label="Right sidebar">
+      <div ref={tabsRef} className="workbench-tabs" role="tablist" aria-label="Right sidebar">
         {tabs.map(([id, label]) => (
           <button
             key={id}
@@ -256,6 +398,13 @@ export function Workbench({
           </button>
         ))}
       </div>
+      {tab !== "properties" && (
+        <div className="workbench-help">
+          <HelpDisclosure key={tab} title={TAB_HELP[tab].title}>
+            {TAB_HELP[tab].content}
+          </HelpDisclosure>
+        </div>
+      )}
       {tab === "tools" && (
         <div className="workbench-tool-search">
           <label>
@@ -274,22 +423,30 @@ export function Workbench({
         <section className="workbench-page" role="tabpanel" aria-label="Tools">
           <p className="eyebrow">Build a route</p>
           <h2>Add tools</h2>
-          <button type="button" className="tool-card" onClick={onAddGroup}>
-            <span className="tool-card-icon" aria-hidden="true">
-              ▢
-            </span>
-            <span>
-              <strong>Group</strong>
-              <small>A named visual background; no audio routing</small>
-            </span>
-          </button>
+          <div className="tool-library-entry">
+            <button type="button" className="tool-card" onClick={onAddGroup}>
+              <span className="tool-card-icon" aria-hidden="true">
+                ▢
+              </span>
+              <span>
+                <strong>Group</strong>
+                <small>A named visual background; no audio routing</small>
+              </span>
+            </button>
+            <ToolGuideLink kind="group" compact toolName="Group" />
+          </div>
           <p className="muted">
             Add and connect tools, press Play to hear the route, then use Save at the top to keep it.
           </p>
           {(["input", "tool", "output"] as const).map((flow) => (
             <section className="tool-group" key={flow}>
               <h3>{flow === "input" ? "Inputs" : flow === "tool" ? "Processing" : "Outputs"}</h3>
-              {flow === "input" && <ApplicationSourceAction onClick={onApplicationPicker} disabled={!connected} />}
+              {flow === "input" && (
+                <div className="tool-library-entry">
+                  <ApplicationSourceAction onClick={onApplicationPicker} disabled={!connected} />
+                  <ToolGuideLink kind="applicationCapture" compact toolName="Application Capture" />
+                </div>
+              )}
               {tools
                 .filter((entry) => entry.flow === flow)
                 .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }))
@@ -297,50 +454,50 @@ export function Workbench({
                   const help = entry.unavailableReason ?? entry.note ?? TOOL_HELP[entry.id] ?? entry.category;
                   // Click adds the tool; drag places it where it is dropped on the canvas.
                   return (
-                    <button
-                      className="tool-card"
-                      key={entry.id}
-                      type="button"
-                      draggable={connected && Boolean(entry.kind)}
-                      onDragStart={(event) => {
-                        if (entry.kind) startLibraryDrag(event, entry.kind, entry.label);
-                      }}
-                      onDragEnd={endLibraryDrag}
-                      onClick={() => {
-                        if (entry.kind) onAdd(entry.kind);
-                        else if (entry.virtualKind)
-                          onAddCable?.(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink");
-                      }}
-                      disabled={
-                        !connected ||
-                        (!entry.kind && !(entry.virtualKind && onAddCable && entry.unavailableReason === undefined))
-                      }
-                      title={help}
-                      aria-description={help}
-                    >
-                      <span className="tool-card-icon" aria-hidden="true">
-                        {TOOL_ICONS[entry.id]}
-                      </span>
-                      <span>
-                        <strong>{entry.label}</strong>
-                        <small>{help}</small>
-                      </span>
-                    </button>
+                    <div className="tool-library-entry" key={entry.id}>
+                      <button
+                        className="tool-card"
+                        type="button"
+                        draggable={connected && Boolean(entry.kind)}
+                        onDragStart={(event) => {
+                          if (entry.kind) startLibraryDrag(event, entry.kind, entry.label);
+                        }}
+                        onDragEnd={endLibraryDrag}
+                        onClick={() => {
+                          if (entry.kind) onAdd(entry.kind);
+                          else if (entry.virtualKind)
+                            onAddCable?.(entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink");
+                        }}
+                        disabled={
+                          !connected ||
+                          (!entry.kind && !(entry.virtualKind && onAddCable && entry.unavailableReason === undefined))
+                        }
+                        title={help}
+                        aria-description={help}
+                      >
+                        <span className="tool-card-icon" aria-hidden="true">
+                          {TOOL_ICONS[entry.id]}
+                        </span>
+                        <span>
+                          <strong>{entry.label}</strong>
+                          <small>{help}</small>
+                        </span>
+                      </button>
+                      <ToolGuideLink
+                        kind={
+                          entry.kind ??
+                          entry.virtualKind ??
+                          (entry.id === "endpoint-loopback" ? "endpointLoopback" : entry.id)
+                        }
+                        compact
+                        toolName={entry.label}
+                      />
+                    </div>
                   );
                 })}
               {flow === "tool" && pluginsContent}
             </section>
           ))}
-          <details className="tools-howto">
-            <summary>How to build a route</summary>
-            <ol>
-              <li>Add a source: Input Device (microphone), Test Signal, Audio File, or an application.</li>
-              <li>Add processing tools such as Gain or Advanced EQ if needed.</li>
-              <li>Add an Output Device and choose your speakers or headphones in its Properties.</li>
-              <li>Connect the nodes: drag from a node's right edge to the next node's left edge.</li>
-              <li>Press Play to hear it, and Save at the top to keep it.</li>
-            </ol>
-          </details>
         </section>
       )}
       {tab === "api" && <ApiPanel builder={apiBuilder} />}
@@ -357,15 +514,22 @@ export function Workbench({
           <p className="muted">Select a node on the canvas to edit it here.</p>
         </section>
       )}
-      {tab === "setup" && (
+      {tab === "status" && (
         <section className="workbench-page" role="tabpanel">
-          <p className="eyebrow">For the whole app</p>
-          <h2>Set up this PC</h2>
-          <p className="muted">
-            These settings apply to AudioRouter on this computer, not to one session. Build routes in Tools and choose
-            each node's device in its Properties.
-          </p>
-          {setupContent}
+          <h2>Status</h2>
+          {statusContent}
+        </section>
+      )}
+      {tab === "virtualCables" && (
+        <section className="workbench-page" role="tabpanel">
+          <h2>Virtual Cables</h2>
+          {virtualCablesContent}
+        </section>
+      )}
+      {tab === "uiOptions" && (
+        <section className="workbench-page" role="tabpanel">
+          <h2>UI Options</h2>
+          {uiOptionsContent}
         </section>
       )}
       {tab === "recording" && (
@@ -737,67 +901,149 @@ export function Workbench({
             </p>
           </section>
 
-          <details className="mcp-secondary-section">
-            <summary>Local MCP apps (standard stdio)</summary>
-            <p className="muted">
-              Use this standard MCP connection with apps that can launch a command on this PC, including Codex and
-              Claude Code. This client ID is AudioRouter's local authorization name, not an assistant account.
+          <details className="mcp-secondary-section local-assistant-setup">
+            <summary>Connect a local assistant</summary>
+            <p>
+              For Codex, Claude Code, or another assistant running on this PC. Your assistant launches AudioRouter’s
+              local MCP command; keep AudioRouter open while using it.
             </p>
-            <label>
-              Client ID
-              <input
-                aria-label="Assistant client ID"
-                value={mcpClientId}
-                maxLength={128}
-                onChange={(event) => setMcpClientId(event.target.value.trim())}
-              />
-            </label>
-            {mcpSetupInfo?.cliAvailable && (
-              <details>
-                <summary>Connection paths</summary>
-                <p>
-                  <code>{mcpSetupInfo.cliPath}</code>
-                </p>
-                <p>
-                  <code>{mcpSetupInfo.databasePath}</code>
-                </p>
-                <p>
-                  <code>{mcpSetupInfo.pipeName}</code>
-                </p>
-              </details>
-            )}
-            {!mcpSetupInfo && (
-              <p className="mcp-tunnel-message" role="status">
-                Checking the local MCP command…
-              </p>
-            )}
-            {mcpSetupInfo && !mcpSetupInfo.cliAvailable && (
-              <p className="mcp-tunnel-error" role="status">
-                The local MCP command is missing from this installation.
-              </p>
-            )}
-            {mcpSetupInfo?.cliAvailable && (
-              <details>
-                <summary>Codex config.toml</summary>
-                <pre className="mcp-command">{codexConfig}</pre>
-                <button className="secondary" onClick={() => copy(codexConfig)}>
-                  Copy Codex config
+            <ol className="setup-instructions">
+              <li>
+                <h3>Choose your assistant</h3>
+                <label>
+                  Assistant
+                  <select
+                    aria-label="Local assistant"
+                    value={localAssistant}
+                    onChange={(event) => setLocalAssistant(event.target.value)}
+                  >
+                    <option value="codex">Codex</option>
+                    <option value="claude">Claude Code</option>
+                    <option value="other">Another MCP app</option>
+                  </select>
+                </label>
+              </li>
+              <li>
+                <h3>Name this connection and grant access</h3>
+                <p>This name identifies permissions in AudioRouter. It is not your assistant account.</p>
+                <label>
+                  Connection name
+                  <input
+                    aria-label="Assistant client ID"
+                    value={mcpClientId}
+                    maxLength={128}
+                    onChange={(event) => setMcpClientId(event.target.value.trim())}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={(event) => {
+                    const panel = event.currentTarget
+                      .closest(".workbench-page")
+                      ?.querySelector<HTMLDetailsElement>("[data-client-permissions]");
+                    if (panel) {
+                      panel.open = true;
+                      panel.scrollIntoView({ block: "start", behavior: "smooth" });
+                      panel.querySelector("summary")?.focus();
+                    }
+                  }}
+                >
+                  Set client permissions
                 </button>
-              </details>
-            )}
-            {mcpSetupInfo?.cliAvailable && (
-              <details>
-                <summary>Claude Code in PowerShell</summary>
-                <pre className="mcp-command">{claudeCommand}</pre>
-                <button className="secondary" onClick={() => copy(claudeCommand)}>
-                  Copy Claude command
-                </button>
-              </details>
-            )}
-            {copyMessage && <p role="status">{copyMessage}</p>}
+                <p className="muted">
+                  Use this exact connection name below. Start with observer access; allow edits only when you need them.
+                </p>
+              </li>
+              <li>
+                <h3>
+                  {localAssistant === "codex"
+                    ? "Add this to your Codex configuration"
+                    : localAssistant === "claude"
+                      ? "Run this in PowerShell"
+                      : "Add a command connection in your MCP app"}
+                </h3>
+                {mcpSetupInfo?.cliAvailable ? (
+                  <>
+                    {localAssistant === "codex" ? (
+                      <>
+                        <p>Paste this block into your Codex config.toml, then reload its MCP connections.</p>
+                        <pre className="mcp-command">{codexConfig}</pre>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!mcpClientId}
+                          onClick={() => copy(codexConfig)}
+                        >
+                          Copy Codex config
+                        </button>
+                      </>
+                    ) : localAssistant === "claude" ? (
+                      <>
+                        <p>Run this once, then restart Claude Code or reconnect its MCP server.</p>
+                        <pre className="mcp-command">{claudeCommand}</pre>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!mcpClientId}
+                          onClick={() => copy(claudeCommand)}
+                        >
+                          Copy Claude command
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p>
+                          Choose the standard command / stdio transport. Enter the executable and arguments separately.
+                        </p>
+                        <label>
+                          Executable
+                          <input readOnly value={cli} />
+                        </label>
+                        <label>
+                          Arguments
+                          <textarea
+                            readOnly
+                            value={JSON.stringify([
+                              "mcp",
+                              "serve",
+                              "--client-id",
+                              mcpClientId,
+                              "--database",
+                              db,
+                              "--pipe",
+                              pipe,
+                            ])}
+                          />
+                        </label>
+                        <p className="muted">
+                          The app starts this command for you. Do not paste it into a web address field.
+                        </p>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <p className="mcp-tunnel-message" role="status">
+                    {mcpSetupInfo
+                      ? "The local MCP command is missing. Repair or update your AudioRouter installation before continuing."
+                      : "Checking the installed local MCP command…"}
+                  </p>
+                )}
+              </li>
+              <li>
+                <h3>Confirm the connection</h3>
+                <p>
+                  Ask your assistant to list AudioRouter sessions. Check Recent MCP activity below for the request and
+                  its outcome. If access is denied, match the connection name in Client permissions.
+                </p>
+              </li>
+            </ol>
+            <p className="mcp-copy-message" role="status">
+              {copyMessage || "Copy a setup above when you are ready."}
+            </p>
           </details>
 
-          <details className="mcp-secondary-section">
+          <details className="mcp-secondary-section" data-client-permissions>
             <summary>Client permissions</summary>
             <p className="muted">
               Start with observer access. Grant write access only for actions you want assistants to perform.

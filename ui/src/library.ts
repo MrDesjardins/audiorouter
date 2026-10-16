@@ -64,7 +64,7 @@ const OUTPUT_DEVICE_NOTE =
   "Send sound to speakers, headphones, or a virtual cable (for example CABLE Input) that another app uses as its input. Choose the device in Properties.";
 
 const CABLES_NOT_INSTALLED =
-  "Install AudioRouter cables in Setup, or use Input device with a virtual cable such as CABLE Output.";
+  "Install AudioRouter cables in Virtual Cables, or use Input device with a virtual cable such as CABLE Output.";
 
 export const libraryEntries: LibraryEntry[] = [
   {

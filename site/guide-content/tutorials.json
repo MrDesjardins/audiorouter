@@ -1,0 +1,417 @@
+{
+  "gain": {
+    "route": ["Source", "Gain", "Meter → Output"],
+    "steps": [
+      "Connect Gain before the stage that needs more headroom, then add a Meter downstream.",
+      "Start at 0 dB. Play a representative loud passage and reduce Gain by 3–6 dB if the next stage is overloaded.",
+      "Compare at the same monitoring volume. Increase only while the downstream peak has room."
+    ],
+    "success": "The level changes while rhythm and tone stay the same. A −6 dB cut roughly halves sample amplitude.",
+    "check": "If distortion remains after a cut, inspect the source and earlier stages: attenuation cannot restore samples already clipped.",
+    "listen": "Compare Input reference with Output. The drum-and-bass phrase keeps its timing as Gain changes."
+  },
+  "volume": {
+    "route": ["Source", "Volume", "Mixer → Output"],
+    "steps": [
+      "Place Volume on the branch you want to balance before it joins other sources.",
+      "Begin at 100%, then lower that branch while the other source plays.",
+      "Use 0% for silence and restore the prior percentage when finished."
+    ],
+    "success": "50% is half amplitude, about −6 dB; 200% doubles amplitude and needs headroom.",
+    "check": "If turning this down changes the wrong sound, follow its incoming wire to confirm which branch it controls.",
+    "listen": "Use the same phrase to compare 50%, 100% and 200%. Output changes level without changing pitch."
+  },
+  "bassTreble": {
+    "route": ["Source", "Bass & Treble", "Meter → Output"],
+    "steps": [
+      "Begin with Bass and Treble at 0 dB so the shelves are flat.",
+      "For boom, try Bass −3 dB and move Bass frequency lower to focus on the bottom rather than all low mids.",
+      "For brightness, try Treble +2 dB. Raise Treble frequency to affect mainly the upper end.",
+      "Match output loudness before comparing Bypass; check headroom after boosts."
+    ],
+    "success": "Shelves change broad regions. Frequency moves the transition; it is not a separate gain adjustment.",
+    "check": "If voice sounds thin or harsh, reduce the amount or move the transition away from important voice frequencies.",
+    "listen": "The fixture combines bass, bell harmonics and broadband texture. Listen for low weight versus high brightness, rather than overall loudness alone."
+  },
+  "graphicEq": {
+    "route": ["Broadband source", "Graphic EQ", "Meter → Output"],
+    "steps": [
+      "Start with all ten bands at 0 dB and identify a specific problem by listening.",
+      "Read the band descriptions below; change one relevant fader by 1–3 dB.",
+      "Compare Input reference with Output, then check neighboring bands only if the correction needs a broader shape.",
+      "After boosts, check downstream peaks and reduce upstream Gain if necessary."
+    ],
+    "success": "Each fixed band shapes an overlapping region: low faders affect weight, middle faders body and articulation, high faders brightness.",
+    "check": "A 16 kHz boost may be barely audible on your hardware. Do not compensate by adding extreme gain; use material containing that range.",
+    "listen": "Bass notes, low rumble, bell overtones and quiet broadband texture give the ten bands material to work on. Each band's purpose and tradeoff is explained below."
+  },
+  "parametricEq": {
+    "route": ["Source", "Advanced EQ", "Meter → Output"],
+    "steps": [
+      "Add a band and choose its job: Peaking for a local correction, a shelf for a broad region, or High/Low pass to remove a frequency extreme.",
+      "Select that band's point or row. Set Frequency, then Q for width/resonance; use Gain only on Peaking and shelves.",
+      "Toggle that band's Enabled control to compare its contribution before adding another.",
+      "Inspect the combined curve and downstream headroom. Keep the fewest bands that solve the problem."
+    ],
+    "success": "The selected band's shape, location and width are distinguishable from the summed response. A flat All pass magnitude can still change phase.",
+    "check": "If Gain does nothing, check the filter type: pass, notch and All pass filters do not use that gain control.",
+    "listen": "Edit any of four example bands, then switch listening between Input and Output. Browser biquads demonstrate the selected shapes; the curve is illustrative rather than an engine measurement."
+  },
+  "compressor": {
+    "route": ["Voice / instrument", "Compressor", "Limiter → Output"],
+    "steps": [
+      "Play both quiet and loud phrases. Begin with Threshold −18 dBFS, Ratio 3:1, Attack 10 ms and Release 150 ms.",
+      "Lower Threshold until loud phrases show useful reduction; keep quiet phrases natural.",
+      "Adjust Attack to preserve or tame beginnings and Release so recovery does not pump between syllables.",
+      "Add Makeup only enough to match the bypassed listening level."
+    ],
+    "success": "Loud passages move closer to quiet ones. Ratio changes the level above threshold, while Makeup lifts the whole result.",
+    "check": "If it only sounds louder, return Makeup to 0 dB and compare again. If reduction is constant, raise Threshold or lower the input.",
+    "listen": "A pulsing tone arrives in four level sections. Compare the loud third section with the quieter first, then change Threshold and Ratio; this is a simplified envelope compressor."
+  },
+  "gate": {
+    "route": ["Microphone", "Gate / Expander", "Compressor → Output"],
+    "steps": [
+      "Measure the background while quiet, then the quietest speech you want to keep.",
+      "Set Threshold between those levels and start with a modest Range such as 20 dB.",
+      "Increase Hold or Release if word endings disappear; lower Threshold if quiet words never open the gate.",
+      "Use Hysteresis to stop rapid reopening near the boundary; use Ratio for gentler downward expansion."
+    ],
+    "success": "Background drops during pauses while wanted phrases open the gate. A gate cannot remove noise underneath speech.",
+    "check": "If it chatters, increase Hysteresis/Hold before deepening Range. If the first consonant is cut, shorten Attack or lower Threshold.",
+    "listen": "Voice-like synthetic phrases sit above a quiet bed. Listen to the pauses and word tails; compare Input with the attenuated Output."
+  },
+  "limiter": {
+    "route": ["Processed mix", "Limiter", "Meter → Output"],
+    "steps": [
+      "Put Limiter after boosts and mixing, near the end of the audible path.",
+      "Start with Ceiling −1 dBFS, Lookahead 5 ms and Release 100 ms.",
+      "Play the loudest expected passage and check peak limiting.",
+      "Reduce upstream levels if limiting is continuous; use Compressor for routine dynamic control."
+    ],
+    "success": "Occasional sample peaks are contained while most material passes. A sample-peak ceiling is not a true-peak loudness guarantee.",
+    "check": "If everything sounds flattened, reduce the level feeding the limiter instead of continually lowering Ceiling.",
+    "listen": "The third section contains deliberately oversized peaks. The bounded example shows a sample ceiling and release, not the production lookahead algorithm."
+  },
+  "delay": {
+    "route": ["Earlier audio path", "Sync (delay)", "Aligned destination"],
+    "steps": [
+      "Use a repeatable event such as a recorded clap to decide which path arrives early.",
+      "Insert Sync on that earlier path and begin at 0 ms.",
+      "Add the measured positive offset in small steps, then compare the recorded result again."
+    ],
+    "success": "The entire signal arrives later with the same shape. This tool does not mix in a dry copy or create an echo effect.",
+    "check": "If audio already arrives late, adding delay makes that worse. Adjust the earlier path or the other system's timing.",
+    "listen": "Try 300 ms and compare Input reference with Output at the same timeline position. The first output is silent until the delayed source arrives."
+  },
+  "pitch": {
+    "route": ["Voice / instrument", "Pitch", "Output"],
+    "steps": [
+      "Begin at 0 Semitones and 0 Cents.",
+      "Try a small shift such as −2 semitones, then listen through a whole phrase.",
+      "Use Cents for fine adjustment. Check clarity and latency before using a large interval."
+    ],
+    "success": "Musical pitch changes while the phrase duration remains the same; +12 semitones is one octave.",
+    "check": "If intelligibility suffers, reduce the shift and compare the unprocessed source. Large shifts can expose artifacts.",
+    "listen": "A synthesized bell melody is regenerated at the new pitch with exactly the original note timing. This teaches interval and timing, not the engine's pitch-shifting artifacts."
+  },
+  "dehum": {
+    "route": ["Humming source", "Dehum", "Output"],
+    "steps": [
+      "Identify whether the unwanted fundamental is near 50 or 60 Hz.",
+      "Set that Frequency, start with Amount 50% and a small harmonic count.",
+      "Add harmonics only where higher buzz remains, then compare lower voice notes or bass for damage."
+    ],
+    "success": "Narrow notches reduce the fundamental and selected multiples while leaving most surrounding sound alone.",
+    "check": "If the buzz remains, verify its frequency. Broadband hiss needs a different treatment; more notches can remove wanted low notes.",
+    "listen": "The input contains a known 60 Hz hum with eight harmonics. Compare 50 versus 60 Hz and change the harmonic count to hear why matching matters."
+  },
+  "declick": {
+    "route": ["Crackling source", "Declick", "Output"],
+    "steps": [
+      "Loop a passage containing an isolated unwanted click and wanted sharp sounds.",
+      "Start at Threshold 50%, then lower it gradually if the click remains.",
+      "Raise Threshold if consonants or percussion become dull."
+    ],
+    "success": "Exceptional short impulses are reduced while ordinary attacks remain recognizable.",
+    "check": "Persistent gaps, clipping or driver dropouts require fixing the source; a click repair tool cannot reconstruct missing passages.",
+    "listen": "Several short injected impulses interrupt synthetic phrases. The lesson repairs only those known impulses when they cross the threshold; it does not reproduce the engine's detector."
+  },
+  "denoise": {
+    "route": ["Steady noisy mic", "Denoise", "Compressor → Output"],
+    "steps": [
+      "Play the route and keep the wanted source quiet.",
+      "Click Learn noise while only the steady room/fan background is present, then Stop learning and keep profile.",
+      "Resume speech and adjust Reduction. Raise Noise left if speech becomes watery.",
+      "Relearn after moving the mic or changing the background."
+    ],
+    "success": "The learned background drops, including under phrases, without excessive damage to wanted detail.",
+    "check": "If the profile contains speech, learn it again in silence. Increasing Reduction cannot repair a contaminated profile.",
+    "listen": "The lesson starts with a prepared synthetic hiss profile. It attenuates a separately known noise layer, not a real spectral-subtraction implementation; use it to compare reduction and residual noise."
+  },
+  "speechDenoise": {
+    "route": ["Conversational mic", "Speech Denoise", "Compressor → Output"],
+    "steps": [
+      "Place Speech Denoise before stages that amplify noise.",
+      "Start at Strength 70% and speak normally, including quiet syllables.",
+      "Reduce Strength if breathing, consonants or desired ambience become unnatural."
+    ],
+    "success": "Background is reduced around conversational speech without a manual Learn step.",
+    "check": "For music or delicate material, compare Bypass carefully; a speech-oriented cleaner may suppress sound you want to keep.",
+    "listen": "Synthetic voice-like phrases and hiss demonstrate stronger versus gentler cleanup. The known noise layer is attenuated for teaching; this is not the production speech detector."
+  },
+  "spectralGate": {
+    "route": ["Noisy source", "Spectral Gate", "Output"],
+    "steps": [
+      "Learn a noise-only interval, then keep the profile before evaluating speech.",
+      "Start with Threshold 3 dB above the learned noise and Reduction 40 dB.",
+      "Lower Threshold or Reduction if quiet syllables develop holes; relearn when the noise changes."
+    ],
+    "success": "Frequency regions close to the learned background are attenuated; this differs from closing the entire signal with Gate.",
+    "check": "A profile learned during speech can remove wanted frequencies. Correct the profile before applying stronger settings.",
+    "listen": "A prepared noise layer makes threshold and blocked-region reduction audible. This deliberately simplified separation model does not simulate FFT bins or production artifacts."
+  },
+  "firFilter": {
+    "route": ["Source", "FIR Filter", "Meter → Output"],
+    "steps": [
+      "Choose and approve an impulse-response WAV in the actual FIR inspector.",
+      "Wait for the prepared response and inspect its duration, partitions and fixed latency.",
+      "Begin with Wet 100% and Gain 0 dB. Compare against dry at matched loudness, then blend if useful.",
+      "If loading fails, inspect the file/error before saving the intended route."
+    ],
+    "success": "The source is convolved with the loaded response. Wet/Dry blends aligned paths; output Gain adjusts the result.",
+    "check": "A long or strongly colored response can smear attacks or increase level. Check the IR and headroom before blaming the source.",
+    "listen": "Browser convolution uses a short built-in multi-tap response, not your file. Compare Dry with Wet to hear the tail; the actual inspector's load/prepare/partition workflow is described below."
+  },
+  "mute": {
+    "route": ["Branch", "Mute", "Destination"],
+    "steps": [
+      "Put Mute on the specific branch you want to silence.",
+      "Select Muted and verify its downstream meter falls silent.",
+      "Restore the signal deliberately when ready; other branches retain their own states."
+    ],
+    "success": "Only audio through this node is silenced; it does not act as a global microphone toggle.",
+    "check": "If another source remains audible, trace its separate path. Do not assume one mute controls every input.",
+    "listen": "Input reference remains available for comparison even when Output is muted. This audition choice affects only the lesson monitor."
+  },
+  "inputSwitch": {
+    "route": ["Input A + Input B", "Input Switch", "Output"],
+    "steps": [
+      "Connect the two alternative sources to the switch.",
+      "Choose the source to hear and select a fade suitable for the transition.",
+      "Switch while both sources are active and listen through the whole fade."
+    ],
+    "success": "One source replaces the other through a transition; this is not a permanent sum like Mixer.",
+    "check": "If the chosen input is silent, check its incoming source before repeatedly switching.",
+    "listen": "Input A is drums/bass; Input B is a bell melody. Listen to either reference separately, then Output while changing selection. Slow fade lasts two seconds in this example."
+  },
+  "duck": {
+    "route": ["Music target + voice key", "Duck", "Music output"],
+    "steps": [
+      "Wire music through Duck as the target.",
+      "Choose a separate voice node as the trigger; the key controls attenuation and is not mixed into Duck's output.",
+      "Set Threshold so speech triggers the detector, then adjust Amount for the music reduction.",
+      "Tune Attack, Hold and Release to bridge short pauses. Mix voice downstream only if you want it in the final output."
+    ],
+    "success": "Music lowers during key phrases and recovers afterward. Changing music level alone should not be your speech trigger.",
+    "check": "If music never ducks, verify the trigger node and its level against Threshold. If voice is missing from the final mix, connect its audible branch separately.",
+    "listen": "Input A is music; the trigger reference is a different voice-like phrase with pauses. Output contains only music following that key. Audition the key separately to understand the timing."
+  },
+  "timeShift": {
+    "route": ["Live source", "Time Shift", "Output"],
+    "steps": [
+      "Set a buffer long enough for the history you need and start the route.",
+      "Let history accumulate, then Pause or seek within the available range.",
+      "Resume from history and use the live-edge action when you want current audio again."
+    ],
+    "success": "The source keeps advancing while playback reads retained history. History before the retained window is unavailable.",
+    "check": "If you cannot seek far enough back, check buffer capacity and how long the route has run.",
+    "listen": "The fixed story is live for two seconds, paused for one, then behind live, then back live at six seconds. The output waveform shows the gap and replayed content."
+  },
+  "mixer": {
+    "route": ["Drums/bass + bell melody", "Mixer", "Meter → Output"],
+    "steps": [
+      "Connect each wanted source to the same Mixer; its input rows follow the upstream connections.",
+      "Play sources separately to identify their rows, then set their individual volumes.",
+      "Play both together and check the summed output. Lower the inputs if their combined peaks overload the next stage."
+    ],
+    "success": "Both different tracks are audible in Output and each volume changes only its own contribution. 100% + 100% can exceed available headroom.",
+    "check": "If one fader appears ineffective, listen to that input reference alone and verify its wire/source is active.",
+    "listen": "A syncopated drum-and-bass track and a higher bell melody have different rhythms and spectra. Set either fader to zero to isolate the other; both raw input waveforms stay visible."
+  },
+  "meter": {
+    "route": ["Signal to inspect", "Meter", "Same signal onward"],
+    "steps": [
+      "Place Meter before or after the stage you want to inspect.",
+      "Read the stereo RMS bars for average energy, white current-peak markers for transients and gold held peaks for recent extremes.",
+      "Check the clipping count and downstream headroom while playing the loudest passage."
+    ],
+    "success": "Meter passes audio unchanged. RMS is generally below peak; held peaks let you catch events you missed visually.",
+    "check": "Silence at this meter points upstream. Healthy signal here but silence later points to a downstream route, mute or device.",
+    "listen": "Four level sections include an intentionally over-range third section. The lesson's bar, current peak, held peak and clip count are computed from the same stereo samples you hear, before the quiet browser monitor gain."
+  },
+  "physicalInput": {
+    "route": [
+      "Chosen capture device",
+      "Channel selection",
+      "AudioRouter route"
+    ],
+    "steps": [
+      "Choose the exact microphone or capture endpoint in Properties; do not leave the device unchosen.",
+      "Select Mono, Stereo, Left or Right to match how that device is wired.",
+      "Save the route, Play and check the input meter while making a sound."
+    ],
+    "success": "Only the explicitly chosen capture device supplies this branch. Left/Right can select a microphone present on just one side.",
+    "check": "Check Windows permission, device availability and channel choice. A missing mic must be rebound deliberately.",
+    "listen": "This diagram explains channel selection only. It never opens your microphone or invents a browser recording of the selected device."
+  },
+  "physicalOutput": {
+    "route": [
+      "AudioRouter route",
+      "Chosen render device",
+      "Headphones / speakers"
+    ],
+    "steps": [
+      "Choose the intended render endpoint explicitly in Properties.",
+      "Wire the processed branch to it, Save and Play at a low monitoring level.",
+      "Check the route meter and the chosen Windows output's volume/mute state."
+    ],
+    "success": "The branch reaches that output device. Choosing an output does not select a capture device.",
+    "check": "If meters move but nothing is audible, confirm the endpoint, Windows volume and physical connection. Avoid a loop back into the same captured output.",
+    "listen": "The diagram shows destination selection without accessing your speakers or claiming to verify a real route."
+  },
+  "applicationCapture": {
+    "route": ["Chosen app process", "Application Capture", "AudioRouter route"],
+    "steps": [
+      "Open the application and make it play audio.",
+      "Refresh the running-app list and choose the intended process in Tools.",
+      "Add the source, connect it to your processing/output, Save and Play.",
+      "Check the source meter while the selected app makes sound."
+    ],
+    "success": "The selected application's audio enters the route independently of a whole-output loopback.",
+    "check": "A restarted app can have a new process identity. Refresh and select it deliberately; check whether the target app is actually producing sound.",
+    "listen": "This process-selection diagram is visual only; the website cannot inspect or capture your running applications."
+  },
+  "endpointLoopback": {
+    "route": ["Windows playback mix", "Endpoint Loopback", "AudioRouter route"],
+    "steps": [
+      "Choose the Windows render endpoint whose playback you want to capture.",
+      "Play audio to that endpoint, then wire Loopback to your intended route.",
+      "Choose a separate monitoring destination or a layout that avoids feeding captured audio back into itself."
+    ],
+    "success": "The endpoint's combined playback is captured, rather than a single application's process.",
+    "check": "If the signal repeats or grows, stop the route and remove the feedback path. If silent, verify where Windows is sending playback.",
+    "listen": "The diagram distinguishes whole-endpoint capture from app capture; it performs no browser loopback capture."
+  },
+  "virtualRenderSource": {
+    "route": [
+      "App plays to cable render",
+      "Virtual Render Source",
+      "AudioRouter route"
+    ],
+    "steps": [
+      "Install/enable the intended cable using Virtual Cables and identify its render/capture names.",
+      "In the sending app, choose the cable's render endpoint as playback.",
+      "Choose that cable source in AudioRouter, connect processing/output, Save and Play."
+    ],
+    "success": "Audio sent by the app to the cable becomes an AudioRouter input. Direction is from app playback into the route.",
+    "check": "Confirm the cable identity and sending app's playback selection; similarly named physical endpoints are not the same cable.",
+    "listen": "The direction diagram explains the Windows/app boundary without installing or opening a virtual device."
+  },
+  "virtualCaptureSink": {
+    "route": [
+      "AudioRouter route",
+      "Virtual Capture Sink",
+      "App microphone input"
+    ],
+    "steps": [
+      "Choose the intended installed cable sink in AudioRouter and wire your processed branch to it.",
+      "In the receiving app, choose that cable's capture endpoint as its microphone/input.",
+      "Save and Play the route, then check the receiving app's input meter."
+    ],
+    "success": "Processed AudioRouter audio appears as input to the other app. It does not automatically play through speakers.",
+    "check": "If the app hears the raw microphone, change that app's selected input to the cable capture endpoint.",
+    "listen": "The diagram teaches route-to-app direction. It does not access your apps or alter Windows defaults."
+  },
+  "testSignal": {
+    "route": ["Generated sine", "Tools under test", "Meter / Output"],
+    "steps": [
+      "Add Test Signal and start at a quiet Level such as −24 dBFS.",
+      "Choose Frequency and Duration for a repeatable check.",
+      "Connect only the path you intend to test, Save and Play. Check meters before raising monitoring volume."
+    ],
+    "success": "A known source helps separate processing/routing faults from capture-device problems. It has no microphone input.",
+    "check": "If the meter sees the tone but the destination does not, inspect the downstream path. Avoid loud continuous tones.",
+    "listen": "Frequency and Level control an actual generated sine. The website lesson uses an eight-second source for the shared timeline; the app's Duration sets the real test length."
+  },
+  "audioFile": {
+    "route": ["Chosen local file", "Audio File", "Processing / Output"],
+    "steps": [
+      "Choose and approve the local file in the actual Audio File inspector.",
+      "Connect the player to the intended processing and output, then Save the route.",
+      "Use its Play/Pause/Stop/Seek controls; compare a repeatable passage when tuning effects."
+    ],
+    "success": "Pause keeps the position, Stop returns to the start, and seeking chooses a deliberate point in the file.",
+    "check": "If loading fails, inspect format/path access. A browser lesson playing successfully does not prove your local file is supported.",
+    "listen": "A built-in synthetic melody stands in for a file so you can practice play, pause and seek. No user's file is read or uploaded."
+  },
+  "recorder": {
+    "route": ["Wanted branch", "Recorder", "Completed take → Audio File"],
+    "steps": [
+      "Wire the branch to record into Recorder and choose/approve a recording folder before the first take.",
+      "Save and Play the session, then press Record. Recording is a separate deliberate action unless Auto record is enabled.",
+      "Press Stop to finalize the take, find it in Recording, and play the completed file.",
+      "Check the saved file and branch before relying on a long take; set splitting only when useful."
+    ],
+    "success": "Capture activity stays at Recorder; completed-file playback belongs to Audio File. Stopping finalizes the interval actually recorded.",
+    "check": "If no take starts, check the approved folder, session state and connected branch. A running route alone does not mean recording is active.",
+    "listen": "Press Record example, stop after a few seconds, then Play recording. Only that in-memory synthetic interval is replayed; there is no microphone, disk write or download."
+  },
+  "networkSend": {
+    "route": ["PC A source → Send", "Network", "PC B Receive → Output"],
+    "steps": [
+      "On PC A, connect a source to Network Send and enter PC B's literal IP address.",
+      "On PC B, add Network Receive with PC A's sender address and connect it to an output.",
+      "Match the UDP port and privately copied generated pairing key on both PCs.",
+      "Save and Play both routes, then inspect receiver activity and output."
+    ],
+    "success": "Pairing precedes packet flow. The receiver is another AudioRouter on another PC; the sender running does not prove successful reception.",
+    "check": "Check address direction, matching port/key, firewall access and receiver state before increasing buffers.",
+    "listen": "The first 2.4 seconds show pairing with no received audio. Then a delayed copy crosses the illustrated network to PC B. This is a local timing model with no packets or remote connection."
+  },
+  "networkReceive": {
+    "route": ["PC A source → Send", "Network", "PC B Receive → Output"],
+    "steps": [
+      "On PC B, enter the literal address of the sending PC in Sender and choose the receiving UDP port.",
+      "Match the sender's port and pairing key; connect Receive to a local output.",
+      "Save and Play both PCs. Begin with Buffer 40 ms and inspect incoming activity.",
+      "Increase Buffer only if timing variation causes gaps; recheck the added delay."
+    ],
+    "success": "Only the configured sender/key feeds this source. More buffer trades latency for tolerance to packet timing variation.",
+    "check": "No received packets usually means address, key, port or firewall; a larger buffer cannot fix mismatched pairing.",
+    "listen": "Pairing completes before received sound starts at PC B. Increase Buffer and compare with the sender reference to hear the extra local simulated delay; no real network is used."
+  },
+  "plugin": {
+    "route": ["Source", "Chosen VST effect", "Meter → Output"],
+    "steps": [
+      "Scan an explicitly chosen installed x64 plugin directory and inspect a supported result.",
+      "Add the intended exact plugin to the draft and wire it into the branch.",
+      "Save and Play, then verify plugin running telemetry and the downstream meter.",
+      "Use the plugin-defined parameter ranges and matched-level Bypass comparisons."
+    ],
+    "success": "The chosen plugin identity and its own parameter metadata determine the controls. A scan result alone does not prove successful live processing.",
+    "check": "If it faults, inspect the error and recover deliberately. Protected voice paths remain silent rather than silently bypassing a failed processor.",
+    "listen": "A generic website sound cannot demonstrate an arbitrary installed plugin. This page uses a visual lifecycle explanation and teaches how to verify the real effect."
+  },
+  "group": {
+    "route": ["Related nodes", "Visual region", "Same audio wiring"],
+    "steps": [
+      "Add a Group from Tools and move/resize it behind related nodes.",
+      "Click its name to rename it, choose a readable color and keep background opacity subtle.",
+      "Lock the finished region to prevent accidental movement while working nearby."
+    ],
+    "success": "A named region makes the route easier to read. Audio still follows the existing wires; the rectangle is not an audio processor.",
+    "check": "If moving or resizing is unavailable, check Locked. Keep the caption away from controls and wires.",
+    "listen": "This organizational diagram has no relevant audio example. Grouping changes canvas presentation only."
+  }
+}

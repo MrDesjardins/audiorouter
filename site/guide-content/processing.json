@@ -1,0 +1,2047 @@
+{
+  "metadata": {
+    "schemaVersion": 1,
+    "date": "2026-10-14",
+    "scope": "User-facing built-in processing tool guides; source-derived configuration facts, illustrative recipes and visual design briefs.",
+    "requirements": [
+      "UI-05",
+      "UI-09",
+      "UI-12",
+      "DSP-01",
+      "DSP-02",
+      "DSP-03",
+      "DSP-04",
+      "DSP-05",
+      "DSP-06",
+      "DSP-07",
+      "DSP-08",
+      "DSP-10",
+      "DSP-11",
+      "DSP-12",
+      "DSP-13",
+      "DSP-14",
+      "DSP-15",
+      "DSP-16",
+      "DSP-17",
+      "DSP-18",
+      "DSP-19",
+      "GRAPH-04"
+    ],
+    "sources": [
+      "docs/milestones/M05-visual-editor.md",
+      "docs/spec/07-processing.md",
+      "docs/spec/09-interface.md",
+      "crates/control/src/catalog.rs",
+      "crates/domain/src/lib.rs",
+      "crates/engine/src/lib.rs",
+      "ui/src/parameterText.ts",
+      "ui/src/NodeEditors.tsx",
+      "ui/src/AdvancedEqEditor.tsx",
+      "ui/src/DuckEditor.tsx",
+      "ui/src/SpectralGateEditor.tsx",
+      "ui/src/SessionFlowCanvas.tsx"
+    ],
+    "limitations": [
+      "Recipes are starting points, not automatic calibration or audio-quality qualification.",
+      "No tests or live audio measurements were performed for this content task.",
+      "Registry ranges are outer bounds; frequency eligibility also depends on graph sample rate.",
+      "Meter has no user-exposed numeric property in the current registry.",
+      "Current Advanced EQ editor has no user-exposed slope control despite the broader initial specification table."
+    ]
+  },
+  "tools": [
+    {
+      "kind": "gain",
+      "title": "Gain",
+      "purpose": "Set a precise level in decibels.",
+      "concept": "Gain multiplies every sample by the same amount. A change of +6 dB is roughly twice the signal amplitude; −6 dB is roughly half. It does not make loud and quiet moments more alike.",
+      "signalBehavior": "Level changes preserve the shape of the sound until a downstream stage overloads. A quiet recording with noise becomes louder noise too.",
+      "properties": [
+        {
+          "key": "gainDb",
+          "label": "Gain",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -60,
+          "maximum": 24,
+          "default": 0,
+          "meaning": "A level adjustment expressed in decibels.",
+          "increase": "More positive values make this output louder.",
+          "decrease": "More negative values make it quieter.",
+          "example": "Try −6 dB to create headroom.",
+          "caution": "An upstream overload is not repaired by lowering gain afterward."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Match two sources",
+          "steps": [
+            "Play one source at a time.",
+            "Start at 0 dB and cut the louder source until the meters are comparable.",
+            "Listen at the same monitoring volume."
+          ]
+        },
+        {
+          "title": "Create headroom",
+          "steps": [
+            "Put Gain before a boosted EQ or a Mixer.",
+            "Try −6 dB before the next stage.",
+            "Watch peaks downstream; a source already clipped cannot be repaired by turning it down."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Boosting Gain cannot restore clipped audio.",
+        "Equal amplitude does not guarantee equal perceived loudness."
+      ],
+      "suggestedVisual": {
+        "type": "level",
+        "title": "Amplitude without reshaping",
+        "description": "Show the same synthetic sine before and after a slider; annotate 50% = about −6 dB and +6 dB = about 2× amplitude.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "volume",
+      "title": "Volume",
+      "purpose": "Balance a source with a familiar percent control.",
+      "concept": "This is a linear amplitude control: 100% is unchanged, 50% is half amplitude, and 200% doubles amplitude. Percent is not a perceived loudness scale.",
+      "signalBehavior": "One source goes in and one comes out. Volume uses the Gain processing path.",
+      "properties": [
+        {
+          "key": "percent",
+          "label": "Volume",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 200,
+          "default": 100,
+          "meaning": "Linear signal amplitude relative to the input.",
+          "increase": "200% doubles amplitude.",
+          "decrease": "0% silences this output.",
+          "example": "50% is about −6 dB.",
+          "caution": "Percent is not perceived loudness."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Balance game and voice",
+          "steps": [
+            "Put Volume on the game branch before the Mixer.",
+            "Start the game at 50% and voice at 100%.",
+            "Adjust while speaking over normal game activity."
+          ]
+        },
+        {
+          "title": "Silent comparison",
+          "steps": [
+            "Set Volume to 0% to hear the other route.",
+            "Restore the exact prior percentage when finished."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "200% may overload the next stage.",
+        "50% amplitude is about −6 dB; it is not guaranteed to sound half as loud."
+      ],
+      "suggestedVisual": {
+        "type": "level",
+        "title": "Amplitude without reshaping",
+        "description": "Show the same synthetic sine before and after a slider; annotate 50% = about −6 dB and +6 dB = about 2× amplitude.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "bassTreble",
+      "title": "Bass & Treble",
+      "purpose": "Adjust warmth and brightness with two shelves.",
+      "concept": "Two separate shelves shape the low and high ends. Bass and Treble each have their own gain and transition frequency; this is not one movable peaking band.",
+      "signalBehavior": "Both adjustments combine. Current defaults of 500 Hz and 1500 Hz include more speech than the original 120 Hz / 6000 Hz tuning.",
+      "properties": [
+        {
+          "key": "bassDb",
+          "label": "Bass",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "meaning": "Broad low-frequency shelf amount.",
+          "increase": "Boosts low frequencies.",
+          "decrease": "Cuts low frequencies.",
+          "example": "Try −3 dB to reduce excess warmth.",
+          "caution": "Its frequency changes how much speech is affected."
+        },
+        {
+          "key": "trebleDb",
+          "label": "Treble",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "meaning": "Broad high-frequency shelf amount.",
+          "increase": "Boosts brightness.",
+          "decrease": "Reduces brightness.",
+          "example": "Try +2 dB for a modest lift.",
+          "caution": "Boost may also emphasize hiss and consonants."
+        },
+        {
+          "key": "bassFrequencyHz",
+          "label": "Bass frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 80,
+          "maximum": 1000,
+          "default": 500,
+          "meaning": "Boundary of the bass shelf transition.",
+          "increase": "Includes more of the voice in the bass adjustment.",
+          "decrease": "Keeps the adjustment lower in the spectrum.",
+          "example": "Try 120 Hz for a focused low-bass change; 500 Hz reaches more of the low-mid warmth.",
+          "caution": "A frequency change can make the same dB value sound stronger."
+        },
+        {
+          "key": "trebleFrequencyHz",
+          "label": "Treble frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 800,
+          "maximum": 12000,
+          "default": 1500,
+          "meaning": "Boundary of the treble shelf transition.",
+          "increase": "Keeps the adjustment in higher frequencies.",
+          "decrease": "Includes more speech in the treble adjustment.",
+          "example": "Try 6000 Hz to change the high end while leaving more voice presence intact.",
+          "caution": "Runtime frequency eligibility depends on sample rate."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Reduce a boomy microphone",
+          "steps": [
+            "Try Bass −3 dB at 500 Hz.",
+            "Keep Treble at 0 dB while evaluating.",
+            "Compare bypass at a matched listening level."
+          ]
+        },
+        {
+          "title": "Focus on the frequency extremes",
+          "steps": [
+            "Set Bass frequency to 120 Hz and Treble frequency to 6000 Hz.",
+            "Keep your chosen gain amounts and compare the narrower regions affected."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Large boosts can consume headroom.",
+        "Changing a frequency can make the same gain setting sound much stronger."
+      ],
+      "suggestedVisual": {
+        "type": "bassTreble",
+        "title": "Two independent tone shelves",
+        "description": "Show low and high shelf curves together, each controlled by its own gain and frequency.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "graphicEq",
+      "title": "Graphic EQ",
+      "purpose": "Shape ten fixed regions of the spectrum.",
+      "concept": "Ten fixed-center faders control 31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000 and 16000 Hz. Their overlapping boosts and cuts combine into one response curve.",
+      "signalBehavior": "The ten centers are 31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000 and 16000 Hz.",
+      "properties": [
+        {
+          "key": "band0Db",
+          "label": "31.5 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "31.5 Hz controls the very bottom of the sub-bass range. Most voice and everyday playback has little useful content here; this band mainly changes deep rumble and extreme low-end weight.",
+          "increase": "Boost only if your source has clean sub-bass and your speakers can reproduce it.",
+          "decrease": "Cut a little to reduce floor, handling or mechanical rumble.",
+          "example": "Try −3 dB while listening for rumble between phrases; compare at matched loudness.",
+          "caution": "Large boosts here consume headroom and may move a speaker or headphone driver without making the sound clearer."
+        },
+        {
+          "key": "band1Db",
+          "label": "63 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "63 Hz adds or reduces deep bass weight: kick-drum thump, bass fundamentals and low cinematic impact often live around here.",
+          "increase": "Add a small amount when a clean source sounds too thin at the bottom.",
+          "decrease": "Reduce it when kick or bass feels boomy or overwhelms the voice.",
+          "example": "Try +2 dB on a bass-heavy music loop, then check that speech remains easy to hear.",
+          "caution": "A boost can make small speakers distort; this band is not a fix for room rumble above it."
+        },
+        {
+          "key": "band2Db",
+          "label": "125 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "125 Hz shapes bass body and warmth. It can add fullness to a voice or instrument, and too much can make a mix sound thick or boomy.",
+          "increase": "Add a little if a close-miked voice or instrument feels too lean.",
+          "decrease": "Trim a few dB if voices sound tubby or bass notes blur together.",
+          "example": "Try −2 dB on a boomy voice recording and compare without changing playback volume.",
+          "caution": "Listen in context: a cut that cleans one voice may thin a full mix."
+        },
+        {
+          "key": "band3Db",
+          "label": "250 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "250 Hz affects low-mid warmth and the boxy, muddy quality that can build up when several sounds share the same space.",
+          "increase": "Boost gently when a source lacks body and sounds small.",
+          "decrease": "Cut slightly when a voice sounds cloudy or a mix has a cardboard-like buildup.",
+          "example": "Try −2 dB on a muddy voice-plus-music mix, then bypass to confirm clarity improved.",
+          "caution": "Broad cuts can make a source hollow; change one band at a time."
+        },
+        {
+          "key": "band4Db",
+          "label": "500 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "500 Hz shapes lower-mid body and woody or boxy tone. It often changes whether a voice or instrument sounds solid or congested.",
+          "increase": "Boost modestly if it has lost body after other cuts.",
+          "decrease": "Cut a little if a source sounds nasal, hollow-boxed or congested in the lower mids.",
+          "example": "Try a small −2 dB cut on a boxy voice, then restore it if the voice becomes thin.",
+          "caution": "The label is a center frequency; the fixed band also affects nearby frequencies."
+        },
+        {
+          "key": "band5Db",
+          "label": "1 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "1 kHz sits in the middle of the sound and changes a source’s core, forward tone. Too much can sound honky; too little can push a voice back.",
+          "increase": "Add a little if the midrange feels distant after level matching.",
+          "decrease": "Reduce it slightly if a voice or instrument has a persistent honk.",
+          "example": "Try −1.5 dB on a honky voice, then compare at the same loudness.",
+          "caution": "Do not use this band alone to solve intelligibility; consonant clarity is higher in frequency."
+        },
+        {
+          "key": "band6Db",
+          "label": "2 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "2 kHz affects upper-mid articulation and attack. It can help words and instrument edges come forward, but can also make a sound hard.",
+          "increase": "Boost gently when a voice is clear but its articulation is buried.",
+          "decrease": "Cut slightly if speech or instruments feel aggressive or tiring.",
+          "example": "Try +1.5 dB on a voice that needs a little more definition, then listen for harshness.",
+          "caution": "A large boost can exaggerate room noise and make listening fatiguing."
+        },
+        {
+          "key": "band7Db",
+          "label": "4 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "4 kHz adds or reduces presence and crisp definition. This is where a small adjustment can make a voice feel closer, or make it sound sharp.",
+          "increase": "Add a little when speech lacks presence against background sound.",
+          "decrease": "Cut a little if a voice has a hard edge or the mix is tiring.",
+          "example": "Try +1 dB and compare at matched loudness; keep it only if words are easier to follow.",
+          "caution": "Strong boosts can emphasize consonant edges and fatigue; sibilance often needs a more targeted tool."
+        },
+        {
+          "key": "band8Db",
+          "label": "8 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "8 kHz changes brightness and the sense of air, along with some sibilance and hiss. It can make cymbals or consonants more apparent.",
+          "increase": "Boost subtly if a clean source sounds dull and needs a little sparkle.",
+          "decrease": "Reduce it if “s” sounds, cymbals or recording hiss are too prominent.",
+          "example": "Try −2 dB on a hissy voice recording and check that consonants remain natural.",
+          "caution": "This band can make noise more obvious; de-essing or noise reduction may be more suitable for a specific problem."
+        },
+        {
+          "key": "band9Db",
+          "label": "16 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "meaning": "16 kHz changes the extreme top end: a little “air” on sources that contain it. Many speakers, headphones and recordings have little useful energy this high.",
+          "increase": "A tiny boost can add air to a clean, full-band source.",
+          "decrease": "Cut if the top end carries hiss or fizz.",
+          "example": "Compare a subtle +1 dB change on a bright, clean recording; if you hear no benefit, leave it flat.",
+          "caution": "Large boosts add noise and consume headroom, and may not be audible on your playback system."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Make a small tonal correction",
+          "steps": [
+            "Start with every fader at 0 dB.",
+            "Try cutting 250 Hz by 2 dB for excess low-mid body.",
+            "Move one fader at a time and compare bypass."
+          ]
+        },
+        {
+          "title": "Reduce excessive brightness",
+          "steps": [
+            "Try −2 dB at 8 kHz.",
+            "Listen to consonants as well as hiss.",
+            "Prefer a small cut before combining several deep cuts."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A fixed band is not a surgical notch.",
+        "Multiple boosts add up and can overload later stages."
+      ],
+      "suggestedVisual": {
+        "type": "graphicEq",
+        "title": "Ten fixed bands shape one combined response",
+        "description": "Show all ten fixed bands and faders together with the combined response curve. Make the frequency centers and ±18 dB range clear.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "parametricEq",
+      "title": "Advanced EQ",
+      "purpose": "Choose where and how each of up to sixteen filters acts.",
+      "concept": "Advanced EQ holds up to sixteen independently enabled filters. Select a band, choose among eight shapes, then set its frequency and Q. Gain applies to peaking and shelves; All pass keeps magnitude flat and changes phase.",
+      "signalBehavior": "The response curve represents the configured filters. The live spectrum represents sound entering the EQ; it is not the response curve. The plot displays ±12 dB, while precise gain controls allow ±24 dB.",
+      "properties": [
+        {
+          "key": "band{index}Enabled",
+          "label": "Band enabled",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Whether this numbered filter contributes to the curve.",
+          "increase": "On adds this filter to the combined response.",
+          "decrease": "Off removes its processing contribution.",
+          "example": "Disable one band to compare its exact contribution.",
+          "caution": "Turning off a band retains its other saved settings."
+        },
+        {
+          "key": "band{index}Type",
+          "label": "Filter type",
+          "type": "string",
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "meaning": "Shape of the selected filter.",
+          "increase": "Choose a different type for a different job.",
+          "decrease": "Return to Peaking for a bell-shaped boost or cut.",
+          "example": "High pass removes low frequencies; Low pass removes high frequencies.",
+          "caution": "Gain applies only to Peaking and shelves; All pass changes phase at flat magnitude."
+        },
+        {
+          "key": "band{index}FrequencyHz",
+          "label": "Frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "meaning": "Center, shelf transition or cutoff location depending on type.",
+          "increase": "Moves the filter toward higher-pitched content.",
+          "decrease": "Moves it toward lower-pitched content.",
+          "example": "A peaking point at 300 Hz targets a low-mid region.",
+          "caution": "The effective valid upper boundary also depends on graph sample rate."
+        },
+        {
+          "key": "band{index}Q",
+          "label": "Q",
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "meaning": "Selectivity or resonance of this filter.",
+          "increase": "Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+          "decrease": "Broadens those selective filters.",
+          "example": "Compare Q 1 with Q 4 on a small peaking cut.",
+          "caution": "The meaning of Q depends on the selected filter shape; pass filters can become more resonant."
+        },
+        {
+          "key": "band{index}GainDb",
+          "label": "Gain",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "meaning": "Boost or cut for Peaking and shelf filters.",
+          "increase": "Boosts their affected region.",
+          "decrease": "Cuts their affected region.",
+          "example": "Try −3 dB before attempting a deep cut.",
+          "caution": "The plot shows only ±12 dB; precise controls support ±24 dB."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Cut a narrow resonance",
+          "steps": [
+            "Add a peaking point at 300 Hz.",
+            "Try −3 dB and Q 2.",
+            "Move frequency slowly to the problem area, then use the smallest useful cut."
+          ]
+        },
+        {
+          "title": "Remove low rumble",
+          "steps": [
+            "Add a high-pass band around 80 Hz.",
+            "Listen to lower voice notes and move the cutoff lower if they lose body."
+          ]
+        },
+        {
+          "title": "Explore phase",
+          "steps": [
+            "Select All pass at 1000 Hz, Q 1.",
+            "Notice that the magnitude curve stays flat.",
+            "Compare phase or an impulse demonstration; a flat magnitude plot does not mean no processing."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Gain does not apply to notch, pass, band-pass or all-pass types.",
+        "Higher Q is more selective for bell/notch/band-pass filters, but can also add resonance in pass filters.",
+        "Use the available filter type and Q controls to shape a pass filter; there is no separate slope control."
+      ],
+      "suggestedVisual": {
+        "type": "parametricEq",
+        "title": "Select a band, then choose its shape",
+        "description": "Show multiple independently editable bands, the eight real filter shapes, frequency, Q and applicable gain. Show All pass magnitude and a separate schematic phase view.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx",
+        "ui/src/AdvancedEqEditor.tsx"
+      ],
+      "propertyFamily": {
+        "indexMinimum": 0,
+        "indexMaximum": 15,
+        "displayLabels": "1–16",
+        "note": "Legacy frequencyHz/q/gainDb values remain in saved contracts; the current editor edits per-band values. No user-exposed slope field exists in AdvancedEqEditor.tsx."
+      },
+      "filterTypes": [
+        {
+          "key": "peaking",
+          "meaning": "Bell-shaped boost/cut around Frequency; Gain and Q apply."
+        },
+        {
+          "key": "lowShelf",
+          "meaning": "Boost/cut below the transition; Gain applies."
+        },
+        {
+          "key": "highShelf",
+          "meaning": "Boost/cut above the transition; Gain applies."
+        },
+        {
+          "key": "lowPass",
+          "meaning": "Attenuate above the cutoff; no Gain."
+        },
+        {
+          "key": "highPass",
+          "meaning": "Attenuate below the cutoff; no Gain."
+        },
+        {
+          "key": "bandPass",
+          "meaning": "Pass a band with unity center magnitude; Q adjusts width; no Gain."
+        },
+        {
+          "key": "allPass",
+          "meaning": "Preserve magnitude while changing phase; Frequency and Q apply; no Gain."
+        },
+        {
+          "key": "notch",
+          "meaning": "Remove a narrow frequency region; no Gain."
+        }
+      ]
+    },
+    {
+      "kind": "compressor",
+      "title": "Compressor",
+      "purpose": "Reduce the distance between quiet and loud moments.",
+      "concept": "Above the threshold, the ratio determines how much extra level comes through. At a 4:1 ratio, 4 dB above the threshold becomes 1 dB above it in the steady-state hard-knee example. Attack and release control how fast reduction moves.",
+      "signalBehavior": "This reduces peaks relative to softer sound. Makeup gain raises the result afterward; it does not change the threshold. Detection is linked for stereo.",
+      "properties": [
+        {
+          "key": "thresholdDb",
+          "label": "Threshold",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -60,
+          "maximum": 0,
+          "default": -18,
+          "meaning": "Level above which compression reduces extra level.",
+          "increase": "Higher values compress fewer moments.",
+          "decrease": "Lower values compress more of the signal.",
+          "example": "Threshold −18 dBFS and ratio 3:1 are starting points.",
+          "caution": "Compression works above the threshold."
+        },
+        {
+          "key": "ratio",
+          "label": "Ratio",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 3,
+          "meaning": "Strength of level reduction beyond the threshold.",
+          "increase": "Applies stronger level reduction.",
+          "decrease": "Approaches unchanged dynamics at 1:1.",
+          "example": "At Compressor 4:1, a steady 4 dB excess becomes 1 dB.",
+          "caution": "Gate uses reduction below its threshold; Compressor uses reduction above it."
+        },
+        {
+          "key": "attackMs",
+          "label": "Attack",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0.1,
+          "maximum": 200,
+          "default": 10,
+          "meaning": "How quickly the processor moves into its engaged state.",
+          "increase": "Makes engagement slower.",
+          "decrease": "Makes engagement faster.",
+          "example": "Compressor 10 ms is a starting point, not automatic calibration.",
+          "caution": "For Gate this is opening; for Compressor and Duck this is increasing attenuation."
+        },
+        {
+          "key": "releaseMs",
+          "label": "Release",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 10,
+          "maximum": 2000,
+          "default": 150,
+          "meaning": "How quickly the processor returns after the triggering condition ends.",
+          "increase": "Makes recovery slower.",
+          "decrease": "Makes recovery faster.",
+          "example": "Try 200 ms if 100 ms sounds abrupt.",
+          "caution": "Extremely quick changes can sound like pumping or distortion."
+        },
+        {
+          "key": "kneeDb",
+          "label": "Knee",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 24,
+          "default": 6,
+          "meaning": "Width of the soft transition around the compressor threshold.",
+          "increase": "Makes compression begin more gradually around the boundary.",
+          "decrease": "Approaches an abrupt hard knee at 0 dB.",
+          "example": "Compare 0 dB with 6 dB while watching the response curve.",
+          "caution": "Knee changes the transition, not the ratio far above threshold."
+        },
+        {
+          "key": "makeupDb",
+          "label": "Makeup gain",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 24,
+          "default": 0,
+          "meaning": "Level added after compression.",
+          "increase": "Makes the compressed output louder.",
+          "decrease": "Reduces the added gain toward 0 dB.",
+          "example": "Start at 0 and increase only enough for a fair bypass comparison.",
+          "caution": "Added level consumes downstream headroom."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Even out speech",
+          "steps": [
+            "Start with threshold −18 dBFS, ratio 3:1, attack 10 ms and release 150 ms.",
+            "Speak normally and watch gain reduction on louder phrases.",
+            "Add only enough makeup gain for a fair bypass comparison."
+          ]
+        },
+        {
+          "title": "Keep transients lively",
+          "steps": [
+            "Try increasing attack from 10 to 25 ms.",
+            "Listen to the beginning of consonants or percussion.",
+            "Place a Limiter later if a sample-peak ceiling is required."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A Compressor is not a guaranteed peak ceiling.",
+        "Excess makeup can clip the next stage.",
+        "Very fast release can make level changes audible."
+      ],
+      "suggestedVisual": {
+        "type": "dynamics",
+        "title": "Input to output",
+        "description": "Show a level envelope against threshold and a transfer curve; animate attack, hold and release separately.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "gate",
+      "title": "Gate / Expander",
+      "purpose": "Turn down quiet gaps between wanted sounds.",
+      "concept": "A gate follows level, not word meaning or frequency. Set its threshold above room noise and below your quietest intended speech. Ratio makes the transition stronger; Range limits the maximum attenuation.",
+      "signalBehavior": "Attack opens the gate. Hold keeps it open briefly after the level falls. Release closes it gradually. Hysteresis separates opening and closing thresholds to reduce chatter.",
+      "properties": [
+        {
+          "key": "thresholdDb",
+          "label": "Threshold",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -80,
+          "maximum": 0,
+          "default": -45,
+          "meaning": "Opening threshold for the overall signal level.",
+          "increase": "Requires louder sound to open; may remove quiet words.",
+          "decrease": "Opens for quieter sound and potentially room noise.",
+          "example": "Put it between measured room noise and quiet speech.",
+          "caution": "Hysteresis defines a lower closing boundary."
+        },
+        {
+          "key": "rangeDb",
+          "label": "Range",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 80,
+          "default": 60,
+          "meaning": "Maximum gate attenuation below the open level.",
+          "increase": "Permits deeper quiet-gap reduction.",
+          "decrease": "Preserves more background; 0 dB disables attenuation.",
+          "example": "Try 20 dB for a gentle expander-like result.",
+          "caution": "Range is a cap on reduction, not the opening threshold."
+        },
+        {
+          "key": "attackMs",
+          "label": "Attack",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0.1,
+          "maximum": 100,
+          "default": 5,
+          "meaning": "How quickly the gate opens once the wanted signal crosses the opening threshold.",
+          "increase": "Makes engagement slower.",
+          "decrease": "Makes engagement faster.",
+          "example": "Try 2 ms; shorten it if initial consonants are being cut.",
+          "caution": "For Gate this is opening; for Compressor and Duck this is increasing attenuation."
+        },
+        {
+          "key": "hysteresisDb",
+          "label": "Hysteresis",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 12,
+          "default": 3,
+          "meaning": "Distance below the opening threshold at which the gate may close.",
+          "increase": "Keeps it open through larger level dips.",
+          "decrease": "Makes opening and closing thresholds closer.",
+          "example": "At threshold −45 dBFS and hysteresis 3 dB, the closing boundary is −48 dBFS.",
+          "caution": "Hold and Release also affect the eventual closing motion."
+        },
+        {
+          "key": "ratio",
+          "label": "Ratio",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 20,
+          "default": 4,
+          "meaning": "Downward expansion below threshold, capped by Range. Higher ratios suppress quiet material more strongly.",
+          "increase": "Applies stronger level reduction.",
+          "decrease": "Approaches unchanged dynamics at 1:1.",
+          "example": "At 2:1, a steady input 6 dB below threshold is pushed about another 6 dB down, until Range limits reduction.",
+          "caution": "Gate uses reduction below its threshold; Compressor uses reduction above it."
+        },
+        {
+          "key": "holdMs",
+          "label": "Hold",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 50,
+          "meaning": "How long the gate stays open after the signal drops below its closing threshold.",
+          "increase": "Bridges longer gaps.",
+          "decrease": "Allows disengagement sooner.",
+          "example": "Try 100 ms to bridge small gaps between syllables.",
+          "caution": "Release follows the hold interval."
+        },
+        {
+          "key": "releaseMs",
+          "label": "Release",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 10,
+          "maximum": 2000,
+          "default": 150,
+          "meaning": "How gradually the gate closes after Hold expires.",
+          "increase": "Makes recovery slower.",
+          "decrease": "Makes recovery faster.",
+          "example": "Try 200 ms to preserve natural word tails.",
+          "caution": "Extremely quick changes can sound like pumping or distortion."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Reduce room noise between phrases",
+          "steps": [
+            "Observe room noise and quiet speech.",
+            "Place threshold between the two rather than blindly using −45 dBFS.",
+            "Try Range 20 dB for a gentle reduction before using deeper attenuation."
+          ]
+        },
+        {
+          "title": "Preserve word endings",
+          "steps": [
+            "If endings disappear, increase Hold from 50 to 100 ms.",
+            "Try a longer Release, such as 200 ms.",
+            "Lower Threshold if quiet words never open the gate."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A gate cannot remove noise while your speech keeps it open.",
+        "A very high threshold can remove entire quiet words.",
+        "Range 0 dB removes attenuation while retaining gate state reporting."
+      ],
+      "suggestedVisual": {
+        "type": "dynamics",
+        "title": "Input to output",
+        "description": "Show a level envelope against threshold and a transfer curve; animate attack, hold and release separately.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "limiter",
+      "title": "Limiter",
+      "purpose": "Hold sample peaks below an output ceiling.",
+      "concept": "The ceiling is the target maximum sample level. Look-ahead delays the signal so the limiter can react to peaks; Release determines how reduction recovers afterward.",
+      "signalBehavior": "This is sample-peak limiting. It is not a claim of true-peak or inter-sample protection, and it does not repair clipping that already happened upstream.",
+      "properties": [
+        {
+          "key": "ceilingDb",
+          "label": "Ceiling",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -12,
+          "maximum": 0,
+          "default": -1,
+          "meaning": "Maximum target output sample-peak level.",
+          "increase": "Allows peaks closer to full scale.",
+          "decrease": "Leaves more headroom.",
+          "example": "−1 dBFS is the default sample-peak ceiling.",
+          "caution": "This is not a true-peak guarantee and a later boost can exceed it."
+        },
+        {
+          "key": "lookaheadMs",
+          "label": "Look-ahead",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 5,
+          "meaning": "Delay that lets the limiter anticipate sample peaks.",
+          "increase": "Adds more look-ahead and delay.",
+          "decrease": "Reduces intentional look-ahead and delay.",
+          "example": "5 ms is the default.",
+          "caution": "Consider total monitoring latency."
+        },
+        {
+          "key": "releaseMs",
+          "label": "Release",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 10,
+          "maximum": 1000,
+          "default": 100,
+          "meaning": "How quickly the processor returns after the triggering condition ends.",
+          "increase": "Makes recovery slower.",
+          "decrease": "Makes recovery faster.",
+          "example": "Try 200 ms if 100 ms sounds abrupt.",
+          "caution": "Extremely quick changes can sound like pumping or distortion."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Catch occasional peaks",
+          "steps": [
+            "Place Limiter after EQ and gain adjustments.",
+            "Start with ceiling −1 dBFS, look-ahead 5 ms and release 100 ms.",
+            "Watch whether it catches occasional peaks or reduces constantly."
+          ]
+        },
+        {
+          "title": "Keep conversational dynamics",
+          "steps": [
+            "If limiting is constant, reduce upstream Gain.",
+            "Use a Compressor for broad level control and reserve Limiter for peaks."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A later boost can exceed this ceiling.",
+        "Look-ahead adds delay.",
+        "0 ms look-ahead is a different reaction tradeoff, not free future knowledge."
+      ],
+      "suggestedVisual": {
+        "type": "dynamics",
+        "title": "Input to output",
+        "description": "Show a level envelope against threshold and a transfer curve; animate attack, hold and release separately.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "delay",
+      "title": "Sync (delay)",
+      "purpose": "Hold audio back to align it with another signal.",
+      "concept": "Delay moves a signal later in time. It cannot make a late source arrive earlier. Manual alignment is separate from automatic Mixer path compensation.",
+      "signalBehavior": "The built-in range is 0–1000 ms. Live changes use a short read-tap crossfade to reduce clicks; large jumps can still be audible.",
+      "properties": [
+        {
+          "key": "delayMs",
+          "label": "Delay",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 0,
+          "meaning": "Intentional time added to this signal.",
+          "increase": "Moves sound later.",
+          "decrease": "Moves it closer to its original arrival time.",
+          "example": "Add 40 ms only if the audio needs to arrive 40 ms later.",
+          "caution": "Large live changes may still be audible despite click reduction."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Align audio to video",
+          "steps": [
+            "Use a clap or another visible transient.",
+            "If the sound arrives before the image, add a small positive delay.",
+            "Recheck the recorded result after each change."
+          ]
+        },
+        {
+          "title": "Compare two paths",
+          "steps": [
+            "Put Delay on the earlier path.",
+            "Adjust in small steps while comparing the same transient.",
+            "Avoid sending duplicate versions to the same speakers during normal use."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Delay cannot correct audio that is already later than video.",
+        "Do not promise that a large live delay change sounds seamless."
+      ],
+      "suggestedVisual": {
+        "type": "timeline",
+        "title": "One event, two arrival times",
+        "description": "Move an impulse along input and output timelines with a labelled offset; provide Play/Pause and a static reduced-motion frame.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "pitch",
+      "title": "Pitch",
+      "purpose": "Change pitch while preserving playback duration.",
+      "concept": "Semitones are musical steps: 12 makes an octave. Cents provide fine tuning: 100 cents make a semitone. Both controls combine.",
+      "signalBehavior": "The processor adds algorithmic latency. Speech can acquire artifacts; changing pitch is not formant preservation or voice identity conversion.",
+      "properties": [
+        {
+          "key": "semitones",
+          "label": "Semitones",
+          "type": "number",
+          "unit": "semitones",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "meaning": "Coarse musical pitch offset.",
+          "increase": "Raises pitch.",
+          "decrease": "Lowers pitch.",
+          "example": "+12 is one octave up; −12 is one octave down.",
+          "caution": "Does not provide optional future formant control."
+        },
+        {
+          "key": "cents",
+          "label": "Fine tune",
+          "type": "number",
+          "unit": "cents",
+          "minimum": -100,
+          "maximum": 100,
+          "default": 0,
+          "meaning": "Fine pitch offset added to Semitones.",
+          "increase": "Raises pitch slightly.",
+          "decrease": "Lowers pitch slightly.",
+          "example": "+50 cents is half a semitone.",
+          "caution": "100 cents equal one semitone."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Try a subtle character voice",
+          "steps": [
+            "Start at −2 semitones and 0 cents.",
+            "Listen to a complete sentence, including sibilants.",
+            "Compare latency and clarity before making a larger shift."
+          ]
+        },
+        {
+          "title": "Fine-tune a steady source",
+          "steps": [
+            "Leave semitones at 0.",
+            "Try +10 cents for a small upward adjustment.",
+            "Evaluate after the processor has warmed up."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A pitch shift does not change the duration setting of a file.",
+        "Large shifts can affect speech intelligibility."
+      ],
+      "suggestedVisual": {
+        "type": "pitch",
+        "title": "Same duration, different cycles",
+        "description": "Show two equal-length waveforms with different cycle counts; annotate semitone + cent combination.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "dehum",
+      "title": "Dehum",
+      "purpose": "Cut mains hum and its harmonic series.",
+      "concept": "A selected 50 or 60 Hz mains fundamental creates a series of up to eight narrow finite-depth cuts at its harmonics. Amount controls notch depth.",
+      "signalBehavior": "Amount changes notch depth, not a broadband noise level. Zero Amount is unity. Harmonic centers must remain below the graph-rate eligibility boundary.",
+      "properties": [
+        {
+          "key": "frequencyHz",
+          "label": "Mains frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 45,
+          "maximum": 65,
+          "default": 60,
+          "meaning": "Fundamental of the unwanted hum series.",
+          "increase": "Moves every notch in the harmonic series higher.",
+          "decrease": "Moves the series lower.",
+          "example": "Use 60 Hz for measured 60 Hz hum or 50 Hz for 50 Hz hum.",
+          "caution": "Match the actual noise; location alone is not a measurement."
+        },
+        {
+          "key": "amountPercent",
+          "label": "Amount",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "meaning": "Depth of each hum notch.",
+          "increase": "Makes the selected narrow cuts deeper.",
+          "decrease": "Approaches exact unity at 0%.",
+          "example": "50% maps to −18 dB at each notch center.",
+          "caution": "100% maps to −36 dB per notch; it is not infinite removal."
+        },
+        {
+          "key": "harmonics",
+          "label": "Harmonics",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 4,
+          "step": 1,
+          "meaning": "Number of selected multiples including the fundamental.",
+          "increase": "Cuts additional higher multiples.",
+          "decrease": "Limits treatment to fewer hum components.",
+          "example": "At 60 Hz and four harmonics: 60, 120, 180 and 240 Hz.",
+          "caution": "Only eligible harmonics below the graph-rate boundary are used."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Treat a 60 Hz buzz",
+          "steps": [
+            "Select 60 Hz, Amount 50% and four harmonics.",
+            "Compare the hum between wanted sounds.",
+            "Increase Amount or harmonics only where the unwanted series remains."
+          ]
+        },
+        {
+          "title": "Treat 50 Hz mains hum",
+          "steps": [
+            "Select 50 Hz.",
+            "Begin with two harmonics and listen.",
+            "Increase the count if higher multiples remain audible."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "The wrong fundamental misses the actual hum.",
+        "More harmonics affect more narrow regions of wanted sound.",
+        "Dehum is not a general fan-noise remover."
+      ],
+      "suggestedVisual": {
+        "type": "harmonicNotches",
+        "title": "A fundamental and its harmonic notches",
+        "description": "Plot the selected mains frequency and harmonic notches, with the number of harmonics and notch depth visible.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "declick",
+      "title": "Declick",
+      "purpose": "Repair very short impulsive spikes.",
+      "concept": "Declick detects unusually sharp changes and interpolates very short flagged runs. Its 64-sample look-ahead repairs runs up to 32 samples; it is not for long dropouts.",
+      "signalBehavior": "The algorithm uses a 64-sample look-ahead and repairs flagged runs of at most 32 samples. It is not a recovery method for long dropouts.",
+      "properties": [
+        {
+          "key": "thresholdPercent",
+          "label": "Threshold",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "meaning": "How exceptional a short impulse must be before it is repaired.",
+          "increase": "Requires a more prominent spike, so detects fewer clicks.",
+          "decrease": "Detects more subtle clicks.",
+          "example": "Lower 50% to 30% cautiously when a known click remains.",
+          "caution": "Too sensitive a setting can affect wanted sharp sounds."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Remove isolated crackles",
+          "steps": [
+            "Begin at Threshold 50%.",
+            "Lower it gradually while replaying the same click.",
+            "Check consonants and percussion for unwanted softening."
+          ]
+        },
+        {
+          "title": "Protect sharp wanted sound",
+          "steps": [
+            "If drum hits or speech consonants soften, raise Threshold.",
+            "Compare the same short passage with bypass."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Lower threshold means more detection, not less.",
+        "Long crackles and missing blocks may exceed the repair window."
+      ],
+      "suggestedVisual": {
+        "type": "transientRepair",
+        "title": "Repair a short spike",
+        "description": "Compare a synthetic impulse before and after interpolation; label 64-sample look-ahead and the 32-sample maximum run.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "denoise",
+      "title": "Denoise",
+      "purpose": "Learn a background and reduce similar spectral noise.",
+      "concept": "Learn a background noise profile while the wanted voice is absent, then reduce spectral content matching that profile. Reduction sets strength and Noise left sets a minimum gain floor.",
+      "signalBehavior": "During learning, audio passes unchanged. Learning needs a running, enabled, non-bypassed tool. The algorithm uses 1024-sample analysis frames and declares 1024 samples of latency.",
+      "properties": [
+        {
+          "key": "reductionPercent",
+          "label": "Reduction",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 70,
+          "meaning": "Strength of learned-profile spectral subtraction.",
+          "increase": "Removes more of the learned spectral background.",
+          "decrease": "Retains more original sound.",
+          "example": "Start at 70% after learning room noise.",
+          "caution": "High values can create watery or musical artifacts."
+        },
+        {
+          "key": "floorPercent",
+          "label": "Noise left in",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 10,
+          "meaning": "Minimum gain permitted in each spectral bin.",
+          "increase": "Retains more background and may sound more natural.",
+          "decrease": "Permits deeper spectral attenuation.",
+          "example": "Try 20% if a 10% floor sounds too hollow.",
+          "caution": "This is a gain floor, not a guarantee of a particular final noise percentage."
+        },
+        {
+          "key": "learning",
+          "label": "Learn noise",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Runtime learning controlled by Learn and Keep profile actions.",
+          "increase": "Start learning only while the unwanted background is present.",
+          "decrease": "Stop and keep the measured profile before evaluating speech.",
+          "example": "Stay quiet while the fan runs, then keep its profile.",
+          "caution": "Requires a running enabled non-bypassed tool; the profile is stored by the editor rather than typed as raw hex."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Learn room noise",
+          "steps": [
+            "Start the route and stay quiet.",
+            "Click Learn noise while the fan or room background is present.",
+            "Click Stop learning and keep profile, then speak and adjust Reduction."
+          ]
+        },
+        {
+          "title": "Reduce watery artifacts",
+          "steps": [
+            "If speech becomes watery, lower Reduction.",
+            "Raise Noise left in slightly, for example from 10% to 20%.",
+            "Relearn after moving the microphone or changing the room background."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Speaking during learning can teach the tool to remove parts of your voice.",
+        "Noise left in at 0% permits deeper suppression; it does not guarantee every unwanted sound is removed."
+      ],
+      "suggestedVisual": {
+        "type": "learnedNoiseProfile",
+        "title": "Learn the background, then reduce it",
+        "description": "Show noise-only learning, the stored profile, and voice-plus-noise processing with a visible gain floor.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx",
+        "ui/src/SpectralGateEditor.tsx"
+      ],
+      "actions": [
+        {
+          "label": "Learn noise",
+          "key": "learning",
+          "meaning": "Start while the route is running, the tool is enabled and not bypassed, and only unwanted background is present."
+        },
+        {
+          "label": "Stop learning and keep profile",
+          "key": "noiseProfile",
+          "meaning": "Stores the live 64-band profile and leaves learning mode. The editor writes the bounded profile; users do not type its 128-character hexadecimal representation."
+        }
+      ]
+    },
+    {
+      "kind": "speechDenoise",
+      "title": "Speech Denoise",
+      "purpose": "Adapt locally to noise around speech.",
+      "concept": "Speech Denoise adapts locally to background noise around speech without a Learn step. It is a classical signal-processing tool, not cloud inference.",
+      "signalBehavior": "Strength changes the suppression floor. It shares the 1024-sample latency boundary of the learned denoiser.",
+      "properties": [
+        {
+          "key": "strengthPercent",
+          "label": "Strength",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 70,
+          "meaning": "Amount of adaptive suppression around speech.",
+          "increase": "Permits stronger attenuation of estimated noise.",
+          "decrease": "Retains more of the original signal.",
+          "example": "Compare 70% and 40% on quiet speech.",
+          "caution": "Music and non-speech material may be altered."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Start with a conversational microphone",
+          "steps": [
+            "Place Speech Denoise before a Compressor.",
+            "Begin at Strength 70%.",
+            "Listen to quiet syllables while adjusting strength down or up."
+          ]
+        },
+        {
+          "title": "Preserve delicate material",
+          "steps": [
+            "For breathing, music or soft voice that sounds thinned, lower Strength.",
+            "Use bypass comparison and choose the lowest useful setting."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A speech-focused tool may alter music or other wanted non-speech material.",
+        "Stronger suppression is not automatically clearer speech."
+      ],
+      "suggestedVisual": {
+        "type": "speechReduction",
+        "title": "Speech and background separate over time",
+        "description": "Show speech-shaped energy with noise-like content reduced; identify the synthetic sound as an approximation of the adaptive processor.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "spectralGate",
+      "title": "Spectral Gate",
+      "purpose": "Gate individual frequency regions against a learned noise profile.",
+      "concept": "Spectral Gate learns a noise profile, then compares each frequency region with a threshold above that profile. Reduction sets how deeply bins below the threshold are attenuated.",
+      "signalBehavior": "Threshold above noise is a relative margin, not an absolute dBFS threshold. Reduction sets how far blocked regions are attenuated. Learn while only the unwanted background is present.",
+      "properties": [
+        {
+          "key": "thresholdDb",
+          "label": "Threshold above noise",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -20,
+          "maximum": 20,
+          "default": 3,
+          "meaning": "Required margin above the learned noise in each frequency region.",
+          "increase": "Blocks more regions.",
+          "decrease": "Lets more frequency regions pass.",
+          "example": "Try 3 dB, then lower toward 0 dB if the voice thins.",
+          "caution": "This is relative dB above the profile, not dBFS."
+        },
+        {
+          "key": "reductionDb",
+          "label": "Reduction",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 80,
+          "default": 40,
+          "meaning": "Attenuation of frequency regions the spectral gate blocks.",
+          "increase": "Makes blocked regions quieter.",
+          "decrease": "Keeps more sound in blocked regions.",
+          "example": "40 dB is the default; try less if spectral holes are audible.",
+          "caution": "Threshold decides what is blocked; Reduction decides how deeply."
+        },
+        {
+          "key": "learning",
+          "label": "Learn noise",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Runtime learning controlled by Learn and Keep profile actions.",
+          "increase": "Start learning only while the unwanted background is present.",
+          "decrease": "Stop and keep the measured profile before evaluating speech.",
+          "example": "Stay quiet while the fan runs, then keep its profile.",
+          "caution": "Requires a running enabled non-bypassed tool; the profile is stored by the editor rather than typed as raw hex."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Create a noise boundary",
+          "steps": [
+            "Start the route and click Learn noise while staying quiet.",
+            "Keep the learned profile.",
+            "Begin at Threshold above noise 3 dB and Reduction 40 dB, then evaluate quiet speech."
+          ]
+        },
+        {
+          "title": "Recover a thin voice",
+          "steps": [
+            "Lower Threshold above noise toward 0 dB.",
+            "Reduce the attenuation depth if spectral holes remain audible.",
+            "Relearn if the noise profile included wanted audio."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Raising the threshold makes fewer frequency regions pass.",
+        "A deep reduction can create unnatural gaps in the spectrum."
+      ],
+      "suggestedVisual": {
+        "type": "spectralBins",
+        "title": "Each frequency region opens or closes",
+        "description": "Show learned noise, threshold margin, open bins and reduced bins; distinguish it from a broadband Gate.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx",
+        "ui/src/SpectralGateEditor.tsx"
+      ],
+      "actions": [
+        {
+          "label": "Learn noise",
+          "key": "learning",
+          "meaning": "Start while the route is running, the tool is enabled and not bypassed, and only unwanted background is present."
+        },
+        {
+          "label": "Stop learning and keep profile",
+          "key": "noiseProfile",
+          "meaning": "Stores the live 64-band profile and leaves learning mode. The editor writes the bounded profile; users do not type its 128-character hexadecimal representation."
+        }
+      ]
+    },
+    {
+      "kind": "firFilter",
+      "title": "FIR Filter",
+      "purpose": "Apply the response of an imported impulse file.",
+      "concept": "Choose an impulse response WAV or MP3. AudioRouter uses up to the first two seconds, normalizes it to unit energy, and convolves it with the input. Wet mix blends the filtered result with an equally delayed dry path; Output gain sets the final level. Without a selected file, the node passes audio unchanged.",
+      "signalBehavior": "Choose WAV or MP3. The backend decodes at the graph rate, uses the first two seconds and normalizes to unit energy. Processing declares 512 samples of latency; wet and dry paths are equally delayed. Without a response file, audio passes unchanged.",
+      "properties": [
+        {
+          "key": "mediaId",
+          "label": "Choose WAV or MP3",
+          "type": "file",
+          "meaning": "Choose the impulse response through the file picker. The backend imports media and the editor stores its media identity; fileName is the display name, not a second effect control.",
+          "increase": "Choose a different response to change the filtering behavior.",
+          "decrease": "No numeric increase/decrease applies to file selection.",
+          "example": "Choose a short WAV impulse response, then compare 100% wet with 50% wet.",
+          "caution": "Only the first two seconds are used and normalized to unit energy. Without a chosen response the tool passes unchanged."
+        },
+        {
+          "key": "wetPercent",
+          "label": "Wet mix",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "meaning": "Blend between filtered and equally delayed dry sound.",
+          "increase": "Includes more convolution output.",
+          "decrease": "Includes more dry sound.",
+          "example": "100% is only filtered sound; 50% blends the two.",
+          "caution": "Without an impulse file the node passes unchanged."
+        },
+        {
+          "key": "gainDb",
+          "label": "Output gain",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 12,
+          "default": 0,
+          "meaning": "A level adjustment expressed in decibels.",
+          "increase": "More positive values make this output louder.",
+          "decrease": "More negative values make it quieter.",
+          "example": "Try −6 dB to create headroom.",
+          "caution": "For FIR this is output gain after filtering; an upstream overload is not repaired."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Explore a supplied response",
+          "steps": [
+            "Choose a WAV impulse response you have permission to use.",
+            "Start Wet mix at 100% and Output gain at 0 dB.",
+            "Compare bypass, then lower Wet mix for a blend."
+          ]
+        },
+        {
+          "title": "Match loudness",
+          "steps": [
+            "With a selected response, compare the same passage through and around the tool.",
+            "Use Output gain to reduce an unexpectedly loud result.",
+            "Watch downstream peaks as well as perceived loudness."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A song file is not usually a useful impulse response.",
+        "Only the first two seconds are used.",
+        "Unit-energy normalization does not guarantee matching perceived loudness."
+      ],
+      "suggestedVisual": {
+        "type": "impulse",
+        "title": "Impulse response, convolution, and wet/dry blend",
+        "description": "Show the real tool’s imported impulse response, a synthetic impulse tail, the convolved output, equally delayed dry path, and Wet mix / Output gain controls. Never imply that the guide loads a user file.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "mute",
+      "title": "Mute",
+      "purpose": "Silence one explicit branch of the graph.",
+      "concept": "Place Mute on the exact branch you want to silence. Its scope follows the connections through that node, making it clear which input or mix is affected.",
+      "signalBehavior": "Muted means zero output from this node. Other independent branches are unaffected by this node.",
+      "properties": [
+        {
+          "key": "muted",
+          "label": "Muted",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Silences the branch passing through this node.",
+          "increase": "On sends silence from this tool.",
+          "decrease": "Off allows this tool to pass its input.",
+          "example": "Mute a microphone branch without muting application audio.",
+          "caution": "Parallel routes around the node remain audible."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Mute one microphone",
+          "steps": [
+            "Put Mute directly after that microphone.",
+            "Connect the downstream voice tools to Mute output.",
+            "Toggle Muted and verify this branch stops while unrelated sources remain."
+          ]
+        },
+        {
+          "title": "Mute a complete mix",
+          "steps": [
+            "Place Mute after the Mixer.",
+            "Use it to silence all sources that converge through that Mixer output."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A Mute on one branch does not silence a second parallel connection around it.",
+        "Bypassing a muting tool can restore its dry audio."
+      ],
+      "suggestedVisual": {
+        "type": "routing",
+        "title": "Make the muted scope visible",
+        "description": "Highlight the exact branch through Mute while a parallel branch continues.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "inputSwitch",
+      "title": "Input Switch",
+      "purpose": "Choose one of two explicitly connected inputs.",
+      "concept": "Connect one source to A and another to B. The selected side is heard at the single output. Switching crossfades rather than cutting abruptly.",
+      "signalBehavior": "Normal uses a 0.5-second equal-power crossfade; Slow uses two seconds. Shift-click offers the slow choice in the canvas. A lone connected source is audible only when its side is selected.",
+      "properties": [
+        {
+          "key": "selected",
+          "label": "Active input",
+          "type": "string",
+          "default": "a",
+          "options": ["a", "b"],
+          "meaning": "Which explicitly wired port is heard.",
+          "increase": "Choose B to transition toward B.",
+          "decrease": "Choose A to transition toward A.",
+          "example": "A can be voice and B can be a backup source.",
+          "caution": "Selecting an empty side is silent."
+        },
+        {
+          "key": "fade",
+          "label": "Switch speed",
+          "type": "string",
+          "default": "normal",
+          "options": ["normal", "slow"],
+          "meaning": "Length of the equal-power input transition.",
+          "increase": "Slow uses two seconds.",
+          "decrease": "Normal uses half a second.",
+          "example": "Choose Slow for a leisurely program handoff.",
+          "caution": "The transition briefly contains both sources."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Alternate two programs",
+          "steps": [
+            "Connect program one to A and program two to B.",
+            "Choose A, then B during playback.",
+            "Use Normal for a deliberate transition."
+          ]
+        },
+        {
+          "title": "Make a slower handoff",
+          "steps": [
+            "Choose Slow, or use the canvas Shift-click action.",
+            "Switch once and allow the two-second fade to complete."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Input Switch is not a Mixer: it does not keep both inputs at full volume.",
+        "Selecting an unconnected side produces silence."
+      ],
+      "suggestedVisual": {
+        "type": "switch",
+        "title": "A to B with a crossfade",
+        "description": "Show A and B gain curves during 0.5-second and 2-second transitions; selectable static stages and pause controls.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "duck",
+      "title": "Duck",
+      "purpose": "Lower this branch when another signal or a supported game phase triggers it.",
+      "concept": "Put Duck on the audio that should get quieter, such as music. In level mode, choose another node as the trigger, such as a voice chain. The trigger controls level reduction but is not mixed into this branch.",
+      "signalBehavior": "At or above Trigger level, Duck reduces by Amount using Attack. Hold bridges short pauses and Release restores volume. A trigger with no published level for 100 ms counts as silent. Siege round mode follows Stats.cc locally; missing, unknown or stale state releases to full volume.",
+      "properties": [
+        {
+          "key": "thresholdDb",
+          "label": "Trigger level",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -80,
+          "maximum": 0,
+          "default": -35,
+          "meaning": "Peak level of the selected trigger at which ducking engages.",
+          "increase": "Requires a louder trigger.",
+          "decrease": "Engages for quieter trigger sound, potentially room noise.",
+          "example": "Put it between room noise and voice level.",
+          "caution": "Used in Level mode; absent trigger telemetry counts as silent."
+        },
+        {
+          "key": "amountDb",
+          "label": "Amount",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 40,
+          "default": 6,
+          "meaning": "Positive amount subtracted from this audio while Duck is engaged.",
+          "increase": "Makes this branch quieter during the trigger.",
+          "decrease": "Keeps it closer to normal level; 0 dB makes no reduction.",
+          "example": "6 dB is about half amplitude; 12 dB is about one quarter.",
+          "caution": "These amplitude examples are not perceived-loudness guarantees."
+        },
+        {
+          "key": "attackMs",
+          "label": "Attack",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 20,
+          "meaning": "How quickly the target is lowered when the separate trigger crosses Threshold.",
+          "increase": "Makes engagement slower.",
+          "decrease": "Makes engagement faster.",
+          "example": "Try 10 ms for prompt lowering at the start of a phrase.",
+          "caution": "For Gate this is opening; for Compressor and Duck this is increasing attenuation."
+        },
+        {
+          "key": "holdMs",
+          "label": "Hold",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 2000,
+          "default": 300,
+          "meaning": "How long target attenuation remains after the trigger falls below Threshold.",
+          "increase": "Bridges longer gaps.",
+          "decrease": "Allows disengagement sooner.",
+          "example": "Try 300 ms to bridge short speech pauses.",
+          "caution": "Release follows the hold interval."
+        },
+        {
+          "key": "releaseMs",
+          "label": "Release",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 20,
+          "maximum": 5000,
+          "default": 500,
+          "meaning": "How gradually target volume recovers after the trigger and Hold end.",
+          "increase": "Makes recovery slower.",
+          "decrease": "Makes recovery faster.",
+          "example": "Try 500 ms for a smooth return of music.",
+          "caution": "Extremely quick changes can sound like pumping or distortion."
+        },
+        {
+          "key": "trigger",
+          "label": "Trigger",
+          "type": "string",
+          "default": "level",
+          "options": ["level", "siegeRound"],
+          "meaning": "Source of the Duck engagement decision.",
+          "increase": "Choose Siege round for supported local game-phase triggering.",
+          "decrease": "Choose Level to follow another node’s level.",
+          "example": "Use Level for voice-over-music.",
+          "caution": "Siege round depends on the configured Stats.cc feed."
+        },
+        {
+          "key": "keyNodeId",
+          "label": "Triggered by",
+          "type": "string",
+          "meaning": "Another audio-producing node in the same session.",
+          "increase": "Choose the intended signal by name.",
+          "decrease": "Choose a different node to follow a different signal.",
+          "example": "Choose processed voice rather than the music being ducked.",
+          "caution": "The referenced node controls gain but is not mixed into Duck output."
+        },
+        {
+          "key": "duckMenu",
+          "label": "Menu and matchmaking",
+          "type": "boolean",
+          "default": true,
+          "meaning": "Whether menu/matchmaking engages Siege round Duck.",
+          "increase": "On reduces this branch in that phase.",
+          "decrease": "Off leaves this phase at normal volume.",
+          "example": "Enable to quiet the game while waiting.",
+          "caution": "Only used in Siege round trigger mode."
+        },
+        {
+          "key": "duckPrep",
+          "label": "Planning, operator selection and preparation",
+          "type": "boolean",
+          "default": true,
+          "meaning": "Whether non-action preparation phases engage Duck.",
+          "increase": "On reduces this branch during preparation.",
+          "decrease": "Off leaves preparation at normal volume.",
+          "example": "Enable for a quieter operator-selection period.",
+          "caution": "Action always releases the round-triggered Duck."
+        },
+        {
+          "key": "duckBetweenRounds",
+          "label": "Between rounds and results",
+          "type": "boolean",
+          "default": true,
+          "meaning": "Whether results/between-round phases engage Duck.",
+          "increase": "On reduces this branch between rounds.",
+          "decrease": "Off leaves results at normal volume.",
+          "example": "Enable to quiet score/result screens.",
+          "caution": "Unknown, disconnected or stale feed state releases to full volume."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Put speech over music",
+          "steps": [
+            "Place Duck on the music branch.",
+            "Select your microphone or processed voice as Triggered by.",
+            "Set Trigger level between room noise and speech; start with Amount 6 dB, Attack 20 ms, Hold 300 ms and Release 500 ms."
+          ]
+        },
+        {
+          "title": "Prevent pumping between words",
+          "steps": [
+            "Increase Hold if music returns between syllables.",
+            "Lengthen Release if the return is too abrupt.",
+            "Check that room noise alone does not engage the trigger."
+          ]
+        },
+        {
+          "title": "Follow Siege phases",
+          "steps": [
+            "Choose the Siege round trigger and run the configured Stats.cc local feed.",
+            "Choose the menu, preparation and between-round phase flags.",
+            "Check the feed state; action and unavailable feed states play at full volume."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Put Duck on the sound being reduced, not accidentally on the voice trigger.",
+        "6 dB is approximately half amplitude; perceived loudness is not a fixed fraction.",
+        "Stats.cc integration is a specific local dependency, not general application detection."
+      ],
+      "suggestedVisual": {
+        "type": "duck",
+        "title": "Voice trigger, quieter music",
+        "description": "Animate two separate lanes: voice crosses Trigger level, music glides down by Amount, stays during Hold and returns over Release.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx",
+        "ui/src/DuckEditor.tsx"
+      ]
+    },
+    {
+      "kind": "timeShift",
+      "title": "Time Shift",
+      "purpose": "Pause and replay recent live audio.",
+      "concept": "A rolling in-memory buffer keeps the most recent input. You can pause output while recording continues, replay earlier audio, and return to the live edge. This is temporary transport history, not a completed recording file.",
+      "signalBehavior": "The Rewind buffer is preallocated for 10–120 seconds. Pause outputs silence. Jumps are bounded by available recorded audio. Live adds no intentional delay; jumps and resumes fade in over 256 samples.",
+      "properties": [
+        {
+          "key": "bufferSeconds",
+          "label": "Rewind buffer",
+          "type": "number",
+          "unit": "s",
+          "minimum": 10,
+          "maximum": 120,
+          "default": 60,
+          "step": 1,
+          "meaning": "Capacity of recent in-memory audio history.",
+          "increase": "Retains a longer past and requires more buffer memory.",
+          "decrease": "Keeps less history.",
+          "example": "60 seconds gives up to a minute of recorded history once filled.",
+          "caution": "A longer capacity does not create audio recorded before startup."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Catch a missed moment",
+          "steps": [
+            "Start the route and let some audio accumulate.",
+            "Click Jump back 10 seconds.",
+            "Click Live when you want the current input again."
+          ]
+        },
+        {
+          "title": "Pause without losing the immediate past",
+          "steps": [
+            "Click Pause; the output becomes silent while input history continues.",
+            "Click Resume to continue behind the live edge.",
+            "Return Live before the rolling history you need is overwritten."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "A buffer cannot replay audio from before the route started.",
+        "The rolling buffer is not a permanent recording.",
+        "Stop frees the buffer once no running graph uses it."
+      ],
+      "suggestedVisual": {
+        "type": "timeline",
+        "title": "One event, two arrival times",
+        "description": "Move an impulse along input and output timelines with a labelled offset; provide Play/Pause and a static reduced-motion frame.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx",
+        "ui/src/SessionFlowCanvas.tsx"
+      ],
+      "actions": [
+        {
+          "key": "pause",
+          "label": "Pause",
+          "meaning": "Silences output while input continues into the rolling buffer."
+        },
+        {
+          "key": "resume",
+          "label": "Resume",
+          "meaning": "Continues from the retained playback position with a short fade-in."
+        },
+        {
+          "key": "back",
+          "label": "Jump back 10 seconds",
+          "meaning": "Moves toward earlier retained audio, bounded by available history."
+        },
+        {
+          "key": "forward",
+          "label": "Jump forward 10 seconds",
+          "meaning": "Moves toward newer retained audio, bounded by the live edge."
+        },
+        {
+          "key": "live",
+          "label": "Live",
+          "meaning": "Returns to the current input."
+        }
+      ]
+    },
+    {
+      "kind": "mixer",
+      "title": "Mixer",
+      "purpose": "Combine explicitly connected sources with separate input levels.",
+      "concept": "A Mixer adds its inputs. Each source has its own 0–100% volume, allowing balance without changing the source elsewhere in the graph. A single loud source and several moderate sources can both overload a sum.",
+      "signalBehavior": "Each level is stored by the upstream node ID. An unconnected volume key has no audible effect. Route the combined output to a destination or additional processing.",
+      "properties": [
+        {
+          "key": "inputVolume:<upstreamNodeId>",
+          "label": "Input volume",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "meaning": "Level applied to one connected source within this Mixer.",
+          "increase": "Raises it toward its unchanged 100% amplitude.",
+          "decrease": "Lowers it; 0% removes its contribution.",
+          "example": "Set game to 50% while voice stays at 100%.",
+          "caution": "Several sources at 100% can overload the combined output."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Blend voice and application audio",
+          "steps": [
+            "Connect voice and application sources to the Mixer.",
+            "Keep voice at 100% and start application input at 50%.",
+            "Listen during simultaneous activity and lower levels if the combined peaks overload."
+          ]
+        },
+        {
+          "title": "Keep a source on an independent branch",
+          "steps": [
+            "Use the Mixer input level to lower it only in this mix.",
+            "Keep a separate source output connection for its other destination.",
+            "Check that a destination is not also receiving an unintended duplicate route."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "100% on every input does not guarantee a safe sum.",
+        "Mixer input volume is capped at 100%; use Gain or Volume upstream for deliberate boost."
+      ],
+      "suggestedVisual": {
+        "type": "mixer",
+        "title": "Two sources, one sum",
+        "description": "Show two synthetic source envelopes and combined output; allow 0–100% per-source sliders and annotate overload risk.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "meter",
+      "title": "Meter",
+      "purpose": "Inspect a signal without changing it.",
+      "concept": "Peak describes the largest sample amplitude. RMS describes average signal energy. Clipping count reports overload observations; these are different measurements and should be read together.",
+      "signalBehavior": "Meter passes audio through. A configured connection can be silent, and a running state alone does not prove signal. Silence is represented with a finite floor in API telemetry rather than JSON infinity.",
+      "properties": [],
+      "recipes": [
+        {
+          "title": "Find where signal disappears",
+          "steps": [
+            "Place Meter after a source and another after a suspected processor.",
+            "Run the same source through the route.",
+            "Compare fresh readings and inspect enabled, bypass and failure states at the first silent stage."
+          ]
+        },
+        {
+          "title": "Compare level fairly",
+          "steps": [
+            "Observe both peak and RMS while replaying the same passage.",
+            "Match listening level before judging whether a processor sounds better."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "RMS is not a full perceived-loudness or LUFS measurement.",
+        "A flat meter may mean silence or unavailable/stale telemetry; read its state.",
+        "The current prepared graph snapshot has block RMS and cumulative peak hold; do not promise configurable 300 ms / 1 s controls."
+      ],
+      "suggestedVisual": {
+        "type": "meter",
+        "title": "Peak and RMS describe different things",
+        "description": "Compare a transient-rich signal and a sustained signal; show peak, RMS and clip observations separately.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/NodeEditors.tsx"
+      ]
+    }
+  ]
+}

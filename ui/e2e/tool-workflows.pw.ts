@@ -113,7 +113,9 @@ for (const entry of libraryEntries.filter((entry) => entry.kind)) {
         changedParameters.bufferMs = 60;
       }
     }
+    await inspector.locator(".editable-node-name").click();
     await inspector.getByLabel("Node name", { exact: true }).fill(`Qualified ${entry.kind}`);
+    await inspector.getByLabel("Node name", { exact: true }).press("Enter");
     await inspector.getByLabel("Enabled", { exact: true }).uncheck();
     await inspector.getByLabel("Bypass", { exact: true }).check();
     await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();

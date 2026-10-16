@@ -42,7 +42,9 @@ test("HTTP mutation reaches the authoritative backend and refreshes the frontend
   await expect(page.getByLabel("Gain precise value", { exact: true })).toHaveValue(String(gain.parameters.gainDb), {
     timeout: 10000,
   });
+  await page.locator(".editable-node-name").click();
   await page.getByLabel("Node name", { exact: true }).fill("Unsaved local label");
+  await page.getByLabel("Node name", { exact: true }).press("Enter");
   const latest = await call("sessions.get", { sessionId: session.id });
   latest.nodes.find((node: { kind: string }) => node.kind === "gain").parameters.gainDb = -6;
   const next = await call("graph.plan", { sessionId: session.id, baseRevision: latest.revision, candidate: latest });
@@ -54,7 +56,7 @@ test("HTTP mutation reaches the authoritative backend and refreshes the frontend
   await expect(page.locator(".global-action-message")).toContainText("This session changed elsewhere", {
     timeout: 10000,
   });
-  await expect(page.getByLabel("Node name", { exact: true })).toHaveValue("Unsaved local label");
+  await expect(page.getByRole("button", { name: "Rename Unsaved local label", exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("2026-09-29-http-refresh.png") });
   const docs = await context.newPage();
   const remote: string[] = [];

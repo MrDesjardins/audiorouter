@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "@playwright/test";
 import { demoSession } from "../src/fixtures";
 
@@ -34,19 +35,21 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       { session, theme },
     );
     await page.goto("/route-harness.html");
-    await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
+    await setColorTheme(page, theme);
     await expect(page.locator(".audio-run-state")).toContainText("Audio running");
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
+    await page.getByRole("button", { name: "Rename Voice gain", exact: true }).click();
     await page.getByLabel("Node name", { exact: true }).fill("Unsaved voice name");
+    await page.getByLabel("Node name", { exact: true }).press("Enter");
     await page.getByLabel("Bypass", { exact: true }).check();
     await expect(page.locator(".global-action-message")).toContainText("applied to the playing audio");
     await page.waitForTimeout(1200);
-    await expect(page.getByLabel("Node name", { exact: true })).toHaveValue("Unsaved voice name");
+    await expect(page.getByRole("button", { name: "Rename Unsaved voice name", exact: true })).toBeVisible();
     await expect(page.getByLabel("Bypass", { exact: true })).toBeChecked();
     await expect(page.locator(".audio-run-state")).toContainText("Audio running");
     await page.screenshot({ path: testInfo.outputPath(`2026-09-29-live-bypass-${theme}.png`) });
     await page.getByLabel("Bypass", { exact: true }).uncheck();
     await expect(page.locator(".global-action-message")).toContainText("applied to the playing audio");
-    await expect(page.getByLabel("Node name", { exact: true })).toHaveValue("Unsaved voice name");
+    await expect(page.getByRole("button", { name: "Rename Unsaved voice name", exact: true })).toBeVisible();
   });
 }

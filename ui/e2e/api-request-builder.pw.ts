@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { test, expect } from "./real-backend";
 
 // API tab request builder against the real backend catalog: choose a tool and
@@ -6,7 +7,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
   test(`request builder generates and sends nodes.set in ${theme}`, async ({ page, backend }, testInfo) => {
     await page.goto("/backend-harness.html");
     await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
-    await page.getByLabel("Color theme").selectOption(theme);
+    await setColorTheme(page, theme);
     await page.getByRole("tab", { name: "API", exact: true }).click();
     const builder = page.getByRole("region", { name: "Request builder" });
     await expect(builder).toBeVisible();

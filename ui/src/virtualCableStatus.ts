@@ -75,6 +75,6 @@ export function cableUnavailableReason(status: VirtualCableStatus | null): strin
     case "incompatible":
       return "The installed AudioRouter cables are too old for this version. Update them, or use Input device with a virtual cable such as CABLE Output.";
     default:
-      return "Install AudioRouter cables in Setup, or use Input device with a virtual cable such as CABLE Output.";
+      return "Install AudioRouter cables in Virtual Cables, or use Input device with a virtual cable such as CABLE Output.";
   }
 }

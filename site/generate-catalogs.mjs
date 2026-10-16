@@ -82,3 +82,5 @@ const tools = [
 await writeFile(resolve(root, "site/assets/api-methods.json"), JSON.stringify({ backendMethods: publicMethods.length, operations }, null, 2) + "\n");
 await writeFile(resolve(root, "site/assets/tool-catalog.json"), JSON.stringify({ nodeKinds: tools.length, tools }, null, 2) + "\n");
 console.log(`Wrote ${publicMethods.length} public backend methods, ${operations.length} HTTP operations, and ${tools.length} available node kinds.`);
+
+await import("./generate-guides.mjs");

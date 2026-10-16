@@ -229,59 +229,6 @@ export function ProcessorParameterEditor({
   );
 }
 
-export function InspectorChangeSummary({
-  draftNode,
-  authoritativeNode,
-}: {
-  draftNode: Node;
-  authoritativeNode?: Node;
-}) {
-  if (!authoritativeNode) {
-    return (
-      <p className="muted inspector-change-summary" role="status">
-        New node. Save to keep it.
-      </p>
-    );
-  }
-  const changes: string[] = [];
-  if (draftNode.name !== authoritativeNode.name) changes.push('rename to "' + draftNode.name + '"');
-  if (draftNode.enabled !== authoritativeNode.enabled) changes.push(draftNode.enabled ? "enable node" : "disable node");
-  if (draftNode.bypass !== authoritativeNode.bypass)
-    changes.push(draftNode.bypass ? "bypass processing" : "resume processing");
-  const parameterNames = [
-    ...new Set([...Object.keys(authoritativeNode.parameters), ...Object.keys(draftNode.parameters)]),
-  ].sort();
-  for (const name of parameterNames) {
-    if (!Object.is(authoritativeNode.parameters[name], draftNode.parameters[name])) {
-      // A network pairing key is a secret: name the change, never the key.
-      changes.push(
-        name === "pairingKey"
-          ? draftNode.parameters[name]
-            ? "change pairing key"
-            : "remove pairing key"
-          : name +
-              ": " +
-              String(authoritativeNode.parameters[name] ?? "unset") +
-              " → " +
-              String(draftNode.parameters[name] ?? "unset"),
-      );
-    }
-  }
-  // One fixed line, so editing never moves the controls below it; the full
-  // list is in the tooltip.
-  const summary =
-    changes.length === 0
-      ? "No unsaved changes to this node."
-      : changes.length === 1
-        ? `Unsaved: ${changes[0]}. Save to keep it.`
-        : `${changes.length} unsaved changes. Save to keep them.`;
-  return (
-    <p className="muted inspector-change-summary" role="status" title={changes.join("\n") || undefined}>
-      {summary}
-    </p>
-  );
-}
-
 export function NodeTelemetryPanel({
   node,
   snapshot,

@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod tool_guides;
 
 use audiorouter_control::{ClientGrant, ClientRole, ControlPlane};
 use audiorouter_domain::{
@@ -451,6 +452,22 @@ fn open_release_page(tag: String) -> Result<(), String> {
     }
     #[cfg(not(windows))]
     let _ = url;
+    Ok(())
+}
+
+/// Open one documented tool in the user's default browser.
+#[tauri::command]
+fn open_tool_guide(kind: String) -> Result<(), String> {
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    let destination =
+        tool_guides::destination(&kind, &executable).ok_or("Unknown AudioRouter tool")?;
+    #[cfg(windows)]
+    std::process::Command::new("explorer.exe")
+        .arg(destination)
+        .spawn()
+        .map_err(|error| format!("Cannot open the guide: {error}"))?;
+    #[cfg(not(windows))]
+    let _ = destination;
     Ok(())
 }
 
@@ -1984,6 +2001,7 @@ fn main() {
             http_api_control,
             http_api_addresses,
             open_release_page,
+            open_tool_guide,
             open_plugin_editor,
             choose_session_file,
             session_id,
@@ -2056,8 +2074,6 @@ fn main() {
             let play = MenuItem::with_id(app, "play", "Play", true, None::<&str>)?;
             let stop = MenuItem::with_id(app, "stop", "Stop audio", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit and stop audio", true, None::<&str>)?;
-            let privacy =
-                MenuItem::with_id(app, "privacy", "Toggle privacy mute", true, None::<&str>)?;
             let refresh_status =
                 MenuItem::with_id(app, "refresh-status", "Refresh status", true, None::<&str>)?;
             let status =
@@ -2090,7 +2106,6 @@ fn main() {
                     &play,
                     &stop,
                     &quit,
-                    &privacy,
                     &refresh_status,
                     &status,
                     &recordings,
@@ -2168,63 +2183,6 @@ fn main() {
                                 _ => {
                                     let _ = status_for_handler
                                         .set_text("Quit refused: backend finalization failed");
-                                }
-                            }
-                        }
-                        "privacy" => {
-                            let status_request = JsonRpcRequest {
-                                jsonrpc: "2.0".into(),
-                                id: Some(serde_json::json!("tray-privacy-status")),
-                                method: "status.get".into(),
-                                params: None,
-                            };
-                            let Some(currently_muted) =
-                                forward_rpc_request(&status_request, &pipe_name)
-                                    .ok()
-                                    .and_then(|response| tray_privacy_muted(&response))
-                            else {
-                                let _ = status_for_handler.set_text("Privacy mute unavailable");
-                                return;
-                            };
-                            let request = JsonRpcRequest {
-                                jsonrpc: "2.0".into(),
-                                id: Some(serde_json::json!("tray-privacy-toggle")),
-                                method: "safety.setPrivacyMute".into(),
-                                params: Some(serde_json::json!({
-                                    "muted": !currently_muted,
-                                    "idempotencyKey": format!(
-                                        "tray-privacy-{}",
-                                        std::time::SystemTime::now()
-                                            .duration_since(std::time::UNIX_EPOCH)
-                                            .map(|duration| duration.as_nanos())
-                                            .unwrap_or_default()
-                                    )
-                                })),
-                            };
-                            match forward_rpc_request(&request, &pipe_name)
-                                .ok()
-                                .and_then(|response| response.result)
-                                .and_then(|result| {
-                                    result.get("muted").and_then(serde_json::Value::as_bool)
-                                }) {
-                                Some(muted) => {
-                                    let _ = status_for_handler.set_text(if muted {
-                                        "Privacy mute enabled"
-                                    } else {
-                                        "Privacy mute disabled"
-                                    });
-                                    // The menu-item text alone required reopening the
-                                    // tray menu to see whether the toggle took effect,
-                                    // reported as no visible feedback for a
-                                    // safety-relevant latch. The icon itself now
-                                    // reflects state at a glance from the taskbar.
-                                    if let Some(tray) = app.tray_by_id("audiorouter") {
-                                        let _ = tray.set_icon(Some(audio_router_tray_icon(muted)));
-                                    }
-                                }
-                                None => {
-                                    let _ =
-                                        status_for_handler.set_text("Privacy mute change refused");
                                 }
                             }
                         }

@@ -38,7 +38,7 @@ export function VersionLine({ update }: { update: AvailableUpdate | null }) {
   );
 }
 
-/** Setup tab: turn the daily new-version check on or off. */
+/** Advanced settings: turn the daily new-version check on or off. */
 export function UpdatesPanel({
   enabled,
   onChange,

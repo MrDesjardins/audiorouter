@@ -1,3 +1,4 @@
+import { setColorTheme } from "./workbench";
 import { expect, test } from "@playwright/test";
 
 for (const initial of ["new", "editor", "revoked"] as const) {
@@ -51,7 +52,7 @@ for (const initial of ["new", "editor", "revoked"] as const) {
     expect(await card.evaluate((element) => element.getBoundingClientRect().height)).toBe(height);
     if (initial === "new") {
       for (const theme of ["dark", "light", "high-contrast"]) {
-        await page.getByLabel("Color theme").selectOption(theme);
+        await setColorTheme(page, theme);
         await card.screenshot({ path: testInfo.outputPath(`cowork-${theme}.png`) });
         expect(await card.evaluate((element) => element.getBoundingClientRect().height)).toBe(height);
       }
