@@ -1,5 +1,112 @@
 # Active plan — post-0.0.8 maintenance
 
+## Tool guide animations follow the audio — 2026-10-17, owner requested
+
+Owner findings: the playhead and the sound did not match, Visual Group
+animated although it is only visual, changing a setting (Gain) stopped the
+audio, and examples should loop under one Play/Stop button.
+
+Causes and changes (`site/assets/guide-audio.js`, `guide-animation.js`):
+- Pictures were schematic (fixed humps, a Duck "control" band at 2.4–5.8 s
+  while the trigger voice is heard at 1.1–3.3 s and 4.6–7.3 s, Delay drawn in
+  a one-second window), yet a playhead swept them over the 8 s audio. Time-axis
+  pictures (Gain, Volume, Compressor, Limiter, Gate, Duck, Delay, Audio File)
+  now draw IN/OUT from the rendered example; Duck's band comes from where its
+  output is ducked; Limiter shows its real ceiling around the output; the
+  linear-scale threshold lines that sat on the baseline (Compressor, Gate)
+  were removed. Diagrams without a time axis (EQs, FIR, Dehum, Input Switch,
+  Pitch, Tone, routing, Group) have no playhead. Time Shift's pointer follows
+  the example (live, history 2–6 s, live); Network pairing aligns with 2.4 s.
+- Group and Physical Input have no motion at all and no transport.
+- A setting change rebuilt the picture through `seek`/`play`, which stopped
+  the audio source until a fresh render. The picture now restores its
+  position without touching audio, and the audio swaps to the new render at
+  the same position with a 30 ms crossfade. Input Switch re-renders the
+  selected input for the whole loop once its fade finishes.
+- Examples loop (`AudioBufferSourceNode.loop`, infinite WAAPI iterations)
+  under "Play example"/"Stop example" ("Play/Stop animation" when silent);
+  Stop returns to the start. Replay was removed. Recorder keeps its once-only
+  take flow.
+
+Validation (Windows host, Edge): `ui/e2e/site-guides.pw.ts` 8 passed,
+including a new test (gain change starts exactly one crossfaded looping
+source and keeps playing; wrap at 7.8 s; Stop; Duck band at the voice
+onsets; Group static); `site/check-guides.mjs` passed; Prettier clean.
+Screenshots of Gain, Volume, Compressor, Limiter, Gate, Duck, Delay, Audio
+File, Time Shift, Network Receive, Input Switch, Plugin and Group reviewed.
+Not done: listening test by ear.
+
+Follow-up the same day (owner: "Bass-treble does not have any audio … check
+every tool"). Bass & Treble was not reproduced as silent: an output-tap sweep
+in Edge with the default autoplay policy measured audible output on every
+audible guide, locally and on the published site, including while dragging a
+slider and after scrolling to the last slider. Review of all 35 pictures
+found and fixed: footnote overlapping the bottom caption (Bass & Treble,
+Advanced EQ, Declick, Spectral Gate), Meter "dBFS" over the +6 label, Speech
+Denoise output label on its waveform, Recorder stage names outside their
+boxes, Pitch wrongly switched to real-audio traces (it keeps its schematic
+cycles; only time-axis pictures use audio traces), routing packets sliding
+under the boxes (now on the wires), and the page note promising a "moving
+playhead" on pictures without one (generator now words it per picture kind;
+29 pages regenerated, one line each). New Edge regressions: every audible
+guide must reach the output above 0.01 peak after Play and above 0.001 after
+a control change; no guide picture may have overlapping or clipped labels
+(Network stage swap excepted). `site-guides.pw.ts` 10 passed. Open question
+for the owner: what Bass & Treble showed when it was silent (page, browser,
+whether the status said Playing).
+
+## Workbench polish, several custom themes, cable section gated — 2026-10-17, owner requested
+
+Requirements UI-17 (no layout shift), UI-10 status colours, spec 17 §7.4
+(cable panel), DIST (app-only releases ship no cable driver).
+
+1. **Sidebar tabs moved.** On pages long enough to scroll, the desktop
+   scrollbar (~10 px) narrowed the tab grid, so at some sidebar widths
+   (reproduced in headed Edge at 420–428 px) "UI Options" wrapped on Tools
+   but not on Properties and the whole tab row changed height. Fix: the
+   sidebar reserves its scrollbar gutter (`scrollbar-gutter: stable`) and
+   every tab button has a fixed two-line height. Headless Edge overlays
+   scrollbars, so the regression asserts the gutter and a single button
+   height across tabs at 404/428/520 px; it fails on the old CSS.
+2. **Help links opened local files.** Repository builds opened
+   `site/tools/<tool>.html` from the checkout. `tool_guides::destination`
+   now always returns `https://audiorouter.org/tools/<slug>.html`.
+3. **Selected-node status was grey.** The Properties status now uses the
+   canvas `node-state` tones (Active/Ready green, Bypass amber, Failed and
+   Disconnected red, Off neutral) at a fixed width.
+4. **Cable section.** The shell reports whether the installation ships the
+   driver helper and package (`virtual_cable_management_available`). App-only
+   releases do not, so the Virtual Cables panel shows "AudioRouter cables are
+   not available yet" with the VB-Cable alternative and keeps every
+   management control disabled. Tauri rejects commands with a string, which
+   the panel turned into a generic grey "The cable operation failed."; the
+   host now wraps it in an `Error`, and outcomes go to the workspace
+   notification area (errors red via `markErrorMessage`).
+5. **Several custom themes.** `audiorouter.ui.custom-themes` stores up to 24
+   named themes plus the selection; the previous single theme is migrated.
+   UI Options lists every custom theme, "Create a new theme" adds one (a copy
+   of the active custom theme, else the default palette), import adds rather
+   than replaces, names stay unique, and "Delete this theme…" asks inline
+   before removing only that custom theme (falling back to Dark when none
+   remain). Built-in themes cannot be deleted.
+6. **Website.** Home page "Make it yours" section with `assets/themes.svg`;
+   manual section 05 "Choose or create a color theme" (Quick fixes is now 06).
+
+Validation (Windows host, 2026-10-17): UI unit tests 541 passed; ESLint 0
+errors (25 existing warnings); Prettier and TypeScript clean; focused Edge
+tests (workbench organization incl. tabs and themes, inspector status, three
+themes) passed; full Edge suite 272 passed, 9 skipped; tab regression failed on the old CSS and passed headed with
+classic scrollbars; `src-tauri` fmt, Clippy `-D warnings` and the
+tool-guide/cable shell tests passed; docs validation (173 files) and
+`site/check-guides.mjs` passed. Screenshots of the status pill, cable notice,
+tabs (dark, light, high contrast), theme editor and the site sections at
+1280/390 px were reviewed. Not done: an attended shell launch of the new
+cable probe (a release build would show the notice; a build with the driver
+payload beside it would not).
+
+Rollback: revert this change set; the old single-theme key is left in
+storage, so a revert reads the previous theme again.
+
 ## Release 0.0.17 — 2026-10-16, owner requested ("create a new release version and push it")
 
 **Published** 2026-10-16 15:20 UTC as an experimental prerelease from tag

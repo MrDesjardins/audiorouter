@@ -4,6 +4,8 @@ const site = new URL("../../site/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("assets/guide-manifest.json", site), "utf8")) as {
   guides: { kind: string; title: string; path: string; propertyCount: number; audioRelevant: boolean }[];
 };
+// Diagrams that show no movement over time get no transport and no playhead.
+const STATIC_KINDS = ["group", "physicalInput"];
 declare global {
   interface Window {
     __guideMonitorGains?: AudioParam[];
@@ -26,11 +28,14 @@ test("every guide opens offline with a labelled illustration and complete contro
       await expect(page.getByRole("button", { name: "Record example", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Stop recording", exact: true })).toBeDisabled();
       await expect(page.getByRole("button", { name: "Play recording", exact: true })).toBeDisabled();
+    } else if (STATIC_KINDS.includes(guide.kind)) {
+      // Purely visual pages have nothing to play.
+      await expect(page.locator(".guide-animation button")).toHaveCount(0);
     } else {
       await expect(
         page.getByRole("button", { name: guide.audioRelevant ? "Play example" : "Play animation", exact: true }),
       ).toBeVisible();
-      await expect(page.locator(".guide-animation button")).toHaveCount(guide.audioRelevant ? 2 : 2);
+      await expect(page.locator(".guide-animation button")).toHaveCount(1);
     }
     await expect(page.locator(".guide-audio-demo")).toHaveCount(0);
     await expect(page.locator("[data-guide-demo]")).not.toHaveAttribute("data-audio-state", "playing");
@@ -198,7 +203,7 @@ test("FIR, Graphic EQ, Advanced EQ and Network Receive use tool-shaped diagrams 
   await expect(fir).toContainText("Wet mix 100%");
   await page.getByRole("button", { name: "Play example", exact: true }).click();
   await expect(page.locator("[data-guide-demo]")).toHaveAttribute("data-audio-state", "playing");
-  await expect(page.getByRole("button", { name: "Pause example", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Stop example", exact: true })).toBeVisible();
   const animationTime = () =>
     page.locator("[data-guide-demo]").evaluate((element) => {
       const host = element as HTMLElement & {
@@ -212,10 +217,12 @@ test("FIR, Graphic EQ, Advanced EQ and Network Receive use tool-shaped diagrams 
   await page.getByLabel("Illustration Wet mix").fill("40");
   await expect(fir).toContainText("Wet mix 40%");
   await expect(page.locator("[data-guide-demo]")).toHaveAttribute("data-audio-state", "playing");
-  await page.getByRole("button", { name: "Pause example", exact: true }).click();
-  await expect(page.locator("[data-guide-demo]")).toHaveAttribute("data-audio-state", "paused");
+  await page.getByRole("button", { name: "Stop example", exact: true }).click();
+  await expect(page.locator("[data-guide-demo]")).toHaveAttribute("data-audio-state", "stopped");
+  await expect.poll(animationTime).toBe(0);
   await page.locator(".guide-animation").screenshot({ path: info.outputPath("fir-filter-interactive.png") });
-  await expect(page.locator(".guide-animation svg [data-guide-playhead]")).toBeAttached();
+  // A frequency-response picture has no time axis, so no sweeping playhead.
+  await expect(page.locator(".guide-animation svg [data-guide-playhead]")).toHaveCount(0);
 
   await page.goto(new URL("tools/graphic-eq.html", site).href);
   await expect(page.locator(".guide-animation svg [data-graphic-band]")).toHaveCount(10);
@@ -263,7 +270,7 @@ test("keyboard animation controls, changing geometry, pause and reduced motion",
   const play = page.getByRole("button", { name: "Play example", exact: true });
   await play.focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("button", { name: "Pause example", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Stop example", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(play).toBeVisible();
   await page.getByLabel("Seek example").fill("4");
@@ -365,4 +372,165 @@ test("the guide index searches property names and links to individual pages", as
   await page.getByRole("link", { name: /Compressor.*Explore this tool/ }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Compressor");
   await page.screenshot({ path: info.outputPath("compressor-hero.png") });
+});
+
+test("a setting change is heard at once, the example loops until Stop, and Group stays still", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.route("https://**", (route) => route.abort());
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const start = AudioBufferSourceNode.prototype.start;
+    const w = window as unknown as { __sourceStarts: number; __sourceLoops: boolean[] };
+    w.__sourceStarts = 0;
+    w.__sourceLoops = [];
+    AudioBufferSourceNode.prototype.start = function (...args: Parameters<typeof start>) {
+      w.__sourceStarts++;
+      w.__sourceLoops.push(this.loop);
+      return start.apply(this, args);
+    };
+  });
+  await page.goto(new URL("tools/gain.html", site).href);
+  const demo = page.locator("[data-guide-demo]");
+  await expect(demo).toHaveAttribute("data-signal-ready", "true");
+  // The timeline traces come from the example audio.
+  await expect(page.locator(".guide-animation svg")).toContainText("Traces drawn from the example audio");
+  await page.getByRole("button", { name: "Play example", exact: true }).click();
+  await expect(demo).toHaveAttribute("data-audio-state", "playing");
+  const audioTime = () =>
+    demo.evaluate((element) => {
+      const host = element as HTMLElement & { __guideAnimation?: { currentTime: () => number } };
+      return host.__guideAnimation?.currentTime() ?? 0;
+    });
+  await expect.poll(audioTime).toBeGreaterThan(300);
+  const before = await audioTime();
+  const startsBefore = await page.evaluate(() => (window as unknown as { __sourceStarts: number }).__sourceStarts);
+  await page.getByLabel("Illustration Gain").fill("-12");
+  // The new level replaces the old one with a short crossfade: one new source,
+  // no pause, and the position keeps moving forward.
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __sourceStarts: number }).__sourceStarts))
+    .toBe(startsBefore + 1);
+  await expect(demo).toHaveAttribute("data-audio-state", "playing");
+  expect(await audioTime()).toBeGreaterThanOrEqual(before);
+  expect(await page.evaluate(() => (window as unknown as { __sourceLoops: boolean[] }).__sourceLoops)).not.toContain(
+    false,
+  );
+  // Near the end, the example wraps to the start instead of finishing.
+  await page.getByLabel("Seek example").fill("7.8");
+  await expect.poll(audioTime, { timeout: 5_000 }).toBeLessThan(1000);
+  await expect(demo).toHaveAttribute("data-audio-state", "playing");
+  await expect(page.getByRole("button", { name: "Stop example", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Stop example", exact: true }).click();
+  await expect(demo).toHaveAttribute("data-audio-state", "stopped");
+  await expect(page.getByRole("button", { name: "Play example", exact: true })).toBeVisible();
+
+  // Duck marks the time the real trigger lowers the music: the voice phrases
+  // start at 1.1 s and 4.6 s, x = 70 + t / 8 * 640.
+  await page.goto(new URL("tools/duck.html", site).href);
+  await expect(page.locator("[data-guide-demo]")).toHaveAttribute("data-signal-ready", "true");
+  const band = await page
+    .locator(".guide-animation svg path[stroke-width='4']")
+    .evaluate((element) => element.getAttribute("d") ?? "");
+  const starts = [...band.matchAll(/M([\d.]+),164/g)].map((match) => Number(match[1]));
+  expect(starts.length).toBeGreaterThanOrEqual(2);
+  expect(Math.abs(starts[0] - (70 + (1.1 / 8) * 640))).toBeLessThan(16);
+  expect(starts.some((x) => Math.abs(x - (70 + (4.6 / 8) * 640)) < 16)).toBe(true);
+
+  // Group is only a visual frame: no playhead, no motion, no transport.
+  await page.goto(new URL("tools/group.html", site).href);
+  await expect(page.locator(".guide-animation svg [data-guide-playhead]")).toHaveCount(0);
+  await expect(page.locator(".guide-animation button")).toHaveCount(0);
+  expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test("every audible guide plays sound and keeps playing through a control change", async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.route("https://**", (route) => route.abort());
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.addInitScript(() => {
+    const make = AudioContext.prototype.createDynamicsCompressor;
+    AudioContext.prototype.createDynamicsCompressor = function () {
+      const node = make.call(this);
+      const analyser = this.createAnalyser();
+      analyser.fftSize = 2048;
+      node.connect(analyser);
+      (window as unknown as { __guideAnalyser: AnalyserNode }).__guideAnalyser = analyser;
+      return node;
+    };
+  });
+  // Loudest sample reaching the speakers over about a second.
+  const peak = () =>
+    page.evaluate(async () => {
+      const analyser = (window as unknown as { __guideAnalyser?: AnalyserNode }).__guideAnalyser;
+      if (!analyser) return 0;
+      const buffer = new Float32Array(analyser.fftSize);
+      let max = 0;
+      for (let i = 0; i < 10; i++) {
+        analyser.getFloatTimeDomainData(buffer);
+        for (const value of buffer) max = Math.max(max, Math.abs(value));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return max;
+    });
+  const results: string[] = [];
+  for (const guide of manifest.guides.filter((entry) => entry.audioRelevant)) {
+    await page.goto(new URL(guide.path, site).href);
+    const demo = page.locator("[data-guide-demo]");
+    await expect(demo).toHaveAttribute("data-signal-ready", "true");
+    const recorder = guide.kind === "recorder";
+    await page.getByRole("button", { name: recorder ? "Record example" : "Play example", exact: true }).click();
+    await expect(demo).toHaveAttribute("data-audio-state", "playing");
+    // Network examples stay silent until pairing at 2.4 s.
+    if (!recorder) await page.getByLabel("Seek example").fill("3");
+    const before = await peak();
+    const range = page.locator("[data-demo-key]").first();
+    let after = before;
+    if (!recorder && (await range.count())) {
+      await range.evaluate((element) => {
+        const input = element as HTMLInputElement;
+        const min = Number(input.min),
+          max = Number(input.max),
+          step = Number(input.step) || 1;
+        input.value = String(Math.round(((min + max) / 2 + (max - min) / 5) / step) * step);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await expect(demo).toHaveAttribute("data-audio-state", "playing");
+      after = await peak();
+    }
+    results.push(`${guide.kind} ${before.toFixed(3)} ${after.toFixed(3)}`);
+    expect(before, `${guide.kind} is silent after Play`).toBeGreaterThan(0.01);
+    expect(after, `${guide.kind} went silent after a control change`).toBeGreaterThan(0.001);
+  }
+  expect(results.length).toBeGreaterThan(20);
+  expect(errors).toEqual([]);
+});
+
+test("no guide picture has overlapping or clipped labels", async ({ page }) => {
+  test.setTimeout(120_000);
+  await page.route("https://**", (route) => route.abort());
+  // The Network stage labels share one spot and swap with a fade.
+  const allowed = new Set(["networkSend", "networkReceive"]);
+  for (const guide of manifest.guides) {
+    await page.goto(new URL(guide.path, site).href);
+    const problems = await page.locator(".guide-animation svg").evaluate((svg) => {
+      const boxes = [...svg.querySelectorAll("text")]
+        .filter((text) => text.textContent?.trim())
+        .map((text) => ({ label: text.textContent!.trim(), box: (text as SVGTextElement).getBBox() }));
+      const found: string[] = [];
+      boxes.forEach(({ label, box }, i) => {
+        if (box.x < 0 || box.y < 0 || box.x + box.width > 760 || box.y + box.height > 340)
+          found.push(`clipped "${label}"`);
+        for (const other of boxes.slice(i + 1)) {
+          const x = Math.min(box.x + box.width, other.box.x + other.box.width) - Math.max(box.x, other.box.x);
+          const y = Math.min(box.y + box.height, other.box.y + other.box.height) - Math.max(box.y, other.box.y);
+          if (x > 2 && y > 2) found.push(`"${label}" overlaps "${other.label}"`);
+        }
+      });
+      return found;
+    });
+    if (!allowed.has(guide.kind)) expect(problems, guide.kind).toEqual([]);
+  }
 });

@@ -126,6 +126,18 @@ const demos = {
     ["track2Percent", "Input B volume", 0, 100, 55, 1, "%"],
   ],
 };
+// Pictures with a time axis and a playhead, and pictures with no motion.
+const timelineKinds = new Set([
+  "gain",
+  "volume",
+  "compressor",
+  "limiter",
+  "gate",
+  "duck",
+  "delay",
+  "audioFile",
+]);
+const stillKinds = new Set(["group", "physicalInput"]);
 const audioKinds = new Set([
   "gain",
   "volume",
@@ -491,9 +503,17 @@ for (let i = 0; i < tools.length; i++) {
         "</div>"
       : "") +
     '<p class="guide-note">' +
-    (audioKinds.has(t.kind)
-      ? "The synthetic audio and moving playhead share one timeline. Audio starts only when you press Play. This illustration is not a DSP measurement or control for your running AudioRouter session."
-      : "This animated diagram is conceptual. It is not a DSP measurement or control for your running AudioRouter session.") +
+    // Keep in step with guide-animation.js: which pictures have a time axis
+    // (playhead), which only move, and which are still.
+    (t.kind === "recorder"
+      ? "Record example captures the synthetic source once; Stop recording ends the take and Play recording plays it back from the Audio File stage. This is not a DSP measurement or control for your running AudioRouter session."
+      : timelineKinds.has(t.kind)
+        ? "The example repeats until you press Stop, and control changes are heard immediately. The traces are drawn from that audio, and the line marks the moment you hear. This is not a DSP measurement or control for your running AudioRouter session."
+        : audioKinds.has(t.kind)
+          ? "The example repeats until you press Stop, and control changes are heard immediately. The picture shows the tool's shape rather than time; follow the timing in Follow the sound below. This is not a DSP measurement or control for your running AudioRouter session."
+          : stillKinds.has(t.kind)
+            ? "This diagram is conceptual and does not move. It is not a DSP measurement or control for your running AudioRouter session."
+            : "This animated diagram is conceptual. It is not a DSP measurement or control for your running AudioRouter session.") +
     '</p></section><section class="guide-section" id="configuration"><div class="eyebrow">03 / Configure</div><h2>Every control, with a reason.</h2>' +
     (t.propertyFamily
       ? "<p>" +

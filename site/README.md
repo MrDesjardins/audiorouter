@@ -95,7 +95,7 @@ bundled. Download messaging notes that current releases are unsigned.
 
 ## Visual tool guides
 
-Open [the guide library](tools/index.html) locally, or use the static site preview. There are 35 pages: 34 audio node kinds plus visual Group. Every page includes a practical setup walkthrough, expected result, troubleshooting check, configuration references and worked examples. Relevant tools have locally generated synthetic audio sharing one Play/Pause/Replay/seek timeline with their illustrations. Device/application selection, arbitrary VST effects and Group remain visual-only.
+Open [the guide library](tools/index.html) locally, or use the static site preview. There are 35 pages: 34 audio node kinds plus visual Group. Every page includes a practical setup walkthrough, expected result, troubleshooting check, configuration references and worked examples. Relevant tools have locally generated synthetic audio sharing one Play/Stop and seek transport with their illustrations; the example repeats until Stop, a setting change is heard immediately (short crossfade), and time-axis pictures draw their traces from that audio so the playhead marks what is heard. Diagrams without a time axis have no playhead. Device/application selection, arbitrary VST effects and Group remain visual-only.
 
 Content lives in guide-content/processing.json, routing.json and tutorials.json. Source references identify the controls used to establish defaults and bounds. Update them when a control changes, then run:
 
@@ -114,4 +114,4 @@ node .\ui\node_modules\vite\bin\vite.js .\site --host 127.0.0.1 --port 8000
 
 Open `http://127.0.0.1:8000/tools/`. Vite's site directory is a positional argument.
 
-Tool cards have a compact question mark inside their visual boundary; Properties also links to the corresponding guide. Repository desktop builds open site/tools/<tool>.html locally; installed builds use https://audiorouter.org/tools/<tool>.html. These edits do not change the published site until the existing Pages workflow runs through an authorized push/merge or manual deployment.
+Tool cards have a compact question mark inside their visual boundary; Properties also links to the corresponding guide. Every desktop build, repository builds included, opens https://audiorouter.org/tools/<tool>.html; review unpublished guide edits by opening site/tools/<tool>.html directly. These edits do not change the published site until the existing Pages workflow runs through an authorized push/merge or manual deployment.

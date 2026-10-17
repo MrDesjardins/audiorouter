@@ -5,8 +5,9 @@
     if (!host || !guide.audioRelevant) return null;
     let params = { ...guide.parameters },
       context = null,
-      source = null,
-      snapshot = null;
+      voice = null,
+      snapshot = null,
+      settleTimer = 0;
     let pending = null,
       revision = 0,
       operation = 0,
@@ -23,11 +24,14 @@
     const listeners = new Set();
     const duration = () =>
       guide.kind === "recorder" && recorderMode === "file" ? takeDuration : 8;
-    const time = () =>
-      Math.min(
-        duration(),
-        running && context ? offset + context.currentTime - startedAt : offset,
-      );
+    // Every lesson except Recorder repeats its example until Stop.
+    const looping = () => guide.kind !== "recorder";
+    const time = () => {
+      if (!running || !context) return Math.min(duration(), offset);
+      const elapsed = offset + context.currentTime - startedAt;
+      return looping() ? elapsed % duration() : Math.min(duration(), elapsed);
+    };
+    const FADE = 0.03;
     const notify = () => listeners.forEach((fn) => fn(snapshot));
     const prepare = () => {
       const ticket = ++revision;
@@ -38,22 +42,79 @@
         if (dead || ticket !== revision) return;
         snapshot = next;
         host.dataset.signalReady = "true";
+        // A setting changed while the example plays: hear it now, at the same
+        // position, instead of stopping until Play is pressed again.
+        if (running && looping()) startVoice(time(), true);
         notify();
       });
       return pending;
     };
-    const stopSource = () => {
-      if (source) {
-        source.onended = null;
-        try {
-          source.stop();
-        } catch {
-          /* already completed */
-        }
-        source.disconnect();
-        source = null;
+    const selectedSignal = () =>
+      audition === "output"
+        ? snapshot.output
+        : snapshot.inputs[Number(audition.slice(5))] || snapshot.output;
+    const releaseVoice = (old, fade) => {
+      if (!old) return;
+      old.source.onended = null;
+      const at = context.currentTime;
+      try {
+        if (fade) {
+          old.gain.gain.setValueAtTime(old.gain.gain.value, at);
+          old.gain.gain.linearRampToValueAtTime(0, at + FADE);
+          old.source.stop(at + FADE + 0.01);
+        } else old.source.stop();
+      } catch {
+        /* already completed */
       }
+      setTimeout(
+        () => {
+          old.source.disconnect();
+          old.gain.disconnect();
+        },
+        fade ? (FADE + 0.05) * 1000 : 0,
+      );
     };
+    const stopSource = () => {
+      releaseVoice(voice, false);
+      voice = null;
+    };
+    /** Start the selected signal at `seconds`; crossfade from any voice already playing. */
+    function startVoice(seconds, crossfade) {
+      const selected = selectedSignal();
+      const buffer = context.createBuffer(
+        selected.channels.length,
+        selected.channels[0].length,
+        snapshot.sampleRate,
+      );
+      selected.channels.forEach((samples, index) =>
+        buffer.copyToChannel(samples, index),
+      );
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      source.loop = looping();
+      const gain = context.createGain();
+      source.connect(gain);
+      gain.connect(context.lessonOutput);
+      const previous = voice;
+      offset = Math.max(0, Math.min(Number(seconds) || 0, duration() - 0.001));
+      startedAt = context.currentTime;
+      if (crossfade && previous) {
+        gain.gain.setValueAtTime(0, startedAt);
+        gain.gain.linearRampToValueAtTime(1, startedAt + FADE);
+      }
+      releaseVoice(previous, crossfade);
+      voice = { source, gain };
+      const token = operation;
+      source.onended = () => {
+        if (dead || token !== operation || voice?.source !== source) return;
+        offset = duration();
+        running = false;
+        host.dataset.audioState = "finished";
+      };
+      if (source.loop) source.start(startedAt, offset);
+      else
+        source.start(startedAt, offset, Math.max(0.001, duration() - offset));
+    }
     async function init() {
       if (context) return;
       if (initPromise) return initPromise;
@@ -85,35 +146,8 @@
       await context.resume();
       if (dead || token !== operation) return;
       stopSource();
-      const selected =
-        audition === "output"
-          ? snapshot.output
-          : snapshot.inputs[Number(audition.slice(5))] || snapshot.output;
-      const buffer = context.createBuffer(
-        selected.channels.length,
-        selected.channels[0].length,
-        snapshot.sampleRate,
-      );
-      selected.channels.forEach((samples, index) =>
-        buffer.copyToChannel(samples, index),
-      );
-      source = context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(context.lessonOutput);
-      offset = Math.max(0, Math.min(Number(seconds) || 0, duration() - 0.001));
-      startedAt = context.currentTime;
+      startVoice(seconds, false);
       running = true;
-      source.onended = () => {
-        if (dead || token !== operation) return;
-        offset = duration();
-        running = false;
-        host.dataset.audioState = "finished";
-      };
-      source.start(
-        context.currentTime,
-        offset,
-        Math.max(0.001, duration() - offset),
-      );
       host.dataset.audioState = "playing";
       host.dataset.audition = audition;
     }
@@ -124,6 +158,12 @@
       stopSource();
       if (context && context.state === "running") await context.suspend();
       if (!dead && token === operation) host.dataset.audioState = "paused";
+    }
+    /** Stop playing and return to the start of the example. */
+    async function stop() {
+      await pause();
+      offset = 0;
+      if (!dead) host.dataset.audioState = "stopped";
     }
     async function seek(seconds, wasPlaying) {
       offset = Math.max(0, Math.min(Number(seconds) || 0, duration()));
@@ -140,11 +180,22 @@
         guide.kind === "inputSwitch" &&
         next.selected !== undefined &&
         next.selected !== params.selected
-      )
+      ) {
         switchOptions = {
           switchFrom: params.selected || "a",
           switchAt: time(),
         };
+        // Once the crossfade has finished, render the selected input for the
+        // whole loop, so the next pass does not replay the old input.
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(
+          () => {
+            switchOptions = {};
+            prepare();
+          },
+          ((next.fade ?? params.fade) === "slow" ? 2.2 : 0.7) * 1000,
+        );
+      }
       params = { ...params, ...next };
       return prepare();
     }
@@ -153,7 +204,8 @@
         wasRunning = running;
       audition = next;
       host.dataset.audition = next;
-      if (wasRunning) await play(at);
+      if (wasRunning && snapshot && context) startVoice(at, true);
+      else if (wasRunning) await play(at);
     }
     async function record() {
       recorderMode = "input";
@@ -185,6 +237,7 @@
     async function destroy() {
       if (dead) return;
       dead = true;
+      clearTimeout(settleTimer);
       operation++;
       revision++;
       running = false;
@@ -199,6 +252,7 @@
     return {
       play,
       pause,
+      stop,
       seek,
       record,
       stopRecording,

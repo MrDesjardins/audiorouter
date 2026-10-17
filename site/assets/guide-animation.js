@@ -98,7 +98,8 @@
       if (typeof element.animate !== "function") return;
       const animation = element.animate(keyframes, {
         duration,
-        iterations: 1,
+        // Lessons repeat until Stop; a Recorder take plays once.
+        iterations: type === "recording" ? 1 : Infinity,
         fill: "both",
         easing: "linear",
         ...timing,
@@ -126,19 +127,41 @@
       0.23 + 0.67 * Math.pow(Math.sin(t * Math.PI * 3), 2);
     const signal = (t) => Math.sin(t * Math.PI * 32) * envelope(t);
     let detail = "Input and output shown over the same interval.";
+    // Time-axis pictures: the playhead crosses the same eight seconds that are
+    // heard, so their traces are redrawn from the example audio (see below).
+    const timelineTypes = new Set([
+      "gain",
+      "volume",
+      "dynamics",
+      "limiter",
+      "gate",
+      "duck",
+      "delay",
+      "media",
+    ]);
+    const traces = [];
+    let controlBand = null;
     const pair = (output, input = signal) => {
       text(20, 108, "IN", inputColor, 13);
       text(15, 235, "OUT", outputColor, 13);
-      wave(input, 106, inputColor);
-      wave(output, 232, outputColor);
+      traces.push({
+        element: wave(input, 106, inputColor),
+        y: 106,
+        signal: "input",
+      });
+      traces.push({
+        element: wave(output, 232, outputColor),
+        y: 232,
+        signal: "output",
+      });
     };
     if (type === "meter") {
       text(72, 64, "SIGNAL LEVEL · STEREO", inputColor, 13);
-      text(94, 77, "dBFS", "#aebed3", 9);
       const top = 82,
         bottom = 246,
         height = bottom - top;
       const yFor = (db) => bottom - ((db + 60) / 66) * height;
+      text(108, yFor(6) + 4, "dBFS", "#aebed3", 9);
       [6, 0, -6, -12, -18, -24, -36, -48, -60].forEach((db) => {
         const y = yFor(db);
         line(
@@ -668,8 +691,8 @@
       );
       text(74, 111, "INPUT", inputColor, 11);
       text(
-        74,
-        285,
+        470,
+        318,
         `OUTPUT · strength ${number(parameters.strengthPercent, 70, 0, 100)}%`,
         outputColor,
         11,
@@ -892,7 +915,9 @@
           stroke: active ? outputColor : inputColor,
           "stroke-width": active ? 3 : 1.5,
         });
-        text(x + 14, 148, label, active ? outputColor : inputColor, 15);
+        const [name, role] = label.split(" · ");
+        text(x + 14, 142, name, active ? outputColor : inputColor, 15);
+        text(x + 14, 160, role, "#b6c6dd", 11);
         line(x + 18, 192, x + 170, 192, "#53657d");
         const waveform = path(
           Array.from({ length: 45 }, (_, i) => [
@@ -967,11 +992,38 @@
         });
         text(x - 76, 174, labels[i], i === 1 ? outputColor : inputColor, 14);
       });
-      const token = add("circle", { cx: 70, cy: 230, r: 7, fill: accent });
-      animate(token, [
-        { transform: "translateX(0px)" },
-        { transform: "translateX(640px)" },
-      ]);
+      for (const [start, phase] of [
+        [238, 0],
+        [468, 0.125],
+      ]) {
+        const packet = add("circle", {
+          cx: start,
+          cy: 169,
+          r: 6,
+          fill: accent,
+        });
+        const frames = [];
+        for (let k = 0; k < 4; k++) {
+          const from = k / 4 + phase,
+            to = from + 0.2;
+          if (to > 1) continue;
+          frames.push(
+            { transform: "translateX(0px)", opacity: 0, offset: from },
+            { transform: "translateX(0px)", opacity: 1, offset: from + 0.01 },
+            { transform: "translateX(54px)", opacity: 1, offset: to - 0.01 },
+            { transform: "translateX(54px)", opacity: 0, offset: to },
+          );
+        }
+        if (frames[0].offset > 0)
+          frames.unshift({
+            transform: "translateX(0px)",
+            opacity: 0,
+            offset: 0,
+          });
+        if (frames[frames.length - 1].offset < 1)
+          frames.push({ transform: "translateX(54px)", opacity: 0, offset: 1 });
+        animate(packet, frames);
+      }
       detail =
         type === "plugin"
           ? "Audio crosses an isolated plugin worker. A failed protected path becomes silent."
@@ -1104,22 +1156,22 @@
       );
       animate(waiting, [
         { opacity: 1, offset: 0 },
-        { opacity: 1, offset: 0.22 },
-        { opacity: 0, offset: 0.27 },
+        { opacity: 1, offset: 0.26 },
+        { opacity: 0, offset: 0.3 },
         { opacity: 0, offset: 1 },
       ]);
       animate(paired, [
         { opacity: 0, offset: 0 },
-        { opacity: 0, offset: 0.22 },
-        { opacity: 1, offset: 0.27 },
+        { opacity: 0, offset: 0.26 },
+        { opacity: 1, offset: 0.3 },
         { opacity: 1, offset: 1 },
       ]);
       const handshake = add("circle", { cx: 226, cy: 171, r: 6, fill: accent });
       animate(handshake, [
         { transform: "translateX(0px)", opacity: 1, offset: 0 },
-        { transform: "translateX(0px)", opacity: 1, offset: 0.1 },
-        { transform: "translateX(318px)", opacity: 1, offset: 0.24 },
-        { transform: "translateX(318px)", opacity: 0, offset: 0.28 },
+        { transform: "translateX(0px)", opacity: 1, offset: 0.12 },
+        { transform: "translateX(318px)", opacity: 1, offset: 0.27 },
+        { transform: "translateX(318px)", opacity: 0, offset: 0.3 },
         { transform: "translateX(318px)", opacity: 0, offset: 1 },
       ]);
       const receiverPulse = add("circle", {
@@ -1285,7 +1337,11 @@
     } else if (type === "media") {
       text(70, 80, "FILE START", inputColor, 14);
       text(565, 80, "FILE END", outputColor, 14);
-      wave(signal, 165, inputColor);
+      traces.push({
+        element: wave(signal, 165, inputColor),
+        y: 165,
+        signal: "input",
+      });
       const playhead = add("line", {
         x1: 70,
         x2: 70,
@@ -1342,8 +1398,8 @@
           opacity: 0.35 + 0.5 * Math.abs(Math.sin(i)),
         });
       const cursor = add("line", {
-        x1: 240,
-        x2: 240,
+        x1: 700,
+        x2: 700,
         y1: 104,
         y2: 216,
         stroke: accent,
@@ -1352,12 +1408,15 @@
       animate(cursor, [
         { transform: "translateX(0px)", offset: 0 },
         { transform: "translateX(0px)", offset: 0.25 },
-        { transform: "translateX(460px)", offset: 1 },
+        { transform: "translateX(-380px)", offset: 0.2501 },
+        { transform: "translateX(-200px)", offset: 0.75 },
+        { transform: "translateX(0px)", offset: 0.7501 },
+        { transform: "translateX(0px)", offset: 1 },
       ]);
       text(72, 254, "Read from history", accent, 15);
       text(490, 254, "Return to the live edge", outputColor, 15);
       detail =
-        "The pointer can read older buffered audio, then return to the live edge.";
+        "The pointer stays on the live edge, jumps back into history at 2 s, reads the past until 6 s, then returns to the live edge, as in the example you hear.";
     } else {
       let output = signal;
       const threshold =
@@ -1391,12 +1450,12 @@
           );
         };
         detail =
-          "Peaks above the illustrative threshold are compressed; quieter details keep their level.";
+          "Loud passages above the threshold are turned down by the ratio; quiet passages keep their level. Compare the IN and OUT heights from 4 s.";
       }
       if (type === "limiter") {
         output = (t) => clamp(signal(t), -threshold, threshold);
         detail =
-          "An illustrative ceiling stops peaks rising further. Real lookahead and release also shape the result.";
+          "The output never crosses the ceiling, even in the loud passage from 4 s; quieter parts pass unchanged.";
       }
       if (type === "gate") {
         const gateSignal = (t) => signal(t) * (t > 0.3 && t < 0.6 ? 0.014 : 1);
@@ -1406,15 +1465,21 @@
             : gateSignal(t);
         pair(output, gateSignal);
         detail =
-          "Quiet regions are attenuated below the illustrative threshold. Loud regions pass through.";
+          "Between phrases the quiet background stays below the threshold and is turned down; the voice passes through.";
       }
       if (type === "duck") {
         const gain = 10 ** (-number(parameters.amountDb, 6, 0, 40) / 20);
         output = (t) => signal(t) * (t > 0.3 && t < 0.72 ? gain : 1);
         detail =
           "The target lowers while the separate control signal is active, then recovers.";
-        line(262, 164, 531, 164, accent);
-        text(270, 183, "Control signal active", accent, 13);
+        controlBand = add("path", {
+          d: "M262,164 L531,164",
+          stroke: accent,
+          "stroke-width": 4,
+          "stroke-linecap": "round",
+          fill: "none",
+        });
+        text(270, 183, "Ducking active", accent, 13);
       }
       if (type === "delay") {
         const shift =
@@ -1423,7 +1488,7 @@
             : number(parameters.delayMs, 140, 0, 1000) / 1000;
         output = (t) => (t < shift ? 0 : signal(t - shift));
         detail =
-          "The same shape arrives later. The horizontal offset represents delay within a schematic one-second window.";
+          "The same sound arrives later. Across these eight seconds a short delay is a small shift to the right; listen for the later start.";
       }
       if (type === "pitch") {
         const multiplier = 2 ** (number(parameters.semitones, 7, -24, 24) / 12);
@@ -1438,21 +1503,16 @@
         detail =
           "Noise or unwanted transients are reduced. Stronger cleanup can also affect wanted detail.";
       } else if (type !== "gate") pair(output);
-      if (type === "dynamics" || type === "gate" || type === "limiter") {
-        line(
-          70,
-          232 - threshold * 48,
-          710,
-          232 - threshold * 48,
-          accent,
-          "6 5",
-        );
+      // The traces show linear amplitude, so only the limiter ceiling (near
+      // full scale) has a readable height; it bounds the output on both sides.
+      if (type === "limiter") {
+        const reach = Math.min(1.1, threshold) * 48;
+        line(70, 232 - reach, 710, 232 - reach, accent, "6 5");
+        line(70, 232 + reach, 710, 232 + reach, accent, "6 5");
         text(
-          550,
-          166,
-          type === "limiter"
-            ? "Illustrative ceiling"
-            : "Illustrative threshold",
+          560,
+          232 - reach - 6,
+          `Ceiling ${number(parameters.ceilingDb, -1, -12, 0)} dB`,
           accent,
           12,
         );
@@ -1465,6 +1525,8 @@
           ? 114
           : 70;
     const cursorSpan = type === "recording" ? 140 : 640;
+    const hasPlayhead =
+      type === "recording" || (timelineTypes.has(type) && type !== "media");
     const cursor = add("line", {
       "data-guide-playhead": "true",
       x1: cursorStart,
@@ -1475,11 +1537,90 @@
       "stroke-width": 1.5,
       opacity: 0.65,
     });
-    cursorAnimation = animate(cursor, [
-      { transform: "translateX(0px)" },
-      { transform: `translateX(${cursorSpan}px)` },
-    ]);
-    text(70, 310, "Illustration • not an audio measurement", "#b6c6dd", 13);
+    if (hasPlayhead)
+      cursorAnimation = animate(cursor, [
+        { transform: "translateX(0px)" },
+        { transform: `translateX(${cursorSpan}px)` },
+      ]);
+    else cursor.remove();
+    const footnote = text(
+      70,
+      333,
+      "Illustration • not an audio measurement",
+      "#b6c6dd",
+      13,
+    );
+    // Replace drawn traces with the example's own envelope once it is rendered.
+    const envelopePath = (samples, y) => {
+      const columns = 320,
+        size = samples.length / columns,
+        top = [],
+        bottom = [];
+      for (let c = 0; c < columns; c++) {
+        let peak = 0;
+        for (let i = Math.floor(c * size); i < Math.floor((c + 1) * size); i++)
+          peak = Math.max(peak, Math.abs(samples[i]));
+        const h = Math.max(0.6, Math.min(1.1, peak) * 48),
+          x = 70 + (c / (columns - 1)) * 640;
+        top.push(`${x.toFixed(1)},${(y - h).toFixed(1)}`);
+        bottom.unshift(`${x.toFixed(1)},${(y + h).toFixed(1)}`);
+      }
+      return `M${top.join(" L")} L${bottom.join(" L")} Z`;
+    };
+    const drawFromAudio = (snapshot) => {
+      if (!snapshot || destroyed) return;
+      for (const trace of traces) {
+        const samples =
+          trace.signal === "input"
+            ? snapshot.inputs[0].channels[0]
+            : snapshot.output.channels[0];
+        const color = trace.element.getAttribute("stroke");
+        trace.element.setAttribute("d", envelopePath(samples, trace.y));
+        trace.element.setAttribute("fill", color);
+        trace.element.setAttribute("fill-opacity", "0.35");
+        trace.element.setAttribute("stroke-width", "1");
+      }
+      if (controlBand) {
+        // Mark where the Duck output is clearly below its music input.
+        const input = snapshot.inputs[0].channels[0],
+          output = snapshot.output.channels[0],
+          columns = 160,
+          size = input.length / columns,
+          segments = [];
+        let start = -1;
+        for (let c = 0; c <= columns; c++) {
+          let a = 0,
+            b = 0;
+          for (
+            let i = Math.floor(c * size);
+            i < Math.floor((c + 1) * size) && i < input.length;
+            i++
+          ) {
+            a += Math.abs(input[i]);
+            b += Math.abs(output[i]);
+          }
+          const ducked = c < columns && a > 0 && b / a < 0.85;
+          if (ducked && start < 0) start = c;
+          if (!ducked && start >= 0) {
+            segments.push([start, c]);
+            start = -1;
+          }
+        }
+        controlBand.setAttribute(
+          "d",
+          segments
+            .map(
+              ([from, to]) =>
+                `M${(70 + (from / columns) * 640).toFixed(1)},164 L${(70 + (to / columns) * 640).toFixed(1)},164`,
+            )
+            .join(" ") || "M0,0",
+        );
+      }
+      if (traces.length)
+        footnote.textContent =
+          "Traces drawn from the example audio · the line marks what you hear now";
+    };
+
     root.append(svg);
     const caption = document.createElement("figcaption");
     caption.textContent = options.visualCaption || detail;
@@ -1511,7 +1652,7 @@
       toggle.style.minWidth = options.audioRelevant ? "136px" : "152px";
       toggle.style.textAlign = "center";
     }
-    const replayButton = recorder ? null : button("Replay");
+    const replayButton = null;
     const recordButton = recorder ? button("Record example") : null;
     const stopRecordButton = recorder ? button("Stop recording") : null;
     const filePlayButton = recorder ? button("Play recording") : null;
@@ -1543,6 +1684,15 @@
     let playing = false,
       destroyed = false,
       transportToken = 0;
+    const unsubscribe =
+      traces.length && timelineTypes.has(type) && options.transport
+        ? options.transport.subscribe(drawFromAudio)
+        : null;
+    // Position inside the example; looping animations keep counting past 8 s.
+    const visualTime = () =>
+      animations.length
+        ? Number(animations[0].currentTime || 0) % timelineDuration
+        : (options.transport?.getTime?.() || 0) * 1000;
     const setRecorderPhase = (phase) => {
       recorderPhase = phase;
       if (!recorderBoxes.length) return;
@@ -1602,8 +1752,8 @@
       if (toggle) {
         toggle.textContent = playing
           ? options.audioRelevant
-            ? "Pause example"
-            : "Pause animation"
+            ? "Stop example"
+            : "Stop animation"
           : options.audioRelevant
             ? "Play example"
             : "Play animation";
@@ -1619,7 +1769,13 @@
             ? "Pause recording"
             : "Play recording";
       }
-      status.textContent = message || (playing ? "Playing once" : "Paused");
+      status.textContent =
+        message ||
+        (playing
+          ? recorder
+            ? "Playing once"
+            : "Playing · repeats"
+          : "Paused");
       status.title = status.textContent;
     };
     function pause(notifyAudio = true) {
@@ -1629,6 +1785,30 @@
       animations.forEach((a) => a.pause());
       playing = false;
       if (notifyAudio) options.transport?.pause?.(time);
+      update();
+    }
+    /** Stop the example and return to its start. */
+    function stop() {
+      if (destroyed) return;
+      transportToken++;
+      animations.forEach((a) => {
+        a.pause();
+        a.currentTime = 0;
+      });
+      seeker.value = "0";
+      playing = false;
+      options.transport?.stop?.();
+      update("Stopped");
+    }
+    /** Show a rebuilt picture at the running position without touching audio. */
+    function restore(ms, wasPlaying) {
+      if (destroyed) return;
+      animations.forEach((a) => {
+        a.currentTime = ms;
+        if (wasPlaying) a.play();
+      });
+      seeker.value = String(ms / 1000);
+      playing = wasPlaying;
       update();
     }
     function seek(seconds, resume = playing) {
@@ -1649,7 +1829,7 @@
           return;
         animations.forEach((a) => a.play());
         playing = true;
-        update("Playing · 8 second example");
+        update();
       };
       if (resume && seekTask?.then)
         seekTask
@@ -1657,17 +1837,22 @@
           .catch(() => update("Audio could not resume"));
       else resumeVisual();
       update(
-        ms === timelineDuration
+        ms === timelineDuration && recorder
           ? "Finished"
           : resume
-            ? "Playing · 8 second example"
+            ? undefined
             : "Paused",
       );
     }
     function play() {
-      if (destroyed || !animations.length) return;
-      if (Number(animations[0].currentTime) >= timelineDuration) seek(0, false);
-      const offset = Number(animations[0]?.currentTime || 0) / 1000;
+      if (destroyed || (!animations.length && !options.transport)) return;
+      if (
+        recorder &&
+        animations.length &&
+        Number(animations[0].currentTime) >= timelineDuration
+      )
+        seek(0, false);
+      const offset = visualTime() / 1000;
       const token = ++transportToken;
       const beginVisual = () => {
         if (token !== transportToken || destroyed) return;
@@ -1687,7 +1872,7 @@
       seek(0, false);
       play();
     }
-    toggle?.addEventListener("click", () => (playing ? pause() : play()));
+    toggle?.addEventListener("click", () => (playing ? stop() : play()));
     replayButton?.addEventListener("click", replay);
     seeker.addEventListener("input", () => seek(seeker.value, playing));
     recordButton?.addEventListener("click", () => {
@@ -1778,6 +1963,8 @@
       replay,
       seek,
       setRecorderPhase,
+      stop,
+      restore,
       sync(seconds) {
         if (!playing) return;
         const ms = Math.min(timelineDuration, seconds * 1000);
@@ -1786,11 +1973,12 @@
         });
         seeker.value = String(ms / 1000);
       },
-      currentTime: () => Number(animations[0]?.currentTime || 0),
+      currentTime: visualTime,
       isPlaying: () => playing,
       destroy() {
         if (destroyed) return;
         destroyed = true;
+        unsubscribe?.();
         animations.forEach((a) => a.cancel());
         observer?.disconnect();
         document.removeEventListener("visibilitychange", visibility);
@@ -1800,14 +1988,18 @@
       },
     };
     host.__guideAnimation = api;
-    if (!animations.length) {
-      if (toggle) toggle.disabled = true;
-      if (replayButton) replayButton.disabled = true;
-      if (recordButton) recordButton.disabled = true;
-      if (stopRecordButton) stopRecordButton.disabled = true;
-      if (filePlayButton) filePlayButton.disabled = true;
+    if (!animations.length && !options.audioRelevant) {
+      // A purely visual tool (for example Group) has nothing to play.
+      controls.remove();
       update("Static diagram");
-    } else update(reduced.matches ? "Reduced motion" : "Ready · 8 seconds");
+    } else
+      update(
+        reduced.matches
+          ? "Reduced motion"
+          : recorder
+            ? "Ready · 8 seconds"
+            : "Ready · 8 second loop",
+      );
     return api;
   }
   window.AudioRouterGuideAnimation = Object.freeze({
@@ -1818,6 +2010,7 @@
       return {
         play: () => current.play(),
         pause: () => current.pause(),
+        stop: () => current.stop(),
         replay: () => current.replay(),
         seek: (seconds) => current.seek(seconds),
         setRecorderPhase(phase) {
@@ -1832,8 +2025,7 @@
           const time = current.currentTime();
           const wasPlaying = current.isPlaying();
           current = mount(host, settings);
-          current.seek(time / 1000);
-          if (wasPlaying) current.play();
+          current.restore(time, wasPlaying);
         },
         destroy() {
           disposed = true;
