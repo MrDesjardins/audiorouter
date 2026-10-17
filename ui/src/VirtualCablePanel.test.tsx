@@ -319,3 +319,48 @@ describe("CableBinding", () => {
     expect(unknown.disabled).toBe(true);
   });
 });
+
+describe("cable management availability and outcomes", () => {
+  it("disables management and explains why when the installation has no cable driver", async () => {
+    setVirtualCableStatus(status("notInstalled", []));
+    const manage = vi.fn();
+    render(
+      <VirtualCablePanel
+        connected
+        cableRoute={null}
+        manageVirtualCable={manage}
+        virtualCableManagementAvailable={() => Promise.resolve(false)}
+      />,
+    );
+    expect(screen.getByText("AudioRouter cables are not available yet")).toBeTruthy();
+    expect(await screen.findByText(/does not include its own virtual cable driver/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Install" })).toHaveProperty("disabled", true);
+  });
+
+  it("reports a failed operation in the notification area as an error", async () => {
+    setVirtualCableStatus(status("notInstalled", []));
+    const manage = vi.fn().mockRejectedValue(new Error("The AudioRouter driver package is missing."));
+    const notify = vi.fn();
+    render(
+      <VirtualCablePanel
+        connected
+        cableRoute={null}
+        manageVirtualCable={manage}
+        virtualCableManagementAvailable={() => Promise.resolve(true)}
+        onActionMessage={notify}
+      />,
+    );
+    const install = screen.getByRole("button", { name: "Install" });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText("AudioRouter cables are not available yet")).toBeNull();
+    fireEvent.click(install);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(notify).toHaveBeenCalledWith("Cable operation failed: The AudioRouter driver package is missing.");
+    const { actionMessageTone } = await import("./actionMessage");
+    expect(actionMessageTone(notify.mock.calls[0][0] as string)).toBe("error");
+  });
+});

@@ -1,5 +1,11 @@
 import { UiOptionsWorkbench } from "./UiOptionsWorkbench";
-import { readCustomTheme, writeCustomTheme, customThemeStyle } from "./customTheme";
+import {
+  customThemeStyle,
+  readCustomThemeLibrary,
+  selectedCustomTheme,
+  writeCustomThemeLibrary,
+  type CustomThemeLibrary,
+} from "./customTheme";
 import { UpdatesPanel } from "./UpdateNotice";
 import { setUpdateCheckEnabled } from "./updateCheck";
 import { FirstRunGuide } from "./FirstRunGuide";
@@ -266,15 +272,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [theme, setTheme] = useState<ThemeMode>(() =>
     readTheme(typeof window === "undefined" ? null : window.localStorage),
   );
-  const [customTheme, setCustomTheme] = useState(() =>
-    readCustomTheme(typeof window === "undefined" ? null : window.localStorage),
+  const [customThemes, setCustomThemes] = useState(() =>
+    readCustomThemeLibrary(typeof window === "undefined" ? null : window.localStorage),
   );
-  const changeCustomTheme = (value: typeof customTheme) => {
-    setCustomTheme(value);
-    writeCustomTheme(typeof window === "undefined" ? null : window.localStorage, value);
+  const changeCustomThemes = (value: CustomThemeLibrary) => {
+    setCustomThemes(value);
+    writeCustomThemeLibrary(typeof window === "undefined" ? null : window.localStorage, value);
   };
-  const themeClassName = theme === "custom" ? `theme-${customTheme.base} theme-custom` : `theme-${theme}`;
-  const themeStyle = theme === "custom" ? customThemeStyle(customTheme) : undefined;
+  // "custom" with no saved custom theme (all deleted) shows the dark theme.
+  const activeCustomTheme = theme === "custom" ? (selectedCustomTheme(customThemes)?.theme ?? null) : null;
+  const themeClassName = activeCustomTheme
+    ? `theme-${activeCustomTheme.base} theme-custom`
+    : `theme-${theme === "custom" ? "dark" : theme}`;
+  const themeStyle = activeCustomTheme ? customThemeStyle(activeCustomTheme) : undefined;
   const [flowAnimation, setFlowAnimation] = useState<FlowAnimationMode>(() =>
     readFlowAnimation(typeof window === "undefined" ? null : window.localStorage),
   );
@@ -2762,14 +2772,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       cableRoute={snapshot?.diagnostics?.cableRoute}
       onAddCablePassThrough={addCablePassThrough}
       sessions={availableSessions}
+      onActionMessage={setActionMessage}
     />
   );
   const uiOptionsWorkbenchContent = (
     <UiOptionsWorkbench
       theme={theme}
       onTheme={setTheme}
-      customTheme={customTheme}
-      onCustomTheme={changeCustomTheme}
+      customThemes={customThemes}
+      onCustomThemes={changeCustomThemes}
       flowAnimation={flowAnimation}
       onFlowAnimation={changeFlowAnimation}
     />

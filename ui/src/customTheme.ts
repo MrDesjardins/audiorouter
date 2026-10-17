@@ -96,6 +96,99 @@ export function writeCustomTheme(storage: Pick<Storage, "setItem"> | null, theme
     /* Optional presentation preference. */
   }
 }
+
+/** Several named custom themes, one of them selected. Stored per PC. */
+export type CustomThemeEntry = { id: string; theme: CustomTheme };
+export type CustomThemeLibrary = { selectedId: string; themes: CustomThemeEntry[] };
+const LIBRARY_KEY = "audiorouter.ui.custom-themes";
+export const MAX_CUSTOM_THEMES = 24;
+const THEME_ID = /^[a-z0-9-]{1,40}$/;
+
+function newThemeId(themes: CustomThemeEntry[]): string {
+  for (;;) {
+    const id = "theme-" + Math.random().toString(36).slice(2, 10);
+    if (!themes.some((entry) => entry.id === id)) return id;
+  }
+}
+
+/** The name itself, or "Name 2", "Name 3"… when another theme already has it. */
+export function uniqueThemeName(themes: CustomThemeEntry[], name: string, exceptId?: string): string {
+  const taken = new Set(themes.filter((entry) => entry.id !== exceptId).map((entry) => entry.theme.name));
+  const base = name.trim() || DEFAULT_CUSTOM_THEME.name;
+  if (!taken.has(base)) return base;
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${base.slice(0, 80 - String(suffix).length - 1)} ${suffix}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
+export function selectedCustomTheme(library: CustomThemeLibrary): CustomThemeEntry | null {
+  return library.themes.find((entry) => entry.id === library.selectedId) ?? null;
+}
+
+/** Add a theme (renamed if its name is taken) and select it. */
+export function addCustomTheme(library: CustomThemeLibrary, theme: CustomTheme): CustomThemeLibrary {
+  if (library.themes.length >= MAX_CUSTOM_THEMES)
+    throw new Error(`You can keep up to ${MAX_CUSTOM_THEMES} custom themes. Delete one first.`);
+  const id = newThemeId(library.themes);
+  const entry = { id, theme: { ...structuredClone(theme), name: uniqueThemeName(library.themes, theme.name) } };
+  return { selectedId: id, themes: [...library.themes, entry] };
+}
+
+export function updateCustomTheme(library: CustomThemeLibrary, id: string, theme: CustomTheme): CustomThemeLibrary {
+  return { ...library, themes: library.themes.map((entry) => (entry.id === id ? { id, theme } : entry)) };
+}
+
+/** Remove a theme; the next remaining one (if any) becomes selected. */
+export function deleteCustomTheme(library: CustomThemeLibrary, id: string): CustomThemeLibrary {
+  const index = library.themes.findIndex((entry) => entry.id === id);
+  if (index < 0) return library;
+  const themes = library.themes.filter((entry) => entry.id !== id);
+  const selectedId =
+    library.selectedId === id ? (themes[Math.min(index, themes.length - 1)]?.id ?? "") : library.selectedId;
+  return { selectedId, themes };
+}
+
+export function readCustomThemeLibrary(storage: Pick<Storage, "getItem"> | null): CustomThemeLibrary {
+  try {
+    const text = storage?.getItem(LIBRARY_KEY);
+    if (text) {
+      if (text.length > (MAX_CUSTOM_THEMES + 1) * MAX_THEME_BYTES) throw new Error("oversized");
+      const value = JSON.parse(text) as Partial<CustomThemeLibrary>;
+      const themes: CustomThemeEntry[] = [];
+      for (const entry of Array.isArray(value.themes) ? value.themes.slice(0, MAX_CUSTOM_THEMES) : []) {
+        const candidate = entry as Partial<CustomThemeEntry> | null;
+        if (!candidate || typeof candidate.id !== "string" || !THEME_ID.test(candidate.id)) continue;
+        if (themes.some((existing) => existing.id === candidate.id)) continue;
+        try {
+          themes.push({ id: candidate.id, theme: parseCustomTheme(JSON.stringify(candidate.theme)) });
+        } catch {
+          /* Skip one damaged theme; keep the others. */
+        }
+      }
+      const selected = themes.find((entry) => entry.id === value.selectedId) ?? themes[0];
+      return { selectedId: selected?.id ?? "", themes };
+    }
+    // Earlier versions kept a single custom theme under another key.
+    const legacy = storage?.getItem(KEY);
+    if (legacy) {
+      const theme = parseCustomTheme(legacy);
+      return { selectedId: "theme-legacy", themes: [{ id: "theme-legacy", theme }] };
+    }
+  } catch {
+    /* Fall through to an empty library. */
+  }
+  return { selectedId: "", themes: [] };
+}
+
+export function writeCustomThemeLibrary(storage: Pick<Storage, "setItem"> | null, library: CustomThemeLibrary): void {
+  try {
+    storage?.setItem(LIBRARY_KEY, JSON.stringify(library));
+  } catch {
+    /* Optional presentation preference. */
+  }
+}
+
 export function customThemeStyle(theme: CustomTheme): Record<string, string> {
   const c = theme.colors;
   const highlightRgb = [1, 3, 5]

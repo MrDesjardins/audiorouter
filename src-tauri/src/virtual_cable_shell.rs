@@ -201,6 +201,25 @@ pub fn run_elevated(_: &tauri::AppHandle, _: CableAction) -> Result<serde_json::
     Err("AudioRouter cable management is available only on Windows.".into())
 }
 
+/// Whether this installation ships the driver helper and package. App-only
+/// releases do not, so the UI keeps cable management disabled and explains why.
+#[tauri::command]
+pub fn virtual_cable_management_available(app: tauri::AppHandle) -> bool {
+    use tauri::Manager;
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let Some(exe_dir) = exe.parent() else {
+        return false;
+    };
+    let resources = app
+        .path()
+        .resource_dir()
+        .unwrap_or_else(|_| exe_dir.to_path_buf());
+    let (helper, package) = resolve_package_paths(&resources, exe_dir);
+    helper.is_file() && package.is_dir()
+}
+
 #[tauri::command]
 pub fn manage_virtual_cable(
     app: tauri::AppHandle,

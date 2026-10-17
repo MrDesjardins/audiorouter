@@ -1,4 +1,5 @@
 // Content of the Setup side-panel tab (moved from App.tsx).
+import { useMemo } from "react";
 import type { DeviceListItem, DiagnosticsSnapshot, Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import type { SetupStep } from "./setup";
@@ -14,6 +15,7 @@ export function SetupWorkbench({
   cableRoute,
   onAddCablePassThrough,
   sessions,
+  onActionMessage,
 }: {
   section: "status" | "virtualCables";
   backend: UiBackend;
@@ -23,7 +25,10 @@ export function SetupWorkbench({
   cableRoute?: DiagnosticsSnapshot["cableRoute"];
   onAddCablePassThrough?: () => void;
   sessions: Session[];
+  onActionMessage?: (text: string) => void;
 }) {
+  // Stable across renders so the panel probes the shell once, not per refresh.
+  const cableManagementAvailable = useMemo(() => backend.virtualCableManagementAvailable?.bind(backend), [backend]);
   return (
     <>
       {section === "status" ? (
@@ -54,6 +59,8 @@ export function SetupWorkbench({
             devices={devices}
             manageVirtualCable={backend.manageVirtualCable?.bind(backend)}
             refreshVirtualCableStatus={backend.getVirtualCableStatus?.bind(backend)}
+            virtualCableManagementAvailable={cableManagementAvailable}
+            onActionMessage={onActionMessage}
           />
 
           <section className="panel setup-panel" aria-labelledby="setup-other-apps-heading">

@@ -458,9 +458,7 @@ fn open_release_page(tag: String) -> Result<(), String> {
 /// Open one documented tool in the user's default browser.
 #[tauri::command]
 fn open_tool_guide(kind: String) -> Result<(), String> {
-    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
-    let destination =
-        tool_guides::destination(&kind, &executable).ok_or("Unknown AudioRouter tool")?;
+    let destination = tool_guides::destination(&kind).ok_or("Unknown AudioRouter tool")?;
     #[cfg(windows)]
     std::process::Command::new("explorer.exe")
         .arg(destination)
@@ -2021,7 +2019,8 @@ fn main() {
             mcp_open_setup_page,
             startup_register,
             startup_status,
-            virtual_cable_shell::manage_virtual_cable
+            virtual_cable_shell::manage_virtual_cable,
+            virtual_cable_shell::virtual_cable_management_available
         ])
         .setup(move |app| {
             let session_script = session_script.clone();

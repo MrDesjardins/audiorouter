@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_CUSTOM_THEME,
+  MAX_CUSTOM_THEMES,
+  addCustomTheme,
+  deleteCustomTheme,
+  readCustomThemeLibrary,
+  selectedCustomTheme,
+  updateCustomTheme,
+  writeCustomThemeLibrary,
   parseCustomTheme,
   readCustomTheme,
   customThemeStyle,
@@ -39,5 +46,49 @@ describe("custom themes", () => {
         DEFAULT_CUSTOM_THEME,
       ),
     ).not.toThrow();
+  });
+});
+describe("custom theme library", () => {
+  const memory = () => {
+    const values = new Map<string, string>();
+    return {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => void values.set(key, value),
+      values,
+    };
+  };
+  it("keeps several themes with unique names and deletes only the chosen one", () => {
+    let library = addCustomTheme({ selectedId: "", themes: [] }, DEFAULT_CUSTOM_THEME);
+    const first = library.selectedId;
+    library = addCustomTheme(library, DEFAULT_CUSTOM_THEME);
+    const second = library.selectedId;
+    expect(library.themes.map((entry) => entry.theme.name)).toEqual(["My theme", "My theme 2"]);
+    expect(selectedCustomTheme(library)?.id).toBe(second);
+    library = deleteCustomTheme(library, second);
+    expect(library.themes.map((entry) => entry.id)).toEqual([first]);
+    expect(library.selectedId).toBe(first);
+    library = deleteCustomTheme(library, first);
+    expect(library).toEqual({ selectedId: "", themes: [] });
+  });
+  it("bounds the number of themes", () => {
+    let library = { selectedId: "", themes: [] } as ReturnType<typeof readCustomThemeLibrary>;
+    for (let index = 0; index < MAX_CUSTOM_THEMES; index += 1) library = addCustomTheme(library, DEFAULT_CUSTOM_THEME);
+    expect(() => addCustomTheme(library, DEFAULT_CUSTOM_THEME)).toThrow(/up to/);
+  });
+  it("round trips through storage, migrates the single legacy theme and skips damaged entries", () => {
+    const storage = memory();
+    storage.setItem("audiorouter.ui.custom-theme", JSON.stringify({ ...DEFAULT_CUSTOM_THEME, name: "Old" }));
+    const migrated = readCustomThemeLibrary(storage);
+    expect(migrated.themes.map((entry) => entry.theme.name)).toEqual(["Old"]);
+    const library = updateCustomTheme(migrated, migrated.selectedId, { ...DEFAULT_CUSTOM_THEME, name: "Renamed" });
+    writeCustomThemeLibrary(storage, library);
+    expect(readCustomThemeLibrary(storage)).toEqual(library);
+    const stored = JSON.parse(storage.values.get("audiorouter.ui.custom-themes")!) as {
+      themes: unknown[];
+    };
+    stored.themes.push({ id: "theme-bad", theme: { name: "x" } }, { id: "../x", theme: DEFAULT_CUSTOM_THEME });
+    storage.setItem("audiorouter.ui.custom-themes", JSON.stringify(stored));
+    expect(readCustomThemeLibrary(storage).themes).toHaveLength(1);
+    expect(readCustomThemeLibrary({ getItem: () => "{invalid" })).toEqual({ selectedId: "", themes: [] });
   });
 });

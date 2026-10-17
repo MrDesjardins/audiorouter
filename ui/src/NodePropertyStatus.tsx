@@ -14,6 +14,22 @@ export function nodePropertyStatus(
   return running ? "Active" : "Ready";
 }
 
+/** The canvas node-state tone for a status, so both read the same colours. */
+export function nodePropertyStatusTone(status: string): "ready" | "bypassed" | "disabled" | "attention" {
+  switch (status) {
+    case "Active":
+    case "Ready":
+      return "ready";
+    case "Bypass":
+      return "bypassed";
+    case "Failed":
+    case "Disconnected":
+      return "attention";
+    default:
+      return "disabled";
+  }
+}
+
 export function NodePropertyStatus({
   node,
   connected,
@@ -27,7 +43,11 @@ export function NodePropertyStatus({
 }) {
   const status = nodePropertyStatus(node, connected, running, snapshot);
   return (
-    <span className="badge" role="status" aria-label={`Node status: ${status}`}>
+    <span
+      className={`node-state node-property-status is-${nodePropertyStatusTone(status)}`}
+      role="status"
+      aria-label={`Node status: ${status}`}
+    >
       {status}
     </span>
   );

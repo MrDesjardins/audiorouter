@@ -402,6 +402,8 @@ export interface UiBackend {
   getVirtualCableStatus?(): Promise<VirtualCableStatus>;
   /** Native shell only; requests a UAC prompt for the fixed driver helper. */
   manageVirtualCable?(request: CableManagementRequest): Promise<unknown>;
+  /** Native shell only; false when this installation has no cable driver package. */
+  virtualCableManagementAvailable?(): Promise<boolean>;
   planStartup(enabled: boolean): Promise<StartupPlanResult>;
   applyStartup(planId: string, idempotencyKey: string): Promise<StartupApplyResult>;
   registerStartup?(enabled: boolean): Promise<string>;
@@ -762,6 +764,7 @@ export function createLiveBackend(
   registerStartup?: (enabled: boolean) => Promise<string>,
   startupRegistrationStatus?: () => Promise<"registered" | "unregistered">,
   manageVirtualCable?: (request: CableManagementRequest) => Promise<unknown>,
+  virtualCableManagementAvailable?: () => Promise<boolean>,
 ): UiBackend {
   return {
     connected: true,
@@ -1197,6 +1200,7 @@ export function createLiveBackend(
     ...(registerStartup === undefined ? {} : { registerStartup }),
     ...(startupRegistrationStatus === undefined ? {} : { startupRegistrationStatus }),
     ...(manageVirtualCable === undefined ? {} : { manageVirtualCable }),
+    ...(virtualCableManagementAvailable === undefined ? {} : { virtualCableManagementAvailable }),
   };
 }
 
@@ -1207,6 +1211,7 @@ export function createLiveBackendFromTransport(
   registerStartup?: (enabled: boolean) => Promise<string>,
   startupRegistrationStatus?: () => Promise<"registered" | "unregistered">,
   manageVirtualCable?: (request: CableManagementRequest) => Promise<unknown>,
+  virtualCableManagementAvailable?: () => Promise<boolean>,
 ): UiBackend {
   // Each request carries a correlation ID; failures are summarized (method,
   // category, ID) in the client diagnostics so they can be matched in the logs.
@@ -1216,5 +1221,6 @@ export function createLiveBackendFromTransport(
     registerStartup,
     startupRegistrationStatus,
     manageVirtualCable,
+    virtualCableManagementAvailable,
   );
 }

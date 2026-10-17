@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DeviceListItem, DiagnosticsSnapshot, VirtualCableStatus } from "@audiorouter/contracts";
 import type { CableManagementRequest } from "./backend";
+import { markErrorMessage } from "./actionMessage";
 import {
   cableLabel,
   cableName,
@@ -47,6 +48,10 @@ export function cableStatusPill(
   return { label: STATE_LABELS[status.state], tone: status.state === "notInstalled" ? "idle" : "attention" };
 }
 
+/** Whether this installation ships the cable driver, remembered for the app
+ * session so reopening the tab renders its final layout at once (UI-17). */
+let knownManagementAvailable: boolean | null = null;
+
 export function VirtualCablePanel({
   connected,
   cableRoute,
@@ -55,6 +60,8 @@ export function VirtualCablePanel({
   devices = [],
   manageVirtualCable,
   refreshVirtualCableStatus,
+  virtualCableManagementAvailable,
+  onActionMessage,
 }: {
   connected: boolean;
   cableRoute: CableRoute | null | undefined;
@@ -67,8 +74,28 @@ export function VirtualCablePanel({
   devices?: DeviceListItem[];
   manageVirtualCable?: (request: CableManagementRequest) => Promise<unknown>;
   refreshVirtualCableStatus?: () => Promise<VirtualCableStatus>;
+  /** Shell probe; without it a provided manageVirtualCable is assumed usable. */
+  virtualCableManagementAvailable?: () => Promise<boolean>;
+  /** Shows an outcome in the workspace notification area. */
+  onActionMessage?: (text: string) => void;
 }) {
   const status = useVirtualCableStatus();
+  const [packageAvailable, setPackageAvailable] = useState<boolean | null>(
+    virtualCableManagementAvailable ? knownManagementAvailable : true,
+  );
+  useEffect(() => {
+    if (!virtualCableManagementAvailable) return;
+    let current = true;
+    virtualCableManagementAvailable()
+      .catch(() => false)
+      .then((available) => {
+        knownManagementAvailable = available;
+        if (current) setPackageAvailable(available);
+      });
+    return () => {
+      current = false;
+    };
+  }, [virtualCableManagementAvailable]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(" ");
   const [countDraft, setCountDraft] = useState(status?.cableCount ?? 2);
@@ -109,14 +136,27 @@ export function VirtualCablePanel({
       const refreshed = await refreshVirtualCableStatus?.();
       if (refreshed) setVirtualCableStatus(refreshed);
       setPendingCount(null);
-      setMessage(successText);
+      if (onActionMessage) {
+        setMessage(" ");
+        onActionMessage(successText);
+      } else setMessage(successText);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The cable operation failed.");
+      const text = markErrorMessage(
+        error instanceof Error && error.message
+          ? `Cable operation failed: ${error.message}`
+          : "The cable operation failed.",
+      );
+      if (onActionMessage) {
+        setMessage(" ");
+        onActionMessage(text);
+      } else setMessage(text);
     } finally {
       setBusy(false);
     }
   };
-  const managementAvailable = connected && manageVirtualCable !== undefined;
+  // Not shipped in this installation (app-only builds) or not in the shell.
+  const cablesShipped = manageVirtualCable !== undefined && packageAvailable === true;
+  const managementAvailable = connected && cablesShipped;
   const canInstall = status?.state === "notInstalled";
   const canUpdate =
     status?.state === "installed" || status?.state === "incompatible" || status?.state === "needsRepair";
@@ -138,6 +178,16 @@ export function VirtualCablePanel({
             ? "Asking the backend for the cable status."
             : "Connect to the backend to see the cable status."}
       </p>
+      {!cablesShipped && (
+        <div className="virtual-cable-unavailable" role="note">
+          <strong>AudioRouter cables are not available yet</strong>
+          <p>
+            {packageAvailable === null && manageVirtualCable !== undefined
+              ? "Checking whether this installation includes the AudioRouter cable driver."
+              : "This version of AudioRouter does not include its own virtual cable driver; it is still being tested and signed. Until it ships, use another virtual cable such as VB-Cable: end a route in an Output Device set to that cable, as described under Use with other apps."}
+          </p>
+        </div>
+      )}
       <p className="muted virtual-cable-version">
         Driver {status?.driverVersion ?? "—"} · protocol {status?.protocol ?? "—"}
       </p>
@@ -186,7 +236,11 @@ export function VirtualCablePanel({
           </li>
         )}
       </ul>
-      <div className="virtual-cable-management" aria-label="Cable management">
+      <div
+        className={`virtual-cable-management${cablesShipped ? "" : " is-unavailable"}`}
+        aria-label="Cable management"
+        aria-disabled={!cablesShipped}
+      >
         <div className="virtual-cable-actions">
           <button
             type="button"

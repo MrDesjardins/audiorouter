@@ -52,7 +52,7 @@ test("custom theme file import, export and persistence", async ({ page }) => {
   await expect(page.getByLabel("Theme name")).toHaveValue("Studio mint");
   await expect(page.locator(".app-shell")).toHaveCSS("--cyan", "#23c8a0");
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export custom theme" }).click();
+  await page.getByRole("button", { name: "Export this theme" }).click();
   const file = await download;
   const stream = await file.createReadStream();
   const chunks = [];
@@ -69,10 +69,34 @@ test("custom theme file import, export and persistence", async ({ page }) => {
   await expect(page.getByLabel("Theme name")).toHaveValue("Studio mint");
   await page.reload();
   await page.getByRole("tab", { name: "UI Options", exact: true }).click();
-  await expect(page.getByLabel("Color theme")).toHaveValue("custom");
+  await expect(page.getByLabel("Color theme")).toHaveValue(/^custom:/);
   await expect(page.getByLabel("Theme name")).toHaveValue("Studio mint");
-  await page.getByRole("button", { name: "Create your own theme" }).click();
+  // A new theme is added beside the imported one, then deleted again.
+  await page.getByRole("button", { name: "Create a new theme" }).click();
+  await expect(page.getByLabel("Theme name")).toHaveValue("Studio mint copy");
+  const choices = page.getByLabel("Color theme").locator("option");
+  await expect(choices).toHaveText([
+    "Dark",
+    "Light",
+    "High contrast",
+    "Studio mint (custom)",
+    "Studio mint copy (custom)",
+  ]);
+  await page.getByRole("button", { name: "Delete this theme…" }).click();
+  await page
+    .getByRole("group", { name: "Confirm theme deletion" })
+    .getByRole("button", { name: "Delete theme" })
+    .click();
   await expect(page.getByLabel("Theme name")).toHaveValue("Studio mint");
+  await expect(choices).toHaveCount(4);
+  await page.getByRole("button", { name: "Delete this theme…" }).click();
+  await page
+    .getByRole("group", { name: "Confirm theme deletion" })
+    .getByRole("button", { name: "Delete theme" })
+    .click();
+  await expect(page.getByLabel("Color theme")).toHaveValue("dark");
+  await expect(choices).toHaveCount(3);
+  await expect(page.getByRole("button", { name: "Export this theme" })).toBeDisabled();
 });
 test("a selected tool has a direct, allowlisted visual guide", async ({ page }) => {
   await page.goto("/route-harness.html");
@@ -82,3 +106,24 @@ test("a selected tool has a direct, allowlisted visual guide", async ({ page }) 
     "https://audiorouter.org/tools/gain.html",
   );
 });
+// In the desktop app a page long enough to scroll took ~10 px of scrollbar
+// from the tab grid, so at some sidebar widths "UI Options" wrapped on Tools
+// but not on Properties and every button moved. Headless Edge overlays its
+// scrollbars, so check what the fix guarantees: the gutter is reserved and
+// every tab button has one height, wrapped or not, on every tab.
+for (const sidebar of [404, 428, 520]) {
+  test(`sidebar tabs keep one size whichever tab is open, ${sidebar} px sidebar (UI-17)`, async ({ page }) => {
+    await page.addInitScript((width) => localStorage.setItem("audiorouter.ui.sidebar-width", String(width)), sidebar);
+    await page.goto("/route-harness.html");
+    await expect(page.locator(".right-workbench")).toHaveCSS("scrollbar-gutter", "stable");
+    const heights = new Set<number>();
+    for (const name of ["Tools", "MCP", "Recording", "Properties", "UI Options", "Virtual Cables", "Logs"]) {
+      await page.getByRole("tab", { name, exact: true }).click();
+      for (const height of await page
+        .locator(".workbench-tabs button")
+        .evaluateAll((buttons) => buttons.map((button) => Math.round(button.getBoundingClientRect().height))))
+        heights.add(height);
+    }
+    expect([...heights]).toHaveLength(1);
+  });
+}

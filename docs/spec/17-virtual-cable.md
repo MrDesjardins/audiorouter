@@ -767,6 +767,11 @@ notifications that the backend already watches.
   overruns) in reserved slots, buttons Install / Update /
   Repair / Remove (only the valid ones enabled, others disabled, no layout
   shift), and a "Create pass-through session" action.
+  When the installation does not ship the driver helper and package (every
+  app-only release until the signed cable ships), the panel says
+  "AudioRouter cables are not available yet", points to a third-party cable
+  instead, and keeps every management control disabled. Management outcomes
+  appear in the workspace notification area; failures read as errors.
   Endpoint formats come from `devices.list`; non-48 kHz float formats carry
   a reserved hint. The low-latency switch changes the configured bridge block
   to 128 frames and explains that Windows briefly restarts the cable device.

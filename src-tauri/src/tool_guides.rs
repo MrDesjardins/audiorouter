@@ -40,18 +40,13 @@ pub fn slug(kind: &str) -> Option<&'static str> {
     })
 }
 
-pub fn destination(kind: &str, executable: &std::path::Path) -> Option<String> {
-    let slug = slug(kind)?;
-    // Repository builds open their generated local guide so unpublished edits
-    // are reviewable. Installed builds use the same guide on the public site.
-    let root = executable.ancestors().nth(4);
-    if let Some(root) = root.filter(|root| root.join("src-tauri/Cargo.toml").is_file()) {
-        let page = root.join("site/tools").join(format!("{slug}.html"));
-        if page.is_file() {
-            return Some(page.to_string_lossy().into_owned());
-        }
-    }
-    Some(format!("https://audiorouter.org/tools/{slug}.html"))
+/// The published guide page. Every build, repository builds included, opens
+/// the public site so a help link never lands on a local file.
+pub fn destination(kind: &str) -> Option<String> {
+    Some(format!(
+        "https://audiorouter.org/tools/{}.html",
+        slug(kind)?
+    ))
 }
 
 #[cfg(test)]
@@ -67,13 +62,11 @@ mod tests {
         }
     }
     #[test]
-    fn installed_shell_uses_the_canonical_site() {
+    fn every_build_uses_the_canonical_site() {
         assert_eq!(
-            destination(
-                "gain",
-                std::path::Path::new("C:/Program Files/AudioRouter/audiorouter-shell.exe")
-            ),
-            Some("https://audiorouter.org/tools/gain.html".into())
+            destination("physicalInput"),
+            Some("https://audiorouter.org/tools/physical-input.html".into())
         );
+        assert_eq!(destination("../gain"), None);
     }
 }

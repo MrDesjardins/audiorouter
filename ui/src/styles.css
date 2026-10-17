@@ -7057,3 +7057,86 @@ input[type="color"] {
   --node-well-border: var(--ambient-edge);
   --node-track: var(--ambient-bg);
 }
+
+/* Sidebar tabs keep one size on every tab (UI-17): the scrollbar gutter is
+   always reserved, so the tab grid never narrows when a page starts to
+   scroll, and each tab reserves two lines so a wrapping label such as
+   "UI Options" cannot change the row height. */
+.main-content > .right-workbench {
+  scrollbar-gutter: stable;
+}
+.workbench-tabs button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.4rem;
+  min-height: 2.4rem;
+  overflow: hidden;
+}
+
+/* The selected node's status uses the canvas node-state colours, at a fixed
+   width so Ready/Active/Bypass swaps never move the title row (UI-17). */
+.node-state.node-property-status {
+  flex: none;
+  width: 7.5rem;
+  padding: 0.18rem 0.4rem;
+  font-size: 0.68rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Cable management stays visible but inert until the cable driver ships. */
+.virtual-cable-unavailable {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--warning, #e5a43b) 55%, var(--ambient-edge));
+  border-left-width: 4px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--warning, #e5a43b) 10%, var(--ambient-surface));
+  color: var(--text-strong);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.virtual-cable-unavailable p {
+  margin: 0;
+}
+.virtual-cable-management.is-unavailable {
+  min-height: 0;
+  opacity: 0.55;
+}
+.theme-high-contrast .virtual-cable-unavailable {
+  border-color: #fff;
+  background: #000;
+  color: #fff;
+}
+.theme-high-contrast .virtual-cable-management.is-unavailable {
+  opacity: 1;
+}
+
+/* Deleting a custom theme asks once, inline, in the theme editor. */
+.theme-delete-confirmation {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--danger, #ff6b6b) 55%, var(--ambient-edge));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--danger, #ff6b6b) 8%, var(--ambient-surface));
+}
+.theme-delete-confirmation p {
+  margin: 0;
+}
+.theme-delete-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.theme-delete-actions button.danger {
+  border-color: var(--danger, #ff6b6b);
+  color: var(--danger, #ff6b6b);
+}
+.theme-high-contrast .theme-delete-actions button.danger {
+  border-color: #fff;
+  color: #fff;
+}
