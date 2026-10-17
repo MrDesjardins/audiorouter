@@ -4,11 +4,27 @@
 //! status_report`): device and driver version from SetupAPI/CfgMgr, endpoints
 //! by device instance, and the bridge QUERY. Nothing here installs or
 //! elevates; install/update/repair/remove stay shell commands (§7.2).
-//! Cached for 2 s, so a UI polling it costs one enumeration every 2 s.
+//! Cached until Windows reports an endpoint change (at most 30 s), so the
+//! UI's 2 s poll does not walk every endpoint. Without the notification
+//! subscription the cache falls back to 2 s.
 
 use super::*;
 
+/// Cache lifetime when no endpoint notification subscription is available.
 pub(crate) const VIRTUAL_CABLE_STATUS_CACHE: Duration = Duration::from_secs(2);
+/// Cache lifetime while endpoint notifications invalidate it. The backstop
+/// covers driver state an endpoint change does not announce (the install
+/// record, the bridge query).
+pub(crate) const VIRTUAL_CABLE_STATUS_MAX_AGE: Duration = Duration::from_secs(30);
+
+/// Whether a cached status of this age may still be served. `endpoint_change`
+/// is `Some(changed)` with a notification subscription, `None` without one.
+fn virtual_cable_cache_is_fresh(age: Duration, endpoint_change: Option<bool>) -> bool {
+    match endpoint_change {
+        Some(changed) => !changed && age < VIRTUAL_CABLE_STATUS_MAX_AGE,
+        None => age < VIRTUAL_CABLE_STATUS_CACHE,
+    }
+}
 
 /// Bus ID of cable `index` (0 = `cable-a`).
 fn bus_id(index: u8) -> String {
@@ -107,14 +123,35 @@ fn read_virtual_cable_status() -> Result<Value, ControlError> {
 
 impl ControlPlane {
     pub(crate) fn dispatch_virtual_cable_status(&mut self) -> Result<Value, ControlError> {
+        // Take the change bit on every call so a notification that arrives
+        // while the cache is fresh still forces the next read.
+        let endpoint_change = self.take_virtual_cable_endpoint_change();
         if let Some((at, value)) = &self.virtual_cable_status_cache {
-            if at.elapsed() < VIRTUAL_CABLE_STATUS_CACHE {
+            if virtual_cable_cache_is_fresh(at.elapsed(), endpoint_change) {
                 return Ok(value.clone());
             }
         }
         let value = read_virtual_cable_status()?;
         self.virtual_cable_status_cache = Some((Instant::now(), value.clone()));
         Ok(value)
+    }
+
+    /// Whether Windows reported an endpoint change since the last call;
+    /// `None` when the read-only notification subscription cannot start.
+    /// The subscription only sets a flag; it never opens a stream.
+    fn take_virtual_cable_endpoint_change(&mut self) -> Option<bool> {
+        #[cfg(windows)]
+        {
+            if self.virtual_cable_endpoint_watch.is_none() {
+                self.virtual_cable_endpoint_watch =
+                    audiorouter_windows_audio::EndpointNotificationSubscription::start().ok();
+            }
+            self.virtual_cable_endpoint_watch
+                .as_ref()
+                .map(|watch| watch.take_dirty())
+        }
+        #[cfg(not(windows))]
+        None
     }
 }
 
@@ -225,6 +262,18 @@ mod tests {
             .unwrap()
             .iter()
             .all(|cable| cable["present"] == false));
+    }
+
+    #[test]
+    fn status_cache_lasts_until_an_endpoint_change_or_the_backstop() {
+        let second = Duration::from_secs(1);
+        // With notifications: served up to 30 s, re-read on any change.
+        assert!(virtual_cable_cache_is_fresh(second * 29, Some(false)));
+        assert!(!virtual_cable_cache_is_fresh(second * 30, Some(false)));
+        assert!(!virtual_cable_cache_is_fresh(Duration::ZERO, Some(true)));
+        // Without them: the previous 2 s cache.
+        assert!(virtual_cable_cache_is_fresh(second, None));
+        assert!(!virtual_cable_cache_is_fresh(second * 2, None));
     }
 
     #[test]

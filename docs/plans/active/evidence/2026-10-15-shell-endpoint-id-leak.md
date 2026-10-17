@@ -87,6 +87,11 @@ plane's `EndpointMonitor`, created at Play: it re-runs
 `enumerate_active_endpoints` whenever its notification client is dirty, and
 `OnPropertyValueChanged` for any property of any endpoint sets it dirty. Idle
 has no monitor, which fits the flat idle result. The fix covers every caller.
+Later measured: the caller was the cable status, not the monitor (see
+"Repeating caller found"). The UI polls the cable status idle too, so the
+15-minute idle run (one 8 MiB step, then flat) was likely too short to show
+the ~2.6 KB/s growth through heap commit steps, and playing was probably
+not required.
 
 ## Fix
 
@@ -151,6 +156,41 @@ has no monitor, which fits the flat idle result. The fix covers every caller.
    target while attached. One long dump session froze the probe shell, and
    killing cdb left its threads suspended (the shell had to be closed).
 
+## Repeating caller found (2026-10-16)
+
+Measured on the owner's PC, release shells playing the owner's session
+(`run-app-soak.ps1 -AutoPlay`, database copy, isolated profile):
+
+- An endpoint notification probe (`IMMNotificationClient` registered
+  beside the app) counted **0** notifications in 30 s idle, 0 during an
+  endpoint walk, and 0 in 4 minutes with 0.0.17 playing. The endpoint
+  monitor does not re-walk while playing; filtering property keys would
+  change nothing.
+- A temporary build (not committed) counting each public walk every 30 s,
+  same session playing for 3 minutes: the active-format walk ran 4 times
+  (startup only), while the display-info walk and the all-state walk each
+  ran about 7.5 times per 30 s, one every 4 s.
+- Caller: `virtualCable.status`. The UI polls it every 2 s and the
+  backend cached it for 2 s, so a fresh check ran about every 4 s, and
+  each runs the driver helper's `cable_endpoints` (display info plus all
+  62 endpoint states). Before the ID fix that leaked 2,064 + 8,251 bytes per
+  check, 2.6 KB/s or about 9 MiB/h: the measured leak rate, and the 2:1
+  ratio of active to inactive IDs in the heap dump.
+
+Change: the status cache now lasts until Windows reports an endpoint change
+(a lazily started read-only `EndpointNotificationSubscription` in the
+control plane), with a 30 s backstop for driver state an endpoint change
+does not announce. Without a subscription it keeps the 2 s cache. Same
+instrumented build with the change, 3 minutes playing: display and
+state walks once per 30 s (from 7.5). Regression
+`virtual_cable::tests::status_cache_lasts_until_an_endpoint_change_or_the_backstop`.
+Control tests 250 passed, 9 ignored; workspace and shell Clippy and
+`cargo fmt --check` clean.
+
+Side note: `run-app-soak.ps1 -AutoPlay` kept waiting for "running" on
+these runs although `session.start` returned `running` in the backend
+log; the overnight run detected it. Not investigated.
+
 ## Rollback and risks
 
 Rollback: revert the `windows-audio` change; the leak returns, nothing else
@@ -159,9 +199,9 @@ freed once after its only read.
 
 ## Follow-ups
 
-1. Measure how often the endpoint monitor's notification fires while
-   playing. Each refresh opens an `IAudioClient` on every active endpoint to
-   read its format; ignore property keys that cannot change a binding.
+1. ~~Measure how often the endpoint monitor's notification fires while
+   playing.~~ Done 2026-10-16; the repeating caller was the cable status,
+   not the monitor (see "Repeating caller found").
 2. Reduce the 20 Hz refresh's allocation churn; in particular, the backend
    logger should not decode responses of routine reads it does not log.
 3. ~~Confirm with the owner's next overnight soak.~~ Done 2026-10-16 (see

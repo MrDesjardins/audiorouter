@@ -404,8 +404,12 @@ pub struct ControlPlane {
     cable_route: Option<cable_routes::ActiveCableRoute>,
     #[cfg(windows)]
     managed_software_devices: audiorouter_windows_audio::ManagedSoftwareDeviceInventory,
-    /// Last `virtualCable.status` result and when it was read (2 s cache).
+    /// Last `virtualCable.status` result and when it was read.
     virtual_cable_status_cache: Option<(Instant, Value)>,
+    /// Endpoint notifications that invalidate that cache (started lazily).
+    #[cfg(windows)]
+    virtual_cable_endpoint_watch:
+        Option<audiorouter_windows_audio::EndpointNotificationSubscription>,
 }
 
 impl Default for ControlPlane {
@@ -541,6 +545,8 @@ impl ControlPlane {
             managed_software_devices:
                 audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
             virtual_cable_status_cache: None,
+            #[cfg(windows)]
+            virtual_cable_endpoint_watch: None,
         }
     }
 

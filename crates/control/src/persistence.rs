@@ -346,6 +346,8 @@ impl ControlPlane {
             managed_software_devices:
                 audiorouter_windows_audio::ManagedSoftwareDeviceInventory::default(),
             virtual_cable_status_cache: None,
+            #[cfg(windows)]
+            virtual_cable_endpoint_watch: None,
         };
         plane.restore_plugin_inventories();
         Ok(plane)

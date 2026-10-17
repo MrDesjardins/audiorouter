@@ -542,8 +542,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     writeTheme(typeof window === "undefined" ? null : window.localStorage, theme);
   }, [theme]);
   // AudioRouter cable status (spec 17 §7.1), published to the library,
-  // canvas palette, cable properties and Setup. The backend caches it for
-  // 2 s, so polling at that rate costs one enumeration per poll at most.
+  // canvas palette, cable properties and Setup. The backend caches it until
+  // Windows reports an endpoint change (at most 30 s), so this poll is cheap.
   useEffect(() => {
     const getStatus = backend.getVirtualCableStatus?.bind(backend);
     if (!backend.connected || !getStatus) {

@@ -408,9 +408,13 @@ session (before: 24 writes, 11 flips). Workspace and shell Clippy and
 `cargo fmt --check` clean; UI format, lint (0 errors) and `tsc` clean;
 Playwright e2e 239 passed, 9 skipped.
 
-Next action: the endpoint-ID fix passed the overnight soak (finding 7);
-next, follow-up (a): measure the endpoint monitor's notification rate while
-playing and ignore property keys that cannot change a binding.
+Follow-up (a) done 2026-10-16: the endpoint monitor gets no notifications
+while playing; the walk that repeated every ~4 s was `virtualCable.status`
+(UI polls 2 s, backend cache 2 s). Its cache now lasts until an endpoint
+change, with a 30 s backstop: cable walks once per 30 s instead of 7.5
+([record](evidence/2026-10-15-shell-endpoint-id-leak.md#repeating-caller-found-2026-10-16)).
+Next action: follow-up (b), the 20 Hz refresh's allocation churn (backend
+logger decoding unlogged routine reads).
 Open decisions: cable route behaviour after a lease loss (reconnect or plain
 message; virtual-cable plan, r10 results).
 
