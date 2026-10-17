@@ -8,8 +8,11 @@
 //! only validates and records the route; `session.start` opens both
 //! bridge leases and starts a [`audiorouter_windows_audio::CableRouteWorker`];
 //! the backend service pass heartbeats the leases; session stop retires and
-//! closes them. A failed lease or worker stops the route: the capture lease
-//! closes and the cable outputs silence, never another source (DEC-10).
+//! closes them. A failed lease or worker closes the route: the capture
+//! lease closes and the cable outputs silence, never another source
+//! (DEC-10). A lost connection (a system freeze longer than the lease)
+//! reopens the route up to three times; then the session stops with a
+//! plain message (user decision 2026-10-16).
 
 use super::*;
 use audiorouter_domain::Node;
@@ -34,6 +37,51 @@ pub(crate) fn cable_route_block_frames(default_period_frames: u32) -> u16 {
 }
 pub(crate) const CABLE_ROUTE_CHANNELS: u16 = 2;
 pub(crate) const CABLE_ROUTE_LEASE_MS: u32 = 2_000;
+/// Wait before each reopen after a lost connection; their count is the
+/// number of tries before the session stops.
+pub(crate) const CABLE_ROUTE_RECONNECT_DELAYS: [std::time::Duration; 3] = [
+    std::time::Duration::from_secs(1),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(4),
+];
+/// A loss this soon after a reconnect continues that reconnect's count, so
+/// a route that keeps failing cannot reopen forever.
+pub(crate) const CABLE_ROUTE_RECONNECT_SETTLE: std::time::Duration =
+    std::time::Duration::from_secs(30);
+
+/// Tries already used when a route loses its connection at `now`, given
+/// when it last reopened and the tries that took.
+pub(crate) fn cable_reconnect_tries_used(
+    last_reconnect: Option<(std::time::Instant, u8)>,
+    now: std::time::Instant,
+) -> u8 {
+    match last_reconnect {
+        Some((at, tries)) if now.saturating_duration_since(at) < CABLE_ROUTE_RECONNECT_SETTLE => {
+            tries
+        }
+        _ => 0,
+    }
+}
+
+pub(crate) fn cable_reconnecting_message(next_try: u8) -> String {
+    format!(
+        "The cable route lost its connection to the cable driver; reconnecting (try {next_try} of {}). The cable output is silent meanwhile.",
+        CABLE_ROUTE_RECONNECT_DELAYS.len()
+    )
+}
+
+pub(crate) fn cable_reconnect_failed_message(last_error: Option<&str>) -> String {
+    let mut message = format!(
+        "The cable route lost its connection to the cable driver and could not reconnect after {} tries; press Play to start it again.",
+        CABLE_ROUTE_RECONNECT_DELAYS.len()
+    );
+    if let Some(error) = last_error {
+        message.push_str(" Last try: ");
+        message.push_str(error);
+    }
+    message
+}
+
 /// Rates a cable offers (VCAB-11); a route runs at its cables' rate.
 const CABLE_ROUTE_RATES: [u32; 3] = [44_100, 48_000, 96_000];
 
@@ -327,12 +375,28 @@ pub(crate) struct ActiveCableRoute {
     /// Last counters, kept after the route stops for diagnostics.
     counters: audiorouter_windows_audio::CableRouteCounters,
     failure: Option<String>,
+    /// Set while the closed route waits to reopen after a lost connection.
+    reconnect: Option<CableReconnect>,
+    /// When this route reopened after a loss, and the tries that took.
+    last_reconnect: Option<(std::time::Instant, u8)>,
+}
+
+#[cfg(windows)]
+#[derive(Debug, Clone, Copy)]
+struct CableReconnect {
+    tries_used: u8,
+    next_at: std::time::Instant,
 }
 
 #[cfg(windows)]
 impl ActiveCableRoute {
     pub fn is_running(&self) -> bool {
         self.worker.is_some()
+    }
+
+    /// Running, or closed and about to reopen: the session is still playing.
+    pub fn is_active(&self) -> bool {
+        self.is_running() || self.reconnect.is_some()
     }
 
     /// Retire and close both leases, then join the worker. Every step runs
@@ -385,7 +449,7 @@ impl ActiveCableRoute {
             "sampleRateHz": self.sample_rate_hz,
             "renderChannels": self.shape.render_channels,
             "captureChannels": self.shape.capture_channels,
-            "state": if self.is_running() { "running" } else if self.failure.is_some() { "failed" } else { "stopped" },
+            "state": if self.is_running() { "running" } else if self.reconnect.is_some() { "reconnecting" } else if self.failure.is_some() { "failed" } else { "stopped" },
             "failure": self.failure,
             "renderBlocks": counters.render_blocks,
             "renderSequenceGaps": counters.render_sequence_gaps,
@@ -419,7 +483,7 @@ impl ControlPlane {
         if self
             .cable_route
             .as_ref()
-            .is_some_and(|route| route.is_running() && route.session_id != *session_id)
+            .is_some_and(|route| route.is_active() && route.session_id != *session_id)
         {
             return Err(ControlError::InvalidRequest(
                 "another cable route is playing; stop it first".into(),
@@ -497,7 +561,7 @@ impl ControlPlane {
         if self
             .cable_route
             .as_ref()
-            .is_some_and(|route| route.is_running() && route.session_id != *session_id)
+            .is_some_and(|route| route.is_active() && route.session_id != *session_id)
         {
             return Err(ControlError::InvalidRequest(
                 "another cable route is playing; stop it first".into(),
@@ -640,6 +704,8 @@ impl ControlPlane {
             last_heartbeat: std::time::Instant::now(),
             counters: Default::default(),
             failure: None,
+            reconnect: None,
+            last_reconnect: None,
         };
         let worker = CableRouteWorker::start(
             render_view,
@@ -712,14 +778,24 @@ impl ControlPlane {
         Ok(())
     }
 
-    /// One backend service pass: heartbeat both leases every quarter lease
-    /// and stop a failed route (its cable then outputs silence). Returns
-    /// whether a route is running.
+    /// One backend service pass: heartbeat both leases every quarter lease,
+    /// close a failed route (its cable then outputs silence) and reopen it
+    /// after a lost connection. Returns whether a route is active.
     #[cfg(windows)]
     pub(crate) fn service_cable_route(&mut self, now: std::time::Instant) -> bool {
+        if self
+            .cable_route
+            .as_ref()
+            .is_some_and(|route| route.reconnect.is_some())
+        {
+            return self.service_cable_reconnect(now);
+        }
         let Some(route) = self.cable_route.as_mut().filter(|route| route.is_running()) else {
             return false;
         };
+        // A lost lease or a failed worker may reopen; a format change needs
+        // the user's Play at the new format.
+        let mut lost_connection = true;
         let mut failure = route
             .worker
             .as_ref()
@@ -756,24 +832,112 @@ impl ControlPlane {
                         cable_label(bus)
                     )
                 });
+                lost_connection = failure.is_none();
             }
         }
-        if let Some(failure) = failure {
-            let _ = route.shutdown();
-            route.failure = Some(failure);
-            // The session is no longer playing; Play starts it again.
-            let session_id = route.session_id.clone();
-            if let Some(runtime) = self.runtimes.get_mut(&session_id) {
-                runtime.stop();
+        let Some(failure) = failure else {
+            return true;
+        };
+        let _ = route.shutdown();
+        if lost_connection {
+            let tries_used = cable_reconnect_tries_used(route.last_reconnect, now);
+            if let Some(delay) = CABLE_ROUTE_RECONNECT_DELAYS.get(usize::from(tries_used)) {
+                route.reconnect = Some(CableReconnect {
+                    tries_used,
+                    next_at: now + *delay,
+                });
+                route.failure = Some(cable_reconnecting_message(tries_used + 1));
+                return true;
             }
-            let revision = self
-                .get_session(&session_id)
-                .map_or(0, |session| session.revision);
-            self.events
-                .append(revision, None, "runtime.stopped", Some(session_id));
+            self.fail_cable_route(cable_reconnect_failed_message(None));
+        } else {
+            self.fail_cable_route(failure);
+        }
+        false
+    }
+
+    /// Reopen a route that lost its connection once its wait is over. A
+    /// failed try waits for the next one; after the last, the session stops.
+    #[cfg(windows)]
+    fn service_cable_reconnect(&mut self, now: std::time::Instant) -> bool {
+        let Some((session_id, generation, reconnect)) =
+            self.cable_route.as_ref().and_then(|route| {
+                route
+                    .reconnect
+                    .map(|reconnect| (route.session_id.clone(), route.generation, reconnect))
+            })
+        else {
             return false;
+        };
+        if now < reconnect.next_at {
+            return true;
         }
-        true
+        let tries = reconnect.tries_used + 1;
+        let session = match self.get_session(&session_id) {
+            Ok(session) => session.clone(),
+            Err(_) => {
+                self.fail_cable_route(cable_reconnect_failed_message(Some(
+                    "the session no longer exists.",
+                )));
+                return false;
+            }
+        };
+        let Some(mut previous) = self.cable_route.take() else {
+            return false;
+        };
+        match self.open_cable_route(&session_id, &session, generation) {
+            Ok(()) => {
+                if let Some(route) = self.cable_route.as_mut() {
+                    route.last_reconnect = Some((now, tries));
+                    if let Some(worker) = route.worker.as_ref() {
+                        worker.set_privacy_muted(self.privacy_muted);
+                    }
+                }
+                true
+            }
+            Err(error) => {
+                let error = match error {
+                    ControlError::InvalidRequest(message) => message,
+                    other => format!("{other:?}"),
+                };
+                match CABLE_ROUTE_RECONNECT_DELAYS.get(usize::from(tries)) {
+                    Some(delay) => {
+                        previous.reconnect = Some(CableReconnect {
+                            tries_used: tries,
+                            next_at: now + *delay,
+                        });
+                        previous.failure = Some(cable_reconnecting_message(tries + 1));
+                        self.cable_route = Some(previous);
+                        true
+                    }
+                    None => {
+                        self.cable_route = Some(previous);
+                        self.fail_cable_route(cable_reconnect_failed_message(Some(&error)));
+                        false
+                    }
+                }
+            }
+        }
+    }
+
+    /// Record why the closed route ended and stop its session; Play starts
+    /// it again.
+    #[cfg(windows)]
+    fn fail_cable_route(&mut self, failure: String) {
+        let Some(route) = self.cable_route.as_mut() else {
+            return;
+        };
+        route.reconnect = None;
+        route.failure = Some(failure);
+        let session_id = route.session_id.clone();
+        if let Some(runtime) = self.runtimes.get_mut(&session_id) {
+            runtime.stop();
+        }
+        let revision = self
+            .get_session(&session_id)
+            .map_or(0, |session| session.revision);
+        self.events
+            .append(revision, None, "runtime.stopped", Some(session_id));
     }
 
     /// Stop the session's cable route, if any. Returns the first teardown
@@ -791,6 +955,7 @@ impl ControlPlane {
             .cable_route
             .as_mut()
             .filter(|route| route.session_id == *session_id)?;
+        route.reconnect = None;
         route.shutdown().map(ControlError::InvalidRequest)
     }
 
@@ -809,14 +974,14 @@ impl ControlPlane {
     pub(crate) fn cable_route_running(&self) -> bool {
         self.cable_route
             .as_ref()
-            .is_some_and(ActiveCableRoute::is_running)
+            .is_some_and(ActiveCableRoute::is_active)
     }
 
     #[cfg(windows)]
     pub(crate) fn cable_route_session(&self) -> Option<&EntityId> {
         self.cable_route
             .as_ref()
-            .filter(|route| route.is_running())
+            .filter(|route| route.is_active())
             .map(|route| &route.session_id)
             .or_else(|| self.cable_route_prepared.as_ref().map(|(id, _)| id))
     }
@@ -892,6 +1057,37 @@ mod tests {
             Some(Err(ControlError::InvalidRequest(reason))) => reason,
             other => panic!("expected a refusal, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_lost_connection_soon_after_a_reconnect_continues_its_count() {
+        // Built forward from an earlier instant (validated lesson 2026-09-07).
+        let reopened = std::time::Instant::now();
+        let soon = reopened + CABLE_ROUTE_RECONNECT_SETTLE - std::time::Duration::from_secs(1);
+        let later = reopened + CABLE_ROUTE_RECONNECT_SETTLE;
+        assert_eq!(cable_reconnect_tries_used(None, later), 0);
+        assert_eq!(cable_reconnect_tries_used(Some((reopened, 2)), soon), 2);
+        assert_eq!(cable_reconnect_tries_used(Some((reopened, 2)), later), 0);
+        // A route that used every try and fails again at once gets none.
+        let exhausted = cable_reconnect_tries_used(
+            Some((reopened, CABLE_ROUTE_RECONNECT_DELAYS.len() as u8)),
+            soon,
+        );
+        assert!(CABLE_ROUTE_RECONNECT_DELAYS
+            .get(usize::from(exhausted))
+            .is_none());
+    }
+
+    #[test]
+    fn reconnect_messages_are_plain_and_count_the_tries() {
+        let reconnecting = cable_reconnecting_message(2);
+        assert!(reconnecting.contains("reconnecting (try 2 of 3)"));
+        assert!(!reconnecting.contains("heartbeat"));
+        let failed = cable_reconnect_failed_message(None);
+        assert!(failed.contains("after 3 tries; press Play"));
+        assert!(!failed.contains("Last try"));
+        let detailed = cable_reconnect_failed_message(Some("Cable A Input could not be opened."));
+        assert!(detailed.ends_with("Last try: Cable A Input could not be opened."));
     }
 
     #[test]

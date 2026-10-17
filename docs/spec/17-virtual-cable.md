@@ -734,6 +734,15 @@ notifications that the backend already watches.
 - The backend's 1 ms service loop pumps the bridge workers (validated
   lesson: never pump from a UI timer) and heartbeats leases at
   `LeaseMs / 4` (default `LeaseMs` = 2000).
+- **Lost connection (user decision 2026-10-16: retries, then a message).**
+  A whole-system freeze longer than `LeaseMs` expires the leases. A
+  cable-only route whose heartbeat or worker fails closes (its cable outputs
+  silence), reports `reconnecting`, and reopens after 1, 2 and 4 s while the
+  session stays playing. A loss within 30 s of a reconnect continues that
+  reconnect's count, so a route that keeps failing cannot reopen forever.
+  When the tries run out, the session stops with a plain message ("…could not reconnect after 3 tries;
+  press Play to start it again"). A cable format change is not retried; it
+  stops with its own message.
 - Protected voice paths: if a bridge fails on a protected path, output
   silence (DEC-10); never fall back to another device.
 - Add both node kinds to `crates/engine/tests/tool_combinations.rs` as

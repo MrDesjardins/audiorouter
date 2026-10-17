@@ -1536,7 +1536,7 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                             "blockFrames": { "type": "integer", "minimum": 128, "maximum": 960 },
                             "renderChannels": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::MAX_CABLE_CHANNELS },
                             "captureChannels": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::MAX_CABLE_CHANNELS },
-                            "state": { "enum": ["running", "stopped", "failed"] },
+                            "state": { "enum": ["running", "reconnecting", "stopped", "failed"] },
                             "failure": { "type": ["string", "null"] },
                             "renderBlocks": { "type": "integer", "minimum": 0 },
                             "renderSequenceGaps": { "type": "integer", "minimum": 0 },

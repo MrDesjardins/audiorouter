@@ -430,9 +430,28 @@ Edge flakes from the 0.0.17 full suite, 2026-10-16:
 - `virtual-cables` status pill: not reproduced (old 5 s wait passed every
   run at 24 workers). The pill changes only on the window's 2 s poll, so
   the wait per status is now 10 s; 24 of 24 passed under stress.
+
+## Cable route lost connection: retries, then a message — 2026-10-16
+
+Owner decision (2026-10-16, "Let's have retries and then messages") on the
+r10 finding (virtual-cable plan, results): a cable-only route whose lease
+heartbeat or worker fails now closes (cable silent), reports
+`reconnecting` and reopens after 1, 2 and 4 s with the session still
+playing; then it stops with a plain message. A loss within 30 s of a
+reconnect continues its count. Format changes keep their own stop message.
+Spec 17 §7.3, `crates/control/src/cable_routes.rs`, contract and output
+schema (`cableRoute.state` gains `reconnecting`). Rollback: revert the
+commit.
+- Checks: fmt clean (both workspaces); workspace Clippy clean; control
+  tests 252 passed, 9 ignored (two new: retry count and messages);
+  contracts typecheck and drift pass; UI typecheck and format clean;
+  `VirtualCablePanel` tests 17 passed.
+- Not run: the reopen itself needs the cable driver, which is not
+  installed on the host; qualify it in the next VM bundle (freeze the guest
+  over 2 s during a cable route and check `reconnecting` then `running`).
+
 Next action: none queued; take the owner's next request.
-Open decisions: cable route behaviour after a lease loss (reconnect or plain
-message; virtual-cable plan, r10 results).
+Open decisions: none.
 
 ## Release 0.0.16 published — 2026-10-12
 

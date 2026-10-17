@@ -769,7 +769,7 @@ export interface DiagnosticsSnapshot {
     /** Channels of the source and destination cables (1-8). */
     renderChannels: number;
     captureChannels: number;
-    state: "running" | "stopped" | "failed";
+    state: "running" | "reconnecting" | "stopped" | "failed";
     failure: string | null;
     renderBlocks: number;
     renderSequenceGaps: number;

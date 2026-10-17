@@ -741,6 +741,9 @@ driver reset, a long hitch) does this; the driver's `LeaseNotActive` user
 message even says "the route will reconnect", which nothing does. Options:
 reconnect a cable-only route automatically a bounded number of times, or
 keep the stop and show a plain message.
+**Decided 2026-10-16 (owner): retries, then a message.** Implemented in
+`cable_routes.rs` (three reopens at 1, 2, 4 s; spec 17 §7.3); the reopen is
+not yet VM-qualified (see the active plan).
 
 ### 8-channel spike (prepared 2026-10-12)
 
