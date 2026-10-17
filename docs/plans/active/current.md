@@ -1,5 +1,19 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.18 — 2026-10-17, owner requested ("publish a new version with all these fixes")
+
+**Published** 2026-10-17 19:55 UTC as an experimental prerelease from tag
+`v0.0.18` (`54b948f1`), same app-only profile as 0.0.17. Contents: several
+custom themes, steady sidebar tabs, coloured node status, public guide
+links, gated Virtual Cables panel, cable route reconnect, cable status
+cache, lighter backend logging. All checks green before tagging (workspace
+1,110 / shell 83 tests, full Edge 275, CI 39062192939); exact-package
+`fresh_install_shell` passed (303 ms); draft and public assets verified.
+Record: [release 0.0.18](evidence/2026-10-17-release-0.0.18.md).
+Rollback: keep 0.0.17 and backups; no migration; never replace published
+assets or move the tag. Next: owner installs 0.0.18; the open question on
+the silent Bass & Treble guide (below) still needs the owner's details.
+
 ## Tool guide animations follow the audio — 2026-10-17, owner requested
 
 Owner findings: the playhead and the sound did not match, Visual Group

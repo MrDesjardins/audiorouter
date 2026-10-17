@@ -285,6 +285,10 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   aborted the draft script before it built anything. Relax
   `$ErrorActionPreference` around expected-failure native calls and decide
   on `$LASTEXITCODE`; exercise both the missing and the existing case.
+  The same happens when the caller wraps the whole script in `*>` (0.0.18,
+  [record](docs/plans/active/evidence/2026-10-17-release-0.0.18.md)): cargo's
+  "Compiling…" progress aborted the build. Capture a release script's log
+  with OS-level redirection (`powershell.exe -File … > log 2>&1` from bash).
 
 - **2026-10-03 — Browser tests must write screenshots to `testInfo.outputPath`, never into `docs/`.**
   Evidence: [0.0.6 release evidence](docs/plans/active/evidence/2026-10-03-release-0.0.6.md).
