@@ -173,11 +173,13 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       samples.add(`${belowBox!.y - panelBox!.y}|${pillBox!.width}x${pillBox!.height}`);
     };
     await sample();
+    // The pill changes only on the window's 2 s status poll; under a loaded
+    // full suite 5 s (two polls) once timed out, so allow five polls.
     for (const state of ["needsRestart", "incompatible", "installed"] as const) {
       fake.status = cableStatus(state);
       await expect(pill).toHaveText(
         { needsRestart: "Restart needed", incompatible: "Update needed", installed: "Installed" }[state],
-        { timeout: 5_000 },
+        { timeout: 10_000 },
       );
       await sample();
     }

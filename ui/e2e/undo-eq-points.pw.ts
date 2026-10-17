@@ -47,6 +47,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(editor.getByLabel("EQ frequency Hz")).toHaveValue("4000");
     await toolbar.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".global-action-message")).toContainText(/saved.*revision/i);
+    // The saved message appears before the post-save refresh ends; history
+    // (button and shortcut) stays unavailable until then. Clicks wait for the
+    // button; the keyboard shortcut below does not.
+    await expect(undo).toBeEnabled();
     const gain = editor.getByLabel("EQ gain dB");
     await gain.fill("-6");
     await gain.press("Control+z");

@@ -4,9 +4,9 @@
 
 **Published** 2026-10-16 15:20 UTC as an experimental prerelease from tag
 `v0.0.17` (`6ed54e91`); exact-package fresh-install passed (95 ms), draft and
-public assets verified. Remaining: watch CI run 38922347936 on `6ed54e91`
-and the next nightly quality run (coverage summary fix); the two Edge
-flakes recorded in the release record.
+public assets verified. CI (run 38923536567 on `05b00352`) and a manual
+nightly quality run (38923751714) passed; the two Edge flakes recorded in
+the release record were fixed 2026-10-16 (below).
 
 Scope: unsigned experimental Windows x64 **app-only** prerelease, same
 profile as 0.0.16 (no driver/helper payload, `-AppOnly`). Contents: the
@@ -417,9 +417,20 @@ Follow-up (b) done 2026-10-16: the backend logger no longer decodes the
 responses of routine-read successes it does not log (session-sized
 `system.diagnostics` 61 → 6 µs per record on the logger thread; same
 record).
-Next action: none queued from the stability round; fix the two Edge
-full-suite flakes recorded in the 0.0.17 evidence (`undo-eq-points` dark,
-`virtual-cables` high-contrast) or take the owner's next request.
+Edge flakes from the 0.0.17 full suite, 2026-10-16:
+- `undo-eq-points`: reproduced with `--repeat-each=12 --workers=18`
+  (8 of 36 failed at the gain Ctrl+Z, value still `-6`). Cause: the test
+  pressed Ctrl+Z right after the "Saved (revision N)" message, but the save
+  keeps `graphBusy` until its post-save `refresh()` ends, and history is
+  unavailable while busy (the Undo button is disabled too; clicks wait for
+  it, the shortcut does not). Test now waits for Undo to be enabled: 72 of
+  72 passed over two stress runs. A product change tried first (window
+  listener calling the latest handler through a ref) only moved 8 → 6
+  failures and was dropped.
+- `virtual-cables` status pill: not reproduced (old 5 s wait passed every
+  run at 24 workers). The pill changes only on the window's 2 s poll, so
+  the wait per status is now 10 s; 24 of 24 passed under stress.
+Next action: none queued; take the owner's next request.
 Open decisions: cable route behaviour after a lease loss (reconnect or plain
 message; virtual-cable plan, r10 results).
 
