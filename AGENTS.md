@@ -91,6 +91,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-17 — Test website audio in Firefox too; it is the owner's default browser.**
+  Evidence: [active plan, Bass & Treble silent in Firefox](docs/plans/active/current.md),
+  `tools/site/firefox-guide-audio.mjs`. Scope: `site/` guides and any Web
+  Audio code. Consequence: the five filter-based guides assigned an
+  `AudioBuffer` to a source before filling it; Chrome and Edge used the
+  data, Firefox rendered silence, and every Edge test (and an output-level
+  sweep) passed. Fill buffers before assigning them, and run the Firefox
+  sweep (stock Firefox over WebDriver BiDi, a real click on Play) before
+  publishing guide audio changes.
+
 - **2026-10-15 — Free every CoTaskMem string the `windows` crate returns; find native leaks by heap bucket.**
   Evidence: [endpoint ID leak record](docs/plans/active/evidence/2026-10-15-shell-endpoint-id-leak.md),
   `endpoint_walks_free_every_endpoint_id`. Scope: Windows interop

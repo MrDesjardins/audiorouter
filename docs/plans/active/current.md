@@ -11,8 +11,8 @@ cache, lighter backend logging. All checks green before tagging (workspace
 `fresh_install_shell` passed (303 ms); draft and public assets verified.
 Record: [release 0.0.18](evidence/2026-10-17-release-0.0.18.md).
 Rollback: keep 0.0.17 and backups; no migration; never replace published
-assets or move the tag. Next: owner installs 0.0.18; the open question on
-the silent Bass & Treble guide (below) still needs the owner's details.
+assets or move the tag. Next: owner installs 0.0.18. The silent Bass & Treble guide was a
+Firefox-only website defect, fixed after the release (website only).
 
 ## Tool guide animations follow the audio — 2026-10-17, owner requested
 
@@ -65,9 +65,16 @@ playhead" on pictures without one (generator now words it per picture kind;
 29 pages regenerated, one line each). New Edge regressions: every audible
 guide must reach the output above 0.01 peak after Play and above 0.001 after
 a control change; no guide picture may have overlapping or clipped labels
-(Network stage swap excepted). `site-guides.pw.ts` 10 passed. Open question
-for the owner: what Bass & Treble showed when it was silent (page, browser,
-whether the status said Playing).
+(Network stage swap excepted). `site-guides.pw.ts` 10 passed. Resolved the same day: the owner's default browser is Firefox 158
+(the earlier sweeps ran only Edge). `filtered()` in `guide-signal.js`
+assigned the input `AudioBuffer` to its source before filling it; Firefox
+takes the contents at assignment, so Bass & Treble, Graphic EQ, Advanced EQ,
+Dehum and FIR Filter rendered silence there. Driving stock Firefox over
+WebDriver BiDi with a real click: the published site had exactly those 5
+silent (peak 0.000), the fix plays all 27 audible guides and keeps them
+playing through a control change; no label overlaps in Firefox either.
+`tools/site/firefox-guide-audio.mjs` keeps that check; Edge
+`site-guides.pw.ts` 10 passed after the fix.
 
 ## Workbench polish, several custom themes, cable section gated — 2026-10-17, owner requested
 

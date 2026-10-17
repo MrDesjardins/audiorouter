@@ -232,11 +232,13 @@
   }
   async function filtered(inputChannels, kind, p, bands) {
     const context = new OfflineAudioContext(inputChannels.length, frames, rate);
+    // Fill the buffer before giving it to the source: Firefox takes the
+    // buffer's contents when it is assigned, so writing afterwards rendered
+    // silence there (Chrome and Edge tolerated it).
+    const input = context.createBuffer(inputChannels.length, frames, rate);
+    inputChannels.forEach((samples, i) => input.copyToChannel(samples, i));
     const source = context.createBufferSource();
-    source.buffer = context.createBuffer(inputChannels.length, frames, rate);
-    inputChannels.forEach((samples, i) =>
-      source.buffer.copyToChannel(samples, i),
-    );
+    source.buffer = input;
     let stage = source;
     const add = (type, hz, db, q = 1) => {
       const f = context.createBiquadFilter();
