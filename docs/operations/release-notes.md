@@ -1,5 +1,37 @@
 # AudioRouter release notes
 
+## 0.0.18 — 2026-10-17 (unsigned experimental preview)
+
+- **Several custom themes.** UI Options keeps up to 24 named themes. Create a
+  new one, import a theme file (it is added, not replaced), switch between
+  them and delete the ones you no longer use; the built-in Dark, Light and
+  High contrast themes stay. Your existing custom theme is kept.
+- **Steadier workbench.** The sidebar tabs no longer change height when a
+  page is long enough to scroll. The selected tool's status shows the canvas
+  colours (green ready or active, amber bypass, red failed or disconnected).
+- **Help links open the website.** The "?" on each tool opens its guide on
+  audiorouter.org. The guides now loop their example under Play/Stop, apply
+  setting changes while the sound plays, and draw time-based pictures from
+  the audio you hear.
+- **Virtual Cables explains why it is unavailable.** This app-only installer
+  has no AudioRouter cable driver, so the panel says so and keeps its
+  controls disabled; use a third-party virtual cable meanwhile. Cable errors
+  appear in the notification area.
+- **Cable routes survive a short system freeze** (preparation for the
+  AudioRouter cable): the route reconnects after 1, 2 and 4 seconds while
+  the session keeps playing, then stops with a plain message.
+- **Less background work.** The cable status is re-read only when Windows
+  reports an endpoint change (at least every 30 s) instead of every few
+  seconds, and the backend logger no longer decodes routine responses it
+  does not record.
+
+Windows 11 x64; app and installer unsigned. Experimental prerelease, not a
+fully M08-qualified consumer release. No database migration, driver
+installation or Windows default-device changes. Close AudioRouter before
+upgrading and keep 0.0.17 plus compatible configuration/recording backups
+for rollback. Clean-machine install/upgrade, missing-WebView2,
+accessibility, hardware and driver-signing gates remain open.
+
 ## 0.0.17 — 2026-10-16 (unsigned experimental preview)
 
 - **Fixed: memory growth while a session plays.** The app grew about
