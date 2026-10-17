@@ -352,6 +352,24 @@ fn backend_rpc_log_records(
         RpcMessage::Single(request) => vec![request],
         RpcMessage::Batch(requests) => requests,
     };
+    let requests = requests
+        .into_iter()
+        .enumerate()
+        .filter(|(_, request)| !is_high_frequency_rpc(&request.method))
+        .collect::<Vec<_>>();
+    let verbose = verbose_duration_micros.is_some();
+    // Timer-driven routine reads (`system.diagnostics` at 20 Hz) are most of
+    // the traffic and their successes are not logged: skip building their
+    // response trees and the correlation lookup.
+    if requests.is_empty()
+        || (!verbose
+            && requests
+                .iter()
+                .all(|(_, request)| is_routine_read_rpc(&request.method))
+            && !any_response_error(responses))
+    {
+        return Vec::new();
+    }
     // The optional `requestId` correlation member is not part of the typed
     // request; read it from the same (already validated) payload, in order.
     let correlation_ids = frame
@@ -361,11 +379,8 @@ fn backend_rpc_log_records(
         .unwrap_or_default();
     let requests = requests
         .into_iter()
-        .enumerate()
         .map(|(index, request)| (request, correlation_ids.get(index).cloned().flatten()))
-        .filter(|(request, _)| !is_high_frequency_rpc(&request.method))
         .collect::<Vec<_>>();
-    let verbose = verbose_duration_micros.is_some();
     // A batch shares one dispatch; its duration is reported per frame.
     let duration_ms = verbose_duration_micros.map(|micros| micros as f64 / 1000.0);
     let response_values = responses
@@ -397,6 +412,22 @@ fn backend_rpc_log_records(
         }
         record
     }).filter(|record| verbose || record["outcome"] == "error" || !record["method"].as_str().is_some_and(is_routine_read_rpc)).collect()
+}
+
+/// Whether a response frame may carry an error. Reads only the `error`
+/// member: the result payload is skipped without allocating a tree. A frame
+/// of another shape (a batch array, or undecodable) counts as an error so
+/// the caller takes the full path.
+fn any_response_error(responses: &[Vec<u8>]) -> bool {
+    #[derive(serde::Deserialize)]
+    struct Outcome {
+        #[serde(default)]
+        error: Option<serde::de::IgnoredAny>,
+    }
+    responses.iter().any(|frame| {
+        audiorouter_protocol::decode_frame::<Outcome>(frame)
+            .map_or(true, |outcome| outcome.error.is_some())
+    })
 }
 
 pub fn device_inventory_log_summary(result: &serde_json::Value) -> serde_json::Value {
@@ -2460,4 +2491,42 @@ mod tests {
         }
         server.join().unwrap().unwrap();
     }
+}
+
+#[test]
+fn routine_read_successes_skip_the_response_but_errors_still_log() {
+    let frame = |value: serde_json::Value| audiorouter_protocol::encode_frame(&value).unwrap();
+    let diagnostics = frame(
+        serde_json::json!({"jsonrpc":"2.0","id":7,"method":"system.diagnostics","params":{}}),
+    );
+    let ok = frame(
+        serde_json::json!({"jsonrpc":"2.0","id":7,"result":{"nodeTelemetry":[{"nodeId":"n"}]}}),
+    );
+    let null_error = frame(serde_json::json!({"jsonrpc":"2.0","id":7,"result":{},"error":null}));
+    let failed = frame(
+        serde_json::json!({"jsonrpc":"2.0","id":7,"error":{"code":-32000,"data":{"code":"unavailable"}}}),
+    );
+    assert!(any_response_error(std::slice::from_ref(&failed)));
+    assert!(!any_response_error(&[ok.clone(), null_error.clone()]));
+    assert!(backend_rpc_log_records(&diagnostics, std::slice::from_ref(&ok), 1, None).is_empty());
+    assert!(backend_rpc_log_records(&diagnostics, &[null_error], 1, None).is_empty());
+    assert_eq!(
+        backend_rpc_log_records(&diagnostics, std::slice::from_ref(&failed), 1, None)[0]
+            ["errorKind"],
+        "unavailable"
+    );
+    // A batch answers one frame per request: one failure among routine
+    // successes takes the full path and logs only that failure.
+    let batch = frame(serde_json::json!([
+        {"jsonrpc":"2.0","id":1,"method":"system.diagnostics","params":{}},
+        {"jsonrpc":"2.0","id":2,"method":"system.diagnostics","params":{}},
+    ]));
+    let first = frame(serde_json::json!({"jsonrpc":"2.0","id":1,"result":{}}));
+    let second = frame(
+        serde_json::json!({"jsonrpc":"2.0","id":2,"error":{"code":-32000,"data":{"code":"unavailable"}}}),
+    );
+    assert!(backend_rpc_log_records(&batch, std::slice::from_ref(&first), 1, None).is_empty());
+    let records = backend_rpc_log_records(&batch, &[first, second], 1, None);
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0]["outcome"], "error");
 }

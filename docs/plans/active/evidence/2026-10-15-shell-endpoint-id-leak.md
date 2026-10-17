@@ -202,7 +202,18 @@ freed once after its only read.
 1. ~~Measure how often the endpoint monitor's notification fires while
    playing.~~ Done 2026-10-16; the repeating caller was the cable status,
    not the monitor (see "Repeating caller found").
-2. Reduce the 20 Hz refresh's allocation churn; in particular, the backend
-   logger should not decode responses of routine reads it does not log.
+2. ~~Reduce the 20 Hz refresh's allocation churn; in particular, the backend
+   logger should not decode responses of routine reads it does not log.~~
+   Done 2026-10-16 for the logger: when every request in a frame is a
+   routine read and no response carries an `error` member (read with
+   serde's `IgnoredAny`, no tree built), the logger thread returns before
+   decoding responses or correlation IDs. Release-mode timing of
+   `backend_rpc_log_records` on a `system.diagnostics` success: 726-byte
+   response 5.5 → 0.8 µs, 9.7 KB session-sized response 61 → 6.0 µs.
+   Unchanged records: failures, verbose mode, logged reads. Regression
+   `routine_read_successes_skip_the_response_but_errors_still_log`
+   (including a batch with one failure); transport 33 passed. The shell
+   logger already returned early. The remaining churn (control-plane JSON
+   building, the window decoding the response) is the refresh itself.
 3. ~~Confirm with the owner's next overnight soak.~~ Done 2026-10-16 (see
    Verification).

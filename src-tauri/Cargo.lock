@@ -238,6 +238,7 @@ dependencies = [
  "audiorouter-domain",
  "audiorouter-protocol",
  "audiorouter-windows-audio",
+ "serde",
  "serde_json",
  "windows 0.62.2",
 ]

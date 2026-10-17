@@ -413,8 +413,13 @@ while playing; the walk that repeated every ~4 s was `virtualCable.status`
 (UI polls 2 s, backend cache 2 s). Its cache now lasts until an endpoint
 change, with a 30 s backstop: cable walks once per 30 s instead of 7.5
 ([record](evidence/2026-10-15-shell-endpoint-id-leak.md#repeating-caller-found-2026-10-16)).
-Next action: follow-up (b), the 20 Hz refresh's allocation churn (backend
-logger decoding unlogged routine reads).
+Follow-up (b) done 2026-10-16: the backend logger no longer decodes the
+responses of routine-read successes it does not log (session-sized
+`system.diagnostics` 61 → 6 µs per record on the logger thread; same
+record).
+Next action: none queued from the stability round; fix the two Edge
+full-suite flakes recorded in the 0.0.17 evidence (`undo-eq-points` dark,
+`virtual-cables` high-contrast) or take the owner's next request.
 Open decisions: cable route behaviour after a lease loss (reconnect or plain
 message; virtual-cable plan, r10 results).
 

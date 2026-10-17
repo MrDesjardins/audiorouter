@@ -14,6 +14,7 @@ audiorouter-control = { path = "../control" }
 audiorouter-domain = { path = "../domain" }
 audiorouter-protocol = { path = "../protocol" }
 audiorouter-windows-audio = { path = "../windows-audio" }
+serde = { workspace = true }
 serde_json = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

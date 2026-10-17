@@ -168,6 +168,7 @@ dependencies = [
  "audiorouter-recording",
  "audiorouter-storage",
  "audiorouter-windows-audio",
+ "serde",
  "serde_json",
  "windows",
 ]
