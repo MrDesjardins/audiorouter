@@ -271,16 +271,16 @@ hardware compatibility, or release readiness. The badges above show current
 CI and nightly quality workflow status, including failures.
 
 <!-- quality-stats:start -->
-Updated 2026-10-17 (UTC) from [`41a620db`](https://github.com/MrDesjardins/audiorouter/commit/41a620dbc11d5c96bfa7a7b88a432f02f67678ab) · [quality run #39014920024](https://github.com/MrDesjardins/audiorouter/actions/runs/39014920024).
+Updated 2026-10-18 (UTC) from [`9f7134a8`](https://github.com/MrDesjardins/audiorouter/commit/9f7134a869ecdbfb998ce65b078275b92de1f7b0) · [quality run #39109822449](https://github.com/MrDesjardins/audiorouter/actions/runs/39109822449).
 
 | Check | Latest result |
 | --- | --- |
-| Rust workspace coverage | 78.0% (64802/83047) lines · 70.7% (5490/7760) functions · 79.8% (100430/125788) regions |
+| Rust workspace coverage | 78.0% (64803/83047) lines · 70.7% (5490/7760) functions · 79.8% (100432/125788) regions |
 | Portable Rust coverage | 87.3% (34649/39667) lines · 86.2% (3115/3612) functions · 88.1% (53797/61038) regions |
-| Desktop shell coverage | 56.9% (3545/6230) lines · 52.0% (326/627) functions · 57.3% (5642/9845) regions |
-| UI (Vitest) coverage | 68.4% (5336/7797) lines · 65.6% (1709/2604) functions · 62.4% (5217/8357) branches |
-| Engine soak | PASS · p99 197 µs, p99.9 250 µs per quantum · in-process heap 0.0 KiB · process heap 0.0 MiB · 14557274 quanta |
-| Fresh-install backend readiness | 238 ms to first backend response on the hosted Windows runner; UI-ready time is not measured |
+| Desktop shell coverage | 56.8% (3538/6231) lines · 52.0% (326/627) functions · 57.2% (5630/9844) regions |
+| UI (Vitest) coverage | 68.4% (5406/7900) lines · 65.6% (1731/2637) functions · 62.3% (5275/8469) branches |
+| Engine soak | PASS · p99 152 µs, p99.9 275 µs per quantum · in-process heap 0.0 KiB · process heap 0.0 MiB · 17557526 quanta |
+| Fresh-install backend readiness | 218 ms to first backend response on the hosted Windows runner; UI-ready time is not measured |
 <!-- quality-stats:end -->
 
 Historical performance (the last 90 successful runs; the full history is in
