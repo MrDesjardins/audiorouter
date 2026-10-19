@@ -1386,7 +1386,7 @@ describe("committed history and client authorization", () => {
     await renderReady(<App backend={{ ...connectedPreviewBackend(), listGraphHistory, undoGraphPlan, commitGraph }} />);
     openTab("Advanced");
     const undoButton = await screen.findByRole("button", { name: "Undo last committed change" });
-    expect((undoButton as HTMLButtonElement).disabled).toBe(false);
+    await waitFor(() => expect((undoButton as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(undoButton);
     await waitFor(() => expect(undoGraphPlan).toHaveBeenCalledWith(demoSession.id, demoSession.revision));
     await waitFor(() =>

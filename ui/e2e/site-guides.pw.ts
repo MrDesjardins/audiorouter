@@ -12,6 +12,9 @@ declare global {
   }
 }
 test("every guide opens offline with a labelled illustration and complete controls", async ({ page }) => {
+  // One page per tool (36 and growing) exceeds the 30 s default under a
+  // fully parallel suite.
+  test.setTimeout(60_000);
   await page.route("https://**", (route) => route.abort());
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
