@@ -170,6 +170,10 @@ describe("Duck editor", () => {
     expect(screen.queryByRole("meter", { name: "Trigger" })).toBeNull();
     expect((screen.getByLabelText("Menu and matchmaking") as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText("Between rounds and results") as HTMLInputElement).checked).toBe(false);
+    // A round being played is unticked unless chosen.
+    expect((screen.getByLabelText("In a round, playing") as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByLabelText("In a round, playing"));
+    expect(onChange).toHaveBeenCalledWith("duckAction", true);
     expect(screen.getByRole("status").textContent).toBe("Ducking −20.0 dB");
     expect(screen.getByText("Stats.cc: preparation.")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Between rounds and results"));
@@ -188,6 +192,22 @@ describe("Duck editor", () => {
       />,
     );
     expect(screen.getByRole("status").textContent).toBe("Full volume");
+    view.rerender(
+      <DuckEditor
+        node={duck({ trigger: "siegeRound", duckMenu: false, duckAction: true })}
+        session={{ nodes: [mic] }}
+        telemetry={telemetry(-120, 0, false)}
+        running
+        disabled={false}
+        gameRound={{ ...round, phase: "action" }}
+        onChange={onChange}
+      />,
+    );
+    expect((screen.getByLabelText("In a round, playing") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Menu and matchmaking") as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText("Planning, operator selection and preparation") as HTMLInputElement).checked).toBe(
+      true,
+    );
   });
 
   it("explains every Stats.cc feed state in plain language", () => {

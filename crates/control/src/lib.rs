@@ -341,6 +341,9 @@ pub struct ControlPlane {
     pending_endpoint_changes: Vec<audiorouter_windows_audio::EndpointChange>,
     /// Continuity statistics for the backend-owned native audio service.
     audio_service: AudioServiceStats,
+    /// Category of the latest failed multi-input service pass, for the
+    /// periodic audio health record (never a raw message).
+    last_audio_pump_error: Option<String>,
     native_endpoint_worker: Option<audiorouter_windows_audio::NativeAudioWorker>,
     native_endpoint_session: Option<EntityId>,
     native_endpoint_worker_secondary: Option<audiorouter_windows_audio::NativeAudioWorker>,
@@ -491,6 +494,7 @@ impl ControlPlane {
             endpoint_monitor: None,
             pending_endpoint_changes: Vec::new(),
             audio_service: AudioServiceStats::default(),
+            last_audio_pump_error: None,
             native_endpoint_worker: None,
             native_endpoint_session: None,
             native_endpoint_worker_secondary: None,

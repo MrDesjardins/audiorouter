@@ -128,4 +128,6 @@ for (const guide of manifest.guides) {
     "UI guide link missing " + guide.kind,
   );
 }
-console.log("PASS: all 35 guides match UI and native destination allowlists.");
+console.log(
+  "PASS: all " + manifest.guides.length + " guides match UI and native destination allowlists.",
+);

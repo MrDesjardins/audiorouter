@@ -81,6 +81,7 @@ describe("output fan-out across library tools", () => {
     denoise: true,
     speechDenoise: true,
     spectralGate: true,
+    funVoiceChanger: true,
     firFilter: true,
     timeShift: true,
     mute: true,

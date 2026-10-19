@@ -38,7 +38,8 @@ export type NodeKind =
   | "timeShift"
   | "networkSend"
   | "networkReceive"
-  | "duck";
+  | "duck"
+  | "funVoiceChanger";
 
 export type PortDirection = "input" | "output";
 
@@ -703,6 +704,16 @@ export interface DiscoveryDocument {
       name: string;
       description: string;
     }>;
+    /** Fun Voice Changer presets with every parameter value each one writes. */
+    voiceChanger?: Array<{
+      id: string;
+      version: number;
+      name: string;
+      description: string;
+      /** Parameters shown in the inspector's basic view, in order. */
+      basicParameters: string[];
+      parameters: Record<string, boolean | number | string>;
+    }>;
   };
   limits: {
     maxNodesPerSession: number;
@@ -831,6 +842,8 @@ export interface DiagnosticsSnapshot {
     noiseProfile?: string;
     /** Present on a playing FIR Filter Hz node: live level per band (power dB) and band centre frequencies. */
     spectrum?: { levelsDb: number[]; bandFrequenciesHz: number[] };
+    /** Present on a playing Fun Voice Changer: its live pitch reading (null fields when unvoiced). */
+    voiceChanger?: { voiced: boolean; f0Hz: number | null; note: number | null; cents: number | null };
     /** Present on a running Network Send or Network Receive node. */
     network?: NetworkNodeTelemetry;
     /**

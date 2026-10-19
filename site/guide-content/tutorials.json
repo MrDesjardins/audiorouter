@@ -413,5 +413,16 @@
     "success": "A named region makes the route easier to read. Audio still follows the existing wires; the rectangle is not an audio processor.",
     "check": "If moving or resizing is unavailable, check Locked. Keep the caption away from controls and wires.",
     "listen": "This organizational diagram has no relevant audio example. Grouping changes canvas presentation only."
+  },
+  "funVoiceChanger": {
+    "route": ["Microphone chain", "Fun Voice Changer", "Cable to Discord"],
+    "steps": [
+      "Add Fun Voice Changer after your microphone tools and before the output Discord uses as its microphone.",
+      "Choose a preset, press Play and talk; the inspector shows the note it hears while pitch stages run.",
+      "Adjust the preset's sliders, or open the sections below for every setting. Reset to preset restores the recipe."
+    ],
+    "success": "Your voice comes out as the chosen character, at about the same loudness as your normal voice, 21 ms later.",
+    "check": "If the effect sounds broken in Discord, turn Discord's noise suppression off for the cable input. If pitch correction warbles, lower the noise gate or add Denoise before the tool.",
+    "listen": "A synthetic sung voice is regenerated with the chosen pitch and formant, then given the ring buzz. It teaches what each control changes, not the engine's exact sound."
   }
 }

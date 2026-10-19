@@ -35,6 +35,7 @@ export type LibraryNodeKind = Extract<
   | "denoise"
   | "speechDenoise"
   | "spectralGate"
+  | "funVoiceChanger"
   | "firFilter"
   | "timeShift"
   | "mute"
@@ -157,6 +158,15 @@ const libraryNodeDefinitions: Record<
   spectralGate: {
     name: "Spectral Gate",
     parameters: { thresholdDb: 3, reductionDb: 40, learning: false },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  funVoiceChanger: {
+    name: "Fun Voice Changer",
+    // Starts neutral; the editor applies a preset's values from the backend.
+    parameters: { preset: "custom" },
     ports: [
       { name: "in", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },
@@ -474,6 +484,7 @@ const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>([
   "denoise",
   "speechDenoise",
   "spectralGate",
+  "funVoiceChanger",
   "firFilter",
   "timeShift",
   "mute",

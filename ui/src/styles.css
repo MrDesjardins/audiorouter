@@ -4113,6 +4113,53 @@ button.primary {
   border-radius: 12px;
   background: var(--ambient-surface-hi);
 }
+.voice-changer {
+  display: grid;
+  gap: 0.6rem;
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--ambient-edge);
+  border-radius: 12px;
+  background: var(--ambient-surface-hi);
+}
+.voice-changer-preset {
+  display: grid;
+  gap: 0.3rem;
+}
+/* Reserved sizes so the badge, description and tuner never move the panel (UI-17). */
+.voice-changer-preset-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.6em;
+}
+.voice-changer-edited.is-hidden {
+  visibility: hidden;
+}
+.voice-changer-tuner {
+  min-height: 1.5em;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.voice-changer-basic,
+.voice-changer-sections details {
+  display: grid;
+  gap: 0.5rem;
+}
+.voice-changer-sections {
+  display: grid;
+  gap: 0.35rem;
+}
+.voice-changer-sections summary {
+  cursor: pointer;
+  font-weight: 600;
+}
 .spectral-gate-live {
   fill: none;
   stroke: #52c7f7;

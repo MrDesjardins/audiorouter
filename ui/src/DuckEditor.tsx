@@ -8,12 +8,15 @@ type ProcessorTelemetry = NonNullable<DiagnosticsSnapshot["nodeTelemetry"][numbe
 type Change = (name: string, value: number | string | boolean) => void;
 type GameRound = NonNullable<DiagnosticsSnapshot["gameRound"]>;
 
-/** Siege phases a round-following Duck can turn the game down in (action always plays at full volume). */
+/** Siege phases a round-following Duck can turn this audio down in, in game order, with the engine's defaults. */
 export const ROUND_PHASES = [
-  { name: "duckMenu", label: "Menu and matchmaking" },
-  { name: "duckPrep", label: "Planning, operator selection and preparation" },
-  { name: "duckBetweenRounds", label: "Between rounds and results" },
+  { name: "duckMenu", label: "Menu and matchmaking", defaultOn: true },
+  { name: "duckPrep", label: "Planning, operator selection and preparation", defaultOn: true },
+  { name: "duckAction", label: "In a round, playing", defaultOn: false },
+  { name: "duckBetweenRounds", label: "Between rounds and results", defaultOn: true },
 ] as const;
+const phaseOn = (node: Node, phase: (typeof ROUND_PHASES)[number]) =>
+  typeof node.parameters[phase.name] === "boolean" ? node.parameters[phase.name] === true : phase.defaultOn;
 const PHASE_LABELS: Record<GameRound["phase"], string> = {
   unknown: "unknown",
   menu: "menu",
@@ -285,7 +288,7 @@ export function DuckEditor({
           <strong>Ducking</strong>
           <small>
             {roundMode
-              ? "Turns this audio down by the Amount outside Siege rounds, and back up when a round starts."
+              ? "Turns this audio down by the Amount during the Siege phases ticked below."
               : "Turns this audio down while the trigger is loud. Drag the orange line to set the trigger level."}
           </small>
         </div>
@@ -312,7 +315,7 @@ export function DuckEditor({
             <label key={phase.name}>
               <input
                 type="checkbox"
-                checked={node.parameters[phase.name] !== false}
+                checked={phaseOn(node, phase)}
                 disabled={disabled}
                 onChange={(event) => onChange(phase.name, event.target.checked)}
               />
@@ -320,8 +323,7 @@ export function DuckEditor({
             </label>
           ))}
           <small className="muted">
-            Rounds in action always play at full volume. If Stats.cc stops or reports nothing, the audio returns to full
-            volume.
+            Unticked phases play at full volume. If Stats.cc stops or reports nothing, the audio returns to full volume.
           </small>
         </fieldset>
       ) : (

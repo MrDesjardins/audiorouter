@@ -22,6 +22,24 @@ pub(crate) fn run_while_servicing<T: Send>(
     })
 }
 
+/// A log-safe category for a failed service pass: an audio error's stable
+/// code, or the error's variant names with every other character removed
+/// (messages can carry device names), bounded in length.
+pub(crate) fn audio_pump_error_category(error: &ControlError) -> String {
+    let text = match error {
+        ControlError::Audio { code, .. } => return (*code).to_owned(),
+        ControlError::InvalidRequest(message) => message.as_str(),
+        _ => return "other".to_owned(),
+    };
+    let detail = text.split_once(": ").map_or(text, |(_, detail)| detail);
+    detail
+        .chars()
+        .take_while(|character| *character != '"' && *character != '{')
+        .filter(|character| character.is_ascii_alphanumeric() || "()_ -".contains(*character))
+        .take(120)
+        .collect()
+}
+
 /// Continuity of the backend-owned native audio service while at least one
 /// native worker is running. A gap is the time between consecutive service
 /// passes; long gaps mean something (for example a slow control request
@@ -33,6 +51,9 @@ pub struct AudioServiceStats {
     pub passes: u64,
     pub late_gaps: u64,
     pub max_gap_micros: u64,
+    /// Multi-input service passes that ended in an error (the pass then
+    /// skipped output draining, which is heard as a gap).
+    pub pump_errors: u64,
     /// Internal phase probe, excluded from the application diagnostics contract.
     pub recorder_drain_micros: u64,
     last_pass: Option<std::time::Instant>,
@@ -99,7 +120,13 @@ impl ControlPlane {
                 running(self, &self.native_multi_input_worker_session)
                     .filter(|(_, generation)| self.multi_input_worker_serves(*generation))
             {
-                let _ = self.pump_native_multi_input_worker(&session, generation, budget);
+                if let Err(error) =
+                    self.pump_native_multi_input_worker(&session, generation, budget)
+                {
+                    self.audio_service.pump_errors =
+                        self.audio_service.pump_errors.saturating_add(1);
+                    self.last_audio_pump_error = Some(audio_pump_error_category(&error));
+                }
                 serviced += 1;
             }
             let playing = running(self, &self.native_multi_input_worker_session)
@@ -178,6 +205,73 @@ impl ControlPlane {
             object.insert("audioService".into(), self.audio_service.to_json());
         }
         value
+    }
+
+    /// Periodic audio health for the backend log while a native route plays:
+    /// service continuity, and per input/output the counters that show where
+    /// audio was lost. Node IDs only; no names, paths or raw messages. `None`
+    /// when no native route is running.
+    pub fn audio_health(&self) -> Option<Value> {
+        let mut health = serde_json::Map::new();
+        #[cfg(windows)]
+        {
+            let playing = self
+                .native_multi_input_worker_session
+                .as_ref()
+                .and_then(|session| self.runtimes.get(session))
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running);
+            if let Some(worker) = self
+                .native_multi_input_worker
+                .as_ref()
+                .filter(|worker| playing && worker.is_running())
+            {
+                let ms = |value: Option<f64>| value.map(|value| (value * 10.0).round() / 10.0);
+                let waits = worker.input_wait_ms();
+                let discontinuities = worker.input_discontinuities();
+                let inputs = worker
+                    .input_node_ids()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, id)| {
+                        json!({
+                            "nodeId": id.as_str(),
+                            "waitMs": ms(waits.get(index).copied().flatten()),
+                            "discontinuities": discontinuities.get(index).copied().unwrap_or(0),
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                let queues = worker.output_queue_ms();
+                let underruns = worker.output_underruns_per_output();
+                let drops = worker.output_full_drops();
+                // Physical outputs come first in output-node order.
+                let outputs = worker
+                    .output_node_ids()
+                    .iter()
+                    .take(underruns.len())
+                    .enumerate()
+                    .map(|(index, id)| {
+                        json!({
+                            "nodeId": id.as_str(),
+                            "queueMs": ms(queues.get(index).copied().flatten()),
+                            "underruns": underruns[index],
+                            "fullDrops": drops.get(index).copied().unwrap_or(0),
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                health.insert("inputs".into(), json!(inputs));
+                health.insert("outputs".into(), json!(outputs));
+            }
+        }
+        if health.is_empty() {
+            return None;
+        }
+        health.insert("audioService".into(), self.audio_service.to_json());
+        health.insert("pumpErrors".into(), json!(self.audio_service.pump_errors));
+        health.insert(
+            "lastPumpError".into(),
+            json!(self.last_audio_pump_error.as_deref()),
+        );
+        Some(Value::Object(health))
     }
 
     /// Record that a backend audio service thread now owns pumping.

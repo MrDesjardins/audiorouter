@@ -17,6 +17,7 @@ const injected = globalThis as {
   __routeFixturePrivacyMuted?: boolean;
   __routeFixtureRecordings?: unknown[];
   __routeFixtureProcessors?: DiscoveryDocument["processors"];
+  __routeFixtureDiscovery?: Partial<DiscoveryDocument>;
   __routeFixtureDelayMs?: number;
   __routeFixtureNoRecordingRoot?: boolean;
   __routeFixtureRecordingLostAudio?: boolean;
@@ -200,6 +201,10 @@ const previewBackend: UiBackend = {
     return structuredClone({
       ...initial,
       session: committed,
+      // Opt-in discovery data (presets, node types) for tool editors.
+      ...(injected.__routeFixtureDiscovery
+        ? { discovery: { ...(initial.discovery ?? {}), ...injected.__routeFixtureDiscovery } as DiscoveryDocument }
+        : {}),
       diagnostics: diagnostics(),
       status: {
         ...initial.status,

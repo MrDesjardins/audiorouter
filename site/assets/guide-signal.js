@@ -14,6 +14,61 @@
       ? 0
       : Math.min(1, (t - start) / attack, (end - t) / release);
   const notes = [523.25, 659.25, 783.99, 987.77, 880, 659.25, 587.33, 783.99];
+  /** Synthetic sung voice for the Fun Voice Changer lesson: harmonics of a
+   * slightly out-of-tune melody under a vowel envelope (700, 1220, 2600 Hz).
+   * With `changed`, it is regenerated at the chosen pitch, formant and
+   * correction, then given the ring buzz; the lesson teaches what each
+   * control changes, not the engine's exact sound. */
+  function sungVoice(p, changed) {
+    const out = channel(),
+      melody = [57, 59, 60, 62, 64, 62, 60, 59],
+      shift = changed
+        ? value(p, "pitchSemitones", 0) + value(p, "pitchCents", 0) / 100
+        : 0,
+      formant = changed ? 2 ** (value(p, "formantSemitones", 0) / 12) : 1,
+      correct = changed && p.correctEnabled === true,
+      retune = Math.max(0, value(p, "retuneMs", 50)),
+      ring = changed ? clamp(value(p, "ringDepthPercent", 0), 0, 100) / 100 : 0,
+      ringHz = value(p, "ringHz", 50),
+      formants = [
+        [700, 130],
+        [1220, 150],
+        [2600, 220],
+      ];
+    let phase = 0,
+      correction = 0;
+    const follow =
+      retune === 0 ? 1 : 1 - Math.exp(-1 / ((rate * retune) / 1000));
+    for (let i = 0; i < frames; i++) {
+      const t = i / rate,
+        note = Math.floor(t / 1),
+        noteTime = t % 1;
+      let midi =
+        melody[note % melody.length] +
+        0.35 * Math.sin(2 * Math.PI * 0.4 * t + note) +
+        0.12 * Math.sin(2 * Math.PI * 5.5 * t);
+      if (correct) {
+        correction += (Math.round(midi) - midi - correction) * follow;
+        midi += correction;
+      }
+      const f0 = 440 * 2 ** ((midi + shift - 69) / 12);
+      phase += f0 / rate;
+      let sample = 0;
+      for (let harmonic = 1; harmonic * f0 < 5000; harmonic++) {
+        const frequency = (harmonic * f0) / formant;
+        let weight = 0.2 / harmonic;
+        for (const [centre, width] of formants)
+          weight += Math.exp(-(((frequency - centre) / width) ** 2));
+        sample += weight * Math.sin(2 * Math.PI * phase * harmonic);
+      }
+      const level = envelope(noteTime, 0, 0.9, 0.04, 0.12);
+      sample *= 0.05 * level;
+      if (ring > 0)
+        sample *= 1 - ring + ring * Math.sin(2 * Math.PI * ringHz * t);
+      out[i] = clamp(sample, -0.89, 0.89);
+    }
+    return out;
+  }
   function fixture(kind, p) {
     const a = channel(),
       b = channel(),
@@ -138,6 +193,18 @@
             label: "Trigger reference · voice-like phrases",
             channels: [voice],
             controlOnly: true,
+          },
+        ],
+        clean,
+        noise,
+        clicks,
+      };
+    if (kind === "funVoiceChanger")
+      return {
+        inputs: [
+          {
+            label: "Input · synthetic sung voice, slightly out of tune",
+            channels: [sungVoice(p, false)],
           },
         ],
         clean,
@@ -440,6 +507,7 @@
           output[i] = input[Math.max(0, i - Math.floor(rate * 1.5))];
       }
     } else if (kind === "pitch") output = data.inputs[0].channels[0];
+    else if (kind === "funVoiceChanger") output = sungVoice(p, true);
     else if (kind === "declick") {
       const cutoff = 0.2 + value(p, "thresholdPercent", 50) / 100;
       for (let i = 0; i < frames; i++)

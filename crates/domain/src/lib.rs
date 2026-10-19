@@ -4,6 +4,8 @@
 //! realtime code. It is the authority for the in-memory graph shape used by
 //! later control-plane adapters.
 
+pub mod voice_changer;
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, Instant};
@@ -56,6 +58,9 @@ pub const DECLICK_LATENCY_SAMPLES: u32 = 64;
 pub const SPECTRAL_LATENCY_SAMPLES: u32 = 1024;
 /// The FIR filter convolves in 512-sample blocks; output lags by one block.
 pub const FIR_LATENCY_SAMPLES: u32 = 512;
+/// Fun Voice Changer delay (DSP-20), fixed whatever the preset; it must
+/// equal `audiorouter_dsp::voice_changer::VOICE_CHANGER_LATENCY_SAMPLES`.
+pub const VOICE_CHANGER_LATENCY_SAMPLES: u32 = 1_024;
 
 /// Linear gain for a Mixer input; absent or invalid values are unity.
 pub fn mixer_input_volume(mixer: &Node, upstream: &EntityId) -> f32 {
@@ -131,10 +136,12 @@ pub enum NodeKind {
     /// Lowers its `in` audio while the `key` input (for example a voice)
     /// is above a threshold. Only `in` is heard; `key` is a trigger.
     Duck,
+    /// Playful voice effects with tweakable presets (DSP-20).
+    FunVoiceChanger,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 34] = [
+    pub const ALL: [Self; 35] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -169,6 +176,7 @@ impl NodeKind {
         Self::NetworkSend,
         Self::NetworkReceive,
         Self::Duck,
+        Self::FunVoiceChanger,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -207,6 +215,7 @@ impl NodeKind {
             Self::NetworkSend => "network-send",
             Self::NetworkReceive => "network-receive",
             Self::Duck => "duck",
+            Self::FunVoiceChanger => "fun-voice-changer",
         }
     }
 }
@@ -320,7 +329,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 34] {
+pub fn node_registry() -> [NodeTypeSpec; 35] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -341,6 +350,7 @@ pub fn node_registry() -> [NodeTypeSpec; 34] {
             | NodeKind::Declick
             | NodeKind::InputSwitch
             | NodeKind::Duck
+            | NodeKind::FunVoiceChanger
             | NodeKind::Denoise
             | NodeKind::SpeechDenoise
             | NodeKind::FirFilter
@@ -388,7 +398,8 @@ pub fn node_registry() -> [NodeTypeSpec; 34] {
             | NodeKind::Denoise
             | NodeKind::SpeechDenoise
             | NodeKind::FirFilter
-            | NodeKind::SpectralGate => "high",
+            | NodeKind::SpectralGate
+            | NodeKind::FunVoiceChanger => "high",
             NodeKind::Plugin => "worker-bound",
             _ => "device-bound",
         },
@@ -400,6 +411,7 @@ pub fn node_registry() -> [NodeTypeSpec; 34] {
                 SPECTRAL_LATENCY_SAMPLES
             }
             NodeKind::FirFilter => FIR_LATENCY_SAMPLES,
+            NodeKind::FunVoiceChanger => VOICE_CHANGER_LATENCY_SAMPLES,
             _ => 0,
         },
     })
@@ -1892,7 +1904,7 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Duck, "trigger") => value
                     .as_str()
                     .is_some_and(|trigger| matches!(trigger, "level" | "siegeRound")),
-                (NodeKind::Duck, "duckMenu" | "duckPrep" | "duckBetweenRounds") => {
+                (NodeKind::Duck, "duckMenu" | "duckPrep" | "duckBetweenRounds" | "duckAction") => {
                     value.is_boolean()
                 }
                 (NodeKind::Duck, name) => {
@@ -1909,6 +1921,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                             .as_f64()
                             .is_some_and(|number| number.is_finite() && range.contains(&number))
                     })
+                }
+                (NodeKind::FunVoiceChanger, name) => {
+                    voice_changer::valid_voice_parameter(name, value)
                 }
                 (NodeKind::Declick, "thresholdPercent") => {
                     value.as_f64().is_some_and(|threshold| {
@@ -4247,9 +4262,45 @@ mod tests {
     }
 
     #[test]
+    fn fun_voice_changer_accepts_every_preset_and_rejects_bad_values() {
+        for preset in &voice_changer::VOICE_PRESETS {
+            let mut changer = node("voice", NodeKind::FunVoiceChanger, PortDirection::Output);
+            changer.parameters = voice_changer::voice_preset_parameters(preset)
+                .into_iter()
+                .collect();
+            assert!(
+                validate_session(&session(vec![changer], vec![])).is_ok(),
+                "{}",
+                preset.id
+            );
+        }
+        for (name, value) in [
+            ("pitchSemitones", serde_json::json!(24)),
+            ("crushBits", serde_json::json!(6.5)),
+            ("scale", serde_json::json!("lydian")),
+            ("preset", serde_json::json!("spooky")),
+            ("volume", serde_json::json!(1)),
+        ] {
+            let mut changer = node("voice", NodeKind::FunVoiceChanger, PortDirection::Output);
+            changer.parameters.insert(name.into(), value);
+            assert!(
+                validate_session(&session(vec![changer], vec![])).is_err(),
+                "{name} accepted"
+            );
+        }
+    }
+
+    #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 34);
+        assert_eq!(registry.len(), 35);
+        let voice = registry
+            .iter()
+            .find(|spec| spec.kind == NodeKind::FunVoiceChanger)
+            .unwrap();
+        assert_eq!(voice.kind.type_name(), "fun-voice-changer");
+        assert_eq!(voice.latency_samples, VOICE_CHANGER_LATENCY_SAMPLES);
+        assert_eq!(voice.realtime_cost_class, "high");
         let physical = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::PhysicalInput)

@@ -20,3 +20,22 @@ fn long_handler_work_keeps_audio_service_passes_running() {
     }));
     assert!(panicked.is_err());
 }
+
+#[test]
+fn audio_health_is_absent_while_nothing_plays() {
+    assert_eq!(ControlPlane::default().audio_health(), None);
+}
+
+#[test]
+fn pump_error_categories_keep_variant_names_and_drop_private_text() {
+    let category = audio_pump_error_category(&ControlError::InvalidRequest(
+        "native input/output pump failed: Feeder(Audio(WindowsOperation { context: \"Microphone (PD200X)\", error: 0x88890004 }))".into(),
+    ));
+    assert_eq!(category, "Feeder(Audio(WindowsOperation ");
+    assert!(!category.contains("PD200X"));
+    let category = audio_pump_error_category(&ControlError::InvalidRequest(
+        "native multi-input worker is not running".into(),
+    ));
+    assert_eq!(category, "native multi-input worker is not running");
+    assert!(audio_pump_error_category(&ControlError::InvalidRequest("x".repeat(500))).len() <= 120);
+}

@@ -42,6 +42,7 @@ export type LibraryEntry = {
     | "networkSend"
     | "networkReceive"
     | "duck"
+    | "funVoiceChanger"
   >;
   /** Helper text shown as a tooltip and matched by search, even for an
    * available entry. Used to point at the free existing-endpoint path
@@ -214,7 +215,7 @@ export const libraryEntries: LibraryEntry[] = [
     category: "Effect",
     flow: "tool",
     kind: "duck",
-    note: "Turn this audio down automatically while another source is loud (for example game sound while you talk), or outside Siege rounds with Stats.cc. Choose the trigger in Properties.",
+    note: "Turn this audio down automatically while another source is loud (for example game sound while you talk), or in chosen Siege phases with Stats.cc. Choose the trigger in Properties.",
   },
   {
     id: "input-switch",
@@ -248,6 +249,14 @@ export const libraryEntries: LibraryEntry[] = [
   },
   { id: "graphic-eq", label: "Graphic EQ", category: "Effect", flow: "tool", kind: "graphicEq" },
   { id: "pitch", label: "Pitch shift", category: "Effect", flow: "tool", kind: "pitch" },
+  {
+    id: "fun-voice-changer",
+    label: "Fun Voice Changer",
+    category: "Effect",
+    flow: "tool",
+    kind: "funVoiceChanger",
+    note: "Playful voice presets you can tweak: pitch correct, deep, chipmunk, robot, monster, radio, whisper and more. Adds 21 ms delay; output is mono.",
+  },
 ];
 
 /** Cable entries become available once the cable status reports installed

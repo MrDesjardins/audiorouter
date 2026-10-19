@@ -18,6 +18,7 @@ const TOOL_ICONS: Record<string, ReactNode> = {
   denoise: "░",
   "speech-denoise": "☊",
   "spectral-gate": "▥",
+  "fun-voice-changer": "☺",
   "fir-filter": "⧉",
   "input-switch": "⇄",
   duck: <DuckGlyph className="tool-card-glyph" />,

@@ -16,6 +16,7 @@ pub fn slug(kind: &str) -> Option<&'static str> {
         "denoise" => "denoise",
         "speechDenoise" => "speech-denoise",
         "spectralGate" => "spectral-gate",
+        "funVoiceChanger" => "fun-voice-changer",
         "firFilter" => "fir-filter",
         "mute" => "mute",
         "inputSwitch" => "input-switch",

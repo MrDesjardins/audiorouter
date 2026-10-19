@@ -1491,7 +1491,15 @@
           "The same sound arrives later. Across these eight seconds a short delay is a small shift to the right; listen for the later start.";
       }
       if (type === "pitch") {
-        const multiplier = 2 ** (number(parameters.semitones, 7, -24, 24) / 12);
+        const multiplier =
+          2 **
+          (number(
+            parameters.semitones ?? parameters.pitchSemitones,
+            7,
+            -24,
+            24,
+          ) /
+            12);
         output = (t) => Math.sin(t * Math.PI * 32 * multiplier) * envelope(t);
         detail =
           "More waveform cycles in the same interval means higher pitch. The example is schematic.";

@@ -131,7 +131,7 @@
       "kind": "duck",
       "title": "Duck",
       "path": "tools/duck.html",
-      "propertyCount": 10,
+      "propertyCount": 11,
       "audioRelevant": true
     },
     {
@@ -153,6 +153,13 @@
       "title": "Meter",
       "path": "tools/meter.html",
       "propertyCount": 0,
+      "audioRelevant": true
+    },
+    {
+      "kind": "funVoiceChanger",
+      "title": "Fun Voice Changer",
+      "path": "tools/fun-voice-changer.html",
+      "propertyCount": 36,
       "audioRelevant": true
     },
     {

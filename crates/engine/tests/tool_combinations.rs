@@ -30,6 +30,7 @@ const TOOLS: &[NodeKind] = &[
     NodeKind::Denoise,
     NodeKind::SpeechDenoise,
     NodeKind::SpectralGate,
+    NodeKind::FunVoiceChanger,
     NodeKind::FirFilter,
     NodeKind::TimeShift,
     NodeKind::Mute,
@@ -170,6 +171,17 @@ fn tool(id: String, kind: NodeKind, (enabled, bypass): (bool, bool), chain_index
         }
         NodeKind::Duck => json!({ "trigger": "level", "keyNodeId": "src-b", "amountDb": 12.0 }),
         NodeKind::Gain => json!({ "gainDb": -3.0 }),
+        // A pitch preset and an effects-only preset, by position.
+        NodeKind::FunVoiceChanger => {
+            let preset = if chain_index % 2 == 0 {
+                "deep"
+            } else {
+                "radio"
+            };
+            serde_json::Value::Object(audiorouter_domain::voice_changer::voice_preset_parameters(
+                audiorouter_domain::voice_changer::voice_preset(preset).unwrap(),
+            ))
+        }
         _ => json!({}),
     };
     tool.parameters = serde_json::from_value(parameters).unwrap();

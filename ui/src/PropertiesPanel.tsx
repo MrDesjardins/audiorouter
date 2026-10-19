@@ -14,6 +14,7 @@ import { libraryEntries, toolDescription } from "./library";
 import { EditableNodeName } from "./EditableNodeName";
 import { HelpDisclosure } from "./HelpDisclosure";
 import { SpectralGateEditor } from "./SpectralGateEditor";
+import { FunVoiceChangerEditor } from "./FunVoiceChangerEditor";
 import { DynamicsEditor } from "./DynamicsEditor";
 import { DuckEditor } from "./DuckEditor";
 import { RecorderControls, RecordingFolderField } from "./RecorderControls";
@@ -336,6 +337,23 @@ export function PropertiesPanel({
             }
             disabled={!backend.connected}
             onChange={(changes) => {
+              for (const [name, value] of changes) changeNodeParameterOn(selectedNode.id, name, value);
+            }}
+          />
+        )}
+        {selectedNode.kind === "funVoiceChanger" && (
+          <FunVoiceChangerEditor
+            node={selectedNode}
+            presets={snapshot?.discovery?.presets?.voiceChanger ?? null}
+            telemetry={
+              liveDiagnostics?.nodeTelemetry.find((item) => item.nodeId === selectedNode.id)?.voiceChanger ?? null
+            }
+            running={sessionRunning}
+            processors={processors}
+            nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
+            connected={backend.connected}
+            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+            onApply={(changes) => {
               for (const [name, value] of changes) changeNodeParameterOn(selectedNode.id, name, value);
             }}
           />

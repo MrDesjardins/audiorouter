@@ -55,6 +55,12 @@ artifact directory when you need a standalone run without older artifacts.
   comparing every output sample with a reference transition waveform.
 - Time Shift: exact recorded history through live, pause, resume, back/forward
   ten seconds and live again, excluding only the documented jump fade.
+- Fun Voice Changer: pitch detection within 1 % (90–400 Hz), shifts and
+  correction within ten cents, no note warble at a scale boundary, formant
+  movement on a single resonance, exact neutral passthrough at the fixed
+  1,024-sample delay, hostile input finite and at most −1 dBFS, every preset
+  within ±3 dB of a synthetic voice, and live preset changes with no dropout
+  against a fresh-processor control.
 - Cross-cutting checks: finite output, bypass/null comparison, stereo isolation,
   and fresh/reset repeatability for stateful processors.
 - Connected pairs: every ordered combination of 17 built-ins (including

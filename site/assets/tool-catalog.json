@@ -1,5 +1,5 @@
 {
-  "nodeKinds": 34,
+  "nodeKinds": 35,
   "tools": [
     {
       "name": "Physical input",
@@ -210,6 +210,14 @@
       "guide": "tools/pitch.html"
     },
     {
+      "name": "Fun Voice Changer",
+      "category": "Time & pitch",
+      "description": "Turn your voice into a character with tweakable presets: pitch correct, deep, robot, radio and more.",
+      "icon": "☺",
+      "kind": "funVoiceChanger",
+      "guide": "tools/fun-voice-changer.html"
+    },
+    {
       "name": "Dehum",
       "category": "Cleanup",
       "description": "Reduce mains hum and harmonics at 50 or 60 Hz.",
@@ -282,5 +290,5 @@
       "guide": "tools/group.html"
     }
   ],
-  "guideCount": 35
+  "guideCount": 36
 }

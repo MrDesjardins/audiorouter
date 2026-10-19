@@ -57,6 +57,7 @@ const tools = [
   ["Delay", "Time & pitch", "Add a controlled delay from 0 to 1,000 ms."],
   ["Time Shift", "Time & pitch", "Pause, jump back or forward, and return to live audio with a bounded buffer."],
   ["Pitch", "Time & pitch", "Shift pitch by semitones and cents in a streaming processor."],
+  ["Fun Voice Changer", "Time & pitch", "Turn your voice into a character with tweakable presets: pitch correct, deep, robot, radio and more."],
   ["Dehum", "Cleanup", "Reduce mains hum and harmonics at 50 or 60 Hz."],
   ["Declick", "Cleanup", "Repair click and crackle transients."],
   ["Denoise", "Cleanup", "Learn a noise profile and reduce steady background noise."],
@@ -72,7 +73,7 @@ const tools = [
     "Input switch": "⇄", Gain: "◢", Volume: "◖", Mute: "⊘", Meter: "▥",
     "Parametric EQ": "⌁", "Graphic EQ": "▤", "Bass & Treble": "♮",
     "FIR Filter": "⧉", Compressor: "⤓", "Gate / Expander": "⊐", Limiter: "⊤",
-    Duck: "duck", Delay: "◷", "Time Shift": "↺", Pitch: "↟", Dehum: "≁",
+    Duck: "duck", Delay: "◷", "Time Shift": "↺", Pitch: "↟", "Fun Voice Changer": "☺", Dehum: "≁",
     Declick: "⌇", Denoise: "░", "Speech Denoise": "☊", "Spectral Gate": "▥",
     "VST Plugin": "plugin"
   };

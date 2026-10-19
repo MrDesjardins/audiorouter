@@ -38,9 +38,12 @@ for (const entry of libraryEntries.filter((entry) => entry.kind)) {
         if (parameter.name.endsWith(":") || parameter.name === "learning") continue;
         // Node references and the Duck trigger/phase choices live in the Duck
         // editor (duck-widget and duck-siege-round tests), not generic fields.
+        // A voice preset rewrites every setting (fun-voice-changer test).
         if (
           "reference" in parameter ||
-          (entry.kind === "duck" && ["trigger", "duckMenu", "duckPrep", "duckBetweenRounds"].includes(parameter.name))
+          (entry.kind === "duck" &&
+            ["trigger", "duckMenu", "duckPrep", "duckBetweenRounds", "duckAction"].includes(parameter.name)) ||
+          (entry.kind === "funVoiceChanger" && parameter.name === "preset")
         )
           continue;
         if (parameter.type === "number") {

@@ -126,7 +126,15 @@ Afterwards, copy the JSONL files from `%LOCALAPPDATA%\AudioRouter\logs`
 (or `%TEMP%\AudioRouter\logs` when LOCALAPPDATA is unavailable):
 
 - `shell.jsonl` and `shell.previous.jsonl`: desktop requests and outcomes.
-- `backend.jsonl` and `backend.previous.jsonl`: backend requests and outcomes.
+- `backend.jsonl` and `backend.previous.jsonl`: backend requests and outcomes,
+  plus one `"event": "audioHealth"` record a minute while a native route
+  plays. It holds the longest gap between audio service passes, the slowest
+  request (method name and duration) and how many requests took longer than
+  8 ms, failed service passes (`pumpErrors`, `lastPumpError` category), and
+  per input (node ID) the pickup delay and packets Windows flagged as
+  following lost data, and per physical output the queued audio, device
+  underruns and blocks dropped at a full queue. Counters are cumulative;
+  compare consecutive records to see when audio was lost.
 - `discovery.jsonl` and `discovery.previous.jsonl`: failed device reads,
   including endpoints skipped because they disappeared during enumeration.
 - `mcp-activity.jsonl`: assistant tool calls (tool name, safe argument

@@ -270,6 +270,8 @@ pub struct AudioBlockPool {
 pub struct AudioBlockRing {
     free: AudioBlockPool,
     ready: AudioBlockQueue,
+    /// Blocks a producer had to skip because every block was in use.
+    full_drops: AtomicU64,
 }
 
 impl AudioBlockRing {
@@ -277,7 +279,19 @@ impl AudioBlockRing {
         Ok(Self {
             free: AudioBlockPool::new(capacity, channels, frames)?,
             ready: AudioBlockQueue::new_for_shape(capacity, channels, frames)?,
+            full_drops: AtomicU64::new(0),
         })
+    }
+
+    /// Count one block a producer skipped because the ring was full (a
+    /// heard gap at the consumer). Lock-free; safe on the audio path.
+    pub fn record_full_drop(&self) {
+        self.full_drops.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Blocks skipped because the ring was full, since construction.
+    pub fn full_drops(&self) -> u64 {
+        self.full_drops.load(Ordering::Relaxed)
     }
 
     pub fn capacity(&self) -> usize {
@@ -2742,6 +2756,13 @@ pub enum ProcessingStage {
     TimeShift {
         state: Arc<TimeShiftState>,
     },
+    /// Fun Voice Changer (mono, fixed 1,024-sample delay). `state` is shared
+    /// across recompiles; `target` is this graph's settings, which the
+    /// processor glides toward.
+    FunVoiceChanger {
+        state: Arc<VoiceChangerState>,
+        target: Box<audiorouter_dsp::voice_changer::VoiceChangerParams>,
+    },
     /// Per-channel impulse-response convolution (disclosed one-block latency).
     Fir {
         left: Box<RealtimeDsp<audiorouter_dsp::spectral::Convolver>>,
@@ -3410,6 +3431,7 @@ impl RoundPhase {
 pub const ROUND_DUCK_MENU: u8 = 1 << 1;
 pub const ROUND_DUCK_PREP: u8 = 1 << 2;
 pub const ROUND_DUCK_BETWEEN_ROUNDS: u8 = 1 << 3;
+pub const ROUND_DUCK_ACTION: u8 = 1 << 4;
 
 /// A round phase not refreshed for this long releases a following Duck, so a
 /// stopped feed never leaves the game turned down. Publishers refresh it at
@@ -3602,6 +3624,120 @@ impl DuckState {
             }
         }
         self.output_level.observe(peak, frames, sample_rate);
+    }
+}
+
+/// Fun Voice Changer processor for one node. A live replacement of the
+/// graph (a parameter or preset change while playing) hands it to the new
+/// graph, so the pitch core keeps its buffers (a fresh core would drop 21 ms
+/// of audio) and glides to the new settings. A graph compiled on its own, or
+/// one where the node returns after bypass, disable or Stop, starts fresh,
+/// so no stale audio is heard.
+#[derive(Debug)]
+pub struct VoiceChangerState {
+    changer: RealtimeDsp<audiorouter_dsp::voice_changer::VoiceChanger>,
+}
+
+impl VoiceChangerState {
+    fn new() -> Self {
+        Self {
+            changer: RealtimeDsp::new(audiorouter_dsp::voice_changer::VoiceChanger::new()),
+        }
+    }
+
+    /// Latest pitch reading, or `None` while the audio thread holds it.
+    pub fn telemetry(&self) -> Option<audiorouter_dsp::voice_changer::VoiceChangerTelemetry> {
+        self.changer.try_with(|changer| changer.telemetry())
+    }
+}
+
+/// Typed Fun Voice Changer settings from a node's saved parameters. A
+/// missing or invalid value takes the neutral default from the domain table
+/// (validation has already rejected invalid saved values).
+pub fn voice_changer_params(
+    parameters: &serde_json::Map<String, serde_json::Value>,
+) -> audiorouter_dsp::voice_changer::VoiceChangerParams {
+    use audiorouter_domain::voice_changer::{voice_parameter, VoiceParameterValue};
+    use audiorouter_dsp::voice_changer::{ModulationType, VoiceScale};
+    let valid = |name: &str| {
+        parameters
+            .get(name)
+            .filter(|value| audiorouter_domain::voice_changer::valid_voice_parameter(name, value))
+    };
+    let number = |name: &str| -> f32 {
+        valid(name)
+            .and_then(serde_json::Value::as_f64)
+            .or_else(|| match voice_parameter(name).map(|spec| spec.default) {
+                Some(VoiceParameterValue::Number(number)) => Some(number),
+                _ => None,
+            })
+            .unwrap_or(0.0) as f32
+    };
+    let flag = |name: &str| {
+        valid(name)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    };
+    let text = |name: &str, fallback: &'static str| {
+        valid(name)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(fallback)
+            .to_owned()
+    };
+    let key = audiorouter_domain::voice_changer::VOICE_KEYS
+        .iter()
+        .position(|key| *key == text("key", "c"))
+        .unwrap_or(0) as u8;
+    let scale = match text("scale", "chromatic").as_str() {
+        "major" => VoiceScale::Major,
+        "minor" => VoiceScale::Minor,
+        "majorPentatonic" => VoiceScale::MajorPentatonic,
+        "minorPentatonic" => VoiceScale::MinorPentatonic,
+        "blues" => VoiceScale::Blues,
+        "monotone" => VoiceScale::Monotone,
+        _ => VoiceScale::Chromatic,
+    };
+    let mod_type = if text("modType", "chorus") == "flanger" {
+        ModulationType::Flanger
+    } else {
+        ModulationType::Chorus
+    };
+    audiorouter_dsp::voice_changer::VoiceChangerParams {
+        gate_db: number("gateDb"),
+        correct_enabled: flag("correctEnabled"),
+        key,
+        scale,
+        retune_ms: number("retuneMs"),
+        humanize_percent: number("humanizePercent"),
+        shift_enabled: flag("shiftEnabled"),
+        pitch_semitones: number("pitchSemitones"),
+        pitch_cents: number("pitchCents"),
+        formant_semitones: number("formantSemitones"),
+        ring_enabled: flag("ringEnabled"),
+        ring_hz: number("ringHz"),
+        ring_depth_percent: number("ringDepthPercent"),
+        crush_enabled: flag("crushEnabled"),
+        crush_bits: number("crushBits") as u8,
+        crush_downsample: number("crushDownsample") as u8,
+        drive_enabled: flag("driveEnabled"),
+        drive_percent: number("drivePercent"),
+        whisper_percent: number("whisperPercent"),
+        tone_enabled: flag("toneEnabled"),
+        low_cut_hz: number("lowCutHz"),
+        high_cut_hz: number("highCutHz"),
+        peak_hz: number("peakHz"),
+        peak_db: number("peakDb"),
+        mod_enabled: flag("modEnabled"),
+        mod_type,
+        mod_rate_hz: number("modRateHz"),
+        mod_depth_percent: number("modDepthPercent"),
+        mod_feedback_percent: number("modFeedbackPercent"),
+        space_enabled: flag("spaceEnabled"),
+        space_size_percent: number("spaceSizePercent"),
+        space_decay_ms: number("spaceDecayMs"),
+        space_level_percent: number("spaceLevelPercent"),
+        mix_percent: number("mixPercent"),
+        output_db: number("outputDb"),
     }
 }
 
@@ -4024,6 +4160,34 @@ impl CompiledMixerFanoutGraph {
             .find_map(|graph| graph.audio_file_source_for_node(node_id))
     }
 
+    /// Fun Voice Changer processor of a node in any chain.
+    pub fn voice_changer_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<VoiceChangerState>> {
+        self.processing_graph
+            .iter()
+            .chain(self.input_chains.iter().flatten().map(|chain| &chain.graph))
+            .chain(self.output_chains.iter().map(|chain| &chain.graph))
+            .find_map(|graph| graph.voice_changer_for_node(node_id))
+    }
+
+    /// Take over the Fun Voice Changer processors of the graph this one
+    /// replaces while playing, wherever each node now sits.
+    fn carry_voice_changers_from(&mut self, previous: &Self) {
+        let find =
+            |node_id: &audiorouter_domain::EntityId| previous.voice_changer_for_node(node_id);
+        if let Some(graph) = &mut self.processing_graph {
+            graph.carry_voice_changers(&find);
+        }
+        for chain in self.input_chains.iter_mut().flatten() {
+            chain.graph.carry_voice_changers(&find);
+        }
+        for chain in &mut self.output_chains {
+            chain.graph.carry_voice_changers(&find);
+        }
+    }
+
     /// Learned noise profile of a learning Denoise node in any chain.
     pub fn noise_profile_for_node(&self, node_id: &audiorouter_domain::EntityId) -> Option<String> {
         self.processing_graph
@@ -4132,6 +4296,7 @@ impl CompiledMixerFanoutGraph {
         let mut delivered = 0;
         for (index, destination) in destinations.iter().enumerate() {
             let Some(mut block) = destination.try_acquire() else {
+                destination.record_full_drop();
                 continue;
             };
             if self.map_output(index, &mut block, mixer_scratch).is_err() {
@@ -4192,6 +4357,7 @@ impl CompiledMixerFanoutGraph {
         let mut delivered = 0;
         for (index, (destination, tap_set)) in destinations.iter().zip(tap_sets).enumerate() {
             let Some(mut block) = destination.try_acquire() else {
+                destination.record_full_drop();
                 continue;
             };
             if self.map_output(index, &mut block, mixer_scratch).is_err() {
@@ -4385,7 +4551,8 @@ impl RealtimeMixerFanout {
         {
             return Err(MixerFanoutError::BranchCount);
         }
-        for (graph, path) in set.paths.into_iter().zip(&mut self.paths) {
+        for (mut graph, path) in set.paths.into_iter().zip(&mut self.paths) {
+            graph.carry_voice_changers_from(&path.graph);
             graph
                 .privacy_mute
                 .set_muted(path.graph.privacy_mute.is_muted());
@@ -4494,6 +4661,16 @@ impl RealtimeMixerFanout {
         self.paths
             .iter()
             .find_map(|path| path.graph.stage_timing_for_node(node_id))
+    }
+
+    /// Fun Voice Changer processor of a node in any path.
+    pub fn voice_changer_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<VoiceChangerState>> {
+        self.paths
+            .iter()
+            .find_map(|path| path.graph.voice_changer_for_node(node_id))
     }
 
     /// Learned noise profile of a learning Denoise node in any path.
@@ -5745,6 +5922,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         | NodeKind::SpeechDenoise
                         | NodeKind::FirFilter
                         | NodeKind::SpectralGate
+                        | NodeKind::FunVoiceChanger
                         | NodeKind::TimeShift
                         | NodeKind::Mute
                         | NodeKind::Meter
@@ -5770,6 +5948,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                             | NodeKind::SpeechDenoise
                             | NodeKind::FirFilter
                             | NodeKind::SpectralGate
+                            | NodeKind::FunVoiceChanger
                             | NodeKind::TimeShift
                             | NodeKind::Mute
                             | NodeKind::Meter
@@ -6009,11 +6188,11 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                         .clamp(*range.start(), *range.end()) as f32
                 };
                 let owner = owning_session_id(session.id.as_str());
-                let flag = |name: &str| {
+                let flag = |name: &str, default: bool| {
                     node.parameters
                         .get(name)
                         .and_then(|value| value.as_bool())
-                        .unwrap_or(true)
+                        .unwrap_or(default)
                 };
                 // Siege round mode follows the game phase instead of a node.
                 let round = (node
@@ -6023,13 +6202,15 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     == Some("siegeRound"))
                 .then(|| {
                     [
-                        ("duckMenu", ROUND_DUCK_MENU),
-                        ("duckPrep", ROUND_DUCK_PREP),
-                        ("duckBetweenRounds", ROUND_DUCK_BETWEEN_ROUNDS),
+                        ("duckMenu", true, ROUND_DUCK_MENU),
+                        ("duckPrep", true, ROUND_DUCK_PREP),
+                        ("duckBetweenRounds", true, ROUND_DUCK_BETWEEN_ROUNDS),
+                        // Off by default: a round being played stays at full volume.
+                        ("duckAction", false, ROUND_DUCK_ACTION),
                     ]
                     .into_iter()
-                    .filter(|(name, _)| flag(name))
-                    .fold(0u8, |mask, (_, bit)| mask | bit)
+                    .filter(|(name, default, _)| flag(name, *default))
+                    .fold(0u8, |mask, (_, _, bit)| mask | bit)
                 });
                 // No trigger chosen (or itself): the audio passes unchanged.
                 let key = node
@@ -6187,6 +6368,13 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     }
                 );
             }
+            NodeKind::FunVoiceChanger => push_stage!(
+                node_id,
+                ProcessingStage::FunVoiceChanger {
+                    state: Arc::new(VoiceChangerState::new()),
+                    target: Box::new(voice_changer_params(&node.parameters)),
+                }
+            ),
             NodeKind::FirFilter => {
                 let media = node
                     .parameters
@@ -7174,6 +7362,7 @@ fn compile_path_graph(
                 | NodeKind::SpeechDenoise
                 | NodeKind::FirFilter
                 | NodeKind::SpectralGate
+                | NodeKind::FunVoiceChanger
                 | NodeKind::TimeShift
                 | NodeKind::Mute
                 | NodeKind::Meter
@@ -8198,6 +8387,7 @@ fn is_chain_processor(kind: audiorouter_domain::NodeKind) -> bool {
             | NodeKind::SpeechDenoise
             | NodeKind::FirFilter
             | NodeKind::SpectralGate
+            | NodeKind::FunVoiceChanger
             | NodeKind::TimeShift
             | NodeKind::Mute
             | NodeKind::Meter
@@ -8367,7 +8557,11 @@ impl RuntimePublication {
 
     /// Publish a fully prepared graph. Existing readers continue using their
     /// old generation while new readers observe the replacement.
-    pub fn publish(&self, graph: RuntimeGraph) {
+    pub fn publish(&self, mut graph: RuntimeGraph) {
+        // A replacement while playing keeps each Fun Voice Changer's audio.
+        if let Some(previous) = self.current.load_full() {
+            graph.carry_voice_changers(&|node_id| previous.voice_changer_for_node(node_id));
+        }
         self.current.store(Some(std::sync::Arc::new(graph)));
     }
 
@@ -8513,6 +8707,16 @@ impl RuntimeProcessor {
         self.publication
             .load()
             .and_then(|graph| graph.plugin_health_for_node(node_id))
+    }
+
+    /// Fun Voice Changer processor of a node in the published graph.
+    pub fn voice_changer_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<VoiceChangerState>> {
+        self.publication
+            .load()
+            .and_then(|graph| graph.voice_changer_for_node(node_id))
     }
 
     /// Learned noise profile of a learning Denoise node in the published graph.
@@ -9256,6 +9460,37 @@ impl RuntimeGraph {
             .find_map(|(index, _)| self.processor_telemetry(index))
     }
 
+    /// The Fun Voice Changer processor of a node in this graph.
+    pub fn voice_changer_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<VoiceChangerState>> {
+        self.stage_node_ids
+            .iter()
+            .zip(&self.stages)
+            .find_map(|(candidate, stage)| match stage {
+                ProcessingStage::FunVoiceChanger { state, .. } if candidate == node_id => {
+                    Some(Arc::clone(state))
+                }
+                _ => None,
+            })
+    }
+
+    /// Take over, by node, the Fun Voice Changer processors `previous`
+    /// returns: called with the graph this one replaces while playing.
+    fn carry_voice_changers(
+        &mut self,
+        previous: &impl Fn(&audiorouter_domain::EntityId) -> Option<Arc<VoiceChangerState>>,
+    ) {
+        for (candidate, stage) in self.stage_node_ids.iter().zip(self.stages.iter_mut()) {
+            if let ProcessingStage::FunVoiceChanger { state, .. } = stage {
+                if let Some(carried) = previous(candidate) {
+                    *state = carried;
+                }
+            }
+        }
+    }
+
     /// The learned noise profile of a Denoise node that is currently
     /// learning (control thread; allocates the returned string). `None` when
     /// the node is not a learning Denoise or its state is momentarily busy.
@@ -9481,6 +9716,11 @@ impl RuntimeGraph {
                     }
                 }
                 ProcessingStage::TimeShift { .. } => {}
+                ProcessingStage::FunVoiceChanger { state, .. } => {
+                    if !reset_dsp(&state.changer, |changer| changer.reset()) {
+                        success = false;
+                    }
+                }
                 ProcessingStage::Fir { left, right } => {
                     for processor in [left, right] {
                         if !reset_dsp(processor, |convolver| convolver.reset()) {
@@ -9582,6 +9822,36 @@ impl RuntimeGraph {
                     }) {
                         Some(gain_db) => carry.publish(gain_db),
                         None => block.clear(),
+                    }
+                }
+                ProcessingStage::FunVoiceChanger { state, target } => {
+                    use audiorouter_dsp::voice_changer::VOICE_CHANGER_BLOCK_FRAMES;
+                    if block.frames() != VOICE_CHANGER_BLOCK_FRAMES || block.channels() == 0 {
+                        block.clear();
+                        continue;
+                    }
+                    // Mono: the voice is the channel average, written back
+                    // to every channel.
+                    let mut voice = [0.0_f32; VOICE_CHANGER_BLOCK_FRAMES];
+                    let channels = block.channels();
+                    for channel in 0..channels {
+                        if let Some(samples) = block.channel(channel) {
+                            for (sum, sample) in voice.iter_mut().zip(samples) {
+                                *sum += *sample / channels as f32;
+                            }
+                        }
+                    }
+                    let processed = state
+                        .changer
+                        .try_with(|changer| changer.process_block(target, &mut voice));
+                    if processed.is_none() {
+                        block.clear();
+                        continue;
+                    }
+                    for channel in 0..channels {
+                        if let Some(samples) = block.channel_mut(channel) {
+                            samples.copy_from_slice(&voice);
+                        }
                     }
                 }
                 ProcessingStage::TimeShift { state } => {
@@ -10798,36 +11068,46 @@ mod tests {
     #[test]
     fn round_duck_follows_ticked_game_phases_and_releases_when_the_feed_stops() {
         use audiorouter_domain::{EntityId, NodeKind};
-        let mut session = voice_and_game_session();
-        session.id = EntityId::new("duck-round-test");
-        let duck = session
-            .nodes
-            .iter_mut()
-            .find(|node| node.id.as_str() == "game-eq")
+        // One test owns the process-wide round signal, so both Ducks run here.
+        let compile = |flags: serde_json::Value| {
+            let mut session = voice_and_game_session();
+            session.id = EntityId::new("duck-round-test");
+            let duck = session
+                .nodes
+                .iter_mut()
+                .find(|node| node.id.as_str() == "game-eq")
+                .unwrap();
+            duck.kind = NodeKind::Duck;
+            // The key node is ignored in round mode.
+            let mut parameters = serde_json::json!({
+                "trigger": "siegeRound", "keyNodeId": "mic",
+                "amountDb": 20.0, "attackMs": 5.0, "releaseMs": 50.0
+            });
+            parameters
+                .as_object_mut()
+                .unwrap()
+                .extend(flags.as_object().unwrap().clone());
+            duck.parameters = serde_json::from_value(parameters).unwrap();
+            assert!(session_follows_game_round(&session));
+            let set = compile_native_paths_with_plugins_and_audio(
+                &session,
+                RuntimeGeneration::new(1),
+                &Default::default(),
+                &Default::default(),
+            )
             .unwrap();
-        duck.kind = NodeKind::Duck;
-        // Between rounds is left unticked; the key node is ignored in round mode.
-        duck.parameters = serde_json::from_value(serde_json::json!({
-            "trigger": "siegeRound", "keyNodeId": "mic", "duckBetweenRounds": false,
-            "amountDb": 20.0, "attackMs": 5.0, "releaseMs": 50.0
-        }))
-        .unwrap();
-        assert!(session_follows_game_round(&session));
-        let set = compile_native_paths_with_plugins_and_audio(
-            &session,
-            RuntimeGeneration::new(1),
-            &Default::default(),
-            &Default::default(),
-        )
-        .unwrap();
-        let game_path = set
-            .paths
-            .iter()
-            .position(|path| path.input_node_ids()[0].as_str() == "cable-b")
-            .unwrap();
+            let game_path = set
+                .paths
+                .iter()
+                .position(|path| path.input_node_ids()[0].as_str() == "cable-b")
+                .unwrap();
+            (set, game_path)
+        };
         let signal = siege_round_signal();
         let frames = PROCESSING_QUANTUM_FRAMES;
-        let run = |phase: Option<RoundPhase>, blocks: usize| {
+        let measure = |(set, game_path): &(CompiledPathSet, usize),
+                       phase: Option<RoundPhase>,
+                       blocks: usize| {
             let mut level = 0.0;
             for _ in 0..blocks {
                 if let Some(phase) = phase {
@@ -10837,15 +11117,19 @@ mod tests {
                 game.channel_mut(0).unwrap().fill(0.5);
                 game.channel_mut(1).unwrap().fill(0.5);
                 let mut scratch =
-                    AudioBlock::new(set.paths[game_path].mixer_channels(), frames).unwrap();
+                    AudioBlock::new(set.paths[*game_path].mixer_channels(), frames).unwrap();
                 let mut speakers = AudioBlock::new(2, frames).unwrap();
-                set.paths[game_path]
+                set.paths[*game_path]
                     .process(&[game], &mut scratch, &mut [&mut speakers])
                     .unwrap();
                 level = speakers.channel(0).unwrap()[frames - 1];
             }
             20.0 * (level / 0.5).log10()
         };
+        // Between rounds is left unticked; action uses its default (off).
+        let outside_rounds = compile(serde_json::json!({ "duckBetweenRounds": false }));
+        let run =
+            |phase: Option<RoundPhase>, blocks: usize| measure(&outside_rounds, phase, blocks);
         // Durations in seconds of audio.
         let blocks =
             |seconds: f32| (seconds * INTERNAL_SAMPLE_RATE_HZ as f32 / frames as f32) as usize;
@@ -10873,6 +11157,35 @@ mod tests {
         );
         assert!(run(None, blocks(1.1)).abs() < 0.01, "stale feed releases");
         assert!((run(Some(RoundPhase::Prep), blocks(1.0)) + 20.0).abs() < 0.05);
+        assert!(
+            run(Some(RoundPhase::Unknown), blocks(1.0)).abs() < 0.01,
+            "unknown state releases"
+        );
+
+        // "In a round, playing" only: ducks in action, full volume elsewhere.
+        let in_round = compile(serde_json::json!({
+            "duckMenu": false, "duckPrep": false, "duckBetweenRounds": false, "duckAction": true
+        }));
+        let run = |phase: Option<RoundPhase>, blocks: usize| measure(&in_round, phase, blocks);
+        assert!(
+            run(Some(RoundPhase::Prep), blocks(1.0)).abs() < 0.01,
+            "unticked prep releases"
+        );
+        assert!(
+            (run(Some(RoundPhase::Action), blocks(1.0)) + 20.0).abs() < 0.05,
+            "ticked action ducks by the Amount"
+        );
+        assert!(
+            run(Some(RoundPhase::Menu), blocks(1.0)).abs() < 0.01,
+            "unticked menu releases"
+        );
+        assert!((run(Some(RoundPhase::Action), blocks(1.0)) + 20.0).abs() < 0.05);
+        // 1 s stale window, then the release glide.
+        assert!(
+            run(None, blocks(2.0)).abs() < 0.01,
+            "stale feed releases in a round"
+        );
+        assert!((run(Some(RoundPhase::Action), blocks(1.0)) + 20.0).abs() < 0.05);
         assert!(
             run(Some(RoundPhase::Unknown), blocks(1.0)).abs() < 0.01,
             "unknown state releases"
@@ -14991,6 +15304,17 @@ mod tests {
         let second_block = second.try_receive().unwrap();
         assert_eq!(first_block.channel(0).unwrap(), &[1.5, 1.5]);
         assert_eq!(second_block.channel(0).unwrap(), &[1.5, 1.5]);
+        // Both blocks are still held, so the next quantum finds every output
+        // ring full: it is dropped and counted per ring.
+        assert_eq!((first.full_drops(), second.full_drops()), (0, 0));
+        runtime
+            .try_submit_input(0, RuntimeGeneration::new(91), &left)
+            .unwrap();
+        runtime
+            .try_submit_input(1, RuntimeGeneration::new(91), &right)
+            .unwrap();
+        assert_eq!(runtime.process_once(&[&first, &second]).unwrap(), 0);
+        assert_eq!((first.full_drops(), second.full_drops()), (1, 1));
 
         let mut built_in_session = session.clone();
         let built_in = built_in_session

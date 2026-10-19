@@ -18,6 +18,7 @@ describe("node library search", () => {
       "delay",
       "graphic-eq",
       "pitch",
+      "fun-voice-changer",
     ]);
     expect(filterLibraryEntries(libraryEntries, "verified running application").map((entry) => entry.id)).toEqual([]);
   });

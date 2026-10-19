@@ -8,6 +8,7 @@ mod pitch_shift;
 pub mod restoration;
 pub mod spectral;
 pub mod timeshift;
+pub mod voice_changer;
 
 #[cfg(test)]
 use std::f32::consts::PI;

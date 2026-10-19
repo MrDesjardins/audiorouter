@@ -70,6 +70,7 @@ pub(crate) fn node_template(kind: NodeKind) -> Option<(&'static str, Vec<Port>, 
         NodeKind::SpectralGate => tool("Spectral Gate", "Learns noise per frequency and blocks what stays below it."),
         NodeKind::FirFilter => tool("FIR Filter", "Applies a room or speaker impulse response."),
         NodeKind::TimeShift => tool("Time Shift", "A live-audio DVR: pause, jump back and return to live."),
+        NodeKind::FunVoiceChanger => tool("Fun Voice Changer", "Playful voice presets: pitch correct, deep, robot, radio and more; tweak any of them."),
         NodeKind::Plugin
         | NodeKind::ApplicationCapture
         | NodeKind::EndpointLoopback

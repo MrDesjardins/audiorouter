@@ -723,17 +723,40 @@ back after Hold and Release. Drag the orange line in its live view, or use the
 suggested level calculated from your voice and room noise. A dashed violet
 line on the canvas shows which node triggers it.
 
-### Turning the game down outside Siege rounds
+### Turning audio down by Siege round phase
 
 Set the Duck's **Trigger** to **Siege round (Stats.cc)** and tick the phases
-that should be quieter (menu, preparation, between rounds). With Stats.cc
-running and its game feed enabled once (`npm run setup:stats` in
+that should be quieter: menu, preparation and between rounds are ticked by
+default; **In a round, playing** is not. With Stats.cc running and its game
+feed enabled once (`npm run setup:stats` in
 `examples\integrations\stats-cc-siege`, then restart Stats.cc), AudioRouter
-connects to Stats.cc on this PC while you play: the game goes down by the
-Duck's amount outside rounds and back to full volume when a round starts. No
-script or API token is needed. If Stats.cc closes or reports nothing, the game
+connects to Stats.cc on this PC while you play. With the defaults, the game
+goes down by the Duck's amount outside rounds and back to full volume when a
+round starts. To turn something down *while* you play a round instead (for
+example music or a stream on another branch), tick only **In a round,
+playing**. No script or API token is needed. If Stats.cc closes or reports nothing, the game
 returns to full volume, and the Duck's status line says why. Phase changes are
 not saved as session edits.
+
+## Fun voices: pitch correct, robot, deep and more
+
+Add **Fun Voice Changer** after your microphone tools and before the output
+Discord (or OBS) uses as its microphone, then choose a **Preset**: Pitch
+Correct (subtle or hard, the tuned-vocal sound), Deep, Chipmunk, Monster,
+Child, Robot, Alien, Radio, Megaphone, Telephone, Whisper, Cave, or Custom
+(everything off). The inspector shows the preset's main sliders; open the
+sections below for every setting. Changing a setting marks the preset as
+edited, and **Reset to preset** restores it. While a pitch preset plays, the
+strip under the preset shows the note it hears.
+
+- The voice comes out 21 ms later and in mono, whatever the preset.
+- In Discord, set noise suppression to off (or Standard) for the cable input;
+  Krisp removes whispers and robot buzz.
+- Put **Denoise** before the voice changer if pitch correction warbles in a
+  noisy room.
+- Bypass skips the 21 ms delay, so the timing jumps; set **Mix** to 0 % to
+  compare with your normal voice instead.
+- It is a fun effect, not a disguise: people may still recognize your voice.
 
 ## Surround game audio on headphones
 

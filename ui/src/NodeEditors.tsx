@@ -17,7 +17,7 @@ import type { VirtualCableStatus } from "@audiorouter/contracts";
 import { cableEndpointName, cableUnavailableReason } from "./virtualCableStatus";
 
 /** Duck settings the Duck editor owns (trigger mode and Siege phases). */
-export const DUCK_EDITOR_PARAMETERS = new Set(["trigger", "duckMenu", "duckPrep", "duckBetweenRounds"]);
+export const DUCK_EDITOR_PARAMETERS = new Set(["trigger", "duckMenu", "duckPrep", "duckBetweenRounds", "duckAction"]);
 
 export function ProcessorParameterEditor({
   node,
@@ -27,6 +27,7 @@ export function ProcessorParameterEditor({
   pluginParameterError = null,
   connected,
   onChange,
+  only,
 }: {
   node: Node;
   processors: ProcessorDescriptor[] | null;
@@ -35,12 +36,16 @@ export function ProcessorParameterEditor({
   pluginParameterError?: string | null;
   connected: boolean;
   onChange: (name: string, value: boolean | number | string) => void;
+  /** Render only these parameters, in this order (a tool editor's section). */
+  only?: readonly string[];
 }) {
   const eqBackend = useContext(EqBackendContext);
   const pluginContext = useContext(PluginParameterContext);
   if (node.kind === "parametricEq")
     return <AdvancedEqEditor node={node} backend={eqBackend} connected={connected} onChange={onChange} />;
   if (node.kind === "graphicEq" || node.kind === "inputSwitch") return null;
+  // The Fun Voice Changer editor shows its settings by section.
+  if (node.kind === "funVoiceChanger" && !only) return null;
   pluginParameters ??= pluginContext.parameters;
   pluginParameterError ??= pluginContext.error;
   if (node.kind === "plugin") {
@@ -114,8 +119,10 @@ export function ProcessorParameterEditor({
       !(parameter.name === "learning" && (node.kind === "denoise" || node.kind === "spectralGate")) &&
       // Node references and the Duck trigger/phase choices have dedicated pickers in the Duck editor.
       !("reference" in parameter && parameter.reference) &&
-      !(node.kind === "duck" && DUCK_EDITOR_PARAMETERS.has(parameter.name)),
+      !(node.kind === "duck" && DUCK_EDITOR_PARAMETERS.has(parameter.name)) &&
+      (!only || only.includes(parameter.name)),
   );
+  if (only) parameters.sort((a, b) => only.indexOf(a.name) - only.indexOf(b.name));
   if (parameters.length === 0) return null;
   return (
     <>

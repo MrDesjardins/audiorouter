@@ -13,6 +13,7 @@ const PROCESSORS: &[NodeKind] = &[
     NodeKind::Denoise,
     NodeKind::SpeechDenoise,
     NodeKind::SpectralGate,
+    NodeKind::FunVoiceChanger,
     NodeKind::FirFilter,
     NodeKind::TimeShift,
     NodeKind::Mute,

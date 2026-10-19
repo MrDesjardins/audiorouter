@@ -6434,6 +6434,15 @@ impl WasapiOutputFanout {
         self.workers.iter().map(|worker| worker.underruns).collect()
     }
 
+    /// Blocks dropped per physical output because its ring was full (the
+    /// graph produced faster than the device played), since start.
+    pub fn output_full_drops(&self) -> Vec<u64> {
+        self.workers
+            .iter()
+            .map(|worker| worker.ring.full_drops())
+            .collect()
+    }
+
     /// Smoothed frames queued ahead of each physical output (render ring,
     /// partial block and device buffer), in physical output order.
     pub fn output_queue_frames(&self) -> Vec<Option<f64>> {
@@ -6472,6 +6481,8 @@ pub struct WasapiMultiInputFanout {
     pending_packet_offsets: Vec<usize>,
     /// Age of captured audio when it is picked up, per source (100 ns).
     input_waits: Vec<DelayEstimate>,
+    /// Packets Windows flagged as following lost capture data, per source.
+    input_discontinuities: Vec<u64>,
     source_blocks: Vec<audiorouter_engine::AudioBlock>,
     channels: Vec<usize>,
     quantum_frames: usize,
@@ -6523,6 +6534,7 @@ impl WasapiMultiInputFanout {
             capture_bytes,
             pending_packet_bytes,
             input_waits: vec![DelayEstimate::default(); source_channels.len()],
+            input_discontinuities: vec![0; source_channels.len()],
             pending_packet_offsets,
             source_blocks,
             channels,
@@ -6544,6 +6556,12 @@ impl WasapiMultiInputFanout {
 
     pub fn input_count(&self) -> usize {
         self.channels.len()
+    }
+
+    /// Packets flagged `AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY` per source
+    /// since start (the first packet of a stream usually carries it).
+    pub fn input_discontinuities(&self) -> &[u64] {
+        &self.input_discontinuities
     }
 
     pub fn mixer_mut(&mut self) -> &mut audiorouter_engine::RealtimeMixerFanout {
@@ -6616,6 +6634,13 @@ impl WasapiMultiInputFanout {
                         self.input_waits[index]
                             .observe(now.saturating_sub(packet.qpc_position) as f64);
                     }
+                }
+                if packet.flags
+                    & windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32
+                    != 0
+                {
+                    self.input_discontinuities[index] =
+                        self.input_discontinuities[index].saturating_add(1);
                 }
                 self.pending_packet_bytes[index] = packet_bytes;
                 self.pending_packet_offsets[index] = 0;
@@ -7219,6 +7244,25 @@ impl NativeMultiInputWorker {
         self.feeder.input_wait_ms()
     }
 
+    /// Capture packets flagged as following lost data, in input order.
+    pub fn input_discontinuities(&self) -> Vec<u64> {
+        self.feeder.input_discontinuities().to_vec()
+    }
+
+    /// Device-buffer underruns per physical output, in output order.
+    pub fn output_underruns_per_output(&self) -> Vec<u64> {
+        self.outputs
+            .as_ref()
+            .map_or_else(Vec::new, WasapiOutputFanout::output_underruns)
+    }
+
+    /// Blocks dropped at a full output ring per physical output, in output order.
+    pub fn output_full_drops(&self) -> Vec<u64> {
+        self.outputs
+            .as_ref()
+            .map_or_else(Vec::new, WasapiOutputFanout::output_full_drops)
+    }
+
     /// Counters of a Network Receive source, by input index.
     pub fn network_receive_stats(&self, input: usize) -> Option<crate::NetworkReceiveStats> {
         match self.captures.get(input)? {
@@ -7304,6 +7348,14 @@ impl NativeMultiInputWorker {
         node_id: &audiorouter_domain::EntityId,
     ) -> Option<audiorouter_engine::PluginWorkerHealth> {
         self.feeder.mixer().plugin_health_for_node(node_id)
+    }
+
+    /// Fun Voice Changer processor of a node in the Mixer graph.
+    pub fn voice_changer_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<std::sync::Arc<audiorouter_engine::VoiceChangerState>> {
+        self.feeder.mixer().voice_changer_for_node(node_id)
     }
 
     /// Learned noise profile of a learning Denoise node in the Mixer graph.
@@ -9875,6 +9927,7 @@ mod tests {
         struct Source {
             samples: [f32; 2],
             reported_frames: u32,
+            flags: u32,
         }
         impl AudioCaptureSource for Source {
             fn next_packet_into(
@@ -9890,7 +9943,7 @@ mod tests {
                 Ok(Some((
                     CapturePacket {
                         frames: self.reported_frames,
-                        flags: 0,
+                        flags: self.flags,
                         device_position: 0,
                         qpc_position: 0,
                     },
@@ -9901,10 +9954,13 @@ mod tests {
         let left = Source {
             samples: [0.25, 0.25],
             reported_frames: 2,
+            flags: 0,
         };
+        // Windows reports lost data before this input's packet.
         let right = Source {
             samples: [0.5, 0.5],
             reported_frames: 2,
+            flags: windows::Win32::Media::Audio::AUDCLNT_BUFFERFLAGS_DATA_DISCONTINUITY.0 as u32,
         };
         let captures: [&dyn AudioCaptureSource; 2] = [&left, &right];
         struct CountingTap(std::sync::atomic::AtomicUsize);
@@ -9932,6 +9988,7 @@ mod tests {
         assert_eq!(result.packets, 2);
         assert_eq!(result.processed_quanta, 2);
         assert_eq!(delivered, 2);
+        assert_eq!(feeder.input_discontinuities(), &[0, 1]);
         assert_eq!(first_tap.0.load(std::sync::atomic::Ordering::Relaxed), 1);
         assert_eq!(second_tap.0.load(std::sync::atomic::Ordering::Relaxed), 1);
         feeder.reset();
@@ -9999,6 +10056,7 @@ mod tests {
         let malformed = Source {
             samples: [0.25, 0.25],
             reported_frames: 1,
+            flags: 0,
         };
         let malformed_captures: [&dyn AudioCaptureSource; 2] = [&malformed, &right];
         assert!(matches!(

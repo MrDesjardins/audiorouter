@@ -1334,6 +1334,7 @@ fn effect_bypass_nulls_against_input_including_high_latency_tools() {
         NodeKind::SpeechDenoise,
         NodeKind::FirFilter,
         NodeKind::SpectralGate,
+        NodeKind::FunVoiceChanger,
         NodeKind::TimeShift,
         NodeKind::ParametricEq,
         NodeKind::GraphicEq,

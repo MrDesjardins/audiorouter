@@ -36,6 +36,7 @@ const visualTypes = {
   limiter: "limiter",
   delay: "delay",
   pitch: "pitch",
+  funVoiceChanger: "pitch",
   dehum: "dehum",
   declick: "declick",
   denoise: "denoise",
@@ -116,6 +117,11 @@ const demos = {
   ],
   delay: [["delayMs", "Delay", 0, 1000, 0, 10, "ms"]],
   pitch: [["semitones", "Pitch", -12, 12, 0, 1, "semitones"]],
+  funVoiceChanger: [
+    ["pitchSemitones", "Pitch", -12, 12, -5, 1, "st"],
+    ["formantSemitones", "Formant", -12, 12, -3, 1, "st"],
+    ["ringDepthPercent", "Robot buzz", 0, 100, 0, 5, "%"],
+  ],
   duck: [["amountDb", "Target attenuation", 0, 40, 6, 1, "dB"]],
   testSignal: [
     ["frequencyHz", "Frequency", 100, 3000, 440, 20, "Hz"],
@@ -149,6 +155,7 @@ const audioKinds = new Set([
   "limiter",
   "delay",
   "pitch",
+  "funVoiceChanger",
   "dehum",
   "declick",
   "denoise",

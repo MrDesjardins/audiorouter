@@ -25,6 +25,7 @@
       "DSP-17",
       "DSP-18",
       "DSP-19",
+      "DSP-20",
       "GRAPH-04"
     ],
     "sources": [
@@ -1798,7 +1799,18 @@
           "increase": "On reduces this branch during preparation.",
           "decrease": "Off leaves preparation at normal volume.",
           "example": "Enable for a quieter operator-selection period.",
-          "caution": "Action always releases the round-triggered Duck."
+          "caution": "Only used in Siege round trigger mode."
+        },
+        {
+          "key": "duckAction",
+          "label": "In a round, playing",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Whether a round being played engages Siege round Duck.",
+          "increase": "On reduces this branch while you play a round.",
+          "decrease": "Off leaves rounds at normal volume.",
+          "example": "Enable on a music or stream branch to quiet it while you play.",
+          "caution": "Off by default, so the game itself stays at full volume during rounds."
         },
         {
           "key": "duckBetweenRounds",
@@ -1833,8 +1845,8 @@
           "title": "Follow Siege phases",
           "steps": [
             "Choose the Siege round trigger and run the configured Stats.cc local feed.",
-            "Choose the menu, preparation and between-round phase flags.",
-            "Check the feed state; action and unavailable feed states play at full volume."
+            "Tick the phases to turn down: menu, preparation and between rounds by default, or In a round, playing to quiet music while you play.",
+            "Check the feed state; unticked phases and an unavailable feed play at full volume."
           ]
         }
       ],
@@ -2041,6 +2053,565 @@
         "docs/spec/07-processing.md",
         "ui/src/parameterText.ts",
         "ui/src/NodeEditors.tsx"
+      ]
+    },
+    {
+      "kind": "funVoiceChanger",
+      "title": "Fun Voice Changer",
+      "purpose": "Turn your voice into a character with presets you can tweak.",
+      "concept": "Pick a preset such as Pitch Correct, Deep, Robot or Radio, then adjust any of its settings. Pitch correction pulls your voice to the notes of a scale; pitch and formant shifting change how high and how big the voice sounds; ring modulation, bit crushing, saturation, whisper, tone, modulation and space add character.",
+      "signalBehavior": "The tool always delays the voice by 21 ms, whichever preset is active, and outputs the same voice on both channels. A safety limiter keeps peaks below −1 dBFS. It is a fun effect, not voice anonymization: people may still recognize you.",
+      "properties": [
+        {
+          "key": "preset",
+          "label": "Preset",
+          "type": "string",
+          "default": "custom",
+          "options": [
+            "pitchCorrectSubtle",
+            "pitchCorrectHard",
+            "deep",
+            "chipmunk",
+            "monster",
+            "child",
+            "robot",
+            "alien",
+            "radio",
+            "megaphone",
+            "telephone",
+            "whisper",
+            "cave",
+            "custom"
+          ],
+          "meaning": "The starting voice. Choosing one writes all of its settings at once.",
+          "increase": "Pick a character such as Robot or Deep.",
+          "decrease": "Choose Custom to start with every effect off.",
+          "example": "Start from Pitch Correct (hard) for the tuned-vocal sound.",
+          "caution": "After you change a setting the preset shows as edited; Reset to preset restores it."
+        },
+        {
+          "key": "gateDb",
+          "label": "Noise gate",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -90,
+          "maximum": -20,
+          "default": -90,
+          "meaning": "Mutes sound quieter than this before the effects.",
+          "increase": "Ignores more room and keyboard noise.",
+          "decrease": "Lets quieter sounds through; −90 dB is off.",
+          "example": "Try −55 dB with a headset microphone.",
+          "caution": "Too high cuts the start and end of words."
+        },
+        {
+          "key": "correctEnabled",
+          "label": "Pitch correction",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Pulls the voice to the nearest note of the scale.",
+          "increase": "On: notes snap toward the scale.",
+          "decrease": "Off: the voice keeps its own pitch.",
+          "example": "Turn it on and sing a scale slowly.",
+          "caution": "Needs a clear, voiced sound; noise and whispers are left alone."
+        },
+        {
+          "key": "key",
+          "label": "Key",
+          "type": "string",
+          "default": "c",
+          "options": [
+            "c",
+            "cs",
+            "d",
+            "ds",
+            "e",
+            "f",
+            "fs",
+            "g",
+            "gs",
+            "a",
+            "as",
+            "b"
+          ],
+          "meaning": "The key of the correction scale.",
+          "increase": "Choose the key of the song you sing along to.",
+          "decrease": "Chromatic ignores the key.",
+          "example": "C major fits many simple melodies.",
+          "caution": "With Monotone the key is the one note held."
+        },
+        {
+          "key": "scale",
+          "label": "Scale",
+          "type": "string",
+          "default": "chromatic",
+          "options": [
+            "chromatic",
+            "major",
+            "minor",
+            "majorPentatonic",
+            "minorPentatonic",
+            "blues",
+            "monotone"
+          ],
+          "meaning": "Which notes correction may use.",
+          "increase": "Narrower scales jump between fewer notes.",
+          "decrease": "Chromatic allows every note.",
+          "example": "Monotone with retune 0 ms gives a flat robot voice.",
+          "caution": "A scale that does not match the song pulls notes to wrong pitches."
+        },
+        {
+          "key": "retuneMs",
+          "label": "Retune speed",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 400,
+          "default": 50,
+          "meaning": "How quickly a note is pulled into tune.",
+          "increase": "Slower, more natural correction.",
+          "decrease": "Faster correction; 0 ms snaps instantly.",
+          "example": "0 ms for the hard tuned-vocal effect; 80 ms for subtle help.",
+          "caution": "Very slow retune barely changes short notes."
+        },
+        {
+          "key": "humanizePercent",
+          "label": "Humanize",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "meaning": "Loosens correction on held notes.",
+          "increase": "Long notes keep more natural vibrato.",
+          "decrease": "Held notes stay locked to the note.",
+          "example": "Try 40 % for subtle correction.",
+          "caution": "Has no effect while retune speed is 0 ms."
+        },
+        {
+          "key": "shiftEnabled",
+          "label": "Pitch and formant",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Turns the pitch and formant shift on.",
+          "increase": "On: Pitch and Formant apply.",
+          "decrease": "Off: the voice keeps its pitch and size.",
+          "example": "Turn it on for Deep, Chipmunk or Monster.",
+          "caution": "Large shifts can sound buzzy; that is part of the fun."
+        },
+        {
+          "key": "pitchSemitones",
+          "label": "Pitch",
+          "type": "number",
+          "unit": "st",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "meaning": "Moves the voice up or down in semitones.",
+          "increase": "Higher voice; 12 is one octave up.",
+          "decrease": "Lower voice; −12 is one octave down.",
+          "example": "−5 for a deep voice, +7 for a chipmunk.",
+          "caution": "The words keep their timing; only the note changes."
+        },
+        {
+          "key": "pitchCents",
+          "label": "Fine pitch",
+          "type": "number",
+          "unit": "cents",
+          "minimum": -100,
+          "maximum": 100,
+          "default": 0,
+          "meaning": "Small pitch steps added to Pitch.",
+          "increase": "Slightly higher.",
+          "decrease": "Slightly lower.",
+          "example": "100 cents is one semitone.",
+          "caution": "Useful for detuned, wobbly characters."
+        },
+        {
+          "key": "formantSemitones",
+          "label": "Formant",
+          "type": "number",
+          "unit": "st",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "meaning": "Changes the size of the voice without changing its note.",
+          "increase": "Smaller, younger-sounding voice.",
+          "decrease": "Bigger, darker voice.",
+          "example": "Combine −3 formant with −5 pitch for Deep.",
+          "caution": "Moving formants far from the pitch shift sounds unnatural."
+        },
+        {
+          "key": "ringEnabled",
+          "label": "Ring modulator",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Multiplies the voice by a tone.",
+          "increase": "On: metallic, robotic or alien sound.",
+          "decrease": "Off: no ring modulation.",
+          "example": "Robot uses 50 Hz at 70 % depth.",
+          "caution": "High frequencies make words harder to understand."
+        },
+        {
+          "key": "ringHz",
+          "label": "Ring frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 2000,
+          "default": 50,
+          "meaning": "Frequency of the modulating tone.",
+          "increase": "Bell-like, alien sound.",
+          "decrease": "Low buzz.",
+          "example": "30–80 Hz for robots, 300 Hz for aliens.",
+          "caution": "Around 100–200 Hz the voice can sound out of tune."
+        },
+        {
+          "key": "ringDepthPercent",
+          "label": "Ring depth",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "meaning": "How much ring-modulated sound replaces the voice.",
+          "increase": "Stronger effect.",
+          "decrease": "More of the normal voice.",
+          "example": "Start at 50 %.",
+          "caution": "100 % replaces the voice entirely."
+        },
+        {
+          "key": "crushEnabled",
+          "label": "Bit crusher",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Lowers audio quality on purpose.",
+          "increase": "On: grainy, digital sound.",
+          "decrease": "Off: clean sound.",
+          "example": "Telephone uses 12 bits and downsample 6.",
+          "caution": "Strong settings add harsh noise."
+        },
+        {
+          "key": "crushBits",
+          "label": "Bits",
+          "type": "number",
+          "minimum": 4,
+          "maximum": 16,
+          "default": 16,
+          "meaning": "Resolution of the crushed sound.",
+          "increase": "Cleaner; 16 is clean.",
+          "decrease": "Grainier distortion.",
+          "example": "Try 8 bits for an old game console.",
+          "caution": "Below 6 bits words become hard to follow."
+        },
+        {
+          "key": "crushDownsample",
+          "label": "Downsample",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 12,
+          "default": 1,
+          "meaning": "Holds each sample for longer.",
+          "increase": "Lo-fi, muffled and aliased.",
+          "decrease": "Closer to the original; 1 is off.",
+          "example": "6 gives about an 8 kHz phone sound.",
+          "caution": "Adds metallic aliasing tones."
+        },
+        {
+          "key": "driveEnabled",
+          "label": "Saturation",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Distorts the voice.",
+          "increase": "On: grit, radio or megaphone sound.",
+          "decrease": "Off: no distortion.",
+          "example": "Megaphone uses 70 % drive.",
+          "caution": "Distortion adds loudness; check the output level."
+        },
+        {
+          "key": "drivePercent",
+          "label": "Drive",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "meaning": "How hard the voice is pushed into distortion.",
+          "increase": "More distortion.",
+          "decrease": "Cleaner.",
+          "example": "30 % for a radio, 70 % for a megaphone.",
+          "caution": "Output is levelled automatically, but very high drive still sounds louder."
+        },
+        {
+          "key": "whisperPercent",
+          "label": "Whisper",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "meaning": "Replaces the voiced tone with breath.",
+          "increase": "More breathy whisper.",
+          "decrease": "More normal voice; 0 % is off.",
+          "example": "100 % for a full whisper.",
+          "caution": "Discord's noise suppression may remove whispered sound."
+        },
+        {
+          "key": "toneEnabled",
+          "label": "Tone",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Turns the tone filters on.",
+          "increase": "On: low cut, high cut and peak apply.",
+          "decrease": "Off: full range.",
+          "example": "Radio uses 300–3,000 Hz.",
+          "caution": "Narrow ranges sound thin; that is the point for radio and phone."
+        },
+        {
+          "key": "lowCutHz",
+          "label": "Low cut",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 2000,
+          "default": 20,
+          "meaning": "Removes bass below this frequency.",
+          "increase": "Thinner sound.",
+          "decrease": "More bass.",
+          "example": "300 Hz for radio.",
+          "caution": "Has no effect while Tone is off."
+        },
+        {
+          "key": "highCutHz",
+          "label": "High cut",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 1000,
+          "maximum": 20000,
+          "default": 20000,
+          "meaning": "Removes treble above this frequency.",
+          "increase": "Brighter sound.",
+          "decrease": "Duller, more muffled sound.",
+          "example": "3,000 Hz for radio.",
+          "caution": "Has no effect while Tone is off."
+        },
+        {
+          "key": "peakHz",
+          "label": "Peak frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 200,
+          "maximum": 8000,
+          "default": 1000,
+          "meaning": "Where the tone peak acts.",
+          "increase": "Brighter, thinner character.",
+          "decrease": "Warmer, boxier character.",
+          "example": "2 kHz for a honky megaphone.",
+          "caution": "Has no effect while Peak is 0 dB."
+        },
+        {
+          "key": "peakDb",
+          "label": "Peak",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "meaning": "Boost or cut at the peak frequency.",
+          "increase": "Stronger honk at that frequency.",
+          "decrease": "Cuts that frequency.",
+          "example": "+6 dB at 2 kHz for a megaphone.",
+          "caution": "Large boosts can sound harsh."
+        },
+        {
+          "key": "modEnabled",
+          "label": "Modulation",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Turns chorus or flanger on.",
+          "increase": "On: doubled or sweeping sound.",
+          "decrease": "Off: no modulation.",
+          "example": "Alien uses chorus; Robot uses flanger.",
+          "caution": "Modulation smears speech slightly."
+        },
+        {
+          "key": "modType",
+          "label": "Modulation type",
+          "type": "string",
+          "default": "chorus",
+          "options": ["chorus", "flanger"],
+          "meaning": "Chorus doubles the voice; flanger sweeps it.",
+          "increase": "Flanger for a jet-like sweep.",
+          "decrease": "Chorus for a thick, doubled voice.",
+          "example": "Flanger with feedback for robots.",
+          "caution": "Switching type fades the effect out and in."
+        },
+        {
+          "key": "modRateHz",
+          "label": "Rate",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 0.05,
+          "maximum": 5,
+          "default": 0.5,
+          "meaning": "How fast the modulation sweeps.",
+          "increase": "Faster wobble.",
+          "decrease": "Slower sweep.",
+          "example": "0.2 Hz for a slow robot sweep.",
+          "caution": "Fast rates sound seasick."
+        },
+        {
+          "key": "modDepthPercent",
+          "label": "Depth",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "meaning": "How wide the modulation sweeps.",
+          "increase": "Stronger effect.",
+          "decrease": "Subtler effect.",
+          "example": "60 % for an alien shimmer.",
+          "caution": "Has no effect while Modulation is off."
+        },
+        {
+          "key": "modFeedbackPercent",
+          "label": "Feedback",
+          "type": "number",
+          "unit": "%",
+          "minimum": -90,
+          "maximum": 90,
+          "default": 0,
+          "meaning": "Flanger only: feeds the sweep back.",
+          "increase": "Ringing, metallic sweeps.",
+          "decrease": "Negative values invert the ring.",
+          "example": "50 % for a robot.",
+          "caution": "Ignored by chorus."
+        },
+        {
+          "key": "spaceEnabled",
+          "label": "Space",
+          "type": "boolean",
+          "default": false,
+          "meaning": "Adds a room or cave echo.",
+          "increase": "On: echo around the voice.",
+          "decrease": "Off: dry voice.",
+          "example": "Cave uses a large, long space.",
+          "caution": "Echo makes speech harder to follow in fast talk."
+        },
+        {
+          "key": "spaceSizePercent",
+          "label": "Room size",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "meaning": "Size of the simulated room.",
+          "increase": "Bigger, more distant space.",
+          "decrease": "Smaller, closer room.",
+          "example": "90 % for a cave.",
+          "caution": "Has no effect while Space is off."
+        },
+        {
+          "key": "spaceDecayMs",
+          "label": "Echo length",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 200,
+          "maximum": 4000,
+          "default": 1000,
+          "meaning": "How long the echo takes to fade.",
+          "increase": "Longer echo.",
+          "decrease": "Shorter echo.",
+          "example": "2,500 ms for a cave.",
+          "caution": "Long echoes build up during continuous speech."
+        },
+        {
+          "key": "spaceLevelPercent",
+          "label": "Echo level",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 30,
+          "meaning": "How loud the echo is.",
+          "increase": "More echo.",
+          "decrease": "Less echo.",
+          "example": "50 % for a cave.",
+          "caution": "Has no effect while Space is off."
+        },
+        {
+          "key": "mixPercent",
+          "label": "Mix",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "meaning": "Blend between the changed and the normal voice.",
+          "increase": "Only the changed voice at 100 %.",
+          "decrease": "More of your normal voice; 0 % is unchanged.",
+          "example": "Use 0 % to compare without the timing jump of Bypass.",
+          "caution": "Mixing a shifted voice with the original sounds like two voices."
+        },
+        {
+          "key": "outputDb",
+          "label": "Output",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 12,
+          "default": 0,
+          "meaning": "Level after the effects.",
+          "increase": "Louder.",
+          "decrease": "Quieter.",
+          "example": "Presets set this so each voice matches your normal level.",
+          "caution": "A safety limiter keeps peaks below −1 dBFS."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Sound like a tuned vocal",
+          "steps": [
+            "Choose Pitch Correct (hard).",
+            "Set Key and Scale to the song, or leave Chromatic.",
+            "Sing slowly; raise Retune speed for a more natural sound."
+          ]
+        },
+        {
+          "title": "Make a robot",
+          "steps": [
+            "Choose Robot.",
+            "Lower Ring frequency for a deeper buzz.",
+            "Reduce Bits for a rougher, older machine."
+          ]
+        },
+        {
+          "title": "Use it in Discord",
+          "steps": [
+            "Put Fun Voice Changer between your microphone chain and the cable Discord uses as its microphone.",
+            "In Discord, turn noise suppression off or to Standard for that input.",
+            "Ask a friend whether the level matches your normal voice; adjust Output."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Discord's noise suppression can remove whisper and robot buzz; turn it off for the cable input.",
+        "Monitoring your own changed voice while talking is distracting because it arrives late.",
+        "Bypass skips the 21 ms delay, so the timing jumps; compare with Mix at 0 % instead."
+      ],
+      "suggestedVisual": {
+        "type": "pitch",
+        "title": "Your voice, reshaped",
+        "description": "Show the voice's harmonics moving with Pitch while the formant envelope moves with Formant.",
+        "accessibility": "User-controlled play and pause; respects prefers-reduced-motion; keyboard-operable sliders; text explanation and labelled static alternative. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/domain/src/voice_changer.rs",
+        "crates/dsp/src/voice_changer.rs",
+        "docs/spec/07-processing.md",
+        "ui/src/parameterText.ts",
+        "ui/src/FunVoiceChangerEditor.tsx"
       ]
     }
   ]

@@ -15,6 +15,7 @@ const TOOL_GUIDES: Record<string, string> = {
   denoise: "denoise",
   speechDenoise: "speech-denoise",
   spectralGate: "spectral-gate",
+  funVoiceChanger: "fun-voice-changer",
   firFilter: "fir-filter",
   mute: "mute",
   inputSwitch: "input-switch",

@@ -3431,6 +3431,7 @@ mod tests {
                 "duck",
                 "denoise",
                 "firFilter",
+                "funVoiceChanger",
                 "gate",
                 "graphicEq",
                 "inputSwitch",

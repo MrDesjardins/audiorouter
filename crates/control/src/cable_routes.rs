@@ -225,6 +225,7 @@ const CABLE_ROUTE_TOOLS: &[NodeKind] = &[
     NodeKind::Denoise,
     NodeKind::SpeechDenoise,
     NodeKind::SpectralGate,
+    NodeKind::FunVoiceChanger,
     NodeKind::FirFilter,
     NodeKind::TimeShift,
     NodeKind::Mute,

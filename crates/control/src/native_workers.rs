@@ -1061,7 +1061,8 @@ impl ControlPlane {
                 });
                 let noise_profile = processor.noise_profile_for_node(&node.id);
                 let spectrum = processor.spectrum_levels_for_node(&node.id);
-                if meter.is_none() && processor_telemetry.is_none() && plugin_health.is_none() && noise_profile.is_none() && spectrum.is_none() {
+                let voice = voice_changer_telemetry(processor.voice_changer_for_node(&node.id));
+                if meter.is_none() && processor_telemetry.is_none() && plugin_health.is_none() && noise_profile.is_none() && spectrum.is_none() && voice.is_none() {
                     return None;
                 }
                 let mut item = json!({
@@ -1076,6 +1077,9 @@ impl ControlPlane {
                 }
                 if let Some(levels) = spectrum {
                     item["spectrum"] = spectrum_telemetry(&levels);
+                }
+                if let Some(voice) = voice {
+                    item["voiceChanger"] = voice;
                 }
                 Some(item)
             })
@@ -1242,10 +1246,12 @@ impl ControlPlane {
                     });
                 let noise_profile = worker.noise_profile_for_node(&node.id);
                 let spectrum = worker.spectrum_levels_for_node(&node.id);
+                let voice = voice_changer_telemetry(worker.voice_changer_for_node(&node.id));
                 if processor_telemetry.is_none()
                     && plugin_health.is_none()
                     && noise_profile.is_none()
                     && spectrum.is_none()
+                    && voice.is_none()
                     && timing.is_none()
                     && meter.is_none()
                     && network.is_none()
@@ -1267,6 +1273,9 @@ impl ControlPlane {
                 }
                 if let Some(levels) = spectrum {
                     item["spectrum"] = spectrum_telemetry(&levels);
+                }
+                if let Some(voice) = voice {
+                    item["voiceChanger"] = voice;
                 }
                 if let Some(timing) = timing {
                     item["timing"] = timing;

@@ -292,6 +292,7 @@ impl ControlPlane {
             endpoint_monitor: None,
             pending_endpoint_changes: Vec::new(),
             audio_service: AudioServiceStats::default(),
+            last_audio_pump_error: None,
             native_endpoint_worker: None,
             native_endpoint_session: None,
             native_endpoint_worker_secondary: None,

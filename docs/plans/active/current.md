@@ -1,5 +1,198 @@
 # Active plan — post-0.0.8 maintenance
 
+## Fun Voice Changer tool — 2026-10-18, owner requested ("lets build it now") (in progress)
+
+Promoted from [future/voice-effects.md](../future/voice-effects.md), which
+holds the full design (signal chain, 36 parameters, 14 presets, runtime
+state registry, test list T1–T8, risks). New requirement DSP-20; one new
+`NodeKind::FunVoiceChanger`, existing tools unchanged. Owner decisions:
+single tool with tweakable presets, approved preset set, ≤ 25 ms added
+delay. Implementation finding: `microfft`'s `rfft_2048` compiles with the
+existing `size-1024` feature but panics at run time (its twiddle table is
+one entry short), so `crates/dsp/Cargo.toml` now enables `size-2048`
+(additive; existing tools unchanged, all 80 DSP tests pass).
+
+Progress: `crates/dsp/src/voice_changer.rs` done: McLeod pitch tracker,
+pitch correction with note hysteresis and humanize, TD-PSOLA with grain
+resampling for formants, ring modulator, bit crusher, saturation, LPC
+whisper, tone filters, chorus/flanger, 8-line FDN space, existing
+`PeakLimiter` as the −1 dBFS safety limiter, fixed 1,024-sample delay. 15
+offline tests pass, including detection within 1 % (90–400 Hz), shifts within
+10 cents (±12 st), correction within 10 cents, no note warble at a boundary,
+formant peak moved by 2^(±5/12) within 8 %, exact neutral passthrough,
+constant delay, hostile input finite and ≤ −1 dBFS, click-free preset change.
+Lessons from the tests: PSOLA output is normalised by a 10 ms average of the
+window overlap (an instantaneous divide reshaped the waveform and cancelled
+the formant shift upward); a perfectly periodic vowel's glottal pulse
+dominates its spectrum, so formant movement is tested on a single
+resonance.
+
+Implemented end to end (2026-10-18), with two deviations from the design:
+- State handoff: not a global (session, node) registry like Time Shift's.
+  Independently compiled graphs of the same session would share one
+  processor (tests and any concurrent compile). Instead a live replacement
+  carries the processor by node: `RealtimeMixerFanout::replace_paths`
+  (every input, output and processing chain) and
+  `RuntimePublication::publish`. A graph compiled on its own, or a node back
+  from bypass/disable/Stop, starts fresh, so no reset flag is needed.
+  Telemetry follows the existing per-node accessor chain.
+- Parameter table and presets live in `crates/domain/src/voice_changer.rs`
+  (domain does not depend on dsp); validation, the catalog schema,
+  `presets.voiceChanger` and the engine all read it. Five presets carry an
+  `outputDb` so every preset is within ±3 dB of the input on a synthetic
+  voice (robot +7, alien +5, whisper +8, radio −3, megaphone −3).
+
+Files: `crates/dsp/src/voice_changer.rs`, `crates/domain/src/voice_changer.rs`
+and `lib.rs` (kind, registry, latency 1,024, validation), engine stage and
+carry (`crates/engine/src/lib.rs`), catalog/schema/simple/cable routes/
+telemetry (`crates/control`), CLI list, contracts, UI (`draft.ts`,
+`library.ts`, `parameterText.ts`, `FunVoiceChangerEditor.tsx` with tests,
+`NodeEditors.tsx` `only` filter, canvas/workbench/guide link tables,
+`styles.css`), shell guide slug, site guide (content, tutorial, synthetic
+sung-voice demo, catalog), spec DSP-20, API reference and quickstart.
+
+Validation (Windows host, 2026-10-18): DSP 15 voice-changer tests (80 in the
+crate); domain 3 new; engine `tests/voice_changer.rs` 6 (fixed delay, live
+preset change without dropout and a fresh-processor control, no stale audio
+after bypass, independent compiles isolated, presets within ±3 dB,
+telemetry) plus the kind in `tool_combinations`, `tool_routes`,
+`cable_route`, bypass-null and the bench; workspace and `src-tauri` Clippy
+`-D warnings` and fmt clean; control 254, shell 83, UI 547 unit tests;
+ESLint 0 errors, Prettier clean; Edge `fun-voice-changer` 4 (three themes
+reviewed, no layout shift on edit, Reset, Custom); `site/check-guides.mjs`
+36 guides; Firefox guide audio sweep for the new guide OK. Full Edge suite
+(2 workers, below-normal priority, while the owner played): first run 3
+failures, two stale for the new tool (`tool-workflows` drove the preset
+select as a generic field, now skipped there since a preset rewrites every
+setting; guide index count 35 → 36) and one load flake in `audio-tools`
+(passed alone); rerun 281 passed, 9 skipped. Review build
+`target/reviews/voice-changer-20261018/release/audiorouter-shell.exe`
+(incremental from a copy of `audio-health-20261018`, `-j 6` below normal;
+`ui/dist` rebuilt first and its bundle name `index-Y_5EWqXj.js` found in the
+exe). Owner tried the review build on 2026-10-18: "Seems to work" (first
+impression; no preset tuning feedback yet). Not done yet: the
+sine-continuity harness through the tool on a live route (needs the owner's
+route stopped), and the owner's attended listening and preset tuning (T8).
+
+Order: DSP core with offline tests → domain/engine/control → UI → site and
+docs → live checks and a review build (owner's shell is not stopped) →
+attended preset tuning. Rollback: remove the kind; saved sessions holding it
+would fail validation in builds without it.
+
+## Scratchy Discord voices after an overnight run — 2026-10-18, owner report (open)
+
+Report: after ~15 h of playing (review build `duck-in-round-20261017`,
+session `patrick-main-siege-footstep`, window open, Siege off), people in
+Discord sounded very scratchy. Stop/Play and the window's Reconnect did not
+help; killing the shell and starting it again did. Requirements NFR-06
+(long-run stability), OPS logging.
+
+Evidence gathered (Windows host, 2026-10-18, on the restarted app):
+- `backend.jsonl` for the overnight process (PID 50928, 20:10→11:02): no
+  errors, no restarts, no device changes; edits until 20:22, then only the
+  quit. The log held no audio-health data at all, so it cannot show when or
+  where audio was lost.
+- Clock drift ruled out: a scratch shared-mode probe (packet device position
+  vs QPC, 120 s) measured mic, CABLE, CABLE-A, CABLE-B and Discord's process
+  loopback within 0.2 ppm, Scarlett within 1–3 ppm (<0.1 s over 15 h).
+- Discord did not restart overnight (running since 2026-10-17 13:17).
+- The round Duck holds the last Stats.cc phase; no round overnight.
+- Fresh run: requests ≤1 ms each, backend thread 1.3 % busy (35 req/s),
+  shell memory/handles and WebView2 memory flat over minutes, diagnostics
+  payload fixed at 13.6 KB. `devices.list` ~10 ms, `sessions.list` 9–26 ms
+  (each blocks the audio thread; the 8 ms late-gap threshold).
+- Stop/Play rebuilds the whole native worker, so the bad state survives
+  outside it (control thread, process-wide state, or the WebView).
+- Found: the backend audio pass discarded multi-input pump errors
+  (`let _ =`); a persistently failing input would end every pass before the
+  outputs drain, unseen.
+
+Change (observability, not yet a fix): a once-a-minute `audioHealth`
+record in `backend.jsonl` while a native route plays (written by the logger
+thread): longest gap between service passes, longest pass, slowest request
+and its method, requests over 8 ms, pump error count and last category, per
+input pickup delay and `DATA_DISCONTINUITY` packets, per physical output
+queued ms, underruns and blocks dropped at a full ring (newly counted in
+`AudioBlockRing::full_drops`). Tests: logger thread writes the record
+(`backend_logger_thread_writes_commits_and_skips_routine_read_successes`),
+full-ring drops counted (`mixer_fanout_runs_bound_plugin_before_every_branch`),
+discontinuities counted (`multi_input_feeder_submits_coherent_sources_to_both_outputs`),
+error categories drop private text, no record while nothing plays.
+
+Reproduced 2026-10-18 ~17:00 (owner in a Discord call, Siege running,
+review build `audio-health-20261018`, PID 50896):
+- Trigger: CPU starvation. From 16:30, only in minutes when the agent was
+  compiling/testing (all cores busy), `system.diagnostics` took 15–170 ms
+  (normally ~1 ms) and the longest service-pass gap matched it; outputs
+  logged underruns and full-ring drops, Discord's process-loopback capture
+  (`application-capture-1`) lost nothing. The audio pump shares the
+  normal-priority control thread, so CPU load starves it.
+- Lasting fault: after the builds stopped, counters were flat again (no
+  late gaps, underruns or drops) yet the owner still heard static on
+  Discord voices. Stop/Play reset every delay to normal (Discord pickup
+  22.6 → 10.9 ms, Siege 98 → 12.5 ms) but not the static. Quitting and
+  restarting the shell fixed it, as overnight.
+- Located: a 10.6 s Recorder take of `mixer-3` (Discord capture + raw mic,
+  before `duck-2` → `mixer-2` → `voice-monitor`) had no clicks, gaps or
+  clipping (one noise burst was an "s", 4–8 kHz). So the static is added on
+  the output side, by state that survives Stop/Play but not a process
+  restart. Ruled out: Duck gain carry and `NodeLevel` (weak entries freed on
+  Stop), `RingOutputPump` (per worker), Siege phase flapping (steady
+  `action`), clipping (no clipped samples on the path).
+
+Offline reproduction attempt (2026-10-18 evening, owner's route stopped,
+debug harness build): `live_backend_service_keeps_a_routed_tone_continuous`
+gained `AUDIOROUTER_CONTINUITY_SOURCE=selfApplication` (a helper copy of the
+test binary plays the tone and the route application-captures it; capturing
+the test process itself fed the route's own output back and produced
+regular false glitches), `AUDIOROUTER_CONTINUITY_STRESS=<start>,<s>,<threads>`
+(normal-priority busy threads) and `AUDIOROUTER_CONTINUITY_RESTART_AT=<s>`
+(Stop, detach, prepare, start, as the UI's Play), plus glitches per 5 s.
+CABLE-B Input is now 8-channel (Siege surround), so the run used tone →
+CABLE-B Input, route app capture → Duck → Mixer (+ silent Test Signal) →
+CABLE Input, result from CABLE Output. Baseline 30 s: 0 glitches. 150 s with
+48 busy threads (24 logical CPUs) at 20–65 s and Stop/Play at 85 s: 6
+glitches plus short silent runs during the load, 2 at the restart, none
+before or after. The lasting fault did not reproduce on this simple route.
+Not yet covered: several sources on different clocks (the 8-channel
+`siege-in` with surround-to-headphones), a round-mode Duck, connected Mixers
+and the Spectral Gate. Note `siege-in` pickup sat at ~98 ms from 12:28 until
+the owner's Stop/Play, after a 31 ms `applications.list` stall, so a short
+stall can leave an input in a lasting state.
+
+Next: (1) reproduce offline, without the owner: route a test tone (or the
+sine-continuity harness) through an application-capture → Duck → Mixer →
+output path, saturate the CPU for a few minutes, stop the load, and check
+whether the output stays corrupted after Stop/Play; diff process-wide state
+(audio service thread, timer resolution, WASAPI sessions, static
+registries). (2) Prevention regardless of the root cause: run the audio
+service on its own thread with MMCSS "Pro Audio" priority so requests and
+CPU load cannot starve it. (3) Agent rule meanwhile: no heavy builds while
+the owner is in a call on the running app. Rollback: revert; the records are
+additive.
+
+## Duck: "In a round, playing" phase — 2026-10-17, owner requested
+
+Owner: "The Duck tool for Siege should have one option to Duck when In a
+Round Playing." Requirement DSP-19. A round-following Duck could only turn
+audio down outside rounds (menu, preparation, between rounds); `action`
+always released. New boolean `duckAction` (default **false**, so saved Ducks
+keep their behavior): engine mask bit `ROUND_DUCK_ACTION`, domain
+validation, catalog/schema, Properties checkbox "In a round, playing"
+(listed in game order), spec 07, quickstart and the Duck website guide.
+Unknown, stale or disconnected feed state still releases.
+
+Validation (Windows host): `round_duck_follows_…` extended with an
+action-only Duck (ducks in action; releases in prep, menu, stale and
+unknown); workspace tests passed except one unrelated
+`sender_clock_drift_is_absorbed…` timing failure, which passed on rerun;
+Clippy `-D warnings` and fmt clean; UI 541 unit tests, ESLint 0 errors,
+Prettier clean; Edge `duck-siege-round`, `duck-widget`, `tool-workflows`
+36 passed; dark/light/high-contrast screenshots reviewed; contract drift,
+`site/check-guides.mjs` and docs validation passed. Not done: an attended
+match with Stats.cc. Rollback: revert; a saved `duckAction` would then be
+rejected by validation, so untick it before downgrading.
+
 ## Release 0.0.18 — 2026-10-17, owner requested ("publish a new version with all these fixes")
 
 **Published** 2026-10-17 19:55 UTC as an experimental prerelease from tag

@@ -381,7 +381,27 @@ fn describe_exposes_versions_methods_limits_and_unavailable_nodes() {
         .iter()
         .any(|node| node["type"] == "virtual-render-source@1"
             && node["availability"]["status"] == "unavailable"));
-    assert_eq!(description["processors"].as_array().unwrap().len(), 18);
+    assert_eq!(description["processors"].as_array().unwrap().len(), 19);
+    let voice_presets = description["presets"]["voiceChanger"].as_array().unwrap();
+    assert_eq!(
+        voice_presets.len(),
+        audiorouter_domain::voice_changer::VOICE_PRESETS.len()
+    );
+    let robot = voice_presets
+        .iter()
+        .find(|preset| preset["id"] == "robot")
+        .unwrap();
+    assert_eq!(robot["parameters"]["preset"], "robot");
+    assert_eq!(robot["parameters"]["scale"], "monotone");
+    assert_eq!(robot["parameters"]["mixPercent"], 100);
+    let voice_node = description["nodeTypes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|node| node["type"] == "fun-voice-changer@1")
+        .unwrap();
+    assert_eq!(voice_node["latencySamples"], 1_024);
+    assert_eq!(voice_node["parameters"].as_array().unwrap().len(), 36);
     assert_eq!(
         description["processors"][0]["availability"]["status"],
         "available"
@@ -478,7 +498,7 @@ fn describe_exposes_versions_methods_limits_and_unavailable_nodes() {
         params: None,
     });
     let result = processors.result.unwrap();
-    assert_eq!(result.as_array().unwrap().len(), 18);
+    assert_eq!(result.as_array().unwrap().len(), 19);
     assert_eq!(result[0]["availability"]["status"], "available");
 }
 

@@ -177,9 +177,10 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                                 "required": ["id", "version", "name", "description"],
                                 "additionalProperties": false
                             }
-                        }
+                        },
+                        "voiceChanger": voice_changer_presets_schema()
                     },
-                    "required": ["voiceChains", "eq"],
+                    "required": ["voiceChains", "eq", "voiceChanger"],
                     "additionalProperties": false
                 },
                 "limits": {
@@ -1141,9 +1142,10 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                         "required": ["id", "version", "name", "description"],
                         "additionalProperties": false
                     }
-                }
+                },
+                "voiceChanger": voice_changer_presets_schema()
             },
-            "required": ["voiceChains", "eq"],
+            "required": ["voiceChains", "eq", "voiceChanger"],
             "additionalProperties": false
         }),
         "processors.list" => json!({
@@ -1984,6 +1986,34 @@ pub(crate) fn node_type_item_schema() -> Value {
         },
         "required": ["type", "availability", "realtimeCostClass", "latencySamples", "parameters"],
         "additionalProperties": false
+    })
+}
+
+/// Fun Voice Changer presets: each carries every parameter it writes.
+pub(crate) fn voice_changer_presets_schema() -> Value {
+    json!({
+        "type": "array",
+        "maxItems": audiorouter_domain::voice_changer::VOICE_PRESETS.len(),
+        "items": {
+            "type": "object",
+            "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "version": { "type": "integer", "minimum": 1 },
+                "name": { "type": "string", "minLength": 1 },
+                "description": { "type": "string", "minLength": 1 },
+                "basicParameters": {
+                    "type": "array",
+                    "maxItems": audiorouter_domain::voice_changer::VOICE_CHANGER_PARAMETERS.len(),
+                    "items": { "type": "string", "minLength": 1 }
+                },
+                "parameters": {
+                    "type": "object",
+                    "maxProperties": audiorouter_domain::voice_changer::VOICE_CHANGER_PARAMETERS.len() + 1
+                }
+            },
+            "required": ["id", "version", "name", "description", "basicParameters", "parameters"],
+            "additionalProperties": false
+        }
     })
 }
 

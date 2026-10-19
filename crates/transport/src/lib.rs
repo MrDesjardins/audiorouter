@@ -92,6 +92,13 @@ struct BackendLogEntry {
     duration_micros: u64,
 }
 
+/// One record for the backend logger thread.
+enum BackendLogRecord {
+    Rpc(BackendLogEntry),
+    /// A ready-made `audioHealth` record (see [`AudioHealthInterval`]).
+    Health(serde_json::Value),
+}
+
 /// Queued records before new ones are dropped. A burst larger than this is
 /// lost from the log rather than slowing the control plane.
 const BACKEND_LOG_QUEUE: usize = 256;
@@ -110,19 +117,43 @@ fn backend_log_directory() -> Option<std::path::PathBuf> {
 fn spawn_backend_rpc_logger(
     directory: std::path::PathBuf,
 ) -> Option<(
-    std::sync::mpsc::SyncSender<BackendLogEntry>,
+    std::sync::mpsc::SyncSender<BackendLogRecord>,
     std::thread::JoinHandle<()>,
 )> {
-    let (sender, receiver) = std::sync::mpsc::sync_channel::<BackendLogEntry>(BACKEND_LOG_QUEUE);
+    let (sender, receiver) = std::sync::mpsc::sync_channel::<BackendLogRecord>(BACKEND_LOG_QUEUE);
     let handle = std::thread::Builder::new()
         .name("audiorouter-backend-log".into())
         .spawn(move || {
-            for entry in receiver {
-                write_backend_rpc_log(&directory, &entry);
+            for record in receiver {
+                match record {
+                    BackendLogRecord::Rpc(entry) => write_backend_rpc_log(&directory, &entry),
+                    BackendLogRecord::Health(record) => {
+                        append_backend_log_records(&directory, &[record])
+                    }
+                }
             }
         })
         .ok()?;
     Some((sender, handle))
+}
+
+/// The process-wide queue of the backend logger thread, started on first use.
+fn backend_log_sink() -> Option<&'static std::sync::mpsc::SyncSender<BackendLogRecord>> {
+    static SINK: std::sync::OnceLock<Option<std::sync::mpsc::SyncSender<BackendLogRecord>>> =
+        std::sync::OnceLock::new();
+    SINK.get_or_init(|| {
+        backend_log_directory()
+            .and_then(spawn_backend_rpc_logger)
+            .map(|(sender, _detached)| sender)
+    })
+    .as_ref()
+}
+
+fn unix_time_ms() -> u128 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or_default()
 }
 
 /// Control-plane-side request summaries for attended desktop diagnosis.
@@ -135,35 +166,119 @@ fn log_backend_rpc(
     verbose: bool,
     duration: std::time::Duration,
 ) {
-    static SINK: std::sync::OnceLock<Option<std::sync::mpsc::SyncSender<BackendLogEntry>>> =
-        std::sync::OnceLock::new();
-    let sink = SINK.get_or_init(|| {
-        backend_log_directory()
-            .and_then(spawn_backend_rpc_logger)
-            .map(|(sender, _detached)| sender)
-    });
-    let Some(sender) = sink else { return };
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|elapsed| elapsed.as_millis())
-        .unwrap_or_default();
-    let _ = sender.try_send(BackendLogEntry {
+    let Some(sender) = backend_log_sink() else {
+        return;
+    };
+    let _ = sender.try_send(BackendLogRecord::Rpc(BackendLogEntry {
         frame: frame.to_vec(),
         responses: responses.to_vec(),
-        now_ms,
+        now_ms: unix_time_ms(),
         verbose,
         duration_micros: u64::try_from(duration.as_micros()).unwrap_or(u64::MAX),
-    });
+    }));
+}
+
+/// How often the serve loop writes an `audioHealth` record while audio plays.
+pub const AUDIO_HEALTH_LOG_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Control-thread measurements between two `audioHealth` records: the
+/// longest gap between audio service passes, the slowest request (the usual
+/// reason for a gap) and how many requests held the thread longer than a
+/// late gap. Only a slow request's method name allocates.
+#[derive(Debug, Default)]
+pub struct AudioHealthInterval {
+    last_pass: Option<std::time::Instant>,
+    max_pass_gap: std::time::Duration,
+    max_pass: std::time::Duration,
+    slow_requests: u64,
+    slowest_request: std::time::Duration,
+    slowest_method: Option<String>,
+}
+
+impl AudioHealthInterval {
+    /// Note one dispatched request. Only a request slower than a late gap is
+    /// decoded for its method name, so routine requests cost nothing extra.
+    pub fn request(&mut self, frame: &[u8], duration: std::time::Duration) {
+        if duration <= audiorouter_control::AUDIO_SERVICE_LATE_GAP {
+            return;
+        }
+        self.slow_requests = self.slow_requests.saturating_add(1);
+        if duration > self.slowest_request {
+            self.slowest_request = duration;
+            self.slowest_method = audiorouter_protocol::decode_frame::<serde_json::Value>(frame)
+                .ok()
+                .and_then(|value| value.get("method")?.as_str().map(str::to_owned))
+                .map(|method| method.chars().take(96).collect());
+        }
+    }
+
+    /// Note one service pass that started at `start` and took `duration`.
+    pub fn pass(
+        &mut self,
+        start: std::time::Instant,
+        duration: std::time::Duration,
+        running: bool,
+    ) {
+        if !running {
+            self.last_pass = None;
+            return;
+        }
+        if let Some(previous) = self.last_pass {
+            self.max_pass_gap = self
+                .max_pass_gap
+                .max(start.saturating_duration_since(previous));
+        }
+        self.max_pass = self.max_pass.max(duration);
+        self.last_pass = Some(start);
+    }
+
+    /// The `audioHealth` record for this interval with the plane's counters,
+    /// then a fresh interval (the pass series continues).
+    pub fn take_record(&mut self, plane_health: serde_json::Value) -> serde_json::Value {
+        let ms = |duration: std::time::Duration| (duration.as_secs_f64() * 10_000.0).round() / 10.0;
+        let record = serde_json::json!({
+            "timeUnixMs": unix_time_ms(),
+            "processId": std::process::id(),
+            "version": env!("CARGO_PKG_VERSION"),
+            "buildId": option_env!("AUDIOROUTER_BUILD_ID").unwrap_or("development"),
+            "event": "audioHealth",
+            "intervalSeconds": AUDIO_HEALTH_LOG_INTERVAL.as_secs(),
+            "maxPassGapMs": ms(self.max_pass_gap),
+            "maxPassMs": ms(self.max_pass),
+            "slowRequests": self.slow_requests,
+            "slowestRequestMs": ms(self.slowest_request),
+            "slowestRequestMethod": self.slowest_method,
+            "plane": plane_health,
+        });
+        *self = Self {
+            last_pass: self.last_pass,
+            ..Self::default()
+        };
+        record
+    }
+}
+
+/// Queue one `audioHealth` record for the logger thread (dropped if full).
+fn log_audio_health(record: serde_json::Value) {
+    if let Some(sender) = backend_log_sink() {
+        let _ = sender.try_send(BackendLogRecord::Health(record));
+    }
 }
 
 fn write_backend_rpc_log(directory: &std::path::Path, entry: &BackendLogEntry) {
-    use std::io::Write;
     let records = backend_rpc_log_records(
         &entry.frame,
         &entry.responses,
         entry.now_ms,
         entry.verbose.then_some(entry.duration_micros),
     );
+    append_backend_log_records(directory, &records);
+}
+
+/// Append records to `backend.jsonl`, rotating it at the size limit. Runs on
+/// the logger thread only.
+fn append_backend_log_records(directory: &std::path::Path, records: &[serde_json::Value]) {
+    use std::io::Write;
     if records.is_empty() {
         return;
     }
@@ -189,7 +304,7 @@ fn write_backend_rpc_log(directory: &std::path::Path, entry: &BackendLogEntry) {
         .open(path)
     {
         for record in records {
-            if serde_json::to_writer(&mut file, &record).is_ok() {
+            if serde_json::to_writer(&mut file, record).is_ok() {
                 let _ = file.write_all(b"\n");
             }
         }
@@ -492,15 +607,35 @@ fn backend_logger_thread_writes_commits_and_skips_routine_read_successes() {
         ("system.diagnostics", &failed),
     ] {
         sender
-            .send(BackendLogEntry {
+            .send(BackendLogRecord::Rpc(BackendLogEntry {
                 frame: frame(method),
                 responses: vec![response.clone()],
                 now_ms: 1,
                 verbose: false,
                 duration_micros: 0,
-            })
+            }))
             .unwrap();
     }
+    // A health record goes through the same thread and file.
+    let mut health = AudioHealthInterval::default();
+    let slow = frame("devices.list");
+    health.request(&slow, std::time::Duration::from_millis(30));
+    health.request(
+        &frame("system.diagnostics"),
+        std::time::Duration::from_millis(1),
+    );
+    let start = std::time::Instant::now();
+    health.pass(start, std::time::Duration::from_millis(2), true);
+    health.pass(
+        start + std::time::Duration::from_millis(40),
+        std::time::Duration::ZERO,
+        true,
+    );
+    sender
+        .send(BackendLogRecord::Health(
+            health.take_record(serde_json::json!({ "pumpErrors": 0 })),
+        ))
+        .unwrap();
     drop(sender);
     handle.join().unwrap();
     let log = std::fs::read_to_string(directory.join("backend.jsonl")).unwrap();
@@ -508,11 +643,23 @@ fn backend_logger_thread_writes_commits_and_skips_routine_read_successes() {
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(lines.len(), 2, "{log}");
+    assert_eq!(lines.len(), 3, "{log}");
     assert_eq!(lines[0]["method"], "graph.commit");
     assert_eq!(lines[1]["method"], "system.diagnostics");
     assert_eq!(lines[1]["outcome"], "error");
+    assert_eq!(lines[2]["event"], "audioHealth");
+    assert_eq!(
+        lines[2]["slowRequests"], 1,
+        "only requests over a late gap count"
+    );
+    assert_eq!(lines[2]["slowestRequestMethod"], "devices.list");
+    assert_eq!(lines[2]["slowestRequestMs"], 30.0);
+    assert_eq!(lines[2]["maxPassGapMs"], 40.0);
+    assert_eq!(lines[2]["maxPassMs"], 2.0);
+    assert_eq!(lines[2]["plane"]["pumpErrors"], 0);
     assert!(!log.contains("private"));
+    // The next interval starts empty.
+    assert_eq!(health.take_record(serde_json::json!({}))["slowRequests"], 0);
     std::fs::remove_dir_all(directory).unwrap();
 }
 
@@ -1631,6 +1778,9 @@ fn serve_control_plane_frames(
     observer: Option<&std::sync::mpsc::SyncSender<AudioServicePassTiming>>,
 ) {
     let origin = std::time::Instant::now();
+    // Periodic `audioHealth` records: where audio was lost on a long run.
+    let mut health = AudioHealthInterval::default();
+    let mut next_health = origin + AUDIO_HEALTH_LOG_INTERVAL;
     loop {
         let wait_start = observer.as_ref().map(|_| std::time::Instant::now());
         let mut dispatch = std::time::Duration::ZERO;
@@ -1638,13 +1788,12 @@ fn serve_control_plane_frames(
         match received.recv_timeout(AUDIO_SERVICE_INTERVAL) {
             Ok(request) => {
                 wait = wait_start.map(|start| start.elapsed()).unwrap_or_default();
-                let dispatch_start = observer.as_ref().map(|_| std::time::Instant::now());
+                let dispatch_start = std::time::Instant::now();
                 let result =
                     dispatch_control_frame(plane, grant, request.client_pid, &request.frame);
                 let _ = request.reply.send(result);
-                dispatch = dispatch_start
-                    .map(|start| start.elapsed())
-                    .unwrap_or_default();
+                dispatch = dispatch_start.elapsed();
+                health.request(&request.frame, dispatch);
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 wait = wait_start.map(|start| start.elapsed()).unwrap_or_default();
@@ -1653,6 +1802,14 @@ fn serve_control_plane_frames(
         }
         let service_start = std::time::Instant::now();
         let running = plane.service_running_native_audio(service_start) != 0;
+        health.pass(service_start, service_start.elapsed(), running);
+        if service_start >= next_health {
+            next_health = service_start + AUDIO_HEALTH_LOG_INTERVAL;
+            match plane.audio_health() {
+                Some(plane_health) => log_audio_health(health.take_record(plane_health)),
+                None => health = AudioHealthInterval::default(),
+            }
+        }
         if let Some(observer) = observer {
             let _ = observer.try_send(AudioServicePassTiming {
                 elapsed: service_start.saturating_duration_since(origin),

@@ -23,6 +23,7 @@ const TOOLS: &[NodeKind] = &[
     NodeKind::Denoise,
     NodeKind::SpeechDenoise,
     NodeKind::SpectralGate,
+    NodeKind::FunVoiceChanger,
     NodeKind::Pitch,
     NodeKind::ParametricEq,
     NodeKind::GraphicEq,

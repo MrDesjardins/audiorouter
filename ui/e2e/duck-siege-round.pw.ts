@@ -53,6 +53,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(editor).toContainText("Stats.cc: preparation.");
     await expect(editor.getByLabel("Menu and matchmaking")).toBeChecked();
     await expect(editor.getByLabel("Between rounds and results")).not.toBeChecked();
+    await expect(editor.getByLabel("In a round, playing")).not.toBeChecked();
     await expect(editor.getByLabel("Triggered by")).toHaveCount(0);
     await editor.scrollIntoViewIfNeeded();
     await editor.screenshot({ path: testInfo.outputPath(`duck-siege-round-${theme}.png`) });

@@ -2,6 +2,21 @@
 
 use super::*;
 
+/// Live pitch reading of a playing Fun Voice Changer for its tuner strip
+/// (DSP-20). `None` when the node has no running processor.
+pub(crate) fn voice_changer_telemetry(
+    state: Option<std::sync::Arc<audiorouter_engine::VoiceChangerState>>,
+) -> Option<Value> {
+    let reading = state?.telemetry()?;
+    let round = |value: f32| (f64::from(value) * 10.0).round() / 10.0;
+    Some(json!({
+        "voiced": reading.voiced,
+        "f0Hz": reading.voiced.then(|| round(reading.f0_hz)),
+        "note": reading.voiced.then_some(reading.note),
+        "cents": reading.voiced.then(|| round(reading.cents)),
+    }))
+}
+
 /// Live spectrum of a FIR Filter Hz node for its Properties graph: level per
 /// band (power dB, one decimal) and each band's centre frequency.
 pub(crate) fn spectrum_telemetry(levels: &audiorouter_engine::SpectrumLevels) -> Value {
@@ -51,7 +66,7 @@ impl ControlPlane {
             "methods": methods,
             "nodeTypes": nodes,
             "processors": Self::processor_catalog(),
-            "presets": { "voiceChains": voice_chains, "eq": eq },
+            "presets": { "voiceChains": voice_chains, "eq": eq, "voiceChanger": Self::voice_changer_presets() },
             "limits": {
                 "maxNodesPerSession": audiorouter_domain::MAX_NODES_PER_SESSION,
                 "maxEdgesPerSession": audiorouter_domain::MAX_EDGES_PER_SESSION,
@@ -185,6 +200,7 @@ impl ControlPlane {
             ]),
             // `keyNodeId` names another node of the same session; "reference":
             // "node" tells clients to offer node names and send the node ID.
+            audiorouter_domain::NodeKind::FunVoiceChanger => Self::voice_changer_parameters(),
             audiorouter_domain::NodeKind::Duck => json!([
                 { "name": "thresholdDb", "type": "number", "unit": "dBFS", "minimum": -80.0, "maximum": 0.0, "default": -35.0 },
                 { "name": "amountDb", "type": "number", "unit": "dB", "minimum": 0.0, "maximum": 40.0, "default": 6.0 },
@@ -195,7 +211,8 @@ impl ControlPlane {
                 { "name": "keyNodeId", "type": "string", "reference": "node" },
                 { "name": "duckMenu", "type": "boolean", "default": true },
                 { "name": "duckPrep", "type": "boolean", "default": true },
-                { "name": "duckBetweenRounds", "type": "boolean", "default": true }
+                { "name": "duckBetweenRounds", "type": "boolean", "default": true },
+                { "name": "duckAction", "type": "boolean", "default": false }
             ]),
             audiorouter_domain::NodeKind::Recorder => json!([
                 { "name": "format", "type": "string", "enum": ["wavPcm24", "wavPcm16", "wavFloat32", "flac24", "flac16", "mp3"], "default": "wavPcm24" },
@@ -222,6 +239,69 @@ impl ControlPlane {
             }]),
             _ => json!([]),
         }
+    }
+
+    /// Fun Voice Changer schema from the domain table (DSP-20), so discovery,
+    /// validation and the engine cannot disagree.
+    pub(crate) fn voice_changer_parameters() -> Value {
+        use audiorouter_domain::voice_changer::{
+            VoiceParameterKind, VOICE_CHANGER_PARAMETERS, VOICE_PRESETS,
+        };
+        let mut parameters = vec![json!({
+            "name": "preset",
+            "type": "string",
+            "enum": VOICE_PRESETS.iter().map(|preset| preset.id).collect::<Vec<_>>(),
+            "default": "custom",
+        })];
+        for spec in &VOICE_CHANGER_PARAMETERS {
+            let default = spec.default.to_json();
+            parameters.push(match spec.kind {
+                VoiceParameterKind::Number {
+                    minimum,
+                    maximum,
+                    integer,
+                    unit,
+                } => {
+                    let mut entry = json!({
+                        "name": spec.name, "type": "number",
+                        "minimum": minimum, "maximum": maximum, "default": default,
+                    });
+                    if !unit.is_empty() {
+                        entry["unit"] = json!(unit);
+                    }
+                    if integer {
+                        entry["step"] = json!(1.0);
+                    }
+                    entry
+                }
+                VoiceParameterKind::Boolean => {
+                    json!({ "name": spec.name, "type": "boolean", "default": default })
+                }
+                VoiceParameterKind::Choice(choices) => json!({
+                    "name": spec.name, "type": "string", "enum": choices, "default": default,
+                }),
+            });
+        }
+        Value::Array(parameters)
+    }
+
+    /// Fun Voice Changer presets with every value they write, so a client
+    /// applies the backend's recipe instead of keeping its own copy.
+    pub(crate) fn voice_changer_presets() -> Value {
+        use audiorouter_domain::voice_changer::{voice_preset_parameters, VOICE_PRESETS};
+        VOICE_PRESETS
+            .iter()
+            .map(|preset| {
+                json!({
+                    "id": preset.id,
+                    "version": preset.version,
+                    "name": preset.name,
+                    "description": preset.description,
+                    "basicParameters": preset.basic,
+                    "parameters": voice_preset_parameters(preset),
+                })
+            })
+            .collect()
     }
 
     pub(crate) fn parametric_eq_parameters() -> Value {
@@ -312,7 +392,8 @@ impl ControlPlane {
             Self::catalog_entry("firFilter", audiorouter_domain::NodeKind::FirFilter, "convolution"),
             Self::catalog_entry("timeShift", audiorouter_domain::NodeKind::TimeShift, "time"),
             Self::catalog_entry("inputSwitch", audiorouter_domain::NodeKind::InputSwitch, "routing"),
-            Self::catalog_entry("duck", audiorouter_domain::NodeKind::Duck, "dynamics")
+            Self::catalog_entry("duck", audiorouter_domain::NodeKind::Duck, "dynamics"),
+            Self::catalog_entry("funVoiceChanger", audiorouter_domain::NodeKind::FunVoiceChanger, "effect")
         ])
     }
 

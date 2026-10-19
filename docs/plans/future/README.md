@@ -66,6 +66,7 @@ VST2 hosting is an explicitly authorized but gated M06 extension. Consult the
 | ASIO and exclusive-mode options | Lower latency on selected interfaces | Shared-mode targets met and ownership conflicts/driver licensing addressed |
 | Multi-app exclusions from system capture | Exclude calls/notifications from desktop mix | A correct Windows implementation proven beyond one process-tree exclusion |
 | Automatic “mute when capturing” | Avoid manual output rerouting | Capture remains audible while normal playback is suppressed through a supported/tested mechanism |
+| [Fun Voice Changer](voice-effects.md) | One new tool with tweakable presets: Pitch Correct ("auto-tune" style), deep, chipmunk, robot, monster, radio, whisper… on the live microphone; existing tools unchanged (owner decision 2026-10-18) | Promoted 2026-10-18 and implemented as DSP-20; see the [active plan](../active/current.md) for status |
 | Model-based voice isolation | Remove difficult background noise from speech | License, offline operation, latency and failure behavior are reviewed |
 | Multiband compressor and automatic gain control | More complex broadcast mixing and level consistency | Current Compressor is single-band; Duck, Gate and Limiter are separate tools. Define behavior, latency, loudness/pumping criteria and protected-voice failure handling |
 | ~~Time-shift~~ — implemented as the Time Shift tool (pause, jump back or forward, return to live). Still future: saving an instant-replay clip | Review recent audio | Explicit privacy, bounded storage and file model for saved clips |

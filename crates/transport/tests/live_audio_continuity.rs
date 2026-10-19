@@ -172,6 +172,26 @@ mod live {
         std::env::var("AUDIOROUTER_CONTINUITY_SOURCE").as_deref() == Ok("testSignal")
     }
 
+    /// `AUDIOROUTER_CONTINUITY_SOURCE=selfApplication`: the route's source is
+    /// an application capture of this test process, which renders the tone
+    /// (the Discord → Duck → Mixer → output shape). Only our own audio is
+    /// captured.
+    fn self_application_source() -> bool {
+        std::env::var("AUDIOROUTER_CONTINUITY_SOURCE").as_deref() == Ok("selfApplication")
+    }
+
+    /// `AUDIOROUTER_CONTINUITY_STRESS=<start s>,<seconds>,<threads>` saturates
+    /// the CPU with normal-priority busy threads for a while, like a build.
+    fn stress_plan() -> Option<(f64, f64, usize)> {
+        let value = std::env::var("AUDIOROUTER_CONTINUITY_STRESS").ok()?;
+        let mut parts = value.split(',').map(str::trim);
+        Some((
+            parts.next()?.parse().ok()?,
+            parts.next()?.parse().ok()?,
+            parts.next()?.parse().ok()?,
+        ))
+    }
+
     fn processor(kind: &str) -> NodeKind {
         serde_json::from_value(json!(kind)).unwrap_or_else(|_| panic!("unknown node kind {kind}"))
     }
@@ -599,6 +619,13 @@ mod live {
                 .collect();
             std::fs::write(file, bytes).unwrap();
         }
+        // Glitches per 5 s, to see whether a fault outlasts a stress phase.
+        let windows = steady.len().div_ceil(5 * SAMPLE_RATE as usize);
+        let mut per_window = vec![0_usize; windows];
+        for glitch in &glitches {
+            per_window[glitch.index / (5 * SAMPLE_RATE as usize)] += 1;
+        }
+        eprintln!("  glitches per 5 s: {per_window:?}");
         for glitch in glitches.iter().take(20) {
             eprintln!(
                 "  at {:8.3} s residual {:.2}x amplitude",
@@ -607,6 +634,18 @@ mod live {
             );
         }
         glitches.len()
+    }
+
+    /// Child process of the application mode: plays the tone into
+    /// `AUDIOROUTER_CONTINUITY_TONE_HELPER_ENDPOINT` until it is killed.
+    #[test]
+    #[ignore = "helper process for AUDIOROUTER_CONTINUITY_SOURCE=selfApplication"]
+    fn live_tone_helper_process() {
+        let Ok(endpoint) = std::env::var("AUDIOROUTER_CONTINUITY_TONE_HELPER_ENDPOINT") else {
+            return;
+        };
+        let stop = Arc::new(AtomicBool::new(false));
+        generator(endpoint, stop).join().unwrap();
     }
 
     #[test]
@@ -691,6 +730,43 @@ mod live {
                 .find(|app| app.process_id == helper.0.id())
                 .expect("own helper identity")
         });
+        // Application mode: a separate copy of this test binary plays the
+        // tone (capturing this process would also capture the route's own
+        // output and feed it back).
+        let stop = Arc::new(AtomicBool::new(false));
+        let tone_helper = self_application_source().then(|| {
+            use std::os::windows::process::CommandExt;
+            Helper(
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args([
+                        "--ignored",
+                        "--exact",
+                        "live::live_tone_helper_process",
+                        "--nocapture",
+                    ])
+                    .env("AUDIOROUTER_CONTINUITY_TONE_HELPER_ENDPOINT", &tone_render)
+                    .creation_flags(0x08000000)
+                    .spawn()
+                    .unwrap(),
+            )
+        });
+        let self_application = tone_helper.as_ref().map(|helper| {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                if let Some(app) = audiorouter_windows_audio::enumerate_applications()
+                    .unwrap()
+                    .into_iter()
+                    .find(|app| app.process_id == helper.0.id())
+                {
+                    break app;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "the tone helper never became an audio application"
+                );
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        });
         let server_pipe = pipe.clone();
         let (route_capture_id, route_render_id) = (route_capture.clone(), route_render.clone());
         let server_chain = chain.clone();
@@ -766,6 +842,22 @@ mod live {
                 eprintln!("plugin node: {}", serde_json::to_string(node).unwrap());
             }
             let mut candidate = route(&route_capture_id, &route_render_id, &server_chain, extra);
+            if let Some(app) = self_application {
+                let source = candidate
+                    .nodes
+                    .iter_mut()
+                    .find(|node| node.id.as_str() == "source")
+                    .unwrap();
+                source.kind = NodeKind::ApplicationCapture;
+                source.parameters = serde_json::from_value(json!({
+                    "processId": app.process_id,
+                    "executable": app.executable,
+                    "executablePath": app.executable_path.unwrap(),
+                    "creationTime100ns": app.creation_time_100ns.unwrap().to_string(),
+                    "processPolicy": "selectedInstance"
+                }))
+                .unwrap();
+            }
             if let Some(application) = application {
                 let output_edge = candidate
                     .edges
@@ -821,8 +913,9 @@ mod live {
         });
         std::thread::sleep(Duration::from_millis(300));
 
-        let stop = Arc::new(AtomicBool::new(false));
-        let tone = generator(tone_render, Arc::clone(&stop));
+        let tone = tone_helper
+            .is_none()
+            .then(|| generator(tone_render.clone(), Arc::clone(&stop)));
         let measuring = Arc::new(AtomicBool::new(false));
         let reference = recorder(
             route_capture.clone(),
@@ -897,7 +990,79 @@ mod live {
         let mut last_service = Value::Null;
         let mut last_underruns = Value::Null;
         let mut tick = 0_u64;
+        // Optional CPU stress phase and a Stop/Play after it, both timed
+        // from the start of measurement.
+        let measured_from = Instant::now();
+        let stress = stress_plan();
+        let stress_stop = Arc::new(AtomicBool::new(false));
+        let mut stress_threads: Vec<std::thread::JoinHandle<()>> = Vec::new();
+        let mut stress_done = false;
+        let restart_at: Option<f64> = std::env::var("AUDIOROUTER_CONTINUITY_RESTART_AT")
+            .ok()
+            .and_then(|value| value.parse().ok());
+        let mut restarted = false;
         while Instant::now() < until {
+            let elapsed = measured_from.elapsed().as_secs_f64();
+            if let Some((start, duration, threads)) = stress {
+                if !stress_done && stress_threads.is_empty() && elapsed >= start {
+                    eprintln!(
+                        "t={elapsed:.1}s CPU stress: {threads} busy threads for {duration} s"
+                    );
+                    for _ in 0..threads {
+                        let stop = Arc::clone(&stress_stop);
+                        stress_threads.push(std::thread::spawn(move || {
+                            let mut value = 1_u64;
+                            while !stop.load(Ordering::Relaxed) {
+                                for _ in 0..10_000 {
+                                    value = value
+                                        .wrapping_mul(6_364_136_223_846_793_005)
+                                        .wrapping_add(1);
+                                }
+                                std::hint::black_box(value);
+                            }
+                        }));
+                    }
+                }
+                if !stress_done && !stress_threads.is_empty() && elapsed >= start + duration {
+                    stress_stop.store(true, Ordering::Relaxed);
+                    for thread in stress_threads.drain(..) {
+                        thread.join().unwrap();
+                    }
+                    stress_done = true;
+                    eprintln!("t={elapsed:.1}s CPU stress ended");
+                }
+            }
+            if let Some(at) = restart_at {
+                if !restarted && elapsed >= at {
+                    restarted = true;
+                    let run = std::process::id();
+                    rpc(
+                        &pipe,
+                        "session.stop",
+                        json!({ "sessionId": session_id, "idempotencyKey": format!("continuity-restop-{run}") }),
+                    );
+                    // As the UI's Play: detach the stopped worker, prepare, start.
+                    rpc(
+                        &pipe,
+                        "nativeEndpoints.detach",
+                        json!({ "sessionId": session_id }),
+                    );
+                    rpc(
+                        &pipe,
+                        "nativePaths.prepare",
+                        json!({ "sessionId": session_id }),
+                    );
+                    let again = rpc(
+                        &pipe,
+                        "session.start",
+                        json!({ "sessionId": session_id, "idempotencyKey": format!("continuity-restart-{run}") }),
+                    );
+                    if let Some(next) = again["generation"].as_u64() {
+                        generation = next;
+                    }
+                    eprintln!("t={elapsed:.1}s Stop/Play done (generation {generation})");
+                }
+            }
             rpc(&pipe, "system.diagnostics", Value::Null);
             if tick % 2 == 0 {
                 let pump = rpc(
@@ -960,7 +1125,8 @@ mod live {
             std::thread::sleep(Duration::from_millis(50));
         }
         measuring.store(false, Ordering::Release);
-        if record_mode() {
+        // A Stop/Play detaches the Recorder; only CABLE recordings remain.
+        if record_mode() && !restarted {
             eprintln!(
                 "recorders before stop: {}",
                 rpc(&pipe, "recorders.list", Value::Null)
@@ -985,7 +1151,10 @@ mod live {
         );
         std::thread::sleep(Duration::from_millis(300));
         stop.store(true, Ordering::Release);
-        tone.join().unwrap();
+        drop(tone_helper);
+        if let Some(tone) = tone {
+            tone.join().unwrap();
+        }
         let reference = reference.join().unwrap();
         let result = result.join().unwrap();
 
@@ -1024,16 +1193,19 @@ mod live {
         }
         let reference_glitches = report("reference (CABLE Output)", &reference);
         let result_glitches = report("routed result (CABLE-B Output)", &result);
-        let recording_glitches = recording_path.as_deref().map(|path| {
-            eprintln!("recording: {path}");
-            report(
-                "recording (Recorder branch)",
-                &Recording {
-                    left: wav_float32_left(path),
-                    discontinuity_flags: 0,
-                },
-            )
-        });
+        let recording_glitches = recording_path
+            .as_deref()
+            .filter(|_| !restarted)
+            .map(|path| {
+                eprintln!("recording: {path}");
+                report(
+                    "recording (Recorder branch)",
+                    &Recording {
+                        left: wav_float32_left(path),
+                        discontinuity_flags: 0,
+                    },
+                )
+            });
         assert_eq!(
             last_service["active"], true,
             "backend must own audio service"
