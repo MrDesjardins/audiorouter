@@ -1,5 +1,40 @@
 # AudioRouter release notes
 
+## 0.0.19 — 2026-10-18 (unsigned experimental preview)
+
+- **New tool: Fun Voice Changer.** One tool with 14 presets you can tweak:
+  Pitch Correct (subtle and hard, "auto-tune" style), Deep, Chipmunk,
+  Monster, Child, Robot, Alien, Radio, Megaphone, Telephone, Whisper, Cave
+  and Custom. Pick a preset, adjust its main sliders, or open every setting
+  grouped by effect (pitch correction with key and scale, pitch and formant,
+  ring modulator, bit crusher, drive, whisper, tone, chorus/flanger, space,
+  mix and output). An "edited" marker and Reset to preset show when you have
+  changed a preset, and a live strip shows the note it hears. Changing a
+  preset while you talk does not drop out. It adds a fixed 21 ms delay and
+  outputs mono. Existing tools are unchanged. Its visual guide is on the
+  website.
+- **Duck: "In a round, playing".** A Duck following the Siege round can now
+  also lower its audio while a round is being played (off by default), for
+  example to quiet music or a stream while you play.
+- **Audio health in the log.** While a route plays, the backend log records
+  once a minute how evenly audio was serviced (pass gaps, slow requests,
+  per-input pickup delay and gaps, per-output queue, underruns and dropped
+  blocks), to diagnose crackling reports. No audio or names are logged.
+
+Known issue: after the PC is heavily loaded for a while (for example a large
+build), some users heard lasting static on incoming voices that Stop/Play did
+not clear; quitting and restarting AudioRouter clears it. Under
+investigation; it could not be reproduced in testing yet.
+
+Windows 11 x64; app and installer unsigned. Experimental prerelease, not a
+fully M08-qualified consumer release. No database migration, driver
+installation or Windows default-device changes. Sessions that use the Fun
+Voice Changer or the new Duck option cannot be opened by 0.0.18. Close
+AudioRouter before upgrading and keep 0.0.18 plus compatible
+configuration/recording backups for rollback. Clean-machine
+install/upgrade, missing-WebView2, accessibility, hardware and
+driver-signing gates remain open.
+
 ## 0.0.18 — 2026-10-17 (unsigned experimental preview)
 
 - **Several custom themes.** UI Options keeps up to 24 named themes. Create a
