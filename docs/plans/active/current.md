@@ -184,6 +184,27 @@ Code and log review (2026-10-18 evening, no audio run):
   entries freed when the graph drops on Stop; no drift or resampler state is
   remembered per endpoint.
 
+Saved-session reproduction (2026-10-18 ~20:10, owner's app quit, nobody in
+a call): new `live_saved_session_tone_survives_starvation` runs the owner's
+`patrick-main-siege-footstep` from a database copy in a release harness
+build, retargets `application-capture-1` at a tone helper process and
+`voice-monitor` at the PD200X headphone output (Firefox was playing on the
+Focusrite, which polluted its loopback), and records that output's loopback.
+Baseline 30 s: 0 glitches, tone at the expected 0.074 peak (41 % direct plus
+Duck 2). 240 s run with 48 busy threads plus a 14 GB memory hog
+(30–150 s) and Stop/Play at 200 s: a 22 ms gap at the stress start, one
+small glitch during it, a 63 ms gap at 179 s followed by ~0.5 s of ±40–50 Hz
+sidebands, the Stop/Play gap; clean everywhere else, including the 30 s
+after the stress and after Stop/Play. No lasting fault. Second run, 600 s
+beside the afternoon's real trigger (a clean release build of the workspace
+and shell in a scratch target dir, then the UI unit tests, from t≈30 s to
+~3.5 min) and Stop/Play at 560 s: glitches only in the first 15 s of the
+build (52 ms gap, slowest `system.diagnostics` 54 ms) and at Stop/Play,
+small level bumps at 478–525 s consistent with room sound through the live
+mic chain, clean otherwise. No lasting fault. So the lasting static needs
+something this copy lacks: real Discord as the captured process, the
+Focusrite render endpoint, a live call, or a much longer intermittent load.
+
 Next: (0) when the static is heard again, before any restart: record
 `mixer-2`'s output and a loopback of the Focusrite endpoint at the same time
 (engine clean + device dirty = render/OS side; both dirty = engine), and

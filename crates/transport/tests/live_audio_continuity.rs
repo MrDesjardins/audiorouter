@@ -1800,4 +1800,308 @@ mod live {
             "bypass changes not applied while playing: {failures:?}"
         );
     }
+
+    /// Child process of the starvation test: holds and keeps touching
+    /// `AUDIOROUTER_HOG_GB` of memory until it is killed, so the memory
+    /// manager trims other processes' working sets (as a large build does).
+    #[test]
+    #[ignore = "helper process for live_saved_session_tone_survives_starvation"]
+    fn live_memory_hog_helper_process() {
+        let Some(gigabytes) = std::env::var("AUDIOROUTER_HOG_GB")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+        else {
+            return;
+        };
+        const CHUNK: usize = 256 << 20;
+        let mut chunks: Vec<Vec<u8>> = Vec::new();
+        for _ in 0..gigabytes * 4 {
+            chunks.push(vec![1_u8; CHUNK]);
+        }
+        let mut round = 0_u8;
+        loop {
+            round = round.wrapping_add(1);
+            for chunk in &mut chunks {
+                for page in chunk.iter_mut().step_by(4096) {
+                    *page = round;
+                }
+            }
+        }
+    }
+
+    /// Owner's static report (2026-10-18): after CPU and memory starvation,
+    /// Discord voices stayed scratchy until AudioRouter was restarted. Runs a
+    /// saved session from a COPY of a user database
+    /// (`AUDIOROUTER_STATIC_DATABASE`, session `AUDIOROUTER_STATIC_SESSION`)
+    /// with its application capture (`AUDIOROUTER_STATIC_APP_NODE`) pointed
+    /// at a tone helper, records the loopback of
+    /// `AUDIOROUTER_STATIC_RESULT_ID` (the output the owner hears), and
+    /// reports glitches per 5 s across a baseline, a stress phase
+    /// (`AUDIOROUTER_CONTINUITY_STRESS` busy threads plus
+    /// `AUDIOROUTER_STATIC_HOG_GB` of memory), recovery, and a Stop/Play at
+    /// `AUDIOROUTER_CONTINUITY_RESTART_AT`. Audio reaches the session's real
+    /// outputs: run only with the owner's consent and nobody in a call.
+    #[test]
+    #[ignore = "live Windows audio devices of a saved session (audible tone)"]
+    fn live_saved_session_tone_survives_starvation() {
+        let Some(database) = std::env::var_os("AUDIOROUTER_STATIC_DATABASE") else {
+            return;
+        };
+        let session_id = std::env::var("AUDIOROUTER_STATIC_SESSION")
+            .unwrap_or_else(|_| "patrick-main-siege-footstep".into());
+        let app_node = std::env::var("AUDIOROUTER_STATIC_APP_NODE")
+            .unwrap_or_else(|_| "application-capture-1".into());
+        let seconds: u64 = std::env::var("AUDIOROUTER_CONTINUITY_SECONDS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(240);
+        let tone_render = endpoint(
+            "AUDIOROUTER_CONTINUITY_TONE_RENDER_ID",
+            "{0.0.0.00000000}.{71f96f14-94c1-4189-b9b9-df8c960db8f2}",
+            EndpointDirection::Render,
+        );
+        let result_render = endpoint(
+            "AUDIOROUTER_STATIC_RESULT_ID",
+            "{0.0.0.00000000}.{829bab15-21b8-47d1-964a-f843aa3b37d6}",
+            EndpointDirection::Render,
+        );
+        struct Helper(std::process::Child);
+        impl Drop for Helper {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+        let spawn_helper = |test: &str, env: (&str, String)| {
+            use std::os::windows::process::CommandExt;
+            Helper(
+                std::process::Command::new(std::env::current_exe().unwrap())
+                    .args(["--ignored", "--exact", test, "--nocapture"])
+                    .env(env.0, env.1)
+                    .creation_flags(0x08000000)
+                    .spawn()
+                    .unwrap(),
+            )
+        };
+        let tone_helper = spawn_helper(
+            "live::live_tone_helper_process",
+            ("AUDIOROUTER_CONTINUITY_TONE_HELPER_ENDPOINT", tone_render),
+        );
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let app = loop {
+            if let Some(app) = audiorouter_windows_audio::enumerate_applications()
+                .unwrap()
+                .into_iter()
+                .find(|app| app.process_id == tone_helper.0.id())
+            {
+                break app;
+            }
+            assert!(Instant::now() < deadline, "tone helper never played");
+            std::thread::sleep(Duration::from_millis(100));
+        };
+
+        let pipe = format!(r"\\.\pipe\audiorouter-static-{}", std::process::id());
+        let server_pipe = pipe.clone();
+        std::thread::spawn(move || {
+            let plane = audiorouter_control::ControlPlane::with_storage(
+                "static",
+                audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap(),
+            );
+            let grant = audiorouter_control::ClientGrant::with_scopes([
+                audiorouter_domain::PermissionScope::Read,
+                audiorouter_domain::PermissionScope::GraphWrite,
+                audiorouter_domain::PermissionScope::SessionControl,
+                audiorouter_domain::PermissionScope::Capture,
+                audiorouter_domain::PermissionScope::DeviceAdministration,
+            ]);
+            let _ = audiorouter_transport::serve_control_connections_forever_with_grant(
+                &server_pipe,
+                plane,
+                grant,
+            );
+        });
+        std::thread::sleep(Duration::from_millis(300));
+        let run = std::process::id();
+
+        // Point the application capture at the tone helper (as the UI saves).
+        let mut session = rpc(&pipe, "sessions.get", json!({ "sessionId": session_id }));
+        let node = session["nodes"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|node| node["id"] == app_node.as_str())
+            .expect("application capture node");
+        node["parameters"] = json!({
+            "processId": app.process_id,
+            "executable": app.executable,
+            "executablePath": app.executable_path.unwrap(),
+            "creationTime100ns": app.creation_time_100ns.unwrap().to_string(),
+            "processPolicy": "selectedInstance"
+        });
+        // The measured output renders to the recorded endpoint, so other
+        // applications playing on the user's default device stay out of it.
+        let output_node = std::env::var("AUDIOROUTER_STATIC_OUTPUT_NODE")
+            .unwrap_or_else(|_| "voice-monitor".into());
+        let output = session["nodes"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|node| node["id"] == output_node.as_str())
+            .expect("measured output node");
+        output["parameters"]["endpointId"] = json!(result_render.clone());
+        let plan = rpc(
+            &pipe,
+            "graph.plan",
+            json!({ "sessionId": session_id, "baseRevision": session["revision"], "candidate": session }),
+        );
+        rpc(
+            &pipe,
+            "graph.commit",
+            json!({ "planId": plan["planId"], "baseRevision": plan["baseRevision"], "idempotencyKey": format!("static-retarget-{run}") }),
+        );
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let measuring = Arc::new(AtomicBool::new(false));
+        let result = recorder(result_render, Arc::clone(&stop), Arc::clone(&measuring));
+        let prepared = rpc(
+            &pipe,
+            "nativePaths.prepare",
+            json!({ "sessionId": session_id }),
+        );
+        eprintln!("prepared: {}", prepared["branchNodeIds"]);
+        let started = rpc(
+            &pipe,
+            "session.start",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("static-start-{run}") }),
+        );
+        let mut generation = started["generation"].as_u64().unwrap();
+        std::thread::sleep(Duration::from_secs(2));
+        measuring.store(true, Ordering::Release);
+
+        let stress = stress_plan();
+        let hog_gb: usize = std::env::var("AUDIOROUTER_STATIC_HOG_GB")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(0);
+        let restart_at: Option<f64> = std::env::var("AUDIOROUTER_CONTINUITY_RESTART_AT")
+            .ok()
+            .and_then(|value| value.parse().ok());
+        let stress_stop = Arc::new(AtomicBool::new(false));
+        let mut stress_threads: Vec<std::thread::JoinHandle<()>> = Vec::new();
+        let mut hog: Option<Helper> = None;
+        let mut stress_done = false;
+        let mut restarted = false;
+        let begin = Instant::now();
+        let mut tick = 0_u64;
+        while begin.elapsed() < Duration::from_secs(seconds) {
+            let elapsed = begin.elapsed().as_secs_f64();
+            if let Some((start, duration, threads)) = stress {
+                if !stress_done && stress_threads.is_empty() && elapsed >= start {
+                    eprintln!("t={elapsed:.1}s stress: {threads} busy threads, {hog_gb} GB memory");
+                    if hog_gb > 0 {
+                        hog = Some(spawn_helper(
+                            "live::live_memory_hog_helper_process",
+                            ("AUDIOROUTER_HOG_GB", hog_gb.to_string()),
+                        ));
+                    }
+                    for _ in 0..threads {
+                        let stop = Arc::clone(&stress_stop);
+                        stress_threads.push(std::thread::spawn(move || {
+                            let mut value = 1_u64;
+                            while !stop.load(Ordering::Relaxed) {
+                                for _ in 0..10_000 {
+                                    value = value
+                                        .wrapping_mul(6_364_136_223_846_793_005)
+                                        .wrapping_add(1);
+                                }
+                                std::hint::black_box(value);
+                            }
+                        }));
+                    }
+                }
+                if !stress_done && !stress_threads.is_empty() && elapsed >= start + duration {
+                    stress_stop.store(true, Ordering::Relaxed);
+                    for thread in stress_threads.drain(..) {
+                        thread.join().unwrap();
+                    }
+                    drop(hog.take());
+                    stress_done = true;
+                    eprintln!("t={elapsed:.1}s stress ended");
+                }
+            }
+            if let Some(at) = restart_at {
+                if !restarted && elapsed >= at {
+                    restarted = true;
+                    rpc(
+                        &pipe,
+                        "session.stop",
+                        json!({ "sessionId": session_id, "idempotencyKey": format!("static-restop-{run}") }),
+                    );
+                    rpc(
+                        &pipe,
+                        "nativeEndpoints.detach",
+                        json!({ "sessionId": session_id }),
+                    );
+                    rpc(
+                        &pipe,
+                        "nativePaths.prepare",
+                        json!({ "sessionId": session_id }),
+                    );
+                    let again = rpc(
+                        &pipe,
+                        "session.start",
+                        json!({ "sessionId": session_id, "idempotencyKey": format!("static-restart-{run}") }),
+                    );
+                    if let Some(next) = again["generation"].as_u64() {
+                        generation = next;
+                    }
+                    eprintln!("t={elapsed:.1}s Stop/Play done (generation {generation})");
+                }
+            }
+            // UI-like load: 20 Hz diagnostics; a slow one is printed.
+            let timer = Instant::now();
+            let diagnostics = rpc(&pipe, "system.diagnostics", Value::Null);
+            let took = timer.elapsed().as_secs_f64() * 1_000.0;
+            if took > 8.0 {
+                eprintln!("t={elapsed:.1}s system.diagnostics {took:.0} ms");
+            }
+            if tick % 100 == 0 {
+                let outputs: Vec<String> = diagnostics["nodeTelemetry"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|node| node["timing"]["delayMs"].is_number())
+                    .map(|node| {
+                        format!(
+                            "{}={:.1}",
+                            node["nodeId"].as_str().unwrap_or(""),
+                            node["timing"]["delayMs"].as_f64().unwrap()
+                        )
+                    })
+                    .collect();
+                eprintln!("t={elapsed:.1}s delays ms: {}", outputs.join(" "));
+            }
+            tick += 1;
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        measuring.store(false, Ordering::Release);
+        let pump = rpc(
+            &pipe,
+            "nativeMultiInputs.pump",
+            json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+        );
+        eprintln!(
+            "audio service: {}; output underruns: {}",
+            pump["audioService"], pump["outputUnderruns"]
+        );
+        rpc(
+            &pipe,
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("static-stop-{run}") }),
+        );
+        stop.store(true, Ordering::Release);
+        drop(tone_helper);
+        let result = result.join().unwrap();
+        report("heard (output loopback)", &result);
+    }
 }
