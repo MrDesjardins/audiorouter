@@ -1,5 +1,20 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.19 — 2026-10-18, owner requested ("Can we have a new release with the new tool we did?")
+
+**Published** 2026-10-19 05:03 UTC as an experimental prerelease from tag
+`v0.0.19` (`8190fd32`), same app-only profile as 0.0.18. Contents: Fun
+Voice Changer (DSP-20), Duck "In a round, playing", once-a-minute
+`audioHealth` log records; known issue: lasting static after heavy load
+(below). All checks green before tagging (workspace 1,137 / shell 83 tests,
+UI 547, full Edge 281, CI 39196571264); three load-sensitive tests fixed on
+the way (guide page walk timeout, undo race, Gate autosave plan count).
+Exact-package `fresh_install_shell` passed (339 ms); draft and public assets
+verified. Record: [release 0.0.19](evidence/2026-10-18-release-0.0.19.md).
+Rollback: keep 0.0.18 and backups taken before using the new tool or Duck
+option (0.0.18 rejects those sessions); no migration; never replace
+published assets or move the tag. Next: owner installs 0.0.19.
+
 ## Fun Voice Changer tool — 2026-10-18, owner requested ("lets build it now") (in progress)
 
 Promoted from [future/voice-effects.md](../future/voice-effects.md), which
