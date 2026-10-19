@@ -160,7 +160,35 @@ and the Spectral Gate. Note `siege-in` pickup sat at ~98 ms from 12:28 until
 the owner's Stop/Play, after a 31 ms `applications.list` stall, so a short
 stall can leave an input in a lasting state.
 
-Next: (1) reproduce offline, without the owner: route a test tone (or the
+Code and log review (2026-10-18 evening, no audio run):
+- The incident process (PID 50896) logged a clean lifecycle: one prepare at
+  11:57, the owner's Stop/Play at 17:05 (stop, detach, prepare, start), a
+  Recorder take, quit. No errors, pump errors or extra prepares.
+- Its `audioHealth` series: Discord's capture had 0 discontinuities and a
+  steady ~11 ms pickup throughout; mic and `siege-in` discontinuities and
+  all three outputs' underruns/full drops rose only in the minutes with slow
+  requests (16:30–17:01).
+- The whole route is one connected component (Discord feeds `mixer-3`,
+  `duck-2` and `mixer-2` directly), so `connected_mixers` compiles it as a
+  single path. Both Discord copies into `mixer-2` are summed inside one
+  graph pass, so path-to-path drift cannot misalign them.
+- The control/audio thread already enters MMCSS "Pro Audio" and 1 ms timer
+  resolution (`AudioServiceThreadGuard`, `transport/src/lib.rs`); the live
+  shell's busiest thread runs at priority 24. The "own MMCSS thread"
+  prevention idea is therefore already in place. A normal-priority build
+  cannot preempt it, so the 15–170 ms request stalls more likely came from
+  memory pressure (page faults on a trimmed working set: that evening an
+  Edge run was killed for low memory) than from CPU priority. Unproven.
+- Process-wide engine state is limited to the Time Shift, `NodeLevel`
+  (including `<duck>::duck-gain`) and Siege round registries, all weak
+  entries freed when the graph drops on Stop; no drift or resampler state is
+  remembered per endpoint.
+
+Next: (0) when the static is heard again, before any restart: record
+`mixer-2`'s output and a loopback of the Focusrite endpoint at the same time
+(engine clean + device dirty = render/OS side; both dirty = engine), and
+bypass `duck-2` briefly; log page faults and working set in `audioHealth`.
+(1) reproduce offline, without the owner: route a test tone (or the
 sine-continuity harness) through an application-capture → Duck → Mixer →
 output path, saturate the CPU for a few minutes, stop the load, and check
 whether the output stays corrupted after Stop/Play; diff process-wide state
