@@ -42,8 +42,11 @@ jobs:
     # Fork PRs get no secrets and a read-only token. pull_request_target is
     # deliberately not used: it would run PR code with base-repo secrets.
     # Large PRs skip Jev because the model's findings are unreliable on them.
+    # Dependabot PRs skip it too: their runs receive only Dependabot secrets,
+    # so TYPESAFE_API_KEY is empty, and lock-file bumps gain little from it.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
       needs.diff-size.outputs.run_jev == 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

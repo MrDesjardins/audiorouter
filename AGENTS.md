@@ -74,7 +74,8 @@ For defects: record reproduction and affected versions; add a focused regression
 
 Jev is disabled as a local development check. GitHub runs Jev only for
 same-repository pull requests with at most 5,000 changed lines (additions plus
-deletions); larger pull requests skip the review. The limit avoids unreliable
+deletions); larger pull requests skip the review, and so do Dependabot pull
+requests (their runs get only Dependabot secrets, so the Jev key is empty). The limit avoids unreliable
 results on large diffs: on 2026-10-06, a roughly 14,600-line diff produced two
 unlocated findings at 6% and 13% confidence, both false. The separate
 formatting, tests, Clippy and other checks in this file remain required.
