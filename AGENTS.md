@@ -92,6 +92,18 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-20 — Windows PowerShell 5.1 reads BOM-less files as Windows-1252; read text as strict UTF-8 and keep `.ps1` files ASCII.**
+  Evidence: `tools/release/create-draft-release.ps1` (notes guard), owner
+  report of "â€”" in the 0.0.17–0.0.20 release headings. Scope: release
+  and tooling scripts that read Markdown, JSON or any non-ASCII text.
+  Consequence: `Get-Content -Raw` turned each "—" and "→" in the notes into
+  three characters on GitHub for four releases. Read with
+  `[IO.File]::ReadAllText($path, (New-Object Text.UTF8Encoding($false, $true)))`.
+  A non-ASCII literal inside a BOM-less script is mis-read the same way
+  (5 parse errors), so build such characters from `[char]` codes. The Edit
+  tool and awk both rewrote `\uXXXX` escapes, so check a script with
+  `grep -cP '[^\x00-\x7F]'` after editing.
+
 - **2026-10-20 — After an npm upgrade, check the new `engines.node` floors against CI's pinned Node.**
   Evidence: [active plan, dependency updates after 0.0.20](docs/plans/active/current.md),
   CI run 39369458528. Scope: `ui/`, `contracts/`, `tools/streamdeck`

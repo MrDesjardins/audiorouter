@@ -100,7 +100,16 @@ try {
     # Windows PowerShell 5.1's "-Encoding utf8" writes a BOM, which GitHub
     # keeps in the body and which stops the first heading from rendering.
     # Write BOM-less UTF-8 and keep a blank line between the guide and notes.
-    $combinedNotes = $downloadGuide.TrimEnd() + "`n`n" + (Get-Content -LiteralPath $notes -Raw).TrimStart([char]0xFEFF)
+    # Read the notes as strict UTF-8: Get-Content -Raw in 5.1 reads a
+    # BOM-less file as Windows-1252, which turned each em dash and arrow into
+    # three characters in the 0.0.17 to 0.0.20 notes. Invalid UTF-8 now stops
+    # the release, and so does UTF-8 that was already mis-decoded once
+    # (U+00E2 U+20AC / U+2020, U+00C3, or U+FFFD). Keep this file ASCII: 5.1
+    # reads a script without a BOM as Windows-1252 too.
+    $notesText = [IO.File]::ReadAllText($notes, (New-Object Text.UTF8Encoding($false, $true)))
+    $combinedNotes = $downloadGuide.TrimEnd() + "`n`n" + $notesText.TrimStart([char]0xFEFF)
+    $misdecoded = '{0}[{1}{2}]|{3}|{4}' -f [char]0xE2, [char]0x20AC, [char]0x2020, [char]0xC3, [char]0xFFFD
+    if ($combinedNotes -match $misdecoded) { throw "release notes contain mis-decoded characters: $notes" }
     [IO.File]::WriteAllText($releaseNotes, $combinedNotes, (New-Object Text.UTF8Encoding($false)))
     $ghArguments = @(
         "release", "create", $Tag,
