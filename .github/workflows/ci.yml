@@ -96,7 +96,7 @@ jobs:
       - name: Install pinned Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22.14.0
+          node-version: 22.22.3
           package-manager-cache: false
 
       - name: Validate documentation
@@ -133,7 +133,7 @@ jobs:
       - name: Install pinned Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22.14.0
+          node-version: 22.22.3
           package-manager-cache: false
 
       # Shipped (runtime) npm dependencies only; fails on high or critical.
@@ -163,7 +163,7 @@ jobs:
       - name: Install pinned Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22.14.0
+          node-version: 22.22.3
           package-manager-cache: false
 
       - name: Install pinned Rust toolchain
@@ -279,7 +279,7 @@ jobs:
       - name: Install pinned Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22.14.0
+          node-version: 22.22.3
           package-manager-cache: false
 
       - name: Install pinned Rust toolchain

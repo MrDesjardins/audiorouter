@@ -92,6 +92,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-20 — After an npm upgrade, check the new `engines.node` floors against CI's pinned Node.**
+  Evidence: [active plan, dependency updates after 0.0.20](docs/plans/active/current.md),
+  CI run 39369458528. Scope: `ui/`, `contracts/`, `tools/streamdeck`
+  dependency upgrades and the `node-version` pins in `ci.yml`,
+  `quality.yml` and `manual-release.yml`. Consequence: jsdom 30 pulled in
+  undici 8.12.3 (`node >=22.19.0`); every vitest worker failed to start on
+  CI's Node 22.14.0 while all 547 tests passed on the PC's 22.22.3. After an
+  upgrade, grep the lock for `"node":` floors (or test with the pinned
+  version) and bump the workflow pins in the same change.
+
 - **2026-10-17 — Test website audio in Firefox too; it is the owner's default browser.**
   Evidence: [active plan, Bass & Treble silent in Firefox](docs/plans/active/current.md),
   `tools/site/firefox-guide-audio.mjs`. Scope: `site/` guides and any Web

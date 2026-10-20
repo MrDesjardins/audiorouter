@@ -16,8 +16,11 @@ upgraded by hand (`b0249e3a`, `ad055257`), superseding the other major
 PRs; Jev skips Dependabot PRs. Auto-merge (owner chose it): Actions and
 npm minor/patch plus Cargo patch merge after CI through
 `dependabot-auto-merge.yml`; Cargo minor and all majors stay manual
-(grouped per ecosystem). Next: #41 (cargo-major group) needs a manual
-upgrade and the live continuity check; confirm #40 auto-merges.
+(grouped per ecosystem). jsdom 30 needs undici 8.12.3 (`node >=22.19.0`),
+so every vitest worker failed on CI's Node 22.14.0 (PR #40, run
+39369458528) while the PC's 22.22.3 passed; the workflow pins are now
+22.22.3. Next: #41 (cargo-major group) needs a manual upgrade and the
+live continuity check; confirm #40 auto-merges after Dependabot rebases.
 Rollback: 0.0.19 opens the same sessions; no migration; never replace
 published assets or move the tag.
 
