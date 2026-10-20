@@ -1,0 +1,104 @@
+name: Dependabot auto-merge
+
+# Merges low-risk Dependabot pull requests once CI passes, so routine
+# updates need no click. Policy (see .github/dependabot.yml for the groups):
+#   - GitHub Actions and npm: minor and patch updates merge automatically;
+#     CI covers them with the UI unit and Edge suites.
+#   - Cargo: patch updates only. Minor crate updates can touch the audio
+#     path, which CI cannot qualify (hosted runners have no audio endpoints;
+#     AGENTS.md asks for the live sine-continuity check), so they stay manual.
+#   - Major updates never merge automatically.
+#
+# Two steps, because Dependabot runs get no write token beyond what a job
+# asks for and GitHub's own auto-merge would need a required-checks rule
+# that also blocks direct pushes to main:
+#   1. On each Dependabot pull request event, label it `automerge` when it is
+#      eligible, and remove the label when a rebase makes it ineligible.
+#   2. When CI completes successfully on a labelled pull request, squash it,
+#      pinned to the exact commit CI tested, then run CI on main (a merge
+#      made with GITHUB_TOKEN does not trigger push workflows).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_run:
+    workflows: [AudioRouter CI]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  classify:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Read update metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Label or unlabel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ECOSYSTEM: ${{ steps.meta.outputs.package-ecosystem }}
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+        run: |
+          # update-type is the largest change in a grouped pull request.
+          eligible=false
+          case "$ECOSYSTEM:$UPDATE_TYPE" in
+            github_actions:version-update:semver-minor | github_actions:version-update:semver-patch) eligible=true ;;
+            npm_and_yarn:version-update:semver-minor | npm_and_yarn:version-update:semver-patch) eligible=true ;;
+            cargo:version-update:semver-patch) eligible=true ;;
+          esac
+          echo "$ECOSYSTEM $UPDATE_TYPE: eligible=$eligible" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$eligible" = true ]; then
+            gh label create automerge --repo "$REPO" --color 0E8A16 \
+              --description "Dependabot update merged automatically after CI" --force
+            gh pr edit "$PR" --repo "$REPO" --add-label automerge
+          else
+            gh pr edit "$PR" --repo "$REPO" --remove-label automerge || true
+          fi
+
+  merge:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Merge the tested commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          pr=$(gh pr view "$BRANCH" --repo "$REPO" \
+            --json number,state,baseRefName,headRefOid,author,labels \
+            --jq 'select(.state == "OPEN" and .baseRefName == "main"
+                    and .author.is_bot and (.author.login | test("dependabot"))
+                    and any(.labels[]; .name == "automerge")) | .number')
+          if [ -z "$pr" ]; then
+            echo "$BRANCH: not an open, labelled Dependabot pull request; nothing to merge." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # --match-head-commit refuses the merge if Dependabot pushed after
+          # this CI run; the newer run decides then.
+          gh pr merge "$pr" --repo "$REPO" --squash --match-head-commit "$SHA"
+          echo "Merged #$pr at $SHA." >> "$GITHUB_STEP_SUMMARY"
+          gh workflow run ci.yml --repo "$REPO" --ref main

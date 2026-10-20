@@ -253,7 +253,10 @@ When dependencies change, a Linux job checks them against `deny.toml`
 `npm audit --omit=dev` for `ui`, `contracts` and `tools/streamdeck`; run
 `cargo deny check` and
 `cargo deny --manifest-path src-tauri/Cargo.toml check` locally. Dependabot
-proposes weekly updates (`.github/dependabot.yml`).
+proposes weekly grouped updates (`.github/dependabot.yml`). Actions and npm
+minor/patch groups and Cargo patch groups merge themselves once CI passes
+(`dependabot-auto-merge.yml`). Cargo minor and all major updates wait for a
+person, because CI cannot run the live audio checks.
 
 A nightly (and manual) `quality.yml` workflow reports Rust (`cargo llvm-cov`)
 and UI (`npm --prefix ui run test:coverage`) coverage, runs a 20-minute

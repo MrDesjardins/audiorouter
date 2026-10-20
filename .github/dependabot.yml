@@ -1,12 +1,16 @@
-# Dependency update proposals (code review P2-4). Weekly, with minor and
-# patch updates grouped into one pull request per ecosystem so the queue
-# stays small; major updates arrive one per pull request. Every proposal
-# still has to pass CI (and, for audio paths, the qualification AGENTS.md
-# asks for) before it is merged.
+# Dependency update proposals (code review P2-4). Weekly, grouped so the
+# queue stays small: one pull request per ecosystem and update size. Low-risk
+# groups merge themselves after CI (.github/workflows/dependabot-auto-merge.yml):
+# Actions and npm minor/patch, Cargo patch. Cargo minor and every major
+# update stay manual; they still have to pass CI and, for audio paths, the
+# qualification AGENTS.md asks for. A major group that one package breaks
+# can be split with "@dependabot ignore <package> major" on its pull request.
 version: 2
 updates:
   # Three separate Cargo lockfiles: the root workspace, the desktop shell
   # workspace and the native WASAPI probe (excluded from the root).
+  # Patch and minor are separate groups so patches can merge automatically
+  # while minor crate updates wait for an audio check.
   - package-ecosystem: cargo
     directories:
       - "/"
@@ -17,8 +21,12 @@ updates:
       day: monday
     open-pull-requests-limit: 5
     groups:
-      cargo-minor-and-patch:
-        update-types: [minor, patch]
+      cargo-patch:
+        update-types: [patch]
+      cargo-minor:
+        update-types: [minor]
+      cargo-major:
+        update-types: [major]
 
   # Shipped or release-built npm projects. examples/ and videos/ are not
   # part of a release and are left out.
@@ -34,6 +42,8 @@ updates:
     groups:
       npm-minor-and-patch:
         update-types: [minor, patch]
+      npm-major:
+        update-types: [major]
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -43,3 +53,5 @@ updates:
     groups:
       actions-minor-and-patch:
         update-types: [minor, patch]
+      actions-major:
+        update-types: [major]
