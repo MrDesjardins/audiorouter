@@ -24,6 +24,10 @@ const sessionFor = (kind: "compressor" | "gate", parameters: Record<string, numb
 for (const kind of ["compressor", "gate"] as const) {
   for (const theme of ["dark", "light", "high-contrast"]) {
     test(`${kind} live editor while talking in ${theme}`, async ({ page }, testInfo) => {
+      // About 7 s of deliberate sampling and waiting; the hosted runner is
+      // several times slower than a desktop and exceeded the 30 s default
+      // (CI run 39363993288).
+      test.setTimeout(60_000);
       const parameters =
         kind === "gate"
           ? { thresholdDb: -40, rangeDb: 40, hysteresisDb: 4, ratio: 4, attackMs: 5, holdMs: 80, releaseMs: 150 }
