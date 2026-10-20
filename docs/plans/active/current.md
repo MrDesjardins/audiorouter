@@ -2,10 +2,22 @@
 
 ## Release 0.0.20 — 2026-10-19, owner requested ("potentially we should do a 0.0.20 since it fixes the issue with the buffer increasing")
 
-**In progress.** Same app-only profile as 0.0.19. Contents: inputs skip
-stale capture packets after a stall (`abad73bf`, see "Backlog recovery
-after stalls" below). Pre-tag checks green so far (workspace 1,137 / shell
-83 tests, UI 547, Edge 281). Record: [release 0.0.20](evidence/2026-10-19-release-0.0.20.md).
+**Published** 2026-10-20 04:38 UTC as an experimental prerelease from tag
+`v0.0.20` (`a5850856`), same app-only profile as 0.0.19. Contents: inputs
+skip stale capture packets after a stall (`abad73bf`, see "Backlog
+recovery after stalls" below). All checks green before tagging (workspace
+1,137 / shell 83 tests, UI 547, Edge 281, CI 39367752979 on branch
+`release/0.0.20`); exact-package fresh install passed; draft assets
+verified and byte-identical. Record: [release 0.0.20](evidence/2026-10-19-release-0.0.20.md).
+
+**Dependency updates after the tag** (owner request, 2026-10-19): merged
+Dependabot #28–#30; sha2 0.11/hmac 0.13, symphonia 0.6, vite 8/jsdom 30
+upgraded by hand (`b0249e3a`, `ad055257`), superseding the other major
+PRs; Jev skips Dependabot PRs. Auto-merge (owner chose it): Actions and
+npm minor/patch plus Cargo patch merge after CI through
+`dependabot-auto-merge.yml`; Cargo minor and all majors stay manual
+(grouped per ecosystem). Next: #41 (cargo-major group) needs a manual
+upgrade and the live continuity check; confirm #40 auto-merges.
 Rollback: 0.0.19 opens the same sessions; no migration; never replace
 published assets or move the tag.
 
