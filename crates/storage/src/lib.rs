@@ -19,6 +19,12 @@ use std::os::windows::fs::MetadataExt;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
+/// Lowercase hexadecimal of a digest, the form stored in manifests and
+/// request hashes (`sha2` 0.11 digests no longer implement `LowerHex`).
+pub fn lower_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 /// Maximum number of short-lived plan records hydrated during startup. Plans
 /// expire quickly and are never a durable unbounded collection; the extra row
 /// is a look-ahead sentinel for fail-closed validation.
@@ -500,7 +506,7 @@ impl PreparedBundleExport {
             .iter()
             .map(|(path, bytes)| ExportBundleAsset {
                 path: path.clone(),
-                sha256: format!("{:x}", Sha256::digest(bytes)),
+                sha256: lower_hex(&Sha256::digest(bytes)),
                 size: bytes.len() as u64,
             })
             .collect();
@@ -3191,7 +3197,7 @@ impl Storage {
             let mut target = target.open(&output)?;
             target.write_all(&bytes)?;
             let hash = Sha256::digest(&bytes);
-            hashes.insert(name.clone(), (actual_size, format!("{hash:x}")));
+            hashes.insert(name.clone(), (actual_size, lower_hex(&hash)));
             if name == "manifest.json" {
                 manifest = Some(serde_json::from_slice::<BundleManifest>(&bytes)?);
             }
@@ -5679,7 +5685,7 @@ mod tests {
                 plugin_sha256: "a".repeat(64),
                 version: 1,
                 path: state_path.to_string_lossy().into_owned(),
-                state_sha256: format!("{:x}", Sha256::digest(&state_bytes)),
+                state_sha256: lower_hex(&Sha256::digest(&state_bytes)),
                 size_bytes: state_bytes.len() as u64,
             })
             .unwrap();

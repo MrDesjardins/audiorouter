@@ -24,7 +24,7 @@
 //! tag and present the packet as version 1 to a paired receiver: a paired
 //! receiver accepts only version 2, and an unpaired one only version 1.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
 pub const NETWORK_AUDIO_MAGIC: [u8; 4] = *b"ARNA";

@@ -10,13 +10,12 @@ use std::io::{Cursor, Read, Seek};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
-use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::DecoderOptions;
+use symphonia::core::codecs::audio::AudioDecoderOptions;
 use symphonia::core::errors::Error as SymphoniaError;
-use symphonia::core::formats::FormatOptions;
+use symphonia::core::formats::probe::Hint;
+use symphonia::core::formats::{FormatOptions, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
 
 pub const MAX_AUDIO_FILE_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_AUDIO_FILE_SECONDS: u64 = 120;
@@ -83,29 +82,35 @@ pub fn decode_audio<R: Read + Seek + MediaSource + 'static>(
     let mut hint = Hint::new();
     hint.with_extension(extension.trim_start_matches('.'));
     let source = MediaSourceStream::new(Box::new(reader), Default::default());
-    let probed = symphonia::default::get_probe()
-        .format(
+    let mut format = symphonia::default::get_probe()
+        .probe(
             &hint,
             source,
-            &FormatOptions::default(),
-            &MetadataOptions::default(),
+            FormatOptions::default(),
+            MetadataOptions::default(),
         )
         .map_err(|_| AudioFileDecodeError::UnsupportedOrMalformed)?;
-    let mut format = probed.format;
     let track = format
-        .default_track()
+        .default_track(TrackType::Audio)
         .ok_or(AudioFileDecodeError::UnsupportedOrMalformed)?;
     let track_id = track.id;
-    let codec_params = track.codec_params.clone();
+    let codec_params = track
+        .codec_params
+        .as_ref()
+        .and_then(|params| params.audio())
+        .ok_or(AudioFileDecodeError::UnsupportedOrMalformed)?
+        .clone();
     let mut decoder = symphonia::default::get_codecs()
-        .make(&codec_params, &DecoderOptions::default())
+        .make_audio_decoder(&codec_params, &AudioDecoderOptions::default())
         .map_err(|_| AudioFileDecodeError::UnsupportedOrMalformed)?;
     let mut decoded = Vec::<f32>::new();
+    let mut packet_samples = Vec::<f32>::new();
     let mut source_channels = None;
     let mut source_rate = None;
     loop {
         let packet = match format.next_packet() {
-            Ok(packet) => packet,
+            Ok(Some(packet)) => packet,
+            Ok(None) => break,
             Err(SymphoniaError::IoError(error))
                 if error.kind() == std::io::ErrorKind::UnexpectedEof =>
             {
@@ -116,14 +121,14 @@ pub fn decode_audio<R: Read + Seek + MediaSource + 'static>(
             }
             Err(_) => return Err(AudioFileDecodeError::UnsupportedOrMalformed),
         };
-        if packet.track_id() != track_id {
+        if packet.track_id != track_id {
             continue;
         }
         let audio = decoder
             .decode(&packet)
             .map_err(|_| AudioFileDecodeError::UnsupportedOrMalformed)?;
-        let channels = audio.spec().channels.count();
-        let rate = audio.spec().rate;
+        let channels = audio.spec().channels().count();
+        let rate = audio.spec().rate();
         if !(1..=2).contains(&channels) {
             return Err(AudioFileDecodeError::UnsupportedChannels);
         }
@@ -137,11 +142,11 @@ pub fn decode_audio<R: Read + Seek + MediaSource + 'static>(
         }
         source_channels = Some(channels);
         source_rate = Some(rate);
-        let mut buffer = SampleBuffer::<f32>::new(audio.capacity() as u64, *audio.spec());
-        buffer.copy_interleaved_ref(audio);
+        // Copies this packet's frames, replacing the previous packet's.
+        audio.copy_to_vec_interleaved(&mut packet_samples);
         let new_len = decoded
             .len()
-            .checked_add(buffer.samples().len())
+            .checked_add(packet_samples.len())
             .ok_or(AudioFileDecodeError::TooLarge)?;
         if new_len
             .checked_mul(std::mem::size_of::<f32>())
@@ -149,7 +154,7 @@ pub fn decode_audio<R: Read + Seek + MediaSource + 'static>(
         {
             return Err(AudioFileDecodeError::TooLong);
         }
-        decoded.extend_from_slice(buffer.samples());
+        decoded.extend_from_slice(&packet_samples);
     }
     let channels = source_channels.ok_or(AudioFileDecodeError::Empty)?;
     let rate = source_rate.ok_or(AudioFileDecodeError::Empty)?;

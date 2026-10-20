@@ -341,7 +341,7 @@ impl ControlPlane {
     ) -> Result<Value, ControlError> {
         let checkpoint = self.store.clone();
         let fingerprint = format!("graph.commit:{}:{}", plan_id.as_str(), base_revision);
-        let request_hash = format!("{:x}", Sha256::digest(fingerprint.as_bytes()));
+        let request_hash = audiorouter_storage::lower_hex(&Sha256::digest(fingerprint.as_bytes()));
         if let Some(storage) = &self.storage {
             if let Some(result) = storage
                 .journal_result_checked(idempotency_key, &request_hash)

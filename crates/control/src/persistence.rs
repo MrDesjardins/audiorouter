@@ -536,7 +536,7 @@ impl ControlPlane {
     pub(crate) fn request_hash(value: &Value) -> String {
         let mut digest = Sha256::new();
         digest.update(serde_json::to_vec(value).unwrap_or_default());
-        format!("{:x}", digest.finalize())
+        audiorouter_storage::lower_hex(&digest.finalize())
     }
 
     pub(crate) fn lookup_idempotent_result(

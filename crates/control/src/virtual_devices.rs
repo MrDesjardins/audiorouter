@@ -129,7 +129,7 @@ pub(crate) fn virtual_bridge_control_error(error: VirtualBusBridgeSetError) -> C
 
 pub(crate) fn virtual_device_request_hash(plan_id: &str) -> String {
     let fingerprint = format!("virtualDevices.apply:{plan_id}");
-    format!("{:x}", Sha256::digest(fingerprint.as_bytes()))
+    audiorouter_storage::lower_hex(&Sha256::digest(fingerprint.as_bytes()))
 }
 
 pub(crate) fn virtual_device_external_request_hash(
@@ -138,7 +138,7 @@ pub(crate) fn virtual_device_external_request_hash(
     instance_id: Option<&str>,
 ) -> String {
     let fingerprint = format!("{method}:{}:{}", bus_id, instance_id.unwrap_or_default());
-    format!("{:x}", Sha256::digest(fingerprint.as_bytes()))
+    audiorouter_storage::lower_hex(&Sha256::digest(fingerprint.as_bytes()))
 }
 
 impl ControlPlane {
