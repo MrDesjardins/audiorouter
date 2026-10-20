@@ -11,18 +11,18 @@
     "pack": "npm run build && streamdeck validate com.mrdesjardins.audiorouter.sdPlugin && streamdeck pack com.mrdesjardins.audiorouter.sdPlugin --output dist --force"
   },
   "dependencies": {
-    "@elgato/streamdeck": "3.0.1",
-    "@elgato/utils": "0.6.0"
+    "@elgato/streamdeck": "3.0.2",
+    "@elgato/utils": "0.6.1"
   },
   "devDependencies": {
-    "@elgato/cli": "1.10.1",
+    "@elgato/cli": "1.10.2",
     "@rollup/plugin-commonjs": "29.0.3",
     "@rollup/plugin-node-resolve": "16.0.3",
     "@rollup/plugin-typescript": "12.3.0",
     "@types/node": "26.6.5",
-    "rollup": "4.64.0",
+    "rollup": "4.64.7",
     "tslib": "2.8.1",
     "typescript": "5.9.2",
-    "vitest": "5.0.3"
+    "vitest": "5.0.5"
   }
 }
