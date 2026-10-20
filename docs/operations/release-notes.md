@@ -1,6 +1,6 @@
 # AudioRouter release notes
 
-## Unreleased
+## 0.0.20 — 2026-10-19 (unsigned experimental preview)
 
 - **Inputs catch up after a freeze.** When the PC stalled for a moment, an
   input (a game cable, a microphone, an application) could keep the audio
@@ -14,6 +14,14 @@
   applications crackled too, with AudioRouter stopped). Changing the
   device's format in Sound settings → Properties → Advanced, and back,
   cleared it. See [quickstart](quickstart.md#check-audio-quality-crackling).
+
+Windows 11 x64; app and installer unsigned. Experimental prerelease, not a
+fully M08-qualified consumer release. No database migration, driver
+installation or Windows default-device changes; sessions and settings are
+unchanged from 0.0.19, so rolling back to 0.0.19 needs no backup restore.
+Close AudioRouter before upgrading. Clean-machine install/upgrade,
+missing-WebView2, accessibility, hardware and driver-signing gates remain
+open.
 
 ## 0.0.19 — 2026-10-18 (unsigned experimental preview)
 

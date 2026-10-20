@@ -1,5 +1,14 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.20 — 2026-10-19, owner requested ("potentially we should do a 0.0.20 since it fixes the issue with the buffer increasing")
+
+**In progress.** Same app-only profile as 0.0.19. Contents: inputs skip
+stale capture packets after a stall (`abad73bf`, see "Backlog recovery
+after stalls" below). Pre-tag checks green so far (workspace 1,137 / shell
+83 tests, UI 547, Edge 281). Record: [release 0.0.20](evidence/2026-10-19-release-0.0.20.md).
+Rollback: 0.0.19 opens the same sessions; no migration; never replace
+published assets or move the tag.
+
 ## Release 0.0.19 — 2026-10-18, owner requested ("Can we have a new release with the new tool we did?")
 
 **Published** 2026-10-19 05:03 UTC as an experimental prerelease from tag
