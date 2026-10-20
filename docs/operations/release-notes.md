@@ -1,5 +1,20 @@
 # AudioRouter release notes
 
+## Unreleased
+
+- **Inputs catch up after a freeze.** When the PC stalled for a moment, an
+  input (a game cable, a microphone, an application) could keep the audio
+  it fell behind by, up to about 100 ms, until Stop/Play. AudioRouter now
+  skips that stale audio once and stays current; the skip is heard as the
+  same short glitch the freeze already caused. The backend log counts it per
+  input (`trimmedPackets`). Outputs can still keep up to 40 ms of extra
+  safety margin after repeated freezes until Stop/Play.
+- **About the 0.0.19 "lasting static" known issue:** the occurrence measured
+  on 2026-10-19 was in the output device's own Windows stream (other
+  applications crackled too, with AudioRouter stopped). Changing the
+  device's format in Sound settings → Properties → Advanced, and back,
+  cleared it. See [quickstart](quickstart.md#check-audio-quality-crackling).
+
 ## 0.0.19 — 2026-10-18 (unsigned experimental preview)
 
 - **New tool: Fun Voice Changer.** One tool with 14 presets you can tweak:

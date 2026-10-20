@@ -401,6 +401,19 @@ nodes from a database copy, Test Signal and network routes are listed in the
 A passing run reports `0 glitches` for both the reference and the routed
 result.
 
+To check how a saved session recovers from a stall, the saved-session test
+`live_saved_session_tone_survives_starvation` takes
+`AUDIOROUTER_STATIC_STALLS=<at s>:<ms>,...` (freezes the audio service
+thread), `AUDIOROUTER_STATIC_SPARE_RENDER_ID` (moves the other outputs to a
+spare endpoint) and `AUDIOROUTER_STATIC_SET=<node>/<parameter>=<n>`; see the
+[stall backlog record](../plans/active/evidence/2026-10-19-lasting-static-and-stall-backlog.md#2-stall-injection-harness).
+
+If every application crackles, including a browser playing straight to the
+same output, the problem is below AudioRouter. Stopping the route will not
+help; in Sound settings → the device → Properties → Advanced, choose another
+format, apply, then choose the usual one again. That restarts the device's
+Windows stream and cleared a Focusrite USB Audio crackle on 2026-10-19.
+
 ## 2. Run the safe acceptance checks
 
 From the repository root:

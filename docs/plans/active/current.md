@@ -220,6 +220,124 @@ mic chain, clean otherwise. No lasting fault. So the lasting static needs
 something this copy lacks: real Discord as the captured process, the
 Focusrite render endpoint, a live call, or a much longer intermittent load.
 
+Code and log re-analysis (2026-10-19, no audio run, owner on the
+`db7a784e` local build): every piece of audio state (graph, DSP, rings,
+WASAPI clients, capture and render workers) is rebuilt by Stop/Play; the
+only state that outlives it is the control/audio thread, the control
+plane, the registries above and the UI. Two facts weaken "survives
+Stop/Play": the load continued after the 17:05 Stop/Play (126 ms gap at
+17:07, `siege-in` 12.5 → 65 ms), and the clean `mixer-3` take ran at
+17:08, after the Stop/Play had put Discord's pickup back to 10.9 ms.
+Leading hypothesis (unproven): the multi-input feeder is lockstep
+(`stage_path_inputs` mixes only when every input has a block) with no
+drift correction or backlog trimming, so a stall leaves each input with a
+lasting backlog in its WASAPI capture buffer (the health log shows new
+plateaus after every stall: Discord 10.7 → 22.4 ms at 17:01, `siege-in`
+pinned at ~100 ms, the 100 ms polling buffer). An input pinned at a full
+buffer loses audio inside Windows on every jitter or burst. Discord's
+process-loopback stream never set `DATA_DISCONTINUITY`, even across
+170 ms stalls that its small event-driven buffer cannot have survived, so
+those losses are invisible to every counter, and they are only audible
+while someone speaks: static on Discord voices. Prediction to test: under
+the static, Discord's `waitMs` sits above its ~11 ms baseline; a
+harness stall (inject a 100–200 ms sleep in the service pass) followed by
+a bursty application source shows lasting drops at the capture while all
+counters stay flat. Fix direction if confirmed: trim each input's backlog
+back to a target after a stall (discard whole packets at a quiet point,
+counted), and count capture frames against the QPC clock to expose losses
+Windows does not flag. The DSP thread sets no FTZ/DAZ and `RealtimeDsp`
+busy-clears are not counted; neither fits the flat `maxPassMs` (1–5 ms).
+
+Stall injection (2026-10-19, owner's app running, owner consented): the
+saved-session harness gained `AUDIOROUTER_STATIC_STALLS=<at s>:<ms>,...`
+(suspends the audio service thread), `AUDIOROUTER_STATIC_SPARE_RENDER_ID`
+(other outputs to the unused Realtek digital output) and
+`AUDIOROUTER_STATIC_SET=<node>/<parameter>=<n>` (here `mixer-2`'s
+`mixer-1` input at 0, so only the tone path is measured). Release test
+build, database copy `static-db`, tone helper → process loopback, result
+from the PD200X headphone loopback. Run 1 (tone on Realtek; stalls 150,
+200, 120 ms; Stop/Play at 150 s) and run 2 (tone on CABLE Input like
+Discord; stalls 60, 90, 170, 30, 120, 200 ms; Stop/Play at 145 s): the
+stalls reproduce the incident's lasting plateaus exactly (`siege-in`
+11.6 → 17 → 79 → 89 ms, output queues 15 → 40–48 ms, held until
+Stop/Play, which restored 11.6/15.5 ms), but the application tone stayed
+at 10.6 ms pickup and clean between stalls: glitches only at each stall
+(2–3 per stall), 0 lasting. One unexplained 30 ms burst of tiny residuals
+(0.06×) at 79.0 s in run 2, before any stall. So: lasting latency after a
+stall is reproduced and is a real defect (no backlog trimming), the
+Discord-at-cap static is not; the application input appears to pace the
+graph here, while in the incident Discord's pickup itself plateaued
+(22 ms), which needs a real bursty or starved Discord. Not yet measured:
+the mic and Siege paths (muted in these runs), where an input pinned near
+its 100 ms polling buffer could lose audio.
+
+Recurrence (2026-10-19, local build of `db7a784e`, PID 25792): the owner
+heard crackle from about 19:03. YouTube in the browser, played straight
+to the default device (Focusrite USB Audio) and not through AudioRouter,
+crackled too, and kept crackling after Stop in AudioRouter. At 19:08:
+audiodg 0.6 % of a core, AudioRouter 7 %, total CPU 22 %, DPC 0.9 %,
+interrupt 0.4 %; no System-log USB, audio, PnP or WHEA events in the
+previous 90 minutes; every Focusrite device reported OK. `audioHealth`
+counters had been flat since 18:52 (siege-in pickup about 97 ms since a
+15:42–15:52 series of 80–85 ms service gaps, Discord 11 ms). So this
+occurrence is below AudioRouter (Focusrite device, driver or Windows
+endpoint), and the earlier "clean `mixer-3` take" could not have shown it,
+since `mixer-3` never passes through the Focusrite. The Siege backlog
+plateau is still a separate real defect. Fix: changing the Focusrite's
+format in Sound settings → Properties → Advanced (and back) cleared the
+crackle at once, without unplugging; the endpoint then stored 48 kHz
+24-bit stereo (engine mix format 48 kHz 32-bit). A format change restarts
+the endpoint's audio engine and the device stream, so the fault lives in
+that stream (driver or device clock state), not in AudioRouter's graph.
+When it recurs, before resetting: note Focusrite Control's sample rate and
+buffer size versus Windows', try YouTube with AudioRouter stopped, and run
+LatencyMon for a minute.
+
+Backlog recovery after stalls (owner-approved 2026-10-19, "Yes please
+do"). Defect: after a service stall, a multi-input route keeps the extra
+delay until Stop/Play (reproduced by `AUDIOROUTER_STATIC_STALLS`; live
+siege-in 97 ms and outputs 26–50 ms). Two causes: (a) the lockstep feeder
+reads each capture at the graph's rate, so unread packets left in an
+input's WASAPI buffer never drain; (b) every underrun deepens the render
+cushion by 5 ms up to 40 ms and it never shrinks, and nothing removes
+audio already queued past it.
+
+Implemented (uncommitted): `AudioCaptureSource::has_queued_packet`
+(physical, binaural and process-loopback captures; `GetNextPacketSize`).
+`WasapiMultiInputFanout::pump_inputs` skips a packet older than 40 ms at
+pickup (`INPUT_BACKLOG_TRIM_AGE_100NS`) while a newer one is queued, and
+keeps skipping until none is (never the newest), counted per input as
+`trimmedPackets` in `audioHealth`. Regression in
+`multi_input_feeder_submits_coherent_sources_to_both_outputs`.
+
+Stall harness (run-2 settings: tone on CABLE Input, stalls 60/90/170/30/
+120/200 ms, Stop/Play at 145 s; logs `stall-run3…8.log` in the session
+scratchpad), run beside the owner's live app with Firefox and Discord
+busy:
+
+| Run | Change | siege-in after stalls | Glitches |
+|---|---|---|---|
+| 6 | trimming off (A/B) | 20 → 32 → 85 → 95 → 105 ms | 23 |
+| 3 | inputs + output trim + cushion decay | 20 ms | 43 |
+| 4 | inputs + output trim | 20 ms | 47 (bursts at 47, 87, 112 s) |
+| 5 | inputs only | 20 ms | 133 (83 after Stop/Play, no stall) |
+| 7 | inputs, no app loopback | 20 ms | 23; app 11 → 18 → 28 ms, lasting |
+| 8 | inputs incl. app loopback (final) | 20 ms | 32, at or beside stalls |
+
+Rejected: output trimming at cushion + 20 ms cut healthy audio, because
+CABLE-A's ordinary queue (about 32 ms) already exceeds it; each device
+buffers differently. Timed cushion decay dropped audio and caused fresh
+underruns about 60 s after the last one. Excluding app loopback moved the
+backlog onto the app input instead. Run 5's burst did not recur in run 8
+with the same code, so it is attributed to load (not proven). Output
+queues still keep their deepened cushion (up to 40 ms after repeated
+underruns) until Stop/Play; a later fix would need inaudible catch-up
+(slight resampling), not block drops. Checks: fmt (workspace, shell),
+strict Clippy, workspace tests 1,138 passed / 0 failed / 29 ignored
+(before the last two narrowing edits), then windows-audio, control and
+transport 429 passed / 0 failed. Rollback: revert the commit. Full
+record: [lasting static and stall backlog](evidence/2026-10-19-lasting-static-and-stall-backlog.md).
+
 Next: (0) when the static is heard again, before any restart: record
 `mixer-2`'s output and a loopback of the Focusrite endpoint at the same time
 (engine clean + device dirty = render/OS side; both dirty = engine), and

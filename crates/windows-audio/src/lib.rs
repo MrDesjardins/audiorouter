@@ -2264,6 +2264,13 @@ pub trait AudioCaptureSource {
         destination: &mut [u8],
         bytes_per_frame: usize,
     ) -> Result<Option<(CapturePacket, usize)>, AudioError>;
+
+    /// Whether another packet is already waiting after the one just read.
+    /// Lets the feeder skip stale packets after a stall without ever
+    /// dropping the newest one. Sources that cannot tell report `false`.
+    fn has_queued_packet(&self) -> bool {
+        false
+    }
 }
 
 /// Decode caller-owned interleaved IEEE float32 bytes into the engine's
@@ -4967,6 +4974,12 @@ impl AudioCaptureSource for ProcessLoopbackCapture {
         }
         self.read_packet_as_float32(destination)
     }
+
+    fn has_queued_packet(&self) -> bool {
+        // SAFETY: `self.capture` is the live capture service owned by `self`;
+        // GetNextPacketSize only reads the stream's queue state.
+        unsafe { self.capture.GetNextPacketSize() }.is_ok_and(|frames| frames != 0)
+    }
 }
 
 impl SharedCapture {
@@ -5497,6 +5510,12 @@ impl AudioCaptureSource for SharedCapture {
         bytes_per_frame: usize,
     ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
         SharedCapture::next_packet_into(self, destination, bytes_per_frame)
+    }
+
+    fn has_queued_packet(&self) -> bool {
+        // SAFETY: `self.capture` is the live capture service owned by `self`;
+        // GetNextPacketSize only reads the stream's queue state.
+        unsafe { self.capture.GetNextPacketSize() }.is_ok_and(|frames| frames != 0)
     }
 }
 
@@ -6460,6 +6479,11 @@ impl Drop for WasapiOutputFanout {
     }
 }
 
+/// A capture packet older than this at pickup (40 ms, 100 ns units) while a
+/// newer packet is already queued is backlog from a stall, not jitter:
+/// healthy inputs are picked up within about 20 ms.
+pub const INPUT_BACKLOG_TRIM_AGE_100NS: u64 = 400_000;
+
 #[derive(Debug)]
 pub enum WasapiMultiInputFanoutError {
     Capacity,
@@ -6483,6 +6507,10 @@ pub struct WasapiMultiInputFanout {
     input_waits: Vec<DelayEstimate>,
     /// Packets Windows flagged as following lost capture data, per source.
     input_discontinuities: Vec<u64>,
+    /// Stale packets skipped to drain a backlog, per source.
+    input_trimmed_packets: Vec<u64>,
+    /// A source is skipping stale packets until it reaches the newest one.
+    input_catching_up: Vec<bool>,
     source_blocks: Vec<audiorouter_engine::AudioBlock>,
     channels: Vec<usize>,
     quantum_frames: usize,
@@ -6535,6 +6563,8 @@ impl WasapiMultiInputFanout {
             pending_packet_bytes,
             input_waits: vec![DelayEstimate::default(); source_channels.len()],
             input_discontinuities: vec![0; source_channels.len()],
+            input_trimmed_packets: vec![0; source_channels.len()],
+            input_catching_up: vec![false; source_channels.len()],
             pending_packet_offsets,
             source_blocks,
             channels,
@@ -6564,6 +6594,12 @@ impl WasapiMultiInputFanout {
         &self.input_discontinuities
     }
 
+    /// Stale packets skipped per source since start to drain a backlog left
+    /// by a stall (see [`INPUT_BACKLOG_TRIM_AGE_100NS`]).
+    pub fn input_trimmed_packets(&self) -> &[u64] {
+        &self.input_trimmed_packets
+    }
+
     pub fn mixer_mut(&mut self) -> &mut audiorouter_engine::RealtimeMixerFanout {
         &mut self.mixer
     }
@@ -6575,6 +6611,7 @@ impl WasapiMultiInputFanout {
         self.pending_packet_bytes.fill(0);
         self.pending_packet_offsets.fill(0);
         self.input_waits.fill(DelayEstimate::default());
+        self.input_catching_up.fill(false);
         self.mixer.reset_inputs()
     }
 
@@ -6589,6 +6626,9 @@ impl WasapiMultiInputFanout {
         }
         if let Some(offset) = self.pending_packet_offsets.get_mut(index) {
             *offset = 0;
+        }
+        if let Some(catching_up) = self.input_catching_up.get_mut(index) {
+            *catching_up = false;
         }
     }
 
@@ -6629,10 +6669,12 @@ impl WasapiMultiInputFanout {
                         AudioError::InvalidFrameSize,
                     ));
                 }
+                let mut age = None;
                 if packet.qpc_position != 0 {
                     if let Some(now) = qpc_now_100ns() {
-                        self.input_waits[index]
-                            .observe(now.saturating_sub(packet.qpc_position) as f64);
+                        let wait = now.saturating_sub(packet.qpc_position);
+                        self.input_waits[index].observe(wait as f64);
+                        age = Some(wait);
                     }
                 }
                 if packet.flags
@@ -6642,6 +6684,21 @@ impl WasapiMultiInputFanout {
                     self.input_discontinuities[index] =
                         self.input_discontinuities[index].saturating_add(1);
                 }
+                // The graph consumes every input at the output clock rate, so
+                // packets a stall left in the capture buffer would otherwise
+                // stay queued as lasting delay. Skip stale packets while a
+                // newer one waits; the newest is always kept.
+                if capture.has_queued_packet()
+                    && (self.input_catching_up[index]
+                        || age.is_some_and(|age| age > INPUT_BACKLOG_TRIM_AGE_100NS))
+                {
+                    self.input_catching_up[index] = true;
+                    self.input_trimmed_packets[index] =
+                        self.input_trimmed_packets[index].saturating_add(1);
+                    result.packets = result.packets.saturating_add(1);
+                    continue;
+                }
+                self.input_catching_up[index] = false;
                 self.pending_packet_bytes[index] = packet_bytes;
                 self.pending_packet_offsets[index] = 0;
                 result.packets = result.packets.saturating_add(1);
@@ -6953,6 +7010,11 @@ impl AudioCaptureSource for BinauralCapture {
             .map_err(|_| AudioError::ProcessingStateUnavailable)?;
         converter.next_packet_into(&self.capture, destination, bytes_per_frame)
     }
+
+    fn has_queued_packet(&self) -> bool {
+        // The converter turns each device packet into exactly one packet.
+        self.capture.has_queued_packet()
+    }
 }
 
 /// Real-time-paced silent capture. It paces generated sources (Test Signal,
@@ -7096,6 +7158,15 @@ impl AudioCaptureSource for MultiInputCaptureSource {
             }
             Self::Silence(capture) => capture.next_packet_into(destination, bytes_per_frame),
             Self::Network(receiver) => receiver.next_packet_into(destination, bytes_per_frame),
+        }
+    }
+
+    fn has_queued_packet(&self) -> bool {
+        match self {
+            Self::Physical(capture) => AudioCaptureSource::has_queued_packet(capture),
+            Self::Binaural(capture) => capture.has_queued_packet(),
+            Self::ApplicationLoopback(capture) => capture.has_queued_packet(),
+            Self::Silence(_) | Self::Network(_) => false,
         }
     }
 }
@@ -7249,6 +7320,10 @@ impl NativeMultiInputWorker {
         self.feeder.input_discontinuities().to_vec()
     }
 
+    /// Stale capture packets skipped to drain a backlog, in input order.
+    pub fn input_trimmed_packets(&self) -> Vec<u64> {
+        self.feeder.input_trimmed_packets().to_vec()
+    }
     /// Device-buffer underruns per physical output, in output order.
     pub fn output_underruns_per_output(&self) -> Vec<u64> {
         self.outputs
@@ -10065,6 +10140,55 @@ mod tests {
                 AudioError::InvalidFrameSize
             ))
         ));
+
+        // Packets a stall left queued, by age at pickup (100 ns).
+        struct Backlog {
+            ages: std::cell::RefCell<std::collections::VecDeque<u64>>,
+        }
+        impl AudioCaptureSource for Backlog {
+            fn next_packet_into(
+                &self,
+                destination: &mut [u8],
+                _bytes_per_frame: usize,
+            ) -> Result<Option<(CapturePacket, usize)>, AudioError> {
+                let Some(age) = self.ages.borrow_mut().pop_front() else {
+                    return Ok(None);
+                };
+                destination[..8].fill(0);
+                Ok(Some((
+                    CapturePacket {
+                        frames: 2,
+                        flags: 0,
+                        device_position: 0,
+                        qpc_position: qpc_now_100ns().unwrap() - age,
+                    },
+                    8,
+                )))
+            }
+            fn has_queued_packet(&self) -> bool {
+                !self.ages.borrow().is_empty()
+            }
+        }
+        feeder.reset();
+        let backlog = Backlog {
+            ages: std::cell::RefCell::new([1_000_000, 900_000, 50_000].into()),
+        };
+        let backlog_captures: [&dyn AudioCaptureSource; 2] = [&backlog, &right];
+        for _ in 0..3 {
+            feeder.pump_inputs(&backlog_captures).unwrap();
+        }
+        // Both stale packets are skipped; the newest one is kept.
+        assert_eq!(feeder.input_trimmed_packets(), &[2, 0]);
+        assert_eq!(feeder.mixer().input_ring(0).unwrap().ready(), 1);
+        // An old packet with nothing newer behind it is never dropped.
+        feeder.reset();
+        let alone = Backlog {
+            ages: std::cell::RefCell::new([1_000_000].into()),
+        };
+        let alone_captures: [&dyn AudioCaptureSource; 2] = [&alone, &right];
+        feeder.pump_inputs(&alone_captures).unwrap();
+        assert_eq!(feeder.input_trimmed_packets(), &[2, 0]);
+        assert_eq!(feeder.mixer().input_ring(0).unwrap().ready(), 1);
     }
 
     #[cfg(windows)]

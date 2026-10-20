@@ -228,6 +228,7 @@ impl ControlPlane {
                 let ms = |value: Option<f64>| value.map(|value| (value * 10.0).round() / 10.0);
                 let waits = worker.input_wait_ms();
                 let discontinuities = worker.input_discontinuities();
+                let input_trims = worker.input_trimmed_packets();
                 let inputs = worker
                     .input_node_ids()
                     .iter()
@@ -237,6 +238,7 @@ impl ControlPlane {
                             "nodeId": id.as_str(),
                             "waitMs": ms(waits.get(index).copied().flatten()),
                             "discontinuities": discontinuities.get(index).copied().unwrap_or(0),
+                            "trimmedPackets": input_trims.get(index).copied().unwrap_or(0),
                         })
                     })
                     .collect::<Vec<_>>();

@@ -1902,7 +1902,14 @@ mod live {
 
         let pipe = format!(r"\\.\pipe\audiorouter-static-{}", std::process::id());
         let server_pipe = pipe.clone();
+        // The serve call runs the audio service on this thread; its ID lets
+        // `AUDIOROUTER_STATIC_STALLS` freeze it exactly like a starved pass.
+        let service_thread = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let service_thread_id = Arc::clone(&service_thread);
         std::thread::spawn(move || {
+            // SAFETY: GetCurrentThreadId takes no arguments and cannot fail.
+            let id = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
+            service_thread_id.store(id, Ordering::Release);
             let plane = audiorouter_control::ControlPlane::with_storage(
                 "static",
                 audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap(),
@@ -1949,6 +1956,38 @@ mod live {
             .find(|node| node["id"] == output_node.as_str())
             .expect("measured output node");
         output["parameters"]["endpointId"] = json!(result_render.clone());
+        // `AUDIOROUTER_STATIC_SPARE_RENDER_ID` moves every other physical
+        // output to an unused endpoint, so a run beside the owner's live app
+        // never reaches their Discord microphone cable or game capture.
+        if let Ok(spare) = std::env::var("AUDIOROUTER_STATIC_SPARE_RENDER_ID") {
+            let spare = endpoint(
+                "AUDIOROUTER_STATIC_SPARE_RENDER_ID",
+                &spare,
+                EndpointDirection::Render,
+            );
+            for node in session["nodes"].as_array_mut().unwrap() {
+                if node["kind"] == "physicalOutput" && node["id"] != output_node.as_str() {
+                    node["parameters"]["endpointId"] = json!(spare.clone());
+                }
+            }
+        }
+        // `AUDIOROUTER_STATIC_SET=<node>/<parameter>=<number>;...` adjusts
+        // parameters, e.g. a Mixer input volume of 0 keeps the live
+        // microphone and game out of the measured output.
+        if let Ok(settings) = std::env::var("AUDIOROUTER_STATIC_SET") {
+            for setting in settings.split(';').filter(|setting| !setting.is_empty()) {
+                let (target, value) = setting.split_once('=').expect("<node>/<parameter>=<value>");
+                let (node_id, parameter) = target.split_once('/').expect("<node>/<parameter>");
+                let value: f64 = value.parse().expect("numeric parameter value");
+                let node = session["nodes"]
+                    .as_array_mut()
+                    .unwrap()
+                    .iter_mut()
+                    .find(|node| node["id"] == node_id)
+                    .unwrap_or_else(|| panic!("node {node_id} for AUDIOROUTER_STATIC_SET"));
+                node["parameters"][parameter] = json!(value);
+            }
+        }
         let plan = rpc(
             &pipe,
             "graph.plan",
@@ -1986,6 +2025,22 @@ mod live {
         let restart_at: Option<f64> = std::env::var("AUDIOROUTER_CONTINUITY_RESTART_AT")
             .ok()
             .and_then(|value| value.parse().ok());
+        // `AUDIOROUTER_STATIC_STALLS=<at s>:<ms>,...` suspends the audio
+        // service thread for that long, as the owner's 15–170 ms request
+        // stalls did, without loading the rest of the machine.
+        let mut stalls: Vec<(f64, u64)> = std::env::var("AUDIOROUTER_STATIC_STALLS")
+            .unwrap_or_default()
+            .split(',')
+            .filter(|stall| !stall.is_empty())
+            .map(|stall| {
+                let (at, ms) = stall.split_once(':').expect("<at s>:<ms>");
+                (
+                    at.parse().expect("stall time"),
+                    ms.parse().expect("stall ms"),
+                )
+            })
+            .collect();
+        stalls.sort_by(|a, b| b.0.total_cmp(&a.0));
         let stress_stop = Arc::new(AtomicBool::new(false));
         let mut stress_threads: Vec<std::thread::JoinHandle<()>> = Vec::new();
         let mut hog: Option<Helper> = None;
@@ -1995,6 +2050,26 @@ mod live {
         let mut tick = 0_u64;
         while begin.elapsed() < Duration::from_secs(seconds) {
             let elapsed = begin.elapsed().as_secs_f64();
+            if stalls.last().is_some_and(|(at, _)| elapsed >= *at) {
+                let (_, ms) = stalls.pop().unwrap();
+                use windows::Win32::System::Threading::{
+                    OpenThread, ResumeThread, SuspendThread, THREAD_SUSPEND_RESUME,
+                };
+                let id = service_thread.load(Ordering::Acquire);
+                // SAFETY: OpenThread takes a plain thread ID; the returned
+                // handle is owned here and closed below. Suspending a thread
+                // that may hold the heap lock is safe because nothing between
+                // SuspendThread and ResumeThread allocates (Sleep and the two
+                // calls only), so this thread cannot wait on that lock.
+                unsafe {
+                    let thread = OpenThread(THREAD_SUSPEND_RESUME, false, id).unwrap();
+                    SuspendThread(thread);
+                    std::thread::sleep(Duration::from_millis(ms));
+                    ResumeThread(thread);
+                    let _ = windows::Win32::Foundation::CloseHandle(thread);
+                }
+                eprintln!("t={elapsed:.1}s stalled the audio service {ms} ms");
+            }
             if let Some((start, duration, threads)) = stress {
                 if !stress_done && stress_threads.is_empty() && elapsed >= start {
                     eprintln!("t={elapsed:.1}s stress: {threads} busy threads, {hog_gb} GB memory");
