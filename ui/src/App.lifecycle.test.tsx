@@ -96,7 +96,9 @@ const sessionPanel = () => within(document.querySelector<HTMLElement>(".right-wo
 const messageBar = () => within(document.querySelector<HTMLElement>(".global-action-message")!);
 function addGain() {
   fireEvent.click(screen.getByRole("tab", { name: "Tools" }));
-  fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain / }));
+  // jsdom 30 treats the card's <strong>/<small> as inline (no stylesheet),
+  // so the computed name has no space between the title and the help text.
+  fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain\s*Make the sound/ }));
 }
 // The top bar's Play (the removed hidden lifecycle panel had the same handler).
 function start() {

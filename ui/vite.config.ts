@@ -41,9 +41,11 @@ export default defineConfig({
         // React is its own chunk for the same reason. The rarely used panels
         // (API, MCP, Logs) total about 10 kB, so lazy-loading them would not
         // shrink startup: the shell loads every chunk from local disk anyway.
-        manualChunks: {
-          "xyflow-vendor": ["@xyflow/react"],
-          "react-vendor": ["react", "react-dom", "react-dom/client", "scheduler"],
+        // Vite 8 (Rolldown) accepts only the function form.
+        manualChunks(id: string) {
+          if (/[\\/]node_modules[\\/]@xyflow[\\/]/.test(id)) return "xyflow-vendor";
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "react-vendor";
+          return undefined;
         },
       },
     },
