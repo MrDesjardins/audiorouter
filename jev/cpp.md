@@ -2,6 +2,13 @@
 applies_to: tools/**/*.cpp, tools/**/*.h, tools/**/*.hpp
 ---
 
+# Review boundary
+Report only C++ correctness, safety, security, and runtime risks that the
+configured compiler and static-analysis checks do not already report. Check
+the toolchain and CI configuration before flagging a finding. Do not report
+compiler diagnostics, configured analyzer findings, formatting, or subjective
+style preferences.
+
 # Do not use raw new and delete for ownership
 Owning heap allocations must be managed by smart pointers or containers (`std::unique_ptr`, `std::make_unique`, `std::vector`), not raw `new`/`delete`.
 

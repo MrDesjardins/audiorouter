@@ -926,7 +926,7 @@ impl Storage {
             }
         }
         self.connection
-            .backup(rusqlite::DatabaseName::Main, destination, None)
+            .backup(rusqlite::MAIN_DB, destination, None)
             .map_err(StorageError::Sql)?;
         validate_backup_size(destination)
     }
@@ -1063,7 +1063,7 @@ impl Storage {
                 "backup integrity check failed: {integrity}"
             )));
         }
-        match source_connection.backup(rusqlite::DatabaseName::Main, destination, None) {
+        match source_connection.backup(rusqlite::MAIN_DB, destination, None) {
             Ok(()) => Ok(()),
             Err(error) => {
                 let _ = std::fs::remove_file(destination);

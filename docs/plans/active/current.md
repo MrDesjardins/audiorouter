@@ -1,5 +1,31 @@
 # Active plan — post-0.0.8 maintenance
 
+## Jev review scope — 2026-10-20, owner preference
+
+Objective: keep Jev focused on review findings that the configured compiler,
+formatter, linter, or static analyzer cannot detect. Formatting remains owned
+by rustfmt and the UI formatter; CI checks remain authoritative for their
+configured diagnostics.
+
+- Requirements: ENG-02 and ENG-04.
+- Decision: Jev may report remaining correctness, safety, security,
+  accessibility, concurrency, or performance risks. It must check the active
+  tool configuration first and must not duplicate compiler/linter findings or
+  comment on formatting and subjective style. Language-specific boundaries
+  are recorded in each `jev/*.md` rule file; the duplicate Rust unsafe-comment
+  rule was removed because strict Clippy already enforces it. The numeric cast
+  rule now distinguishes narrowing integer casts from deliberate approximate
+  integer-to-float metric formatting.
+- Tasks: update rule boundaries and retain the preference as a validated
+  lesson.
+- Validation: inspect rule boundaries and the Clippy/rustfmt/UI lint workflow;
+  run `git diff --check`. Re-run Jev through PR CI after pushing.
+- Evidence: this entry, Jev rule files, and `AGENTS.md`.
+- Risk: Jev may still miss context or overreport; use the configured tools and
+  the concrete value range when triaging a future cast finding.
+- Rollback: revert only the Jev policy and corresponding documentation.
+- Next: allow PR Jev and AudioRouter CI to complete on the updated base.
+
 ## Dedicated audio thread for the multi-input worker — 2026-10-21, owner requested ("Go full")
 
 Objective: requests and control-thread maintenance can no longer delay
@@ -130,6 +156,34 @@ owner's go-ahead; release test builds at below-normal priority):
 
 Next: CI green, then an attended session on a branch build, reading
 `audioThread` in `backend.jsonl`, before merging.
+
+## Cargo major updates by hand (supersedes Dependabot #41) — 2026-10-21, owner requested
+
+#41 failed CI in `audiorouter-storage` (rusqlite 0.40 API) and paired
+windows-core 0.100 with windows 0.62.2, whose COM types only implement
+windows-core 0.62 traits (no windows 0.100 exists). Done on branch
+`deps/cargo-major-2026-10`, without local compiles while the owner's
+long-run observation of the scratchy-voice defect runs:
+
+- rusqlite 0.32.1 → 0.40.2 (bundled SQLite via libsqlite3-sys 0.30 → 0.38).
+  `DatabaseName::Main` became `MAIN_DB` (two backup calls). `u64`/`usize`
+  `ToSql`/`FromSql` moved behind the `fallible_uint` feature, which is
+  enabled: the same checked `i64` conversion as 0.32, so no stored value
+  changes.
+- tungstenite 0.26.2 → 0.30.0 (Stats.cc round feed client): changelog shows
+  no API change for the client calls used; 0.30 only tightens server-side
+  key checks.
+- getrandom 0.3.4 → 0.4.3 (shell tokens and nonces): `fill` unchanged.
+- windows-core stays 0.62.2; `.github/dependabot.yml` now ignores its major
+  updates until a matching windows release exists.
+
+Checks so far: both `cargo fmt -- --check` clean; `cargo deny check` (root
+and `src-tauri`) advisories, bans, licenses and sources ok; lockfiles change
+only these three crates and their dependencies. Compile, Clippy and tests:
+Windows CI on the branch. Still to do before merging: open a copy of the
+owner's session database with the new SQLite (sessions list, a backup) and
+a muted start + pump of a Stats.cc Duck route, both when the owner is not in
+a call. Rollback: revert the commit; no schema or file format change.
 
 ## Release 0.0.20 — 2026-10-19, owner requested ("potentially we should do a 0.0.20 since it fixes the issue with the buffer increasing")
 

@@ -2,6 +2,13 @@
 applies_to: crates/**/*.rs, src-tauri/**/*.rs
 ---
 
+# Review boundary
+Report only realtime correctness or safety risks that the compiler and the
+repository's configured Rust lint checks cannot identify. Do not duplicate
+compiler or Clippy diagnostics, and do not comment on formatting; rustfmt and
+CI are authoritative for those checks. Keep findings tied to an actual
+realtime path and concrete behavior.
+
 # The realtime audio path must not allocate
 Code that runs on the audio callback (`RealtimePluginProcessor::process`, anything handed an `AudioBlock` during processing, and functions it calls) must not allocate: no `Vec::new`/`push` that can grow, `collect`, `clone` of heap data, `Box::new`, `format!`, or `String` building. Allocate at construction or graph-preparation time and reuse the storage.
 

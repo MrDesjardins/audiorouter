@@ -2,6 +2,12 @@
 applies_to: ui/**/*.tsx, ui/**/*.css
 ---
 
+# Review boundary
+Report only user-visible behavior, accessibility, layout, or compatibility
+risks that the TypeScript compiler, configured ESLint checks, and build do not
+already report. Do not duplicate their diagnostics or comment on formatting;
+the app formatter and CI are authoritative for those checks.
+
 # Live data must not shift the layout (UI-17)
 Live values, suggestions, status text, and pills must never make the UI move. Render each such slot at a reserved size, show a placeholder (with a disabled action) while waiting, keep the last good value through brief gaps, and fix the width of changing labels. Only a deliberate user action may change layout.
 

@@ -20,6 +20,13 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # windows-core must stay on the same release as the windows crate: COM
+    # types from one release do not implement the other's traits. In
+    # 2026-10, windows-core 0.100 existed while windows stopped at 0.62.2.
+    # Upgrade both by hand when a matching windows release appears.
+    ignore:
+      - dependency-name: windows-core
+        update-types: ["version-update:semver-major"]
     groups:
       cargo-patch:
         update-types: [patch]

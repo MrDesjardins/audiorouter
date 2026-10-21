@@ -2,6 +2,12 @@
 applies_to: **/*.tsx
 ---
 
+# Review boundary
+Report only React runtime, accessibility, correctness, or performance risks
+that TypeScript and the repository's configured ESLint/React Hooks checks do
+not already report. Do not duplicate configured lint findings or comment on
+formatting and style preferences; CI is authoritative for those checks.
+
 # Avoid unnecessary re-renders from inline literals in JSX props
 Passing a newly created object, array, or arrow function literal as a prop
 on every render (e.g. `<Child options={{ x: 1 }} />`) should be avoided
