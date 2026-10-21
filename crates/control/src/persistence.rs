@@ -300,6 +300,10 @@ impl ControlPlane {
             #[cfg(windows)]
             native_multi_input_worker: None,
             #[cfg(windows)]
+            audio_thread_shared: std::sync::Arc::default(),
+            #[cfg(windows)]
+            audio_thread: None,
+            #[cfg(windows)]
             native_multi_input_worker_session: None,
             #[cfg(windows)]
             native_multi_input_worker_generation: None,

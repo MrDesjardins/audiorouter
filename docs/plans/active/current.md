@@ -1,5 +1,109 @@
 # Active plan — post-0.0.8 maintenance
 
+## Dedicated audio thread for the multi-input worker — 2026-10-21, owner requested ("Go full")
+
+Objective: requests and control-thread maintenance can no longer delay
+audio processing. Today one thread (MMCSS "Pro Audio", measured base
+priority 24, ~5 % of a core) both dispatches every request and pumps every
+native worker, so a slow request stops all audio for its duration. Prevention
+item (2) of the scratchy-voice defect below. Requirements NFR-06, ARCH-04,
+the AGENTS.md audio-callback rule (never wait for UI, IPC, disk or
+control-plane locks).
+
+Evidence before the change (owner's live session, 133 min after a restart,
+2026-10-21): longest gap between passes 7.6 ms (late threshold 8 ms), 2 slow
+requests (`nativePaths.prepare`, 333 ms, at Play). So the change is
+prevention; it is not expected to change a quiet session's numbers.
+
+Scope: the multi-input worker only. It serves every route started from the
+app (`nativePaths.prepare`). The single-endpoint (`nativeEndpoints.*`),
+duplex and render-source workers and the cable route stay on the control
+thread for now (legacy API and the unshipped cable); each can move later
+with the same pattern.
+
+Design:
+
+1. **Audio thread.** The plane starts one `audiorouter-audio` thread (COM
+   MTA, MMCSS "Pro Audio", 1 ms timer) the first time a multi-input worker
+   starts, and keeps it for the process. Every 1 ms it calls
+   `pump_and_process_outputs` (or `pump_available` when no output owner)
+   on the shared worker. Nothing else runs there: no logging, no disk, no
+   allocation in the steady state.
+2. **Sharing.** The worker moves into a slot shared by both threads: a
+   mutex around the worker plus atomics for `enabled`, pass statistics and
+   the latest pump error code. The audio thread only `try_lock`s: when the
+   control thread holds the slot, the pass is skipped and retried 1 ms
+   later, so a control thread at normal priority can never block the
+   audio thread (no priority inversion). The control thread holds the slot
+   only for short worker calls (start, stop, binding taps, live graph
+   updates, reading counters for diagnostics); a worker being released is
+   taken out of the slot and dropped outside the lock.
+3. **Thread safety.** WASAPI and MMDevice interfaces are free-threaded
+   within the MTA, and both threads join the MTA, but the `windows` crate
+   marks every COM interface `!Send`. A small wrapper asserts `Send` for the
+   worker, with the invariants written at the `unsafe impl`: both threads
+   are MTA, the mutex gives one thread access at a time, and no part of the
+   worker is apartment-bound or reference-counted with `Rc`. Checked by
+   reading every field the worker owns before relying on it.
+4. **Gating.** The control thread keeps every check the pump made:
+   capture-sink lease heartbeats, endpoint lifecycle invalidation, runtime
+   state and generation. It sets `enabled` from them on each maintenance
+   pass and synchronously at Stop, Play and rebinding; the audio thread
+   pumps only while `enabled`. A pump error is counted, its category kept,
+   and the control thread reacts as before (application inputs switched to
+   silence via `maintain_multi_input_applications`).
+5. **Control-thread maintenance stays where it is:** recorder draining
+   (2 s queues), node recordings, network diagnostics, application probes,
+   heartbeats. Its 1 ms loop is unchanged.
+6. **Diagnostics.** `audioService` (passes, late gaps, max gap) and the
+   `audioHealth` gap fields come from the audio thread; the record adds
+   whether MMCSS was granted on it. The control-thread gap measurement
+   becomes `controlMaxPassGapMs`, so a slow request still shows.
+
+Order: wrapper and audio-thread host with unit tests (a fake pump: skip on
+contention, enabled gating, error reporting, stop and drop outside the
+lock) → move the multi-input slot and its ~36 call sites → diagnostics →
+compile and the full test suite → live checks. Local builds run at
+below-normal priority with limited jobs, and only when the owner agrees.
+
+Validation: workspace tests and Clippy; `live_backend_service_keeps_a_routed_tone_continuous`
+for the multi-input path (zero glitches on a clean reference); a stall test
+that blocks the control thread for 500 ms with a request while a tone plays
+and requires zero glitches (impossible before the change); muted start and
+pump with a plugin and a Stats.cc Duck; then an attended session.
+Rollback: revert the commit; no saved data or API change.
+
+**Implemented (2026-10-21, branch `audio-thread`, not yet compiled
+locally; CI compiles it).** `crates/control/src/audio_thread.rs` holds the
+shared slot, the `Send` wrapper and the thread; the plane's
+`native_multi_input_worker` is now a `MultiInputWorkerHandle` with the same
+method names, so most call sites are unchanged (the network sender and
+receiver, which returned references, go through `with`). Differences from
+the design above:
+
+- The thread starts with the backend service (`mark_audio_service_started`),
+  not at the first Play, and only if it joins the COM MTA; otherwise, and
+  in tests and the CLI, the control thread pumps inline as before.
+- A handle drops only the worker it attached (attach number), so a stale
+  handle can never release a newer worker.
+- A panic on the audio thread stops its pumping and is re-raised on the
+  control thread at the next pass, so the existing supervisor restarts the
+  backend as it did for an inline panic.
+- `nativeMultiInputs.pump` with the thread running applies the checks and
+  returns zero new frames plus the worker's counters (`"audioThread": true`).
+- Diagnostics: the transport's `maxPassGapMs`/`maxPassMs` keep their names
+  (they still measure the control thread); `audioHealth` gains an
+  `audioThread` object (started, MMCSS granted, passes, late gaps, max gap,
+  pump errors, passes skipped on contention, and interval maxima).
+- The 500 ms stall test needs a way to hold the control thread from the
+  harness; not written yet. Until then the continuity harness with its CPU
+  stress phase (`AUDIOROUTER_CONTINUITY_STRESS`) is the live check.
+
+Next: CI green on the branch (unit tests in `audio_thread_tests.rs`), then,
+with the owner's go-ahead (not during a call), the continuity harness, the
+muted start + pump, and an attended session reading `audioThread` in
+`backend.jsonl`.
+
 ## Release 0.0.20 — 2026-10-19, owner requested ("potentially we should do a 0.0.20 since it fixes the issue with the buffer increasing")
 
 **Published** 2026-10-20 04:38 UTC as an experimental prerelease from tag

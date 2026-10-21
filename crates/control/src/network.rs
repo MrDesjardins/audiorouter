@@ -245,15 +245,17 @@ impl ControlPlane {
             records.push((node_id.as_str().to_owned(), summary.to_record("summary")));
         }
         for (index, node_id) in worker.output_node_ids().iter().enumerate() {
-            let (Some(stats), Some(sender)) = (
-                worker.network_send_stats(index),
-                worker.network_sender(index),
-            ) else {
+            let Some((stats, destination)) = worker.with(|worker| {
+                Some((
+                    worker.network_send_stats(index)?,
+                    worker.network_sender(index)?.destination().to_string(),
+                ))
+            }) else {
                 continue;
             };
             let summary = network_log::SendSummary {
                 node_id: node_id.as_str().to_owned(),
-                destination: sender.destination().to_string(),
+                destination,
                 local_address: stats.local_address.map(|address| address.to_string()),
                 seconds_playing,
                 sent_packets: stats.sent_packets,
@@ -334,11 +336,15 @@ impl ControlPlane {
                 let destination = audiorouter_windows_audio::network_socket_address(host, port).ok_or_else(|| {
                     ControlError::InvalidRequest(format!("enter the IP address of the receiving computer for {} in its Properties", node.name))
                 })?;
-                if let Some(sender) = worker.network_sender(index) {
-                    sender.retarget(destination);
-                    if pairing_changed {
-                        sender.set_pairing_key(pairing_key);
-                    }
+                let retargeted = worker.with(|worker| {
+                    worker.network_sender(index).map(|sender| {
+                        sender.retarget(destination);
+                        if pairing_changed {
+                            sender.set_pairing_key(pairing_key);
+                        }
+                    })
+                });
+                if retargeted.is_some() {
                     changed += 1;
                 }
                 continue;
@@ -359,12 +365,14 @@ impl ControlPlane {
             let port_changed = old.parameters.get("port") != node.parameters.get("port");
             let in_place = !port_changed
                 && sender.is_some_and(|sender| {
-                    worker.network_receiver(index).is_some_and(|receiver| {
-                        let reconfigured = receiver.reconfigure(sender, buffer_ms);
-                        if reconfigured && pairing_changed {
-                            receiver.set_pairing_key(pairing_key.clone());
-                        }
-                        reconfigured
+                    worker.with(|worker| {
+                        worker.network_receiver(index).is_some_and(|receiver| {
+                            let reconfigured = receiver.reconfigure(sender, buffer_ms);
+                            if reconfigured && pairing_changed {
+                                receiver.set_pairing_key(pairing_key.clone());
+                            }
+                            reconfigured
+                        })
                     })
                 });
             if !in_place {

@@ -128,6 +128,10 @@ impl ControlPlane {
                     self.last_audio_pump_error = Some(audio_pump_error_category(&error));
                 }
                 serviced += 1;
+            } else if let Some(worker) = self.native_multi_input_worker.as_ref() {
+                // Not running, or a stale generation: the audio thread must
+                // not pump it either.
+                worker.set_pumping(false);
             }
             let playing = running(self, &self.native_multi_input_worker_session)
                 .filter(|_| self.native_multi_input_worker.is_some())
@@ -268,6 +272,27 @@ impl ControlPlane {
             return None;
         }
         health.insert("audioService".into(), self.audio_service.to_json());
+        #[cfg(windows)]
+        if self.audio_thread.is_some() {
+            let counters = self.audio_thread_shared.counters();
+            let interval = self.audio_thread_shared.take_interval();
+            let ms = |micros: u64| (micros as f64 / 100.0).round() / 10.0;
+            health.insert(
+                "audioThread".into(),
+                json!({
+                    "started": self.audio_thread_shared.thread_started(),
+                    "mmcssProAudio": interval.mmcss_pro_audio,
+                    "passes": counters.passes,
+                    "lateGaps": counters.late_gaps,
+                    "maxGapMicros": counters.max_gap_micros,
+                    "pumpErrors": counters.pump_errors,
+                    "skippedPasses": counters.skipped_passes,
+                    "intervalMaxGapMs": ms(interval.max_gap_micros),
+                    "intervalMaxPassMs": ms(interval.max_pass_micros),
+                    "intervalSkippedPasses": interval.skipped_passes,
+                }),
+            );
+        }
         health.insert("pumpErrors".into(), json!(self.audio_service.pump_errors));
         health.insert(
             "lastPumpError".into(),
@@ -279,6 +304,14 @@ impl ControlPlane {
     /// Record that a backend audio service thread now owns pumping.
     pub fn mark_audio_service_started(&mut self) {
         self.audio_service.active = true;
+        // The multi-input worker gets its own audio thread, so a slow request
+        // on this thread no longer delays it. If the thread cannot start, the
+        // service pass keeps pumping inline.
+        #[cfg(windows)]
+        if self.audio_thread.is_none() {
+            self.audio_thread =
+                audio_thread::AudioThread::spawn(self.audio_thread_shared.clone()).ok();
+        }
     }
 
     /// Whether the attached multi-input worker plays `generation`: the one it
@@ -297,41 +330,19 @@ impl ControlPlane {
         generation: u64,
         max_packets: u32,
     ) -> Result<Value, ControlError> {
-        // Keep capture-sink leases alive before borrowing the realtime worker.
-        // A failed lease is removed and its virtual route is deactivated by
-        // the heartbeat helper, so the subsequent tap path remains
-        // fail-closed instead of writing through an expired owner.
-        self.heartbeat_native_capture_sink_bindings()?;
-        if self.native_multi_input_worker_session.as_ref() != Some(session_id)
-            || !self.multi_input_worker_serves(generation)
-        {
-            return Err(ControlError::InvalidRequest(
-                "native multi-input worker binding is stale for the session".into(),
-            ));
+        let checked = self.check_native_multi_input_worker(session_id, generation);
+        if self.audio_thread.is_some() {
+            // The audio thread pumps only while every check passes.
+            if let Some(worker) = self.native_multi_input_worker.as_ref() {
+                worker.set_pumping(checked.is_ok());
+            }
         }
-        let runtime_generation = self
-            .runtimes
-            .get(session_id)
-            .filter(|runtime| runtime.state() == RuntimeState::Running)
-            .map(FakeRuntime::generation)
-            .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
-        if !self.multi_input_worker_serves(runtime_generation) {
-            return Err(ControlError::InvalidRequest(
-                "native multi-input worker generation is stale".into(),
-            ));
-        }
-        // Callers may know either the prepared or the live-applied
-        // generation; the worker itself runs its prepared one.
-        let generation = self
-            .native_multi_input_worker_generation
-            .unwrap_or(generation);
-        if self.poll_native_endpoint_lifecycle()? {
-            return Err(ControlError::InvalidRequest(
-                "native multi-input worker binding was invalidated; rebind before pumping".into(),
-            ));
-        }
-        self.maintain_multi_input_applications(session_id, false);
-        let pumped = self.pump_native_multi_input_worker_once(session_id, generation, max_packets);
+        let generation = checked?;
+        let pumped = if self.audio_thread.is_some() {
+            self.collect_audio_thread_pump(session_id, generation)
+        } else {
+            self.pump_native_multi_input_worker_once(session_id, generation, max_packets)
+        };
         // Recorder branches of a multi-path session queue audio from their
         // graph taps; write it out here as the endpoint pump does, or the
         // bounded queue fills within milliseconds and the rest is dropped.
@@ -367,6 +378,94 @@ impl ControlPlane {
             }
             result => result,
         }
+    }
+
+    /// The checks every multi-input pump makes first, returning the worker's
+    /// prepared generation. With an audio thread, they decide whether it may
+    /// pump.
+    #[cfg(windows)]
+    fn check_native_multi_input_worker(
+        &mut self,
+        session_id: &EntityId,
+        generation: u64,
+    ) -> Result<u64, ControlError> {
+        // Keep capture-sink leases alive before borrowing the realtime worker.
+        // A failed lease is removed and its virtual route is deactivated by
+        // the heartbeat helper, so the subsequent tap path remains
+        // fail-closed instead of writing through an expired owner.
+        self.heartbeat_native_capture_sink_bindings()?;
+        if self.native_multi_input_worker_session.as_ref() != Some(session_id)
+            || !self.multi_input_worker_serves(generation)
+        {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker binding is stale for the session".into(),
+            ));
+        }
+        let runtime_generation = self
+            .runtimes
+            .get(session_id)
+            .filter(|runtime| runtime.state() == RuntimeState::Running)
+            .map(FakeRuntime::generation)
+            .ok_or_else(|| ControlError::InvalidRequest("session runtime is not running".into()))?;
+        if !self.multi_input_worker_serves(runtime_generation) {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker generation is stale".into(),
+            ));
+        }
+        // Callers may know either the prepared or the live-applied
+        // generation; the worker itself runs its prepared one.
+        let generation = self
+            .native_multi_input_worker_generation
+            .unwrap_or(generation);
+        if self.poll_native_endpoint_lifecycle()? {
+            return Err(ControlError::InvalidRequest(
+                "native multi-input worker binding was invalidated; rebind before pumping".into(),
+            ));
+        }
+        self.maintain_multi_input_applications(session_id, false);
+        Ok(generation)
+    }
+
+    /// With an audio thread pumping, report what it parked instead of
+    /// pumping here: its first error since the last call (formatted as the
+    /// inline pump formats it), or the worker's counters with no new quanta.
+    /// A panic on the audio thread is re-raised here, so the backend
+    /// supervisor restarts the backend as it did for an inline pump panic.
+    #[cfg(windows)]
+    fn collect_audio_thread_pump(
+        &self,
+        session_id: &EntityId,
+        generation: u64,
+    ) -> Result<Value, ControlError> {
+        if self.audio_thread_shared.is_faulted() {
+            panic!("the audio thread's multi-input pump panicked");
+        }
+        let worker = self.native_multi_input_worker.as_ref().ok_or_else(|| {
+            ControlError::InvalidRequest("native multi-input worker is not attached".into())
+        })?;
+        if let Some(error) = self.audio_thread_shared.take_error() {
+            let pump = if worker.has_output_owner() {
+                "input/output"
+            } else {
+                "input"
+            };
+            return Err(ControlError::InvalidRequest(format!(
+                "native {pump} pump failed: {error:?}"
+            )));
+        }
+        Ok(json!({
+            "sessionId": session_id,
+            "generation": generation,
+            "inputs": 0,
+            "capturedFrames": 0,
+            "submittedQuanta": 0,
+            "outputCount": worker.output_count(),
+            "deliveredQuanta": 0,
+            "renderedFrames": 0,
+            "renderBackpressureEvents": 0,
+            "outputUnderruns": worker.output_underruns(),
+            "audioThread": true,
+        }))
     }
 
     #[cfg(windows)]
