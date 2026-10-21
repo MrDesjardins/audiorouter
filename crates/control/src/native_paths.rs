@@ -192,7 +192,10 @@ impl ControlPlane {
             ));
         }
         worker.set_privacy_muted(self.privacy_muted);
-        self.native_multi_input_worker = Some(worker);
+        self.native_multi_input_worker = Some(audio_thread::MultiInputWorkerHandle::attach(
+            &self.audio_thread_shared,
+            worker,
+        ));
         self.native_multi_input_worker_session = Some(session_id);
         self.native_multi_input_worker_generation = Some(generation);
         self.native_multi_input_applied_generation = None;

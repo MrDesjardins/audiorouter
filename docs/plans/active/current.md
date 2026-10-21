@@ -1,5 +1,162 @@
 # Active plan — post-0.0.8 maintenance
 
+## Jev review scope
+
+Objective: keep Jev focused on review findings that the configured compiler,
+formatter, linter, or static analyzer cannot detect. Formatting remains owned
+by rustfmt and the UI formatter; CI checks remain authoritative for their
+configured diagnostics.
+
+- Requirements: ENG-02 and ENG-04.
+- Decision: Jev may report remaining correctness, safety, security,
+  accessibility, concurrency, or performance risks. It must check the active
+  tool configuration first and must not duplicate compiler/linter findings or
+  comment on formatting and subjective style. Language-specific boundaries
+  are recorded in each `jev/*.md` rule file; the duplicate Rust unsafe-comment
+  rule was removed because strict Clippy already enforces it. The numeric cast
+  rule now distinguishes narrowing integer casts from deliberate approximate
+  integer-to-float metric formatting.
+- Tasks: update rule boundaries and retain the preference as a validated
+  lesson.
+- Validation: inspect rule boundaries and the Clippy/rustfmt/UI lint workflow;
+  run `git diff --check`. Re-run Jev through PR CI after pushing.
+- Evidence: this entry, Jev rule files, and `AGENTS.md`.
+- Risk: Jev may still miss context or overreport; use the configured tools and
+  the concrete value range when triaging a future cast finding.
+- Rollback: revert only the Jev policy and corresponding documentation.
+- Next: allow PR Jev and AudioRouter CI to complete on the updated base.
+
+## Dedicated audio thread for the multi-input worker — 2026-10-21, owner requested ("Go full")
+
+Objective: requests and control-thread maintenance can no longer delay
+audio processing. Today one thread (MMCSS "Pro Audio", measured base
+priority 24, ~5 % of a core) both dispatches every request and pumps every
+native worker, so a slow request stops all audio for its duration. Prevention
+item (2) of the scratchy-voice defect below. Requirements NFR-06, ARCH-04,
+the AGENTS.md audio-callback rule (never wait for UI, IPC, disk or
+control-plane locks).
+
+Evidence before the change (owner's live session, 133 min after a restart,
+2026-10-21): longest gap between passes 7.6 ms (late threshold 8 ms), 2 slow
+requests (`nativePaths.prepare`, 333 ms, at Play). So the change is
+prevention; it is not expected to change a quiet session's numbers.
+
+Scope: the multi-input worker only. It serves every route started from the
+app (`nativePaths.prepare`). The single-endpoint (`nativeEndpoints.*`),
+duplex and render-source workers and the cable route stay on the control
+thread for now (legacy API and the unshipped cable); each can move later
+with the same pattern.
+
+Design:
+
+1. **Audio thread.** The plane starts one `audiorouter-audio` thread (COM
+   MTA, MMCSS "Pro Audio", 1 ms timer) the first time a multi-input worker
+   starts, and keeps it for the process. Every 1 ms it calls
+   `pump_and_process_outputs` (or `pump_available` when no output owner)
+   on the shared worker. Nothing else runs there: no logging, no disk, no
+   allocation in the steady state.
+2. **Sharing.** The worker moves into a slot shared by both threads: a
+   mutex around the worker plus atomics for `enabled`, pass statistics and
+   the latest pump error code. The audio thread only `try_lock`s: when the
+   control thread holds the slot, the pass is skipped and retried 1 ms
+   later, so a control thread at normal priority can never block the
+   audio thread (no priority inversion). The control thread holds the slot
+   only for short worker calls (start, stop, binding taps, live graph
+   updates, reading counters for diagnostics); a worker being released is
+   taken out of the slot and dropped outside the lock.
+3. **Thread safety.** WASAPI and MMDevice interfaces are free-threaded
+   within the MTA, and both threads join the MTA, but the `windows` crate
+   marks every COM interface `!Send`. A small wrapper asserts `Send` for the
+   worker, with the invariants written at the `unsafe impl`: both threads
+   are MTA, the mutex gives one thread access at a time, and no part of the
+   worker is apartment-bound or reference-counted with `Rc`. Checked by
+   reading every field the worker owns before relying on it.
+4. **Gating.** The control thread keeps every check the pump made:
+   capture-sink lease heartbeats, endpoint lifecycle invalidation, runtime
+   state and generation. It sets `enabled` from them on each maintenance
+   pass and synchronously at Stop, Play and rebinding; the audio thread
+   pumps only while `enabled`. A pump error is counted, its category kept,
+   and the control thread reacts as before (application inputs switched to
+   silence via `maintain_multi_input_applications`).
+5. **Control-thread maintenance stays where it is:** recorder draining
+   (2 s queues), node recordings, network diagnostics, application probes,
+   heartbeats. Its 1 ms loop is unchanged.
+6. **Diagnostics.** `audioService` (passes, late gaps, max gap) and the
+   `audioHealth` gap fields come from the audio thread; the record adds
+   whether MMCSS was granted on it. The control-thread gap measurement
+   becomes `controlMaxPassGapMs`, so a slow request still shows.
+
+Order: wrapper and audio-thread host with unit tests (a fake pump: skip on
+contention, enabled gating, error reporting, stop and drop outside the
+lock) → move the multi-input slot and its ~36 call sites → diagnostics →
+compile and the full test suite → live checks. Local builds run at
+below-normal priority with limited jobs, and only when the owner agrees.
+
+Validation: workspace tests and Clippy; `live_backend_service_keeps_a_routed_tone_continuous`
+for the multi-input path (zero glitches on a clean reference); a stall test
+that blocks the control thread for 500 ms with a request while a tone plays
+and requires zero glitches (impossible before the change); muted start and
+pump with a plugin and a Stats.cc Duck; then an attended session.
+Rollback: revert the commit; no saved data or API change.
+
+**Implemented (2026-10-21, branch `audio-thread`, not yet compiled
+locally; CI compiles it).** `crates/control/src/audio_thread.rs` holds the
+shared slot, the `Send` wrapper and the thread; the plane's
+`native_multi_input_worker` is now a `MultiInputWorkerHandle` with the same
+method names, so most call sites are unchanged (the network sender and
+receiver, which returned references, go through `with`). Differences from
+the design above:
+
+- The thread starts with the backend service (`mark_audio_service_started`),
+  not at the first Play, and only if it joins the COM MTA; otherwise, and
+  in tests and the CLI, the control thread pumps inline as before.
+- A handle drops only the worker it attached (attach number), so a stale
+  handle can never release a newer worker.
+- A panic on the audio thread stops its pumping and is re-raised on the
+  control thread at the next pass, so the existing supervisor restarts the
+  backend as it did for an inline panic.
+- `nativeMultiInputs.pump` with the thread running applies the checks and
+  returns zero new frames plus the worker's counters; its response (and
+  every response carrying `audioService`) adds an `audioThread` object
+  with the thread's counters.
+- Diagnostics: the transport's `maxPassGapMs`/`maxPassMs` keep their names
+  (they still measure the control thread); `audioHealth` gains an
+  `audioThread` object (started, MMCSS granted, passes, late gaps, max gap,
+  pump errors, passes skipped on contention, and interval maxima).
+- The stall test already existed: `live_saved_session_tone_survives_starvation`
+  with `AUDIOROUTER_STATIC_STALLS` suspends the control thread.
+
+Validation, 2026-10-21 (owner's PC; AudioRouter and Discord closed at the
+owner's go-ahead; release test builds at below-normal priority):
+
+- Control crate: 261 tests passed (7 new in `audio_thread_tests.rs`);
+  workspace Clippy `-D warnings` clean.
+- Stall test, same day, same settings on `main` and on this branch: copy of
+  the owner's database, session `patrick-main-siege-footstep`, tone helper
+  on CABLE Input captured in place of Discord, result from the PD200X
+  loopback, other outputs on Realtek Digital Output,
+  `mixer-2/inputVolume:mixer-1=0`, control-thread stalls of 60, 90, 170,
+  30, 120, 200 and 500 ms at 20–110 s, Stop/Play at 130 s, 150 s.
+
+  | Run | Glitches during stalls | At Stop/Play | Silent samples |
+  |---|---|---|---|
+  | `main` | 18 (1–3 at every stall) | 4 | 68,063 |
+  | branch, run 1 | 0 | 8 | 13,599 |
+  | branch, run 2 | 0 | 10 | 14,111 |
+
+  Run 1 also had one 30 ms burst of tiny residuals (0.05–0.14×) at 3.07 s
+  that run 2 did not repeat (the same kind was seen once on old code,
+  2026-10-19). Stop/Play glitches are expected; the higher count is noted,
+  not explained.
+- Muted start + pump (`live_native_paths_start_pump_and_report_signal_timing`
+  with the new `AUDIOROUTER_LIVE_PATHS_AUDIO_THREAD=1`) on the same
+  session: passed, 2,798 audio-thread passes in 4 s, no pump errors, every
+  node (both Ducks, built-in Gate/Compressor/EQ, Pitch, Voice Changer)
+  reported processing. The session has no VST plugins.
+
+Next: CI green, then an attended session on a branch build, reading
+`audioThread` in `backend.jsonl`, before merging.
+
 ## Cargo major updates by hand (supersedes Dependabot #41) — 2026-10-21, owner requested
 
 #41 failed CI in `audiorouter-storage` (rusqlite 0.40 API) and paired

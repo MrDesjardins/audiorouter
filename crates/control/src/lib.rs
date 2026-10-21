@@ -50,6 +50,8 @@ mod api_output_schema;
 mod api_schema;
 mod audio_media;
 mod audio_service;
+#[cfg(windows)]
+mod audio_thread;
 mod authorization;
 mod cable_routes;
 mod catalog;
@@ -349,7 +351,16 @@ pub struct ControlPlane {
     native_endpoint_worker_secondary: Option<audiorouter_windows_audio::NativeAudioWorker>,
     native_endpoint_session_secondary: Option<EntityId>,
     #[cfg(windows)]
-    native_multi_input_worker: Option<audiorouter_windows_audio::NativeMultiInputWorker>,
+    native_multi_input_worker: Option<audio_thread::MultiInputWorkerHandle>,
+    /// The slot the multi-input worker shares with the dedicated audio
+    /// thread (see `audio_thread`). Declared after the worker handle, so the
+    /// handle drops the worker before the thread is joined.
+    #[cfg(windows)]
+    audio_thread_shared: std::sync::Arc<audio_thread::AudioThreadShared>,
+    /// The audio thread, once a backend service started it; `None` pumps
+    /// the multi-input worker inline on the control thread.
+    #[cfg(windows)]
+    audio_thread: Option<audio_thread::AudioThread>,
     #[cfg(windows)]
     native_multi_input_worker_session: Option<EntityId>,
     #[cfg(windows)]
@@ -501,6 +512,10 @@ impl ControlPlane {
             native_endpoint_session_secondary: None,
             #[cfg(windows)]
             native_multi_input_worker: None,
+            #[cfg(windows)]
+            audio_thread_shared: std::sync::Arc::default(),
+            #[cfg(windows)]
+            audio_thread: None,
             #[cfg(windows)]
             native_multi_input_worker_session: None,
             #[cfg(windows)]

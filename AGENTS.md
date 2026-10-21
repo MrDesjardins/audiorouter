@@ -79,6 +79,12 @@ requests (their runs get only Dependabot secrets, so the Jev key is empty). The 
 results on large diffs: on 2026-10-06, a roughly 14,600-line diff produced two
 unlocated findings at 6% and 13% confidence, both false. The separate
 formatting, tests, Clippy and other checks in this file remain required.
+Jev reviews only correctness, safety, security, accessibility, concurrency,
+or performance risks that the compiler and the repository's configured
+linters/static analyzers cannot detect. Check the active tool configuration
+before reporting a finding; never duplicate those diagnostics or report
+formatting and other style issues already owned by automated checks.
+`rustfmt` and the UI formatter remain the sources of truth for formatting.
 
 ## Self-learning, with evidence
 
@@ -91,6 +97,13 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-20 — Keep Jev focused on findings automated checks cannot report (user preference).**
+  Evidence: [active plan, Jev review scope](docs/plans/active/current.md#jev-review-scope).
+  Scope: Jev rules and pull-request review. Consequence: the compiler,
+  configured linters/static analyzers, and formatters own their diagnostics;
+  Jev should report only remaining correctness, safety, security,
+  accessibility, concurrency, or performance risks.
 
 - **2026-10-20 — Windows PowerShell 5.1 reads BOM-less files as Windows-1252; read text as strict UTF-8 and keep `.ps1` files ASCII.**
   Evidence: `tools/release/create-draft-release.ps1` (notes guard), owner

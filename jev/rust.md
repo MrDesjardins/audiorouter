@@ -2,6 +2,15 @@
 applies_to: **/*.rs
 ---
 
+# Review boundary
+Use this file only for correctness, safety, security, concurrency, and
+performance risks that the repository's Rust compiler and configured Clippy
+checks do not already report. Before flagging an issue, check the workspace
+and shell lint configuration. Do not report formatting, rustfmt output,
+compiler errors, or configured Clippy findings; `cargo fmt` and CI are the
+sources of truth for those checks. Prefer no finding over a duplicate or
+speculative style suggestion.
+
 # Do not use unwrap() on fallible values in library or production code
 `Option::unwrap`/`Result::unwrap` must not be used outside tests, examples, or cases where failure is provably impossible. Propagate the error with `?` or handle it explicitly.
 
@@ -140,20 +149,6 @@ let mut total = 0;
 for i in 0..items.len() {
     total += items[i].price;
 }
-```
-
-# Every unsafe block must have a SAFETY comment
-Each `unsafe` block must be preceded by a `// SAFETY:` comment explaining why the invariants the compiler cannot check are upheld.
-
-Good:
-```rust
-// SAFETY: `idx` was bounds-checked against `self.len` above.
-let value = unsafe { *self.ptr.add(idx) };
-```
-
-Bad:
-```rust
-let value = unsafe { *self.ptr.add(idx) };
 ```
 
 # Keep unsafe blocks as small as possible
@@ -340,8 +335,13 @@ Bad:
 let total = price * quantity;
 ```
 
-# The as cast silently truncates and wraps
-`as` between numeric types silently truncates, wraps, or saturates (e.g. `300_i32 as u8 == 44`, `-1_i32 as u32 == 4294967295`). Use `try_from`/`try_into` when the value may not fit.
+# Numeric casts must preserve values needed by the behavior
+Use checked integer conversions when a value may exceed the target integer
+range or change signedness. Report a cast only when the value can exceed that
+range or its loss of precision changes behavior. Intentional integer-to-float
+conversions for approximate display or metrics are acceptable when their
+range is bounded and the approximation is sufficient; float casts round and
+do not wrap like narrowing integer casts.
 
 Good:
 ```rust

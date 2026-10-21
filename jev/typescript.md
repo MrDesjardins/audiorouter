@@ -2,6 +2,13 @@
 applies_to: **/*.ts
 ---
 
+# Review boundary
+Report only correctness, security, and runtime risks that TypeScript and the
+repository's configured ESLint checks do not already report. Before flagging
+an issue, check `ui/tsconfig.json` and `ui/eslint.config.js`. Do not report
+type errors, configured lint findings, formatting, or stylistic preferences;
+the compiler, ESLint, and the configured formatter own those checks.
+
 # No explicit any type
 TypeScript code must not use the `any` type. Use a specific type, `unknown`,
 or a generic parameter instead.

@@ -2,6 +2,12 @@
 applies_to: **/*.css
 ---
 
+# Review boundary
+Report only CSS behavior, accessibility, or compatibility risks that an
+available configured linter or build check does not already report. Check
+the repository's actual CSS tooling before flagging a finding. Do not report
+formatting or subjective style preferences.
+
 # Avoid !important
 
 `!important` should not be used to override specificity conflicts; fix the
