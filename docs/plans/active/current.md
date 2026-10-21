@@ -1,6 +1,6 @@
 # Active plan — post-0.0.8 maintenance
 
-## Jev review scope — 2026-10-20, owner preference
+## Jev review scope
 
 Objective: keep Jev focused on review findings that the configured compiler,
 formatter, linter, or static analyzer cannot detect. Formatting remains owned
