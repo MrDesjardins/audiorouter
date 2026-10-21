@@ -416,6 +416,39 @@ button:disabled {
   overflow: hidden;
   background: #101722;
 }
+
+.canvas-context-backdrop {
+  position: absolute;
+  z-index: 10000;
+  inset: 0;
+}
+.canvas-context-menu {
+  position: absolute;
+  z-index: 1;
+  min-width: 174px;
+  padding: 0.35rem;
+  border: 1px solid var(--panel-border, #384458);
+  border-radius: 9px;
+  background: var(--panel, #1a2130);
+  color: var(--text, #e9edf5);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+}
+.canvas-context-menu button {
+  display: block;
+  width: 100%;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+}
+.canvas-context-menu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.theme-high-contrast .canvas-context-menu {
+  border-width: 2px;
+}
 .canvas-library {
   position: absolute;
   z-index: 5;

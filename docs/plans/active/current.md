@@ -1,5 +1,123 @@
 # Active plan — post-0.0.8 maintenance
 
+## Canvas node copy and paste — 2026-10-20 (owner request, in progress)
+
+Objective: let users copy one configured canvas node and paste it as an
+unconnected node, including between sessions in the same AudioRouter window.
+Requirements: UI-02, UI-11 and UI-17. Preserve normal backend plan/commit
+validation and local session layout ownership.
+
+Decision: the app keeps a deep configuration snapshot in memory across session
+switches. Pasting assigns a unique destination-session ID and copy name, copies
+the node's settings and flags, and omits all graph edges and Duck's
+`keyNodeId` side-chain association. Context menus provide Copy/Paste; Ctrl+C and
+Ctrl+V act on the selected node/canvas and do not intercept editable fields.
+Clipboard contents are window-local and are not persisted after app exit.
+
+Prerequisites: UI and contract packages installed; inspect the current M05
+canvas and layout ownership. No audio hardware is required. Windows Edge is
+required for the themed canvas interaction run; jsdom covers data semantics
+but does not establish visual behavior.
+
+Tasks:
+1. Add copy/paste draft helpers and regress configuration, flags, unique IDs,
+   cross-session paste, detached graph edges and Duck references. Done.
+2. Add canvas context menus and Ctrl+C/Ctrl+V. Pane paste is positioned at the
+   pointer and clamped within the visible canvas; keyboard paste uses the
+   session's next layout slot. Clipboard data survives session selection in
+   this window. Done.
+3. Update UI-02 and verify data semantics, TypeScript, lint/format and headed
+   Edge behavior in dark, light and high-contrast themes. Done; results below.
+4. Review the final diff and hand off the feature branch. Done.
+
+Validation matrix: draft unit tests for same- and cross-session paste; focused
+canvas/App tests for copy, paste, menu and shortcut behavior; `npm --prefix ui
+run typecheck:all`, `npm --prefix ui run lint`, `npm --prefix ui run format`,
+and targeted UI tests; headed Edge in the three themes for context menus and
+keyboard paste. No Windows audio gate applies because this changes graph-edit
+UI data only.
+
+Risks: a copied node may carry a reference to another node through its
+parameters; clear the known Duck side-chain reference and test it. Paste
+remains an unsaved draft edit and is reversible through existing graph
+undo/commit behavior. Rollback: remove the clipboard helpers, canvas menu and
+shortcut bindings, and revert the UI-02 wording.
+
+Evidence (2026-10-20, Windows host):
+- `npm.cmd --prefix ui run format` and `npm.cmd --prefix ui run format:check`:
+  clean.
+- `npm.cmd --prefix ui run typecheck:all`: pass.
+- `npm.cmd --prefix ui test`: 62 files, 549 tests passed.
+- `npm.cmd --prefix ui run lint`: exit 0, 25 existing
+  `react-hooks/exhaustive-deps` warnings; no new warning from copy/paste code.
+- `npm.cmd --prefix ui run build`: pass; Vite retains its existing warning
+  that the main JavaScript chunk exceeds 500 KB.
+- `npm.cmd --prefix ui run e2e -- --grep "copy and paste a configured node
+  across sessions"`: Playwright reported the targeted test passed (2.8 s).
+  The local runner then remained in fixture teardown; it was interrupted after
+  the passing result, and the Vite child was stopped. The assertion path had
+  already verified shortcuts across a newly created session, both context
+  menus, saved configuration, detached edges and in-canvas paste bounds.
+  Dark/light/high-contrast screenshots are in the ignored temporary output
+  directory `%TEMP%\audiorouter-playwright-results\canvas-copy-paste.pw.ts-co-6c9dc-ns-with-menus-and-shortcuts\`.
+  Inspected all three theme screenshots; the context menu stayed in the canvas
+  bounds, remained legible, and had a visible focus outline.
+- `git diff --check`: pass. No audio device or Windows package gate applies.
+
+### Owner-requested code review — 2026-10-20
+
+Reviewed every feature diff and its selection, shortcut, layout, draft history
+and session-switching callers. Implementation files were left unchanged during
+review. Three P2 findings are confirmed in Windows Edge:
+
+- Keyboard paste always sets `skipNextFitRef`, even when its next grid slot is
+  outside the viewport. After panning right and pressing Ctrl+V, the new node
+  started at screen x=1751.7 while the canvas ended at x=981.8. The node exists
+  but is entirely hidden. Keep the current view only for a deliberate pointer
+  paste, or place/bring keyboard paste into view.
+- The global Ctrl+C listener checks editable elements but not selected UI text
+  or canvas focus. Selecting header text and pressing Ctrl+C prevented the
+  native copy and copied the previously selected tool instead.
+- Clipboard shortcuts are outside the existing customizable shortcut conflict
+  mechanism. With the saved session-toggle shortcut `Control+C`, selecting a
+  tool and pressing Ctrl+C stopped the playing route instead of copying it.
+  Resolve/reserve these bindings through the same shortcut dispatcher.
+
+Review verification: full UI suite 62 files / 549 tests passed again;
+`typecheck:all` and `git diff --check` passed. Fifteen existing Edge scenarios
+passed, covering cross-session copy/paste, the three themes, dragging, visual
+groups, session lifecycle/import/export, transactions, undo/revert and the
+default playback shortcut. A separate focused probe confirmed non-default
+gain preservation, paste undo/redo and editable-field shortcut exclusion.
+The original copy/paste test plus that focused probe completed with exit 0
+(2 passed). The three defect probes completed with exit 1, each failing at
+its intended assertion. Two earlier audit attempts used a precise-gain field
+absent from the browser fixture; those setup failures are not product findings.
+
+The previous runner shutdown uncertainty is resolved: the same direct
+Playwright/Vite command exited normally when run with Windows process-cleanup
+permissions. The hang also reproduced without the real backend in the
+sandbox, so it was not evidence of a copy/paste/backend teardown defect.
+Temporary audit files were removed from the worktree. Probe source, temporary
+config and failure screenshots/error contexts are preserved under
+`%TEMP%\audiorouter-clipboard-review\`.
+
+Owner requested commit and push of the tested feature on 2026-10-20, with the
+three review findings recorded above still open. Next: fix those findings and
+retain focused regression coverage before merging. Feature worktree:
+`C:\Users\miste\AppData\Local\Temp\audiorouter-ts7-main`.
+The original dirty worktree was not modified.
+
+Manual test build (owner requested 2026-10-20): rebuilt the production UI and
+the optimized native shell with `--locked --release --features custom-protocol`,
+plus the matching workspace CLI and plugin worker. Staged these and the existing
+OpenAI tunnel runtime/licenses at
+`%TEMP%\audiorouter-copy-paste-test\audiorouter-shell.exe`.
+Both native builds completed successfully. Used the existing build cache,
+then restored the original three executables and verified their hashes against
+the backups. The test app was not launched by the agent. It contains the current
+feature and the three documented review findings; no fixes were applied.
+
 ## TypeScript 7 readiness — 2026-10-20, owner request
 
 Objective: make every maintained TypeScript project typecheck with the latest

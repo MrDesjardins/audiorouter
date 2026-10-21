@@ -1,6 +1,7 @@
 import type {
   ApplicationInfo,
   EntityId,
+  Node,
   NodeKind,
   PluginScanEntry,
   Session,
@@ -1261,29 +1262,53 @@ export function removeDraftNode(session: Session, nodeId: EntityId): Session {
   };
 }
 
-/** Duplicates one node as an unconnected draft node with a deterministic ID. */
-export function duplicateDraftNode(session: Session, nodeId: EntityId): Session {
+/** Captures one node's configuration without any association to another node. */
+export function copyDraftNode(session: Session, nodeId: EntityId): Node {
   const original = session.nodes.find((node) => node.id === nodeId);
   if (!original) throw new Error(`Unknown draft node: ${nodeId}`);
+  return {
+    ...original,
+    parameters: {
+      ...original.parameters,
+      ...(original.kind === "duck" ? { keyNodeId: "" } : {}),
+    },
+    ports: original.ports.map((port) => ({ ...port })),
+  };
+}
+
+/** Pastes a copied node as an unconnected draft node with a destination-unique ID. */
+export function pasteDraftNode(session: Session, copied: Node): Session {
   let suffix = 1;
-  let id = `${nodeId}-copy-${suffix}`;
+  let id = `${copied.id}-copy-${suffix}`;
   while (session.nodes.some((node) => node.id === id)) {
     suffix += 1;
-    id = `${nodeId}-copy-${suffix}`;
+    id = `${copied.id}-copy-${suffix}`;
+  }
+  const baseName = copied.name.replace(/ copy \d+$/, "");
+  let nameSuffix = 1;
+  let name = `${baseName} copy ${nameSuffix}`;
+  while (session.nodes.some((node) => node.name === name)) {
+    nameSuffix += 1;
+    name = `${baseName} copy ${nameSuffix}`;
   }
   return {
     ...session,
     nodes: [
       ...session.nodes,
       {
-        ...original,
+        ...copied,
         id,
-        name: `${original.name} copy ${suffix}`,
-        parameters: { ...original.parameters },
-        ports: original.ports.map((port) => ({ ...port })),
+        name,
+        parameters: { ...copied.parameters },
+        ports: copied.ports.map((port) => ({ ...port })),
       },
     ],
   };
+}
+
+/** Duplicates one node as an unconnected draft node with a deterministic ID. */
+export function duplicateDraftNode(session: Session, nodeId: EntityId): Session {
+  return pasteDraftNode(session, copyDraftNode(session, nodeId));
 }
 
 /** Changes only a draft edge's enabled state; topology and revision are preserved. */

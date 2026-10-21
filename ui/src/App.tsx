@@ -11,7 +11,7 @@ import { setUpdateCheckEnabled } from "./updateCheck";
 import { FirstRunGuide } from "./FirstRunGuide";
 import { useCanvasGroups } from "./CanvasGroups";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { PluginParametersResult } from "@audiorouter/contracts";
+import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { SignalTimingPanel } from "./SignalTiming";
 import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo, type McpTunnelStatus } from "./Workbench";
@@ -50,7 +50,9 @@ import {
   appendVoiceChainPreset,
   appendCablePassThrough,
   applyGraphDraft,
+  copyDraftNode,
   duplicateDraftNode,
+  pasteDraftNode,
   insertDraftMixer,
   insertDraftPluginProcessor,
   insertDraftProcessor,
@@ -219,6 +221,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [draft, setDraft] = useState(demoSession);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const copiedNodeRef = useRef<Node | null>(null);
+  const [hasCopiedNode, setHasCopiedNode] = useState(false);
   const authoritativeSession = useRef(demoSession);
   const hasAuthoritativeSession = useRef(!backend.connected);
   const [draftHistory, setDraftHistory] = useState<DraftHistory>({ past: [], future: [] });
@@ -2668,6 +2672,39 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(formatUiError(error, "Unable to duplicate node."));
     }
   };
+  const copyNodeToClipboard = (nodeId: string) => {
+    try {
+      const source = draftRef.current.nodes.find((node) => node.id === nodeId);
+      if (!source) throw new Error(`Unknown draft node: ${nodeId}`);
+      copiedNodeRef.current = copyDraftNode(draftRef.current, nodeId);
+      setHasCopiedNode(true);
+      setActionMessage(`${source.name} copied. Paste it into this or another session.`);
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to copy tool."));
+    }
+  };
+  const pasteNodeFromClipboard = (_position: { x: number; y: number }) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing the draft.");
+      return undefined;
+    }
+    const copied = copiedNodeRef.current;
+    if (!copied) return undefined;
+    try {
+      const next = pasteDraftNode(draftRef.current, copied);
+      const inserted = next.nodes.at(-1);
+      if (!inserted) return undefined;
+      recordDraftChange(next);
+      selectNodeProperties(inserted.id);
+      setActionMessage(
+        `${inserted.name} pasted into the draft without connections. Review and plan the changes before committing.`,
+      );
+      return inserted.id;
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to paste tool."));
+      return undefined;
+    }
+  };
   if (backend.connected && !hasSnapshot)
     return (
       <div className={`app-shell ${themeClassName}`} style={themeStyle}>
@@ -2705,6 +2742,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       nodeSaveState={graphBusy ? "saving" : autoSavePending ? "autosave" : "needs-save"}
       selectedNodeId={selectedNode.id}
       selectedNodeIds={selectedNodeIds}
+      onCopyNode={copyNodeToClipboard}
+      onPasteNode={pasteNodeFromClipboard}
+      canPasteNode={hasCopiedNode}
       diagnostics={snapshot?.diagnostics ?? null}
       telemetryStore={telemetryStore}
       flowAnimation={flowAnimation}

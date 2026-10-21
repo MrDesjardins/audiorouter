@@ -22,6 +22,7 @@ import "@xyflow/react/dist/style.css";
 import {
   createContext,
   memo,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -90,6 +91,9 @@ type SessionFlowCanvasProps = {
   selectedNodeIds?: string[];
   onSelect: (id: string) => void;
   onSelectMany?: (ids: string[]) => void;
+  onCopyNode?: (nodeId: string) => void;
+  onPasteNode?: (position: { x: number; y: number }) => string | void;
+  canPasteNode?: boolean;
   onConnect: (connection: Connection, dropPosition?: { x: number; y: number }) => string | void;
   onRemoveConnection?: (edgeId: string) => void;
   onToggleConnection?: (edgeId: string, enabled: boolean) => void;
@@ -2173,6 +2177,9 @@ export function SessionFlowCanvas({
   selectedNodeIds = [selectedNodeId],
   onSelect,
   onSelectMany,
+  onCopyNode,
+  onPasteNode,
+  canPasteNode = false,
   onConnect,
   onRemoveConnection,
   onToggleConnection,
@@ -2204,6 +2211,11 @@ export function SessionFlowCanvas({
     readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey),
   );
   const [dropPreview, setDropPreview] = useState<{ kind: string; position: { x: number; y: number } } | null>(null);
+  const [contextMenu, setContextMenu] = useState<
+    | { kind: "node"; nodeId: string; x: number; y: number; flowPosition: { x: number; y: number } }
+    | { kind: "pane"; x: number; y: number; flowPosition: { x: number; y: number } }
+    | null
+  >(null);
   // Controlled React Flow nodes must retain measured dimensions across meter
   // updates. Omitting them on every 20 Hz render resets handle bounds and can
   // leave every node hidden until a new ResizeObserver notification arrives.
@@ -2262,6 +2274,77 @@ export function SessionFlowCanvas({
     nextLayoutIndexRef.current += 1;
     return position;
   };
+  const canvasPoint = (clientX: number, clientY: number) => {
+    const bounds = document.querySelector<HTMLElement>(".session-flow-canvas")?.getBoundingClientRect();
+    return bounds ? { x: clientX - bounds.left, y: clientY - bounds.top } : { x: clientX, y: clientY };
+  };
+  const pasteNode = useCallback(
+    (position?: { x: number; y: number }, contextPoint?: { x: number; y: number }) => {
+      if (!canEdit || !canPasteNode || !onPasteNode) return;
+      let pastePosition: { x: number; y: number };
+      if (!position) {
+        nextLayoutIndexRef.current = Math.max(nextLayoutIndexRef.current, session.nodes.length);
+        pastePosition = positionFor(nextLayoutIndexRef.current);
+        nextLayoutIndexRef.current += 1;
+      } else {
+        pastePosition = { x: position.x - 110, y: position.y - 45 };
+      }
+      if (position) {
+        const canvas = document.querySelector<HTMLElement>(".session-flow-canvas");
+        const flow = flowInstanceRef.current;
+        const bounds = canvas?.getBoundingClientRect();
+        if (contextPoint && flow && bounds) {
+          const zoom = flow.getZoom();
+          const screenX = Math.max(
+            bounds.left + 8,
+            Math.min(bounds.left + contextPoint.x - 110 * zoom, bounds.right - 250 * zoom - 8),
+          );
+          const screenY = Math.max(
+            bounds.top + 8,
+            Math.min(bounds.top + contextPoint.y - 45 * zoom, bounds.bottom - 174 * zoom - 8),
+          );
+          pastePosition = flow.screenToFlowPosition({ x: screenX, y: screenY });
+        }
+      }
+      const pastedId = onPasteNode(pastePosition);
+      if (!pastedId) return;
+      const next = { ...positionsRef.current, [pastedId]: pastePosition };
+      positionsRef.current = next;
+      setPositions(next);
+      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+      skipNextFitRef.current = true;
+      setContextMenu(null);
+    },
+    [canEdit, canPasteNode, layoutKey, onPasteNode, session.nodes.length],
+  );
+  useEffect(() => {
+    const onClipboardShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (
+        target?.isContentEditable ||
+        target?.closest("input, textarea, select, [role='dialog'], [contenteditable='true']")
+      )
+        return;
+      const key = event.key.toLowerCase();
+      if (key === "c" && selectedNodeIds.length === 1 && session.nodes.some((node) => node.id === selectedNodeIds[0])) {
+        event.preventDefault();
+        onCopyNode?.(selectedNodeIds[0]);
+      } else if (key === "v" && canPasteNode && canEdit) {
+        event.preventDefault();
+        pasteNode();
+      }
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("keydown", onClipboardShortcut);
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      window.removeEventListener("keydown", onClipboardShortcut);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [canEdit, canPasteNode, onCopyNode, onPasteNode, pasteNode, selectedNodeId, selectedNodeIds, session.nodes]);
   const setEdgeSide = (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => {
     setEdgeSides((currentMap) => {
       const current = currentMap[edgeId] ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
@@ -2954,6 +3037,32 @@ export function SessionFlowCanvas({
                 onSelect(node.id);
               }
             }}
+            onNodeContextMenu={(event, node) => {
+              event.preventDefault();
+              if (node.type === "visualGroup") return;
+              onSelectGroup?.("");
+              onSelect(node.id);
+              const point = canvasPoint(event.clientX, event.clientY);
+              setContextMenu({
+                kind: "node",
+                nodeId: node.id,
+                ...point,
+                flowPosition:
+                  flowInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) ??
+                  node.position,
+              });
+            }}
+            onPaneContextMenu={(event) => {
+              event.preventDefault();
+              const point = canvasPoint(event.clientX, event.clientY);
+              setContextMenu({
+                kind: "pane",
+                ...point,
+                flowPosition:
+                  flowInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) ??
+                  nextNodePosition(),
+              });
+            }}
             onMouseDownCapture={captureConnectionHandle}
             onPointerDownCapture={captureConnectionHandle}
             onConnectStart={(event, params) => {
@@ -3135,6 +3244,57 @@ export function SessionFlowCanvas({
             <Background gap={24} size={1} color="#2e4057" />
             <Controls showInteractive={false} />
           </ReactFlow>
+          {contextMenu && (
+            <div className="canvas-context-backdrop" onPointerDown={() => setContextMenu(null)}>
+              <div
+                className="canvas-context-menu"
+                role="menu"
+                aria-label={contextMenu.kind === "node" ? "Tool actions" : "Canvas actions"}
+                style={{
+                  left: Math.max(
+                    8,
+                    Math.min(
+                      contextMenu.x,
+                      (document.querySelector<HTMLElement>(".session-flow-canvas")?.clientWidth ?? 0) - 190,
+                    ),
+                  ),
+                  top: Math.max(
+                    8,
+                    Math.min(
+                      contextMenu.y,
+                      (document.querySelector<HTMLElement>(".session-flow-canvas")?.clientHeight ?? 0) - 64,
+                    ),
+                  ),
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {contextMenu.kind === "node" ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    autoFocus
+                    onClick={() => {
+                      onCopyNode?.(contextMenu.nodeId);
+                      setContextMenu(null);
+                    }}
+                  >
+                    Copy tool
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    autoFocus
+                    disabled={!canEdit || !canPasteNode}
+                    onClick={() => pasteNode(contextMenu.flowPosition, contextMenu)}
+                  >
+                    Paste tool
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </FlowMotionProvider>
     </LiveCanvasProvider>
