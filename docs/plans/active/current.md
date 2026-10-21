@@ -1,5 +1,33 @@
 # Active plan — post-0.0.8 maintenance
 
+## Cargo major updates by hand (supersedes Dependabot #41) — 2026-10-21, owner requested
+
+#41 failed CI in `audiorouter-storage` (rusqlite 0.40 API) and paired
+windows-core 0.100 with windows 0.62.2, whose COM types only implement
+windows-core 0.62 traits (no windows 0.100 exists). Done on branch
+`deps/cargo-major-2026-10`, without local compiles while the owner's
+long-run observation of the scratchy-voice defect runs:
+
+- rusqlite 0.32.1 → 0.40.2 (bundled SQLite via libsqlite3-sys 0.30 → 0.38).
+  `DatabaseName::Main` became `MAIN_DB` (two backup calls). `u64`/`usize`
+  `ToSql`/`FromSql` moved behind the `fallible_uint` feature, which is
+  enabled: the same checked `i64` conversion as 0.32, so no stored value
+  changes.
+- tungstenite 0.26.2 → 0.30.0 (Stats.cc round feed client): changelog shows
+  no API change for the client calls used; 0.30 only tightens server-side
+  key checks.
+- getrandom 0.3.4 → 0.4.3 (shell tokens and nonces): `fill` unchanged.
+- windows-core stays 0.62.2; `.github/dependabot.yml` now ignores its major
+  updates until a matching windows release exists.
+
+Checks so far: both `cargo fmt -- --check` clean; `cargo deny check` (root
+and `src-tauri`) advisories, bans, licenses and sources ok; lockfiles change
+only these three crates and their dependencies. Compile, Clippy and tests:
+Windows CI on the branch. Still to do before merging: open a copy of the
+owner's session database with the new SQLite (sessions list, a backup) and
+a muted start + pump of a Stats.cc Duck route, both when the owner is not in
+a call. Rollback: revert the commit; no schema or file format change.
+
 ## Release 0.0.20 — 2026-10-19, owner requested ("potentially we should do a 0.0.20 since it fixes the issue with the buffer increasing")
 
 **Published** 2026-10-20 04:38 UTC as an experimental prerelease from tag
