@@ -592,6 +592,13 @@ fn live_native_paths_start_pump_and_report_signal_timing() {
         .unwrap_or_else(|_| "patrick-main-session".into());
     let storage = audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap();
     let mut plane = ControlPlane::with_storage("live-paths", storage);
+    // `AUDIOROUTER_LIVE_PATHS_AUDIO_THREAD=1` pumps on the dedicated audio
+    // thread, as the backend service does; the pump requests then only
+    // apply the checks, and the thread's passes count as delivery.
+    let audio_thread = std::env::var("AUDIOROUTER_LIVE_PATHS_AUDIO_THREAD").as_deref() == Ok("1");
+    if audio_thread {
+        plane.mark_audio_service_started();
+    }
     // Idempotency survives database copies and backend restart. Each
     // qualification is a new operation, rather than replaying a previous
     // test's successful start response on a currently stopped backend.
@@ -634,6 +641,10 @@ fn live_native_paths_start_pump_and_report_signal_timing() {
             json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
         );
         delivered += pump["deliveredQuanta"].as_u64().unwrap_or(0);
+        if audio_thread {
+            assert_eq!(pump["audioThread"]["pumpErrors"], 0, "{pump}");
+            delivered = pump["audioThread"]["passes"].as_u64().unwrap_or(0);
+        }
         std::thread::sleep(Duration::from_millis(10));
     }
     let diagnostics = call("system.diagnostics", Value::Null);

@@ -90,19 +90,46 @@ the design above:
   control thread at the next pass, so the existing supervisor restarts the
   backend as it did for an inline panic.
 - `nativeMultiInputs.pump` with the thread running applies the checks and
-  returns zero new frames plus the worker's counters (`"audioThread": true`).
+  returns zero new frames plus the worker's counters; its response (and
+  every response carrying `audioService`) adds an `audioThread` object
+  with the thread's counters.
 - Diagnostics: the transport's `maxPassGapMs`/`maxPassMs` keep their names
   (they still measure the control thread); `audioHealth` gains an
   `audioThread` object (started, MMCSS granted, passes, late gaps, max gap,
   pump errors, passes skipped on contention, and interval maxima).
-- The 500 ms stall test needs a way to hold the control thread from the
-  harness; not written yet. Until then the continuity harness with its CPU
-  stress phase (`AUDIOROUTER_CONTINUITY_STRESS`) is the live check.
+- The stall test already existed: `live_saved_session_tone_survives_starvation`
+  with `AUDIOROUTER_STATIC_STALLS` suspends the control thread.
 
-Next: CI green on the branch (unit tests in `audio_thread_tests.rs`), then,
-with the owner's go-ahead (not during a call), the continuity harness, the
-muted start + pump, and an attended session reading `audioThread` in
-`backend.jsonl`.
+Validation, 2026-10-21 (owner's PC; AudioRouter and Discord closed at the
+owner's go-ahead; release test builds at below-normal priority):
+
+- Control crate: 261 tests passed (7 new in `audio_thread_tests.rs`);
+  workspace Clippy `-D warnings` clean.
+- Stall test, same day, same settings on `main` and on this branch: copy of
+  the owner's database, session `patrick-main-siege-footstep`, tone helper
+  on CABLE Input captured in place of Discord, result from the PD200X
+  loopback, other outputs on Realtek Digital Output,
+  `mixer-2/inputVolume:mixer-1=0`, control-thread stalls of 60, 90, 170,
+  30, 120, 200 and 500 ms at 20–110 s, Stop/Play at 130 s, 150 s.
+
+  | Run | Glitches during stalls | At Stop/Play | Silent samples |
+  |---|---|---|---|
+  | `main` | 18 (1–3 at every stall) | 4 | 68,063 |
+  | branch, run 1 | 0 | 8 | 13,599 |
+  | branch, run 2 | 0 | 10 | 14,111 |
+
+  Run 1 also had one 30 ms burst of tiny residuals (0.05–0.14×) at 3.07 s
+  that run 2 did not repeat (the same kind was seen once on old code,
+  2026-10-19). Stop/Play glitches are expected; the higher count is noted,
+  not explained.
+- Muted start + pump (`live_native_paths_start_pump_and_report_signal_timing`
+  with the new `AUDIOROUTER_LIVE_PATHS_AUDIO_THREAD=1`) on the same
+  session: passed, 2,798 audio-thread passes in 4 s, no pump errors, every
+  node (both Ducks, built-in Gate/Compressor/EQ, Pitch, Voice Changer)
+  reported processing. The session has no VST plugins.
+
+Next: CI green, then an attended session on a branch build, reading
+`audioThread` in `backend.jsonl`, before merging.
 
 ## Release 0.0.20 — 2026-10-19, owner requested ("potentially we should do a 0.0.20 since it fixes the issue with the buffer increasing")
 

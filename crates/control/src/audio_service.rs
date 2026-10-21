@@ -207,6 +207,20 @@ impl ControlPlane {
     pub(crate) fn with_audio_service_stats(&self, mut value: Value) -> Value {
         if let Some(object) = value.as_object_mut() {
             object.insert("audioService".into(), self.audio_service.to_json());
+            #[cfg(windows)]
+            if self.audio_thread.is_some() {
+                let counters = self.audio_thread_shared.counters();
+                object.insert(
+                    "audioThread".into(),
+                    json!({
+                        "passes": counters.passes,
+                        "lateGaps": counters.late_gaps,
+                        "maxGapMicros": counters.max_gap_micros,
+                        "pumpErrors": counters.pump_errors,
+                        "skippedPasses": counters.skipped_passes,
+                    }),
+                );
+            }
         }
         value
     }
@@ -464,7 +478,6 @@ impl ControlPlane {
             "renderedFrames": 0,
             "renderBackpressureEvents": 0,
             "outputUnderruns": worker.output_underruns(),
-            "audioThread": true,
         }))
     }
 
