@@ -128,6 +128,18 @@ export function useCanvasGroups(sessionId: string) {
           return validGroup(next) ? next : g;
         }),
       ),
+    changeGroupOptions: (ids: string[], patch: Partial<Pick<CanvasGroup, "locked" | "moveContents">>) =>
+      update((current) =>
+        current.map((group) => {
+          if (!ids.includes(group.id)) return group;
+          const next = {
+            ...group,
+            ...(patch.locked === undefined ? {} : { locked: patch.locked }),
+            ...(patch.moveContents === undefined ? {} : { moveContents: patch.moveContents }),
+          };
+          return validGroup(next) ? next : group;
+        }),
+      ),
     changeGroups: (patches: Map<string, Partial<CanvasGroup>>) =>
       update((current) =>
         current.map((group) => {

@@ -27,7 +27,11 @@ inside a locked annotation remain individually editable.
 Select multiple tools and/or groups with modifier-click or marquee selection
 to show layout controls in Properties. Provide left/center/right and
 top/middle/bottom alignment, matching smallest/largest widths and heights, and
-horizontal/vertical equal edge spacing. Selected carrying ancestors count as
+horizontal/vertical equal edge spacing. Show conventional icons beside the
+visible action labels. Multi-selection also exposes Lock and Move contents
+for selected groups only, with mixed checkbox states; applying an option
+updates every explicitly selected group, including unlocking locked groups,
+without changing geometry. Selected carrying ancestors count as
 one movement unit; sizing changes only explicitly selected rectangles. Locked
 frames stay fixed and participate as alignment/distribution anchors. Equal
 spacing keeps endpoints fixed and distributes between locked anchors; reject

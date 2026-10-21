@@ -443,12 +443,30 @@ button:disabled {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.6rem;
 }
+.canvas-layout-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.canvas-selection-inspector .group-option-state {
+  min-height: 1.3em;
+}
 .canvas-layout-grid button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: left;
   min-width: 0;
   padding: 0.5rem;
 }
 .group-position-options > label {
   display: grid;
+  grid-template-rows: 2.6em auto 1fr;
   gap: 0.3rem;
   align-content: start;
   justify-items: start;
@@ -2144,6 +2162,15 @@ input[type="checkbox"]:checked {
 input[type="checkbox"]:checked::after {
   transform: translateX(1.1rem);
   background: #d9ffec;
+}
+input[type="checkbox"]:indeterminate::after {
+  top: 50%;
+  left: 50%;
+  width: 0.9rem;
+  height: 0.18rem;
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+  background: var(--text-strong, #edf4ff);
 }
 input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--signal-hot);

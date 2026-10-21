@@ -289,3 +289,59 @@ test("Shift marquee selects tools and keyboard movement can be undone", async ({
   await page.getByRole("button", { name: "Undo layout", exact: true }).click();
   await expect.poll(async () => (await geometry(page))["gain-0"].x).toBe(before["gain-0"].x);
 });
+
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`multi-group options apply only to selected groups in ${theme}`, async ({ page }, info) => {
+    const other = { ...inner, id: "group-other", name: "Other", x: 1000, y: 400 };
+    await fixture(page, [outer, { ...inner, locked: true }, other], theme);
+    await page
+      .getByTestId("rf__node-" + outer.id)
+      .locator(".canvas-group-caption")
+      .click();
+    await page
+      .getByTestId("rf__node-" + inner.id)
+      .locator(".canvas-group-caption")
+      .click({ modifiers: ["Control"] });
+    const panel = page.getByRole("region", { name: "Selection layout" });
+    const lock = panel.getByRole("checkbox", { name: "Lock position and size", exact: true });
+    const carry = panel.getByRole("checkbox", { name: "Move contents with group", exact: true });
+    await expect(lock).toBeVisible();
+    expect(await lock.evaluate((element) => (element as HTMLInputElement).indeterminate)).toBe(true);
+    expect(await carry.evaluate((element) => (element as HTMLInputElement).indeterminate)).toBe(true);
+    await expect(panel.getByRole("button", { name: "Align left", exact: true }).locator("svg")).toHaveCount(1);
+    await page.screenshot({ path: info.outputPath(`group-options-icons-${theme}.png`) });
+    await panel.getByRole("button", { name: "Space horizontally", exact: true }).scrollIntoViewIfNeeded();
+    await expect(panel.getByRole("button", { name: "Space horizontally", exact: true }).locator("svg")).toHaveCount(1);
+    await page.screenshot({ path: info.outputPath(`group-spacing-icons-${theme}.png`) });
+    const before = await geometry(page);
+    await lock.click();
+    await expect(lock).toBeChecked();
+    await expect(panel.getByRole("button", { name: "Align left", exact: true })).toBeDisabled();
+    await lock.click();
+    await expect(lock).not.toBeChecked();
+    await page
+      .getByTestId("rf__node-voice")
+      .locator(".flow-node-title")
+      .click({ modifiers: ["Control"] });
+    await expect(panel.getByRole("heading")).toHaveText("3 items selected");
+    await carry.click();
+    await expect(carry).toBeChecked();
+    await carry.click();
+    await expect(carry).not.toBeChecked();
+    expect(await geometry(page)).toEqual(before);
+    const saved = (await page.evaluate(
+      (id) => JSON.parse(localStorage.getItem(`audiorouter.ui.groups.${id}`)!),
+      demoSession.id,
+    )) as CanvasGroup[];
+    for (const id of [outer.id, inner.id])
+      expect(saved.find((group) => group.id === id)).toMatchObject({ locked: false, moveContents: false });
+    expect(saved.find((group) => group.id === other.id)).toEqual(other);
+    await expect(page.locator(".topbar").getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await page.reload();
+    await page
+      .getByTestId("rf__node-" + outer.id)
+      .locator(".canvas-group-caption")
+      .click();
+    await expect(page.getByLabel("Move contents with group")).not.toBeChecked();
+  });
+}

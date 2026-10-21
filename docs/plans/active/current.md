@@ -1,5 +1,50 @@
 # Active plan — post-0.0.8 maintenance
 
+## Multi-group options and layout icons - 2026-10-21 owner feedback
+
+Objective: UI-02/11/16/17 follow-up: edit Lock and Move contents for all
+explicitly selected groups, with native mixed-state checkboxes. Mixed
+selections apply these options only to groups; locked groups must remain
+unlockable. Preserve geometry, graph and selection. Add conventional SVG
+alignment/spacing/size icons with visible labels and accessible button names.
+Steps: group-only batch option update; selection controls and icons; regress
+mixed states, unlock, persistence and no geometry changes; format/lint/build,
+unit and Edge tests with dark/light/high-contrast visual inspection. No audio
+hardware is needed. Rollback: revert this follow-up commit.
+
+Implemented: group-only batched option updates permit unlocking and changing
+Move contents on locked groups, while geometry still uses the locked-aware
+batch path. Selected group values come from saved group state. Mixed values
+show a dash plus Mixed text; clicking sets all selected groups on, then off.
+Tools and unselected groups stay unchanged. Icons accompany all 12 layout
+actions and keep their visible/accessibility names. Updated UI specification
+and generated Group guide from its source JSON. Review confirmed that locking
+does not disable the option controls, and option edits never enter graph state.
+
+Evidence (Windows, 2026-10-21): npm.cmd --prefix ui test passed 64 files / 570
+tests. npm.cmd --prefix ui run format, format:check, lint and build passed;
+build includes TypeScript 7 typecheck:all. Lint retains 25 existing warnings;
+Vite retains the existing main-chunk size warning. The first typecheck caught
+a test-only unsupported query option; corrected it and the build passed.
+Direct Edge command from ui/: node node_modules/@playwright/test/cli.js test
+--config=playwright.config.ts e2e/canvas-layout.pw.ts
+e2e/canvas-layout-session.pw.ts e2e/canvas-group-lock.pw.ts --workers=1:
+18 passed. The three bulk-option theme tests also passed again with screenshots
+in %TEMP%/audiorouter-group-options-visuals/. Checks cover mixed states, lock
+and unlock all, move-content on/off, persistence, unchanged rectangles and
+graph Save state, and unselected group isolation in mixed tool/group selection.
+Visually inspected dark/light/high-contrast controls and SVG icons. Existing
+ResizeObserver resize notifications remain as recorded below.
+node site/check-guides.mjs and node site/generate-social.mjs --check passed.
+
+Native shell rebuilt with the same locked release/custom-protocol command as
+below. Separate manual review app (same matching sidecars/runtime):
+%TEMP%/audiorouter-group-layout-options-test/audiorouter-shell.exe.
+SHA256: 2B650CF8A7D03D6CD3ADA42DE11C7B394EF6F3640180179E1C0BC69157E0CE0F.
+Original cached shell restored with the same verified hash recorded below.
+No Rust/audio behavior changed; no new audio qualification is claimed.
+Next: owner review of the follow-up build on feature/canvas-group-layout.
+
 ## Group movement and selection layout — 2026-10-20, owner overnight request
 
 Objective: optional group-content movement plus mixed tool/group selection,

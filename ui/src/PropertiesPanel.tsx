@@ -144,7 +144,17 @@ export function PropertiesPanel({
 }) {
   const cableStatus = useVirtualCableStatus();
   return layoutItems.length > 1 && onLayoutAction ? (
-    <CanvasLayoutInspector items={layoutItems} onAction={onLayoutAction} />
+    <CanvasLayoutInspector
+      items={layoutItems}
+      onAction={onLayoutAction}
+      groups={groupState.groups.filter((group) => layoutItems.some((item) => item.id === group.id))}
+      onGroupOptionsChange={(patch) =>
+        groupState.changeGroupOptions(
+          layoutItems.filter((item) => item.group).map((item) => item.id),
+          patch,
+        )
+      }
+    />
   ) : selectedGroup ? (
     <CanvasGroupInspector
       group={selectedGroup}
