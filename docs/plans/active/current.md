@@ -20,7 +20,8 @@ npm minor/patch plus Cargo patch merge after CI through
 so every vitest worker failed on CI's Node 22.14.0 (PR #40, run
 39369458528) while the PC's 22.22.3 passed; the workflow pins are now
 22.22.3. Next: #41 (cargo-major group) needs a manual upgrade and the
-live continuity check; confirm #40 auto-merges after Dependabot rebases.
+live continuity check. #40 auto-merged on 2026-10-20 (`fc6df9ab`) after
+its CI passed on Node 22.22.3; the dispatched main CI 39372710384 passed.
 Rollback: 0.0.19 opens the same sessions; no migration; never replace
 published assets or move the tag.
 
