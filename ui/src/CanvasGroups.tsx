@@ -17,6 +17,7 @@ export type CanvasGroup = {
   width: number;
   height: number;
   locked?: boolean;
+  moveContents?: boolean;
 };
 export function validGroup(value: unknown): value is CanvasGroup {
   if (!value || typeof value !== "object") return false;
@@ -38,7 +39,8 @@ export function validGroup(value: unknown): value is CanvasGroup {
     g.width <= 10_000 &&
     g.height >= 100 &&
     g.height <= 10_000 &&
-    (g.locked === undefined || typeof g.locked === "boolean")
+    (g.locked === undefined || typeof g.locked === "boolean") &&
+    (g.moveContents === undefined || typeof g.moveContents === "boolean")
   );
 }
 export function readGroups(key: string): CanvasGroup[] {
@@ -70,7 +72,9 @@ export function useCanvasGroups(sessionId: string) {
   const key = `audiorouter.ui.groups.${sessionId}`;
   const [state, setState] = useState(() => ({ key, groups: readGroups(key) }));
   const groups = state.key === key ? state.groups : [];
-  const [selectedGroupId, selectGroup] = useState("");
+  const [selectedGroupIds, selectGroups] = useState<string[]>([]);
+  const selectedGroupId = selectedGroupIds[0] ?? "";
+  const selectGroup = (id: string) => selectGroups(id ? [id] : []);
   useEffect(() => {
     setState({ key, groups: readGroups(key) });
     selectGroup("");
@@ -94,7 +98,9 @@ export function useCanvasGroups(sessionId: string) {
   return {
     groups,
     selectedGroupId,
+    selectedGroupIds,
     selectGroup,
+    selectGroups,
     addGroup: () => {
       const id = `group-${crypto.randomUUID()}`;
       update((current) => [
@@ -109,6 +115,7 @@ export function useCanvasGroups(sessionId: string) {
           y: -80 + current.length * 24,
           width: 540,
           height: 340,
+          moveContents: true,
         },
       ]);
       selectGroup(id);
@@ -116,8 +123,18 @@ export function useCanvasGroups(sessionId: string) {
     changeGroup: (id: string, patch: Partial<CanvasGroup>) =>
       update((current) =>
         current.map((g) => {
-          const next = g.id === id ? { ...g, ...patch, id } : g;
+          const safePatch = g.locked ? { ...patch, x: g.x, y: g.y, width: g.width, height: g.height } : patch;
+          const next = g.id === id ? { ...g, ...safePatch, id } : g;
           return validGroup(next) ? next : g;
+        }),
+      ),
+    changeGroups: (patches: Map<string, Partial<CanvasGroup>>) =>
+      update((current) =>
+        current.map((group) => {
+          const patch = patches.get(group.id);
+          if (!patch || group.locked) return group;
+          const next = { ...group, ...patch, id: group.id };
+          return validGroup(next) ? next : group;
         }),
       ),
     removeGroup: (id: string) => {
@@ -144,8 +161,18 @@ export function CanvasGroupRenderer({ data, selected }: NodeProps) {
         minHeight={100}
         maxWidth={10_000}
         maxHeight={10_000}
+        onResizeStart={() => (data.onResizeStart as (() => void) | undefined)?.()}
+        onResizeEnd={() => (data.onResizeEnd as (() => void) | undefined)?.()}
       />
-      <div className="canvas-group-caption" style={{ fontSize: `${group.fontSize}px` }}>
+      <div
+        className="canvas-group-caption"
+        style={{ fontSize: `${group.fontSize}px` }}
+        title={
+          !group.locked && data.movementBlocked
+            ? "A nested group is locked. Unlock it or turn off Move contents with group."
+            : undefined
+        }
+      >
         <strong>{group.name || "Group"}</strong>
         {group.locked && (
           <span
@@ -187,16 +214,30 @@ export function CanvasGroupInspector({
         </p>
       </HelpDisclosure>
       <div className="group-properties">
-        <label className="group-lock-toggle">
-          Lock position and size
-          <input
-            type="checkbox"
-            aria-label="Lock group position and size"
-            checked={group.locked === true}
-            onChange={(event) => onChange({ locked: event.target.checked })}
-          />
-          <small>Prevents dragging or resizing the rectangle by accident.</small>
-        </label>
+        <div className="group-position-options">
+          <label className="group-lock-toggle">
+            Lock position and size
+            <input
+              type="checkbox"
+              aria-label="Lock group position and size"
+              checked={group.locked === true}
+              onChange={(event) => onChange({ locked: event.target.checked })}
+            />
+            <small>Prevents dragging or resizing the rectangle by accident.</small>
+          </label>
+          <label className="group-lock-toggle">
+            Move contents with group
+            <input
+              type="checkbox"
+              aria-label="Move contents with group"
+              checked={group.moveContents === true}
+              onChange={(event) => onChange({ moveContents: event.target.checked })}
+            />
+            <small>
+              Fully enclosed tools and nested groups follow together. A locked nested group blocks this move.
+            </small>
+          </label>
+        </div>
         <label>
           Name
           <TextField

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clearLayout, readLayout, writeLayout } from "./layout";
+import { clearLayout, readLayout, writeLayout, readNodeSizes, writeNodeSizes } from "./layout";
 
 function storage() {
   const values = new Map<string, string>();
@@ -36,5 +36,21 @@ describe("canvas layout persistence", () => {
     writeLayout(state, "session", { mic: { x: 1, y: 2 } });
     clearLayout(state, "session");
     expect(readLayout(state, "session")).toEqual({});
+  });
+  it("roundtrips usable sizes while rejecting malformed, inverted or excessive dimensions", () => {
+    const state = storage();
+    const good = { width: 500, height: 300, minWidth: 218, minHeight: 170 };
+    writeNodeSizes(state, "sizes", { gain: good });
+    expect(readNodeSizes(state, "sizes")).toEqual({ gain: good });
+    state.setItem(
+      "sizes",
+      JSON.stringify({
+        gain: good,
+        bad: { ...good, width: 100 },
+        huge: { ...good, height: 10001 },
+        text: { ...good, width: "500" },
+      }),
+    );
+    expect(readNodeSizes(state, "sizes")).toEqual({ gain: good });
   });
 });

@@ -18,8 +18,10 @@ export function shortcutFromKeyboardEvent(
 
 export function shortcutConflicts(binding: ShortcutBinding): ShortcutAction[] {
   const actions = Object.keys(binding) as ShortcutAction[];
-  return actions.filter((action, index) =>
-    actions.some((other, otherIndex) => otherIndex < index && binding[other] === binding[action]),
+  return actions.filter(
+    (action, index) =>
+      ["Control+C", "Control+V"].includes(binding[action]) ||
+      actions.some((other, otherIndex) => otherIndex < index && binding[other] === binding[action]),
   );
 }
 

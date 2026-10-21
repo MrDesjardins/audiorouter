@@ -10,7 +10,8 @@ import { UpdatesPanel } from "./UpdateNotice";
 import { setUpdateCheckEnabled } from "./updateCheck";
 import { FirstRunGuide } from "./FirstRunGuide";
 import { useCanvasGroups } from "./CanvasGroups";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { SignalTimingPanel } from "./SignalTiming";
@@ -305,11 +306,24 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const groupState = useCanvasGroups(selectedSessionId);
   const selectedGroup = groupState.groups.find((group) => group.id === groupState.selectedGroupId);
+  const canvasLayoutActions = useRef<((action: LayoutAction) => void) | null>(null);
+  const [canvasLayoutSelection, setCanvasLayoutSelection] = useState<{ sessionId: string; items: CanvasRect[] }>({
+    sessionId: "",
+    items: [],
+  });
+  const updateCanvasLayoutSelection = useCallback((sessionId: string, items: CanvasRect[]) => {
+    setCanvasLayoutSelection((current) =>
+      current.sessionId === sessionId && JSON.stringify(current.items) === JSON.stringify(items)
+        ? current
+        : { sessionId, items },
+    );
+  }, []);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("tools");
   // UI-18: optional daily new-version check (GitHub public releases list).
   const [updateChecks, setUpdateChecks] = useState(updateCheckEnabled);
   const availableUpdate = useUpdateCheck(updateChecks && !isAutomatedHarness());
   const selectNodeProperties = (id: string) => {
+    groupState.selectGroup("");
     setSelectedNodeId(id);
     setSelectedNodeIds([id]);
     setWorkbenchTab("properties");
@@ -2084,7 +2098,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const next = { ...shortcuts, [action]: shortcut };
     setShortcuts(next);
     setShortcutMessage(
-      shortcutConflicts(next).length > 0 ? "Shortcut conflict: duplicate bindings are disabled until resolved." : null,
+      shortcutConflicts(next).length > 0
+        ? "Shortcut conflict: duplicate bindings and reserved Ctrl+C/Ctrl+V bindings are disabled until resolved."
+        : null,
     );
   };
   const addLibraryNode = (kind: LibraryNodeKind, _position?: { x: number; y: number }) => {
@@ -2731,17 +2747,33 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     <SessionFlowCanvas
       groups={groupState.groups}
       selectedGroupId={groupState.selectedGroupId}
+      selectedGroupIds={groupState.selectedGroupIds}
       onSelectGroup={(id) => {
         groupState.selectGroup(id);
-        if (id) setWorkbenchTab("properties");
+        if (id) {
+          setSelectedNodeIds([]);
+          setWorkbenchTab("properties");
+        }
       }}
       onChangeGroup={groupState.changeGroup}
+      onChangeGroups={groupState.changeGroups}
       onRemoveGroup={groupState.removeGroup}
       session={draft}
       pendingNodeIds={unsavedNodeIds(session, draft)}
       nodeSaveState={graphBusy ? "saving" : autoSavePending ? "autosave" : "needs-save"}
       selectedNodeId={selectedNode.id}
       selectedNodeIds={selectedNodeIds}
+      onSelectItems={(ids) => {
+        const groupIds = new Set(groupState.groups.map((group) => group.id));
+        groupState.selectGroups(ids.filter((id) => groupIds.has(id)));
+        const nodes = ids.filter((id) => !groupIds.has(id));
+        setSelectedNodeIds(nodes);
+        if (nodes[0]) setSelectedNodeId(nodes[0]);
+        if (ids.length) setWorkbenchTab("properties");
+      }}
+      layoutActionsRef={canvasLayoutActions}
+      onLayoutSelection={updateCanvasLayoutSelection}
+      onLayoutMessage={setActionMessage}
       onCopyNode={copyNodeToClipboard}
       onPasteNode={pasteNodeFromClipboard}
       canPasteNode={hasCopiedNode}
@@ -3227,6 +3259,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
                 {(liveDiagnostics) => (
                   <PropertiesPanel
+                    layoutItems={canvasLayoutSelection.sessionId === draft.id ? canvasLayoutSelection.items : []}
+                    onLayoutAction={(action) => canvasLayoutActions.current?.(action)}
                     selectedGroup={selectedGroup}
                     groupState={groupState}
                     selectedNode={selectedNode}
@@ -3277,6 +3311,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               <Workbench
                 onAddGroup={() => {
                   groupState.addGroup();
+                  setSelectedNodeIds([]);
                   setWorkbenchTab("properties");
                 }}
                 tab={workbenchTab}

@@ -30,10 +30,27 @@ import {
   useState,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
+  type CSSProperties,
 } from "react";
 import { useLiveDiagnostics, type TelemetryStore } from "./liveTelemetry";
 import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/contracts";
-import { readLayout, writeLayout, type LayoutPositions } from "./layout";
+import {
+  readLayout,
+  writeLayout,
+  readNodeSizes,
+  writeNodeSizes,
+  type LayoutPositions,
+  type NodeLayoutSizes,
+} from "./layout";
+import {
+  canvasOwners,
+  layoutCanvasItems,
+  moveCanvasItems,
+  movementLocked,
+  type CanvasRect,
+  type LayoutAction,
+} from "./canvasGeometry";
 import { nodePortLabels } from "./graphView";
 import { applyCableAvailability, libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
 import { cableName, useVirtualCableStatus } from "./virtualCableStatus";
@@ -81,8 +98,10 @@ export { LIBRARY_DROP_MIME } from "./libraryDrag";
 type SessionFlowCanvasProps = {
   groups?: CanvasGroup[];
   selectedGroupId?: string;
+  selectedGroupIds?: string[];
   onSelectGroup?: (id: string) => void;
   onChangeGroup?: (id: string, patch: Partial<CanvasGroup>) => void;
+  onChangeGroups?: (patches: Map<string, Partial<CanvasGroup>>) => void;
   onRemoveGroup?: (id: string) => void;
   session: Session;
   pendingNodeIds?: ReadonlySet<string>;
@@ -91,6 +110,10 @@ type SessionFlowCanvasProps = {
   selectedNodeIds?: string[];
   onSelect: (id: string) => void;
   onSelectMany?: (ids: string[]) => void;
+  onSelectItems?: (ids: string[]) => void;
+  layoutActionsRef?: RefObject<((action: LayoutAction) => void) | null>;
+  onLayoutSelection?: (sessionId: string, items: CanvasRect[]) => void;
+  onLayoutMessage?: (message: string) => void;
   onCopyNode?: (nodeId: string) => void;
   onPasteNode?: (position: { x: number; y: number }) => string | void;
   canPasteNode?: boolean;
@@ -187,6 +210,8 @@ function LiveCanvasProvider({
   return <LiveCanvasContext.Provider value={value}>{children}</LiveCanvasContext.Provider>;
 }
 const NODE_TYPES = { flowNode: FlowNodeRenderer, visualGroup: CanvasGroupRenderer };
+const ownValue = <T,>(values: Record<string, T>, id: string): T | undefined =>
+  Object.hasOwn(values, id) ? values[id] : undefined;
 
 // Card dimensions can arrive before connector bounds on a cold WebView load.
 // A later resize is not guaranteed, leaving saved edges and hit testing inert.
@@ -2167,8 +2192,10 @@ export function SessionFlowCanvas({
   recordingBusyNodeId = null,
   groups = [],
   selectedGroupId = "",
+  selectedGroupIds = selectedGroupId ? [selectedGroupId] : [],
   onSelectGroup,
   onChangeGroup,
+  onChangeGroups,
   onRemoveGroup,
   session,
   pendingNodeIds,
@@ -2177,6 +2204,10 @@ export function SessionFlowCanvas({
   selectedNodeIds = [selectedNodeId],
   onSelect,
   onSelectMany,
+  onSelectItems,
+  layoutActionsRef,
+  onLayoutSelection,
+  onLayoutMessage,
   onCopyNode,
   onPasteNode,
   canPasteNode = false,
@@ -2210,6 +2241,9 @@ export function SessionFlowCanvas({
   const [positions, setPositions] = useState<LayoutPositions>(() =>
     readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey),
   );
+  const sizesKey = `${layoutKey}.sizes`;
+  const [nodeSizes, setNodeSizes] = useState<NodeLayoutSizes>(() => readNodeSizes(window.localStorage, sizesKey));
+  const naturalSizesRef = useRef<Record<string, { width: number; height: number }>>(Object.create(null));
   const [dropPreview, setDropPreview] = useState<{ kind: string; position: { x: number; y: number } } | null>(null);
   const [contextMenu, setContextMenu] = useState<
     | { kind: "node"; nodeId: string; x: number; y: number; flowPosition: { x: number; y: number } }
@@ -2248,6 +2282,158 @@ export function SessionFlowCanvas({
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const initialFitDoneRef = useRef(false);
   const skipNextFitRef = useRef(false);
+  const dragSnapshotRef = useRef<{
+    sessionId: string;
+    items: CanvasRect[];
+    targets: Map<string, { x: number; y: number }>;
+  } | null>(null);
+  const resizingGroupRef = useRef<string | null>(null);
+  const geometryItems = useMemo<CanvasRect[]>(
+    () => [
+      ...groups.map((group) => ({
+        id: group.id,
+        x: group.x,
+        y: group.y,
+        width: group.width,
+        height: group.height,
+        group: true,
+        locked: group.locked,
+        carry: group.moveContents === true,
+        minWidth: 180,
+        minHeight: 100,
+      })),
+      ...session.nodes.map((node, index) => {
+        const position = ownValue(positions, node.id) ?? positionFor(index);
+        const size = ownValue(nodeSizes, node.id);
+        const natural = ownValue(naturalSizesRef.current, node.id);
+        return {
+          id: node.id,
+          ...position,
+          width: measured[node.id]?.width ?? size?.width ?? 218,
+          height: measured[node.id]?.height ?? size?.height ?? 180,
+          minWidth: size?.minWidth ?? natural?.width ?? 218,
+          minHeight: size?.minHeight ?? natural?.height ?? 180,
+        };
+      }),
+    ],
+    [groups, session.nodes, positions, nodeSizes, measured],
+  );
+  const geometryOwners = useMemo(() => canvasOwners(geometryItems), [geometryItems]);
+  type LayoutSnapshot = { items: CanvasRect[]; sizes: NodeLayoutSizes; sides: typeof edgeSides };
+  const [layoutHistory, setLayoutHistory] = useState<{ past: LayoutSnapshot[]; future: LayoutSnapshot[] }>({
+    past: [],
+    future: [],
+  });
+  const beforeGestureRef = useRef<LayoutSnapshot | null>(null);
+  const captureLayout = (): LayoutSnapshot => ({
+    items: geometryItems.map((item) => ({ ...item })),
+    sizes: { ...nodeSizes },
+    sides: { ...edgeSides },
+  });
+  const geometryChanged = (a: CanvasRect[], b: CanvasRect[]) =>
+    a.some((item) => {
+      const other = b.find((candidate) => candidate.id === item.id);
+      return (
+        other &&
+        (item.x !== other.x || item.y !== other.y || item.width !== other.width || item.height !== other.height)
+      );
+    });
+  const rememberGesture = () => {
+    const before = beforeGestureRef.current;
+    beforeGestureRef.current = null;
+    if (before && geometryChanged(before.items, geometryItems))
+      setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+  };
+  useEffect(() => {
+    const ids = new Set([...selectedNodeIds, ...selectedGroupIds]);
+    onLayoutSelection?.(
+      session.id,
+      geometryItems.filter((item) => ids.has(item.id)),
+    );
+  }, [geometryItems, selectedNodeIds, selectedGroupIds, onLayoutSelection, session.id]);
+  const commitGeometry = (items: CanvasRect[], persist = false) => {
+    const before = beforeGestureRef.current;
+    if (before && geometryChanged(before.items, items)) {
+      beforeGestureRef.current = null;
+      setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+    }
+    const previous = new Map(geometryItems.map((item) => [item.id, item]));
+    const nextPositions: LayoutPositions = Object.assign(Object.create(null), positionsRef.current);
+    const nextSizes: NodeLayoutSizes = Object.assign(Object.create(null), nodeSizes);
+    const groupPatches = new Map<string, Partial<CanvasGroup>>();
+    for (const item of items) {
+      const old = previous.get(item.id);
+      if (!old || (old.x === item.x && old.y === item.y && old.width === item.width && old.height === item.height))
+        continue;
+      if (item.group) {
+        if (!old.locked) groupPatches.set(item.id, { x: item.x, y: item.y, width: item.width, height: item.height });
+      } else {
+        nextPositions[item.id] = { x: item.x, y: item.y };
+        if (old.width !== item.width || old.height !== item.height)
+          nextSizes[item.id] = {
+            width: item.width,
+            height: item.height,
+            minWidth: item.minWidth ?? 218,
+            minHeight: item.minHeight ?? 180,
+          };
+      }
+    }
+    positionsRef.current = nextPositions;
+    setPositions(nextPositions);
+    setNodeSizes(nextSizes);
+    if (onChangeGroups) onChangeGroups(groupPatches);
+    else for (const [id, patch] of groupPatches) onChangeGroup?.(id, patch);
+    if (persist) {
+      writeLayout(window.localStorage, layoutKey, nextPositions);
+      writeNodeSizes(window.localStorage, sizesKey, nextSizes);
+    }
+  };
+  if (layoutActionsRef)
+    layoutActionsRef.current = (action) => {
+      const result = layoutCanvasItems(geometryItems, [...selectedNodeIds, ...selectedGroupIds], action);
+      if (geometryChanged(geometryItems, result.items)) {
+        const before = captureLayout();
+        setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+      }
+      commitGeometry(result.items, true);
+      onLayoutMessage?.(result.message);
+    };
+  const restoreLayout = (direction: "undo" | "redo") => {
+    const stack = direction === "undo" ? layoutHistory.past : layoutHistory.future;
+    const snapshot = stack.at(-1);
+    if (!snapshot) return;
+    const prior = new Map(snapshot.items.map((item) => [item.id, item]));
+    const restored = geometryItems.map((item) => {
+      const old = prior.get(item.id);
+      return old ? { ...item, x: old.x, y: old.y, width: old.width, height: old.height } : item;
+    });
+    if (geometryItems.some((item, index) => item.locked && geometryChanged([item], [restored[index]]))) {
+      onLayoutMessage?.("Unlock the affected groups before restoring this layout.");
+      return;
+    }
+    const current = captureLayout();
+    setLayoutHistory(
+      direction === "undo"
+        ? { past: layoutHistory.past.slice(0, -1), future: [...layoutHistory.future.slice(-19), current] }
+        : { past: [...layoutHistory.past.slice(-19), current], future: layoutHistory.future.slice(0, -1) },
+    );
+    commitGeometry(restored, true);
+    const sizes = { ...nodeSizes };
+    for (const item of snapshot.items)
+      if (!item.group) {
+        if (Object.hasOwn(snapshot.sizes, item.id)) sizes[item.id] = snapshot.sizes[item.id];
+        else delete sizes[item.id];
+      }
+    setNodeSizes(sizes);
+    writeNodeSizes(window.localStorage, sizesKey, sizes);
+    setEdgeSides(snapshot.sides);
+    try {
+      window.localStorage.setItem(edgeLayoutKey, JSON.stringify(snapshot.sides));
+    } catch {
+      /* Presentation storage is optional. */
+    }
+    onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
+  };
   useEffect(() => {
     initialFitDoneRef.current = false;
     nextLayoutIndexRef.current = session.nodes.length;
@@ -2255,6 +2441,12 @@ export function SessionFlowCanvas({
     positionsRef.current = next;
     setPositions(next);
     setMeasured({});
+    naturalSizesRef.current = Object.create(null);
+    setNodeSizes(readNodeSizes(window.localStorage, sizesKey));
+    setContextMenu(null);
+    dragSnapshotRef.current = null;
+    beforeGestureRef.current = null;
+    setLayoutHistory({ past: [], future: [] });
     if (typeof window !== "undefined") {
       try {
         setEdgeSides(
@@ -2267,7 +2459,7 @@ export function SessionFlowCanvas({
         setEdgeSides({});
       }
     }
-  }, [layoutKey, edgeLayoutKey]);
+  }, [layoutKey, edgeLayoutKey, sizesKey]);
   const nextNodePosition = () => {
     nextLayoutIndexRef.current = Math.max(nextLayoutIndexRef.current, session.nodes.length);
     const position = positionFor(nextLayoutIndexRef.current);
@@ -2312,7 +2504,7 @@ export function SessionFlowCanvas({
       positionsRef.current = next;
       setPositions(next);
       writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
-      skipNextFitRef.current = true;
+      skipNextFitRef.current = position !== undefined;
       setContextMenu(null);
     },
     [canEdit, canPasteNode, layoutKey, onPasteNode, session.nodes.length],
@@ -2327,7 +2519,14 @@ export function SessionFlowCanvas({
       )
         return;
       const key = event.key.toLowerCase();
-      if (key === "c" && selectedNodeIds.length === 1 && session.nodes.some((node) => node.id === selectedNodeIds[0])) {
+      if (key === "c" && window.getSelection()?.toString()) return;
+      if (
+        key === "c" &&
+        onCopyNode &&
+        selectedGroupIds.length === 0 &&
+        selectedNodeIds.length === 1 &&
+        session.nodes.some((node) => node.id === selectedNodeIds[0])
+      ) {
         event.preventDefault();
         onCopyNode?.(selectedNodeIds[0]);
       } else if (key === "v" && canPasteNode && canEdit) {
@@ -2344,7 +2543,17 @@ export function SessionFlowCanvas({
       window.removeEventListener("keydown", onClipboardShortcut);
       window.removeEventListener("keydown", onEscape);
     };
-  }, [canEdit, canPasteNode, onCopyNode, onPasteNode, pasteNode, selectedNodeId, selectedNodeIds, session.nodes]);
+  }, [
+    canEdit,
+    canPasteNode,
+    onCopyNode,
+    onPasteNode,
+    pasteNode,
+    selectedNodeId,
+    selectedNodeIds,
+    selectedGroupIds,
+    session.nodes,
+  ]);
   const setEdgeSide = (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => {
     setEdgeSides((currentMap) => {
       const current = currentMap[edgeId] ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
@@ -2432,11 +2641,15 @@ export function SessionFlowCanvas({
     };
   }, [fitRequest]);
   const tidyLayout = () => {
+    const before = captureLayout();
+    setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
     setArrangeUndo({ positions: positionsRef.current, sides: edgeSides });
     applyArrangement(smartLayout(session, measured), {});
   };
   const undoArrange = () => {
     if (!arrangeUndo) return;
+    const before = captureLayout();
+    setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
     applyArrangement(arrangeUndo.positions, arrangeUndo.sides);
     setArrangeUndo(null);
   };
@@ -2558,6 +2771,7 @@ export function SessionFlowCanvas({
       ? { ...appendPreviewNode({ ...session, nodes: [], edges: [] }, dropPreview.kind).nodes[0], id: DROP_PREVIEW_ID }
       : null;
   const nodes: FlowNode[] = (previewNode ? [...session.nodes, previewNode] : session.nodes).map((node, index) => {
+    const layoutSize = ownValue(nodeSizes, node.id);
     const applicationCaptureState =
       diagnostics?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null;
     const headerState = nodeHeaderState(node, applicationCaptureState);
@@ -2569,9 +2783,11 @@ export function SessionFlowCanvas({
       id: node.id,
       type: "flowNode",
       position:
-        node.id === DROP_PREVIEW_ID && dropPreview ? dropPreview.position : (positions[node.id] ?? positionFor(index)),
+        node.id === DROP_PREVIEW_ID && dropPreview
+          ? dropPreview.position
+          : (ownValue(positions, node.id) ?? positionFor(index)),
       measured: measured[node.id],
-      selected: !selectedGroupId && selectedNodeIds.includes(node.id),
+      selected: selectedNodeIds.includes(node.id),
       data: {
         label: (
           <div
@@ -2769,23 +2985,26 @@ export function SessionFlowCanvas({
           </div>
         ),
       },
-      className: `${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
+      className: `${layoutSize ? "has-layout-size " : ""}${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
       // The drop preview is only a picture: no dragging, selecting or connecting.
       draggable: node.id !== DROP_PREVIEW_ID,
       selectable: node.id !== DROP_PREVIEW_ID,
       deletable: canEdit && node.id !== DROP_PREVIEW_ID,
       ...(node.id === DROP_PREVIEW_ID ? { connectable: false, zIndex: 1000, ariaHidden: true } : {}),
       style: {
-        border:
-          !selectedGroupId && selectedNodeIds.includes(node.id)
-            ? "2px solid var(--accent, #65d1b5)"
-            : "1px solid var(--line, #40536b)",
+        border: selectedNodeIds.includes(node.id)
+          ? "2px solid var(--accent, #65d1b5)"
+          : "1px solid var(--line, #40536b)",
         borderRadius: 10,
         background: "var(--panel, #162132)",
         color: "var(--text, #edf4ff)",
         minWidth: 190,
         opacity: 1,
-      },
+        width: layoutSize?.width,
+        height: layoutSize?.height,
+        "--canvas-node-width": layoutSize ? `${layoutSize.width}px` : undefined,
+        "--canvas-node-min-width": layoutSize ? `${layoutSize.minWidth}px` : undefined,
+      } as CSSProperties,
     };
   });
 
@@ -2837,8 +3056,25 @@ export function SessionFlowCanvas({
       <FlowMotionProvider mode={flowAnimation}>
         <div className="canvas-layout-actions" aria-label="Canvas layout actions">
           <span className="muted" role="status" aria-live="polite">
-            {selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected
+            {selectedNodeIds.length + selectedGroupIds.length} item
+            {selectedNodeIds.length + selectedGroupIds.length === 1 ? "" : "s"} selected
           </span>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!layoutHistory.past.length}
+            onClick={() => restoreLayout("undo")}
+          >
+            Undo layout
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!layoutHistory.future.length}
+            onClick={() => restoreLayout("redo")}
+          >
+            Redo layout
+          </button>
           <button
             type="button"
             className="secondary"
@@ -2964,12 +3200,23 @@ export function SessionFlowCanvas({
                 height: group.height,
                 measured: measured[group.id],
                 style: { width: group.width, height: group.height },
-                selected: group.id === selectedGroupId,
-                data: { group },
+                selected: selectedGroupIds.includes(group.id),
+                data: {
+                  group,
+                  movementBlocked: movementLocked(group.id, geometryItems, geometryOwners),
+                  onResizeStart: () => {
+                    resizingGroupRef.current = group.id;
+                    beforeGestureRef.current = captureLayout();
+                  },
+                  onResizeEnd: () => {
+                    resizingGroupRef.current = null;
+                    rememberGesture();
+                  },
+                },
                 zIndex: -1,
                 className: `visual-group-node${group.locked ? " is-locked" : ""}`,
                 connectable: false,
-                draggable: !group.locked,
+                draggable: !movementLocked(group.id, geometryItems, geometryOwners),
                 deletable: !group.locked,
               })),
               ...nodes,
@@ -2981,40 +3228,53 @@ export function SessionFlowCanvas({
                 for (const change of changes) {
                   if (change.type !== "dimensions" || !change.dimensions) continue;
                   const { width, height } = change.dimensions;
+                  if (
+                    !groups.some((group) => group.id === change.id) &&
+                    !Object.hasOwn(nodeSizes, change.id) &&
+                    width > 0 &&
+                    height > 0
+                  )
+                    naturalSizesRef.current[change.id] ??= { width, height };
                   if (current[change.id]?.width === width && current[change.id]?.height === height) continue;
                   if (next === current) next = { ...current };
                   next[change.id] = { width, height };
                 }
                 return next;
               });
+              const moved = new Map<string, { x: number; y: number }>();
+              const resized = new Map<string, { width: number; height: number }>();
               for (const change of changes) {
-                if (!("id" in change) || !groups.some((g) => g.id === change.id)) continue;
-                if (change.type === "position" && change.position)
-                  onChangeGroup?.(change.id, { x: change.position.x, y: change.position.y });
+                if (change.type === "position" && change.position) moved.set(change.id, change.position);
                 if (change.type === "dimensions" && change.dimensions && change.resizing)
-                  onChangeGroup?.(change.id, { width: change.dimensions.width, height: change.dimensions.height });
+                  resized.set(change.id, change.dimensions);
               }
-              const moved = changes.filter(
-                (change) => change.type === "position" && change.position && !groups.some((g) => g.id === change.id),
-              );
-              if (moved.length) {
-                const next = { ...positionsRef.current };
-                for (const change of moved)
-                  if (change.type === "position" && change.position) next[change.id] = change.position;
-                positionsRef.current = next;
-                setPositions(next);
+              if (moved.size || resized.size) {
+                const drag = dragSnapshotRef.current;
+                if (resizingGroupRef.current || resized.size) {
+                  commitGeometry(
+                    geometryItems.map((item) =>
+                      item.locked ? item : { ...item, ...moved.get(item.id), ...resized.get(item.id) },
+                    ),
+                  );
+                } else if (drag?.sessionId === session.id) {
+                  for (const [id, point] of moved) drag.targets.set(id, point);
+                  commitGeometry(moveCanvasItems(drag.items, drag.targets));
+                } else {
+                  const next = moveCanvasItems(geometryItems, moved);
+                  if (geometryChanged(geometryItems, next)) beforeGestureRef.current = captureLayout();
+                  commitGeometry(next, true);
+                }
               }
-              const selection = changes.filter(
-                (change) => change.type === "select" && !groups.some((g) => g.id === change.id),
-              );
+              const selection = changes.filter((change) => change.type === "select");
               if (selection.length) {
-                const selected = new Set(selectedNodeIds);
+                const selected = new Set([...selectedNodeIds, ...selectedGroupIds]);
                 for (const change of selection)
                   if (change.type === "select") {
                     if (change.selected) selected.add(change.id);
                     else selected.delete(change.id);
                   }
-                onSelectMany?.([...selected]);
+                if (onSelectItems) onSelectItems([...selected]);
+                else onSelectMany?.([...selected].filter((id) => session.nodes.some((node) => node.id === id)));
               }
             }}
             nodeTypes={NODE_TYPES}
@@ -3030,7 +3290,9 @@ export function SessionFlowCanvas({
             deleteKeyCode={["Backspace", "Delete"]}
             nodesDraggable
             selectionOnDrag
-            onNodeClick={(_, node) => {
+            multiSelectionKeyCode={["Control", "Meta", "Shift"]}
+            onNodeClick={(event, node) => {
+              if (event.ctrlKey || event.metaKey || event.shiftKey) return;
               if (node.type === "visualGroup") onSelectGroup?.(node.id);
               else {
                 onSelectGroup?.("");
@@ -3207,7 +3469,7 @@ export function SessionFlowCanvas({
                 ? (deleted) => {
                     for (const nodeId of deletedNodeIds(deleted)) {
                       if (groups.some((g) => g.id === nodeId)) {
-                        onRemoveGroup?.(nodeId);
+                        if (!groups.find((group) => group.id === nodeId)?.locked) onRemoveGroup?.(nodeId);
                         continue;
                       }
                       if (onRemoveNode) onRemoveNode(nodeId);
@@ -3216,15 +3478,18 @@ export function SessionFlowCanvas({
                   }
                 : undefined
             }
-            onNodeDragStop={(_, node) => {
-              if (node.type === "visualGroup") {
-                onChangeGroup?.(node.id, { x: node.position.x, y: node.position.y });
-                return;
-              }
-              const next = { ...positionsRef.current, [node.id]: node.position };
-              positionsRef.current = next;
-              setPositions(next);
-              writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+            onNodeDragStart={() => {
+              beforeGestureRef.current = captureLayout();
+              dragSnapshotRef.current = {
+                sessionId: session.id,
+                items: geometryItems.map((item) => ({ ...item })),
+                targets: new Map(),
+              };
+            }}
+            onNodeDragStop={() => {
+              rememberGesture();
+              dragSnapshotRef.current = null;
+              writeLayout(window.localStorage, layoutKey, positionsRef.current);
             }}
             proOptions={{ hideAttribution: true }}
           >

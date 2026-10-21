@@ -87,3 +87,16 @@ test("lock persists, rejects non-boolean values and is offered in Properties", (
   );
   expect(readGroups("groups")).toEqual([{ ...group, id: "group-ok", locked: true }]);
 });
+
+test("new groups carry contents, legacy groups keep frame-only movement, and the toggle persists", () => {
+  render(<Fixture />);
+  fireEvent.click(screen.getByText("Add group"));
+  const toggle = screen.getByLabelText("Move contents with group") as HTMLInputElement;
+  expect(toggle.checked).toBe(true);
+  fireEvent.click(toggle);
+  expect(readGroups("audiorouter.ui.groups.one")[0].moveContents).toBe(false);
+  const saved = readGroups("audiorouter.ui.groups.one")[0];
+  const { moveContents: _flag, ...legacy } = saved;
+  localStorage.setItem("legacy", JSON.stringify([legacy, { ...saved, id: "group-bad", moveContents: "yes" }]));
+  expect(readGroups("legacy")).toEqual([legacy]);
+});

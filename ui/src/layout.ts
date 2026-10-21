@@ -1,5 +1,37 @@
 export type LayoutPosition = { x: number; y: number };
 export type LayoutPositions = Record<string, LayoutPosition>;
+export type NodeLayoutSize = { width: number; height: number; minWidth: number; minHeight: number };
+export type NodeLayoutSizes = Record<string, NodeLayoutSize>;
+
+export function readNodeSizes(storage: Pick<Storage, "getItem"> | null, key: string): NodeLayoutSizes {
+  try {
+    const parsed: unknown = JSON.parse(storage?.getItem(key) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, value]) => {
+        if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+        const size = value as NodeLayoutSize;
+        return (
+          [size.width, size.height, size.minWidth, size.minHeight].every(
+            (n) => typeof n === "number" && Number.isFinite(n) && n >= 100 && n <= 10_000,
+          ) &&
+          size.width >= size.minWidth &&
+          size.height >= size.minHeight
+        );
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function writeNodeSizes(storage: Pick<Storage, "setItem"> | null, key: string, sizes: NodeLayoutSizes): void {
+  try {
+    storage?.setItem(key, JSON.stringify(sizes));
+  } catch {
+    /* Optional presentation storage. */
+  }
+}
 
 const MAX_COORDINATE = 100_000;
 

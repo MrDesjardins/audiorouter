@@ -1,5 +1,128 @@
 # Active plan — post-0.0.8 maintenance
 
+## Group movement and selection layout — 2026-10-20, owner overnight request
+
+Objective: optional group-content movement plus mixed tool/group selection,
+alignment, equal sizing and equal spacing in Properties. Requirements UI-02,
+UI-11, UI-16 and UI-17; presentation data only, no graph/API/audio changes.
+Prerequisites: M05 canvas and local group/layout storage; installed Windows
+Edge for real pointer/selection/themed verification. No audio hardware needed.
+
+Decisions: full rectangle containment, with the smallest containing group as
+the unique owner (stable ID breaks overlap ties). Freeze ownership at drag
+start. Nested groups and their descendants move once with a carrying ancestor;
+the inner toggle controls dragging that inner group itself. New groups carry
+contents by default; old annotations without the flag keep their old behavior.
+Locked rectangles stay fixed; a carrying group with a locked descendant cannot
+move until unlocked or carrying is disabled. A locked rectangle does not freeze
+individually edited audio tools. Partial overlaps are not membership.
+
+Layout actions use selection bounds. Selected carrying ancestors subsume their
+selected descendants for movement; sizing applies to explicitly selected items
+without scaling contents. Locked groups remain fixed anchors. Distribute equal
+edge gaps between the endpoints and any locked anchors; reject insufficient
+space rather than create overlaps. Tool sizes retain usable content minima,
+and persist separately from graph state. Align/sizing/distribution never rewire.
+
+Tasks: (1) pure tested ownership/movement/layout math and validated sizes;
+(2) group toggle and drag integration; (3) mixed selection and accessible
+Properties controls; (4) regression tests for locks, nesting, overlap, resize,
+session isolation and persistence; (5) format/lint/typecheck/build/unit tests,
+headed Edge dark/light/high-contrast, full diff review and fixes. Include the
+three existing clipboard findings in integration review because selection and
+keyboard ownership are changing here. Record results and remaining limits.
+
+Rollback: revert scoped UI changes and the new presentation size key; old
+group/layout records remain compatible. Risks: double movement in multi-drag,
+ownership drift mid-drag, stale selection across sessions, clipping after size
+changes, and accidental changes to locked rectangles. Implementation and review
+are complete; next is owner acceptance using the separate review executable.
+
+Implementation: pure ownership/translation/layout math in canvasGeometry.ts;
+batched group updates and persisted moveContents flag; mixed React Flow
+selection and Properties layout controls; validated per-session tool sizes;
+20-entry local Undo layout/Redo layout history for drag, resize, keyboard moves
+and layout actions. History respects current locks and preserves connector-side
+preferences. Group and size presentation preferences stay outside graph drafts.
+The Group website guide and UI-02/UI-11/UI-16 wording were updated together.
+
+Review fixes and regression evidence:
+- NodeResizer end callbacks can see the starting render. Recording history at
+  the first changed geometry fixes disabled resize undo, without recording
+  no-op gestures. The real-pointer resize/lock/undo regression passes.
+- Test Signal and Audio File had later fixed-width CSS overrides. Restrict
+  those defaults to unsized cards; both now honor size matching, restore their
+  defaults on undo, and keep their buttons inside the minimum-size card.
+- Keyboard movement records layout history; undo restores connector-side
+  preferences after Arrange; imported IDs cannot inherit presentation sizes
+  or positions from Object.prototype. Ownership is computed once per render.
+- All three clipboard review findings recorded below are resolved here:
+  keyboard paste is brought into view; selected UI text keeps native copy;
+  customizable playback/privacy shortcuts reserve Ctrl+C and Ctrl+V. The
+  three focused browser regressions pass, including copying while playing.
+
+Validation (Windows host, 2026-10-20; no hardware required for this UI slice):
+- npm.cmd --prefix ui test: 63 files / 568 tests passed on the final code.
+  Pure tests cover deterministic overlap ownership, partial containment,
+  nested selected descendants, disabled carrying, locked descendants,
+  coordinate bounds, six alignments, shared usable minima, unequal vertical
+  sizes, edge-gap arithmetic, locked anchors and atomic insufficient-space
+  rejection. Persistence tests cover legacy flags and invalid stored sizes.
+- npm.cmd --prefix ui run format and format:check: passed; git diff --check
+  passed. npm.cmd --prefix ui run lint: exit 0, the same 25 existing
+  exhaustive-deps warnings, no added warning.
+- npm.cmd --prefix ui run build (includes typecheck:all with TypeScript 7):
+  passed. Existing Vite main-chunk warning remains (about 549 KB minified).
+- Final consolidated Edge run: 47 tests passed, exit 0 (2.5 minutes).
+  Command from ui/:
+  node node_modules/@playwright/test/cli.js test --config=playwright.config.ts
+  e2e/canvas-layout.pw.ts e2e/canvas-layout-session.pw.ts
+  e2e/canvas-clipboard-regressions.pw.ts e2e/canvas-copy-paste.pw.ts
+  e2e/canvas-groups.pw.ts e2e/canvas-group-lock.pw.ts
+  e2e/smart-layout.pw.ts e2e/canvas-cold-start.pw.ts e2e/drag-place.pw.ts
+  e2e/header-canvas-usability.pw.ts e2e/site-guides.pw.ts --workers=1.
+  Covers dark/light/high-contrast, mouse and keyboard movement, mixed and
+  marquee selection, exactly-once nested movement, locks, frame-only mode,
+  resize, undo/redo, equal gaps, min/max sizing, reload/session isolation,
+  media-card bounds, connector updates and unchanged graph Save state.
+  Also covers existing clipboard, Arrange, tool placement, cold connectors,
+  header behavior and every website guide (including offline control counts).
+  Screenshots were visually inspected in all three themes; artifacts are in
+  %TEMP%/audiorouter-playwright-results/canvas-layout.pw.ts-*/.
+  The pre-existing ResizeObserver loop notification still appears during
+  group resize, including the existing group tests; geometry assertions pass.
+  The cold-start test deliberately hides connectors briefly and emits the
+  expected missing-handle warnings before successful recovery.
+- Guide generation: updated site/guide-content/routing.json, ran
+  node site/generate-guides.mjs and node site/generate-social.mjs. Only the
+  Group guide, guide index and manifest change. node site/check-guides.mjs
+  passed: 36 pages, 139 anchors, 1,075 links/assets and 36 catalog links;
+  generator social --check passed. After regeneration, the offline guide
+  opening/control-count test and guide search/index test passed again (2/2).
+- Native build: cargo.exe build --locked --release --features custom-protocol
+  --manifest-path src-tauri/Cargo.toml --target-dir
+  C:/code/audiorouter/src-tauri/target passed. Staged the final shell alongside
+  the matching CLI/plugin worker from the preceding clipboard build and
+  existing tunnel runtime/licenses at
+  %TEMP%/audiorouter-group-layout-test/audiorouter-shell.exe.
+  Shell SHA256: C22818302B0AA7A2F996BF6D3EB06ECA8FC558887776E0EA50D81F4AE2B98FEF.
+  The original cache executable was restored and its SHA256 verified:
+  EBDCA3FC1E11844DDAF87BFD4F938FA4CC9D0DE06D6EBE5FC07F97FCBCB90496.
+  This is a manual review build, not a signed release or audio qualification.
+
+Requirement evidence: UI-02/16 -> geometry and group/layout browser tests;
+UI-11 -> modifier/marquee selection, keyboard nudge/undo and labelled controls;
+UI-17 -> stable controls, local state, three-theme visual inspection. No backend
+API, Rust source or audio callback changed. Existing driver/release gates are
+unaffected and are not asserted by these UI checks.
+
+Work is isolated on feature/canvas-group-layout, based on the already pushed
+clipboard feature. Original C:/code/audiorouter user changes (including marketing,
+Jev and website work) remain untouched, and .codex is never staged. Next task:
+owner morning review, then PR/merge review; do not merge this branch automatically.
+For existing groups, enable Move contents with group to try carrying behavior.
+
+
 ## Canvas node copy and paste — 2026-10-20 (owner request, in progress)
 
 Objective: let users copy one configured canvas node and paste it as an

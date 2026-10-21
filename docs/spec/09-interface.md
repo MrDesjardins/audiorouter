@@ -12,6 +12,31 @@ Its interior must not block nodes or wires. Groups have no audio ports or
 routing effect and do not require Save/Stop. Persist per-session beside local canvas layout; they are not
 included in exported audio session files in this initial version.
 
+Groups offer a **Move contents with group** toggle beside Lock position and
+size. New groups enable it; existing annotations without that saved property
+retain the previous rectangle-only movement. A tool or nested group belongs
+to its smallest fully enclosing group, with stable group ID as the tie-breaker
+for equal overlapping candidates. Partial overlap does not count. Membership
+is frozen for a drag. A carrying group translates all owned descendants once,
+preserving their relative positions; inner toggles govern dragging that inner
+group itself. Resizing a frame does not scale or move contents. Locked frames
+remain fixed, including during ancestor movement: carrying an ancestor with a
+locked descendant is blocked until unlocked or carrying is disabled. Tools
+inside a locked annotation remain individually editable.
+
+Select multiple tools and/or groups with modifier-click or marquee selection
+to show layout controls in Properties. Provide left/center/right and
+top/middle/bottom alignment, matching smallest/largest widths and heights, and
+horizontal/vertical equal edge spacing. Selected carrying ancestors count as
+one movement unit; sizing changes only explicitly selected rectangles. Locked
+frames stay fixed and participate as alignment/distribution anchors. Equal
+spacing keeps endpoints fixed and distributes between locked anchors; reject
+insufficient room without moving anything. Tool sizes preserve usable minimum
+dimensions. Positions, tool sizes and group settings persist per session as
+local presentation preferences and never change audio topology. Provide local
+Undo layout/Redo layout for geometry edits; restore only existing items and
+respect their current locks. Layout history resets when switching sessions.
+
 The API tab displays the optional localhost HTTP listener URL/port, start/stop,
 the "Who can connect" choice and network URL (HTTP-09),
 explicit token reveal/copy and a link to its local Swagger documentation.
