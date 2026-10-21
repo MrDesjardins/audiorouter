@@ -228,7 +228,14 @@ Done 2026-10-20:
 - 0.8: GitHub Discussions enabled and linked from the README and the site
   footer.
 
-Next, for the owner: 0.4 (register the site in Google Search Console and
-Bing Webmaster Tools and submit `https://audiorouter.org/sitemap.xml`; both
-need the owner's account), then 0.5
-(search-friendly guide titles in `site/generate-guides.mjs`) and Phase 1.
+- 0.4 (in part, 2026-10-21): Google Search Console registered with the
+  sitemap. Bing Webmaster Tools failed after sign-in (Bing-side outage);
+  retry the Google import, or add the site manually with DNS verification.
+- 0.5: guide pages get search-phrased titles from `searchTitles` in
+  `site/generate-guides.mjs` (for example "Noise gate for your microphone
+  (Discord, OBS)"); headings keep the in-app tool names.
+
+Next: finish Bing (owner), then Phase 1: a "Why I built AudioRouter" post on
+the owner's blog (cross-posted to dev.to) and one Reddit post (r/software or
+r/Windows11), drafted by the agent and posted by the owner. AlternativeTo
+(Phase 2) can start in parallel.

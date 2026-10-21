@@ -174,12 +174,56 @@ const audioKinds = new Set([
   "networkSend",
   "networkReceive",
 ]);
+// Browser and search-result titles, phrased as the problem people search for.
+// The page heading keeps the tool's name as it appears in the app.
+const searchTitles = {
+  gain: "Gain: boost or cut audio level in decibels",
+  volume: "Volume control for any audio source on Windows",
+  bassTreble: "Bass and treble control for Windows audio",
+  graphicEq: "10-band graphic equalizer for Windows audio",
+  parametricEq: "Parametric EQ for your microphone on Windows",
+  compressor: "Audio compressor for your microphone and stream",
+  gate: "Noise gate for your microphone (Discord, OBS)",
+  limiter: "Audio limiter: stop clipping and loud peaks",
+  delay: "Audio delay: sync sound with video or another source",
+  pitch: "Pitch shifter for live audio on Windows",
+  dehum: "Remove 50/60 Hz hum from your microphone",
+  declick: "Remove clicks and pops from live audio",
+  denoise: "Remove background noise from your microphone",
+  speechDenoise: "Speech noise reduction for voice chat and streams",
+  spectralGate: "Spectral noise gate: remove fan noise and hiss",
+  firFilter: "Convolution: apply an impulse response (IR) live",
+  mute: "Mute one audio path without touching the others",
+  inputSwitch: "Switch between two audio inputs instantly",
+  duck: "Audio ducking: lower music or game audio automatically",
+  timeShift: "Pause and replay live audio (time shift)",
+  mixer: "Mix several audio sources into one on Windows",
+  meter: "Audio level meter for any point of your route",
+  funVoiceChanger: "Free real-time voice changer for Discord and OBS",
+  physicalInput: "Use your microphone or audio interface as a source",
+  physicalOutput: "Send audio to your headphones or speakers",
+  applicationCapture: "Capture audio from one app only (game, browser)",
+  endpointLoopback: "Capture what plays on a Windows output (loopback)",
+  virtualRenderSource: "Take app audio from an AudioRouter virtual cable",
+  virtualCaptureSink: "Send audio to an AudioRouter virtual cable",
+  testSignal: "Test tone generator to check your audio routing",
+  audioFile: "Play a WAV or MP3 file through your audio route",
+  recorder: "Record any audio route to WAV, FLAC or MP3",
+  networkSend: "Send audio to another PC over your home network",
+  networkReceive: "Receive audio from another PC (two-PC streaming)",
+  plugin: "Use VST plugins on your microphone, crash-safe",
+  group: "Organize your audio routing canvas with groups",
+};
+const pageTitle = (t) => {
+  if (!searchTitles[t.kind]) throw new Error("No search title for " + t.kind);
+  return searchTitles[t.kind] + " — AudioRouter";
+};
 const header =
   '<a class="guide-skip" href="#guide-main">Skip to guide</a><header class="guide-topbar"><a class="brand" href="../index.html"><img src="../assets/mark.svg" alt=""><b>Audio<span>Router</span></b></a><nav aria-label="Guide navigation"><a href="../tools.html">All tools</a><a href="index.html">Visual guides</a><a href="../manual.html">Manual</a><a class="button" href="../download.html">Get AudioRouter ↗</a></nav></header>';
 const doc = (title, description, body, scripts = "") =>
   '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
   esc(title) +
-  ' — AudioRouter guides</title><meta name="description" content="' +
+  '</title><meta name="description" content="' +
   esc(description) +
   '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css">' +
   scripts +
@@ -569,7 +613,7 @@ for (let i = 0; i < tools.length; i++) {
   await writeFile(
     resolve(site, "tools", s + ".html"),
     doc(
-      t.title,
+      pageTitle(t),
       t.purpose,
       body,
       '<script defer src="../assets/guide-animation.js"></script><script defer src="../assets/guide-signal.js"></script><script defer src="../assets/guide-audio.js"></script><script defer src="../assets/guide-playback.js"></script><script defer src="../assets/guides.js"></script>',
@@ -605,7 +649,7 @@ const cards = tools
 await writeFile(
   resolve(site, "tools/index.html"),
   doc(
-    "Visual tool guides",
+    "Audio tool guides with live examples — AudioRouter",
     "Understand every AudioRouter tool through animated signal diagrams, configuration explanations and worked examples.",
     '<main id="guide-main"><section class="guide-index-hero"><p class="eyebrow">The AudioRouter field guide</p><h1>Understand the sound.<br><em>Shape it with confidence.</em></h1><p>One focused guide for every tool. See the signal move, learn what each setting means, and follow an example you can try.</p><label class="guide-search">Find a tool or property<input type="search" id="guide-search" placeholder="Try threshold, noise, delay, cable…" autocomplete="off"></label><p id="guide-count" role="status">' +
       tools.length +
