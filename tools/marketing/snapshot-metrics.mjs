@@ -1,6 +1,7 @@
 // Append one row of public project numbers to docs/marketing-metrics.csv.
-// GitHub keeps traffic (views, clones, referrers) for 14 days only, so run
-// this about once a week; see docs/plans/future/marketing.md.
+// GitHub keeps traffic (views, clones, referrers) for 14 days only, so the
+// marketing-metrics.yml workflow runs this every Monday; see
+// docs/plans/future/marketing.md.
 // Needs the GitHub CLI signed in with push access to the repository.
 //   node tools/marketing/snapshot-metrics.mjs
 //   node tools/marketing/snapshot-metrics.mjs --dry-run   print the row only

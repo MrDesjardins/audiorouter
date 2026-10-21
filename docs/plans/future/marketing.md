@@ -76,7 +76,7 @@ permanent.
 | 0.6 | Write a "Coming from Voicemeeter?" page: the same three common setups built in AudioRouter, side by side, fair and factual | page live, linked from the home page |
 | 0.7 | Add a short "Windows says the installer is unsigned" section to the download page with a screenshot of the SmartScreen steps and why (no certificate yet, link to sponsorship) | a first-time user is not surprised |
 | 0.8 | Enable GitHub Discussions (Q&A, Show your route, Ideas) so newcomers have a place that is not an issue | Discussions linked from the README and site |
-| 0.9 | Record the numbers weekly with `node tools/marketing/snapshot-metrics.mjs`, which appends to `docs/marketing-metrics.csv`; GitHub keeps traffic only 14 days | first row committed |
+| 0.9 | `node tools/marketing/snapshot-metrics.mjs` appends the numbers to `docs/marketing-metrics.csv`; the `marketing-metrics.yml` workflow runs it every Monday and commits the row (needs the `METRICS_TOKEN` secret). GitHub keeps traffic only 14 days | a row appears every week |
 
 ## Phase 1 — Soft launch in small communities (weeks 2–4)
 
@@ -220,7 +220,9 @@ Done 2026-10-20:
   Voicemeeter facts from vb-audio.com, checked 2026-10-20.
 - 0.7: "Why Windows warns" section on the download page, with a checksum
   check against `SHA256SUMS.txt`.
-- 0.9: `tools/marketing/snapshot-metrics.mjs` and the baseline row in
+- 0.9: `tools/marketing/snapshot-metrics.mjs`, the weekly
+  `.github/workflows/marketing-metrics.yml` (Monday 13:23 UTC, also run by
+  hand from Actions; needs the `METRICS_TOKEN` secret) and the baseline row in
   `docs/marketing-metrics.csv`.
 
 - 0.8: GitHub Discussions enabled and linked from the README and the site
