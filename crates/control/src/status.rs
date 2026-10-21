@@ -199,8 +199,8 @@ impl ControlPlane {
                     .expect("attached above");
                 normalize_live_path_flags(
                     &mut session,
-                    worker.input_node_ids(),
-                    worker.output_node_ids(),
+                    &worker.input_node_ids(),
+                    &worker.output_node_ids(),
                 );
                 session = audiorouter_engine::prune_inactive_upstream(&session).into_owned();
                 for node in session

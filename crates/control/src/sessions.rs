@@ -798,7 +798,7 @@ impl ControlPlane {
             if self.native_multi_input_worker_session.as_ref() == Some(id) {
                 self.native_multi_input_worker
                     .as_mut()
-                    .map(audiorouter_windows_audio::NativeMultiInputWorker::stop)
+                    .map(|worker| worker.stop())
                     .transpose()
                     .err()
             } else {
