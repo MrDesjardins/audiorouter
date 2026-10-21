@@ -40,6 +40,22 @@ GitHub Releases API when opened. The page falls back to the GitHub Releases
 listing if that feed is unavailable. The dedicated Stream Deck page describes
 the local controls and first-time connection.
 
+## Link previews, sitemap and robots.txt
+
+`site/generate-social.mjs` adds a canonical URL and Open Graph/Twitter card
+tags (title, description, `assets/social-preview.png`) to every page, between
+`<!-- social -->` markers, and rewrites `sitemap.xml` and `robots.txt` from
+the pages that exist. The Pages workflow runs it before deployment. Run it
+after adding a page or regenerating the guides; `--check` reports files that
+are out of date:
+
+```powershell
+node site/generate-social.mjs
+```
+
+Give every new page a `<title>` and a `<meta name="description">`; the
+generator copies both into the preview tags.
+
 ## Feature catalogs
 
 `site/generate-catalogs.mjs` reads the current backend method contract and

@@ -135,6 +135,8 @@ on a live frequency-response curve, or type exactly.
   [user guide](docs/operations/quickstart.md).
 - **Release notes:** [Releases page](https://audiorouter.org/releases.html)
   or [GitHub Releases](https://github.com/MrDesjardins/audiorouter/releases).
+- **Questions and ideas:** ask in [Discussions](https://github.com/MrDesjardins/audiorouter/discussions),
+  or show the route you built.
 - **Problems:** open an [issue](https://github.com/MrDesjardins/audiorouter/issues).
   In the app, the **Logs** tab has **Open logs folder** for the files to
   attach.
