@@ -1,5 +1,51 @@
 # Active plan — post-0.0.8 maintenance
 
+## TypeScript 7 readiness — 2026-10-20, owner request
+
+Objective: make every maintained TypeScript project typecheck with the latest
+stable TypeScript compiler, currently 7.0.2, while keeping tools that need the
+TypeScript compiler API on a compatible 6.x API.
+
+- Requirements: ENG-02 and ENG-04.
+- Prerequisites: PR #46 is merged. The TypeScript 7.0 announcement says 7.0
+  has no programmatic API yet and recommends running TypeScript 7 beside
+  TypeScript 6 for tools such as typescript-eslint; the current
+  typescript-eslint dependency range is below 6.1.0. Evidence:
+  [TypeScript 7 side-by-side guidance](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6-0),
+  [typescript-eslint supported TypeScript versions](https://typescript-eslint.io/users/dependency-versions/),
+  and the PR #48 CI typecheck failure at `contracts/src/index.ts:1205`.
+- Decision: retain TypeScript 6.0.3 under the `typescript` package name for
+  API-using tools, install TypeScript 7.0.2 as `typescript-7`, and invoke its
+  compiler by explicit package path. Keep `tsc` scripts deterministic and
+  typecheck the complete UI source, tests, end-to-end tests and configs.
+- Ordered tasks: update this plan; add side-by-side compiler dependencies and
+  explicit typecheck scripts to UI, contracts and Stream Deck; fix and regress
+  the TypeScript 7 typed-array error; run TypeScript 7 across every TS/TSX
+  file; run UI lint, formatting, unit tests, UI build, contracts drift check,
+  and Stream Deck tests/build; inspect the diff; commit and push only these
+  scoped changes to `main`.
+- Validation matrix: `typecheck:all` in UI, contracts and Stream Deck under
+  TypeScript 7.0.2; UI ESLint under TypeScript 6.0.3; UI unit tests and build;
+  contract drift; Stream Deck tests and build; `git diff --check`; GitHub CI
+  on the pushed main commit. No hardware gate is part of this tooling change.
+- Risks: npm's binary link can select the TypeScript 6 compiler when both
+  packages expose `tsc`; scripts will invoke the TypeScript 7 binary by path.
+  TypeScript 7.1 prerelease behavior is outside the stable 7.0.2 target.
+- Rollback: revert the dedicated TypeScript readiness commit; no runtime or
+  persisted-data changes are intended.
+- Evidence on 2026-10-20: TypeScript 7.0.2 passes for the full UI project
+  (app, tests, end-to-end tests and configs), contracts, and Stream Deck.
+  Expanding the UI check exposed existing errors in Playwright fixtures and
+  configs; those are fixed and included in the full UI check. UI production
+  build passed with the full check enabled; UI tests passed (547/547), format
+  check passed, and ESLint passed with zero errors (25 existing hook warnings).
+  Contracts drift passed (124 methods, 35 node kinds, 19 processors, 22 event
+  categories). Stream Deck typecheck, 26 tests, and build passed. `git diff
+  --check` passed. Commands were run on Windows with Node 22.22.3 in the
+  isolated `codex/typescript-7-readiness` worktree based on merged `main`.
+- Next: commit and push the scoped readiness change to `main`; inspect the
+  resulting GitHub CI run before reporting the task complete.
+
 ## Jev review scope
 
 Objective: keep Jev focused on review findings that the configured compiler,

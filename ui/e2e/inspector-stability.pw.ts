@@ -1,4 +1,5 @@
-import { test, expect, type Locator, type Page } from "./real-backend";
+import { test, expect } from "./real-backend";
+import type { Locator, Page } from "@playwright/test";
 import { libraryEntries } from "../src/library";
 
 // Editing a tool must never move the Properties content (a jumping sidebar

@@ -5,7 +5,7 @@ import type { Session } from "../../contracts/src/index";
 // through a stereo FIR Filter Hz and mono plugins to two outputs, and a
 // stereo game source through an EQ. Reported 2026-09-27: lines looked gone
 // while playing and could not be dragged back.
-const port = (name: string, direction: "input" | "output", channels: number) => ({ name, direction, channels });
+const port = (name: string, direction: "input" | "output", channels: 1 | 2) => ({ name, direction, channels });
 const node = (
   id: string,
   kind: Session["nodes"][number]["kind"],

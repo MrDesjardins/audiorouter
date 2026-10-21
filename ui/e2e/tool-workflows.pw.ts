@@ -4,7 +4,10 @@ import { parameterText } from "../src/parameterText";
 import type { DiscoveryDocument, Session } from "../../contracts/src/index";
 import { syntheticWav } from "./audio-fixtures";
 
-for (const entry of libraryEntries.filter((entry) => entry.kind)) {
+type EntryWithKind = (typeof libraryEntries)[number] & { kind: NonNullable<(typeof libraryEntries)[number]["kind"]> };
+const entriesWithKind = libraryEntries.filter((entry): entry is EntryWithKind => Boolean(entry.kind));
+
+for (const entry of entriesWithKind) {
   test(`${entry.label}: add, Properties, flags, save and durable reload through real backend`, async ({
     page,
     backend,

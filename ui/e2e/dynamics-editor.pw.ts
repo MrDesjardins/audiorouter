@@ -28,10 +28,13 @@ for (const kind of ["compressor", "gate"] as const) {
       // several times slower than a desktop and exceeded the 30 s default
       // (CI run 39363993288).
       test.setTimeout(60_000);
-      const parameters =
+      const parameters: Record<string, number> = {};
+      Object.assign(
+        parameters,
         kind === "gate"
           ? { thresholdDb: -40, rangeDb: 40, hysteresisDb: 4, ratio: 4, attackMs: 5, holdMs: 80, releaseMs: 150 }
-          : { thresholdDb: -24, ratio: 3, attackMs: 10, releaseMs: 150, kneeDb: 6, makeupDb: 2 };
+          : { thresholdDb: -24, ratio: 3, attackMs: 10, releaseMs: 150, kneeDb: 6, makeupDb: 2 },
+      );
       await page.addInitScript(
         ({ session, theme, kind, parameters }) => {
           localStorage.setItem("audiorouter.ui.theme", theme);
@@ -121,9 +124,10 @@ for (const kind of ["compressor", "gate"] as const) {
       await page.mouse.up();
       const moved = Number(await handle.getAttribute("aria-valuenow"));
       expect(moved).toBeGreaterThan(parameters.thresholdDb);
-      await expect(
-        editor.getByRole("slider", { name: kind === "limiter" ? "Ceiling line" : "Threshold line" }),
-      ).toHaveAttribute("aria-valuenow", String(moved));
+      await expect(editor.getByRole("slider", { name: "Threshold line" })).toHaveAttribute(
+        "aria-valuenow",
+        String(moved),
+      );
       const content = page.getByTestId("rf__node-voice").locator(".flow-node-content");
       // This fixture deliberately has no connected route, so the debounced
       // autosave is rejected by planning and must leave an explicit Save marker.

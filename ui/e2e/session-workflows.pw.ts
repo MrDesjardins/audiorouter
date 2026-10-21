@@ -68,7 +68,9 @@ test("new session and cancelled dialogs never mutate the existing setup", async 
   page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("button", { name: "Delete session", exact: true }).click();
   expect((await backend.call("sessions.list")).items).toHaveLength(2);
-  expect(await backend.call("sessions.get", { sessionId: "e2e-session" })).toMatchObject(initialSession);
+  expect(await backend.call<Session>("sessions.get", { sessionId: "e2e-session" })).toMatchObject(
+    initialSession as unknown as Record<string, unknown>,
+  );
 });
 
 test("draft undo, redo and revert restore exact nodes without saving accidental edits", async ({ page, backend }) => {
@@ -86,7 +88,9 @@ test("draft undo, redo and revert restore exact nodes without saving accidental 
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
   await page.getByRole("button", { name: "Revert edits", exact: true }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toHaveCount(0);
-  expect(await backend.call("sessions.get", { sessionId: "e2e-session" })).toMatchObject(initialSession);
+  expect(await backend.call<Session>("sessions.get", { sessionId: "e2e-session" })).toMatchObject(
+    initialSession as unknown as Record<string, unknown>,
+  );
   expect(backend.methods.filter((method) => method === "graph.commit")).toHaveLength(0);
 });
 
@@ -169,7 +173,7 @@ test("session export and validated import roundtrip through the UI without start
   const download = await downloadReady;
   expect(download.suggestedFilename()).toBe("Offline-qualification.audiorouter.json");
   const exported = JSON.parse(await readFile((await download.path())!, "utf8"));
-  expect(exported).toMatchObject(initialSession);
+  expect(exported).toMatchObject(initialSession as unknown as Record<string, unknown>);
   const picker = panel.getByLabel("Import session configuration");
   await picker.setInputFiles({ name: "bad.json", mimeType: "application/json", buffer: Buffer.from("{") });
   await expect(panel).toContainText(/validate|JSON|syntax/i);

@@ -1202,7 +1202,10 @@ export function isValidCorrelationId(value: unknown): value is string {
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 /** A fresh 8-character Crockford base-32 correlation ID (40 random bits). */
-export function newCorrelationId(random: (bytes: Uint8Array) => Uint8Array = (bytes) => globalThis.crypto.getRandomValues(bytes)): string {
+export function newCorrelationId(random: (bytes: Uint8Array<ArrayBuffer>) => Uint8Array = (bytes) => {
+  globalThis.crypto.getRandomValues(bytes);
+  return bytes;
+}): string {
   const bytes = random(new Uint8Array(8));
   let id = "";
   for (let index = 0; index < 8; index += 1) id += CROCKFORD[bytes[index] & 31];

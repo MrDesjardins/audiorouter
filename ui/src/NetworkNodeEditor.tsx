@@ -29,7 +29,10 @@ export const GENERATED_PAIRING_KEY_LENGTH = 24;
 
 /** A new random pairing key from the platform's cryptographic generator. */
 export function generatePairingKey(
-  fill: (bytes: Uint8Array) => Uint8Array = (bytes) => crypto.getRandomValues(bytes),
+  fill: (bytes: Uint8Array<ArrayBuffer>) => Uint8Array = (bytes) => {
+    crypto.getRandomValues(bytes);
+    return bytes;
+  },
 ): string {
   const bytes = fill(new Uint8Array(GENERATED_PAIRING_KEY_LENGTH));
   return Array.from(bytes, (byte) => PAIRING_SYMBOLS[byte & 31]).join("");

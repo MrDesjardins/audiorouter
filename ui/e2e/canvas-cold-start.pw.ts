@@ -35,7 +35,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
         // connector elements are available. Later DOM queries are normal.
         const query = Element.prototype.querySelectorAll;
         const missed = new WeakMap<Element, Set<string>>();
-        Element.prototype.querySelectorAll = function (selectors: string) {
+        Element.prototype.querySelectorAll = function (this: Element, selectors: string) {
           if (this.classList.contains("react-flow__node") && [".source", ".target"].includes(selectors)) {
             const seen = missed.get(this) ?? new Set<string>();
             if (!seen.has(selectors)) {

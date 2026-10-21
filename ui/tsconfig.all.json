@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "e2e/**/*.ts",
+    "e2e/**/*.tsx",
+    "vite.config.ts",
+    "vite.canvas-production.config.ts",
+    "playwright.config.ts",
+    "playwright.usability.config.ts",
+    "playwright.production.config.ts"
+  ]
+}
