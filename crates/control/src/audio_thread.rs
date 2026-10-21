@@ -373,10 +373,6 @@ impl MultiInputWorkerHandle {
         self.with(NativeMultiInputWorker::is_running)
     }
 
-    pub(crate) fn generation(&self) -> u64 {
-        self.with(NativeMultiInputWorker::generation)
-    }
-
     pub(crate) fn output_count(&self) -> usize {
         self.with(NativeMultiInputWorker::output_count)
     }
