@@ -2602,9 +2602,13 @@ export function SessionFlowCanvas({
   // default connection sides. The previous arrangement can be restored for
   // a short time with Undo arrange.
   const [arrangeUndo, setArrangeUndo] = useState<{
+    layoutKey: string;
     positions: LayoutPositions;
     sides: Record<string, { source: EdgeSide; target: EdgeSide }>;
   } | null>(null);
+  useEffect(() => {
+    setArrangeUndo(null);
+  }, [layoutKey]);
   useEffect(() => {
     if (!arrangeUndo) return;
     const timer = window.setTimeout(() => setArrangeUndo(null), 15_000);
@@ -2643,11 +2647,11 @@ export function SessionFlowCanvas({
   const tidyLayout = () => {
     const before = captureLayout();
     setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
-    setArrangeUndo({ positions: positionsRef.current, sides: edgeSides });
+    setArrangeUndo({ layoutKey, positions: positionsRef.current, sides: edgeSides });
     applyArrangement(smartLayout(session, measured), {});
   };
   const undoArrange = () => {
-    if (!arrangeUndo) return;
+    if (!arrangeUndo || arrangeUndo.layoutKey !== layoutKey) return;
     const before = captureLayout();
     setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
     applyArrangement(arrangeUndo.positions, arrangeUndo.sides);
@@ -3083,7 +3087,7 @@ export function SessionFlowCanvas({
           >
             Arrange
           </button>
-          {arrangeUndo && (
+          {arrangeUndo?.layoutKey === layoutKey && (
             <button type="button" className="secondary" onClick={undoArrange}>
               Undo arrange
             </button>

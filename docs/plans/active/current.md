@@ -1,5 +1,34 @@
 # Active plan — post-0.0.8 maintenance
 
+## Group layout review - 2026-10-21
+
+Review found a session-isolation risk in the older Undo arrange control:
+its 15-second snapshot has no session key and survives a session switch,
+allowing old positions/connector sides to be written into the next session.
+Affected code predates the group feature and is present at 103802f9.
+Requirements UI-02/16, local presentation only. Plan: reproduce with real
+backend session switching, scope and clear the Arrange snapshot, regress
+normal Arrange undo and session switching, typecheck/lint/format/build.
+Rollback: revert this isolated fix. No audio hardware is needed.
+
+Confirmed: real-backend Edge regression failed because Undo arrange remained
+visible in the newly created session within its 15-second lifetime. Evidence:
+%TEMP%/audiorouter-arrange-review/canvas-layout-session.pw.t-eb1f8-ded-when-switching-sessions/.
+Fixed: snapshots store the layout/session key; rendering and execution check
+that key, and session switching clears the snapshot. Returning to the original
+session does not resurrect the old undo. No stored data migration is needed.
+Validation: direct Playwright command for e2e/canvas-layout-session.pw.ts and
+e2e/smart-layout.pw.ts, --workers=1, passed all 6 tests (Windows Edge), covering
+this reproduction and normal Arrange undo in all three themes. Artifacts:
+%TEMP%/audiorouter-arrange-fix/. npm.cmd --prefix ui run format, format:check,
+lint and build (including TypeScript 7 typecheck:all) passed. Lint retains the
+same 25 existing warnings; the existing Vite chunk warning remains.
+Native shell build passed with the same locked release/custom-protocol command
+recorded below; original cached executable restored with its verified hash.
+Separate local app: %TEMP%/audiorouter-group-layout-review-fix/audiorouter-shell.exe.
+SHA256: 69BA50CFE640DAA1E5CE10EE4657C1BEF4AE9AB4D689C4BC25C56886AC07D9DA.
+Next: owner acceptance of the fix on feature/canvas-group-layout.
+
 ## Multi-group options and layout icons - 2026-10-21 owner feedback
 
 Objective: UI-02/11/16/17 follow-up: edit Lock and Move contents for all

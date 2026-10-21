@@ -74,3 +74,16 @@ test("wide media tools share sizes without clipping and connectors follow tool r
     ).toBe(true);
   }
 });
+
+test("Undo arrange is discarded when switching sessions", async ({ page }) => {
+  await page.goto("/backend-harness.html");
+  await page.getByRole("button", { name: "Arrange", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Undo arrange", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Session", exact: true }).click();
+  page.once("dialog", (dialog) => dialog.accept("Arrange isolation"));
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Arrange isolation", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Undo arrange", exact: true })).toHaveCount(0);
+  await page.getByLabel("Choose session").selectOption("e2e-session");
+  await expect(page.getByRole("button", { name: "Undo arrange", exact: true })).toHaveCount(0);
+});
