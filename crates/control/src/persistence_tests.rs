@@ -233,7 +233,11 @@ fn graph_commit_storage_failure_restores_plan_for_exactly_once_retry() {
         "audiorouter-graph-commit-fault-{}.sqlite",
         std::process::id()
     ));
-    let _ = std::fs::remove_file(&path);
+    match std::fs::remove_file(&path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => panic!("failed to remove stale graph commit test database: {error}"),
+    }
     let storage = Storage::open(&path).unwrap();
     let original = session();
     let mut plane = ControlPlane::with_storage("graph-commit-fault", storage);
