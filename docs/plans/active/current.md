@@ -1,5 +1,44 @@
 # Active plan — post-0.0.8 maintenance
 
+## Quality Q4 - graph commit storage-failure recovery - 2026-10-22
+
+Objective: close one deterministic failure-boundary gap in the approved
+quality roadmap. Requirements ENG-01/02, API-05/07 and STATE-01. The Q1
+verification baseline already has a full successful run (39710446637); the
+newer current-head run 39714997868 is still in progress. This Q4 slice is
+independent and stacks on quality/regression-gates commit 31386905.
+
+Reproduction target: a validated graph plan is committed in memory, but the
+SQLite transaction rejects persistence. The control plane must restore its
+previous in-memory graph and keep the plan retryable; a same-key retry after
+the storage fault is removed must commit exactly once with one durable
+revision. Use a disposable SQLite file and an injected trigger; do not touch
+the daily database or launch the shell.
+
+Implementation: added a control-plane regression using a disposable SQLite
+database and a second-connection trigger that rejects the session update. It
+asserts the old graph/revision remains visible, no durable journal row leaks,
+and the same plan and idempotency key commit once after the injected fault is
+removed. `rusqlite` is a dev-only dependency; no product behavior or API changed.
+
+Validation (Windows 11 x64, pinned Rust 1.96.0, Node 22.22.3): the focused
+test passed; all 262 control tests passed and 9 hardware/device tests were
+ignored; `cargo test --workspace --locked` exited 0; strict workspace and
+desktop-shell all-target/all-feature Clippy passed; both Rust format checks
+passed; the locked UI install, all-project TypeScript and Vite build passed.
+The first shell Clippy attempt lacked `ui/dist` and stopped before rustc; after
+building the UI it passed. Mutation check: temporarily removing the in-memory
+checkpoint restore made this regression fail because the session had already
+advanced to revision 1; restoring the guard made it pass. No audio devices,
+user database or shell process were used by these checks.
+
+Validation: Windows portable workspace tests and Clippy; this scenario does
+not require devices. It does not qualify native audio, crash-at-every-journal
+stage recovery or packaged startup. Rollback: revert this test and dev-only
+dependency commit. Next: run shell tests, check docs/diff and CI on this exact
+head. Local shell tests, docs and diff checks passed. Keep the PR stacked on
+Q1 until Q1 is reviewed and merged.
+
 ## Application quality implementation - 2026-10-21
 
 Owner approved the [quality roadmap](application-quality.md). Execute Q1-Q6

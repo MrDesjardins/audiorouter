@@ -228,6 +228,77 @@ fn graph_plan_persistence_failure_rolls_back_the_in_memory_plan() {
 }
 
 #[test]
+fn graph_commit_storage_failure_restores_plan_for_exactly_once_retry() {
+    let path = std::env::temp_dir().join(format!(
+        "audiorouter-graph-commit-fault-{}.sqlite",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+    let storage = Storage::open(&path).unwrap();
+    let original = session();
+    let mut plane = ControlPlane::with_storage("graph-commit-fault", storage);
+    plane.insert_session(original.clone()).unwrap();
+    let mut candidate = original.clone();
+    candidate.name = "retry-after-disk-recovers".into();
+    let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+
+    // Fail the durable session update after GraphStore has accepted the plan.
+    // A second connection keeps fault injection outside production APIs.
+    let injector = rusqlite::Connection::open(&path).unwrap();
+    injector
+        .execute_batch(
+            "CREATE TRIGGER reject_graph_commit BEFORE UPDATE ON sessions
+             BEGIN SELECT RAISE(ABORT, 'injected graph commit write failure'); END;",
+        )
+        .unwrap();
+
+    let failed = plane.commit_graph(&plan, 0, "graph-commit-retry");
+    assert!(
+        matches!(failed, Err(ControlError::Storage(_))),
+        "injected persistence failure must be returned as storageFailure: {failed:?}"
+    );
+    let current = plane.get_session(&original.id).unwrap();
+    assert_eq!(current.revision, 0);
+    assert_eq!(current.name, original.name);
+    assert_eq!(
+        injector
+            .query_row(
+                "SELECT COUNT(*) FROM operation_journal WHERE idempotency_key = ?1",
+                ["graph-commit-retry"],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        0
+    );
+
+    injector
+        .execute_batch("DROP TRIGGER reject_graph_commit;")
+        .unwrap();
+    let recovered = plane
+        .commit_graph(&plan, 0, "graph-commit-retry")
+        .expect("the restored plan and idempotency key remain retryable");
+    assert_eq!(recovered["revision"], 1);
+    assert_eq!(recovered["idempotentReplay"], false);
+    assert_eq!(
+        plane.get_session(&original.id).unwrap().name,
+        "retry-after-disk-recovers"
+    );
+    assert_eq!(
+        injector
+            .query_row(
+                "SELECT COUNT(*) FROM operation_journal WHERE idempotency_key = ?1",
+                ["graph-commit-retry"],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap(),
+        1
+    );
+    drop(injector);
+    drop(plane);
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn storage_backed_control_persists_session_and_commit() {
     let storage = Storage::open_memory().unwrap();
     let mut plane = ControlPlane::with_storage("persistent-test", storage);
