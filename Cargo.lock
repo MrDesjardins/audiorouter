@@ -46,6 +46,7 @@ dependencies = [
  "audiorouter-recording",
  "audiorouter-storage",
  "audiorouter-windows-audio",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",

@@ -1,5 +1,32 @@
 # Active plan — post-0.0.8 maintenance
 
+## Quality Q4 - graph commit storage-failure recovery - 2026-10-22
+
+Objective: cover the approved quality roadmap's graph-commit persistence failure
+boundary (ENG-01/02, API-05/07, STATE-01). Main contains the merged Q1-Q3
+baseline; this slice adds the missing deterministic control-plane regression.
+
+Prerequisites and decision: use only a disposable SQLite fixture and an
+injected trigger; do not touch the daily database or launch the shell. Keep
+product behavior and APIs unchanged. The test checks rollback of the in-memory
+graph and durable revision when persistence fails, then retries the same plan
+with the same idempotency key and verifies exactly one durable commit.
+
+Implementation: added the regression and a dev-only `rusqlite` dependency.
+The fixture now ignores only `NotFound` when clearing a stale file and fails
+on other cleanup errors. Rollback: revert the scoped test and dev-only
+dependency commits.
+
+Validation matrix (Windows 11 x64, pinned Rust 1.96.0): focused regression
+passed after the cleanup fix; both workspace and desktop-shell Rust format
+checks passed. The branch's earlier run recorded full workspace tests and
+Clippy, UI type/build checks, and a mutation check; current-base GitHub CI is
+the remaining gate. No hardware or audio endpoints are required. This does
+not qualify native audio or packaged startup.
+
+Next: finish the protected current-main PR gate, merge if green, then rerun
+the merged-main checks and repair any failures.
+
 ## Quality Q3 - production browser smoke - 2026-10-21
 
 Q2 storage slice is isolated in PR #53 on history PR #52 and feature PR #51.
