@@ -439,6 +439,114 @@ Both native builds completed successfully. Used the existing build cache,
 then restored the original three executables and verified their hashes against
 the backups. The test app was not launched by the agent. It contains the current
 feature and the three documented review findings; no fixes were applied.
+## Application quality implementation - 2026-10-21
+
+Owner approved the [quality roadmap](application-quality.md). Execute Q1-Q6
+in small changes; Q1 begins with shared verification and merge gates.
+Requirements ENG-01/02/04/05 first, then UI/QUAL/NFR gates in the roadmap.
+Worktree was clean except the requested planning documents; unrelated original
+C:/code/audiorouter user changes remain untouched. Branch quality/regression-gates
+is based on main 5ff9de22. The reviewed group feature 6d9890e0 remains separate;
+its product changes are not part of Q1 and no automatic feature merge occurs.
+
+Initial audit: current account has repository admin access. Main had
+no branch protection; ruleset 25451476 was disabled and only described deletion
+and force pushes. The owner is the sole collaborator, so an independent formal
+PR approval cannot be required without making owner-authored PRs unmergeable.
+Require PRs and resolved threads, with owner review; record this limitation.
+Latest successful full CI baseline: run 39543090377 at b4bbbef5 (main), about
+32m37s total; Windows checks 31m09s, Edge 16m21s, docs 11s, dependency checks
+33s. This is not evidence for the newer feature SHA. Cancelled runs remain
+cancelled evidence, not passes. GitHub connector has no ruleset-management API;
+use authenticated gh REST for that capability.
+
+Tasks: Q1 shared classifier/command inventory, fast/full/guarded profiles,
+classifier and aggregate negative tests, Stream Deck checks, reviewed metric
+publication, then real PR CI and staged protection activation. Continue Q2
+state invariants and Q3 production/packaged smoke; Q4 offline fault/contract
+work and Q5 bounded reliability follow. Q4 hardware/endurance and Q6 actual
+release install/rollback evidence require declared fixtures and isolated state.
+Validation: node tests of policy/runner including intentional failures; actual
+local checks with timing and full current PR CI; no skipped required job may
+pass the aggregate. Preserve pinned toolchains and existing checks.
+Rollback: revert each scoped quality commit; keep prior required protections
+until a replacement gate is demonstrated. Back up rules before settings edits.
+Risks: classifier under-testing, a green aggregate from skipped jobs, main
+protection blocking the metrics bot, unavailable live endpoints, and a formal
+review rule blocking the sole owner. Next: implement and test Q1 policy.
+
+Q1 implementation evidence (Windows 11 x64, Node 22.22.3, 2026-10-21):
+shared Node command inventory and runner now power local and CI checks. Fast,
+full/change-scoped and explicitly guarded hardware profiles report actual
+command exits and distinguish failed/blocked/not-run results. JSON evidence
+includes dirty state so local edits are not misrepresented as commit evidence.
+Classification tests include contracts' consumers, Stream Deck, unknown build
+surfaces and invalid paths. The aggregate rejects missing, cancelled, failed or
+unexpectedly skipped checks; real subprocess tests exercise nonzero exits.
+Stream Deck now gets a conditional CI type/test/build job. Nightly metrics
+produce a reviewed artifact at the measured SHA instead of pushing main.
+
+Commands/results: `node --test tools/quality/policy.test.mjs
+tools/quality/verify.test.mjs`: 50 passed. Shared `--profile fast --keep-going`:
+8 checks passed (docs, policy, both Rust format checks, contract types,
+UI format/lint/all-project types, Stream Deck types); 25 existing UI Hook
+warnings, no lint errors. Evidence %TEMP%/audiorouter-quality-q1-fast.json
+predates the final policy additions and dirty-state metadata. Shared
+`--checks docs,policy,streamdeck-type,streamdeck-tests,streamdeck-build`:
+all passed, including 26 Stream Deck tests; evidence
+%TEMP%/audiorouter-quality-q1-tooling.json. Documentation: 181 files/993 links.
+Official actionlint 1.7.12 Windows binary, archive verified against its published
+SHA256 checksum: CI and nightly workflow validation passed. `git diff --check`
+passed. No product code or real audio activity changed in Q1.
+
+Q1 rollout evidence: [PR #50](https://github.com/MrDesjardins/audiorouter/pull/50)
+is separate from the group feature. Its first clean full
+[CI run 39710446637](https://github.com/MrDesjardins/audiorouter/actions/runs/39710446637)
+passed at 0a7cd2af: all eight jobs including Windows/release preparation,
+Edge, Stream Deck and Quality gate succeeded (28m45s total). Clean local fast
+evidence at the same SHA: %TEMP%/audiorouter-quality-q1-clean.json, dirty=false,
+all eight selected checks passed. Intentional format/type/unit/contract-drift/
+classifier faults were all detected by real shared checks, then restored;
+reports/logs: %TEMP%/audiorouter-q1-faults-zplj4b/.
+
+After that demonstration, updated the branch to main 1be9ce3b (website/marketing
+records preserved; resolved only the active-plan insertion conflict). Activated
+ruleset 25451476 and verified effective main rules through the REST API:
+PR required, blocking review threads resolved, Quality gate from GitHub Actions
+integration 15368 required, strict latest-base checks, no bypass actors,
+deletion/force-push restrictions retained. Independent approval count is zero
+because the owner is the only collaborator; owner review remains an operational
+requirement. Public settings evidence and rollback source:
+[before](evidence/2026-10-21-quality-rules-before.json),
+[active](evidence/2026-10-21-quality-rules-active.json),
+[effective main rules](evidence/2026-10-21-quality-main-effective-rules.json).
+No direct-push exception was granted to the nightly publisher. Its old main
+workflow cannot push under these rules; PR #50 provides the reviewed artifact
+replacement. The newly updated PR head must pass fresh CI before merge; the
+earlier successful run does not qualify this later merge commit. Next: record
+the new head's CI, demonstrate a docs-only declared-skip run and continue Q2/Q3
+in their separate stacked branches. No PR is automatically merged.
+
+Q1 follow-up review: shell Clippy inherited CI's omission of --all-features,
+although AGENTS.md requires the same strict profile as the workspace. Verified
+the all-feature shell check locally with current embedded UI: passed in 21.3s
+(existing C:/code/audiorouter/src-tauri/target cache; no app launched/replaced).
+Shared rust-clippy now builds current UI before both strict checks, and CI
+installs locked UI dependencies before that step for backend changes too.
+A policy regression pins the prerequisite/order and both all-feature flags.
+
+Run 39713478156's dependency job failed on a registry HTTP 503 during Stream
+Deck audit, after cargo-deny and the other npm audits passed. Retained log:
+%TEMP%/audiorouter-quality-q1-supply-failure.log and its uploaded verification
+artifact. A diagnostic local probe timed out on bulk audit then got 400 from
+the deprecated quick fallback; it did not establish a dependency-tree defect
+or a passing audit. The npm status page reports degraded install/publishing
+since 02:33 UTC (Security Audit still lists operational), so attribution to a
+broader registry incident remains an inference. GitHub refused to rerun the
+completed job while the whole run was active. Do not waive or suppress it.
+This source follow-up triggers fresh full CI; retain the failed/cancelled older
+run as such. Next: require the final head's full check, including audit, to pass.
+
 ## Website: no localhost Swagger link, one header everywhere — 2026-10-21, owner request
 
 Objective: the hosted API page must not link to `127.0.0.1` (that points at
