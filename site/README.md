@@ -69,9 +69,11 @@ API methods or node kinds:
 node site/generate-catalogs.mjs
 ```
 
-The Pages workflow runs this generator before deployment. The API page links
-to the live Swagger UI in the user's local AudioRouter instance for full
-request and response schemas.
+The Pages workflow runs this generator before deployment. The public API page
+shows the endpoint catalog and explains that full request and response schemas
+are available in the interactive Swagger view inside the desktop app. It does
+not link to a localhost address that would point at each website visitor's
+own computer.
 
 The homepage embeds the requested AudioRouter video and includes a real Duck inspector screenshot from project UI evidence. `stream-deck.html` explains the local Stream Deck actions and first-time API connection. `siege.html` documents Stats.cc round ducking, phase choices, and the labeled-take EQ/compressor experiments; its example omits device and session identifiers.
 
