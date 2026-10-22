@@ -136,18 +136,16 @@ jobs:
           retention-days: 14
 
   publish-readme-coverage:
-    name: Publish quality stats to README
+    name: Prepare reviewed quality history update
     needs: [coverage, soak, startup]
     if: ${{ github.ref == 'refs/heads/main' && needs.coverage.result == 'success' && needs.soak.result == 'success' && needs.startup.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: write
     steps:
-      - name: Check out main
+      - name: Check out measured commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.sha }}
 
       - name: Install pinned Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -176,11 +174,17 @@ jobs:
             echo "README quality stats and history are already current."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- README.md docs/quality-history.csv docs/quality-history.svg
-          git commit -m "docs: refresh quality history"
-          git push origin HEAD:main
+          echo "Quality results prepared for review; no direct push to main."
+
+      - name: Upload proposed documentation update
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: quality-history-update
+          path: |
+            README.md
+            docs/quality-history.csv
+            docs/quality-history.svg
+          retention-days: 14
 
   soak:
     name: Engine soak

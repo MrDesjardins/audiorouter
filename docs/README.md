@@ -43,6 +43,9 @@ Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall
 The [editor invariant catalog](operations/editor-invariants.md) records state
 ownership, layout/history rules and the executable regression coverage.
 
+The [verification runbook](operations/verification.md) documents shared local/CI
+profiles, check selection, evidence, guarded audio and merge-gate rollout.
+
 The [development quickstart](operations/quickstart.md) gives the safe toolchain,
 acceptance, CLI, UI, MCP, and troubleshooting path for the current repository
 state.
