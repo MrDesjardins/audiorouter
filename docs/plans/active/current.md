@@ -7,7 +7,8 @@ in small changes; Q1 begins with shared verification and merge gates.
 Requirements ENG-01/02/04/05 first, then UI/QUAL/NFR gates in the roadmap.
 Worktree was clean except the requested planning documents; unrelated original
 C:/code/audiorouter user changes remain untouched. Branch quality/regression-gates
-starts at the reviewed group feature 6d9890e0; no automatic feature merge.
+is based on main 5ff9de22. The reviewed group feature 6d9890e0 remains separate;
+its product changes are not part of Q1 and no automatic feature merge occurs.
 
 Prerequisites/evidence: current account has repository admin access. Main has
 no branch protection; ruleset 25451476 is disabled and only prevents deletion

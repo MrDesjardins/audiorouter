@@ -18,8 +18,9 @@ UI-02/11/16/17, and the applicable NFR requirements in
 ## Evidence and current coverage
 
 This is a repository inspection at 6d9890e0, not a new CI or hardware result.
-The [active plan](../active/current.md) records the latest local Windows run:
-578 UI tests and 41 focused Edge scenarios passed. Test count alone did not
+The group feature's [review record](https://github.com/MrDesjardins/audiorouter/blob/6d9890e0/docs/plans/active/current.md)
+records its local Windows run: 578 UI tests and 41 focused Edge scenarios passed.
+That feature remains separate from the Q1 tooling PR. Test count alone did not
 prevent the preceding defects.
 
 Existing protections to retain:
