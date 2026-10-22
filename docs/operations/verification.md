@@ -83,10 +83,12 @@ failure, cancellation, missing results and unexpected skips fail the gate.
 Only explicitly unaffected jobs can be skipped. This aggregate is scoped to
 its workflow's tested commit; check the current PR merge result after base changes.
 
-Main protection is being rolled out after a real CI demonstration. The active
-[quality plan](../plans/active/application-quality.md) records the actual settings
-and remaining activation work; the presence of workflow YAML alone does not
-prove GitHub enforces a required check. The repository currently has one
+Main protection was activated after PR #50's full run 39710446637 succeeded.
+The effective rules require PRs, resolved threads and the GitHub Actions Quality
+gate against the latest base, with no bypass actors. Deletion and force pushes
+are restricted. The [active plan](../plans/active/current.md) links API evidence
+and the previous settings for rollback; workflow YAML alone does not establish
+enforcement. The repository currently has one
 collaborator. Require PRs, resolved blocking threads and current checks; owner
 review remains necessary, but a mandatory independent approval would prevent
 owner-authored PRs from merging. Do not add a bot bypass to hide that limitation.

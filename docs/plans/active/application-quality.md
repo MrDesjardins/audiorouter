@@ -1,7 +1,9 @@
 # Application quality and regression prevention
 
 Status: implementation authorized by the owner on 2026-10-21 ("Let's do it!").
-Q1 is in progress; Q2-Q6 follow in small changes. Hardware and release evidence
+Q1's initial full CI passed and main protection is active; its updated-base CI
+and declared-skip demonstration remain. Q2/Q3 continue in separate small PRs.
+Hardware and release evidence
 remain separate gates. Existing acceptance targets remain binding.
 
 ## Objective
@@ -49,8 +51,10 @@ malformed persisted preferences, storage failures, and tool-specific CSS
 interacting with shared sizing. Several were missed by isolated happy-path tests.
 See the dated review sections in the active plan for reproductions and fixes.
 
-Branch protection/ruleset enforcement, latest remote CI status and current
-coverage percentages were not verified here. Q1 must establish them explicitly.
+The initial planning inspection did not verify branch protection or remote CI.
+Q1 has since audited and activated protection after a full successful CI run;
+the [active execution record](current.md) links the settings/evidence. Current
+coverage percentages still need Q5 baseline evidence.
 
 ## Delivery rules
 
