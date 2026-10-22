@@ -45,6 +45,9 @@ ownership, layout/history rules and the executable regression coverage.
 The [production UI checks](operations/production-ui-tests.md) cover optimized
 adapters, usable-canvas readiness, uncaught errors and retained evidence.
 
+The [verification runbook](operations/verification.md) documents shared local/CI
+profiles, check selection, evidence, guarded audio and merge-gate rollout.
+
 The [development quickstart](operations/quickstart.md) gives the safe toolchain,
 acceptance, CLI, UI, MCP, and troubleshooting path for the current repository
 state.
