@@ -1,5 +1,41 @@
 # Active plan — post-0.0.8 maintenance
 
+## Application quality implementation - 2026-10-21
+
+Owner approved the [quality roadmap](application-quality.md). Execute Q1-Q6
+in small changes; Q1 begins with shared verification and merge gates.
+Requirements ENG-01/02/04/05 first, then UI/QUAL/NFR gates in the roadmap.
+Worktree was clean except the requested planning documents; unrelated original
+C:/code/audiorouter user changes remain untouched. Branch quality/regression-gates
+starts at the reviewed group feature 6d9890e0; no automatic feature merge.
+
+Prerequisites/evidence: current account has repository admin access. Main has
+no branch protection; ruleset 25451476 is disabled and only prevents deletion
+and force pushes. The owner is the sole collaborator, so an independent formal
+PR approval cannot be required without making owner-authored PRs unmergeable.
+Require PRs and resolved threads, with owner review; record this limitation.
+Latest successful full CI baseline: run 39543090377 at b4bbbef5 (main), about
+32m37s total; Windows checks 31m09s, Edge 16m21s, docs 11s, dependency checks
+33s. This is not evidence for the newer feature SHA. Cancelled runs remain
+cancelled evidence, not passes. GitHub connector has no ruleset-management API;
+use authenticated gh REST for that capability.
+
+Tasks: Q1 shared classifier/command inventory, fast/full/guarded profiles,
+classifier and aggregate negative tests, Stream Deck checks, reviewed metric
+publication, then real PR CI and staged protection activation. Continue Q2
+state invariants and Q3 production/packaged smoke; Q4 offline fault/contract
+work and Q5 bounded reliability follow. Q4 hardware/endurance and Q6 actual
+release install/rollback evidence require declared fixtures and isolated state.
+Validation: node tests of policy/runner including intentional failures; actual
+local checks with timing and full current PR CI; no skipped required job may
+pass the aggregate. Preserve pinned toolchains and existing checks.
+Rollback: revert each scoped quality commit; keep prior required protections
+until a replacement gate is demonstrated. Back up rules before settings edits.
+Risks: classifier under-testing, a green aggregate from skipped jobs, main
+protection blocking the metrics bot, unavailable live endpoints, and a formal
+review rule blocking the sole owner. Next: implement and test Q1 policy.
+
+
 ## TypeScript 7 readiness — 2026-10-20, owner request
 
 Objective: make every maintained TypeScript project typecheck with the latest

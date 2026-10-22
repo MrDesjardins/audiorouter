@@ -28,6 +28,13 @@ secure relay/hosting remain planned work in
 model, service ownership and ongoing cost must be designed before public
 reachability is enabled.
 
+## Proposed quality work
+
+[Application quality and regression prevention](../active/application-quality.md) records
+the owner-requested plan (2026-10-21): consistent merge gates, state-transition
+and fault tests, production/packaged UI verification, backend/audio regression
+coverage, reliability trends and release/rollback qualification. Implementation was authorized on 2026-10-21 and is now active.
+
 ## Delivered features and their remaining scope
 
 These are implemented; only the specific follow-ups in the table below remain
