@@ -239,3 +239,17 @@ Next: finish Bing (owner), then Phase 1: a "Why I built AudioRouter" post on
 the owner's blog (cross-posted to dev.to) and one Reddit post (r/software or
 r/Windows11), drafted by the agent and posted by the owner. AlternativeTo
 (Phase 2) can start in parallel.
+
+Signing (2026-10-21): SignPath Foundation declined AudioRouter because the
+project is not popular enough yet; reapply once Phase 1–2 bring users. The
+owner is considering a ~$20 trial of Azure Artifact Signing (about $9.99 a
+month; individuals in the USA and Canada only; identity check first; builds
+SmartScreen reputation for the publisher across releases rather than per
+file). Wiring signing into `tools/release/` waits for a certificate.
+
+Phase 1 Reddit post 1 (2026-10-21): the owner posted to r/software,
+<https://www.reddit.com/r/software/comments/1xc69ah/audiorouter_free_open_source_visual_audio_routing/>
+(draft in [marketing-phase1-posts.md](marketing-phase1-posts.md), Post 1).
+Next: answer comments for the first 2–3 hours, then after a week compare
+GitHub traffic referrers and release downloads with the week before, and
+pick the next subreddit (one per week).

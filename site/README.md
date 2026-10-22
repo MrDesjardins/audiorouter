@@ -69,9 +69,11 @@ API methods or node kinds:
 node site/generate-catalogs.mjs
 ```
 
-The Pages workflow runs this generator before deployment. The API page links
-to the live Swagger UI in the user's local AudioRouter instance for full
-request and response schemas.
+The Pages workflow runs this generator before deployment. The public API page
+shows the endpoint catalog and explains that full request and response schemas
+are available in the interactive Swagger view inside the desktop app. It does
+not link to a localhost address that would point at each website visitor's
+own computer.
 
 The homepage embeds the requested AudioRouter video and includes a real Duck inspector screenshot from project UI evidence. `stream-deck.html` explains the local Stream Deck actions and first-time API connection. `siege.html` documents Stats.cc round ducking, phase choices, and the labeled-take EQ/compressor experiments; its example omits device and session identifiers.
 
@@ -122,7 +124,17 @@ The catalog generator also generates individual HTML pages, the guide index and 
 
 `guide-signal.js` produces deterministic PCM fixtures and bounded illustrative processing; `guide-audio.js` plays those samples and `guide-playback.js` shows their waveforms/readings. Mixer and Input Switch have distinct drums/bass and bell tracks; Duck has a separate control-only key. Input reference listening shares the same transport. Browser monitoring uses 50% gain with a peak-protection compressor. Recorder stores only its completed synthetic interval in page memory. No microphone, application capture, personal file, actual network stream or disk recording is used. Each guide explains its simulation limits; these examples are not engine or hardware qualification.
 
-On Windows without Python, preview from the repository root:
+Preview with [uv](https://docs.astral.sh/uv/) from the repository root (uv
+fetches a Python for the run if none is installed):
+
+```powershell
+uv run --no-project python -m http.server 8000 --bind 127.0.0.1 --directory site
+```
+
+Open `http://127.0.0.1:8000/`; stop with Ctrl+C. Opening the HTML files
+directly (`file://`) breaks the catalogs, which `fetch` their JSON.
+
+Without uv, preview from the repository root with Vite:
 
 ```powershell
 node .\ui\node_modules\vite\bin\vite.js .\site --host 127.0.0.1 --port 8000

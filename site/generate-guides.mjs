@@ -219,13 +219,13 @@ const pageTitle = (t) => {
   return searchTitles[t.kind] + " — AudioRouter";
 };
 const header =
-  '<a class="guide-skip" href="#guide-main">Skip to guide</a><header class="guide-topbar"><a class="brand" href="../index.html"><img src="../assets/mark.svg" alt=""><b>Audio<span>Router</span></b></a><nav aria-label="Guide navigation"><a href="../tools.html">All tools</a><a href="index.html">Visual guides</a><a href="../manual.html">Manual</a><a class="button" href="../download.html">Get AudioRouter ↗</a></nav></header>';
+  '<a class="guide-skip" href="#guide-main">Skip to guide</a><div data-header></div>';
 const doc = (title, description, body, scripts = "") =>
   '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' +
   esc(title) +
   '</title><meta name="description" content="' +
   esc(description) +
-  '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css">' +
+  '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css"><script defer src="../assets/site.js"></script>' +
   scripts +
   '</head><body class="guide-body">' +
   header +
