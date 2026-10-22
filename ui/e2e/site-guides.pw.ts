@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { readFileSync } from "node:fs";
 const site = new URL("../../site/", import.meta.url);
 const manifest = JSON.parse(readFileSync(new URL("assets/guide-manifest.json", site), "utf8")) as {

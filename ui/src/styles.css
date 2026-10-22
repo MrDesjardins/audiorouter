@@ -416,6 +416,102 @@ button:disabled {
   overflow: hidden;
   background: #101722;
 }
+
+.canvas-context-backdrop {
+  position: absolute;
+  z-index: 10000;
+  inset: 0;
+}
+.canvas-selection-inspector {
+  display: grid;
+  gap: 1rem;
+}
+.canvas-selection-inspector fieldset {
+  margin: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--panel-border, #384458);
+  border-radius: 9px;
+  min-width: 0;
+}
+.canvas-selection-inspector legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+}
+.canvas-layout-grid,
+.group-position-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+.canvas-layout-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.canvas-selection-inspector .group-option-state {
+  min-height: 1.3em;
+}
+.canvas-layout-grid button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-align: left;
+  min-width: 0;
+  padding: 0.5rem;
+}
+.group-position-options > label {
+  display: grid;
+  grid-template-rows: 2.6em auto 1fr;
+  gap: 0.3rem;
+  align-content: start;
+  justify-items: start;
+}
+.canvas-selection-inspector small {
+  display: block;
+  margin-top: 0.6rem;
+}
+.session-flow-canvas .react-flow__node.has-layout-size {
+  width: var(--canvas-node-width) !important;
+  min-width: var(--canvas-node-min-width) !important;
+}
+.session-flow-canvas .has-layout-size .flow-node-content {
+  height: 100%;
+}
+.session-flow-canvas .react-flow__node.visual-group-node {
+  min-width: 180px !important;
+}
+.canvas-context-menu {
+  position: absolute;
+  z-index: 1;
+  min-width: 174px;
+  padding: 0.35rem;
+  border: 1px solid var(--panel-border, #384458);
+  border-radius: 9px;
+  background: var(--panel, #1a2130);
+  color: var(--text, #e9edf5);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+}
+.canvas-context-menu button {
+  display: block;
+  width: 100%;
+  border-color: transparent;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+}
+.canvas-context-menu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.theme-high-contrast .canvas-context-menu {
+  border-width: 2px;
+}
 .canvas-library {
   position: absolute;
   z-index: 5;
@@ -2067,6 +2163,15 @@ input[type="checkbox"]:checked::after {
   transform: translateX(1.1rem);
   background: #d9ffec;
 }
+input[type="checkbox"]:indeterminate::after {
+  top: 50%;
+  left: 50%;
+  width: 0.9rem;
+  height: 0.18rem;
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+  background: var(--text-strong, #edf4ff);
+}
 input[type="checkbox"]:focus-visible {
   outline: 2px solid var(--signal-hot);
   outline-offset: 2px;
@@ -2163,11 +2268,11 @@ button.primary {
     inset 1px 1px 0 rgb(255 255 255 / 16%),
     7px 10px 18px rgb(0 0 0 / 34%) !important;
 }
-.session-flow-canvas .react-flow__node.flow-node-test-signal {
+.session-flow-canvas .react-flow__node.flow-node-test-signal:not(.has-layout-size) {
   width: 184px !important;
   min-width: 184px !important;
 }
-.session-flow-canvas .react-flow__node.flow-node-audio-file {
+.session-flow-canvas .react-flow__node.flow-node-audio-file:not(.has-layout-size) {
   width: 208px !important;
   min-width: 208px !important;
 }

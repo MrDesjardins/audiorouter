@@ -98,6 +98,15 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-21 — Construct decoded presentation values from allowed fields.**
+  Evidence: [Q2 persistence failures and regressions](docs/plans/active/current.md#quality-q2---presentation-persistence---2026-10-21),
+  `ui/src/layout.test.ts` and `ui/e2e/canvas-layout-review.pw.ts`.
+  Scope: optional browser storage and JSON-derived geometry. Consequence:
+  validating x/y while retaining the original object let a saved id override
+  CanvasRect identity through a spread. Return canonical fields, bound input
+  before parsing, and catch the localStorage getter as well as method failures;
+  a denied getter crashed AppContent before the read helper could catch it.
+
 - **2026-10-20 — Keep Jev focused on findings automated checks cannot report (user preference).**
   Evidence: [active plan, Jev review scope](docs/plans/active/current.md#jev-review-scope).
   Scope: Jev rules and pull-request review. Consequence: the compiler,

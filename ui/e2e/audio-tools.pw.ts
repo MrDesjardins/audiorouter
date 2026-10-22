@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test";
 import { openConnectionForm, openDeviceTroubleshooting, setColorTheme } from "./workbench";
 
 test("top-bar audio status stays visible without privacy mute or Route status in all themes", async ({

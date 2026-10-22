@@ -1,3 +1,4 @@
+import { optionalLocalStorage } from "./presentationStorage";
 export const CLIENT_DIAGNOSTICS_STORAGE_KEY = "audiorouter.client-diagnostics.v1";
 const MAX_ROWS = 80;
 const MAX_ROW_CHARS = 320;
@@ -5,11 +6,7 @@ const MAX_ROW_CHARS = 320;
 export type DiagnosticStorage = Pick<Storage, "getItem" | "setItem">;
 
 export function browserDiagnosticStorage(): DiagnosticStorage | null {
-  try {
-    return typeof window === "undefined" ? null : window.localStorage;
-  } catch {
-    return null;
-  }
+  return optionalLocalStorage();
 }
 
 export function readClientDiagnostics(storage: DiagnosticStorage | null): string[] {

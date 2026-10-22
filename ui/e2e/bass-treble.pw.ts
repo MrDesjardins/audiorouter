@@ -1,5 +1,5 @@
 import { setColorTheme } from "./workbench";
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 import { join } from "node:path";
 

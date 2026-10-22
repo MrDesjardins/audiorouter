@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 
 test("HTTP mutation reaches the authoritative backend and refreshes the frontend; Swagger works offline", async ({
   page,

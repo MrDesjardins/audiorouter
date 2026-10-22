@@ -23,7 +23,9 @@ import {
   appendLibraryNode,
   appendPluginPlaceholderNode,
   appendVirtualBusNode,
+  copyDraftNode,
   duplicateDraftNode,
+  pasteDraftNode,
   GAIN_MAX_DB,
   GAIN_MIN_DB,
   type LibraryNodeKind,
@@ -303,6 +305,54 @@ describe("appendLibraryNode", () => {
     expect(duplicated.revision).toBe(demoSession.revision);
     const twice = duplicateDraftNode(duplicated, "voice");
     expect(twice.nodes.at(-1)?.id).toBe("voice-copy-2");
+  });
+
+  it("pastes a configured node into another session with a fresh identity and no associations", () => {
+    const sourceNode = demoSession.nodes.find((node) => node.id === "voice")!;
+    const connectedSource = appendDraftConnection(
+      { ...demoSession, id: "source-session" },
+      "voice",
+      "out",
+      "headphones",
+      "in",
+    );
+    const source = {
+      ...connectedSource,
+      nodes: connectedSource.nodes.map((node) =>
+        node.id === sourceNode.id ? { ...node, name: "Voice color", enabled: false, parameters: { gainDb: 7 } } : node,
+      ),
+    };
+    const clipboard = copyDraftNode(source, sourceNode.id);
+    const target = { ...demoSession, id: "target-session", nodes: [demoSession.nodes[0]], edges: [] };
+    const pasted = pasteDraftNode(target, clipboard);
+
+    expect(pasted.nodes.at(-1)).toMatchObject({
+      id: `${sourceNode.id}-copy-1`,
+      name: "Voice color copy 1",
+      kind: "gain",
+      enabled: false,
+      parameters: { gainDb: 7 },
+    });
+    expect(pasted.edges).toEqual([]);
+    expect(source.edges).toHaveLength(1);
+    expect(pasted.revision).toBe(target.revision);
+    const pastedAgain = pasteDraftNode(pasted, clipboard).nodes.at(-1);
+    expect(pastedAgain?.id).toBe(`${sourceNode.id}-copy-2`);
+    expect(pastedAgain?.name).toBe("Voice color copy 2");
+  });
+
+  it("clears a Duck's side-chain node reference when copying", () => {
+    const withDuck = appendLibraryNode(demoSession, "duck");
+    const duck = withDuck.nodes.at(-1)!;
+    const associated = {
+      ...withDuck,
+      nodes: withDuck.nodes.map((node) =>
+        node.id === duck.id ? { ...node, parameters: { ...node.parameters, keyNodeId: "mic" } } : node,
+      ),
+    };
+    const copied = copyDraftNode(associated, duck.id);
+    expect(copied.parameters.keyNodeId).toBe("");
+    expect(pasteDraftNode(demoSession, copied).nodes.at(-1)?.parameters.keyNodeId).toBe("");
   });
 
   it("resets supported parameters without changing topology", () => {

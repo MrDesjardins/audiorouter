@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 const session = {
   ...demoSession,

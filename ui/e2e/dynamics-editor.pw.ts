@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 // Simulated speech: ~300 ms words over −60 dB room noise, fed to the harness

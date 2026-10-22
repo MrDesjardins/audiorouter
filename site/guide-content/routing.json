@@ -977,11 +977,25 @@
           "minimum": null,
           "maximum": null,
           "default": false,
-          "meaning": "Prevents accidental dragging, resizing and canvas deletion. Properties can still edit the group.",
+          "meaning": "Prevents accidental dragging, resizing and canvas deletion. Properties can still edit its appearance and unlock it.",
           "increase": "",
           "decrease": "",
           "example": "Lock a finished Voice group while connecting nearby tools.",
           "caution": "Unlock it to move or resize it."
+        },
+        {
+          "key": "moveContents",
+          "label": "Move contents with group",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": true,
+          "meaning": "Drag fully enclosed tools and nested groups together while preserving their relative positions. Resizing the frame leaves contents still.",
+          "increase": "",
+          "decrease": "",
+          "example": "Enable this to move a complete processing region together.",
+          "caution": "The smallest fully containing group owns a tool in overlapping frames. A selected child follows its carrying ancestor only once. Locked nested groups block carrying; unlock them or disable this option to move the outer frame alone. Existing groups keep frame-only behavior until enabled."
         }
       ],
       "recipes": [
@@ -1004,7 +1018,9 @@
       ],
       "commonMistakes": [
         "Groups do not mix audio and dragging them does not connect nodes.",
-        "Groups use local presentation storage; session export does not carry them."
+        "Groups use local presentation storage; session export does not carry them.",
+        "Ctrl-click tools and group captions to select several items. Properties offers alignment, smallest or largest width and height, and equal horizontal or vertical edge gaps. Locked groups stay fixed. Alignment and spacing buttons include icons. Selected groups also share Lock and Move contents options; Mixed means their saved settings differ, and clicking applies the option to all selected groups.",
+        "Use Undo layout and Redo layout to reverse presentation changes, including connector-side choices. Tool content keeps its minimum usable size; group contents are not scaled."
       ],
       "suggestedVisual": {
         "type": "group",

@@ -26,6 +26,9 @@ concurrency:
 jobs:
   coverage:
     name: Rust and UI coverage
+    env:
+      # Keep fixed PR seeds and add one reproducible seed per nightly/manual run.
+      AUDIOROUTER_TEST_SEED: ${{ github.run_id }}
     runs-on: windows-latest
     timeout-minutes: 240
     steps:
@@ -80,6 +83,7 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: |
+          "Generated editor seed: $env:AUDIOROUTER_TEST_SEED (plus fixed seeds)" >> $env:GITHUB_STEP_SUMMARY
           npm ci --prefix ui
           if ($LASTEXITCODE -ne 0) { exit 1 }
           npm --prefix ui run test:coverage

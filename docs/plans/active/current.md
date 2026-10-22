@@ -1,5 +1,576 @@
 # Active plan — post-0.0.8 maintenance
 
+## Quality Q3 - production browser smoke - 2026-10-21
+
+Q2 storage slice is isolated in PR #53 on history PR #52 and feature PR #51.
+This slice starts at 01e31b77 on quality/production-smoke. Requirements UI-02/11/17,
+NFR-08/14/15, ENG-02/05. Extend the optimized Vite harness to include the real
+backend adapter and the missing group/layout/history/clipboard/session/recording
+scenarios. Preserve the full development suite. Make the ordinary e2e script
+run both so Q1's shared browser check and CI automatically select the smoke;
+retain separate failure outputs. Add an explicit session/connector readiness
+condition using the existing bounded measurement repair, and regress cold/warm
+loads and generation changes without arbitrary sleeps. Run optimized Edge,
+format/lint/type/unit/build; triage unexpected page errors, keep traces and
+three-theme/scaling evidence. Packaging smoke uses only an isolated profile and
+the exact built shell/sidecars; do not call browser evidence packaged evidence.
+Prerequisites: installed Edge, Windows build cache and no-device Rust fixture.
+No live audio or default endpoint changes. Rollback: revert the scoped smoke
+commit(s). Next: extend the existing production inputs and scenario selection.
+
+Q1 status while Q3 proceeds: first full CI run 39710446637 passed all eight
+jobs at 0a7cd2af. Main ruleset 25451476 is now active: PR/resolved threads,
+strict current-base Quality gate (GitHub Actions app 15368), no bypass actors,
+no deletion/force push, independent approvals=0 for the sole-owner repository.
+PR #50 was updated to main 1be9ce3b and pushed at 10b666b2; current-base run
+39713478156 remains pending. A separate docs-only PR #54 at fd2b4c65 proved
+the legitimate-skip path in [run 39713611409](https://github.com/MrDesjardins/audiorouter/actions/runs/39713611409):
+classification/docs/policy/gate succeeded; Windows/Edge/supply/Stream Deck were
+explicitly skipped. Closed that temporary PR after retaining the evidence.
+Its result does not replace the full run or waive any hardware/release gate.
+
+Q3 baseline experiment: extended optimized acceptance input from route-only to
+route plus real-backend adapter, and selected the missing history, group,
+clipboard, session and synthetic-recording suites. `npm.cmd run
+e2e:production-canvas -- --workers=1`: 72 passed in 1.8m. Both entry HTML files
+and their optimized chunks were emitted; the normal desktop build still has
+only index.html. Browser command now runs full development plus optimized smoke
+through the shared package script, so Q1 inventory needs no duplicate command.
+Separate production trace/screenshot output is included in CI failure uploads.
+
+Readiness now reports the rendered session/revision and valid card/connector
+measurements through a hidden DOM probe; it waits for fonts and reuses the
+existing bounded repair, exposing exhausted rather than a false ready state.
+Three pure readiness tests, TypeScript and seven development Edge scenarios
+(including delayed first snapshot, cold repair in three themes, reload, new
+session/revision and permanent missing bounds) passed. Output:
+%TEMP%/audiorouter-q3-readiness/. This is not packaged WebView2 evidence.
+The user's app is currently running (PID 28952, group-layout-test build), so
+the ordinary single-instance packaged smoke cannot safely run locally until
+that app is closed. No process or daily-use profile was changed. Continue
+independent optimized/CI work and prepare an isolated packaged check.
+
+Further Q3 evidence: the full guarded local pipeline completed successfully.
+UI unit tests passed all 71 files/611 tests; the development Edge invocation
+exited zero across its 326 collected scenarios (explicit optional skips remain
+unrun), and all 76 optimized scenarios passed. Both Playwright `.last-run.json`
+files report `passed` with no failed tests. The optimized directory is now
+explicitly emptied before builds; verified its resolved dedicated target
+beneath target/canvas-production-ui before cleanup. Wiring tests check both
+build inputs, selected scenario existence and package scripts. The uncaught
+error fixture is shared by all 45 formerly raw Playwright scenario modules;
+real-backend scenarios retain their stricter existing guard. The initial
+negative guard setup failed to import a file: URI on Windows and was correctly
+rejected by the positive control/expected assertion markers. After fixing to an
+absolute module path, the clean-page child exited 0 and intentional-error child
+exited 1 at the intended guard assertion. Evidence: `%TEMP%/audiorouter-browser-guard-Tt7cbR/`
+and `%TEMP%/audiorouter-browser-guard-szqJfN/`. Fixed five Node-script lint
+errors through explicit process/log imports; lint has only the existing 25
+hook warnings. Formatting, all-project TypeScript, Vite build and lint pass.
+
+CI limitations retained: PR #53's Jev run 39712836614 failed with HTTP 422
+while building a location-choice dictionary (291 entries, API limit 255).
+It reported an unlocated provisional rule violation but posted no review;
+this is not a successful review or a confirmed product bug. The pinned tool
+lives in another repository, so no unapproved upstream edit or fabricated
+finding was made. Actual UI/TypeScript/model/browser evidence remains separate.
+Q1 current head is 31386905, run 39714997868: policy, docs, supply, Stream
+Deck and Edge passed; Windows strict Clippy is still in progress. The prior
+503/cancelled run is not counted as passing; registry audit recovered on this
+new run.
+
+Q5 baseline inspection (not a new coverage run): downloaded metrics-coverage
+from [nightly 39570183964](https://github.com/MrDesjardins/audiorouter/actions/runs/39570183964)
+at b4bbbef57f56598d50dcf3b5cabc25b7093a1e70: Rust workspace lines 78.3%,
+shell lines 56.8%, UI lines 68.5%. Artifact copy:
+%TEMP%/audiorouter-quality-baseline-39570183964/. These older global percentages
+are not baselines for the new history modules and do not justify setting a
+coverage floor yet. Continue measured module coverage before a ratchet.
+
+## Quality Q2 - presentation persistence - 2026-10-21
+
+History slice is isolated in PR #52 on top of group PR #51. This next slice
+starts at bccd6249 on quality/presentation-storage. Requirements UI-02/16/17,
+ENG-01/02: reject oversized local JSON before parsing and normalize decoded
+geometry to its allowed fields. Current readLayout accepts extra fields; those
+are later spread into CanvasRect, so a stored id can replace a graph identity.
+Reproduce with a focused decoder regression; add bounded pure storage helpers,
+canonical position/size/side decoders and malformed/generated corpus tests.
+Retain valid data, legacy group behavior and optional write-failure handling.
+Compatibility: existing ordinary shapes remain readable; invalid extra fields
+are discarded; oversized presentation records fall back without changing audio.
+Verify failing-before/passing-after tests, full UI checks and canvas browser
+scenarios. No hardware required. Rollback: revert this slice; no graph/database
+migration. Next: demonstrate the unexpected-field failure before implementation.
+
+Confirmed two failures before fixing: the new layout unit regression returned
+foreign id/group/width fields, and a denied window.localStorage getter crashed
+AppContent in Edge (SecurityError, canvas absent). Before-browser artifacts:
+%TEMP%/audiorouter-q2-storage-before/. Canonical decoders now construct only
+allowed position/size/side fields, validate IDs against the backend's 128-byte
+bound, and reject JSON above 1,048,576 characters before parsing. Shared safe
+storage access protects App preferences, canvas, groups and diagnostics. Groups
+also discard foreign fields while retaining legacy defaults. Oversized writes
+preserve the prior record; optional faults leave in-memory editing usable.
+
+Expanded evidence: 300 generated malformed/canonical persistence cases, 600
+fixed-seed nested gestures checking frozen ownership/once-only movement/locks,
+and nightly coverage retains fixed seeds plus a reproducible run-ID seed.
+Replayed AUDIOROUTER_TEST_SEED=39710446637: 19 selected tests passed. Removed
+the normalization, parse-bound, denied-getter catch and write catch in four
+temporary experiments: all four made focused tests fail; originals restored.
+Logs: %TEMP%/audiorouter-q2-storage-mutations-jK2Hgb/.
+
+Final Windows checks: format, lint (zero errors, 25 existing Hook warnings),
+all-project TypeScript and Vite build passed (existing chunk warning), all
+69 files/604 UI tests passed. Full focused Edge set: 45 passed in 56.9s,
+including poisoned saved identity and denied-storage startup/undo regressions.
+Artifacts: %TEMP%/audiorouter-q2-storage-final/. Visually inspected cold-start
+screenshots in dark, light and high-contrast: canvas/cards/controls/notifications
+remain readable and positioned consistently. actionlint 1.7.12 validated the
+nightly seed change. Docs and diff checks passed. No backend/audio changes or
+database migration; local presentation compatibility consequences are specified
+in UI-16. Next: scoped persistence PR, then Q3 production browser coverage.
+
+## Quality Q2 - editor state boundaries - 2026-10-21
+
+Owner approved the [application quality roadmap](application-quality.md).
+Q1 is isolated on main in PR #50; current CI run 39710446637 is pending.
+Its local intentional format/type/test/contract/classifier faults were all
+detected by the real shared runner and restored in finally blocks; reports
+are in %TEMP%/audiorouter-q1-faults-zplj4b/. This is failure-detection evidence,
+not passing product evidence. Q2 starts at the reviewed group branch 6d9890e0
+in its own worktree; it does not implicitly merge that feature or PR #50.
+
+Scope UI-02/11/16/17, ENG-01/02: specify session/presentation/history invariants,
+extract pure layout history/restore operations without moving backend authority,
+and test generated action sequences plus malformed persistence/fault boundaries.
+Prerequisites: Windows/Edge and deterministic backend fixture available, no
+audio hardware needed. Steps: reproduce repeated Arrange no-op history issue;
+extract and integrate history; keep Undo arrange on the same history path;
+add fixed-seed bounded sequence tests, lock/session/storage guards and focused
+browser regressions; run format/lint/type/unit/Edge and inspect diffs. Rollback:
+revert the Q2 commit; no database or contract migration is intended. Keep
+generated seed/action trace in failure output. Next: reproduce before fixing.
+
+Q2 first evidence: Edge reproduced the redundant Arrange undo entry at
+6d9890e0 (%TEMP%/audiorouter-q2-arrange-before/, expected original voice position
+445,67 but undo left arranged 419,0). Added pure history model/tests first;
+integration and the user-visible fix follow as a separate commit. Five seeds
+each exercise 400 actions against an independent coordinate/connector model.
+The model's lock, stale-session and redo-clear guards were each removed in a
+temporary experiment: all three mutations made the focused suite fail; originals
+restored in finally. Logs: %TEMP%/audiorouter-q2-mutations-u2e7FB/.
+The integrated working tree passed 590 UI tests, type/build/lint (25 existing
+Hook warnings, zero errors), and 28 focused Edge scenarios including the
+formerly failing case. Final integration checks and the Undo arrange/redo
+regression still follow. No Rust/audio or backend graph behavior is changed.
+
+Q2 history integration completed: all geometry/side/Arrange history commands
+now use the pure module. Repeating unchanged Arrange preserves undo/redo, and
+Undo arrange delegates to the ordinary undo path, permitting Redo layout.
+The model clones snapshots, rejects cross-session restore and locked changes
+atomically, and touches only surviving graph identities and preferences.
+Compatibility: local storage shapes are unchanged; history is transient and
+still resets on session changes. No migration is needed. User guidance and
+UI-16 contract now state the no-op/redo semantics.
+
+Final Windows checks: `npm.cmd run format`, `npm.cmd run lint` (zero errors,
+25 existing warnings), `npm.cmd run build` (TypeScript all-project check and
+production build passed; existing chunk-size warning), `npm.cmd test`:
+65 files/590 tests passed. Complete focused Edge set (review, layout, session,
+lock/groups, smart-layout, cold-start, clipboard, copy/paste and drag-place):
+43 passed in 56.3s, including dark/light/high-contrast scenarios and both new
+Arrange regressions. Output %TEMP%/audiorouter-q2-history-final/. Earlier 28-case
+integration run also passed; no diagnostic rerun is counted as first-pass
+success. Existing React Flow handle/attribution warnings remain visible.
+`node tools/docs/validate.mjs` and `git diff --check` passed. Q2 history is
+ready for its own review on top of the unmerged group feature PR #51; next
+Q2 slice is bounded/sanitized presentation persistence and generated geometry.
+
+## Group/layout review round two - 2026-10-21
+
+Scope: UI-02/11/16/17, review undo interleaving, connector-side presentation
+preferences, nested movement, locks and persistence. Worktree initially clean
+at 1de3a33a. No hardware needed. Candidate probes: Undo layout followed by
+Undo arrange, connector side changes after geometry edits, invalid saved edge
+preferences, and storage write failures. Reproduce before fixes; add focused
+regressions, repair owning layout/history layer, run unit/Edge/format/lint/build
+and record evidence. Rollback: revert this review fix commit.
+
+Confirmed and fixed four findings at 1de3a33a:
+1. Undo layout left the temporary Undo arrange action live. Using that stale
+   shortcut could add a no-op snapshot and discard valid redo. New geometry,
+   side edits and history restoration now retire the older Arrange shortcut.
+2. Connector-side edits were omitted from history while geometry snapshots
+   restored connector sides, so undo could discard a later choice. Side edits
+   now record layout history and clear redo; no-op side selections do neither.
+   Connection creation initializes both sides together without extra history
+   entries; a synchronous ref preserves both updates. Restore touches only
+   edges existing in the snapshot and current graph, preserving newer edges.
+3. Saved connector preferences were unchecked JSON. A saved null crashed the
+   canvas on opening. A validated reader rejects null/arrays/scalars/invalid
+   side values and falls back to default sides, while retaining valid entries.
+4. Connector preference saves ran inside a React state updater and an optional
+   storage quota failure crashed the canvas. Writes now run outside updaters,
+   catch storage failures, and leave the in-memory editor/undo usable. Arrange
+   and undo use the same safe persistence path. Existing on-disk shape stays
+   compatible; no migration or graph/backend change is needed.
+
+Evidence (Windows, 2026-10-21): before fixes, all 3 initial browser probes failed
+at their intended assertions, including an uncaught null preference exception.
+Artifacts: %TEMP%/audiorouter-layout-review-round2-before/. The separate quota
+probe reproduced an uncaught QuotaExceededError and canvas error boundary:
+%TEMP%/audiorouter-layout-review-round2-quota-before/. After fixes all four
+probes passed. Added ordered geometry/side undo-redo and new-connection-side
+regressions. One expanded test initially compared the whole transient node
+style (hidden versus visible); corrected it to compare geometry after node
+visibility and reran the complete set. No product change was based on that
+setup failure.
+
+Final direct Edge command from ui/: node node_modules/@playwright/test/cli.js
+ test --config=playwright.config.ts e2e/canvas-layout-review.pw.ts
+ e2e/canvas-layout.pw.ts e2e/canvas-layout-session.pw.ts
+ e2e/canvas-group-lock.pw.ts e2e/canvas-groups.pw.ts e2e/smart-layout.pw.ts
+ e2e/canvas-cold-start.pw.ts e2e/canvas-clipboard-regressions.pw.ts
+ e2e/canvas-copy-paste.pw.ts e2e/drag-place.pw.ts --workers=1
+ --output %TEMP%/audiorouter-layout-review-round2-final: 41 passed.
+Covers the six review regressions, nested/locked groups, bulk flags, alignment,
+sizing/distribution, geometry undo/redo, session isolation, pointer connection
+creation, clipboard and tool placement in all three themes. Existing resize
+observer and intentional cold-connector warnings remain as documented below.
+
+npm.cmd --prefix ui test: 64 files / 578 tests passed (including eight new
+connector preference validation/storage cases). npm.cmd --prefix ui run format,
+format:check, lint and build (TypeScript 7 typecheck:all included) passed.
+Lint retains 25 existing warnings, no new warning; existing Vite chunk warning
+remains. git diff --check passed. UI specification and Group guide source were
+updated; node site/generate-guides.mjs, node site/generate-social.mjs,
+node site/check-guides.mjs and social --check completed successfully.
+
+Native shell build passed with the same locked release/custom-protocol command
+recorded below; separate manual test app with matching sidecars/runtime:
+%TEMP%/audiorouter-group-layout-review2-test/audiorouter-shell.exe.
+SHA256: 837DD256499E0F97A9A93BF1FD48C6AC31B04B4AA0BD71C0FCF59BA638E042B3.
+Original cached shell restored and its hash verified unchanged. These are UI
+repairs, not an audio/driver qualification or signed release. Review found no
+additional confirmed functional defect in the other inspected paths.
+Next: owner acceptance of this second-review build on feature/canvas-group-layout.
+
+## Group layout review - 2026-10-21
+
+Review found a session-isolation risk in the older Undo arrange control:
+its 15-second snapshot has no session key and survives a session switch,
+allowing old positions/connector sides to be written into the next session.
+Affected code predates the group feature and is present at 103802f9.
+Requirements UI-02/16, local presentation only. Plan: reproduce with real
+backend session switching, scope and clear the Arrange snapshot, regress
+normal Arrange undo and session switching, typecheck/lint/format/build.
+Rollback: revert this isolated fix. No audio hardware is needed.
+
+Confirmed: real-backend Edge regression failed because Undo arrange remained
+visible in the newly created session within its 15-second lifetime. Evidence:
+%TEMP%/audiorouter-arrange-review/canvas-layout-session.pw.t-eb1f8-ded-when-switching-sessions/.
+Fixed: snapshots store the layout/session key; rendering and execution check
+that key, and session switching clears the snapshot. Returning to the original
+session does not resurrect the old undo. No stored data migration is needed.
+Validation: direct Playwright command for e2e/canvas-layout-session.pw.ts and
+e2e/smart-layout.pw.ts, --workers=1, passed all 6 tests (Windows Edge), covering
+this reproduction and normal Arrange undo in all three themes. Artifacts:
+%TEMP%/audiorouter-arrange-fix/. npm.cmd --prefix ui run format, format:check,
+lint and build (including TypeScript 7 typecheck:all) passed. Lint retains the
+same 25 existing warnings; the existing Vite chunk warning remains.
+Native shell build passed with the same locked release/custom-protocol command
+recorded below; original cached executable restored with its verified hash.
+Separate local app: %TEMP%/audiorouter-group-layout-review-fix/audiorouter-shell.exe.
+SHA256: 69BA50CFE640DAA1E5CE10EE4657C1BEF4AE9AB4D689C4BC25C56886AC07D9DA.
+Next: owner acceptance of the fix on feature/canvas-group-layout.
+
+## Multi-group options and layout icons - 2026-10-21 owner feedback
+
+Objective: UI-02/11/16/17 follow-up: edit Lock and Move contents for all
+explicitly selected groups, with native mixed-state checkboxes. Mixed
+selections apply these options only to groups; locked groups must remain
+unlockable. Preserve geometry, graph and selection. Add conventional SVG
+alignment/spacing/size icons with visible labels and accessible button names.
+Steps: group-only batch option update; selection controls and icons; regress
+mixed states, unlock, persistence and no geometry changes; format/lint/build,
+unit and Edge tests with dark/light/high-contrast visual inspection. No audio
+hardware is needed. Rollback: revert this follow-up commit.
+
+Implemented: group-only batched option updates permit unlocking and changing
+Move contents on locked groups, while geometry still uses the locked-aware
+batch path. Selected group values come from saved group state. Mixed values
+show a dash plus Mixed text; clicking sets all selected groups on, then off.
+Tools and unselected groups stay unchanged. Icons accompany all 12 layout
+actions and keep their visible/accessibility names. Updated UI specification
+and generated Group guide from its source JSON. Review confirmed that locking
+does not disable the option controls, and option edits never enter graph state.
+
+Evidence (Windows, 2026-10-21): npm.cmd --prefix ui test passed 64 files / 570
+tests. npm.cmd --prefix ui run format, format:check, lint and build passed;
+build includes TypeScript 7 typecheck:all. Lint retains 25 existing warnings;
+Vite retains the existing main-chunk size warning. The first typecheck caught
+a test-only unsupported query option; corrected it and the build passed.
+Direct Edge command from ui/: node node_modules/@playwright/test/cli.js test
+--config=playwright.config.ts e2e/canvas-layout.pw.ts
+e2e/canvas-layout-session.pw.ts e2e/canvas-group-lock.pw.ts --workers=1:
+18 passed. The three bulk-option theme tests also passed again with screenshots
+in %TEMP%/audiorouter-group-options-visuals/. Checks cover mixed states, lock
+and unlock all, move-content on/off, persistence, unchanged rectangles and
+graph Save state, and unselected group isolation in mixed tool/group selection.
+Visually inspected dark/light/high-contrast controls and SVG icons. Existing
+ResizeObserver resize notifications remain as recorded below.
+node site/check-guides.mjs and node site/generate-social.mjs --check passed.
+
+Native shell rebuilt with the same locked release/custom-protocol command as
+below. Separate manual review app (same matching sidecars/runtime):
+%TEMP%/audiorouter-group-layout-options-test/audiorouter-shell.exe.
+SHA256: 2B650CF8A7D03D6CD3ADA42DE11C7B394EF6F3640180179E1C0BC69157E0CE0F.
+Original cached shell restored with the same verified hash recorded below.
+No Rust/audio behavior changed; no new audio qualification is claimed.
+Next: owner review of the follow-up build on feature/canvas-group-layout.
+
+## Group movement and selection layout — 2026-10-20, owner overnight request
+
+Objective: optional group-content movement plus mixed tool/group selection,
+alignment, equal sizing and equal spacing in Properties. Requirements UI-02,
+UI-11, UI-16 and UI-17; presentation data only, no graph/API/audio changes.
+Prerequisites: M05 canvas and local group/layout storage; installed Windows
+Edge for real pointer/selection/themed verification. No audio hardware needed.
+
+Decisions: full rectangle containment, with the smallest containing group as
+the unique owner (stable ID breaks overlap ties). Freeze ownership at drag
+start. Nested groups and their descendants move once with a carrying ancestor;
+the inner toggle controls dragging that inner group itself. New groups carry
+contents by default; old annotations without the flag keep their old behavior.
+Locked rectangles stay fixed; a carrying group with a locked descendant cannot
+move until unlocked or carrying is disabled. A locked rectangle does not freeze
+individually edited audio tools. Partial overlaps are not membership.
+
+Layout actions use selection bounds. Selected carrying ancestors subsume their
+selected descendants for movement; sizing applies to explicitly selected items
+without scaling contents. Locked groups remain fixed anchors. Distribute equal
+edge gaps between the endpoints and any locked anchors; reject insufficient
+space rather than create overlaps. Tool sizes retain usable content minima,
+and persist separately from graph state. Align/sizing/distribution never rewire.
+
+Tasks: (1) pure tested ownership/movement/layout math and validated sizes;
+(2) group toggle and drag integration; (3) mixed selection and accessible
+Properties controls; (4) regression tests for locks, nesting, overlap, resize,
+session isolation and persistence; (5) format/lint/typecheck/build/unit tests,
+headed Edge dark/light/high-contrast, full diff review and fixes. Include the
+three existing clipboard findings in integration review because selection and
+keyboard ownership are changing here. Record results and remaining limits.
+
+Rollback: revert scoped UI changes and the new presentation size key; old
+group/layout records remain compatible. Risks: double movement in multi-drag,
+ownership drift mid-drag, stale selection across sessions, clipping after size
+changes, and accidental changes to locked rectangles. Implementation and review
+are complete; next is owner acceptance using the separate review executable.
+
+Implementation: pure ownership/translation/layout math in canvasGeometry.ts;
+batched group updates and persisted moveContents flag; mixed React Flow
+selection and Properties layout controls; validated per-session tool sizes;
+20-entry local Undo layout/Redo layout history for drag, resize, keyboard moves
+and layout actions. History respects current locks and preserves connector-side
+preferences. Group and size presentation preferences stay outside graph drafts.
+The Group website guide and UI-02/UI-11/UI-16 wording were updated together.
+
+Review fixes and regression evidence:
+- NodeResizer end callbacks can see the starting render. Recording history at
+  the first changed geometry fixes disabled resize undo, without recording
+  no-op gestures. The real-pointer resize/lock/undo regression passes.
+- Test Signal and Audio File had later fixed-width CSS overrides. Restrict
+  those defaults to unsized cards; both now honor size matching, restore their
+  defaults on undo, and keep their buttons inside the minimum-size card.
+- Keyboard movement records layout history; undo restores connector-side
+  preferences after Arrange; imported IDs cannot inherit presentation sizes
+  or positions from Object.prototype. Ownership is computed once per render.
+- All three clipboard review findings recorded below are resolved here:
+  keyboard paste is brought into view; selected UI text keeps native copy;
+  customizable playback/privacy shortcuts reserve Ctrl+C and Ctrl+V. The
+  three focused browser regressions pass, including copying while playing.
+
+Validation (Windows host, 2026-10-20; no hardware required for this UI slice):
+- npm.cmd --prefix ui test: 63 files / 568 tests passed on the final code.
+  Pure tests cover deterministic overlap ownership, partial containment,
+  nested selected descendants, disabled carrying, locked descendants,
+  coordinate bounds, six alignments, shared usable minima, unequal vertical
+  sizes, edge-gap arithmetic, locked anchors and atomic insufficient-space
+  rejection. Persistence tests cover legacy flags and invalid stored sizes.
+- npm.cmd --prefix ui run format and format:check: passed; git diff --check
+  passed. npm.cmd --prefix ui run lint: exit 0, the same 25 existing
+  exhaustive-deps warnings, no added warning.
+- npm.cmd --prefix ui run build (includes typecheck:all with TypeScript 7):
+  passed. Existing Vite main-chunk warning remains (about 549 KB minified).
+- Final consolidated Edge run: 47 tests passed, exit 0 (2.5 minutes).
+  Command from ui/:
+  node node_modules/@playwright/test/cli.js test --config=playwright.config.ts
+  e2e/canvas-layout.pw.ts e2e/canvas-layout-session.pw.ts
+  e2e/canvas-clipboard-regressions.pw.ts e2e/canvas-copy-paste.pw.ts
+  e2e/canvas-groups.pw.ts e2e/canvas-group-lock.pw.ts
+  e2e/smart-layout.pw.ts e2e/canvas-cold-start.pw.ts e2e/drag-place.pw.ts
+  e2e/header-canvas-usability.pw.ts e2e/site-guides.pw.ts --workers=1.
+  Covers dark/light/high-contrast, mouse and keyboard movement, mixed and
+  marquee selection, exactly-once nested movement, locks, frame-only mode,
+  resize, undo/redo, equal gaps, min/max sizing, reload/session isolation,
+  media-card bounds, connector updates and unchanged graph Save state.
+  Also covers existing clipboard, Arrange, tool placement, cold connectors,
+  header behavior and every website guide (including offline control counts).
+  Screenshots were visually inspected in all three themes; artifacts are in
+  %TEMP%/audiorouter-playwright-results/canvas-layout.pw.ts-*/.
+  The pre-existing ResizeObserver loop notification still appears during
+  group resize, including the existing group tests; geometry assertions pass.
+  The cold-start test deliberately hides connectors briefly and emits the
+  expected missing-handle warnings before successful recovery.
+- Guide generation: updated site/guide-content/routing.json, ran
+  node site/generate-guides.mjs and node site/generate-social.mjs. Only the
+  Group guide, guide index and manifest change. node site/check-guides.mjs
+  passed: 36 pages, 139 anchors, 1,075 links/assets and 36 catalog links;
+  generator social --check passed. After regeneration, the offline guide
+  opening/control-count test and guide search/index test passed again (2/2).
+- Native build: cargo.exe build --locked --release --features custom-protocol
+  --manifest-path src-tauri/Cargo.toml --target-dir
+  C:/code/audiorouter/src-tauri/target passed. Staged the final shell alongside
+  the matching CLI/plugin worker from the preceding clipboard build and
+  existing tunnel runtime/licenses at
+  %TEMP%/audiorouter-group-layout-test/audiorouter-shell.exe.
+  Shell SHA256: C22818302B0AA7A2F996BF6D3EB06ECA8FC558887776E0EA50D81F4AE2B98FEF.
+  The original cache executable was restored and its SHA256 verified:
+  EBDCA3FC1E11844DDAF87BFD4F938FA4CC9D0DE06D6EBE5FC07F97FCBCB90496.
+  This is a manual review build, not a signed release or audio qualification.
+
+Requirement evidence: UI-02/16 -> geometry and group/layout browser tests;
+UI-11 -> modifier/marquee selection, keyboard nudge/undo and labelled controls;
+UI-17 -> stable controls, local state, three-theme visual inspection. No backend
+API, Rust source or audio callback changed. Existing driver/release gates are
+unaffected and are not asserted by these UI checks.
+
+Work is isolated on feature/canvas-group-layout, based on the already pushed
+clipboard feature. Original C:/code/audiorouter user changes (including marketing,
+Jev and website work) remain untouched, and .codex is never staged. Next task:
+owner morning review, then PR/merge review; do not merge this branch automatically.
+For existing groups, enable Move contents with group to try carrying behavior.
+
+
+## Canvas node copy and paste — 2026-10-20 (owner request, in progress)
+
+Objective: let users copy one configured canvas node and paste it as an
+unconnected node, including between sessions in the same AudioRouter window.
+Requirements: UI-02, UI-11 and UI-17. Preserve normal backend plan/commit
+validation and local session layout ownership.
+
+Decision: the app keeps a deep configuration snapshot in memory across session
+switches. Pasting assigns a unique destination-session ID and copy name, copies
+the node's settings and flags, and omits all graph edges and Duck's
+`keyNodeId` side-chain association. Context menus provide Copy/Paste; Ctrl+C and
+Ctrl+V act on the selected node/canvas and do not intercept editable fields.
+Clipboard contents are window-local and are not persisted after app exit.
+
+Prerequisites: UI and contract packages installed; inspect the current M05
+canvas and layout ownership. No audio hardware is required. Windows Edge is
+required for the themed canvas interaction run; jsdom covers data semantics
+but does not establish visual behavior.
+
+Tasks:
+1. Add copy/paste draft helpers and regress configuration, flags, unique IDs,
+   cross-session paste, detached graph edges and Duck references. Done.
+2. Add canvas context menus and Ctrl+C/Ctrl+V. Pane paste is positioned at the
+   pointer and clamped within the visible canvas; keyboard paste uses the
+   session's next layout slot. Clipboard data survives session selection in
+   this window. Done.
+3. Update UI-02 and verify data semantics, TypeScript, lint/format and headed
+   Edge behavior in dark, light and high-contrast themes. Done; results below.
+4. Review the final diff and hand off the feature branch. Done.
+
+Validation matrix: draft unit tests for same- and cross-session paste; focused
+canvas/App tests for copy, paste, menu and shortcut behavior; `npm --prefix ui
+run typecheck:all`, `npm --prefix ui run lint`, `npm --prefix ui run format`,
+and targeted UI tests; headed Edge in the three themes for context menus and
+keyboard paste. No Windows audio gate applies because this changes graph-edit
+UI data only.
+
+Risks: a copied node may carry a reference to another node through its
+parameters; clear the known Duck side-chain reference and test it. Paste
+remains an unsaved draft edit and is reversible through existing graph
+undo/commit behavior. Rollback: remove the clipboard helpers, canvas menu and
+shortcut bindings, and revert the UI-02 wording.
+
+Evidence (2026-10-20, Windows host):
+- `npm.cmd --prefix ui run format` and `npm.cmd --prefix ui run format:check`:
+  clean.
+- `npm.cmd --prefix ui run typecheck:all`: pass.
+- `npm.cmd --prefix ui test`: 62 files, 549 tests passed.
+- `npm.cmd --prefix ui run lint`: exit 0, 25 existing
+  `react-hooks/exhaustive-deps` warnings; no new warning from copy/paste code.
+- `npm.cmd --prefix ui run build`: pass; Vite retains its existing warning
+  that the main JavaScript chunk exceeds 500 KB.
+- `npm.cmd --prefix ui run e2e -- --grep "copy and paste a configured node
+  across sessions"`: Playwright reported the targeted test passed (2.8 s).
+  The local runner then remained in fixture teardown; it was interrupted after
+  the passing result, and the Vite child was stopped. The assertion path had
+  already verified shortcuts across a newly created session, both context
+  menus, saved configuration, detached edges and in-canvas paste bounds.
+  Dark/light/high-contrast screenshots are in the ignored temporary output
+  directory `%TEMP%\audiorouter-playwright-results\canvas-copy-paste.pw.ts-co-6c9dc-ns-with-menus-and-shortcuts\`.
+  Inspected all three theme screenshots; the context menu stayed in the canvas
+  bounds, remained legible, and had a visible focus outline.
+- `git diff --check`: pass. No audio device or Windows package gate applies.
+
+### Owner-requested code review — 2026-10-20
+
+Reviewed every feature diff and its selection, shortcut, layout, draft history
+and session-switching callers. Implementation files were left unchanged during
+review. Three P2 findings are confirmed in Windows Edge:
+
+- Keyboard paste always sets `skipNextFitRef`, even when its next grid slot is
+  outside the viewport. After panning right and pressing Ctrl+V, the new node
+  started at screen x=1751.7 while the canvas ended at x=981.8. The node exists
+  but is entirely hidden. Keep the current view only for a deliberate pointer
+  paste, or place/bring keyboard paste into view.
+- The global Ctrl+C listener checks editable elements but not selected UI text
+  or canvas focus. Selecting header text and pressing Ctrl+C prevented the
+  native copy and copied the previously selected tool instead.
+- Clipboard shortcuts are outside the existing customizable shortcut conflict
+  mechanism. With the saved session-toggle shortcut `Control+C`, selecting a
+  tool and pressing Ctrl+C stopped the playing route instead of copying it.
+  Resolve/reserve these bindings through the same shortcut dispatcher.
+
+Review verification: full UI suite 62 files / 549 tests passed again;
+`typecheck:all` and `git diff --check` passed. Fifteen existing Edge scenarios
+passed, covering cross-session copy/paste, the three themes, dragging, visual
+groups, session lifecycle/import/export, transactions, undo/revert and the
+default playback shortcut. A separate focused probe confirmed non-default
+gain preservation, paste undo/redo and editable-field shortcut exclusion.
+The original copy/paste test plus that focused probe completed with exit 0
+(2 passed). The three defect probes completed with exit 1, each failing at
+its intended assertion. Two earlier audit attempts used a precise-gain field
+absent from the browser fixture; those setup failures are not product findings.
+
+The previous runner shutdown uncertainty is resolved: the same direct
+Playwright/Vite command exited normally when run with Windows process-cleanup
+permissions. The hang also reproduced without the real backend in the
+sandbox, so it was not evidence of a copy/paste/backend teardown defect.
+Temporary audit files were removed from the worktree. Probe source, temporary
+config and failure screenshots/error contexts are preserved under
+`%TEMP%\audiorouter-clipboard-review\`.
+
+Owner requested commit and push of the tested feature on 2026-10-20, with the
+three review findings recorded above still open. Next: fix those findings and
+retain focused regression coverage before merging. Feature worktree:
+`C:\Users\miste\AppData\Local\Temp\audiorouter-ts7-main`.
+The original dirty worktree was not modified.
+
+Manual test build (owner requested 2026-10-20): rebuilt the production UI and
+the optimized native shell with `--locked --release --features custom-protocol`,
+plus the matching workspace CLI and plugin worker. Staged these and the existing
+OpenAI tunnel runtime/licenses at
+`%TEMP%\audiorouter-copy-paste-test\audiorouter-shell.exe`.
+Both native builds completed successfully. Used the existing build cache,
+then restored the original three executables and verified their hashes against
+the backups. The test app was not launched by the agent. It contains the current
+feature and the three documented review findings; no fixes were applied.
 ## Application quality implementation - 2026-10-21
 
 Owner approved the [quality roadmap](application-quality.md). Execute Q1-Q6

@@ -1,3 +1,5 @@
+import { optionalLocalStorage } from "./presentationStorage";
+import { connectorGeometryReady, type ConnectorRequirement } from "./canvasReadiness";
 import { smartLayout } from "./smartLayout";
 import {
   Background,
@@ -22,6 +24,7 @@ import "@xyflow/react/dist/style.css";
 import {
   createContext,
   memo,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -29,10 +32,40 @@ import {
   useState,
   type PointerEvent,
   type ReactNode,
+  type RefObject,
+  type CSSProperties,
 } from "react";
 import { useLiveDiagnostics, type TelemetryStore } from "./liveTelemetry";
 import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/contracts";
-import { readLayout, writeLayout, type LayoutPositions } from "./layout";
+import {
+  readLayout,
+  writeLayout,
+  readNodeSizes,
+  writeNodeSizes,
+  readEdgeLayout,
+  writeEdgeLayout,
+  type EdgeSide,
+  type EdgeLayoutSides,
+  type LayoutPositions,
+  type NodeLayoutSizes,
+} from "./layout";
+import {
+  canvasOwners,
+  layoutCanvasItems,
+  moveCanvasItems,
+  movementLocked,
+  type CanvasRect,
+  type LayoutAction,
+} from "./canvasGeometry";
+import {
+  arrangedCanvasSnapshot,
+  canvasLayoutChanged,
+  emptyCanvasHistory,
+  geometryChanged,
+  recordCanvasHistory,
+  restoreCanvasHistory,
+  type CanvasSnapshot,
+} from "./canvasHistory";
 import { nodePortLabels } from "./graphView";
 import { applyCableAvailability, libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
 import { cableName, useVirtualCableStatus } from "./virtualCableStatus";
@@ -80,8 +113,10 @@ export { LIBRARY_DROP_MIME } from "./libraryDrag";
 type SessionFlowCanvasProps = {
   groups?: CanvasGroup[];
   selectedGroupId?: string;
+  selectedGroupIds?: string[];
   onSelectGroup?: (id: string) => void;
   onChangeGroup?: (id: string, patch: Partial<CanvasGroup>) => void;
+  onChangeGroups?: (patches: Map<string, Partial<CanvasGroup>>) => void;
   onRemoveGroup?: (id: string) => void;
   session: Session;
   pendingNodeIds?: ReadonlySet<string>;
@@ -90,6 +125,13 @@ type SessionFlowCanvasProps = {
   selectedNodeIds?: string[];
   onSelect: (id: string) => void;
   onSelectMany?: (ids: string[]) => void;
+  onSelectItems?: (ids: string[]) => void;
+  layoutActionsRef?: RefObject<((action: LayoutAction) => void) | null>;
+  onLayoutSelection?: (sessionId: string, items: CanvasRect[]) => void;
+  onLayoutMessage?: (message: string) => void;
+  onCopyNode?: (nodeId: string) => void;
+  onPasteNode?: (position: { x: number; y: number }) => string | void;
+  canPasteNode?: boolean;
   onConnect: (connection: Connection, dropPosition?: { x: number; y: number }) => string | void;
   onRemoveConnection?: (edgeId: string) => void;
   onToggleConnection?: (edgeId: string, enabled: boolean) => void;
@@ -183,43 +225,50 @@ function LiveCanvasProvider({
   return <LiveCanvasContext.Provider value={value}>{children}</LiveCanvasContext.Provider>;
 }
 const NODE_TYPES = { flowNode: FlowNodeRenderer, visualGroup: CanvasGroupRenderer };
+const ownValue = <T,>(values: Record<string, T>, id: string): T | undefined =>
+  Object.hasOwn(values, id) ? values[id] : undefined;
 
 // Card dimensions can arrive before connector bounds on a cold WebView load.
 // A later resize is not guaranteed, leaving saved edges and hit testing inert.
 // Repair only missing bounds, with bounded retries rather than a meter timer.
-function CanvasConnectorMeasurements({ geometryKey }: { geometryKey: string }) {
+function CanvasConnectorMeasurements({
+  geometryKey,
+  sessionId,
+  revision,
+}: {
+  geometryKey: string;
+  sessionId: string;
+  revision: number;
+}) {
   const updateNodeInternals = useUpdateNodeInternals();
   const { getInternalNode } = useReactFlow();
+  const [measurement, setMeasurement] = useState<{ key: string; status: "ready" | "exhausted" } | null>(null);
   useEffect(() => {
-    const expected = JSON.parse(geometryKey) as Array<{ id: string; source: string[]; target: string[] }>;
+    const expected = JSON.parse(geometryKey) as ConnectorRequirement[];
     let frame = 0;
     let attempts = 0;
     let cancelled = false;
+    let fontsReady = !document.fonts || document.fonts.status === "loaded";
+    const finish = (status: "ready" | "exhausted") =>
+      setMeasurement((current) =>
+        current?.key === geometryKey && current.status === status ? current : { key: geometryKey, status },
+      );
     const repair = () => {
       if (cancelled) return;
-      const missing = expected.filter(({ id, source, target }) => {
-        const bounds = getInternalNode(id)?.internals.handleBounds;
-        const valid = (
-          bound: { id?: string | null; x: number; y: number; width: number; height: number },
-          handle: string,
-        ) =>
-          bound.id === handle &&
-          [bound.x, bound.y, bound.width, bound.height].every(Number.isFinite) &&
-          bound.width > 0 &&
-          bound.height > 0;
-        return (
-          source.some((handle) => !bounds?.source?.some((bound) => valid(bound, handle))) ||
-          target.some((handle) => !bounds?.target?.some((bound) => valid(bound, handle)))
-        );
+      const missing = expected.filter((requirement) => {
+        const node = getInternalNode(requirement.id);
+        return !connectorGeometryReady(node?.measured, node?.internals.handleBounds, requirement);
       });
       if (missing.length && attempts++ < 8) {
         updateNodeInternals(missing.map(({ id }) => id));
         frame = requestAnimationFrame(repair);
-      }
+      } else if (!missing.length && fontsReady) finish("ready");
+      else if (missing.length) finish("exhausted");
     };
     frame = requestAnimationFrame(repair);
     void document.fonts?.ready.then(() => {
       if (!cancelled) {
+        fontsReady = true;
         cancelAnimationFrame(frame);
         attempts = 0;
         frame = requestAnimationFrame(repair);
@@ -230,10 +279,19 @@ function CanvasConnectorMeasurements({ geometryKey }: { geometryKey: string }) {
       cancelAnimationFrame(frame);
     };
   }, [geometryKey, getInternalNode, updateNodeInternals]);
-  return null;
+  const status = measurement?.key === geometryKey ? measurement.status : "waiting";
+  return (
+    <span
+      hidden
+      data-testid="canvas-readiness"
+      data-ready={status === "ready"}
+      data-state={status}
+      data-session-id={sessionId}
+      data-revision={revision}
+    />
+  );
 }
 
-type EdgeSide = "left" | "right" | "top" | "bottom";
 const IDLE_CONNECTION_MODE = "idle" as const;
 const EDGE_SIDES: EdgeSide[] = ["left", "right", "top", "bottom"];
 const edgeSidePosition = (side: EdgeSide) =>
@@ -2163,8 +2221,10 @@ export function SessionFlowCanvas({
   recordingBusyNodeId = null,
   groups = [],
   selectedGroupId = "",
+  selectedGroupIds = selectedGroupId ? [selectedGroupId] : [],
   onSelectGroup,
   onChangeGroup,
+  onChangeGroups,
   onRemoveGroup,
   session,
   pendingNodeIds,
@@ -2173,6 +2233,13 @@ export function SessionFlowCanvas({
   selectedNodeIds = [selectedNodeId],
   onSelect,
   onSelectMany,
+  onSelectItems,
+  layoutActionsRef,
+  onLayoutSelection,
+  onLayoutMessage,
+  onCopyNode,
+  onPasteNode,
+  canPasteNode = false,
   onConnect,
   onRemoveConnection,
   onToggleConnection,
@@ -2200,26 +2267,33 @@ export function SessionFlowCanvas({
 }: SessionFlowCanvasProps) {
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
-  const [positions, setPositions] = useState<LayoutPositions>(() =>
-    readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey),
-  );
+  const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(optionalLocalStorage(), layoutKey));
+  const sizesKey = `${layoutKey}.sizes`;
+  const [nodeSizes, setNodeSizes] = useState<NodeLayoutSizes>(() => readNodeSizes(optionalLocalStorage(), sizesKey));
+  const naturalSizesRef = useRef<Record<string, { width: number; height: number }>>(Object.create(null));
   const [dropPreview, setDropPreview] = useState<{ kind: string; position: { x: number; y: number } } | null>(null);
+  const [contextMenu, setContextMenu] = useState<
+    | { kind: "node"; nodeId: string; x: number; y: number; flowPosition: { x: number; y: number } }
+    | { kind: "pane"; x: number; y: number; flowPosition: { x: number; y: number } }
+    | null
+  >(null);
   // Controlled React Flow nodes must retain measured dimensions across meter
   // updates. Omitting them on every 20 Hz render resets handle bounds and can
   // leave every node hidden until a new ResizeObserver notification arrives.
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const edgeLayoutKey = `${layoutKey}.edges`;
-  const [edgeSides, setEdgeSides] = useState<Record<string, { source: EdgeSide; target: EdgeSide }>>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      return JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<
-        string,
-        { source: EdgeSide; target: EdgeSide }
-      >;
-    } catch {
-      return {};
-    }
-  });
+  const [edgeSides, setEdgeSides] = useState<EdgeLayoutSides>(() =>
+    readEdgeLayout(optionalLocalStorage(), edgeLayoutKey),
+  );
+  const edgeSidesRef = useRef(edgeSides);
+  const replaceEdgeSides = useCallback(
+    (next: EdgeLayoutSides, persist = true) => {
+      edgeSidesRef.current = next;
+      setEdgeSides(next);
+      if (persist) writeEdgeLayout(optionalLocalStorage(), edgeLayoutKey, next);
+    },
+    [edgeLayoutKey],
+  );
   const [connectionHandleMode, setConnectionHandleMode] = useState<"idle" | "from-input" | "from-output">(
     IDLE_CONNECTION_MODE,
   );
@@ -2236,39 +2310,249 @@ export function SessionFlowCanvas({
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const initialFitDoneRef = useRef(false);
   const skipNextFitRef = useRef(false);
+  const dragSnapshotRef = useRef<{
+    sessionId: string;
+    items: CanvasRect[];
+    targets: Map<string, { x: number; y: number }>;
+  } | null>(null);
+  const resizingGroupRef = useRef<string | null>(null);
+  const geometryItems = useMemo<CanvasRect[]>(
+    () => [
+      ...groups.map((group) => ({
+        id: group.id,
+        x: group.x,
+        y: group.y,
+        width: group.width,
+        height: group.height,
+        group: true,
+        locked: group.locked,
+        carry: group.moveContents === true,
+        minWidth: 180,
+        minHeight: 100,
+      })),
+      ...session.nodes.map((node, index) => {
+        const position = ownValue(positions, node.id) ?? positionFor(index);
+        const size = ownValue(nodeSizes, node.id);
+        const natural = ownValue(naturalSizesRef.current, node.id);
+        return {
+          id: node.id,
+          ...position,
+          width: measured[node.id]?.width ?? size?.width ?? 218,
+          height: measured[node.id]?.height ?? size?.height ?? 180,
+          minWidth: size?.minWidth ?? natural?.width ?? 218,
+          minHeight: size?.minHeight ?? natural?.height ?? 180,
+        };
+      }),
+    ],
+    [groups, session.nodes, positions, nodeSizes, measured],
+  );
+  const geometryOwners = useMemo(() => canvasOwners(geometryItems), [geometryItems]);
+  const [layoutHistory, setLayoutHistory] = useState(() => emptyCanvasHistory(session.id));
+  const beforeGestureRef = useRef<CanvasSnapshot | null>(null);
+  const captureLayout = (): CanvasSnapshot => ({
+    sessionId: session.id,
+    items: geometryItems.map((item) => ({ ...item })),
+    sizes: { ...nodeSizes },
+    sides: { ...edgeSidesRef.current },
+    edgeIds: session.edges.map((edge) => edge.id),
+  });
+  const rememberLayout = (before: CanvasSnapshot, after = captureLayout()) => {
+    if (!canvasLayoutChanged(before, after)) return false;
+    setLayoutHistory((history) => recordCanvasHistory(history, before, after));
+    setArrangeUndo(null);
+    return true;
+  };
+  const rememberGesture = () => {
+    const before = beforeGestureRef.current;
+    beforeGestureRef.current = null;
+    if (before && geometryChanged(before.items, geometryItems)) rememberLayout(before);
+  };
+  useEffect(() => {
+    const ids = new Set([...selectedNodeIds, ...selectedGroupIds]);
+    onLayoutSelection?.(
+      session.id,
+      geometryItems.filter((item) => ids.has(item.id)),
+    );
+  }, [geometryItems, selectedNodeIds, selectedGroupIds, onLayoutSelection, session.id]);
+  const commitGeometry = (items: CanvasRect[], persist = false) => {
+    const before = beforeGestureRef.current;
+    if (before && geometryChanged(before.items, items)) {
+      beforeGestureRef.current = null;
+      rememberLayout(before, { ...captureLayout(), items });
+    }
+    const previous = new Map(geometryItems.map((item) => [item.id, item]));
+    const nextPositions: LayoutPositions = Object.assign(Object.create(null), positionsRef.current);
+    const nextSizes: NodeLayoutSizes = Object.assign(Object.create(null), nodeSizes);
+    const groupPatches = new Map<string, Partial<CanvasGroup>>();
+    for (const item of items) {
+      const old = previous.get(item.id);
+      if (!old || (old.x === item.x && old.y === item.y && old.width === item.width && old.height === item.height))
+        continue;
+      if (item.group) {
+        if (!old.locked) groupPatches.set(item.id, { x: item.x, y: item.y, width: item.width, height: item.height });
+      } else {
+        nextPositions[item.id] = { x: item.x, y: item.y };
+        if (old.width !== item.width || old.height !== item.height)
+          nextSizes[item.id] = {
+            width: item.width,
+            height: item.height,
+            minWidth: item.minWidth ?? 218,
+            minHeight: item.minHeight ?? 180,
+          };
+      }
+    }
+    positionsRef.current = nextPositions;
+    setPositions(nextPositions);
+    setNodeSizes(nextSizes);
+    if (onChangeGroups) onChangeGroups(groupPatches);
+    else for (const [id, patch] of groupPatches) onChangeGroup?.(id, patch);
+    if (persist) {
+      writeLayout(optionalLocalStorage(), layoutKey, nextPositions);
+      writeNodeSizes(optionalLocalStorage(), sizesKey, nextSizes);
+    }
+  };
+  if (layoutActionsRef)
+    layoutActionsRef.current = (action) => {
+      const result = layoutCanvasItems(geometryItems, [...selectedNodeIds, ...selectedGroupIds], action);
+      if (geometryChanged(geometryItems, result.items)) {
+        const before = captureLayout();
+        rememberLayout(before, { ...before, items: result.items });
+      }
+      commitGeometry(result.items, true);
+      onLayoutMessage?.(result.message);
+    };
+  const restoreLayout = (direction: "undo" | "redo") => {
+    const result = restoreCanvasHistory(layoutHistory, captureLayout(), direction);
+    if (result.status === "locked") {
+      onLayoutMessage?.("Unlock the affected groups before restoring this layout.");
+      return;
+    }
+    if (result.status !== "restored") return;
+    setArrangeUndo(null);
+    setLayoutHistory(result.history);
+    commitGeometry(result.snapshot.items, true);
+    const { sizes, sides } = result.snapshot;
+    setNodeSizes(sizes);
+    writeNodeSizes(optionalLocalStorage(), sizesKey, sizes);
+    replaceEdgeSides(sides);
+    onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
+  };
   useEffect(() => {
     initialFitDoneRef.current = false;
     nextLayoutIndexRef.current = session.nodes.length;
-    const next = readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey);
+    const next = readLayout(optionalLocalStorage(), layoutKey);
     positionsRef.current = next;
     setPositions(next);
     setMeasured({});
-    if (typeof window !== "undefined") {
-      try {
-        setEdgeSides(
-          JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<
-            string,
-            { source: EdgeSide; target: EdgeSide }
-          >,
-        );
-      } catch {
-        setEdgeSides({});
-      }
-    }
-  }, [layoutKey, edgeLayoutKey]);
+    naturalSizesRef.current = Object.create(null);
+    setNodeSizes(readNodeSizes(optionalLocalStorage(), sizesKey));
+    setContextMenu(null);
+    dragSnapshotRef.current = null;
+    beforeGestureRef.current = null;
+    setLayoutHistory(emptyCanvasHistory(session.id));
+    replaceEdgeSides(readEdgeLayout(optionalLocalStorage(), edgeLayoutKey), false);
+  }, [layoutKey, edgeLayoutKey, sizesKey, replaceEdgeSides, session.id]);
   const nextNodePosition = () => {
     nextLayoutIndexRef.current = Math.max(nextLayoutIndexRef.current, session.nodes.length);
     const position = positionFor(nextLayoutIndexRef.current);
     nextLayoutIndexRef.current += 1;
     return position;
   };
-  const setEdgeSide = (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => {
-    setEdgeSides((currentMap) => {
-      const current = currentMap[edgeId] ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
-      const next = { ...currentMap, [edgeId]: { ...current, [endpoint]: side } };
-      if (typeof window !== "undefined") window.localStorage.setItem(edgeLayoutKey, JSON.stringify(next));
-      return next;
-    });
+  const canvasPoint = (clientX: number, clientY: number) => {
+    const bounds = document.querySelector<HTMLElement>(".session-flow-canvas")?.getBoundingClientRect();
+    return bounds ? { x: clientX - bounds.left, y: clientY - bounds.top } : { x: clientX, y: clientY };
+  };
+  const pasteNode = useCallback(
+    (position?: { x: number; y: number }, contextPoint?: { x: number; y: number }) => {
+      if (!canEdit || !canPasteNode || !onPasteNode) return;
+      let pastePosition: { x: number; y: number };
+      if (!position) {
+        nextLayoutIndexRef.current = Math.max(nextLayoutIndexRef.current, session.nodes.length);
+        pastePosition = positionFor(nextLayoutIndexRef.current);
+        nextLayoutIndexRef.current += 1;
+      } else {
+        pastePosition = { x: position.x - 110, y: position.y - 45 };
+      }
+      if (position) {
+        const canvas = document.querySelector<HTMLElement>(".session-flow-canvas");
+        const flow = flowInstanceRef.current;
+        const bounds = canvas?.getBoundingClientRect();
+        if (contextPoint && flow && bounds) {
+          const zoom = flow.getZoom();
+          const screenX = Math.max(
+            bounds.left + 8,
+            Math.min(bounds.left + contextPoint.x - 110 * zoom, bounds.right - 250 * zoom - 8),
+          );
+          const screenY = Math.max(
+            bounds.top + 8,
+            Math.min(bounds.top + contextPoint.y - 45 * zoom, bounds.bottom - 174 * zoom - 8),
+          );
+          pastePosition = flow.screenToFlowPosition({ x: screenX, y: screenY });
+        }
+      }
+      const pastedId = onPasteNode(pastePosition);
+      if (!pastedId) return;
+      const next = { ...positionsRef.current, [pastedId]: pastePosition };
+      positionsRef.current = next;
+      setPositions(next);
+      writeLayout(optionalLocalStorage(), layoutKey, next);
+      skipNextFitRef.current = position !== undefined;
+      setContextMenu(null);
+    },
+    [canEdit, canPasteNode, layoutKey, onPasteNode, session.nodes.length],
+  );
+  useEffect(() => {
+    const onClipboardShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (
+        target?.isContentEditable ||
+        target?.closest("input, textarea, select, [role='dialog'], [contenteditable='true']")
+      )
+        return;
+      const key = event.key.toLowerCase();
+      if (key === "c" && window.getSelection()?.toString()) return;
+      if (
+        key === "c" &&
+        onCopyNode &&
+        selectedGroupIds.length === 0 &&
+        selectedNodeIds.length === 1 &&
+        session.nodes.some((node) => node.id === selectedNodeIds[0])
+      ) {
+        event.preventDefault();
+        onCopyNode?.(selectedNodeIds[0]);
+      } else if (key === "v" && canPasteNode && canEdit) {
+        event.preventDefault();
+        pasteNode();
+      }
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("keydown", onClipboardShortcut);
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      window.removeEventListener("keydown", onClipboardShortcut);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [
+    canEdit,
+    canPasteNode,
+    onCopyNode,
+    onPasteNode,
+    pasteNode,
+    selectedNodeId,
+    selectedNodeIds,
+    selectedGroupIds,
+    session.nodes,
+  ]);
+  const setEdgeSide = (edgeId: string, endpoint: "source" | "target", side: EdgeSide, remember = true) => {
+    const currentMap = edgeSidesRef.current;
+    const current = ownValue(currentMap, edgeId) ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
+    if (current[endpoint] === side) return;
+    const next = { ...currentMap, [edgeId]: { ...current, [endpoint]: side } };
+    if (remember) rememberLayout(captureLayout(), { ...captureLayout(), sides: next });
+    replaceEdgeSides(next);
   };
   useEffect(() => {
     if (session.nodes.length === 0) return;
@@ -2310,9 +2594,11 @@ export function SessionFlowCanvas({
   // default connection sides. The previous arrangement can be restored for
   // a short time with Undo arrange.
   const [arrangeUndo, setArrangeUndo] = useState<{
-    positions: LayoutPositions;
-    sides: Record<string, { source: EdgeSide; target: EdgeSide }>;
+    layoutKey: string;
   } | null>(null);
+  useEffect(() => {
+    setArrangeUndo(null);
+  }, [layoutKey]);
   useEffect(() => {
     if (!arrangeUndo) return;
     const timer = window.setTimeout(() => setArrangeUndo(null), 15_000);
@@ -2321,12 +2607,8 @@ export function SessionFlowCanvas({
   const applyArrangement = (next: LayoutPositions, sides: Record<string, { source: EdgeSide; target: EdgeSide }>) => {
     positionsRef.current = next;
     setPositions(next);
-    writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
-    setEdgeSides(sides);
-    if (typeof window !== "undefined") {
-      if (Object.keys(sides).length) window.localStorage.setItem(edgeLayoutKey, JSON.stringify(sides));
-      else window.localStorage.removeItem(edgeLayoutKey);
-    }
+    writeLayout(optionalLocalStorage(), layoutKey, next);
+    replaceEdgeSides(sides);
     setFitRequest((count) => count + 1);
   };
   // Fit after React Flow has the new positions (two frames after render).
@@ -2349,13 +2631,14 @@ export function SessionFlowCanvas({
     };
   }, [fitRequest]);
   const tidyLayout = () => {
-    setArrangeUndo({ positions: positionsRef.current, sides: edgeSides });
-    applyArrangement(smartLayout(session, measured), {});
+    const before = captureLayout();
+    const next = smartLayout(session, measured);
+    if (rememberLayout(before, arrangedCanvasSnapshot(before, next, {}))) setArrangeUndo({ layoutKey });
+    applyArrangement(next, {});
   };
   const undoArrange = () => {
-    if (!arrangeUndo) return;
-    applyArrangement(arrangeUndo.positions, arrangeUndo.sides);
-    setArrangeUndo(null);
+    if (!arrangeUndo || arrangeUndo.layoutKey !== layoutKey) return;
+    restoreLayout("undo");
   };
   const addLibraryNode = (kind: LibraryNodeKind, position: { x: number; y: number }) => {
     const nodeId = onAddLibraryNode?.(kind, position);
@@ -2363,7 +2646,7 @@ export function SessionFlowCanvas({
       const next = { ...positionsRef.current, [nodeId]: position };
       positionsRef.current = next;
       setPositions(next);
-      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+      writeLayout(optionalLocalStorage(), layoutKey, next);
     }
   };
   const addVirtualBusNode = (direction: "renderSource" | "captureSink", position: { x: number; y: number }) => {
@@ -2372,7 +2655,7 @@ export function SessionFlowCanvas({
       const next = { ...positionsRef.current, [nodeId]: position };
       positionsRef.current = next;
       setPositions(next);
-      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+      writeLayout(optionalLocalStorage(), layoutKey, next);
     }
   };
   const routeLibraryDrop = (kind: string, position: { x: number; y: number }) => {
@@ -2384,7 +2667,7 @@ export function SessionFlowCanvas({
       const next = { ...positionsRef.current, [nodeId]: position };
       positionsRef.current = next;
       setPositions(next);
-      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+      writeLayout(optionalLocalStorage(), layoutKey, next);
     }
   };
   const libraryButton = (entry: LibraryEntry) => {
@@ -2475,6 +2758,7 @@ export function SessionFlowCanvas({
       ? { ...appendPreviewNode({ ...session, nodes: [], edges: [] }, dropPreview.kind).nodes[0], id: DROP_PREVIEW_ID }
       : null;
   const nodes: FlowNode[] = (previewNode ? [...session.nodes, previewNode] : session.nodes).map((node, index) => {
+    const layoutSize = ownValue(nodeSizes, node.id);
     const applicationCaptureState =
       diagnostics?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null;
     const headerState = nodeHeaderState(node, applicationCaptureState);
@@ -2486,9 +2770,11 @@ export function SessionFlowCanvas({
       id: node.id,
       type: "flowNode",
       position:
-        node.id === DROP_PREVIEW_ID && dropPreview ? dropPreview.position : (positions[node.id] ?? positionFor(index)),
+        node.id === DROP_PREVIEW_ID && dropPreview
+          ? dropPreview.position
+          : (ownValue(positions, node.id) ?? positionFor(index)),
       measured: measured[node.id],
-      selected: !selectedGroupId && selectedNodeIds.includes(node.id),
+      selected: selectedNodeIds.includes(node.id),
       data: {
         label: (
           <div
@@ -2686,23 +2972,26 @@ export function SessionFlowCanvas({
           </div>
         ),
       },
-      className: `${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
+      className: `${layoutSize ? "has-layout-size " : ""}${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
       // The drop preview is only a picture: no dragging, selecting or connecting.
       draggable: node.id !== DROP_PREVIEW_ID,
       selectable: node.id !== DROP_PREVIEW_ID,
       deletable: canEdit && node.id !== DROP_PREVIEW_ID,
       ...(node.id === DROP_PREVIEW_ID ? { connectable: false, zIndex: 1000, ariaHidden: true } : {}),
       style: {
-        border:
-          !selectedGroupId && selectedNodeIds.includes(node.id)
-            ? "2px solid var(--accent, #65d1b5)"
-            : "1px solid var(--line, #40536b)",
+        border: selectedNodeIds.includes(node.id)
+          ? "2px solid var(--accent, #65d1b5)"
+          : "1px solid var(--line, #40536b)",
         borderRadius: 10,
         background: "var(--panel, #162132)",
         color: "var(--text, #edf4ff)",
         minWidth: 190,
         opacity: 1,
-      },
+        width: layoutSize?.width,
+        height: layoutSize?.height,
+        "--canvas-node-width": layoutSize ? `${layoutSize.width}px` : undefined,
+        "--canvas-node-min-width": layoutSize ? `${layoutSize.minWidth}px` : undefined,
+      } as CSSProperties,
     };
   });
 
@@ -2718,8 +3007,8 @@ export function SessionFlowCanvas({
       session,
       running: graphRunning,
       enabled: edge.enabled,
-      sourceSide: edgeSides[edge.id]?.source,
-      targetSide: edgeSides[edge.id]?.target,
+      sourceSide: ownValue(edgeSides, edge.id)?.source,
+      targetSide: ownValue(edgeSides, edge.id)?.target,
       onSetSide: setEdgeSide,
       onToggle: onToggleConnection,
       onRemove: onRemoveConnection,
@@ -2754,8 +3043,25 @@ export function SessionFlowCanvas({
       <FlowMotionProvider mode={flowAnimation}>
         <div className="canvas-layout-actions" aria-label="Canvas layout actions">
           <span className="muted" role="status" aria-live="polite">
-            {selectedNodeIds.length} node{selectedNodeIds.length === 1 ? "" : "s"} selected
+            {selectedNodeIds.length + selectedGroupIds.length} item
+            {selectedNodeIds.length + selectedGroupIds.length === 1 ? "" : "s"} selected
           </span>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!layoutHistory.past.length}
+            onClick={() => restoreLayout("undo")}
+          >
+            Undo layout
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!layoutHistory.future.length}
+            onClick={() => restoreLayout("redo")}
+          >
+            Redo layout
+          </button>
           <button
             type="button"
             className="secondary"
@@ -2764,7 +3070,7 @@ export function SessionFlowCanvas({
           >
             Arrange
           </button>
-          {arrangeUndo && (
+          {arrangeUndo?.layoutKey === layoutKey && (
             <button type="button" className="secondary" onClick={undoArrange}>
               Undo arrange
             </button>
@@ -2881,12 +3187,23 @@ export function SessionFlowCanvas({
                 height: group.height,
                 measured: measured[group.id],
                 style: { width: group.width, height: group.height },
-                selected: group.id === selectedGroupId,
-                data: { group },
+                selected: selectedGroupIds.includes(group.id),
+                data: {
+                  group,
+                  movementBlocked: movementLocked(group.id, geometryItems, geometryOwners),
+                  onResizeStart: () => {
+                    resizingGroupRef.current = group.id;
+                    beforeGestureRef.current = captureLayout();
+                  },
+                  onResizeEnd: () => {
+                    resizingGroupRef.current = null;
+                    rememberGesture();
+                  },
+                },
                 zIndex: -1,
                 className: `visual-group-node${group.locked ? " is-locked" : ""}`,
                 connectable: false,
-                draggable: !group.locked,
+                draggable: !movementLocked(group.id, geometryItems, geometryOwners),
                 deletable: !group.locked,
               })),
               ...nodes,
@@ -2898,40 +3215,53 @@ export function SessionFlowCanvas({
                 for (const change of changes) {
                   if (change.type !== "dimensions" || !change.dimensions) continue;
                   const { width, height } = change.dimensions;
+                  if (
+                    !groups.some((group) => group.id === change.id) &&
+                    !Object.hasOwn(nodeSizes, change.id) &&
+                    width > 0 &&
+                    height > 0
+                  )
+                    naturalSizesRef.current[change.id] ??= { width, height };
                   if (current[change.id]?.width === width && current[change.id]?.height === height) continue;
                   if (next === current) next = { ...current };
                   next[change.id] = { width, height };
                 }
                 return next;
               });
+              const moved = new Map<string, { x: number; y: number }>();
+              const resized = new Map<string, { width: number; height: number }>();
               for (const change of changes) {
-                if (!("id" in change) || !groups.some((g) => g.id === change.id)) continue;
-                if (change.type === "position" && change.position)
-                  onChangeGroup?.(change.id, { x: change.position.x, y: change.position.y });
+                if (change.type === "position" && change.position) moved.set(change.id, change.position);
                 if (change.type === "dimensions" && change.dimensions && change.resizing)
-                  onChangeGroup?.(change.id, { width: change.dimensions.width, height: change.dimensions.height });
+                  resized.set(change.id, change.dimensions);
               }
-              const moved = changes.filter(
-                (change) => change.type === "position" && change.position && !groups.some((g) => g.id === change.id),
-              );
-              if (moved.length) {
-                const next = { ...positionsRef.current };
-                for (const change of moved)
-                  if (change.type === "position" && change.position) next[change.id] = change.position;
-                positionsRef.current = next;
-                setPositions(next);
+              if (moved.size || resized.size) {
+                const drag = dragSnapshotRef.current;
+                if (resizingGroupRef.current || resized.size) {
+                  commitGeometry(
+                    geometryItems.map((item) =>
+                      item.locked ? item : { ...item, ...moved.get(item.id), ...resized.get(item.id) },
+                    ),
+                  );
+                } else if (drag?.sessionId === session.id) {
+                  for (const [id, point] of moved) drag.targets.set(id, point);
+                  commitGeometry(moveCanvasItems(drag.items, drag.targets));
+                } else {
+                  const next = moveCanvasItems(geometryItems, moved);
+                  if (geometryChanged(geometryItems, next)) beforeGestureRef.current = captureLayout();
+                  commitGeometry(next, true);
+                }
               }
-              const selection = changes.filter(
-                (change) => change.type === "select" && !groups.some((g) => g.id === change.id),
-              );
+              const selection = changes.filter((change) => change.type === "select");
               if (selection.length) {
-                const selected = new Set(selectedNodeIds);
+                const selected = new Set([...selectedNodeIds, ...selectedGroupIds]);
                 for (const change of selection)
                   if (change.type === "select") {
                     if (change.selected) selected.add(change.id);
                     else selected.delete(change.id);
                   }
-                onSelectMany?.([...selected]);
+                if (onSelectItems) onSelectItems([...selected]);
+                else onSelectMany?.([...selected].filter((id) => session.nodes.some((node) => node.id === id)));
               }
             }}
             nodeTypes={NODE_TYPES}
@@ -2947,12 +3277,40 @@ export function SessionFlowCanvas({
             deleteKeyCode={["Backspace", "Delete"]}
             nodesDraggable
             selectionOnDrag
-            onNodeClick={(_, node) => {
+            multiSelectionKeyCode={["Control", "Meta", "Shift"]}
+            onNodeClick={(event, node) => {
+              if (event.ctrlKey || event.metaKey || event.shiftKey) return;
               if (node.type === "visualGroup") onSelectGroup?.(node.id);
               else {
                 onSelectGroup?.("");
                 onSelect(node.id);
               }
+            }}
+            onNodeContextMenu={(event, node) => {
+              event.preventDefault();
+              if (node.type === "visualGroup") return;
+              onSelectGroup?.("");
+              onSelect(node.id);
+              const point = canvasPoint(event.clientX, event.clientY);
+              setContextMenu({
+                kind: "node",
+                nodeId: node.id,
+                ...point,
+                flowPosition:
+                  flowInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) ??
+                  node.position,
+              });
+            }}
+            onPaneContextMenu={(event) => {
+              event.preventDefault();
+              const point = canvasPoint(event.clientX, event.clientY);
+              setContextMenu({
+                kind: "pane",
+                ...point,
+                flowPosition:
+                  flowInstanceRef.current?.screenToFlowPosition({ x: event.clientX, y: event.clientY }) ??
+                  nextNodePosition(),
+              });
             }}
             onMouseDownCapture={captureConnectionHandle}
             onPointerDownCapture={captureConnectionHandle}
@@ -3028,8 +3386,8 @@ export function SessionFlowCanvas({
                   targetSide: target.side,
                 });
                 if (edgeId) {
-                  if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide);
-                  if (target.side) setEdgeSide(edgeId, "target", target.side);
+                  if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide, false);
+                  if (target.side) setEdgeSide(edgeId, "target", target.side, false);
                 }
               } else if (
                 !pending &&
@@ -3098,7 +3456,7 @@ export function SessionFlowCanvas({
                 ? (deleted) => {
                     for (const nodeId of deletedNodeIds(deleted)) {
                       if (groups.some((g) => g.id === nodeId)) {
-                        onRemoveGroup?.(nodeId);
+                        if (!groups.find((group) => group.id === nodeId)?.locked) onRemoveGroup?.(nodeId);
                         continue;
                       }
                       if (onRemoveNode) onRemoveNode(nodeId);
@@ -3107,19 +3465,25 @@ export function SessionFlowCanvas({
                   }
                 : undefined
             }
-            onNodeDragStop={(_, node) => {
-              if (node.type === "visualGroup") {
-                onChangeGroup?.(node.id, { x: node.position.x, y: node.position.y });
-                return;
-              }
-              const next = { ...positionsRef.current, [node.id]: node.position };
-              positionsRef.current = next;
-              setPositions(next);
-              writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+            onNodeDragStart={() => {
+              beforeGestureRef.current = captureLayout();
+              dragSnapshotRef.current = {
+                sessionId: session.id,
+                items: geometryItems.map((item) => ({ ...item })),
+                targets: new Map(),
+              };
+            }}
+            onNodeDragStop={() => {
+              rememberGesture();
+              dragSnapshotRef.current = null;
+              writeLayout(optionalLocalStorage(), layoutKey, positionsRef.current);
             }}
             proOptions={{ hideAttribution: true }}
           >
             <CanvasConnectorMeasurements
+              key={`${session.id}:${session.revision}`}
+              sessionId={session.id}
+              revision={session.revision}
               geometryKey={JSON.stringify(
                 session.nodes.map((node) => ({
                   id: node.id,
@@ -3135,6 +3499,57 @@ export function SessionFlowCanvas({
             <Background gap={24} size={1} color="#2e4057" />
             <Controls showInteractive={false} />
           </ReactFlow>
+          {contextMenu && (
+            <div className="canvas-context-backdrop" onPointerDown={() => setContextMenu(null)}>
+              <div
+                className="canvas-context-menu"
+                role="menu"
+                aria-label={contextMenu.kind === "node" ? "Tool actions" : "Canvas actions"}
+                style={{
+                  left: Math.max(
+                    8,
+                    Math.min(
+                      contextMenu.x,
+                      (document.querySelector<HTMLElement>(".session-flow-canvas")?.clientWidth ?? 0) - 190,
+                    ),
+                  ),
+                  top: Math.max(
+                    8,
+                    Math.min(
+                      contextMenu.y,
+                      (document.querySelector<HTMLElement>(".session-flow-canvas")?.clientHeight ?? 0) - 64,
+                    ),
+                  ),
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => event.stopPropagation()}
+              >
+                {contextMenu.kind === "node" ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    autoFocus
+                    onClick={() => {
+                      onCopyNode?.(contextMenu.nodeId);
+                      setContextMenu(null);
+                    }}
+                  >
+                    Copy tool
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    autoFocus
+                    disabled={!canEdit || !canPasteNode}
+                    onClick={() => pasteNode(contextMenu.flowPosition, contextMenu)}
+                  >
+                    Paste tool
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </FlowMotionProvider>
     </LiveCanvasProvider>

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 test("parameter Undo/Redo survives live autosave and later backend refreshes", async ({ page }) => {

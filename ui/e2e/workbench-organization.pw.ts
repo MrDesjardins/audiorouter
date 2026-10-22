@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { DEFAULT_CUSTOM_THEME } from "../src/customTheme";
 import { openAppSettings } from "./workbench";
 for (const theme of ["dark", "light", "high-contrast"]) {

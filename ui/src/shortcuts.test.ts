@@ -30,4 +30,10 @@ describe("keyboard shortcuts", () => {
     expect(isEditableShortcutTarget(input)).toBe(true);
     expect(isEditableShortcutTarget(button)).toBe(false);
   });
+  it("reserves clipboard shortcuts so customized actions cannot stop audio while copying", () => {
+    expect(shortcutConflicts({ sessionToggle: "Control+C", privacyMute: "Control+V" })).toEqual([
+      "sessionToggle",
+      "privacyMute",
+    ]);
+  });
 });
