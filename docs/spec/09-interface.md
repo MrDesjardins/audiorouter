@@ -38,8 +38,11 @@ spacing keeps endpoints fixed and distributes between locked anchors; reject
 insufficient room without moving anything. Tool sizes preserve usable minimum
 dimensions. Positions, tool sizes and group settings persist per session as
 local presentation preferences and never change audio topology. Provide local
-Undo layout/Redo layout for geometry edits; restore only existing items and
-respect their current locks. Layout history resets when switching sessions.
+Undo layout/Redo layout for geometry edits and connector-side choices; restore
+only existing items and respect their current locks. Later layout edits or
+undo retire the temporary Undo arrange shortcut. Layout history resets when
+switching sessions. Invalid saved connector preferences fall back to defaults;
+optional presentation storage failures never interrupt editing.
 
 The API tab displays the optional localhost HTTP listener URL/port, start/stop,
 the "Who can connect" choice and network URL (HTTP-09),

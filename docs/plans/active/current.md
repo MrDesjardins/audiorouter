@@ -1,5 +1,74 @@
 # Active plan — post-0.0.8 maintenance
 
+## Group/layout review round two - 2026-10-21
+
+Scope: UI-02/11/16/17, review undo interleaving, connector-side presentation
+preferences, nested movement, locks and persistence. Worktree initially clean
+at 1de3a33a. No hardware needed. Candidate probes: Undo layout followed by
+Undo arrange, connector side changes after geometry edits, invalid saved edge
+preferences, and storage write failures. Reproduce before fixes; add focused
+regressions, repair owning layout/history layer, run unit/Edge/format/lint/build
+and record evidence. Rollback: revert this review fix commit.
+
+Confirmed and fixed four findings at 1de3a33a:
+1. Undo layout left the temporary Undo arrange action live. Using that stale
+   shortcut could add a no-op snapshot and discard valid redo. New geometry,
+   side edits and history restoration now retire the older Arrange shortcut.
+2. Connector-side edits were omitted from history while geometry snapshots
+   restored connector sides, so undo could discard a later choice. Side edits
+   now record layout history and clear redo; no-op side selections do neither.
+   Connection creation initializes both sides together without extra history
+   entries; a synchronous ref preserves both updates. Restore touches only
+   edges existing in the snapshot and current graph, preserving newer edges.
+3. Saved connector preferences were unchecked JSON. A saved null crashed the
+   canvas on opening. A validated reader rejects null/arrays/scalars/invalid
+   side values and falls back to default sides, while retaining valid entries.
+4. Connector preference saves ran inside a React state updater and an optional
+   storage quota failure crashed the canvas. Writes now run outside updaters,
+   catch storage failures, and leave the in-memory editor/undo usable. Arrange
+   and undo use the same safe persistence path. Existing on-disk shape stays
+   compatible; no migration or graph/backend change is needed.
+
+Evidence (Windows, 2026-10-21): before fixes, all 3 initial browser probes failed
+at their intended assertions, including an uncaught null preference exception.
+Artifacts: %TEMP%/audiorouter-layout-review-round2-before/. The separate quota
+probe reproduced an uncaught QuotaExceededError and canvas error boundary:
+%TEMP%/audiorouter-layout-review-round2-quota-before/. After fixes all four
+probes passed. Added ordered geometry/side undo-redo and new-connection-side
+regressions. One expanded test initially compared the whole transient node
+style (hidden versus visible); corrected it to compare geometry after node
+visibility and reran the complete set. No product change was based on that
+setup failure.
+
+Final direct Edge command from ui/: node node_modules/@playwright/test/cli.js
+ test --config=playwright.config.ts e2e/canvas-layout-review.pw.ts
+ e2e/canvas-layout.pw.ts e2e/canvas-layout-session.pw.ts
+ e2e/canvas-group-lock.pw.ts e2e/canvas-groups.pw.ts e2e/smart-layout.pw.ts
+ e2e/canvas-cold-start.pw.ts e2e/canvas-clipboard-regressions.pw.ts
+ e2e/canvas-copy-paste.pw.ts e2e/drag-place.pw.ts --workers=1
+ --output %TEMP%/audiorouter-layout-review-round2-final: 41 passed.
+Covers the six review regressions, nested/locked groups, bulk flags, alignment,
+sizing/distribution, geometry undo/redo, session isolation, pointer connection
+creation, clipboard and tool placement in all three themes. Existing resize
+observer and intentional cold-connector warnings remain as documented below.
+
+npm.cmd --prefix ui test: 64 files / 578 tests passed (including eight new
+connector preference validation/storage cases). npm.cmd --prefix ui run format,
+format:check, lint and build (TypeScript 7 typecheck:all included) passed.
+Lint retains 25 existing warnings, no new warning; existing Vite chunk warning
+remains. git diff --check passed. UI specification and Group guide source were
+updated; node site/generate-guides.mjs, node site/generate-social.mjs,
+node site/check-guides.mjs and social --check completed successfully.
+
+Native shell build passed with the same locked release/custom-protocol command
+recorded below; separate manual test app with matching sidecars/runtime:
+%TEMP%/audiorouter-group-layout-review2-test/audiorouter-shell.exe.
+SHA256: 837DD256499E0F97A9A93BF1FD48C6AC31B04B4AA0BD71C0FCF59BA638E042B3.
+Original cached shell restored and its hash verified unchanged. These are UI
+repairs, not an audio/driver qualification or signed release. Review found no
+additional confirmed functional defect in the other inspected paths.
+Next: owner acceptance of this second-review build on feature/canvas-group-layout.
+
 ## Group layout review - 2026-10-21
 
 Review found a session-isolation risk in the older Undo arrange control:

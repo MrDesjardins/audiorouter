@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { clearLayout, readLayout, writeLayout, readNodeSizes, writeNodeSizes } from "./layout";
+import {
+  clearLayout,
+  readLayout,
+  writeLayout,
+  readNodeSizes,
+  writeNodeSizes,
+  readEdgeLayout,
+  writeEdgeLayout,
+} from "./layout";
 
 function storage() {
   const values = new Map<string, string>();
@@ -52,5 +60,41 @@ describe("canvas layout persistence", () => {
       }),
     );
     expect(readNodeSizes(state, "sizes")).toEqual({ gain: good });
+  });
+});
+
+describe("connector presentation persistence", () => {
+  it.each(["null", "[]", "false", "3", '"text"', "{"])("ignores invalid saved container %s", (value) => {
+    const state = storage();
+    state.setItem("edges", value);
+    expect(readEdgeLayout(state, "edges")).toEqual({});
+  });
+  it("retains only complete allowed sides and roundtrips valid values", () => {
+    const state = storage();
+    state.setItem(
+      "edges",
+      JSON.stringify({
+        good: { source: "bottom", target: "top" },
+        null: null,
+        partial: { source: "left" },
+        wrong: { source: "outside", target: "right" },
+        array: [],
+      }),
+    );
+    expect(readEdgeLayout(state, "edges")).toEqual({ good: { source: "bottom", target: "top" } });
+    writeEdgeLayout(state, "edges", { link: { source: "left", target: "right" } });
+    expect(readEdgeLayout(state, "edges")).toEqual({ link: { source: "left", target: "right" } });
+  });
+  it("keeps storage failures optional", () => {
+    const broken = {
+      getItem: () => {
+        throw Error("unavailable");
+      },
+      setItem: () => {
+        throw Error("quota");
+      },
+    };
+    expect(readEdgeLayout(broken, "edges")).toEqual({});
+    expect(() => writeEdgeLayout(broken, "edges", {})).not.toThrow();
   });
 });

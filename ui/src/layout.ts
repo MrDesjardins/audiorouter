@@ -1,3 +1,27 @@
+export type EdgeSide = "left" | "right" | "top" | "bottom";
+export type EdgeLayoutSides = Record<string, { source: EdgeSide; target: EdgeSide }>;
+const isEdgeSides = (value: unknown): value is EdgeLayoutSides[string] => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const sides = value as EdgeLayoutSides[string];
+  return [sides.source, sides.target].every((side) => ["left", "right", "top", "bottom"].includes(side));
+};
+export function readEdgeLayout(storage: Pick<Storage, "getItem"> | null, key: string): EdgeLayoutSides {
+  try {
+    const value: unknown = JSON.parse(storage?.getItem(key) ?? "{}");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return Object.fromEntries(Object.entries(value).filter(([, sides]) => isEdgeSides(sides)));
+  } catch {
+    return {};
+  }
+}
+export function writeEdgeLayout(storage: Pick<Storage, "setItem"> | null, key: string, sides: EdgeLayoutSides): void {
+  try {
+    storage?.setItem(key, JSON.stringify(sides));
+  } catch {
+    /* Optional presentation storage must not interrupt the editor. */
+  }
+}
+
 export type LayoutPosition = { x: number; y: number };
 export type LayoutPositions = Record<string, LayoutPosition>;
 export type NodeLayoutSize = { width: number; height: number; minWidth: number; minHeight: number };

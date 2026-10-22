@@ -1020,7 +1020,7 @@
         "Groups do not mix audio and dragging them does not connect nodes.",
         "Groups use local presentation storage; session export does not carry them.",
         "Ctrl-click tools and group captions to select several items. Properties offers alignment, smallest or largest width and height, and equal horizontal or vertical edge gaps. Locked groups stay fixed. Alignment and spacing buttons include icons. Selected groups also share Lock and Move contents options; Mixed means their saved settings differ, and clicking applies the option to all selected groups.",
-        "Use Undo layout and Redo layout to reverse presentation changes. Tool content keeps its minimum usable size; group contents are not scaled."
+        "Use Undo layout and Redo layout to reverse presentation changes, including connector-side choices. Tool content keeps its minimum usable size; group contents are not scaled."
       ],
       "suggestedVisual": {
         "type": "group",

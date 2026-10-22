@@ -40,6 +40,10 @@ import {
   writeLayout,
   readNodeSizes,
   writeNodeSizes,
+  readEdgeLayout,
+  writeEdgeLayout,
+  type EdgeSide,
+  type EdgeLayoutSides,
   type LayoutPositions,
   type NodeLayoutSizes,
 } from "./layout";
@@ -262,7 +266,6 @@ function CanvasConnectorMeasurements({ geometryKey }: { geometryKey: string }) {
   return null;
 }
 
-type EdgeSide = "left" | "right" | "top" | "bottom";
 const IDLE_CONNECTION_MODE = "idle" as const;
 const EDGE_SIDES: EdgeSide[] = ["left", "right", "top", "bottom"];
 const edgeSidePosition = (side: EdgeSide) =>
@@ -2255,17 +2258,18 @@ export function SessionFlowCanvas({
   // leave every node hidden until a new ResizeObserver notification arrives.
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const edgeLayoutKey = `${layoutKey}.edges`;
-  const [edgeSides, setEdgeSides] = useState<Record<string, { source: EdgeSide; target: EdgeSide }>>(() => {
-    if (typeof window === "undefined") return {};
-    try {
-      return JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<
-        string,
-        { source: EdgeSide; target: EdgeSide }
-      >;
-    } catch {
-      return {};
-    }
-  });
+  const [edgeSides, setEdgeSides] = useState<EdgeLayoutSides>(() =>
+    readEdgeLayout(typeof window === "undefined" ? null : window.localStorage, edgeLayoutKey),
+  );
+  const edgeSidesRef = useRef(edgeSides);
+  const replaceEdgeSides = useCallback(
+    (next: EdgeLayoutSides, persist = true) => {
+      edgeSidesRef.current = next;
+      setEdgeSides(next);
+      if (persist) writeEdgeLayout(window.localStorage, edgeLayoutKey, next);
+    },
+    [edgeLayoutKey],
+  );
   const [connectionHandleMode, setConnectionHandleMode] = useState<"idle" | "from-input" | "from-output">(
     IDLE_CONNECTION_MODE,
   );
@@ -2319,7 +2323,7 @@ export function SessionFlowCanvas({
     [groups, session.nodes, positions, nodeSizes, measured],
   );
   const geometryOwners = useMemo(() => canvasOwners(geometryItems), [geometryItems]);
-  type LayoutSnapshot = { items: CanvasRect[]; sizes: NodeLayoutSizes; sides: typeof edgeSides };
+  type LayoutSnapshot = { items: CanvasRect[]; sizes: NodeLayoutSizes; sides: EdgeLayoutSides; edgeIds: string[] };
   const [layoutHistory, setLayoutHistory] = useState<{ past: LayoutSnapshot[]; future: LayoutSnapshot[] }>({
     past: [],
     future: [],
@@ -2328,8 +2332,13 @@ export function SessionFlowCanvas({
   const captureLayout = (): LayoutSnapshot => ({
     items: geometryItems.map((item) => ({ ...item })),
     sizes: { ...nodeSizes },
-    sides: { ...edgeSides },
+    sides: { ...edgeSidesRef.current },
+    edgeIds: session.edges.map((edge) => edge.id),
   });
+  const rememberLayout = (before: LayoutSnapshot) => {
+    setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+    setArrangeUndo(null);
+  };
   const geometryChanged = (a: CanvasRect[], b: CanvasRect[]) =>
     a.some((item) => {
       const other = b.find((candidate) => candidate.id === item.id);
@@ -2341,8 +2350,7 @@ export function SessionFlowCanvas({
   const rememberGesture = () => {
     const before = beforeGestureRef.current;
     beforeGestureRef.current = null;
-    if (before && geometryChanged(before.items, geometryItems))
-      setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+    if (before && geometryChanged(before.items, geometryItems)) rememberLayout(before);
   };
   useEffect(() => {
     const ids = new Set([...selectedNodeIds, ...selectedGroupIds]);
@@ -2355,7 +2363,7 @@ export function SessionFlowCanvas({
     const before = beforeGestureRef.current;
     if (before && geometryChanged(before.items, items)) {
       beforeGestureRef.current = null;
-      setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+      rememberLayout(before);
     }
     const previous = new Map(geometryItems.map((item) => [item.id, item]));
     const nextPositions: LayoutPositions = Object.assign(Object.create(null), positionsRef.current);
@@ -2393,7 +2401,7 @@ export function SessionFlowCanvas({
       const result = layoutCanvasItems(geometryItems, [...selectedNodeIds, ...selectedGroupIds], action);
       if (geometryChanged(geometryItems, result.items)) {
         const before = captureLayout();
-        setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+        rememberLayout(before);
       }
       commitGeometry(result.items, true);
       onLayoutMessage?.(result.message);
@@ -2412,6 +2420,7 @@ export function SessionFlowCanvas({
       return;
     }
     const current = captureLayout();
+    setArrangeUndo(null);
     setLayoutHistory(
       direction === "undo"
         ? { past: layoutHistory.past.slice(0, -1), future: [...layoutHistory.future.slice(-19), current] }
@@ -2426,12 +2435,14 @@ export function SessionFlowCanvas({
       }
     setNodeSizes(sizes);
     writeNodeSizes(window.localStorage, sizesKey, sizes);
-    setEdgeSides(snapshot.sides);
-    try {
-      window.localStorage.setItem(edgeLayoutKey, JSON.stringify(snapshot.sides));
-    } catch {
-      /* Presentation storage is optional. */
-    }
+    const sides = { ...edgeSidesRef.current };
+    const currentEdges = new Set(session.edges.map((edge) => edge.id));
+    for (const id of snapshot.edgeIds)
+      if (currentEdges.has(id)) {
+        if (Object.hasOwn(snapshot.sides, id)) sides[id] = snapshot.sides[id];
+        else delete sides[id];
+      }
+    replaceEdgeSides(sides);
     onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
   };
   useEffect(() => {
@@ -2447,19 +2458,8 @@ export function SessionFlowCanvas({
     dragSnapshotRef.current = null;
     beforeGestureRef.current = null;
     setLayoutHistory({ past: [], future: [] });
-    if (typeof window !== "undefined") {
-      try {
-        setEdgeSides(
-          JSON.parse(window.localStorage.getItem(edgeLayoutKey) ?? "{}") as Record<
-            string,
-            { source: EdgeSide; target: EdgeSide }
-          >,
-        );
-      } catch {
-        setEdgeSides({});
-      }
-    }
-  }, [layoutKey, edgeLayoutKey, sizesKey]);
+    replaceEdgeSides(readEdgeLayout(window.localStorage, edgeLayoutKey), false);
+  }, [layoutKey, edgeLayoutKey, sizesKey, replaceEdgeSides]);
   const nextNodePosition = () => {
     nextLayoutIndexRef.current = Math.max(nextLayoutIndexRef.current, session.nodes.length);
     const position = positionFor(nextLayoutIndexRef.current);
@@ -2554,13 +2554,12 @@ export function SessionFlowCanvas({
     selectedGroupIds,
     session.nodes,
   ]);
-  const setEdgeSide = (edgeId: string, endpoint: "source" | "target", side: EdgeSide) => {
-    setEdgeSides((currentMap) => {
-      const current = currentMap[edgeId] ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
-      const next = { ...currentMap, [edgeId]: { ...current, [endpoint]: side } };
-      if (typeof window !== "undefined") window.localStorage.setItem(edgeLayoutKey, JSON.stringify(next));
-      return next;
-    });
+  const setEdgeSide = (edgeId: string, endpoint: "source" | "target", side: EdgeSide, remember = true) => {
+    const currentMap = edgeSidesRef.current;
+    const current = ownValue(currentMap, edgeId) ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
+    if (current[endpoint] === side) return;
+    if (remember) rememberLayout(captureLayout());
+    replaceEdgeSides({ ...currentMap, [edgeId]: { ...current, [endpoint]: side } });
   };
   useEffect(() => {
     if (session.nodes.length === 0) return;
@@ -2618,11 +2617,7 @@ export function SessionFlowCanvas({
     positionsRef.current = next;
     setPositions(next);
     writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
-    setEdgeSides(sides);
-    if (typeof window !== "undefined") {
-      if (Object.keys(sides).length) window.localStorage.setItem(edgeLayoutKey, JSON.stringify(sides));
-      else window.localStorage.removeItem(edgeLayoutKey);
-    }
+    replaceEdgeSides(sides);
     setFitRequest((count) => count + 1);
   };
   // Fit after React Flow has the new positions (two frames after render).
@@ -2646,14 +2641,14 @@ export function SessionFlowCanvas({
   }, [fitRequest]);
   const tidyLayout = () => {
     const before = captureLayout();
-    setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+    rememberLayout(before);
     setArrangeUndo({ layoutKey, positions: positionsRef.current, sides: edgeSides });
     applyArrangement(smartLayout(session, measured), {});
   };
   const undoArrange = () => {
     if (!arrangeUndo || arrangeUndo.layoutKey !== layoutKey) return;
     const before = captureLayout();
-    setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+    rememberLayout(before);
     applyArrangement(arrangeUndo.positions, arrangeUndo.sides);
     setArrangeUndo(null);
   };
@@ -3024,8 +3019,8 @@ export function SessionFlowCanvas({
       session,
       running: graphRunning,
       enabled: edge.enabled,
-      sourceSide: edgeSides[edge.id]?.source,
-      targetSide: edgeSides[edge.id]?.target,
+      sourceSide: ownValue(edgeSides, edge.id)?.source,
+      targetSide: ownValue(edgeSides, edge.id)?.target,
       onSetSide: setEdgeSide,
       onToggle: onToggleConnection,
       onRemove: onRemoveConnection,
@@ -3403,8 +3398,8 @@ export function SessionFlowCanvas({
                   targetSide: target.side,
                 });
                 if (edgeId) {
-                  if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide);
-                  if (target.side) setEdgeSide(edgeId, "target", target.side);
+                  if (pending.sourceSide) setEdgeSide(edgeId, "source", pending.sourceSide, false);
+                  if (target.side) setEdgeSide(edgeId, "target", target.side, false);
                 }
               } else if (
                 !pending &&
