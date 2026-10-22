@@ -7,6 +7,11 @@ it and resize its border. Groups stay beneath audio nodes/wires and save automat
 PC's per-session canvas layout. They do not change audio or require Save/Stop;
 session-file exports currently carry the audio graph, not these annotations.
 
+Canvas geometry and connector-side choices share **Undo layout**/**Redo layout**.
+Repeating an unchanged action does not add an undo step. **Undo arrange** uses
+that history too, so **Redo layout** reapplies it. Current group locks remain
+in effect during restore. See the [editor invariants](editor-invariants.md).
+
 The new **API** tab starts optional localhost HTTP control and opens its bundled
 Swagger page. See [HTTP setup and examples](local-http-api.md).
 

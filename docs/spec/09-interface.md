@@ -44,6 +44,12 @@ undo retire the temporary Undo arrange shortcut. Layout history resets when
 switching sessions. Invalid saved connector preferences fall back to defaults;
 optional presentation storage failures never interrupt editing.
 
+Layout history is bounded to 20 entries per direction. No-op commands,
+including repeating an unchanged Arrange, neither add an undo step nor clear
+redo. Undo arrange uses the same history path and permits Redo layout; it
+does not maintain a second geometry snapshot. History never changes current
+group lock/carry settings or resurrects deleted graph objects.
+
 The API tab displays the optional localhost HTTP listener URL/port, start/stop,
 the "Who can connect" choice and network URL (HTTP-09),
 explicit token reveal/copy and a link to its local Swagger documentation.

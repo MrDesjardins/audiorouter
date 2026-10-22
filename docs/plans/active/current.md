@@ -34,6 +34,28 @@ Hook warnings, zero errors), and 28 focused Edge scenarios including the
 formerly failing case. Final integration checks and the Undo arrange/redo
 regression still follow. No Rust/audio or backend graph behavior is changed.
 
+Q2 history integration completed: all geometry/side/Arrange history commands
+now use the pure module. Repeating unchanged Arrange preserves undo/redo, and
+Undo arrange delegates to the ordinary undo path, permitting Redo layout.
+The model clones snapshots, rejects cross-session restore and locked changes
+atomically, and touches only surviving graph identities and preferences.
+Compatibility: local storage shapes are unchanged; history is transient and
+still resets on session changes. No migration is needed. User guidance and
+UI-16 contract now state the no-op/redo semantics.
+
+Final Windows checks: `npm.cmd run format`, `npm.cmd run lint` (zero errors,
+25 existing warnings), `npm.cmd run build` (TypeScript all-project check and
+production build passed; existing chunk-size warning), `npm.cmd test`:
+65 files/590 tests passed. Complete focused Edge set (review, layout, session,
+lock/groups, smart-layout, cold-start, clipboard, copy/paste and drag-place):
+43 passed in 56.3s, including dark/light/high-contrast scenarios and both new
+Arrange regressions. Output %TEMP%/audiorouter-q2-history-final/. Earlier 28-case
+integration run also passed; no diagnostic rerun is counted as first-pass
+success. Existing React Flow handle/attribution warnings remain visible.
+`node tools/docs/validate.mjs` and `git diff --check` passed. Q2 history is
+ready for its own review on top of the unmerged group feature PR #51; next
+Q2 slice is bounded/sanitized presentation persistence and generated geometry.
+
 ## Group/layout review round two - 2026-10-21
 
 Scope: UI-02/11/16/17, review undo interleaving, connector-side presentation

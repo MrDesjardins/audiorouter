@@ -55,6 +55,15 @@ import {
   type CanvasRect,
   type LayoutAction,
 } from "./canvasGeometry";
+import {
+  arrangedCanvasSnapshot,
+  canvasLayoutChanged,
+  emptyCanvasHistory,
+  geometryChanged,
+  recordCanvasHistory,
+  restoreCanvasHistory,
+  type CanvasSnapshot,
+} from "./canvasHistory";
 import { nodePortLabels } from "./graphView";
 import { applyCableAvailability, libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
 import { cableName, useVirtualCableStatus } from "./virtualCableStatus";
@@ -2323,30 +2332,21 @@ export function SessionFlowCanvas({
     [groups, session.nodes, positions, nodeSizes, measured],
   );
   const geometryOwners = useMemo(() => canvasOwners(geometryItems), [geometryItems]);
-  type LayoutSnapshot = { items: CanvasRect[]; sizes: NodeLayoutSizes; sides: EdgeLayoutSides; edgeIds: string[] };
-  const [layoutHistory, setLayoutHistory] = useState<{ past: LayoutSnapshot[]; future: LayoutSnapshot[] }>({
-    past: [],
-    future: [],
-  });
-  const beforeGestureRef = useRef<LayoutSnapshot | null>(null);
-  const captureLayout = (): LayoutSnapshot => ({
+  const [layoutHistory, setLayoutHistory] = useState(() => emptyCanvasHistory(session.id));
+  const beforeGestureRef = useRef<CanvasSnapshot | null>(null);
+  const captureLayout = (): CanvasSnapshot => ({
+    sessionId: session.id,
     items: geometryItems.map((item) => ({ ...item })),
     sizes: { ...nodeSizes },
     sides: { ...edgeSidesRef.current },
     edgeIds: session.edges.map((edge) => edge.id),
   });
-  const rememberLayout = (before: LayoutSnapshot) => {
-    setLayoutHistory((history) => ({ past: [...history.past.slice(-19), before], future: [] }));
+  const rememberLayout = (before: CanvasSnapshot, after = captureLayout()) => {
+    if (!canvasLayoutChanged(before, after)) return false;
+    setLayoutHistory((history) => recordCanvasHistory(history, before, after));
     setArrangeUndo(null);
+    return true;
   };
-  const geometryChanged = (a: CanvasRect[], b: CanvasRect[]) =>
-    a.some((item) => {
-      const other = b.find((candidate) => candidate.id === item.id);
-      return (
-        other &&
-        (item.x !== other.x || item.y !== other.y || item.width !== other.width || item.height !== other.height)
-      );
-    });
   const rememberGesture = () => {
     const before = beforeGestureRef.current;
     beforeGestureRef.current = null;
@@ -2363,7 +2363,7 @@ export function SessionFlowCanvas({
     const before = beforeGestureRef.current;
     if (before && geometryChanged(before.items, items)) {
       beforeGestureRef.current = null;
-      rememberLayout(before);
+      rememberLayout(before, { ...captureLayout(), items });
     }
     const previous = new Map(geometryItems.map((item) => [item.id, item]));
     const nextPositions: LayoutPositions = Object.assign(Object.create(null), positionsRef.current);
@@ -2401,47 +2401,24 @@ export function SessionFlowCanvas({
       const result = layoutCanvasItems(geometryItems, [...selectedNodeIds, ...selectedGroupIds], action);
       if (geometryChanged(geometryItems, result.items)) {
         const before = captureLayout();
-        rememberLayout(before);
+        rememberLayout(before, { ...before, items: result.items });
       }
       commitGeometry(result.items, true);
       onLayoutMessage?.(result.message);
     };
   const restoreLayout = (direction: "undo" | "redo") => {
-    const stack = direction === "undo" ? layoutHistory.past : layoutHistory.future;
-    const snapshot = stack.at(-1);
-    if (!snapshot) return;
-    const prior = new Map(snapshot.items.map((item) => [item.id, item]));
-    const restored = geometryItems.map((item) => {
-      const old = prior.get(item.id);
-      return old ? { ...item, x: old.x, y: old.y, width: old.width, height: old.height } : item;
-    });
-    if (geometryItems.some((item, index) => item.locked && geometryChanged([item], [restored[index]]))) {
+    const result = restoreCanvasHistory(layoutHistory, captureLayout(), direction);
+    if (result.status === "locked") {
       onLayoutMessage?.("Unlock the affected groups before restoring this layout.");
       return;
     }
-    const current = captureLayout();
+    if (result.status !== "restored") return;
     setArrangeUndo(null);
-    setLayoutHistory(
-      direction === "undo"
-        ? { past: layoutHistory.past.slice(0, -1), future: [...layoutHistory.future.slice(-19), current] }
-        : { past: [...layoutHistory.past.slice(-19), current], future: layoutHistory.future.slice(0, -1) },
-    );
-    commitGeometry(restored, true);
-    const sizes = { ...nodeSizes };
-    for (const item of snapshot.items)
-      if (!item.group) {
-        if (Object.hasOwn(snapshot.sizes, item.id)) sizes[item.id] = snapshot.sizes[item.id];
-        else delete sizes[item.id];
-      }
+    setLayoutHistory(result.history);
+    commitGeometry(result.snapshot.items, true);
+    const { sizes, sides } = result.snapshot;
     setNodeSizes(sizes);
     writeNodeSizes(window.localStorage, sizesKey, sizes);
-    const sides = { ...edgeSidesRef.current };
-    const currentEdges = new Set(session.edges.map((edge) => edge.id));
-    for (const id of snapshot.edgeIds)
-      if (currentEdges.has(id)) {
-        if (Object.hasOwn(snapshot.sides, id)) sides[id] = snapshot.sides[id];
-        else delete sides[id];
-      }
     replaceEdgeSides(sides);
     onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
   };
@@ -2457,9 +2434,9 @@ export function SessionFlowCanvas({
     setContextMenu(null);
     dragSnapshotRef.current = null;
     beforeGestureRef.current = null;
-    setLayoutHistory({ past: [], future: [] });
+    setLayoutHistory(emptyCanvasHistory(session.id));
     replaceEdgeSides(readEdgeLayout(window.localStorage, edgeLayoutKey), false);
-  }, [layoutKey, edgeLayoutKey, sizesKey, replaceEdgeSides]);
+  }, [layoutKey, edgeLayoutKey, sizesKey, replaceEdgeSides, session.id]);
   const nextNodePosition = () => {
     nextLayoutIndexRef.current = Math.max(nextLayoutIndexRef.current, session.nodes.length);
     const position = positionFor(nextLayoutIndexRef.current);
@@ -2558,8 +2535,9 @@ export function SessionFlowCanvas({
     const currentMap = edgeSidesRef.current;
     const current = ownValue(currentMap, edgeId) ?? { source: "right" as EdgeSide, target: "left" as EdgeSide };
     if (current[endpoint] === side) return;
-    if (remember) rememberLayout(captureLayout());
-    replaceEdgeSides({ ...currentMap, [edgeId]: { ...current, [endpoint]: side } });
+    const next = { ...currentMap, [edgeId]: { ...current, [endpoint]: side } };
+    if (remember) rememberLayout(captureLayout(), { ...captureLayout(), sides: next });
+    replaceEdgeSides(next);
   };
   useEffect(() => {
     if (session.nodes.length === 0) return;
@@ -2602,8 +2580,6 @@ export function SessionFlowCanvas({
   // a short time with Undo arrange.
   const [arrangeUndo, setArrangeUndo] = useState<{
     layoutKey: string;
-    positions: LayoutPositions;
-    sides: Record<string, { source: EdgeSide; target: EdgeSide }>;
   } | null>(null);
   useEffect(() => {
     setArrangeUndo(null);
@@ -2641,16 +2617,13 @@ export function SessionFlowCanvas({
   }, [fitRequest]);
   const tidyLayout = () => {
     const before = captureLayout();
-    rememberLayout(before);
-    setArrangeUndo({ layoutKey, positions: positionsRef.current, sides: edgeSides });
-    applyArrangement(smartLayout(session, measured), {});
+    const next = smartLayout(session, measured);
+    if (rememberLayout(before, arrangedCanvasSnapshot(before, next, {}))) setArrangeUndo({ layoutKey });
+    applyArrangement(next, {});
   };
   const undoArrange = () => {
     if (!arrangeUndo || arrangeUndo.layoutKey !== layoutKey) return;
-    const before = captureLayout();
-    rememberLayout(before);
-    applyArrangement(arrangeUndo.positions, arrangeUndo.sides);
-    setArrangeUndo(null);
+    restoreLayout("undo");
   };
   const addLibraryNode = (kind: LibraryNodeKind, position: { x: number; y: number }) => {
     const nodeId = onAddLibraryNode?.(kind, position);

@@ -1,5 +1,33 @@
 import { test, expect } from "./real-backend";
 
+test("repeating Arrange without a change does not consume an undo step", async ({ page }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("audiorouter.ui.layout.e2e-session", JSON.stringify({ voice: { x: 445, y: 67 } })),
+  );
+  await page.goto("/backend-harness.html");
+  const voice = page.getByTestId("rf__node-voice");
+  await expect(voice).toBeVisible();
+  const position = () => voice.evaluate((element) => (element as HTMLElement).style.transform);
+  const before = await position();
+  await page.getByRole("button", { name: "Arrange", exact: true }).click();
+  const arranged = await position();
+  expect(arranged).not.toBe(before);
+  await page.getByRole("button", { name: "Arrange", exact: true }).click();
+  expect(await position()).toBe(arranged);
+  await page.getByRole("button", { name: "Undo layout", exact: true }).click();
+  expect(await position()).toBe(before);
+});
+
+test("Undo arrange uses layout history and permits redo", async ({ page }) => {
+  await page.goto("/backend-harness.html");
+  await page.getByRole("button", { name: "Arrange", exact: true }).click();
+  await page.getByRole("button", { name: "Undo arrange", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Redo layout", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Undo arrange", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Redo layout", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Undo layout", exact: true })).toBeEnabled();
+});
+
 test("Undo layout retires the old Undo arrange shortcut without losing redo", async ({ page }) => {
   await page.goto("/backend-harness.html");
   await page.getByRole("button", { name: "Arrange", exact: true }).click();
