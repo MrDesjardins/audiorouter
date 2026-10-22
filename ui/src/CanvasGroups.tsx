@@ -4,6 +4,7 @@ import { NodeResizer, type NodeProps } from "@xyflow/react";
 import { NumberField } from "./NumberField";
 import { TextField } from "./TextField";
 import { HelpDisclosure } from "./HelpDisclosure";
+import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 
 /** `locked` stops accidental moving or resizing on the canvas; Properties still edits it. */
 export type CanvasGroup = {
@@ -45,7 +46,7 @@ export function validGroup(value: unknown): value is CanvasGroup {
 }
 export function readGroups(key: string): CanvasGroup[] {
   try {
-    const value: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+    const value = readPresentationJson(optionalLocalStorage(), key);
     if (!Array.isArray(value)) return [];
     const seen = new Set<string>();
     return value
@@ -58,6 +59,19 @@ export function readGroups(key: string): CanvasGroup[] {
           : withFontSize;
       })
       .filter(validGroup)
+      .map(({ id, name, color, opacity, fontSize, x, y, width, height, locked, moveContents }) => ({
+        id,
+        name,
+        color,
+        opacity,
+        fontSize,
+        x,
+        y,
+        width,
+        height,
+        ...(locked === undefined ? {} : { locked }),
+        ...(moveContents === undefined ? {} : { moveContents }),
+      }))
       .filter((g) => {
         if (seen.has(g.id)) return false;
         seen.add(g.id);
@@ -81,11 +95,7 @@ export function useCanvasGroups(sessionId: string) {
   }, [key]);
   useEffect(() => {
     if (state.key !== key) return;
-    try {
-      localStorage.setItem(key, JSON.stringify(state.groups));
-    } catch {
-      /* Presentation storage is optional. */
-    }
+    writePresentationJson(optionalLocalStorage(), key, state.groups);
   }, [key, state]);
   // Persist committed React state, never speculative/replayed state updaters.
   const update = (transform: (current: CanvasGroup[]) => CanvasGroup[]) =>

@@ -1,3 +1,4 @@
+import { optionalLocalStorage } from "./presentationStorage";
 import { UiOptionsWorkbench } from "./UiOptionsWorkbench";
 import {
   customThemeStyle,
@@ -274,15 +275,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [pluginParameterError, setPluginParameterError] = useState<string | null>(null);
   const [presets, setPresets] = useState<import("@audiorouter/contracts").DiscoveryDocument["presets"] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
-  const [theme, setTheme] = useState<ThemeMode>(() =>
-    readTheme(typeof window === "undefined" ? null : window.localStorage),
-  );
-  const [customThemes, setCustomThemes] = useState(() =>
-    readCustomThemeLibrary(typeof window === "undefined" ? null : window.localStorage),
-  );
+  const [theme, setTheme] = useState<ThemeMode>(() => readTheme(optionalLocalStorage()));
+  const [customThemes, setCustomThemes] = useState(() => readCustomThemeLibrary(optionalLocalStorage()));
   const changeCustomThemes = (value: CustomThemeLibrary) => {
     setCustomThemes(value);
-    writeCustomThemeLibrary(typeof window === "undefined" ? null : window.localStorage, value);
+    writeCustomThemeLibrary(optionalLocalStorage(), value);
   };
   // "custom" with no saved custom theme (all deleted) shows the dark theme.
   const activeCustomTheme = theme === "custom" ? (selectedCustomTheme(customThemes)?.theme ?? null) : null;
@@ -291,18 +288,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     : `theme-${theme === "custom" ? "dark" : theme}`;
   const themeStyle = activeCustomTheme ? customThemeStyle(activeCustomTheme) : undefined;
   const [flowAnimation, setFlowAnimation] = useState<FlowAnimationMode>(() =>
-    readFlowAnimation(typeof window === "undefined" ? null : window.localStorage),
+    readFlowAnimation(optionalLocalStorage()),
   );
   const changeFlowAnimation = (mode: FlowAnimationMode) => {
     setFlowAnimation(mode);
-    writeFlowAnimation(typeof window === "undefined" ? null : window.localStorage, mode);
+    writeFlowAnimation(optionalLocalStorage(), mode);
   };
-  const [sidebarWidth, setSidebarWidth] = useState(() =>
-    readSidebarWidth(typeof window === "undefined" ? null : window.localStorage),
-  );
+  const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(optionalLocalStorage()));
   const changeSidebarWidth = (width: number) => {
     setSidebarWidth(width);
-    writeSidebarWidth(typeof window === "undefined" ? null : window.localStorage, width);
+    writeSidebarWidth(optionalLocalStorage(), width);
   };
   const groupState = useCanvasGroups(selectedSessionId);
   const selectedGroup = groupState.groups.find((group) => group.id === groupState.selectedGroupId);
@@ -336,7 +331,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [mcpTunnelStatus, setMcpTunnelStatus] = useState<McpTunnelStatus | null>(null);
   const [backendActivity, setBackendActivity] = useState<Record<string, unknown>[]>([]);
   const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() =>
-    readShortcuts(typeof window === "undefined" ? null : window.localStorage, defaultShortcutBinding),
+    readShortcuts(optionalLocalStorage(), defaultShortcutBinding),
   );
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
   const [connectionSource, setConnectionSource] = useState("");
@@ -567,7 +562,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setUiDiagnostics(next);
   };
   useEffect(() => {
-    writeTheme(typeof window === "undefined" ? null : window.localStorage, theme);
+    writeTheme(optionalLocalStorage(), theme);
   }, [theme]);
   // AudioRouter cable status (spec 17 §7.1), published to the library,
   // canvas palette, cable properties and Setup. The backend caches it until
@@ -685,7 +680,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     };
   }, [workbenchTab]);
   useEffect(() => {
-    writeShortcuts(typeof window === "undefined" ? null : window.localStorage, shortcuts);
+    writeShortcuts(optionalLocalStorage(), shortcuts);
   }, [shortcuts]);
   // Follow the backend's mute state when it changes. Diagnostics refresh
   // every 50 ms while playing and carry the current value; `status` is only

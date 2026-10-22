@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { qualitySeeds } from "./qualitySeeds";
 import {
   arrangedCanvasSnapshot,
   canvasLayoutChanged,
@@ -128,7 +129,7 @@ it("arrangement changes only existing node positions and connector presentation"
 
 // A small independent reference history models two coordinates and a connector.
 // Fixed seeds and the full prefix are printed by the assertion on failure.
-for (const seed of [1, 47, 997, 0x12345678, 0x7fffffff])
+for (const seed of qualitySeeds([1, 47, 997, 0x12345678, 0x7fffffff]))
   it(`matches bounded action sequences, seed ${seed}`, () => {
     let rng = seed;
     const random = (limit: number) => {

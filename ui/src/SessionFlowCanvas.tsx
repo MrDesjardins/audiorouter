@@ -1,3 +1,4 @@
+import { optionalLocalStorage } from "./presentationStorage";
 import { smartLayout } from "./smartLayout";
 import {
   Background,
@@ -2250,11 +2251,9 @@ export function SessionFlowCanvas({
 }: SessionFlowCanvasProps) {
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
-  const [positions, setPositions] = useState<LayoutPositions>(() =>
-    readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey),
-  );
+  const [positions, setPositions] = useState<LayoutPositions>(() => readLayout(optionalLocalStorage(), layoutKey));
   const sizesKey = `${layoutKey}.sizes`;
-  const [nodeSizes, setNodeSizes] = useState<NodeLayoutSizes>(() => readNodeSizes(window.localStorage, sizesKey));
+  const [nodeSizes, setNodeSizes] = useState<NodeLayoutSizes>(() => readNodeSizes(optionalLocalStorage(), sizesKey));
   const naturalSizesRef = useRef<Record<string, { width: number; height: number }>>(Object.create(null));
   const [dropPreview, setDropPreview] = useState<{ kind: string; position: { x: number; y: number } } | null>(null);
   const [contextMenu, setContextMenu] = useState<
@@ -2268,14 +2267,14 @@ export function SessionFlowCanvas({
   const [measured, setMeasured] = useState<Record<string, { width: number; height: number }>>({});
   const edgeLayoutKey = `${layoutKey}.edges`;
   const [edgeSides, setEdgeSides] = useState<EdgeLayoutSides>(() =>
-    readEdgeLayout(typeof window === "undefined" ? null : window.localStorage, edgeLayoutKey),
+    readEdgeLayout(optionalLocalStorage(), edgeLayoutKey),
   );
   const edgeSidesRef = useRef(edgeSides);
   const replaceEdgeSides = useCallback(
     (next: EdgeLayoutSides, persist = true) => {
       edgeSidesRef.current = next;
       setEdgeSides(next);
-      if (persist) writeEdgeLayout(window.localStorage, edgeLayoutKey, next);
+      if (persist) writeEdgeLayout(optionalLocalStorage(), edgeLayoutKey, next);
     },
     [edgeLayoutKey],
   );
@@ -2392,8 +2391,8 @@ export function SessionFlowCanvas({
     if (onChangeGroups) onChangeGroups(groupPatches);
     else for (const [id, patch] of groupPatches) onChangeGroup?.(id, patch);
     if (persist) {
-      writeLayout(window.localStorage, layoutKey, nextPositions);
-      writeNodeSizes(window.localStorage, sizesKey, nextSizes);
+      writeLayout(optionalLocalStorage(), layoutKey, nextPositions);
+      writeNodeSizes(optionalLocalStorage(), sizesKey, nextSizes);
     }
   };
   if (layoutActionsRef)
@@ -2418,24 +2417,24 @@ export function SessionFlowCanvas({
     commitGeometry(result.snapshot.items, true);
     const { sizes, sides } = result.snapshot;
     setNodeSizes(sizes);
-    writeNodeSizes(window.localStorage, sizesKey, sizes);
+    writeNodeSizes(optionalLocalStorage(), sizesKey, sizes);
     replaceEdgeSides(sides);
     onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
   };
   useEffect(() => {
     initialFitDoneRef.current = false;
     nextLayoutIndexRef.current = session.nodes.length;
-    const next = readLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey);
+    const next = readLayout(optionalLocalStorage(), layoutKey);
     positionsRef.current = next;
     setPositions(next);
     setMeasured({});
     naturalSizesRef.current = Object.create(null);
-    setNodeSizes(readNodeSizes(window.localStorage, sizesKey));
+    setNodeSizes(readNodeSizes(optionalLocalStorage(), sizesKey));
     setContextMenu(null);
     dragSnapshotRef.current = null;
     beforeGestureRef.current = null;
     setLayoutHistory(emptyCanvasHistory(session.id));
-    replaceEdgeSides(readEdgeLayout(window.localStorage, edgeLayoutKey), false);
+    replaceEdgeSides(readEdgeLayout(optionalLocalStorage(), edgeLayoutKey), false);
   }, [layoutKey, edgeLayoutKey, sizesKey, replaceEdgeSides, session.id]);
   const nextNodePosition = () => {
     nextLayoutIndexRef.current = Math.max(nextLayoutIndexRef.current, session.nodes.length);
@@ -2480,7 +2479,7 @@ export function SessionFlowCanvas({
       const next = { ...positionsRef.current, [pastedId]: pastePosition };
       positionsRef.current = next;
       setPositions(next);
-      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+      writeLayout(optionalLocalStorage(), layoutKey, next);
       skipNextFitRef.current = position !== undefined;
       setContextMenu(null);
     },
@@ -2592,7 +2591,7 @@ export function SessionFlowCanvas({
   const applyArrangement = (next: LayoutPositions, sides: Record<string, { source: EdgeSide; target: EdgeSide }>) => {
     positionsRef.current = next;
     setPositions(next);
-    writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+    writeLayout(optionalLocalStorage(), layoutKey, next);
     replaceEdgeSides(sides);
     setFitRequest((count) => count + 1);
   };
@@ -2631,7 +2630,7 @@ export function SessionFlowCanvas({
       const next = { ...positionsRef.current, [nodeId]: position };
       positionsRef.current = next;
       setPositions(next);
-      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+      writeLayout(optionalLocalStorage(), layoutKey, next);
     }
   };
   const addVirtualBusNode = (direction: "renderSource" | "captureSink", position: { x: number; y: number }) => {
@@ -2640,7 +2639,7 @@ export function SessionFlowCanvas({
       const next = { ...positionsRef.current, [nodeId]: position };
       positionsRef.current = next;
       setPositions(next);
-      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+      writeLayout(optionalLocalStorage(), layoutKey, next);
     }
   };
   const routeLibraryDrop = (kind: string, position: { x: number; y: number }) => {
@@ -2652,7 +2651,7 @@ export function SessionFlowCanvas({
       const next = { ...positionsRef.current, [nodeId]: position };
       positionsRef.current = next;
       setPositions(next);
-      writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+      writeLayout(optionalLocalStorage(), layoutKey, next);
     }
   };
   const libraryButton = (entry: LibraryEntry) => {
@@ -3461,7 +3460,7 @@ export function SessionFlowCanvas({
             onNodeDragStop={() => {
               rememberGesture();
               dragSnapshotRef.current = null;
-              writeLayout(window.localStorage, layoutKey, positionsRef.current);
+              writeLayout(optionalLocalStorage(), layoutKey, positionsRef.current);
             }}
             proOptions={{ hideAttribution: true }}
           >

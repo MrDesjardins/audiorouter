@@ -50,6 +50,14 @@ redo. Undo arrange uses the same history path and permits Redo layout; it
 does not maintain a second geometry snapshot. History never changes current
 group lock/carry settings or resurrects deleted graph objects.
 
+Decode local position, size and connector records into their allowed fields;
+foreign saved fields must not override geometry identity. Match backend entity
+ID bounds (128 UTF-8 bytes). Reject local presentation JSON above 1,048,576
+characters before parsing; a rejected record uses default presentation and
+does not change the graph. Oversized writes leave prior persisted data intact.
+Unavailable local-storage access, including a denied browser getter, leaves
+the in-memory editor usable.
+
 The API tab displays the optional localhost HTTP listener URL/port, start/stop,
 the "Who can connect" choice and network URL (HTTP-09),
 explicit token reveal/copy and a link to its local Swagger documentation.

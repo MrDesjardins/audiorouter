@@ -1,5 +1,43 @@
 import { test, expect } from "./real-backend";
 
+test("foreign saved position fields cannot replace geometry identities", async ({ page }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "audiorouter.ui.layout.e2e-session",
+      JSON.stringify({
+        voice: { x: 445, y: 67, id: "forged", group: true, width: 9999 },
+      }),
+    ),
+  );
+  await page.goto("/backend-harness.html");
+  const voice = page.getByTestId("rf__node-voice");
+  await expect(voice).toBeVisible();
+  const position = () => voice.evaluate((element) => (element as HTMLElement).style.transform);
+  const before = await position();
+  await voice.click();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(position).not.toBe(before);
+  await page.getByRole("button", { name: "Undo layout", exact: true }).click();
+  expect(await position()).toBe(before);
+  await expect(page.locator(".topbar").getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+});
+
+test("denied local storage does not prevent startup or in-memory layout undo", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "localStorage", {
+      get: () => {
+        throw new DOMException("Storage denied", "SecurityError");
+      },
+    });
+  });
+  await page.goto("/backend-harness.html");
+  await expect(page.getByTestId("rf__node-voice")).toBeVisible();
+  await page.getByRole("button", { name: "Arrange", exact: true }).click();
+  await page.getByRole("button", { name: "Undo layout", exact: true }).click();
+  await expect(page.getByTestId("rf__node-voice")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Redo layout", exact: true })).toBeEnabled();
+});
+
 test("repeating Arrange without a change does not consume an undo step", async ({ page }) => {
   await page.addInitScript(() =>
     localStorage.setItem("audiorouter.ui.layout.e2e-session", JSON.stringify({ voice: { x: 445, y: 67 } })),

@@ -51,6 +51,12 @@ out-of-range and legacy values must not crash the editor. Keep valid entries
 where possible, bound parsing/geometry, and never spread unchecked persisted
 fields into geometry identities. Import validation remains backend-owned.
 
+Position, size and connector codecs retain only their declared fields and
+entity IDs of at most 128 UTF-8 bytes (the backend's bound). JSON is limited to
+1,048,576 characters before parsing. Ordinary saved records remain compatible;
+oversized records use defaults and oversized writes leave the prior value.
+The storage accessor catches a denied getter as well as read/write failures.
+
 Executable coverage:
 
 - [Pure history model](../../ui/src/canvasHistory.test.ts): immutable snapshots,
@@ -70,7 +76,11 @@ Executable coverage:
   event interleavings. Three-theme scenarios establish browser appearance;
   packaged WebView2, Narrator and real audio remain distinct evidence.
 
-Remaining Q2 work is tracked in the [quality plan](../plans/active/application-quality.md):
-broader bounded persistence/import corpus, generated nested geometry, rotating
-nightly seeds and fault/mutation demonstrations. A test count alone does not
-establish those unrun gates.
+The generated geometry suite covers 600 nested gestures under fixed seeds.
+The persistence corpus checks 300 generated records and canonical round-trips.
+Nightly coverage adds a seed derived from `github.run_id` while keeping all fixed
+PR seeds; reproduce with `AUDIOROUTER_TEST_SEED=<run ID>` and the same tests.
+Logs print the bounded seed and failing action prefix/sample. Remaining Q2
+work in the [quality plan](../plans/active/application-quality.md) includes
+broader import/failure interleavings and permanent minimized fixtures for new
+failures. A test count alone does not establish those unrun gates.

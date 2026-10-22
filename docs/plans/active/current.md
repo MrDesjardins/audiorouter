@@ -1,5 +1,50 @@
 # Active plan — post-0.0.8 maintenance
 
+## Quality Q2 - presentation persistence - 2026-10-21
+
+History slice is isolated in PR #52 on top of group PR #51. This next slice
+starts at bccd6249 on quality/presentation-storage. Requirements UI-02/16/17,
+ENG-01/02: reject oversized local JSON before parsing and normalize decoded
+geometry to its allowed fields. Current readLayout accepts extra fields; those
+are later spread into CanvasRect, so a stored id can replace a graph identity.
+Reproduce with a focused decoder regression; add bounded pure storage helpers,
+canonical position/size/side decoders and malformed/generated corpus tests.
+Retain valid data, legacy group behavior and optional write-failure handling.
+Compatibility: existing ordinary shapes remain readable; invalid extra fields
+are discarded; oversized presentation records fall back without changing audio.
+Verify failing-before/passing-after tests, full UI checks and canvas browser
+scenarios. No hardware required. Rollback: revert this slice; no graph/database
+migration. Next: demonstrate the unexpected-field failure before implementation.
+
+Confirmed two failures before fixing: the new layout unit regression returned
+foreign id/group/width fields, and a denied window.localStorage getter crashed
+AppContent in Edge (SecurityError, canvas absent). Before-browser artifacts:
+%TEMP%/audiorouter-q2-storage-before/. Canonical decoders now construct only
+allowed position/size/side fields, validate IDs against the backend's 128-byte
+bound, and reject JSON above 1,048,576 characters before parsing. Shared safe
+storage access protects App preferences, canvas, groups and diagnostics. Groups
+also discard foreign fields while retaining legacy defaults. Oversized writes
+preserve the prior record; optional faults leave in-memory editing usable.
+
+Expanded evidence: 300 generated malformed/canonical persistence cases, 600
+fixed-seed nested gestures checking frozen ownership/once-only movement/locks,
+and nightly coverage retains fixed seeds plus a reproducible run-ID seed.
+Replayed AUDIOROUTER_TEST_SEED=39710446637: 19 selected tests passed. Removed
+the normalization, parse-bound, denied-getter catch and write catch in four
+temporary experiments: all four made focused tests fail; originals restored.
+Logs: %TEMP%/audiorouter-q2-storage-mutations-jK2Hgb/.
+
+Final Windows checks: format, lint (zero errors, 25 existing Hook warnings),
+all-project TypeScript and Vite build passed (existing chunk warning), all
+69 files/604 UI tests passed. Full focused Edge set: 45 passed in 56.9s,
+including poisoned saved identity and denied-storage startup/undo regressions.
+Artifacts: %TEMP%/audiorouter-q2-storage-final/. Visually inspected cold-start
+screenshots in dark, light and high-contrast: canvas/cards/controls/notifications
+remain readable and positioned consistently. actionlint 1.7.12 validated the
+nightly seed change. Docs and diff checks passed. No backend/audio changes or
+database migration; local presentation compatibility consequences are specified
+in UI-16. Next: scoped persistence PR, then Q3 production browser coverage.
+
 ## Quality Q2 - editor state boundaries - 2026-10-21
 
 Owner approved the [application quality roadmap](application-quality.md).
