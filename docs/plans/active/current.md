@@ -439,6 +439,38 @@ Both native builds completed successfully. Used the existing build cache,
 then restored the original three executables and verified their hashes against
 the backups. The test app was not launched by the agent. It contains the current
 feature and the three documented review findings; no fixes were applied.
+## Website: no localhost Swagger link, one header everywhere — 2026-10-21, owner request
+
+Objective: the hosted API page must not link to `127.0.0.1` (that points at
+each visitor's own PC), and the visual guides under `site/tools/` must show
+the same header menu as the rest of the site.
+
+- Decisions: the API page explains that the interactive Swagger view runs in
+  the desktop app (API → Start API → Open Swagger documentation); the app's
+  local Swagger flow is unchanged. `site/assets/site.js` resolves header links
+  from the site root (the `site.js` script URL), so `generate-guides.mjs`
+  emits `<div data-header></div>` and loads `../assets/site.js` instead of
+  its own guide-only header; "Visual guides" is marked current on every
+  `tools/` page. The latest-release lookup now runs only on pages that show
+  release links, so browsing guides makes no GitHub API calls.
+- Validation (Windows, Node 22.22.3): `node site/generate-guides.mjs`
+  regenerated 36 guides plus the index; `node site/check-guides.mjs` passed
+  (36 pages, 894 local links/assets); headless Edge screenshots of
+  `tools/index.html` and `tools/gain.html` at 1280 px and 390 px (menu open),
+  and `api.html`: same header, correct current item, links resolve to the
+  site root, no horizontal scroll. The site has one (dark) theme.
+- Follow-up (owner request): the header now stays at the top. Its
+  `<div data-header>` wrapper was the sticky containing block, so it scrolled
+  away on every page; `[data-header]{display:contents}` fixes that, and
+  `html{scroll-padding-top:88px}` keeps anchor targets below it (manual
+  sections' own margin drops 100 → 12 px; the guide TOC sticks at 104 px).
+  Headless Edge: topbar at 0 after scrolling index, API, a guide and the
+  390 px tools page (menu opens); `api.html#endpoints` lands at 91 px,
+  `manual.html#api` at 127 px, a guide TOC jump at 116 px with the right
+  item current. `site/README.md` documents a `uv` preview server (tested:
+  200 for a guide and the catalog JSON).
+- Rollback: revert the commits; no app or data change.
+- Next: confirm the deployed pages after the Pages workflow runs.
 
 ## TypeScript 7 readiness — 2026-10-20, owner request
 
