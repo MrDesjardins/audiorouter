@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 
 // Advanced → "When AudioRouter starts": sign-in startup and autoplay together,
 // in the app field style in every theme. The shell bridge is faked so the

@@ -2,6 +2,7 @@
 import { fireEvent, render, screen, act, cleanup } from "@testing-library/react";
 import { beforeEach, afterEach, expect, test } from "vitest";
 import { CanvasGroupInspector, readGroups, useCanvasGroups, type CanvasGroup } from "./CanvasGroups";
+import { MAX_PRESENTATION_JSON_CHARS } from "./presentationStorage";
 
 beforeEach(() => localStorage.clear());
 afterEach(cleanup);
@@ -86,4 +87,37 @@ test("lock persists, rejects non-boolean values and is offered in Properties", (
     ]),
   );
   expect(readGroups("groups")).toEqual([{ ...group, id: "group-ok", locked: true }]);
+});
+
+test("new groups carry contents, legacy groups keep frame-only movement, and the toggle persists", () => {
+  render(<Fixture />);
+  fireEvent.click(screen.getByText("Add group"));
+  const toggle = screen.getByLabelText("Move contents with group") as HTMLInputElement;
+  expect(toggle.checked).toBe(true);
+  fireEvent.click(toggle);
+  expect(readGroups("audiorouter.ui.groups.one")[0].moveContents).toBe(false);
+  const saved = readGroups("audiorouter.ui.groups.one")[0];
+  const { moveContents: _flag, ...legacy } = saved;
+  localStorage.setItem("legacy", JSON.stringify([legacy, { ...saved, id: "group-bad", moveContents: "yes" }]));
+  expect(readGroups("legacy")).toEqual([legacy]);
+});
+
+test("groups ignore foreign fields, oversized JSON and invalid containers", () => {
+  const group: CanvasGroup = {
+    id: "group-ok",
+    name: "Group",
+    color: "#abcdef",
+    opacity: 5,
+    fontSize: 18,
+    x: 0,
+    y: 0,
+    width: 500,
+    height: 300,
+  };
+  localStorage.setItem("groups", JSON.stringify([{ ...group, foreign: { id: "tool" } }]));
+  expect(readGroups("groups")).toEqual([group]);
+  for (const raw of ["null", "{}", "false", "3", "{", " ".repeat(MAX_PRESENTATION_JSON_CHARS) + "[]"]) {
+    localStorage.setItem("groups", raw);
+    expect(readGroups("groups")).toEqual([]);
+  }
 });

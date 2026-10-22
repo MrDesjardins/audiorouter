@@ -12,6 +12,52 @@ Its interior must not block nodes or wires. Groups have no audio ports or
 routing effect and do not require Save/Stop. Persist per-session beside local canvas layout; they are not
 included in exported audio session files in this initial version.
 
+Groups offer a **Move contents with group** toggle beside Lock position and
+size. New groups enable it; existing annotations without that saved property
+retain the previous rectangle-only movement. A tool or nested group belongs
+to its smallest fully enclosing group, with stable group ID as the tie-breaker
+for equal overlapping candidates. Partial overlap does not count. Membership
+is frozen for a drag. A carrying group translates all owned descendants once,
+preserving their relative positions; inner toggles govern dragging that inner
+group itself. Resizing a frame does not scale or move contents. Locked frames
+remain fixed, including during ancestor movement: carrying an ancestor with a
+locked descendant is blocked until unlocked or carrying is disabled. Tools
+inside a locked annotation remain individually editable.
+
+Select multiple tools and/or groups with modifier-click or marquee selection
+to show layout controls in Properties. Provide left/center/right and
+top/middle/bottom alignment, matching smallest/largest widths and heights, and
+horizontal/vertical equal edge spacing. Show conventional icons beside the
+visible action labels. Multi-selection also exposes Lock and Move contents
+for selected groups only, with mixed checkbox states; applying an option
+updates every explicitly selected group, including unlocking locked groups,
+without changing geometry. Selected carrying ancestors count as
+one movement unit; sizing changes only explicitly selected rectangles. Locked
+frames stay fixed and participate as alignment/distribution anchors. Equal
+spacing keeps endpoints fixed and distributes between locked anchors; reject
+insufficient room without moving anything. Tool sizes preserve usable minimum
+dimensions. Positions, tool sizes and group settings persist per session as
+local presentation preferences and never change audio topology. Provide local
+Undo layout/Redo layout for geometry edits and connector-side choices; restore
+only existing items and respect their current locks. Later layout edits or
+undo retire the temporary Undo arrange shortcut. Layout history resets when
+switching sessions. Invalid saved connector preferences fall back to defaults;
+optional presentation storage failures never interrupt editing.
+
+Layout history is bounded to 20 entries per direction. No-op commands,
+including repeating an unchanged Arrange, neither add an undo step nor clear
+redo. Undo arrange uses the same history path and permits Redo layout; it
+does not maintain a second geometry snapshot. History never changes current
+group lock/carry settings or resurrects deleted graph objects.
+
+Decode local position, size and connector records into their allowed fields;
+foreign saved fields must not override geometry identity. Match backend entity
+ID bounds (128 UTF-8 bytes). Reject local presentation JSON above 1,048,576
+characters before parsing; a rejected record uses default presentation and
+does not change the graph. Oversized writes leave prior persisted data intact.
+Unavailable local-storage access, including a denied browser getter, leaves
+the in-memory editor usable.
+
 The API tab displays the optional localhost HTTP listener URL/port, start/stop,
 the "Who can connect" choice and network URL (HTTP-09),
 explicit token reveal/copy and a link to its local Swagger documentation.
@@ -69,7 +115,7 @@ missing managed-driver capability is reported explicitly rather than treated
 as a failed current-profile setup.
 
 - **UI-01 — First run.** Explain source → effects → destinations with a small working example. Check backend/device readiness, offer the Gaming + Discord template, select mic/headphones and existing supported endpoints in the current VB-Cable-first profile, and guide third-party app selections. Managed virtual-bus provisioning remains a deferred signed-driver-profile option. Include a meter/test step for each destination. A Test Signal node provides in-place Play and Stop controls for its connected session route. An Audio File input imports bounded WAV/MP3 media, exposes only Play and Stop on its compact node, and keeps Pause/Resume, file selection, and looping in its inspector. It follows ordinary graph plan/commit plus session lifecycle. Mic monitoring begins muted; recording begins unarmed.
-- **UI-02 — Canvas.** Support add/search, drag, connect/disconnect, rename, duplicate, delete, multi-select, zoom/pan, fit, and tidy layout. Provide undo/redo for graph edits using backend revisions. Node deletion is immediately undoable without a confirmation dialog and works with the Delete key while the canvas is focused. A dragged preview is visually provisional until saved. Persist positions separately from audio state.
+- **UI-02 — Canvas.** Support add/search, drag, connect/disconnect, rename, duplicate, delete, multi-select, zoom/pan, fit, and tidy layout. Provide undo/redo for graph edits using backend revisions. Node deletion is immediately undoable without a confirmation dialog and works with the Delete key while the canvas is focused. A dragged preview is visually provisional until saved. Persist positions separately from audio state. Copying a canvas node copies its kind, name, flags, and configuration into an app-local clipboard; pasting creates a new node with no graph edges or side-chain node reference. The clipboard survives switching sessions in the same app window. Offer Copy on a node's context menu, Paste on the canvas context menu, and Ctrl+C/Ctrl+V when a node is selected; pasted nodes join the current draft and use ordinary plan/commit validation.
 - **UI-03 — Connections.** Label ports by role and channels; distinguish audio and sidechain ports. While idle, show blue sending/start handles on every node's output ports and hide orange receiving/input handles. During a sender-start drag, show only receiving handles until drop/cancel. Tools and Mixers use the same affordance as microphones and other sources. Create the same canonical output-to-input graph edge regardless of drag direction; keep keyboard connection available. Every output port may feed multiple independent downstream inputs regardless of source or tool kind; an ordinary destination input accepts one incoming edge. A Mixer input accepts multiple explicit source edges and its output may feed one or more destinations. When a Physical Output is already fed directly by a source that also feeds the requested Mixer, route the output through that existing Mixer and remove the now-redundant direct edge so one signal is not heard twice. Mark the selected path without dimming unrelated active routes or making selection look like audio activity. Pause, remove, and insert controls have distinct icons and explanatory tooltips. Show invalid target reasons before drop where known, then display backend rejection if state changed. Insert-a-mixer and remove-and-reconnect are explicit previewable operations.
 - **UI-04 — State.** Distinguish running/stopped, enabled/bypassed/muted, missing/faulted, and recording/paused using text/icons as well as color. Application-capture sources additionally show process lifecycle: connected, app closed, reconnecting, ambiguous, unsupported, and not prepared. Animate flow only when relevant activity exists; a static connected line means configured connectivity. Silent-but-valid is different from disconnected. An open but silent process must not imply audio activity. Provide reduced-motion mode.
 - **UI-05 — Inspector.** Offer sliders plus precise text entry, unit labels, reset, presets, pre/post meters, and an effect of change summary. Rejected values remain an editable draft with a reason; do not display them as active. Expensive rebuild operations show progress and preserve last committed values on failure. Audio File settings include descriptive source state, a WAV/MP3 picker, and a loop toggle; decoding is backend-owned and bounded. Temporary voice takes use an already-connected Recorder node on a running route, stop at 120 seconds, and become expiring backend media after the temporary WAV and library row are removed. The local shell may request `Record`; it does not gain capture-device or endpoint-administration authority. Voice recording controls may not capture through renderer/browser APIs.

@@ -1,5 +1,5 @@
 import { openAppSettings } from "./workbench";
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
 
 // A fresh install (release 0.0.1 regression): the first Play must ask once

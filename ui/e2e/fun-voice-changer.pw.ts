@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 // Fun Voice Changer (DSP-20): preset choice, edited marker and Reset, tuner

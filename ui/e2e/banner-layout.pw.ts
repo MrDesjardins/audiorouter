@@ -1,5 +1,5 @@
 import { setColorTheme } from "./workbench";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./browser-test";
 import type { Session } from "../../contracts/src/index";
 
 const port = (name: string, direction: "input" | "output") => ({ name, direction, channels: 2 as const });

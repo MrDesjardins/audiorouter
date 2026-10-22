@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`Properties clears every tab and compact help works in ${theme}`, async ({ page }, info) => {

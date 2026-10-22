@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 // The Duck canvas widget shows a duck while ducking; the Properties amount is a slider.

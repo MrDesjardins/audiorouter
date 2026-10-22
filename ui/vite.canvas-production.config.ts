@@ -6,6 +6,7 @@ import base from "./vite.config";
 export default mergeConfig(base, defineConfig({
   build: {
     outDir: "../target/canvas-production-ui",
-    rollupOptions: { input: "route-harness.html" },
+    emptyOutDir: true,
+    rollupOptions: { input: ["route-harness.html", "backend-harness.html"] },
   },
 }));

@@ -1,4 +1,6 @@
 import { ToolGuideLink } from "./ToolGuideLink";
+import { CanvasLayoutInspector } from "./CanvasLayoutInspector";
+import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 // The Properties panel: the selected node's (or canvas group's) inspector and editors (moved from App.tsx).
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { DeviceListItem, DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
@@ -50,6 +52,8 @@ import { setVirtualBusDraftCable } from "./draft";
 import { useVirtualCableStatus } from "./virtualCableStatus";
 
 export function PropertiesPanel({
+  layoutItems = [],
+  onLayoutAction,
   selectedGroup,
   groupState,
   selectedNode,
@@ -93,6 +97,8 @@ export function PropertiesPanel({
   togglePrivacyMute,
   privacyMuted,
 }: {
+  layoutItems?: CanvasRect[];
+  onLayoutAction?: (action: LayoutAction) => void;
   selectedGroup: CanvasGroup | undefined;
   groupState: ReturnType<typeof useCanvasGroups>;
   selectedNode: Node;
@@ -137,7 +143,19 @@ export function PropertiesPanel({
   privacyMuted: boolean;
 }) {
   const cableStatus = useVirtualCableStatus();
-  return selectedGroup ? (
+  return layoutItems.length > 1 && onLayoutAction ? (
+    <CanvasLayoutInspector
+      items={layoutItems}
+      onAction={onLayoutAction}
+      groups={groupState.groups.filter((group) => layoutItems.some((item) => item.id === group.id))}
+      onGroupOptionsChange={(patch) =>
+        groupState.changeGroupOptions(
+          layoutItems.filter((item) => item.group).map((item) => item.id),
+          patch,
+        )
+      }
+    />
+  ) : selectedGroup ? (
     <CanvasGroupInspector
       group={selectedGroup}
       onChange={(patch) => groupState.changeGroup(selectedGroup.id, patch)}

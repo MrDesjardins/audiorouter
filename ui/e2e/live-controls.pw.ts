@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./browser-test";
 import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
 
 async function playingRoute(page: Page, mode = "") {

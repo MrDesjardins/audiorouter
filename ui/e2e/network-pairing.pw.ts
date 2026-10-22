@@ -1,4 +1,4 @@
-import { test, expect, type Locator } from "@playwright/test";
+import { test, expect, type Locator } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 // P2-5: a Network Receive/Send pairing key. The field uses the app style,

@@ -1,3 +1,4 @@
+import { optionalLocalStorage } from "./presentationStorage";
 import { UiOptionsWorkbench } from "./UiOptionsWorkbench";
 import {
   customThemeStyle,
@@ -10,8 +11,9 @@ import { UpdatesPanel } from "./UpdateNotice";
 import { setUpdateCheckEnabled } from "./updateCheck";
 import { FirstRunGuide } from "./FirstRunGuide";
 import { useCanvasGroups } from "./CanvasGroups";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { PluginParametersResult } from "@audiorouter/contracts";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import type { CanvasRect, LayoutAction } from "./canvasGeometry";
+import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { SignalTimingPanel } from "./SignalTiming";
 import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo, type McpTunnelStatus } from "./Workbench";
@@ -50,7 +52,9 @@ import {
   appendVoiceChainPreset,
   appendCablePassThrough,
   applyGraphDraft,
+  copyDraftNode,
   duplicateDraftNode,
+  pasteDraftNode,
   insertDraftMixer,
   insertDraftPluginProcessor,
   insertDraftProcessor,
@@ -219,6 +223,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [draft, setDraft] = useState(demoSession);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  const copiedNodeRef = useRef<Node | null>(null);
+  const [hasCopiedNode, setHasCopiedNode] = useState(false);
   const authoritativeSession = useRef(demoSession);
   const hasAuthoritativeSession = useRef(!backend.connected);
   const [draftHistory, setDraftHistory] = useState<DraftHistory>({ past: [], future: [] });
@@ -269,15 +275,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [pluginParameterError, setPluginParameterError] = useState<string | null>(null);
   const [presets, setPresets] = useState<import("@audiorouter/contracts").DiscoveryDocument["presets"] | null>(null);
   const [presetError, setPresetError] = useState<string | null>(null);
-  const [theme, setTheme] = useState<ThemeMode>(() =>
-    readTheme(typeof window === "undefined" ? null : window.localStorage),
-  );
-  const [customThemes, setCustomThemes] = useState(() =>
-    readCustomThemeLibrary(typeof window === "undefined" ? null : window.localStorage),
-  );
+  const [theme, setTheme] = useState<ThemeMode>(() => readTheme(optionalLocalStorage()));
+  const [customThemes, setCustomThemes] = useState(() => readCustomThemeLibrary(optionalLocalStorage()));
   const changeCustomThemes = (value: CustomThemeLibrary) => {
     setCustomThemes(value);
-    writeCustomThemeLibrary(typeof window === "undefined" ? null : window.localStorage, value);
+    writeCustomThemeLibrary(optionalLocalStorage(), value);
   };
   // "custom" with no saved custom theme (all deleted) shows the dark theme.
   const activeCustomTheme = theme === "custom" ? (selectedCustomTheme(customThemes)?.theme ?? null) : null;
@@ -286,26 +288,37 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     : `theme-${theme === "custom" ? "dark" : theme}`;
   const themeStyle = activeCustomTheme ? customThemeStyle(activeCustomTheme) : undefined;
   const [flowAnimation, setFlowAnimation] = useState<FlowAnimationMode>(() =>
-    readFlowAnimation(typeof window === "undefined" ? null : window.localStorage),
+    readFlowAnimation(optionalLocalStorage()),
   );
   const changeFlowAnimation = (mode: FlowAnimationMode) => {
     setFlowAnimation(mode);
-    writeFlowAnimation(typeof window === "undefined" ? null : window.localStorage, mode);
+    writeFlowAnimation(optionalLocalStorage(), mode);
   };
-  const [sidebarWidth, setSidebarWidth] = useState(() =>
-    readSidebarWidth(typeof window === "undefined" ? null : window.localStorage),
-  );
+  const [sidebarWidth, setSidebarWidth] = useState(() => readSidebarWidth(optionalLocalStorage()));
   const changeSidebarWidth = (width: number) => {
     setSidebarWidth(width);
-    writeSidebarWidth(typeof window === "undefined" ? null : window.localStorage, width);
+    writeSidebarWidth(optionalLocalStorage(), width);
   };
   const groupState = useCanvasGroups(selectedSessionId);
   const selectedGroup = groupState.groups.find((group) => group.id === groupState.selectedGroupId);
+  const canvasLayoutActions = useRef<((action: LayoutAction) => void) | null>(null);
+  const [canvasLayoutSelection, setCanvasLayoutSelection] = useState<{ sessionId: string; items: CanvasRect[] }>({
+    sessionId: "",
+    items: [],
+  });
+  const updateCanvasLayoutSelection = useCallback((sessionId: string, items: CanvasRect[]) => {
+    setCanvasLayoutSelection((current) =>
+      current.sessionId === sessionId && JSON.stringify(current.items) === JSON.stringify(items)
+        ? current
+        : { sessionId, items },
+    );
+  }, []);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("tools");
   // UI-18: optional daily new-version check (GitHub public releases list).
   const [updateChecks, setUpdateChecks] = useState(updateCheckEnabled);
   const availableUpdate = useUpdateCheck(updateChecks && !isAutomatedHarness());
   const selectNodeProperties = (id: string) => {
+    groupState.selectGroup("");
     setSelectedNodeId(id);
     setSelectedNodeIds([id]);
     setWorkbenchTab("properties");
@@ -318,7 +331,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [mcpTunnelStatus, setMcpTunnelStatus] = useState<McpTunnelStatus | null>(null);
   const [backendActivity, setBackendActivity] = useState<Record<string, unknown>[]>([]);
   const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() =>
-    readShortcuts(typeof window === "undefined" ? null : window.localStorage, defaultShortcutBinding),
+    readShortcuts(optionalLocalStorage(), defaultShortcutBinding),
   );
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
   const [connectionSource, setConnectionSource] = useState("");
@@ -549,7 +562,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setUiDiagnostics(next);
   };
   useEffect(() => {
-    writeTheme(typeof window === "undefined" ? null : window.localStorage, theme);
+    writeTheme(optionalLocalStorage(), theme);
   }, [theme]);
   // AudioRouter cable status (spec 17 §7.1), published to the library,
   // canvas palette, cable properties and Setup. The backend caches it until
@@ -667,7 +680,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     };
   }, [workbenchTab]);
   useEffect(() => {
-    writeShortcuts(typeof window === "undefined" ? null : window.localStorage, shortcuts);
+    writeShortcuts(optionalLocalStorage(), shortcuts);
   }, [shortcuts]);
   // Follow the backend's mute state when it changes. Diagnostics refresh
   // every 50 ms while playing and carry the current value; `status` is only
@@ -2080,7 +2093,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const next = { ...shortcuts, [action]: shortcut };
     setShortcuts(next);
     setShortcutMessage(
-      shortcutConflicts(next).length > 0 ? "Shortcut conflict: duplicate bindings are disabled until resolved." : null,
+      shortcutConflicts(next).length > 0
+        ? "Shortcut conflict: duplicate bindings and reserved Ctrl+C/Ctrl+V bindings are disabled until resolved."
+        : null,
     );
   };
   const addLibraryNode = (kind: LibraryNodeKind, _position?: { x: number; y: number }) => {
@@ -2668,6 +2683,39 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(formatUiError(error, "Unable to duplicate node."));
     }
   };
+  const copyNodeToClipboard = (nodeId: string) => {
+    try {
+      const source = draftRef.current.nodes.find((node) => node.id === nodeId);
+      if (!source) throw new Error(`Unknown draft node: ${nodeId}`);
+      copiedNodeRef.current = copyDraftNode(draftRef.current, nodeId);
+      setHasCopiedNode(true);
+      setActionMessage(`${source.name} copied. Paste it into this or another session.`);
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to copy tool."));
+    }
+  };
+  const pasteNodeFromClipboard = (_position: { x: number; y: number }) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing the draft.");
+      return undefined;
+    }
+    const copied = copiedNodeRef.current;
+    if (!copied) return undefined;
+    try {
+      const next = pasteDraftNode(draftRef.current, copied);
+      const inserted = next.nodes.at(-1);
+      if (!inserted) return undefined;
+      recordDraftChange(next);
+      selectNodeProperties(inserted.id);
+      setActionMessage(
+        `${inserted.name} pasted into the draft without connections. Review and plan the changes before committing.`,
+      );
+      return inserted.id;
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to paste tool."));
+      return undefined;
+    }
+  };
   if (backend.connected && !hasSnapshot)
     return (
       <div className={`app-shell ${themeClassName}`} style={themeStyle}>
@@ -2694,17 +2742,36 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     <SessionFlowCanvas
       groups={groupState.groups}
       selectedGroupId={groupState.selectedGroupId}
+      selectedGroupIds={groupState.selectedGroupIds}
       onSelectGroup={(id) => {
         groupState.selectGroup(id);
-        if (id) setWorkbenchTab("properties");
+        if (id) {
+          setSelectedNodeIds([]);
+          setWorkbenchTab("properties");
+        }
       }}
       onChangeGroup={groupState.changeGroup}
+      onChangeGroups={groupState.changeGroups}
       onRemoveGroup={groupState.removeGroup}
       session={draft}
       pendingNodeIds={unsavedNodeIds(session, draft)}
       nodeSaveState={graphBusy ? "saving" : autoSavePending ? "autosave" : "needs-save"}
       selectedNodeId={selectedNode.id}
       selectedNodeIds={selectedNodeIds}
+      onSelectItems={(ids) => {
+        const groupIds = new Set(groupState.groups.map((group) => group.id));
+        groupState.selectGroups(ids.filter((id) => groupIds.has(id)));
+        const nodes = ids.filter((id) => !groupIds.has(id));
+        setSelectedNodeIds(nodes);
+        if (nodes[0]) setSelectedNodeId(nodes[0]);
+        if (ids.length) setWorkbenchTab("properties");
+      }}
+      layoutActionsRef={canvasLayoutActions}
+      onLayoutSelection={updateCanvasLayoutSelection}
+      onLayoutMessage={setActionMessage}
+      onCopyNode={copyNodeToClipboard}
+      onPasteNode={pasteNodeFromClipboard}
+      canPasteNode={hasCopiedNode}
       diagnostics={snapshot?.diagnostics ?? null}
       telemetryStore={telemetryStore}
       flowAnimation={flowAnimation}
@@ -3187,6 +3254,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
                 {(liveDiagnostics) => (
                   <PropertiesPanel
+                    layoutItems={canvasLayoutSelection.sessionId === draft.id ? canvasLayoutSelection.items : []}
+                    onLayoutAction={(action) => canvasLayoutActions.current?.(action)}
                     selectedGroup={selectedGroup}
                     groupState={groupState}
                     selectedNode={selectedNode}
@@ -3237,6 +3306,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               <Workbench
                 onAddGroup={() => {
                   groupState.addGroup();
+                  setSelectedNodeIds([]);
                   setWorkbenchTab("properties");
                 }}
                 tab={workbenchTab}

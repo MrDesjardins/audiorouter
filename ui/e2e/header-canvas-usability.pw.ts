@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`header status, Session shortcut and collapsed legend in ${theme}`, async ({ page }, info) => {
