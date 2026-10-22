@@ -83,7 +83,7 @@
 }
 .guide-toc {
   position: sticky;
-  top: 28px;
+  top: 104px;
   display: grid;
   gap: 12px;
   font-size: 13px;

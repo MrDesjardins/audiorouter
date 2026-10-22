@@ -20,7 +20,17 @@ the same header menu as the rest of the site.
   `tools/index.html` and `tools/gain.html` at 1280 px and 390 px (menu open),
   and `api.html`: same header, correct current item, links resolve to the
   site root, no horizontal scroll. The site has one (dark) theme.
-- Rollback: revert the commit; no app or data change.
+- Follow-up (owner request): the header now stays at the top. Its
+  `<div data-header>` wrapper was the sticky containing block, so it scrolled
+  away on every page; `[data-header]{display:contents}` fixes that, and
+  `html{scroll-padding-top:88px}` keeps anchor targets below it (manual
+  sections' own margin drops 100 → 12 px; the guide TOC sticks at 104 px).
+  Headless Edge: topbar at 0 after scrolling index, API, a guide and the
+  390 px tools page (menu opens); `api.html#endpoints` lands at 91 px,
+  `manual.html#api` at 127 px, a guide TOC jump at 116 px with the right
+  item current. `site/README.md` documents a `uv` preview server (tested:
+  200 for a guide and the catalog JSON).
+- Rollback: revert the commits; no app or data change.
 - Next: confirm the deployed pages after the Pages workflow runs.
 
 ## TypeScript 7 readiness — 2026-10-20, owner request
