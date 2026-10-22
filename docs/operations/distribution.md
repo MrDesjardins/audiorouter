@@ -66,7 +66,9 @@ executables, provenance, checksums, SBOMs and notices. Extract and run
 `AudioRouter_0.0.2_x64-setup.exe`. The maintainer reports successful use on two
 PCs. The exact shell passes fresh-install consent regression; clean-machine,
 upgrade/uninstall and missing-WebView2 gates remain open. Windows may warn
-because it is unsigned. SignPath signing is under investigation.
+because it is unsigned. SignPath Foundation declined the project on
+2026-10-21 for lack of popularity (it may reapply later); Azure Artifact
+Signing is the paid option under consideration (see the marketing plan).
 
 The following 2026-09-28 status is historical.
 
