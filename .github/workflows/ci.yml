@@ -34,6 +34,7 @@ jobs:
       windows: ${{ steps.detect.outputs.windows }}
       rust: ${{ steps.detect.outputs.rust }}
       supply: ${{ steps.detect.outputs.supply }}
+      streamdeck: ${{ steps.detect.outputs.streamdeck }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,49 +43,15 @@ jobs:
           # the base branch tip, so HEAD^1..HEAD is exactly the PR's change.
           fetch-depth: 2
 
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+
       - name: Classify changed files
         id: detect
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          set -euo pipefail
-          areas="backend contracts ui probe sdk release"
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            for area in $areas; do echo "$area=true" >> "$GITHUB_OUTPUT"; done
-          else
-            files=$(git diff --name-only HEAD^1 HEAD)
-            echo "Changed files:"; echo "$files"
-            # Markdown never affects a build or test; docs are validated in
-            # the docs job. A change to this workflow re-runs everything.
-            code=$(grep -vE '\.md$' <<<"$files" || true)
-            all=false
-            grep -qE '^\.github/workflows/ci\.yml$' <<<"$files" && all=true
-            has() { [ "$all" = true ] || grep -qE "$1" <<<"$code"; }
-            out() { if has "$2"; then echo "$1=true"; else echo "$1=false"; fi >> "$GITHUB_OUTPUT"; }
-            out backend   '^(crates/|src-tauri/|tests/|examples/|Cargo\.(toml|lock)$|rust-toolchain\.toml$)'
-            out contracts '^(contracts/|tools/contracts/)'
-            out ui        '^(ui/|contracts/)'
-            out probe     '^(tools/m00-wasapi-probe/|tools/m00-native-wasapi-probe/|tests/acceptance/m00-)'
-            out sdk       '^(tools/m06-vst3-sdk/|tests/acceptance/m06-)'
-            out release   '^(tools/release/|drivers/|tests/acceptance/m08-|src-tauri/tauri[^/]*\.json$|src-tauri/Cargo\.toml$|ui/package\.json$)'
-          fi
-          # Dependency manifests, lockfiles and the cargo-deny policy. Not an
-          # area: a lockfile-only change to tools/streamdeck needs no Windows
-          # build, but it does need the supply-chain checks.
-          if [ "$EVENT_NAME" != "pull_request" ] || [ "$all" = true ] \
-            || grep -qE '^(deny\.toml|Cargo\.(toml|lock)|src-tauri/Cargo\.(toml|lock)|crates/[^/]+/Cargo\.toml|(ui|contracts|tools/streamdeck)/package(-lock)?\.json|\.github/workflows/ci\.yml)$' <<<"$files"; then
-            echo "supply=true"
-          else
-            echo "supply=false"
-          fi >> "$GITHUB_OUTPUT"
-          # Derived flags, from the area flags just written.
-          declare -A flag
-          while IFS='=' read -r key value; do flag[$key]=$value; done < "$GITHUB_OUTPUT"
-          any() { for area in "$@"; do [ "${flag[$area]}" = true ] && return 0; done; return 1; }
-          if any $areas; then echo "windows=true"; else echo "windows=false"; fi >> "$GITHUB_OUTPUT"
-          if any backend contracts probe release; then echo "rust=true"; else echo "rust=false"; fi >> "$GITHUB_OUTPUT"
-          cat "$GITHUB_OUTPUT"
+        run: node tools/quality/policy.mjs --github --event "${{ github.event_name }}"
 
   docs:
     name: Validate documentation
@@ -100,7 +67,16 @@ jobs:
           package-manager-cache: false
 
       - name: Validate documentation
-        run: node tools/docs/validate.mjs
+        run: node tools/quality/verify.mjs --checks docs
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
 
   # cargo-deny reads Cargo metadata only, so Linux can resolve the Windows-only
   # dependency graph (deny.toml limits it to x86_64-pc-windows-msvc).
@@ -124,31 +100,23 @@ jobs:
         with:
           tool: cargo-deny@0.20.2
 
-      - name: cargo deny (root workspace)
-        run: cargo deny --manifest-path Cargo.toml check advisories licenses sources bans
-
-      - name: cargo deny (desktop shell)
-        run: cargo deny --manifest-path src-tauri/Cargo.toml check advisories licenses sources bans
-
       - name: Install pinned Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22.22.3
           package-manager-cache: false
 
-      # Shipped (runtime) npm dependencies only; fails on high or critical.
-      # npm audit reads the lockfile, so no install is needed.
-      - name: npm audit (ui, contracts, Stream Deck plugin)
-        shell: bash
-        run: |
-          set -uo pipefail
-          status=0
-          for dir in ui contracts tools/streamdeck; do
-            echo "::group::npm audit $dir"
-            npm audit --omit=dev --audit-level=high --prefix "$dir" || status=1
-            echo "::endgroup::"
-          done
-          exit $status
+      - name: Dependency policy
+        run: node tools/quality/verify.mjs --checks cargo-deny,npm-audit
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
 
   windows:
     name: Windows build, tests and release preparation
@@ -176,42 +144,30 @@ jobs:
       - name: Check formatting
         if: needs.changes.outputs.backend == 'true'
         shell: pwsh
-        run: |
-          cargo fmt --all -- --check
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+        run: node tools/quality/verify.mjs --checks rust-format
 
-      - name: Strict Clippy (workspace)
+      - name: Strict Clippy (workspace and desktop shell)
         if: needs.changes.outputs.backend == 'true'
-        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-
-      - name: Strict Clippy (desktop shell)
-        if: needs.changes.outputs.backend == 'true'
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+        run: node tools/quality/verify.mjs --checks rust-clippy
 
       # Includes the Windows audio adapter; its tests that need real audio
       # endpoints are #[ignore]d, since hosted runners have none.
       - name: Test workspace (no audio hardware)
         if: needs.changes.outputs.backend == 'true'
-        run: cargo test --workspace --locked
+        run: node tools/quality/verify.mjs --checks rust-tests
 
       - name: Test desktop shell
         if: needs.changes.outputs.backend == 'true'
-        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+        run: node tools/quality/verify.mjs --checks shell-tests
 
-      - name: Check native Rust WASAPI probe
+      - name: Check and compile native WASAPI probes
         if: needs.changes.outputs.probe == 'true'
-        run: cargo check --manifest-path tools/m00-wasapi-probe/Cargo.toml --locked
-
-      - name: Compile native WASAPI probe
-        if: needs.changes.outputs.probe == 'true'
-        shell: pwsh
-        run: ./tests/acceptance/m00-native-build.ps1
+        run: node tools/quality/verify.mjs --checks probe-build
 
       - name: CLI parity acceptance
         if: needs.changes.outputs.backend == 'true'
         shell: pwsh
-        run: ./tests/acceptance/m01-cli.ps1 -AllowNoAudioEndpoints
+        run: node tools/quality/verify.mjs --checks cli-parity
 
       # The drift check compares the TypeScript contracts with what the Rust
       # CLI discovers, so a change on either side runs it.
@@ -221,9 +177,7 @@ jobs:
         run: |
           npm ci --prefix contracts
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          npm --prefix contracts run typecheck
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          npm --prefix contracts run check:drift
+          node tools/quality/verify.mjs --checks contract-type,contract-drift
 
       # The release build below uses the Tauri CLI from ui/node_modules.
       - name: Install UI dependencies
@@ -233,28 +187,17 @@ jobs:
       - name: Test and build UI
         if: needs.changes.outputs.ui == 'true'
         shell: pwsh
-        run: |
-          npm --prefix ui run format:check
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          npm --prefix ui run lint
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          npm --prefix ui test
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          npm --prefix ui run build
+        run: node tools/quality/verify.mjs --checks ui-format,ui-lint,ui-tests,ui-build
 
       - name: Verify SDK installer provenance
         if: needs.changes.outputs.sdk == 'true'
         shell: pwsh
-        run: ./tests/acceptance/m06-sdk-installer.ps1
+        run: node tools/quality/verify.mjs --checks sdk-provenance
 
       - name: Test release tooling
         if: needs.changes.outputs.release == 'true'
         shell: pwsh
-        run: |
-          ./tools/release/test-prepare-artifacts.ps1
-          ./tools/release/test-verify-artifacts.ps1
-          ./tools/release/test-runbook-command.ps1
-          ./tools/release/test-app-only-release.ps1
+        run: node tools/quality/verify.mjs --checks release-tests
 
       - name: Build and verify the unsigned installer and release assets
         if: needs.changes.outputs.release == 'true'
@@ -263,7 +206,16 @@ jobs:
           # `gh attestation verify` (OpenAI tunnel runtime provenance) needs a
           # token even for a public repository's attestations.
           GH_TOKEN: ${{ github.token }}
-        run: ./tests/acceptance/m08-release.ps1 -AppOnly
+        run: node tools/quality/verify.mjs --checks release-build
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
 
   browser:
     name: UI browser tests (Edge)
@@ -301,7 +253,7 @@ jobs:
         shell: pwsh
         env:
           TEMP: ${{ runner.temp }}
-        run: npm --prefix ui run e2e
+        run: node tools/quality/verify.mjs --checks browser
 
       - name: Upload Playwright traces and screenshots
         if: failure()
@@ -311,3 +263,81 @@ jobs:
           path: ${{ runner.temp }}/audiorouter-playwright-results
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  policy:
+    name: Verification policy tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+      - name: Test classification, required checks and failure reporting
+        run: node tools/quality/verify.mjs --checks policy
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  streamdeck:
+    name: Stream Deck checks
+    needs: changes
+    if: needs.changes.outputs.streamdeck == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+      - name: Install locked Stream Deck dependencies
+        run: npm ci --prefix tools/streamdeck
+      - name: Typecheck, test and build Stream Deck
+        run: node tools/quality/verify.mjs --checks streamdeck-type,streamdeck-tests,streamdeck-build
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  quality-gate:
+    name: Quality gate
+    if: always()
+    needs: [changes, docs, policy, supply-chain, windows, browser, streamdeck]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+      - name: Require the current workflow checks to succeed
+        env:
+          NEEDS_RESULTS: ${{ toJSON(needs) }}
+        run: node tools/quality/gate.mjs

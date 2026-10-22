@@ -35,6 +35,35 @@ Risks: classifier under-testing, a green aggregate from skipped jobs, main
 protection blocking the metrics bot, unavailable live endpoints, and a formal
 review rule blocking the sole owner. Next: implement and test Q1 policy.
 
+Q1 implementation evidence (Windows 11 x64, Node 22.22.3, 2026-10-21):
+shared Node command inventory and runner now power local and CI checks. Fast,
+full/change-scoped and explicitly guarded hardware profiles report actual
+command exits and distinguish failed/blocked/not-run results. JSON evidence
+includes dirty state so local edits are not misrepresented as commit evidence.
+Classification tests include contracts' consumers, Stream Deck, unknown build
+surfaces and invalid paths. The aggregate rejects missing, cancelled, failed or
+unexpectedly skipped checks; real subprocess tests exercise nonzero exits.
+Stream Deck now gets a conditional CI type/test/build job. Nightly metrics
+produce a reviewed artifact at the measured SHA instead of pushing main.
+
+Commands/results: `node --test tools/quality/policy.test.mjs
+tools/quality/verify.test.mjs`: 50 passed. Shared `--profile fast --keep-going`:
+8 checks passed (docs, policy, both Rust format checks, contract types,
+UI format/lint/all-project types, Stream Deck types); 25 existing UI Hook
+warnings, no lint errors. Evidence %TEMP%/audiorouter-quality-q1-fast.json
+predates the final policy additions and dirty-state metadata. Shared
+`--checks docs,policy,streamdeck-type,streamdeck-tests,streamdeck-build`:
+all passed, including 26 Stream Deck tests; evidence
+%TEMP%/audiorouter-quality-q1-tooling.json. Documentation: 181 files/993 links.
+Official actionlint 1.7.12 Windows binary, archive verified against its published
+SHA256 checksum: CI and nightly workflow validation passed. `git diff --check`
+passed. No product code or real audio activity changed in Q1.
+
+Rollout: isolate Q1 on current main so the group feature can be reviewed
+separately; run actual PR CI before requiring the new aggregate on main.
+Ruleset remains disabled pending that demonstration. Next: push the scoped Q1
+PR, retain its current CI evidence, then activate protection and continue Q2.
+
 
 ## TypeScript 7 readiness — 2026-10-20, owner request
 
