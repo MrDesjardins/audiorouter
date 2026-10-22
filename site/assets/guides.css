@@ -3,20 +3,6 @@
   background:
     radial-gradient(ellipse at 75% 0, #15313060, transparent 40rem), var(--bg);
 }
-.guide-topbar {
-  min-height: 76px;
-  padding: 16px max(24px, calc((100% - 1260px) / 2));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 30px;
-  border-bottom: 1px solid var(--edge);
-}
-.guide-topbar nav {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-}
 .guide-skip {
   position: absolute;
   top: 0;
@@ -97,7 +83,7 @@
 }
 .guide-toc {
   position: sticky;
-  top: 28px;
+  top: 104px;
   display: grid;
   gap: 12px;
   font-size: 13px;
@@ -474,22 +460,8 @@
   .guide-hero {
     gap: 30px;
   }
-  .guide-topbar nav {
-    gap: 12px;
-  }
-  .guide-topbar nav .button {
-    display: none;
-  }
 }
 @media (max-width: 720px) {
-  .guide-topbar {
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 16px 22px;
-  }
-  .guide-topbar nav {
-    width: 100%;
-  }
   .guide-hero {
     padding: 40px 0;
     grid-template-columns: 1fr;
