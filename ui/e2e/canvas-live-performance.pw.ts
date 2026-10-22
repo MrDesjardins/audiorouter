@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 // While audio plays, meters change 20 times a second. Those ticks must update

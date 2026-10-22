@@ -1,5 +1,5 @@
 import { setColorTheme } from "./workbench";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./browser-test";
 
 for (const initial of ["new", "editor", "revoked"] as const) {
   test(`local Cowork export preserves permissions for ${initial} client`, async ({ page }, testInfo) => {

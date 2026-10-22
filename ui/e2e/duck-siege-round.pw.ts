@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 // A Duck following the Siege round (Stats.cc): trigger choice, phase

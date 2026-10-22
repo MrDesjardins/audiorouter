@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./browser-test";
 import type { Session } from "../../contracts/src/index";
 
 // A two-path route shaped like a real streaming setup: a mono microphone

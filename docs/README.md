@@ -42,6 +42,8 @@ Read 01–04 first, then the feature areas needed for a milestone. `MUST`/`shall
 
 The [editor invariant catalog](operations/editor-invariants.md) records state
 ownership, layout/history rules and the executable regression coverage.
+The [production UI checks](operations/production-ui-tests.md) cover optimized
+adapters, usable-canvas readiness, uncaught errors and retained evidence.
 
 The [development quickstart](operations/quickstart.md) gives the safe toolchain,
 acceptance, CLI, UI, MCP, and troubleshooting path for the current repository

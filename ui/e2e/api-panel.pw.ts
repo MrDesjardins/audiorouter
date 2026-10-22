@@ -1,5 +1,5 @@
 import { setColorTheme } from "./workbench";
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`API listener controls and address in ${theme}`, async ({ page }, testInfo) => {
     await page.addInitScript(() => {

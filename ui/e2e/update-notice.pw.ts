@@ -1,6 +1,6 @@
 import { openAppSettings } from "./workbench";
 import { readFileSync } from "node:fs";
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 
 // UI-18: the header shows the version and, when the (here injected) release
 // list has a newer release, a link to its page. No request reaches GitHub.

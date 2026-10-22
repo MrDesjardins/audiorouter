@@ -1,5 +1,5 @@
 // Playwright dispatches this path to a disposable real Rust backend over
-// stdio. This entry is excluded from the production Vite build.
+// stdio. Included only in the optimized acceptance build, never the desktop build.
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { createLiveBackendFromTransport } from "./backend";

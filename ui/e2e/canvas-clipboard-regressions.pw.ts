@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 
 test("keyboard paste brings the new node into view after panning", async ({ page }) => {
   await page.goto("/route-harness.html");

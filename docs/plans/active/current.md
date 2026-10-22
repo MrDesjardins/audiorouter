@@ -1,5 +1,92 @@
 # Active plan — post-0.0.8 maintenance
 
+## Quality Q3 - production browser smoke - 2026-10-21
+
+Q2 storage slice is isolated in PR #53 on history PR #52 and feature PR #51.
+This slice starts at 01e31b77 on quality/production-smoke. Requirements UI-02/11/17,
+NFR-08/14/15, ENG-02/05. Extend the optimized Vite harness to include the real
+backend adapter and the missing group/layout/history/clipboard/session/recording
+scenarios. Preserve the full development suite. Make the ordinary e2e script
+run both so Q1's shared browser check and CI automatically select the smoke;
+retain separate failure outputs. Add an explicit session/connector readiness
+condition using the existing bounded measurement repair, and regress cold/warm
+loads and generation changes without arbitrary sleeps. Run optimized Edge,
+format/lint/type/unit/build; triage unexpected page errors, keep traces and
+three-theme/scaling evidence. Packaging smoke uses only an isolated profile and
+the exact built shell/sidecars; do not call browser evidence packaged evidence.
+Prerequisites: installed Edge, Windows build cache and no-device Rust fixture.
+No live audio or default endpoint changes. Rollback: revert the scoped smoke
+commit(s). Next: extend the existing production inputs and scenario selection.
+
+Q1 status while Q3 proceeds: first full CI run 39710446637 passed all eight
+jobs at 0a7cd2af. Main ruleset 25451476 is now active: PR/resolved threads,
+strict current-base Quality gate (GitHub Actions app 15368), no bypass actors,
+no deletion/force push, independent approvals=0 for the sole-owner repository.
+PR #50 was updated to main 1be9ce3b and pushed at 10b666b2; current-base run
+39713478156 remains pending. A separate docs-only PR #54 at fd2b4c65 proved
+the legitimate-skip path in [run 39713611409](https://github.com/MrDesjardins/audiorouter/actions/runs/39713611409):
+classification/docs/policy/gate succeeded; Windows/Edge/supply/Stream Deck were
+explicitly skipped. Closed that temporary PR after retaining the evidence.
+Its result does not replace the full run or waive any hardware/release gate.
+
+Q3 baseline experiment: extended optimized acceptance input from route-only to
+route plus real-backend adapter, and selected the missing history, group,
+clipboard, session and synthetic-recording suites. `npm.cmd run
+e2e:production-canvas -- --workers=1`: 72 passed in 1.8m. Both entry HTML files
+and their optimized chunks were emitted; the normal desktop build still has
+only index.html. Browser command now runs full development plus optimized smoke
+through the shared package script, so Q1 inventory needs no duplicate command.
+Separate production trace/screenshot output is included in CI failure uploads.
+
+Readiness now reports the rendered session/revision and valid card/connector
+measurements through a hidden DOM probe; it waits for fonts and reuses the
+existing bounded repair, exposing exhausted rather than a false ready state.
+Three pure readiness tests, TypeScript and seven development Edge scenarios
+(including delayed first snapshot, cold repair in three themes, reload, new
+session/revision and permanent missing bounds) passed. Output:
+%TEMP%/audiorouter-q3-readiness/. This is not packaged WebView2 evidence.
+The user's app is currently running (PID 28952, group-layout-test build), so
+the ordinary single-instance packaged smoke cannot safely run locally until
+that app is closed. No process or daily-use profile was changed. Continue
+independent optimized/CI work and prepare an isolated packaged check.
+
+Further Q3 evidence: the full guarded local pipeline completed successfully.
+UI unit tests passed all 71 files/611 tests; the development Edge invocation
+exited zero across its 326 collected scenarios (explicit optional skips remain
+unrun), and all 76 optimized scenarios passed. Both Playwright `.last-run.json`
+files report `passed` with no failed tests. The optimized directory is now
+explicitly emptied before builds; verified its resolved dedicated target
+beneath target/canvas-production-ui before cleanup. Wiring tests check both
+build inputs, selected scenario existence and package scripts. The uncaught
+error fixture is shared by all 45 formerly raw Playwright scenario modules;
+real-backend scenarios retain their stricter existing guard. The initial
+negative guard setup failed to import a file: URI on Windows and was correctly
+rejected by the positive control/expected assertion markers. After fixing to an
+absolute module path, the clean-page child exited 0 and intentional-error child
+exited 1 at the intended guard assertion. Evidence: `%TEMP%/audiorouter-browser-guard-Tt7cbR/`
+and `%TEMP%/audiorouter-browser-guard-szqJfN/`. Fixed five Node-script lint
+errors through explicit process/log imports; lint has only the existing 25
+hook warnings. Formatting, all-project TypeScript, Vite build and lint pass.
+
+CI limitations retained: PR #53's Jev run 39712836614 failed with HTTP 422
+while building a location-choice dictionary (291 entries, API limit 255).
+It reported an unlocated provisional rule violation but posted no review;
+this is not a successful review or a confirmed product bug. The pinned tool
+lives in another repository, so no unapproved upstream edit or fabricated
+finding was made. Actual UI/TypeScript/model/browser evidence remains separate.
+Q1 current head is 31386905, run 39714997868: policy, docs, supply, Stream
+Deck and Edge passed; Windows strict Clippy is still in progress. The prior
+503/cancelled run is not counted as passing; registry audit recovered on this
+new run.
+
+Q5 baseline inspection (not a new coverage run): downloaded metrics-coverage
+from [nightly 39570183964](https://github.com/MrDesjardins/audiorouter/actions/runs/39570183964)
+at b4bbbef57f56598d50dcf3b5cabc25b7093a1e70: Rust workspace lines 78.3%,
+shell lines 56.8%, UI lines 68.5%. Artifact copy:
+%TEMP%/audiorouter-quality-baseline-39570183964/. These older global percentages
+are not baselines for the new history modules and do not justify setting a
+coverage floor yet. Continue measured module coverage before a ratchet.
+
 ## Quality Q2 - presentation persistence - 2026-10-21
 
 History slice is isolated in PR #52 on top of group PR #51. This next slice

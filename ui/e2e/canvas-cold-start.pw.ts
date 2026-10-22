@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 const session = {
@@ -50,6 +50,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       { session, theme },
     );
     await page.goto("/route-harness.html");
+    await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
     for (const edge of session.edges)
       await expect(page.getByTestId(`rf__edge-${edge.id}`).locator("path").first()).toHaveAttribute("d", /^M-?\d/);
     await page.getByRole("button", { name: "Remove connection voice-output" }).click({ force: true });

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`inspector status remains clear in ${theme}`, async ({ page }, testInfo) => {
     await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);

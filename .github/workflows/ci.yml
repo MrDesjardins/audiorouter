@@ -294,8 +294,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           npm ci --prefix ui
 
-      # Builds the e2e_backend fixture, then runs every Playwright test in the
-      # installed Edge. README screenshots stay off (they write into docs/).
+      # Builds the e2e_backend fixture, runs every development Playwright test,
+      # then the optimized acceptance smoke in installed Edge. README screenshot
+      # generators stay off (they write into docs/).
       # playwright.config.ts runs one worker when CI is set.
       - name: Run Playwright tests
         shell: pwsh
@@ -308,6 +309,17 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-results
-          path: ${{ runner.temp }}/audiorouter-playwright-results
+          path: |
+            ${{ runner.temp }}/audiorouter-playwright-results
+            ${{ runner.temp }}/audiorouter-production-playwright-results
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload browser error-guard qualification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-guard-qualification
+          path: ${{ runner.temp }}/audiorouter-browser-guard-*
           if-no-files-found: ignore
           retention-days: 7

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
 // A device node with no saved device must show an empty picker, not the device

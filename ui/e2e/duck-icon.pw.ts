@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 
 // The Duck tool card shows a duck glyph (not the Compressor's arrow) and the
 // window Quit button only exists in the desktop shell.

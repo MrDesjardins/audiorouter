@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 
 // The recording library (browse, search, preview, metadata) rendered only in
 // an always-hidden panel until 2026-10-04; it now lives in the Recording tab.

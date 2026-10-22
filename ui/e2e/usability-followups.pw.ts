@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 import { appendLibraryNode } from "../src/draft";
 
