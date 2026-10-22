@@ -1,5 +1,39 @@
 # Active plan — post-0.0.8 maintenance
 
+## Quality Q2 - editor state boundaries - 2026-10-21
+
+Owner approved the [application quality roadmap](application-quality.md).
+Q1 is isolated on main in PR #50; current CI run 39710446637 is pending.
+Its local intentional format/type/test/contract/classifier faults were all
+detected by the real shared runner and restored in finally blocks; reports
+are in %TEMP%/audiorouter-q1-faults-zplj4b/. This is failure-detection evidence,
+not passing product evidence. Q2 starts at the reviewed group branch 6d9890e0
+in its own worktree; it does not implicitly merge that feature or PR #50.
+
+Scope UI-02/11/16/17, ENG-01/02: specify session/presentation/history invariants,
+extract pure layout history/restore operations without moving backend authority,
+and test generated action sequences plus malformed persistence/fault boundaries.
+Prerequisites: Windows/Edge and deterministic backend fixture available, no
+audio hardware needed. Steps: reproduce repeated Arrange no-op history issue;
+extract and integrate history; keep Undo arrange on the same history path;
+add fixed-seed bounded sequence tests, lock/session/storage guards and focused
+browser regressions; run format/lint/type/unit/Edge and inspect diffs. Rollback:
+revert the Q2 commit; no database or contract migration is intended. Keep
+generated seed/action trace in failure output. Next: reproduce before fixing.
+
+Q2 first evidence: Edge reproduced the redundant Arrange undo entry at
+6d9890e0 (%TEMP%/audiorouter-q2-arrange-before/, expected original voice position
+445,67 but undo left arranged 419,0). Added pure history model/tests first;
+integration and the user-visible fix follow as a separate commit. Five seeds
+each exercise 400 actions against an independent coordinate/connector model.
+The model's lock, stale-session and redo-clear guards were each removed in a
+temporary experiment: all three mutations made the focused suite fail; originals
+restored in finally. Logs: %TEMP%/audiorouter-q2-mutations-u2e7FB/.
+The integrated working tree passed 590 UI tests, type/build/lint (25 existing
+Hook warnings, zero errors), and 28 focused Edge scenarios including the
+formerly failing case. Final integration checks and the Undo arrange/redo
+regression still follow. No Rust/audio or backend graph behavior is changed.
+
 ## Group/layout review round two - 2026-10-21
 
 Scope: UI-02/11/16/17, review undo interleaving, connector-side presentation
