@@ -141,6 +141,11 @@ jobs:
           toolchain: 1.96.0
           components: rustfmt, clippy
 
+      # All-feature shell lint embeds frontendDist through custom-protocol.
+      - name: Install UI dependencies
+        if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.release == 'true'
+        run: npm ci --prefix ui
+
       - name: Check formatting
         if: needs.changes.outputs.backend == 'true'
         shell: pwsh
@@ -178,11 +183,6 @@ jobs:
           npm ci --prefix contracts
           if ($LASTEXITCODE -ne 0) { exit 1 }
           node tools/quality/verify.mjs --checks contract-type,contract-drift
-
-      # The release build below uses the Tauri CLI from ui/node_modules.
-      - name: Install UI dependencies
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.release == 'true'
-        run: npm ci --prefix ui
 
       - name: Test and build UI
         if: needs.changes.outputs.ui == 'true'

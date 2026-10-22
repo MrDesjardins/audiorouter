@@ -88,6 +88,26 @@ earlier successful run does not qualify this later merge commit. Next: record
 the new head's CI, demonstrate a docs-only declared-skip run and continue Q2/Q3
 in their separate stacked branches. No PR is automatically merged.
 
+Q1 follow-up review: shell Clippy inherited CI's omission of --all-features,
+although AGENTS.md requires the same strict profile as the workspace. Verified
+the all-feature shell check locally with current embedded UI: passed in 21.3s
+(existing C:/code/audiorouter/src-tauri/target cache; no app launched/replaced).
+Shared rust-clippy now builds current UI before both strict checks, and CI
+installs locked UI dependencies before that step for backend changes too.
+A policy regression pins the prerequisite/order and both all-feature flags.
+
+Run 39713478156's dependency job failed on a registry HTTP 503 during Stream
+Deck audit, after cargo-deny and the other npm audits passed. Retained log:
+%TEMP%/audiorouter-quality-q1-supply-failure.log and its uploaded verification
+artifact. A diagnostic local probe timed out on bulk audit then got 400 from
+the deprecated quick fallback; it did not establish a dependency-tree defect
+or a passing audit. The npm status page reports degraded install/publishing
+since 02:33 UTC (Security Audit still lists operational), so attribution to a
+broader registry incident remains an inference. GitHub refused to rerun the
+completed job while the whole run was active. Do not waive or suppress it.
+This source follow-up triggers fresh full CI; retain the failed/cancelled older
+run as such. Next: require the final head's full check, including audit, to pass.
+
 ## Website: no localhost Swagger link, one header everywhere — 2026-10-21, owner request
 
 Objective: the hosted API page must not link to `127.0.0.1` (that points at

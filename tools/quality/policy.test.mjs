@@ -91,3 +91,12 @@ test('nightly metrics use read-only permissions and artifacts instead of pushing
   assert.match(workflow, /name: quality-history-update/);
   assert.match(workflow, /ref: \$\{\{ github.sha \}\}/);
 });
+
+test('strict shell Clippy covers every feature after building current embedded UI', () => {
+  const commands = checks['rust-clippy'];
+  assert.deepEqual(commands[0].args, ['--prefix', 'ui', 'run', 'build']);
+  for (const command of commands.filter(command => command.executable === 'cargo')) assert.ok(command.args.includes('--all-features'));
+  const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  assert.ok(workflow.indexOf('name: Install UI dependencies') < workflow.indexOf('name: Strict Clippy'));
+  assert.match(workflow, /name: Install UI dependencies\s+if: needs.changes.outputs.backend == 'true' \|\| needs.changes.outputs.ui == 'true' \|\| needs.changes.outputs.release == 'true'/);
+});
