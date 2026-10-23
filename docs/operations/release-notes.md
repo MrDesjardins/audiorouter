@@ -10,6 +10,13 @@
   its audio.
 - **Delete session right after start-up** now moves to a remaining session
   instead of staying on the deleted one.
+- **Route status shows real numbers again** for routes with several inputs
+  (they read 0 since the dedicated audio thread), and its late-gap warning
+  measures the thread that plays the audio.
+- **Plugin windows with many controls** no longer stop the plugin when you
+  turn knobs while AudioRouter also sends slider values.
+- **App group picker** starts empty after you create a group.
+- Copying a copied tool names it from the original (`voice-copy-2`).
 
 ## 0.0.21 — 2026-10-23 (unsigned experimental preview)
 
