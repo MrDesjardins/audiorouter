@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { classifyChanges, expectedJobs, areas } from './policy.mjs';
 import { evaluateGate } from './gate.mjs';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +56,8 @@ test('main push classifies the pushed before/after diff', () => {
     execFileSync('git', ['add', '.'], { cwd: root });
     execFileSync('git', ['commit', '-m', 'baseline'], { cwd: root, stdio: 'ignore' });
     const before = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
-    writeFileSync(join(root, 'README.md'), 'website only\n');
+    mkdirSync(join(root, 'site'), { recursive: true });
+    writeFileSync(join(root, 'site', 'compare.html'), '<title>site</title>\n');
     execFileSync('git', ['add', '.'], { cwd: root });
     execFileSync('git', ['commit', '-m', 'site update'], { cwd: root, stdio: 'ignore' });
     const after = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
