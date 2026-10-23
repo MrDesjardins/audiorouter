@@ -663,6 +663,15 @@ export function needsNativePaths(session: Session): boolean {
   // Network Send/Receive run only on the multi-path worker.
   if (session.nodes.some((node) => node.enabled && (node.kind === "networkSend" || node.kind === "networkReceive")))
     return true;
+  // An Output Switch is compiled only by the multi-path worker; the
+  // single-endpoint chain rejects it even with one connected output.
+  if (
+    session.nodes.some(
+      (node) =>
+        node.kind === "outputSwitch" && session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id),
+    )
+  )
+    return true;
   // A Recorder is a fan-out branch; the single-endpoint worker compiles only
   // a linear chain and rejects it, while the multi-path worker records it.
   if (

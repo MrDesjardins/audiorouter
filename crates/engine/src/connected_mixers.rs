@@ -135,6 +135,19 @@ pub(super) fn compile(
             .ok_or_else(unsupported)?;
         let node = pending.remove(position);
         let feeds = incoming(&node.id);
+        // Gates apply to a node's whole output, so a node mixing several
+        // feeds cannot gate one of them: refuse rather than leak the
+        // unselected side or mute the other feeds.
+        if feeds.len() > 1
+            && feeds.iter().any(|edge| {
+                output_switch_indices.contains_key(&edge.source_node)
+                    || inherited_gates
+                        .get(&edge.source_node)
+                        .is_some_and(|gates| !gates.is_empty())
+            })
+        {
+            return Err(unsupported());
+        }
         let mut gates = if feeds.len() == 1 {
             inherited_gates
                 .get(&feeds[0].source_node)
@@ -574,6 +587,67 @@ mod tests {
         let output = run(&set.paths()[0]);
         assert!((output["monitor"] - 0.6).abs() < 1e-6);
         assert!(output["obs-monitor"].abs() < 1e-6);
+    }
+
+    #[test]
+    fn output_switch_side_into_a_shared_mixer_is_refused_rather_than_leaked() {
+        // A gate covers a node's whole output, so a switch side mixed with
+        // another feed would either leak while unselected or mute that feed.
+        let mut session = fixture();
+        let switch_id = EntityId::new("output-switch");
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 2,
+        };
+        session.nodes.push(Node {
+            id: switch_id.clone(),
+            name: "Output Switch".into(),
+            kind: NodeKind::OutputSwitch,
+            type_version: 1,
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(serde_json::json!({ "selected": "a" })).unwrap(),
+            ports: vec![
+                port("in", PortDirection::Input),
+                port("a", PortDirection::Output),
+                port("b", PortDirection::Output),
+            ],
+        });
+        // game-eq -> switch; a -> game-output, b -> game-mix (shared with discord).
+        let feed = session
+            .edges
+            .iter_mut()
+            .find(|edge| edge.id.as_str() == "game-eq-game-mix")
+            .unwrap();
+        feed.destination_node = switch_id.clone();
+        for (side, destination) in [("a", "obs-out"), ("b", "game-mix")] {
+            session.edges.push(Edge {
+                id: EntityId::new(format!("output-switch-{side}")),
+                source_node: switch_id.clone(),
+                source_port: side.into(),
+                destination_node: EntityId::new(destination),
+                destination_port: "in".into(),
+                matrix: vec![1.0, 0.0, 0.0, 1.0],
+                enabled: true,
+            });
+        }
+        let mut obs = session
+            .nodes
+            .iter()
+            .find(|node| node.id.as_str() == "game-output")
+            .unwrap()
+            .clone();
+        obs.id = EntityId::new("obs-out");
+        session.nodes.push(obs);
+
+        assert!(compile_native_paths_with_plugins_and_audio(
+            &session,
+            RuntimeGeneration::new(5),
+            &Default::default(),
+            &Default::default(),
+        )
+        .is_err());
     }
 
     #[test]

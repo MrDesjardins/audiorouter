@@ -3733,8 +3733,27 @@ impl SupervisedWorkerProcess {
     pub fn plugin_latency_samples(&mut self, now: Instant) -> Result<u32, WorkerProcessError> {
         let request =
             WorkerLatency::new(0, self.sample_rate_hz).map_err(WorkerProcessError::Message)?;
-        self.report_latency(request, now)
-            .map(|latency| latency.samples)
+        self.ensure_running()?;
+        self.process
+            .write(&WorkerMessage::Latency(request))
+            .and_then(|()| self.process.read())
+            .map_err(WorkerProcessError::Message)
+            .and_then(|message| match message {
+                WorkerMessage::Latency(actual) => Ok(actual.samples),
+                // The plugin could not say; the worker is fine and the
+                // stage runs with no reported delay.
+                WorkerMessage::Failure { .. } => Ok(0),
+                _ => Err(WorkerProcessError::Protocol(
+                    "unexpected latency response".into(),
+                )),
+            })
+            .inspect(|_| {
+                self.supervisor.heartbeat(now);
+            })
+            .inspect_err(|_| {
+                terminate_child(&mut self.process.child);
+                self.supervisor.record_failure(now);
+            })
     }
 
     pub fn report_latency(
@@ -4085,6 +4104,32 @@ pub struct PluginRuntimeBridge {
     owner: Option<Arc<PluginRuntimeBridge>>,
 }
 
+/// The slider events to send with the next quantum: each member's list only
+/// when it differs from the one last delivered, otherwise nothing, so knobs
+/// turned in the plugin's own window keep their value until a slider moves.
+/// A bypassed member is not processed, so its list stays pending.
+fn changed_parameters(
+    template: &[Vec<ParameterEvent>],
+    sent: &mut [Vec<ParameterEvent>],
+    active: &[bool],
+) -> Vec<Vec<ParameterEvent>> {
+    template
+        .iter()
+        .enumerate()
+        .map(|(index, events)| {
+            if sent.get(index) == Some(events) {
+                return Vec::new();
+            }
+            if active.get(index).copied().unwrap_or(false) {
+                if let Some(slot) = sent.get_mut(index) {
+                    slot.clone_from(events);
+                }
+            }
+            events.clone()
+        })
+        .collect()
+}
+
 /// Watches whether a plugin ever changes the audio it is given. Quanta
 /// quieter than [`UnchangedAudioWatch::LOUD`] say nothing (many effects leave
 /// silence alone). Once a loud quantum comes back changed the watch stops for
@@ -4318,6 +4363,10 @@ impl PluginRuntimeBridge {
                 // Single plugins only: a chain's members cannot be told apart.
                 let mut unchanged_watch = (members == 1).then(|| UnchangedAudioWatch::new(frames));
                 let mut input_copy = vec![0.0_f32; channels * frames];
+                // Slider values last delivered to each member. Sending them
+                // again every quantum would undo edits made in the plugin's
+                // own window, so only a changed slider list is sent.
+                let mut sent_parameters: Vec<Vec<ParameterEvent>> = vec![Vec::new(); members];
                 while thread_running.load(Ordering::Acquire) {
                     // Serve control requests between frames; the worker
                     // protocol is strictly request/response, so they cannot
@@ -4429,18 +4478,25 @@ impl PluginRuntimeBridge {
                             }
                         };
                     sequence = sequence.saturating_add(1);
-                    let parameters = thread_parameters
+                    let template = thread_parameters
                         .lock()
                         .map(|value| value.clone())
                         .unwrap_or_default();
+                    let active_now: Vec<bool> = thread_active
+                        .iter()
+                        .map(|flag| flag.load(Ordering::Acquire))
+                        .collect();
+                    let parameters =
+                        changed_parameters(&template, &mut sent_parameters, &active_now);
                     let mut should_stop = false;
                     let result = if members > 1 {
-                        let active = thread_active
-                            .iter()
-                            .map(|flag| flag.load(Ordering::Acquire))
-                            .collect();
-                        worker.process_chain_with_active(frame, parameters, active, Instant::now())
-                    } else if !thread_active[0].load(Ordering::Acquire) {
+                        worker.process_chain_with_active(
+                            frame,
+                            parameters,
+                            active_now,
+                            Instant::now(),
+                        )
+                    } else if !active_now[0] {
                         Ok(frame)
                     } else {
                         worker.process(
@@ -4531,7 +4587,6 @@ impl PluginRuntimeBridge {
         self.active[self.instance_index].store(active, Ordering::Release);
     }
 
-    /// Bounded callback counters; output misses include startup warm-up.
     /// True when this plugin has returned clearly audible input unchanged
     /// since it started. A licensed effect at neutral settings can do that,
     /// but so does an unlicensed or unactivated plugin that bypasses itself
@@ -4540,6 +4595,7 @@ impl PluginRuntimeBridge {
         self.unchanged_audio.load(Ordering::Acquire)
     }
 
+    /// Bounded callback counters; output misses include startup warm-up.
     pub fn continuity_counts(&self) -> (u32, u32) {
         (
             self.output_misses.load(Ordering::Relaxed),
@@ -7360,6 +7416,42 @@ mod tests {
         assert_eq!(identity.metadata.version.as_deref(), Some("1.2.3"));
         assert_eq!(identity.metadata.class_ids.len(), 1);
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn slider_events_are_sent_once_per_change_so_editor_edits_survive() {
+        let event = |value| ParameterEvent {
+            parameter_id: 5,
+            normalized_value: value,
+            sample_offset: 0,
+        };
+        let mut sent = vec![Vec::new(), Vec::new()];
+        let template = vec![vec![event(0.3)], vec![event(0.7)]];
+        // First quantum: both lists go out; the bypassed member stays pending.
+        assert_eq!(
+            changed_parameters(&template, &mut sent, &[true, false]),
+            template
+        );
+        // Later quanta: nothing for the delivered member, so a knob turned in
+        // its window is not reset; the bypassed member is retried.
+        assert_eq!(
+            changed_parameters(&template, &mut sent, &[true, true]),
+            vec![Vec::new(), vec![event(0.7)]]
+        );
+        assert_eq!(
+            changed_parameters(&template, &mut sent, &[true, true]),
+            vec![Vec::<ParameterEvent>::new(), Vec::new()]
+        );
+        // A moved slider is sent once.
+        let moved = vec![vec![event(0.4)], vec![event(0.7)]];
+        assert_eq!(
+            changed_parameters(&moved, &mut sent, &[true, true]),
+            vec![vec![event(0.4)], Vec::new()]
+        );
+        assert_eq!(
+            changed_parameters(&moved, &mut sent, &[true, true]),
+            vec![Vec::<ParameterEvent>::new(), Vec::new()]
+        );
     }
 
     #[test]

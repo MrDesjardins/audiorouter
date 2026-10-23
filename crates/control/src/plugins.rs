@@ -850,8 +850,6 @@ impl ControlPlane {
             })
     }
 
-    /// Read and verify a stored plugin state for the plugin binary it was
-    /// captured from.
     /// The slider values saved with a captured state, when it has them
     /// (captures from before 2026-10-22 do not).
     fn plugin_slider_snapshot(&self, state_id: &str) -> Option<serde_json::Map<String, Value>> {
@@ -867,6 +865,8 @@ impl ControlPlane {
         }
     }
 
+    /// Read and verify a stored plugin state for the plugin binary it was
+    /// captured from.
     pub(crate) fn load_plugin_state_asset(
         &self,
         state_id: &str,

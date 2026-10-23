@@ -1104,6 +1104,17 @@ describe("independent paths", () => {
     expect(needsNativePaths(unconnected)).toBe(false);
   });
 
+  it("uses the multi-path worker for a route through an Output Switch", () => {
+    const single: Session = { ...twoPaths, nodes: twoPaths.nodes.slice(0, 3), edges: twoPaths.edges.slice(0, 2) };
+    expect(needsNativePaths(single)).toBe(false);
+    const switched: Session = {
+      ...single,
+      nodes: [...single.nodes, node("switch", "outputSwitch")],
+      edges: [...single.edges, edge("e7", "voice", "switch")],
+    };
+    expect(needsNativePaths(switched)).toBe(true);
+  });
+
   it("lists device nodes that still need a saved endpoint", () => {
     const bound: Session = {
       ...twoPaths,
