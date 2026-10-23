@@ -70,6 +70,12 @@ Archive a completed execution plan under `docs/plans/archived/` with a date and 
 
 For defects: record reproduction and affected versions; add a focused regression when useful; fix the owning layer; verify the original failure; document compatibility or migration consequences. For releases: use M08 gates, record artifacts and checksums, confirm rollback, publish known issues and migration instructions. For incidents: mitigate within authority, preserve redacted evidence, identify cause, repair, and add a prevention measure. Revisit the specification when experience disproves an assumption.
 
+## Pull request approval
+
+- Do not create, open, or convert a pull request to ready-for-review until a human explicitly approves opening a PR for the reviewed branch and changes. Authorization to implement, commit, push, or run CI does not grant this approval.
+- Before requesting that approval, finish the locally available checks, inspect the complete diff, and report the branch, commit, local results, and any limitations. Wait for the human's approval before creating the PR.
+- If the human wants to test locally first, keep the work on its branch and provide the local test instructions/results. Do not open a PR while that request is in effect.
+
 ## Jev review
 
 Jev is paused for now. Its GitHub Actions workflow is manually dispatchable
@@ -92,6 +98,14 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-22 — Get human approval before opening a pull request (user preference).**
+  Evidence: [active plan, PR approval preference](docs/plans/active/current.md#pull-request-approval-preference-2026-10-22).
+  Scope: all repository branches and pull requests. Consequence: finish local
+  validation and present the exact branch, commit and diff summary, then wait
+  for explicit human approval before creating a PR; implementation, commits,
+  pushes or CI authorization do not imply PR approval. Honor any request to
+  test locally first by keeping the branch out of a PR.
 
 - **2026-10-22 — Pause automatic Jev reviews when they add little value (user preference).**
   Evidence: [active plan, Jev pause](docs/plans/active/current.md#jev-paused-2026-10-22).

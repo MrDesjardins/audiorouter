@@ -74,6 +74,15 @@ graph planning/commit path.
   `git diff --check` passes. Not run: live process-loopback capture, native
   file-dialog interaction in a packaged shell, or group behavior with
   parent/child process trees.
+- Owner local-test build (Windows 11): `npm.cmd run build --prefix ui` passed,
+  then `cargo build --release --manifest-path src-tauri/Cargo.toml
+  --features custom-protocol`, `cargo build --release -p
+  audiorouter-plugin-host --bin audiorouter-plugin-worker`, and `cargo build
+  --release -p audiorouter-cli` passed with `CARGO_TARGET_DIR` set to
+  `target/owner-local-test`. Shell artifact:
+  `C:\code\audiorouter\.worktrees\wave-link-app-sources\target\owner-local-test\release\audiorouter-shell.exe`.
+  The plugin worker and CLI are beside it. This is a local unsigned build,
+  not an installer or release qualification.
 - Deviation/blocker: current API does not expose process ancestry and backend
   CAP-10 does not yet detect parent/helper overlap between app-capture nodes.
   Group creation therefore warns clearly but cannot deduplicate or reject a
@@ -81,10 +90,22 @@ graph planning/commit path.
   full group-overlap safety.
 - Review handoff: commit `53816c46` is pushed in isolated branch
   `feature/wave-link-app-sources`; [PR #59](https://github.com/MrDesjardins/audiorouter/pull/59)
-  is open against current `main`. Local verification is complete; GitHub
-  current-base checks are queued. Do not merge automatically.
-- Next: finish PR #59 CI and owner review. Then continue with Listen to any
-  mix (#1 + #9); keep CAP-10 overlap detection on the open list.
+  was opened before the owner's new PR-approval preference and is now closed.
+  The owner tested the local build and reported that it is working. On
+  2026-10-22 the owner explicitly authorized pushing these changes directly
+  to `main`; do not reopen the PR. The hosted CI run was cancelled after the
+  PR was closed. Keep CAP-10 overlap detection on the open list.
+- Next: continue Wave Link parity with Listen to any mix (#1 + #9); retain
+  CAP-10 overlap detection as a separate app-group follow-up.
+
+## Pull request approval preference 2026-10-22
+
+The owner requests that no agent create or open a pull request until a human
+explicitly approves the exact branch and changes. Complete local validation,
+inspect the diff, and report the branch, commit and results before asking for
+that approval. Authorization to implement, commit, push or run CI is not PR
+approval. PR #59 was closed for local testing; the owner tested the local
+build, confirmed it works, and explicitly authorized a direct push to `main`.
 
 ## Wave Link parity, first round — 2026-10-22, owner request
 
