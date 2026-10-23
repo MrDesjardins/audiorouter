@@ -3176,7 +3176,7 @@ enum OutputBranchSource {
     Chain(usize),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct OutputSwitchGate {
     switch: usize,
     side_b: bool,
@@ -3241,6 +3241,10 @@ struct OutputProcessorChain {
     /// Several authored parents converge here. All are earlier cached stages;
     /// no recursive processing or source duplication occurs in the callback.
     convergence: Option<CachedConvergence>,
+    /// One side of an Output Switch: the switch's input with that side's
+    /// gain applied, so every tool, Meter and Mixer after the side sees the
+    /// gated signal rather than only the final sink.
+    gate: Option<OutputSwitchGate>,
 }
 
 struct CachedConvergence {
@@ -3955,6 +3959,9 @@ impl CompiledMixerFanoutGraph {
                 self.with_output_source(chain.source, mixed, |source| {
                     block.map_from(source, &chain.entry_matrix)?;
                     chain.graph.process(block);
+                    if let Some(gate) = &chain.gate {
+                        self.apply_switch_gate(gate, block);
+                    }
                     Ok::<(), BlockError>(())
                 })
             });
@@ -3978,32 +3985,40 @@ impl CompiledMixerFanoutGraph {
         }) {
             result?;
         }
+        // The side chains already gate their signal; gating again at the sink
+        // also silences what tools after the side add (tails, plugin noise).
         for gate in &self.output_gates[index] {
-            let switch = &self.output_switches[gate.switch];
-            let start = f32::from_bits(switch.block_start.load(Ordering::Relaxed));
-            let end = f32::from_bits(switch.block_end.load(Ordering::Relaxed));
-            let frames = destination.frames();
-            for channel in 0..destination.channels() {
-                if let Some(samples) = destination.channel_mut(channel) {
-                    for (frame, sample) in samples.iter_mut().enumerate() {
-                        let position = if frames <= 1 {
-                            end
-                        } else {
-                            start + (end - start) * frame as f32 / (frames - 1) as f32
-                        };
-                        *sample *= if gate.muted {
-                            0.0
-                        } else {
-                            OutputSwitchState::gain(position, gate.side_b)
-                        };
-                    }
-                }
-            }
+            self.apply_switch_gate(gate, destination);
         }
         // Branch DSP may generate or retain audio even with a muted input.
         // Enforce privacy after every branch, including pre-Mixer captures.
         self.privacy_mute.apply(destination);
         Ok(())
+    }
+
+    /// Scale `block` by one Output Switch side's gain for this quantum,
+    /// ramping across the block while the switch moves.
+    fn apply_switch_gate(&self, gate: &OutputSwitchGate, block: &mut AudioBlock) {
+        let switch = &self.output_switches[gate.switch];
+        let start = f32::from_bits(switch.block_start.load(Ordering::Relaxed));
+        let end = f32::from_bits(switch.block_end.load(Ordering::Relaxed));
+        let frames = block.frames();
+        for channel in 0..block.channels() {
+            if let Some(samples) = block.channel_mut(channel) {
+                for (frame, sample) in samples.iter_mut().enumerate() {
+                    let position = if frames <= 1 {
+                        end
+                    } else {
+                        start + (end - start) * frame as f32 / (frames - 1) as f32
+                    };
+                    *sample *= if gate.muted {
+                        0.0
+                    } else {
+                        OutputSwitchState::gain(position, gate.side_b)
+                    };
+                }
+            }
+        }
     }
 
     /// Mix all inputs into a cleared scratch block, running any per-input
@@ -7381,28 +7396,8 @@ impl OutputBranchCompiler<'_> {
                     .and_then(|value| value.as_str())
                     == Some("b"),
             ));
-            let graph = compile_processor_chain(
-                session.id.as_str(),
-                &format!("output_switch_{}", node.id.as_str()),
-                &[],
-                input.channels,
-                self.generation,
-                self.plugins,
-                self.audio_media,
-            )?;
-            let chain_index = self.output_chains.len();
-            self.output_chains.push(OutputProcessorChain {
-                source,
-                entry_matrix: edge.matrix.clone(),
-                graph,
-                channels: usize::from(input.channels),
-                block: RealtimeDsp::new(
-                    AudioBlock::new(usize::from(input.channels), PROCESSING_QUANTUM_FRAMES)
-                        .map_err(|_| GraphCompileError::UnsupportedTopology)?,
-                ),
-                ready: AtomicBool::new(false),
-                convergence: None,
-            });
+            // One gated chain per used side, prepared before its children.
+            let mut side_chains = [None::<usize>; 2];
             let mut child_gates = gates.to_vec();
             for child in children {
                 let side_b = child.source_port == "b";
@@ -7411,11 +7406,49 @@ impl OutputBranchCompiler<'_> {
                     .find(|port| port.name == child.source_port)
                     .ok_or(GraphCompileError::UnsupportedTopology)?
                     .channels;
-                child_gates.push(OutputSwitchGate {
+                // A disabled or bypassed routing node fails closed on both sides.
+                let gate = OutputSwitchGate {
                     switch: state_index,
                     side_b,
                     muted: !node.enabled || node.bypass,
-                });
+                };
+                let chain_index = match side_chains[usize::from(side_b)] {
+                    Some(index) => index,
+                    None => {
+                        let index = self.output_chains.len();
+                        self.output_chains.push(OutputProcessorChain {
+                            source,
+                            entry_matrix: edge.matrix.clone(),
+                            graph: compile_processor_chain(
+                                session.id.as_str(),
+                                &format!(
+                                    "output_switch_{}_{}",
+                                    node.id.as_str(),
+                                    child.source_port
+                                ),
+                                &[],
+                                input.channels,
+                                self.generation,
+                                self.plugins,
+                                self.audio_media,
+                            )?,
+                            channels: usize::from(input.channels),
+                            block: RealtimeDsp::new(
+                                AudioBlock::new(
+                                    usize::from(input.channels),
+                                    PROCESSING_QUANTUM_FRAMES,
+                                )
+                                .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+                            ),
+                            ready: AtomicBool::new(false),
+                            convergence: None,
+                            gate: Some(gate),
+                        });
+                        side_chains[usize::from(side_b)] = Some(index);
+                        index
+                    }
+                };
+                child_gates.push(gate);
                 self.compile(
                     child,
                     OutputBranchSource::Chain(chain_index),
@@ -7473,6 +7506,7 @@ impl OutputBranchCompiler<'_> {
             ),
             ready: AtomicBool::new(false),
             convergence: None,
+            gate: None,
         });
         for child in children {
             self.compile(
