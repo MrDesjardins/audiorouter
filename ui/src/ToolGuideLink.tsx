@@ -19,6 +19,7 @@ const TOOL_GUIDES: Record<string, string> = {
   firFilter: "fir-filter",
   mute: "mute",
   inputSwitch: "input-switch",
+  outputSwitch: "output-switch",
   duck: "duck",
   timeShift: "time-shift",
   mixer: "mixer",

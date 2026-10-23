@@ -86,4 +86,12 @@ describe("node library search", () => {
       kind: "testSignal",
     });
   });
+
+  it("offers Output Switch as a routing tool", () => {
+    expect(libraryEntries.find((entry) => entry.id === "output-switch")).toMatchObject({
+      label: "Output Switch",
+      category: "Routing",
+      kind: "outputSwitch",
+    });
+  });
 });

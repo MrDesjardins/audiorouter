@@ -1,5 +1,17 @@
 # Active plan — post-0.0.8 maintenance
 
+## Output Switch — active feature branch (2026-10-22)
+
+The owner authorized a routing node with one input and two exclusive outputs,
+toggled in the app or on Stream Deck. Work is isolated on
+`feature/output-switch`; see the detailed
+[Output Switch plan](output-switch.md) for contracts, decisions, tasks and
+validation. Implementation and automated checks are complete. Local build:
+`C:\code\audiorouter\.worktrees\output-switch\src-tauri\target\debug\audiorouter-shell.exe`
+(worker and CLI sidecars are beside it). Owner testing is pending; no commit,
+push or PR is authorized until the owner tests the build and approves the
+reviewed branch and changes.
+
 ## Wave Link parity #4 — application sources and groups — 2026-10-22
 
 Objective: let a user add an application source from a selected `.exe` even

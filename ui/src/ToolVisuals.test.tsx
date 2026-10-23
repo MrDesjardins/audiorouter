@@ -10,6 +10,7 @@ import {
   DelayEditor,
   GraphicEqEditor,
   InputSwitchEditor,
+  OutputSwitchEditor,
   LevelEditor,
   PitchEditor,
   StrengthEditor,
@@ -167,6 +168,38 @@ describe("tool visual editors", () => {
     expect(screen.getByRole("button", { name: "Medium · 70 %" }).getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Strong · 90 %" }));
     expect(onChange).toHaveBeenLastCalledWith("strengthPercent", 90);
+  });
+
+  it("Output Switch names its destinations and changes the selected output", () => {
+    const onChange = vi.fn();
+    const switchNode = {
+      ...node("outputSwitch", { selected: "a" }),
+      ports: [
+        { name: "in", direction: "input" as const, channels: 2 as const },
+        { name: "a", direction: "output" as const, channels: 2 as const },
+        { name: "b", direction: "output" as const, channels: 2 as const },
+      ],
+    };
+    const headphones = { ...node("physicalOutput"), id: "headphones", name: "Headphones" };
+    const obs = { ...node("virtualCaptureSink"), id: "obs", name: "OBS cable" };
+    render(
+      <OutputSwitchEditor
+        node={switchNode}
+        session={{
+          nodes: [switchNode, headphones, obs],
+          edges: [
+            { sourceNode: switchNode.id, sourcePort: "a", destinationNode: headphones.id, enabled: true },
+            { sourceNode: switchNode.id, sourcePort: "b", destinationNode: obs.id, enabled: true },
+          ],
+        }}
+        disabled={false}
+        onChange={onChange}
+      />,
+    );
+    const b = screen.getByRole("radio", { name: /B\s*OBS cable/ });
+    expect(b.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(b);
+    expect(onChange).toHaveBeenLastCalledWith("selected", "b");
   });
 
   it("formats caption values with units", () => {

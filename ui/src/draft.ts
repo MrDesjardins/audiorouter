@@ -33,6 +33,7 @@ export type LibraryNodeKind = Extract<
   | "dehum"
   | "declick"
   | "inputSwitch"
+  | "outputSwitch"
   | "denoise"
   | "speechDenoise"
   | "spectralGate"
@@ -55,7 +56,14 @@ export type LibraryNodeKind = Extract<
 >;
 export type InsertableProcessorKind = Exclude<
   LibraryNodeKind,
-  "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "networkSend" | "networkReceive"
+  | "physicalInput"
+  | "physicalOutput"
+  | "testSignal"
+  | "mixer"
+  | "inputSwitch"
+  | "outputSwitch"
+  | "networkSend"
+  | "networkReceive"
 >;
 
 /** Default UDP port of the Network Send/Receive tools (mirrors the domain). */
@@ -197,6 +205,15 @@ const libraryNodeDefinitions: Record<
       { name: "a", direction: "input", channels: 2 },
       { name: "b", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  outputSwitch: {
+    name: "Output Switch",
+    parameters: { selected: "a" },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "a", direction: "output", channels: 2 },
+      { name: "b", direction: "output", channels: 2 },
     ],
   },
   bassTreble: {

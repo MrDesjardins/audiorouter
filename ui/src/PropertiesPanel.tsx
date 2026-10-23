@@ -26,6 +26,7 @@ import {
   DelayEditor,
   GraphicEqEditor,
   InputSwitchEditor,
+  OutputSwitchEditor,
   LevelEditor,
   PitchEditor,
   StrengthEditor,
@@ -428,6 +429,14 @@ export function PropertiesPanel({
         )}
         {selectedNode.kind === "inputSwitch" && (
           <InputSwitchEditor
+            node={selectedNode}
+            session={draft}
+            disabled={!backend.connected}
+            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+          />
+        )}
+        {selectedNode.kind === "outputSwitch" && (
+          <OutputSwitchEditor
             node={selectedNode}
             session={draft}
             disabled={!backend.connected}

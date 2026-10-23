@@ -20,6 +20,7 @@ pub fn slug(kind: &str) -> Option<&'static str> {
         "firFilter" => "fir-filter",
         "mute" => "mute",
         "inputSwitch" => "input-switch",
+        "outputSwitch" => "output-switch",
         "duck" => "duck",
         "timeShift" => "time-shift",
         "mixer" => "mixer",
@@ -57,6 +58,7 @@ mod tests {
     fn only_known_tool_kinds_can_open_guides() {
         assert_eq!(slug("parametricEq"), Some("parametric-eq"));
         assert_eq!(slug("virtualCaptureSink"), Some("virtual-capture-sink"));
+        assert_eq!(slug("outputSwitch"), Some("output-switch"));
         assert_eq!(slug("group"), Some("group"));
         for invalid in ["", "../gain", "https://example.com", "gain.html", "Gain"] {
             assert_eq!(slug(invalid), None);

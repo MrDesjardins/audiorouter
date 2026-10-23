@@ -223,6 +223,9 @@ impl ControlPlane {
                 { "name": "selected", "type": "string", "enum": ["a", "b"], "default": "a" },
                 { "name": "fade", "type": "string", "enum": ["normal", "slow"], "default": "normal" }
             ]),
+            audiorouter_domain::NodeKind::OutputSwitch => json!([
+                { "name": "selected", "type": "string", "enum": ["a", "b"], "default": "a" }
+            ]),
             audiorouter_domain::NodeKind::Declick => json!([
                 { "name": "thresholdPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 50.0 }
             ]),
@@ -392,6 +395,7 @@ impl ControlPlane {
             Self::catalog_entry("firFilter", audiorouter_domain::NodeKind::FirFilter, "convolution"),
             Self::catalog_entry("timeShift", audiorouter_domain::NodeKind::TimeShift, "time"),
             Self::catalog_entry("inputSwitch", audiorouter_domain::NodeKind::InputSwitch, "routing"),
+            Self::catalog_entry("outputSwitch", audiorouter_domain::NodeKind::OutputSwitch, "routing"),
             Self::catalog_entry("duck", audiorouter_domain::NodeKind::Duck, "dynamics"),
             Self::catalog_entry("funVoiceChanger", audiorouter_domain::NodeKind::FunVoiceChanger, "effect")
         ])

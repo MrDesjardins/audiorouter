@@ -806,6 +806,28 @@
       text(110, 250, "other branches keep their own routes", "#c8d6e9", 12);
       detail =
         "Mute silences this node's branch. Independent connected branches keep their own signal.";
+    } else if (type === "outputSwitch") {
+      const selected = parameters.selected === "b" ? "B" : "A";
+      text(70, 68, "ONE INPUT · ONE DESTINATION ACTIVE", inputColor, 13);
+      line(92, 171, 276, 171, inputColor, 5);
+      add("rect", {
+        x: 276,
+        y: 129,
+        width: 145,
+        height: 84,
+        rx: 16,
+        fill: "#18273e",
+        stroke: accent,
+        "stroke-width": 2,
+      });
+      text(303, 177, "OUTPUT SWITCH", accent, 13);
+      line(421, 156, 620, 111, selected === "A" ? outputColor : "#52647f", 5);
+      line(421, 187, 620, 231, selected === "B" ? outputColor : "#52647f", 5);
+      text(557, 97, "A · HEADPHONES", selected === "A" ? outputColor : "#9fb0c8", 12);
+      text(580, 257, "B · OBS CABLE", selected === "B" ? outputColor : "#9fb0c8", 12);
+      text(72, 289, "Only the selected branch carries audio", "#c8d6e9", 12);
+      detail =
+        "Output Switch sends one signal to output A or output B. It never sends audio to both branches at the same time.";
     } else if (type === "inputSwitch") {
       const selected = parameters.selected === "b" ? "B" : "A";
       text(70, 68, "TWO WIRED INPUTS · ONE SELECTED", inputColor, 13);

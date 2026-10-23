@@ -12,6 +12,7 @@ function fakeAudioRouter() {
     { kind: "gain", name: "Gain", parameters: [{ name: "gainDb", type: "number", default: 0 }] },
     { kind: "mute", name: "Mute", parameters: [{ name: "muted", type: "boolean", default: false }] },
     { kind: "inputSwitch", name: "Input Switch", parameters: [{ name: "selected", type: "string", enum: ["a", "b"], default: "a" }] },
+    { kind: "outputSwitch", name: "Output Switch", parameters: [{ name: "selected", type: "string", enum: ["a", "b"], default: "a" }] },
   ];
   const fetcher: Fetch = async (url, init) => {
     const body = JSON.parse(init.body ?? "{}");
@@ -24,8 +25,9 @@ function fakeAudioRouter() {
       case "sessions/summary": return reply({ sessionId: "s1", name: "Gaming", revision, playing: true, privacyMuted: state.privacyMuted, nodes: [
         { id: "voice", name: "Voice gain", kind: "gain", enabled: state.voiceEnabled, bypass: false },
         { id: "switch", name: "Game or chat", kind: "inputSwitch", enabled: true, bypass: false },
+        { id: "output", name: "Headphones or OBS", kind: "outputSwitch", enabled: true, bypass: false },
       ] });
-      case "sessions/get": return reply({ id: "s1", revision, nodes: [{ id: "voice", kind: "gain", parameters: { gainDb: 3 } }, { id: "switch", kind: "inputSwitch", parameters: { selected: state.switchSelected } }] });
+      case "sessions/get": return reply({ id: "s1", revision, nodes: [{ id: "voice", kind: "gain", parameters: { gainDb: 3 } }, { id: "switch", kind: "inputSwitch", parameters: { selected: state.switchSelected } }, { id: "output", kind: "outputSwitch", parameters: { selected: "a" } }] });
       case "meters/levels": return reply({ sessionId: "s1", playing: true, levels: [{ nodeId: "voice", name: "Voice gain", peakDb: -6, rmsDb: -18, clipped: false, reductionDb: null, active: null }] });
       case "nodes/toggle": state.voiceEnabled = !state.voiceEnabled; revision += 1; return reply({ detail: { value: state.voiceEnabled } });
       case "safety/togglePrivacyMute": state.privacyMuted = !state.privacyMuted; return reply({ muted: state.privacyMuted });
@@ -63,6 +65,7 @@ describe("store", () => {
     expect(toggleTargets({ kind: "gain", name: "Gain", parameters: [{ name: "gainDb", type: "number" }] })).toEqual(["enabled", "bypass"]);
     expect(toggleTargets({ kind: "mute", name: "Mute", parameters: [{ name: "muted", type: "boolean" }] })).toEqual(["enabled", "bypass", "muted"]);
     expect(toggleTargets({ kind: "x", name: "X", parameters: [{ name: "mode", enum: ["a", "b", "c"] }, { name: "side", enum: ["l", "r"] }] })).toEqual(["enabled", "bypass", "side"]);
+    expect(toggleTargets({ kind: "outputSwitch", name: "Output Switch", parameters: [{ name: "selected", type: "string", enum: ["a", "b"] }] })).toEqual(["enabled", "bypass", "selected"]);
   });
 
   it("follows the selected session, reads raw settings, and confirms a press quickly", async () => {
@@ -76,6 +79,7 @@ describe("store", () => {
     expect(store.setting(voice, "enabled")).toBe(true);
     expect(store.setting(voice, "gainDb")).toBe(3);
     expect(store.setting(store.node("", "Game or chat")!, "selected")).toBe("a");
+    expect(store.setting(store.node("output")!, "selected")).toBe("a");
     await store.call("nodes.toggle", { node: "voice", target: "enabled", idempotencyKey: "k" });
     store.refreshSoon();
     await settle(50);

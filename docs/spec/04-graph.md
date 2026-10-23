@@ -80,3 +80,14 @@ was excluded before preparation is not opened by an unrelated live toggle.
 Disabled output branches suppress playback; compatible disabled/bypassed effects remain
 dry stages. UI endpoint preparation retains per-node bindings when paths or
 branches are turned off, rather than selecting a previously used global pair.
+
+- **GRAPH-17 — Exclusive selected output.** An Output Switch has one mono or
+  stereo `in` port and two same-width output ports `a` and `b`. The selected
+  side may fan out; only edges from that side carry audio. The inactive side is
+  silent, and an absent or unconnected selected side never falls back. A
+  running selection change switches exclusively: ramp the old side to silence
+  before ramping the new side up, never sending a transition copy to both
+  sides. Selection is an ordinary persisted node parameter and can be changed
+  through `nodes.toggle`; transition state is bounded, lock-free and preserved
+  through live graph replacement. Planning rejects malformed port counts,
+  directions or channel widths.
