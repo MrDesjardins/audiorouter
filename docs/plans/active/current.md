@@ -1,5 +1,35 @@
 # Active plan — post-0.0.8 maintenance
 
+## Overnight review, PR, merge and release 0.0.21 — 2026-10-23, owner request
+
+The owner asked, before going to sleep, for: (1) a quick code review of all
+changes since 0.0.20, (2) fixes for high-priority findings and the rest
+recorded as future fixes, (3) one PR with all the work, (4) merge it when
+ready, (5) a new release with every fix and feature. This message is the
+explicit PR, merge and release approval (AGENTS.md "Pull request approval").
+
+- Scope: branch `feature/vst3-plugin-windows` = plugin windows (f1eb76f2)
+  + `feature/output-switch` merged locally (1015b5be) + review fixes
+  (50aeaed9) + the 0.0.21 bump. Everything else since 0.0.20 is already on
+  main (#58, #59, #60 and earlier).
+- Review: `/code-review medium v0.0.20..HEAD`, 9 findings. Fixed: plugin
+  sliders resent every quantum (editor knobs reset), Output Switch side into
+  a shared Mixer (leak or wrong mute; now refused), Output Switch routes on
+  the single-endpoint worker, latency query ending the worker, two misplaced
+  doc comments. Open: [review follow-ups](../future/review-fixes-0.0.21.md)
+  R1–R6.
+- Checks on 50aeaed9: fmt and Clippy (workspace, shell) clean; plugin-host,
+  engine and control tests pass (plugin-host lib 78, engine lib 161, control
+  lib 264); UI format, typecheck, lint (0 errors, 25 warnings), 646 tests;
+  contracts typecheck and drift; docs validation (191 files, 1056 links).
+  The new switch-into-Mixer regression was not run against the old code
+  (the guard-disabled run was blocked), so it is not yet proven to fail
+  without the fix.
+- Not changed: `site/compare.html` VST2 wording (R6, blocked by the
+  permission check; owner decision).
+- Release: same app-only profile as 0.0.20; evidence will be in
+  `docs/plans/active/evidence/2026-10-23-release-0.0.21.md`.
+
 ## UAD plugin plan and bring-your-own-plugin guide — 2026-10-22, owner request
 
 Objective: plan support for every UAD product family and give users one

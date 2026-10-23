@@ -1,5 +1,47 @@
 # AudioRouter release notes
 
+## 0.0.21 — 2026-10-23 (unsigned experimental preview)
+
+- **Plugin windows.** VST3 plugins, including Universal Audio UADx, now
+  open their own editor window from **Open plugin editor**, next to the
+  sliders. Knobs turned in the window and AudioRouter's sliders both work;
+  the latest change wins, also at the next Play. While a plugin window is
+  open its worker may start up to 16 helper processes (UADx windows use
+  WebView2); they stay inside the plugin's sandbox and end with it.
+- **UADx plugins work.** UADx effects now process audio (they returned it
+  unchanged before). See [bring your own plugins](bring-your-own-plugins.md).
+- **Plugin delay counted.** The delay shown for a plugin includes the delay
+  the plugin reports for itself.
+- **Licence hint.** A plugin that returns your audio unchanged for about two
+  seconds shows a note suggesting to check its licence or activation.
+- **Instruments left out.** A scan marks instrument plugins (such as
+  PolyMAX) as unsupported instead of listing them as effects.
+- **Drag plugins onto the canvas** like built-in tools.
+- **New tool: Output Switch.** One input, two outputs, only one live at a
+  time; switch in the app or on Stream Deck.
+- **Sound Check** and **mixers for occupied inputs**: connecting a second
+  source to an input adds a Mixer.
+- **Application sources for closed apps and app groups**, a **voice target
+  zone** on the Meter, and **hidden devices** in device pickers.
+- **Canvas:** copy and paste configured tools across sessions, move grouped
+  tools together, align selections, edit group options in bulk, and undo
+  Arrange.
+- **Steadier audio under load:** the multi-input worker runs on its own
+  audio thread, so a slow request no longer pauses the route.
+
+Known issues: an Output Switch side cannot yet feed a Mixer shared with
+other sources (Play reports the route as unsupported), and a Meter after the
+unselected side still shows its audio. See
+[review follow-ups](../plans/future/review-fixes-0.0.21.md).
+
+Windows 11 x64; app and installer unsigned. Experimental prerelease, not a
+fully M08-qualified consumer release. No database migration, driver
+installation or Windows default-device changes. Sessions that use an Output
+Switch cannot be opened by 0.0.20.
+Close AudioRouter before upgrading and keep 0.0.20 plus configuration
+backups for rollback. Clean-machine install/upgrade, missing-WebView2,
+accessibility, hardware and driver-signing gates remain open.
+
 ## 0.0.20 — 2026-10-19 (unsigned experimental preview)
 
 - **Inputs catch up after a freeze.** When the PC stalled for a moment, an
