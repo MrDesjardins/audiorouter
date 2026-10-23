@@ -27,8 +27,15 @@ explicit PR, merge and release approval (AGENTS.md "Pull request approval").
   without the fix.
 - Not changed: `site/compare.html` VST2 wording (R6, blocked by the
   permission check; owner decision).
-- Release: same app-only profile as 0.0.20; evidence will be in
-  `docs/plans/active/evidence/2026-10-23-release-0.0.21.md`.
+- Merged: #61 `69ea5992` (squash), then #62 (`ctutils` advisory published
+  overnight) and #63 (Edge test budget, flakes recorded as R7).
+- Released: [v0.0.21](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.21)
+  on `90b6ab2e`, published 2026-10-23 11:52 UTC as a prerelease
+  ([evidence](evidence/2026-10-23-release-0.0.21.md)). Keep 0.0.20 for
+  rollback.
+- Next: the owner installs 0.0.21 and plays a route with a plugin window;
+  then picks a review follow-up (R1–R7) or decides the VST2 site wording
+  (R6).
 
 ## UAD plugin plan and bring-your-own-plugin guide — 2026-10-22, owner request
 
