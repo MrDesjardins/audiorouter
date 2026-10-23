@@ -72,19 +72,14 @@ For defects: record reproduction and affected versions; add a focused regression
 
 ## Jev review
 
-Jev is disabled as a local development check. GitHub runs Jev only for
-same-repository pull requests with at most 5,000 changed lines (additions plus
-deletions); larger pull requests skip the review, and so do Dependabot pull
-requests (their runs get only Dependabot secrets, so the Jev key is empty). The limit avoids unreliable
-results on large diffs: on 2026-10-06, a roughly 14,600-line diff produced two
-unlocated findings at 6% and 13% confidence, both false. The separate
-formatting, tests, Clippy and other checks in this file remain required.
-Jev reviews only correctness, safety, security, accessibility, concurrency,
-or performance risks that the compiler and the repository's configured
-linters/static analyzers cannot detect. Check the active tool configuration
-before reporting a finding; never duplicate those diagnostics or report
-formatting and other style issues already owned by automated checks.
-`rustfmt` and the UI formatter remain the sources of truth for formatting.
+Jev is paused for now. Its GitHub Actions workflow is manually dispatchable
+only and does not run automatically on pull requests. Formatting, tests,
+Clippy and the other configured checks remain required. If Jev is re-enabled,
+keep it focused on correctness, safety, security, accessibility, concurrency,
+or performance risks that the compiler and configured linters/static analyzers
+cannot detect; do not duplicate those diagnostics or report formatting and
+subjective style. `rustfmt` and the UI formatter remain the sources of truth
+for formatting.
 
 ## Self-learning, with evidence
 
@@ -97,6 +92,12 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-22 — Pause automatic Jev reviews when they add little value (user preference).**
+  Evidence: [active plan, Jev pause](docs/plans/active/current.md#jev-paused-2026-10-22).
+  Scope: GitHub pull-request review automation. Consequence: leave the Jev
+  workflow available to dispatch manually, but do not run it automatically
+  until the owner asks to re-enable it.
 
 - **2026-10-21 — Construct decoded presentation values from allowed fields.**
   Evidence: [Q2 persistence failures and regressions](docs/plans/active/current.md#quality-q2---presentation-persistence---2026-10-21),

@@ -5,8 +5,7 @@ name: Jev rule review
 # and posts a review comment on each violation it can place on a line.
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  workflow_dispatch:
 
 permissions:
   contents: read

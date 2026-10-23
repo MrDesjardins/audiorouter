@@ -828,6 +828,15 @@ TypeScript compiler API on a compatible 6.x API.
 - Next: commit and push the scoped readiness change to `main`; inspect the
   resulting GitHub CI run before reporting the task complete.
 
+## Jev paused — 2026-10-22
+
+The owner asked to pause Jev because it is not providing enough value for the
+time it adds. The workflow now supports manual dispatch only; pull-request
+CI, formatter, test and Clippy checks remain unchanged. This is reversible by
+restoring the `pull_request` trigger in
+`.github/workflows/jev-review.yml`. No requirement or acceptance gate was
+waived.
+
 ## Jev review scope
 
 Objective: keep Jev focused on review findings that the configured compiler,
