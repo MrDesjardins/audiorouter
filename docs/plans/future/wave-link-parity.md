@@ -28,7 +28,7 @@ Sources (checked 2026-10-22): [Wave Link 3.0 software overview](https://www.elga
 | 1 | Listen to any mix (ear icon switches headphones to the Stream or Chat mix) | No solo/cue; rewiring needed | **Listen here** on a node or output: a temporary monitor path to the headphones, removed on stop | Backend: a temporary edge into an occupied output needs a mixer; must not touch saved revisions or protected voice paths. Medium–high |
 | 2 | Virtual channels installed with the app | Needs VB-Cable; own cable in development | Already tracked by DEC-18 and the [virtual cable plan](../active/virtual-cable.md) | High (driver signing) |
 | 3 | Channel × mix grid with send levels and mutes | Per-node mini faders on the canvas | Optional **Mixer view** of the same graph: sources × outputs, send level and mute per cell, edits through the same API | UI-heavy; no engine change. Medium |
-| 4 | Several apps per channel, including apps not running; apps grouped by category | One process tree per source (CAP-06); the picker lists running apps only | Pick an executable that is not running (recent or browsed `.exe`); an **app group** source that expands to several app sources into a Mixer | Picker part is small; groups need CAP-10 overlap checks. Medium |
+| 4 | Several apps per channel, including apps not running; apps grouped by category | Implemented: browse/type a closed app's `.exe`; app groups expand into ordinary app sources feeding a Mixer (UI-23). Parent/helper tree overlap remains an open CAP-10 limitation. | Add recent-apps and app-category grouping after process-tree overlap detection can warn or deduplicate safely. | Medium |
 | 5 | "Everything else" / All-audio source | One exclusion (CAP-07); several exclusions future | Desktop minus assigned apps | Blocked on a proven Windows mechanism (see the [future README](README.md)). High |
 | 6 | Fades on Stream Deck "Set" actions | Step key jumps instantly | Fade over a chosen time | Each `nodes.set` is a saved plan/commit revision, so client-side fades would flood history and delay the audio pump. Needs a backend ramp or a non-revision live parameter path first. Medium |
 | 7 | Soundboard clips from keys | Audio File play/pause/stop; no soundboard action | Stream Deck soundboard key bound to an Audio File node | Small–medium; see [Stream Deck extensions](stream-deck-extensions.md) |
@@ -51,6 +51,7 @@ Sources (checked 2026-10-22): [Wave Link 3.0 software overview](https://www.elga
 
 ## Suggested order
 
-Listen here (#1 with #9), not-running app picker (#4), Sound Check (#10),
-Mixer view (#3). None needs a new Windows capability except #4's capture
-details. The virtual cable (#2) remains the strategic item.
+The not-running app picker and basic app groups (#4) are implemented on
+`feature/wave-link-app-sources` (PR and CI still pending); listen to any mix (#1 with #9) is next, then
+Sound Check (#10) and Mixer view (#3). The virtual cable (#2) remains the
+strategic item.

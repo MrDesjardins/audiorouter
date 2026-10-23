@@ -46,6 +46,66 @@ pub fn choose(save: bool, suggested_name: &str, owner: isize) -> Result<Option<P
         .map_err(|_| "the file dialog stopped unexpectedly".to_owned())?
 }
 
+/// Ask the user for one existing Windows executable. The dialog thread owns
+/// its COM apartment just like the session-file dialog above.
+pub fn choose_executable(owner: isize) -> Result<Option<PathBuf>, String> {
+    std::thread::Builder::new()
+        .name("audiorouter-application-file-dialog".into())
+        .spawn(move || {
+            // SAFETY: this thread owns its COM apartment; every successful
+            // CoInitializeEx is paired with CoUninitialize after COM values drop.
+            let initialized =
+                unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) }
+                    .is_ok();
+            // SAFETY: owner is a window handle from this process (or zero) and
+            // is only used as the native dialog's modal owner.
+            let result = unsafe { show_executable(owner) };
+            if initialized {
+                // SAFETY: balances the successful CoInitializeEx above.
+                unsafe { CoUninitialize() };
+            }
+            result
+        })
+        .map_err(|error| format!("dialog thread failed: {error}"))?
+        .join()
+        .map_err(|_| "the file dialog stopped unexpectedly".to_owned())?
+}
+
+unsafe fn show_executable(owner: isize) -> Result<Option<PathBuf>, String> {
+    let dialog: IFileDialog = CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)
+        .map_err(|error| format!("Open dialog unavailable: {error}"))?;
+    let filters = [COMDLG_FILTERSPEC {
+        pszName: w!("Applications (*.exe)"),
+        pszSpec: w!("*.exe"),
+    }];
+    let options = dialog.GetOptions().map_err(|error| error.to_string())?;
+    dialog
+        .SetOptions(options | FOS_FILEMUSTEXIST | FOS_PATHMUSTEXIST | FOS_FORCEFILESYSTEM)
+        .map_err(|error| error.to_string())?;
+    dialog
+        .SetFileTypes(&filters)
+        .map_err(|error| error.to_string())?;
+    dialog
+        .SetTitle(w!("Choose an application executable"))
+        .map_err(|error| error.to_string())?;
+    let owner = (owner != 0).then_some(HWND(owner as *mut _));
+    if let Err(error) = dialog.Show(owner) {
+        if error.code() == ERROR_CANCELLED.to_hresult() {
+            return Ok(None);
+        }
+        return Err(format!("file dialog failed: {error}"));
+    }
+    let item = dialog.GetResult().map_err(|error| error.to_string())?;
+    let name: PWSTR = item
+        .GetDisplayName(SIGDN_FILESYSPATH)
+        .map_err(|error| error.to_string())?;
+    // SAFETY: GetDisplayName returns a NUL-terminated CoTaskMem string; copy
+    // it before freeing the allocation exactly once.
+    let path = name.to_string().map_err(|error| error.to_string());
+    CoTaskMemFree(Some(name.0 as *const _));
+    Ok(Some(PathBuf::from(path?)))
+}
+
 unsafe fn show(save: bool, suggested_name: &str, owner: isize) -> Result<Option<PathBuf>, String> {
     let dialog: IFileDialog = if save {
         let dialog: IFileSaveDialog = CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER)

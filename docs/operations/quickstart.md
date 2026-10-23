@@ -139,6 +139,16 @@ separate recording feed rather than Scarlett again to avoid duplicate playback.
 See [Discord Mic Testing](https://support.discord.com/hc/en-us/articles/360020641332-Mic-Testing)
 and [Microsoft process-loopback capture](https://learn.microsoft.com/en-us/samples/microsoft/windows-classic-samples/applicationloopbackaudio-sample/).
 
+In Signal Flow, choose **Add application capture source** to select a running
+app, or browse to/type the full path of its `.exe` while it is closed. A
+closed-app source stores its executable path rather than a PID and captures
+only when AudioRouter finds a verified matching process and you start the route. Choose
+**App group** to select several running apps or add several executable paths;
+AudioRouter creates separate Application Capture nodes feeding one Mixer. Do
+not include both an app and a helper process it launches, because their
+process-tree audio may overlap. Application selection does not start an app or
+change its Windows output device.
+
 The **Input device** tool accepts a Windows capture endpoint, whether it is a
 microphone or an installed virtual capture bus. The **Output device** tool
 accepts a Windows playback endpoint. Existing virtual devices are chosen in

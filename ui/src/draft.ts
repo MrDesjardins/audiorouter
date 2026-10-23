@@ -420,6 +420,43 @@ function applicationIdentityParameters(application: ApplicationInfo): Record<str
   return parameters;
 }
 
+export interface ApplicationExecutableSelector {
+  executable: string;
+  executablePath: string;
+}
+
+/** Convert a chosen Windows executable path into a persistent, PID-free selector. */
+export function applicationExecutableSelector(path: string): ApplicationExecutableSelector {
+  if (
+    [...path].some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127;
+    })
+  ) {
+    throw new Error("Choose a full Windows path to an .exe file.");
+  }
+  const executablePath = path.trim();
+  if (!executablePath || executablePath.length > 32768 || !/^(?:[a-z]:\\|\\\\)/i.test(executablePath)) {
+    throw new Error("Choose a full Windows path to an .exe file.");
+  }
+  const executable = executablePath.slice(executablePath.lastIndexOf("\\") + 1);
+  if (!/^[^\\/:*?"<>|]+\.exe$/i.test(executable)) {
+    throw new Error("Choose an .exe application file.");
+  }
+  return { executable, executablePath };
+}
+
+function applicationSelectorParameters(selector: ApplicationExecutableSelector) {
+  const normalized = applicationExecutableSelector(selector.executablePath);
+  if (normalized.executable.toLowerCase() !== selector.executable.toLowerCase())
+    throw new Error("The executable name does not match its selected path.");
+  return {
+    executable: normalized.executable,
+    executablePath: normalized.executablePath,
+    processPolicy: "allVerifiedInstances",
+  };
+}
+
 /** Stable picker key for one exact process instance. */
 export function applicationChoiceKey(application: ApplicationInfo): string {
   return `${application.processId}-${application.creationTime100ns ?? "unknown"}`;
@@ -721,6 +758,14 @@ export function rebindApplicationCaptureNode(
 /** Adds a verified application identity as a process-capture source. */
 export function appendApplicationCaptureNode(session: Session, application: ApplicationInfo): Session {
   const parameters = applicationIdentityParameters(application);
+  return appendApplicationCaptureSelectorNode(session, parameters, `${application.executable} capture`);
+}
+
+function appendApplicationCaptureSelectorNode(
+  session: Session,
+  parameters: Record<string, boolean | number | string>,
+  namePrefix: string,
+): Session {
   let suffix = 1;
   let id = `application-capture-${suffix}`;
   while (session.nodes.some((node) => node.id === id)) {
@@ -735,7 +780,7 @@ export function appendApplicationCaptureNode(session: Session, application: Appl
         id,
         kind: "applicationCapture",
         typeVersion: 1,
-        name: `${application.executable} capture ${suffix}`,
+        name: `${namePrefix} ${suffix}`,
         enabled: true,
         bypass: false,
         parameters,
@@ -743,6 +788,51 @@ export function appendApplicationCaptureNode(session: Session, application: Appl
       },
     ],
   };
+}
+
+/** Adds an executable-based application source without requiring a live PID. */
+export function appendApplicationCapturePathNode(session: Session, path: string): Session {
+  const selector = applicationExecutableSelector(path);
+  return appendApplicationCaptureSelectorNode(
+    session,
+    applicationSelectorParameters(selector),
+    `${selector.executable} capture`,
+  );
+}
+
+/** Expand a chosen app set into independent sources feeding one ordinary Mixer. */
+export function appendApplicationCaptureGroup(
+  session: Session,
+  applications: readonly ApplicationInfo[],
+  executablePaths: readonly string[],
+): { session: Session; mixerId: string } {
+  const selectors = new Map<string, { parameters: Record<string, boolean | number | string>; label: string }>();
+  for (const application of applications) {
+    if (!application.executablePath)
+      throw new Error(`A full executable path for ${application.executable} is unavailable; choose its .exe file.`);
+    const selector = applicationExecutableSelector(application.executablePath);
+    const parameters = applicationSelectorParameters(selector);
+    const key = selector.executablePath.toLowerCase();
+    if (!selectors.has(key)) selectors.set(key, { parameters, label: `${application.executable} capture` });
+  }
+  for (const path of executablePaths) {
+    const selector = applicationExecutableSelector(path);
+    const parameters = applicationSelectorParameters(selector);
+    const key = selector.executablePath.toLowerCase();
+    if (!selectors.has(key)) selectors.set(key, { parameters, label: `${selector.executable} capture` });
+  }
+  if (selectors.size < 2) throw new Error("Choose at least two different applications for a group.");
+
+  let next = session;
+  const sourceIds: string[] = [];
+  for (const selector of selectors.values()) {
+    next = appendApplicationCaptureSelectorNode(next, selector.parameters, selector.label);
+    sourceIds.push(next.nodes.at(-1)!.id);
+  }
+  next = appendLibraryNode(next, "mixer");
+  const mixer = next.nodes.at(-1)!;
+  for (const sourceId of sourceIds) next = appendDraftConnection(next, sourceId, "out", mixer.id, "in");
+  return { session: next, mixerId: mixer.id };
 }
 
 /** Adds a stopped endpoint-loopback source bound to one exact render endpoint. */
