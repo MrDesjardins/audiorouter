@@ -212,43 +212,14 @@ pub(super) fn compile(
             .filter(|port| port.direction == PortDirection::Output)
             .collect::<Vec<_>>();
         if node.kind == NodeKind::OutputSwitch {
-            if feeds.len() != 1
-                || node.ports.len() != 3
-                || node
-                    .ports
-                    .iter()
-                    .filter(|port| port.direction == PortDirection::Input)
-                    .count()
-                    != 1
-                || output_ports.len() != 2
-                || !output_ports.iter().any(|port| port.name == "a")
-                || !output_ports.iter().any(|port| port.name == "b")
-                || output_ports
-                    .iter()
-                    .any(|port| port.channels != input.channels)
-            {
+            if feeds.len() != 1 {
                 return Err(unsupported());
             }
-            let children = session
-                .edges
-                .iter()
-                .filter(|edge| edge.enabled && edge.source_node == node.id)
-                .collect::<Vec<_>>();
-            if children.is_empty()
-                || children
-                    .iter()
-                    .any(|edge| !matches!(edge.source_port.as_str(), "a" | "b"))
-            {
-                return Err(unsupported());
-            }
+            let children = output_switch_children(session, node, input.channels)?;
             let state_index = graph.output_switches.len();
-            graph.output_switches.push(OutputSwitchState::new(
-                node.id.clone(),
-                node.parameters
-                    .get("selected")
-                    .and_then(|value| value.as_str())
-                    == Some("b"),
-            ));
+            graph
+                .output_switches
+                .push(OutputSwitchState::for_node(node));
             // A disabled or bypassed routing node fails closed on both sides.
             let muted = !node.enabled || node.bypass;
             let parent = source_of(feeds[0]);
@@ -258,31 +229,23 @@ pub(super) fn compile(
                     continue;
                 }
                 let index = graph.output_chains.len();
-                graph.output_chains.push(OutputProcessorChain {
-                    source: parent,
-                    entry_matrix: feeds[0].matrix.clone(),
-                    graph: compile_processor_chain(
+                graph
+                    .output_chains
+                    .push(OutputProcessorChain::output_switch_side(
                         session.id.as_str(),
-                        &format!("output_switch_{}_{side}", node.id.as_str()),
-                        &[],
+                        &node.id,
+                        parent,
+                        feeds[0].matrix.clone(),
                         input.channels,
                         generation,
                         plugins,
                         audio_media,
-                    )?,
-                    channels: usize::from(input.channels),
-                    block: RealtimeDsp::new(
-                        AudioBlock::new(usize::from(input.channels), PROCESSING_QUANTUM_FRAMES)
-                            .map_err(|_| unsupported())?,
-                    ),
-                    ready: AtomicBool::new(false),
-                    convergence: None,
-                    gate: Some(OutputSwitchGate {
-                        switch: state_index,
-                        side_b: side == "b",
-                        muted,
-                    }),
-                });
+                        OutputSwitchGate {
+                            switch: state_index,
+                            side_b: side == "b",
+                            muted,
+                        },
+                    )?);
                 sides.push((side, index));
             }
             output_switch_indices.insert(node.id.clone(), (state_index, muted));
