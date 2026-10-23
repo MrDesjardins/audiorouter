@@ -1,4 +1,5 @@
 import type { DeviceListItem } from "@audiorouter/contracts";
+import { setDeviceHidden, useHiddenDevices } from "./hiddenDevices";
 
 const ROLE_LABELS: Record<string, string> = {
   console: "Windows default",
@@ -7,9 +8,10 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 /**
- * Read-only list of the audio devices Windows exposes on this PC. Choosing a
+ * List of the audio devices Windows exposes on this PC. Choosing a
  * device happens in an Input or Output node's Properties; this list only shows
- * what is available and each device's format, and refreshes on demand.
+ * what is available and each device's format, and refreshes on demand. Its
+ * "Show in pickers" switches hide unused devices from those pickers (UI-22).
  */
 export function ThisPcDevices({
   devices,
@@ -20,6 +22,7 @@ export function ThisPcDevices({
   connected: boolean;
   onRefresh: () => void;
 }) {
+  const hidden = useHiddenDevices();
   const byName = (left: DeviceListItem, right: DeviceListItem) =>
     left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
   const active = devices.filter((device) => device.state === "active").sort(byName);
@@ -37,8 +40,9 @@ export function ThisPcDevices({
           <ul aria-label={heading}>
             {items.map((device) => {
               const roles = [...new Set(device.defaultRoles.map((role) => ROLE_LABELS[role]).filter(Boolean))];
+              const shown = !hidden.has(device.id);
               return (
-                <li key={device.id}>
+                <li key={device.id} className={shown ? undefined : "is-hidden-device"}>
                   <strong>{device.name}</strong>
                   <small>
                     {"format" in device
@@ -46,6 +50,15 @@ export function ThisPcDevices({
                       : ""}
                     {roles.length > 0 ? ` · ${roles.join(", ")}` : ""}
                   </small>
+                  <label className="this-pc-device-shown">
+                    <input
+                      type="checkbox"
+                      checked={shown}
+                      aria-label={`Show ${device.name} in device pickers`}
+                      onChange={(event) => setDeviceHidden(device.id, !event.target.checked)}
+                    />
+                    Show in pickers
+                  </label>
                 </li>
               );
             })}
@@ -64,7 +77,8 @@ export function ThisPcDevices({
       </div>
       <p className="muted">
         What Windows offers right now. To use one, add an Input Device or Output Device tool and choose it in that
-        node's Properties. AudioRouter never changes Windows defaults or volumes.
+        node's Properties. AudioRouter never changes Windows defaults or volumes. Clear "Show in pickers" to keep a
+        device you never use (a monitor's speakers, a webcam microphone) out of the device lists on this PC.
       </p>
       {group("capture", "Inputs (microphones, line-in, virtual cables)")}
       {group("render", "Outputs (speakers, headphones, virtual cables)")}
