@@ -81,6 +81,7 @@ describe("output fan-out across library tools", () => {
     dehum: true,
     declick: true,
     inputSwitch: true,
+    outputSwitch: true,
     duck: true,
     denoise: true,
     speechDenoise: true,
@@ -868,6 +869,22 @@ describe("Input Switch routes", () => {
   });
 });
 
+describe("Output Switch routes", () => {
+  it("adds one input and two named exclusive outputs", () => {
+    const session = appendLibraryNode(
+      { ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] },
+      "outputSwitch",
+    );
+    const outputSwitch = session.nodes.find((node) => node.kind === "outputSwitch")!;
+    expect(outputSwitch.parameters).toEqual({ selected: "a" });
+    expect(outputSwitch.ports).toEqual([
+      { name: "in", direction: "input", channels: 2 },
+      { name: "a", direction: "output", channels: 2 },
+      { name: "b", direction: "output", channels: 2 },
+    ]);
+  });
+});
+
 describe("pluginCatalog", () => {
   const entry = (
     path: string,
@@ -984,6 +1001,31 @@ describe("independent paths", () => {
     expect(needsNativePaths(monitored)).toBe(true);
   });
 
+  it("uses the multi-path worker when a connection changes the channel width", () => {
+    const withPorts = (id: string, kind: Session["nodes"][number]["kind"], input?: 1 | 2, output?: 1 | 2) => ({
+      ...node(id, kind),
+      ports: [
+        ...(input ? [{ name: "in", direction: "input" as const, channels: input }] : []),
+        ...(output ? [{ name: "out", direction: "output" as const, channels: output }] : []),
+      ],
+    });
+    const route = (mic: 1 | 2, plugin: 1 | 2, out: 1 | 2): Session => ({
+      ...demoSession,
+      nodes: [
+        withPorts("mic", "physicalInput", undefined, mic),
+        withPorts("fx", "plugin", plugin, plugin),
+        withPorts("headphones", "physicalOutput", out),
+      ],
+      edges: [edge("e1", "mic", "fx"), edge("e2", "fx", "headphones")],
+    });
+    // The owner's UADx route: mono microphone, mono plugin, stereo headphones.
+    expect(needsNativePaths(route(1, 1, 2))).toBe(true);
+    // Default stereo devices around a mono plugin block.
+    expect(needsNativePaths(route(2, 1, 2))).toBe(true);
+    expect(needsNativePaths(route(2, 2, 2))).toBe(false);
+    expect(needsNativePaths(route(1, 1, 1))).toBe(false);
+  });
+
   it("reuses a fed Mixer when routing its source branch to an already occupied output", () => {
     const session: Session = {
       ...demoSession,
@@ -1060,6 +1102,17 @@ describe("independent paths", () => {
     expect(needsNativePaths(recorded)).toBe(true);
     const unconnected: Session = { ...single, nodes: [...single.nodes, node("take", "recorder")] };
     expect(needsNativePaths(unconnected)).toBe(false);
+  });
+
+  it("uses the multi-path worker for a route through an Output Switch", () => {
+    const single: Session = { ...twoPaths, nodes: twoPaths.nodes.slice(0, 3), edges: twoPaths.edges.slice(0, 2) };
+    expect(needsNativePaths(single)).toBe(false);
+    const switched: Session = {
+      ...single,
+      nodes: [...single.nodes, node("switch", "outputSwitch")],
+      edges: [...single.edges, edge("e7", "voice", "switch")],
+    };
+    expect(needsNativePaths(switched)).toBe(true);
   });
 
   it("lists device nodes that still need a saved endpoint", () => {

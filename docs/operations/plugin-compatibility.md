@@ -1,5 +1,43 @@
 # Plugin compatibility snapshot
 
+For how to install, scan and add your own plugins (including UAD), see
+[Bring your own plugins](bring-your-own-plugins.md). This page records what
+was tested.
+
+## 2026-10-22 UADx free titles
+
+The eight free UADx effects installed by UA Connect (VST3 only, signed in)
+were run through the app's supervised worker path
+(`SupervisedWorkerProcess` with `audiorouter-vst3-worker.exe`, release
+build) at 48 kHz, mono and stereo, with a 220 Hz sine at 0.25 peak for
+200 blocks (`native_vst3_fixture_signal_report`). Every one changed the
+signal (not pass-through) and returned finite output.
+
+| Plugin (`uaudio_…`) | Mono | Stereo | Latency (samples) | Controls shown |
+| --- | --- | --- | --- | --- |
+| 1176 FET Compressor | ✓ | ✓ | 86 | 8 |
+| LA-2A Tube Compressor | ✓ | ✓ | 87 | 6 |
+| 610-A Preamp and EQ | ✓ | ✓ | 86 | 10 |
+| 610-B Tube Preamp and EQ | ✓ | ✓ | 86 | 12 |
+| Century Tube Channel Strip | ✓ | ✓ | 86 | 16 |
+| Showtime 64 Tube Amp | ✓ | ✓ | 34 | 13 |
+| Pure Plate Reverb | ✓ | ✓ | 31 | 10 |
+| Vibe Analog Machines Essentials | ✓ | ✓ | 714 | 3 |
+| PolyMAX Synth | refused (instrument) | | | |
+
+The backend `plugins.parameters` request also started each one through the
+packaged-worker lookup. Each one also saves its state and restores it into
+the same and a fresh worker, mono and stereo. Play, Stop and Play of
+mic → 1176 → headphones passed on a copy of the owner's route
+(privacy-muted), and the owner confirmed by ear in the shell that the 1176
+works on that route (2026-10-22). All eight editors opened in a test parent window,
+sized it and kept processing, with no WebView2 error in UA's log (2026-10-22,
+`native_vst3_editor_opens_in_a_pumping_parent`). Not yet tested: the editors
+from the app on a live route, and signed-out behavior. The plugin latency above is now included in
+the delay the app shows for the block. Details and the two host defects found on the way (verbatim
+`\\?\` paths fail UA's licence check; an empty worker environment) are in
+the [UADx evidence](../plans/active/evidence/2026-10-22-uadx-inventory.md#u0-results-in-the-app-worker-2026-10-22).
+
 On 2026-09-26, the installed ReaFIR, ReaEQ, ReaComp and ReaGate VST2 plugins
 passed a privacy-muted Patrick Main Session Start/pump in one isolated shared
 worker. All four were running with zero faults. Shared-chain fixtures passed

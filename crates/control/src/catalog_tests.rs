@@ -381,7 +381,15 @@ fn describe_exposes_versions_methods_limits_and_unavailable_nodes() {
         .iter()
         .any(|node| node["type"] == "virtual-render-source@1"
             && node["availability"]["status"] == "unavailable"));
-    assert_eq!(description["processors"].as_array().unwrap().len(), 19);
+    assert_eq!(description["processors"].as_array().unwrap().len(), 20);
+    let output_switch = description["processors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|processor| processor["id"] == "outputSwitch")
+        .unwrap();
+    assert_eq!(output_switch["category"], "routing");
+    assert_eq!(output_switch["parameters"][0]["enum"], json!(["a", "b"]));
     let voice_presets = description["presets"]["voiceChanger"].as_array().unwrap();
     assert_eq!(
         voice_presets.len(),
@@ -498,7 +506,7 @@ fn describe_exposes_versions_methods_limits_and_unavailable_nodes() {
         params: None,
     });
     let result = processors.result.unwrap();
-    assert_eq!(result.as_array().unwrap().len(), 19);
+    assert_eq!(result.as_array().unwrap().len(), 20);
     assert_eq!(result[0]["availability"]["status"], "available");
 }
 

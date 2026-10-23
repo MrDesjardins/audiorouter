@@ -44,7 +44,7 @@ export function ProcessorParameterEditor({
   const pluginContext = useContext(PluginParameterContext);
   if (node.kind === "parametricEq")
     return <AdvancedEqEditor node={node} backend={eqBackend} connected={connected} onChange={onChange} />;
-  if (node.kind === "graphicEq" || node.kind === "inputSwitch") return null;
+  if (node.kind === "graphicEq" || node.kind === "inputSwitch" || node.kind === "outputSwitch") return null;
   // The Fun Voice Changer editor shows its settings by section.
   if (node.kind === "funVoiceChanger" && !only) return null;
   pluginParameters ??= pluginContext.parameters;

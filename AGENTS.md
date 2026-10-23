@@ -99,6 +99,20 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-22 — Hand plugins a plain path and a real environment; "loads and processes" is not "applies the effect".**
+  Evidence: [UADx evidence, U0 results](docs/plans/active/evidence/2026-10-22-uadx-inventory.md#u0-results-in-the-app-worker-2026-10-22),
+  `loadable_plugin_path_tests`. Scope: plugin worker spawning
+  (`crates/plugin-host`), the VST3 worker, any licensed (PACE/iLok) plugin.
+  Consequence: every UADx effect returned its input unchanged, with no
+  error, because the worker loaded it through the verbatim `\\?\C:\...`
+  path from `fs::canonicalize`; UA's licence check logged
+  `invalid_host_signature` in `%LOCALAPPDATA%\Universal Audio\Logs`.
+  Pass the plain path when it fits `MAX_PATH`, keep the Windows
+  environment allowlist after `env_clear`, keep plugin stdout off the
+  protocol pipe, and require a qualification to show output differing
+  from input, not only finite output. Read the vendor's own log before
+  changing sandbox limits.
+
 - **2026-10-22 — Get human approval before opening a pull request (user preference).**
   Evidence: [active plan, PR approval preference](docs/plans/active/current.md#pull-request-approval-preference-2026-10-22).
   Scope: all repository branches and pull requests. Consequence: finish local

@@ -52,13 +52,15 @@ or packaging it, run from the repository root:
 npm.cmd run build --prefix ui
 cargo build --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target
 cargo build --manifest-path Cargo.toml -p audiorouter-plugin-host --bin audiorouter-plugin-worker --target-dir src-tauri/target
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\m06-vst3-worker\build.ps1 -Release -Output src-tauri\target\debug\audiorouter-vst3-worker.exe
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\stage-mcp-cli.ps1 -Profile debug -Build
 ```
 
-The shell and matching plugin worker are written beside each other in
-`src-tauri\target\debug\` as `audiorouter-shell.exe` and
-`audiorouter-plugin-worker.exe`. Keep both executables together; building the
-shell alone leaves plugin nodes unable to start. The shell also explains the
+The shell and matching plugin workers are written beside each other in
+`src-tauri\target\debug\` as `audiorouter-shell.exe`,
+`audiorouter-plugin-worker.exe` (VST2) and `audiorouter-vst3-worker.exe`
+(VST3, built from `tools\m06-vst3-worker` with the SDK from step 1). Keep
+them together; building the shell alone leaves plugin nodes unable to start. The shell also explains the
 expected worker locations and repair steps if it is missing.
 MCP also requires the matching `audiorouter-cli.exe` beside the shell. The
 staging command builds the workspace CLI, copies it beside the shell, and

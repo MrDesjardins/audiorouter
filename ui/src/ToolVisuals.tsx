@@ -978,6 +978,56 @@ export function InputSwitchEditor({
   );
 }
 
+export function OutputSwitchEditor({
+  node,
+  session,
+  disabled,
+  onChange,
+}: {
+  node: Node;
+  session: {
+    nodes: Node[];
+    edges: Array<{ sourceNode: string; sourcePort: string; destinationNode: string; enabled: boolean }>;
+  };
+  disabled: boolean;
+  onChange: (name: string, value: string) => void;
+}) {
+  const selected = node.parameters.selected === "b" ? "b" : "a";
+  const destinationName = (port: "a" | "b") => {
+    const edge = session.edges.find((item) => item.enabled && item.sourceNode === node.id && item.sourcePort === port);
+    return edge
+      ? (session.nodes.find((item) => item.id === edge.destinationNode)?.name ?? "Unknown destination")
+      : "Nothing connected";
+  };
+  return (
+    <ToolPanel
+      label="Output Switch editor"
+      title="Where this signal goes"
+      summary="Audio fades down before the new output fades up. The two outputs never play at the same time."
+    >
+      <div className="input-switch-choices" role="radiogroup" aria-label="Active output">
+        {(["a", "b"] as const).map((port) => (
+          <button
+            key={port}
+            type="button"
+            role="radio"
+            aria-checked={selected === port}
+            className={`input-switch-choice${selected === port ? " is-active" : ""}`}
+            disabled={disabled}
+            onClick={() => {
+              if (selected !== port) onChange("selected", port);
+            }}
+          >
+            <b>{port.toUpperCase()}</b>
+            <span>{destinationName(port)}</span>
+            <small>{selected === port ? "Playing" : "Silent"}</small>
+          </button>
+        ))}
+      </div>
+    </ToolPanel>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* One-knob cleanup tools: named strengths beside the exact value.    */
 

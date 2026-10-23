@@ -193,7 +193,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "safety.togglePrivacyMute" => "Mute the microphone if it is live, unmute it if it is muted. Returns the new state.",
         "nodes.catalog" => "List the tools and devices that can be added by kind, with a plain description, inputs, outputs and settings.",
         "nodes.set" => "Change one node, found by ID or name: settings (parameters), enabled, bypass or name. Applied live and saved.",
-        "nodes.toggle" => "Flip one node's enabled, bypass, an on/off setting or a two-choice setting (for example an Input Switch between A and B). Applied live and saved.",
+        "nodes.toggle" => "Flip one node's enabled, bypass, an on/off setting or a two-choice setting (for example an Input or Output Switch between A and B). Applied live and saved.",
         "nodes.add" => "Add a tool or device by kind (see nodes.catalog), optionally between two connected nodes or after a node. Saved.",
         "nodes.remove" => "Remove a node by ID or name; by default its upstream and downstream nodes are reconnected. Saved.",
         "connections.add" => "Connect two nodes by ID or name (first output to the first free input). Saved.",

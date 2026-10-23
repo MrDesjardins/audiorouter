@@ -260,3 +260,12 @@ gain/delay and nonlinear order checks provide independent pair references.
 Test impulse/frequency response, step response, DC/silence, clipping, automation, bypass latency, and long-run numerical stability. Flat EQ shall null against the input within the numeric tolerance in [14](14-quality.md). Verify notch attenuation at both hum presets and compressor/gate transfer curves across thresholds. Compare dry and processed branches to prove isolation. Exercise plugin scan crash, runtime crash, hang, mismatched channel layouts, editor resizing, state save/reload, and dynamic latency. A plugin that fails is an explicit unsupported fixture, not evidence that all VST3 effects work.
 
 Sources: [Cockos ReaPlugs page](https://www.reaper.fm/reaplugs/) documents the separately distributed effects suite; [Steinberg licensing FAQ](https://steinbergmedia.github.io/vst3_dev_portal/pages/FAQ/Licensing.html) distinguishes VST3 and VST2 terms. These inform the compatibility boundary, not a legal determination about any particular third-party binary.
+
+- **DSP-21 — Output Switch.** A routing node with one input and two named
+  outputs (`a`, `b`) sends audio only to its selected output. `selected` is `a`
+  or `b`, defaults to `a`, and changes while running through the live parameter
+  path. The previous branch ramps to silence over 10 ms before the new branch
+  ramps up over 10 ms. The branches never overlap; switching may create a
+  brief silent interval. An unconnected selected side is silent, with no
+  fallback. Changing selection uses bounded lock-free state; processing
+  allocates nothing and performs no blocking work.

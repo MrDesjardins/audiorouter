@@ -969,7 +969,7 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                                     "vendor": { "type": ["string", "null"], "maxLength": 128 },
                                     "version": { "type": ["string", "null"], "maxLength": 128 },
                                     "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                                    "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat"] }
+                                    "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat", "unsupportedInstrument"] }
                                 },
                                 "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
                                 "additionalProperties": false
@@ -1001,7 +1001,7 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                         "vendor": { "type": ["string", "null"], "maxLength": 128 },
                         "version": { "type": ["string", "null"], "maxLength": 128 },
                         "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat"] }
+                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat", "unsupportedInstrument"] }
                     },
                     "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
                     "additionalProperties": false
@@ -1638,7 +1638,8 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                                 "state": { "enum": ["unknown", "stopped", "running", "failed", "quarantined"] },
                                 "failureCount": { "type": "integer", "minimum": 0 },
                                 "outputMisses": { "type": "integer", "minimum": 0 },
-                                "inputDrops": { "type": "integer", "minimum": 0 }
+                                "inputDrops": { "type": "integer", "minimum": 0 },
+                                "unchangedAudio": { "type": "boolean" }
                             },
                             "required": ["state", "failureCount"],
                             "additionalProperties": false

@@ -369,7 +369,7 @@ test("Network Send waits for a paired AudioRouter on PC B before packets cross t
 test("the guide index searches property names and links to individual pages", async ({ page }, info) => {
   await page.route("https://**", (route) => route.abort());
   await page.goto(new URL("tools/index.html", site).href);
-  await expect(page.locator(".guide-index-card")).toHaveCount(36);
+  await expect(page.locator(".guide-index-card")).toHaveCount(37);
   await page.getByLabel("Find a tool or property").fill("threshold");
   await expect(page.locator(".guide-index-card:visible")).toHaveCount(4);
   await page.getByRole("link", { name: /Compressor.*Explore this tool/ }).click();

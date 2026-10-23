@@ -27,10 +27,16 @@ fn plugin_worker_resolves_from_the_packaged_resource_directory() {
     };
     let worker = resources.join(worker_name);
     std::fs::write(&worker, b"test executable placeholder").unwrap();
-    assert_eq!(packaged_plugin_worker_path(&shell), Some(worker.clone()));
+    assert_eq!(
+        packaged_plugin_worker_path(&shell, PluginWorkerKind::Vst2),
+        Some(worker.clone())
+    );
     let adjacent = root.join(worker_name);
     std::fs::write(&adjacent, b"adjacent executable placeholder").unwrap();
-    assert_eq!(packaged_plugin_worker_path(&shell), Some(adjacent));
+    assert_eq!(
+        packaged_plugin_worker_path(&shell, PluginWorkerKind::Vst2),
+        Some(adjacent)
+    );
     std::fs::remove_dir_all(&root).unwrap();
 }
 
@@ -42,7 +48,7 @@ fn missing_plugin_worker_error_names_search_paths_and_repair_action() {
     } else {
         "audiorouter-shell"
     });
-    let message = plugin_worker_unavailable_message(Some(&shell));
+    let message = plugin_worker_unavailable_message(Some(&shell), PluginWorkerKind::Vst2);
     let worker = if cfg!(windows) {
         "audiorouter-plugin-worker.exe"
     } else {
@@ -52,6 +58,112 @@ fn missing_plugin_worker_error_names_search_paths_and_repair_action() {
     assert!(message.contains(&root.join("resources").join(worker).display().to_string()));
     assert!(message.contains("rebuild the complete AudioRouter package"));
     assert!(message.contains("AUDIOROUTER_PLUGIN_WORKER_PATH"));
+}
+
+/// VST3 effects run in their own native worker, never the VST2-only one
+/// (which reported `VST2 load failed: MissingEntryPoint` for every VST3).
+#[test]
+fn vst3_plugins_resolve_the_native_vst3_worker() {
+    assert_eq!(
+        PluginWorkerKind::for_format(audiorouter_plugin_host::PluginFormat::Vst3),
+        PluginWorkerKind::Vst3
+    );
+    assert_eq!(
+        PluginWorkerKind::for_format(audiorouter_plugin_host::PluginFormat::Vst2),
+        PluginWorkerKind::Vst2
+    );
+    let root = std::env::temp_dir().join(format!(
+        "audiorouter-vst3-worker-resource-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let resources = root.join("resources");
+    std::fs::create_dir_all(&resources).unwrap();
+    let shell = root.join("audiorouter-shell.exe");
+    std::fs::write(
+        resources.join(PluginWorkerKind::Vst2.file_name()),
+        b"vst2 worker placeholder",
+    )
+    .unwrap();
+    assert_eq!(
+        packaged_plugin_worker_path(&shell, PluginWorkerKind::Vst3),
+        None
+    );
+    let vst3 = resources.join(PluginWorkerKind::Vst3.file_name());
+    std::fs::write(&vst3, b"vst3 worker placeholder").unwrap();
+    assert_eq!(
+        packaged_plugin_worker_path(&shell, PluginWorkerKind::Vst3),
+        Some(vst3)
+    );
+    let message = plugin_worker_unavailable_message(Some(&shell), PluginWorkerKind::Vst3);
+    assert!(message.contains(PluginWorkerKind::Vst3.file_name()));
+    assert!(message.contains("AUDIOROUTER_VST3_WORKER_PATH"));
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// Installed VST3 effects start in the native VST3 worker through the
+/// backend's own RPCs: scan a folder, then describe each matching plugin's
+/// parameters (which launches its worker). Instruments are refused with a
+/// plain reason. Set `AUDIOROUTER_VST3_WORKER_PATH` to the built
+/// `audiorouter-vst3-worker.exe`; `AUDIOROUTER_LIVE_VST3_MATCH` selects
+/// plugins by path text (default `uaudio_`, the UADx titles).
+#[cfg(windows)]
+#[test]
+#[ignore = "installed VST3 plugins and the native VST3 worker"]
+fn installed_vst3_plugins_start_in_the_native_worker() {
+    if std::env::var_os("AUDIOROUTER_VST3_WORKER_PATH").is_none() {
+        return;
+    }
+    let directory = std::env::var("AUDIOROUTER_LIVE_VST3_DIRECTORY")
+        .unwrap_or_else(|_| r"C:\Program Files\Common Files\VST3".into());
+    let pattern = std::env::var("AUDIOROUTER_LIVE_VST3_MATCH").unwrap_or_else(|_| "uaudio_".into());
+    let mut plane = ControlPlane::default();
+    let grant = ClientGrant::for_desktop_shell();
+    let mut call = |method: &str, params: Value| {
+        plane.dispatch_authorized(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            &grant,
+        )
+    };
+    let scan = call("plugins.scan", json!({ "directory": directory }));
+    assert!(scan.error.is_none(), "{:?}", scan.error);
+    let entries = scan.result.unwrap()["entries"].as_array().unwrap().clone();
+    let mut started = 0;
+    for entry in entries.iter().filter(|entry| {
+        entry["path"]
+            .as_str()
+            .is_some_and(|path| path.contains(&pattern))
+            && entry["identity"]["compatibility"] == "supportedVst3X64"
+    }) {
+        let path = entry["path"].as_str().unwrap();
+        let response = call("plugins.parameters", json!({ "path": path }));
+        match (response.result, response.error) {
+            (Some(result), None) => {
+                let parameters = result["parameters"].as_array().unwrap();
+                eprintln!("{path}: {} parameters", parameters.len());
+                assert!(!parameters.is_empty(), "{path} exposed no parameters");
+                started += 1;
+            }
+            (_, Some(error)) => {
+                let text = format!("{error:?}");
+                eprintln!("{path}: refused: {text}");
+                assert!(
+                    text.contains("instrument"),
+                    "{path} failed to start: {text}"
+                );
+            }
+            (None, None) => unreachable!(),
+        }
+    }
+    assert!(started > 0, "no VST3 plugin matching {pattern} started");
 }
 
 /// A plugin setting changed while playing (as in its editor) must come
@@ -435,4 +547,26 @@ fn unprepared_plugin_start_explains_http_preparation_for_both_aliases() {
             .get(&id)
             .is_some_and(|runtime| runtime.state() == RuntimeState::Running));
     }
+}
+
+#[test]
+fn play_applies_only_sliders_moved_since_the_state_was_captured() {
+    let parameters = json!({
+        "path": "effect.vst3",
+        "pluginParameter:1": 0.25,
+        "pluginParameter:2": 0.5,
+        "pluginParameter:3": 0.75,
+    });
+    let parameters = parameters.as_object().unwrap();
+    // No snapshot (an old capture, or none): every slider applies.
+    let all = plugin_sliders_to_apply(parameters, None);
+    assert_eq!(all.len(), 3);
+    // The capture saw 1 and 2 at these values; 2 has moved since and 3 is new.
+    let captured = json!({ "pluginParameter:1": 0.25, "pluginParameter:2": 0.1 });
+    let moved = plugin_sliders_to_apply(parameters, captured.as_object());
+    let names = moved
+        .iter()
+        .map(|(name, _)| name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names, ["pluginParameter:2", "pluginParameter:3"]);
 }

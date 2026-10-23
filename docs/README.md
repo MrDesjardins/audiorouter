@@ -109,7 +109,10 @@ The [privacy and permissions guide](operations/privacy-permissions.md) explains
 the local trust boundary, grant scopes, recording/capture limits, and safe
 diagnostics handling. The [plugin compatibility snapshot](operations/plugin-compatibility.md)
 records the verified local VST3 fixture, gated x64 VST2 observations, and the
-remaining execution limits.
+remaining execution limits. [Bring your own plugins](operations/bring-your-own-plugins.md)
+is the user guide for installing, scanning, adding and troubleshooting VST3,
+VST2 and UAD plugins; the [UAD support plan](plans/future/uad-plugin-support.md)
+lists the proposed work to support every UAD product family.
 
 ## Plans versus specifications
 

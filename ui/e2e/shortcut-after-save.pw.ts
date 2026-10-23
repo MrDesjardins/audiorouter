@@ -1,5 +1,5 @@
 import { test, expect } from "./browser-test";
-import { demoSession } from "../src/fixtures";
+import { stereoDemoSession as demoSession } from "./workbench";
 import { appendDraftConnection } from "../src/draft";
 
 // The session shortcut must play the route just saved, like the Play button.

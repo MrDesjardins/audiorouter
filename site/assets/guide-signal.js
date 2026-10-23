@@ -417,7 +417,9 @@
         output[i] =
           (input[i] * value(p, "track1Percent", 80)) / 100 +
           (inputs[1].channels[0][i] * value(p, "track2Percent", 55)) / 100;
-    else if (kind === "inputSwitch") {
+    else if (kind === "outputSwitch") {
+      output = copy(input);
+    } else if (kind === "inputSwitch") {
       const selected = p.selected === "b" ? 1 : 0,
         from = options.switchFrom === "b" ? 1 : 0;
       for (let i = 0; i < frames; i++) {

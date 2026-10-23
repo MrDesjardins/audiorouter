@@ -85,6 +85,9 @@ for (const entry of entriesWithKind) {
               : inspector.getByRole("button", { name: "Slow fade (2 s)" })
           ).click();
           changedParameters[parameter.name] = value;
+        } else if (entry.kind === "outputSwitch" && parameter.name === "selected") {
+          await inspector.getByRole("radio", { name: /^B/ }).click();
+          changedParameters[parameter.name] = "b";
         } else if (parameter.type === "string" && parameter.enum && parameter.enum.length > 1) {
           const control = inspector.getByLabel(parameterText(entry.kind, parameter.name).label, { exact: true });
           await expect(control).toBeVisible();

@@ -1,6 +1,6 @@
 import { setColorTheme } from "./workbench";
 import { test, expect } from "./browser-test";
-import { demoSession } from "../src/fixtures";
+import { stereoDemoSession as demoSession } from "./workbench";
 import { appendLibraryNode, appendDraftConnection } from "../src/draft";
 import { join } from "node:path";
 

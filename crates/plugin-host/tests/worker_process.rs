@@ -1213,9 +1213,9 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
     let editor = worker
         .describe_editor(Instant::now())
         .expect("native VST3 editor description response");
-    assert!(!editor.has_editor);
-    assert_eq!(editor.width, 0);
-    assert_eq!(editor.height, 0);
+    // native_vst3_editor_opens_in_a_pumping_parent opens a real editor; a
+    // plugin without one reports no size.
+    assert!(editor.has_editor || (editor.width == 0 && editor.height == 0));
     let descriptors = worker
         .describe_parameters(Instant::now())
         .expect("native VST3 parameter description response");
@@ -1232,19 +1232,10 @@ fn verified_native_vst3_worker_processes_an_opt_in_fixture() {
     parameter_ids.sort_unstable();
     parameter_ids.dedup();
     assert_eq!(parameter_ids.len(), descriptors.len());
-    let authorization = EditorParentAuthorizationIssuer::from_key([7; 32])
-        .issue(1, std::process::id())
-        .expect("native VST3 editor authorization fixture");
-    assert!(matches!(
-        worker.open_editor(&authorization, Instant::now()),
-        Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(code))
-            if code == "editorUnavailable"
-    ));
-    assert!(matches!(
-        worker.close_editor(Instant::now()),
-        Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(code))
-            if code == "editorUnavailable"
-    ));
+    // Closing an editor that is not open is a no-op.
+    worker
+        .close_editor(Instant::now())
+        .expect("closing a closed editor");
     let mut samples = vec![0.0; 256];
     samples[2] = 0.1;
     samples[3] = -0.1;
@@ -2246,6 +2237,35 @@ fn supervised_worker_fixture_preserves_dynamic_latency_and_descriptors() {
     assert!(descriptor_worker.shutdown().unwrap().success());
 }
 
+/// The delay a plugin reports for itself is part of the stage latency the
+/// engine shows, not only the quanta queued for the worker.
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn runtime_bridge_counts_the_plugin_reported_latency() {
+    use audiorouter_engine::RealtimePluginProcessor;
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: "d".repeat(64),
+        metadata: Default::default(),
+    };
+    // The latency fixture reports 64 samples more than it is asked about.
+    let worker = SupervisedWorkerProcess::spawn_fixture(
+        fixture_worker_path(),
+        &identity,
+        1,
+        "latency",
+        Instant::now(),
+    )
+    .expect("spawn latency fixture");
+    let bridge = audiorouter_plugin_host::PluginRuntimeBridge::start(worker, 1, 128, 4)
+        .expect("start bridge");
+    assert_eq!(bridge.latency_samples(), 64);
+}
+
 #[test]
 fn disposable_worker_rejects_a_runtime_sample_rate_change() {
     let hash = "1".repeat(64);
@@ -2959,4 +2979,279 @@ fn runtime_bridge_saves_state_and_opens_the_editor_in_a_pumping_parent() {
             .expect("close attempted")
             .expect("the editor closes and hands back its state");
     }
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[link(name = "user32")]
+unsafe extern "system" {
+    fn GetClientRect(window: *mut std::ffi::c_void, rect: *mut [i32; 4]) -> i32;
+    fn GetWindow(window: *mut std::ffi::c_void, command: u32) -> *mut std::ffi::c_void;
+}
+
+/// Opt-in check of a VST3 effect's own editor: it opens inside a visible,
+/// pumping parent window owned by this process, sizes that window to fit,
+/// keeps processing audio while open, and closes cleanly. Set
+/// `AUDIOROUTER_VST3_EDITOR_HOLD_MS` to keep it on screen for a look.
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires AUDIOROUTER_VST3_FIXTURE, AUDIOROUTER_VST3_NATIVE_WORKER and a Windows desktop"]
+fn native_vst3_editor_opens_in_a_pumping_parent() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let plugin_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").unwrap());
+    let worker_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER").unwrap());
+    let hold = Duration::from_millis(
+        std::env::var("AUDIOROUTER_VST3_EDITOR_HOLD_MS")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(1_000),
+    );
+    let root = plugin_path.parent().unwrap().to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root)).unwrap();
+    let mut worker = SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        2,
+        48_000,
+        Instant::now(),
+    )
+    .expect("launch native VST3 worker");
+    let editor = worker.describe_editor(Instant::now()).unwrap();
+    assert!(editor.has_editor, "the fixture reports no editor");
+    assert!(editor.width > 0 && editor.height > 0, "{editor:?}");
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let (window_sender, window_receiver) = std::sync::mpsc::channel();
+    let pump_stop = Arc::clone(&stop);
+    let pump = std::thread::spawn(move || {
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        let title: Vec<u16> = "AudioRouter VST3 editor host test\0"
+            .encode_utf16()
+            .collect();
+        // WS_OVERLAPPEDWINDOW | WS_VISIBLE, at a size the editor must change.
+        let style = 0x00CF_0000 | 0x1000_0000;
+        // SAFETY: NUL-terminated buffers outlive the synchronous call.
+        let parent = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                title.as_ptr(),
+                style,
+                100,
+                100,
+                320,
+                200,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+        window_sender.send(parent as usize).unwrap();
+        let mut message = [0usize; 6];
+        while !pump_stop.load(Ordering::Acquire) {
+            // SAFETY: standard non-blocking message pump for this thread's windows.
+            unsafe {
+                while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, 1) != 0 {
+                    TranslateMessage(&message);
+                    DispatchMessageW(&message);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        // SAFETY: the window was created on this thread.
+        unsafe { DestroyWindow(parent) };
+    });
+    let parent = window_receiver.recv().unwrap();
+    assert_ne!(parent, 0, "editor parent creation failed");
+    let authorization = EditorParentAuthorizationIssuer::from_key([6; 32])
+        .issue(parent as u64, std::process::id())
+        .unwrap();
+    worker
+        .open_editor(&authorization, Instant::now())
+        .expect("the editor opens in a pumping parent");
+
+    // Audio keeps flowing while the editor is up.
+    let started = Instant::now();
+    let mut sequence = 0;
+    let mut fitted = false;
+    let mut child = std::ptr::null_mut();
+    while started.elapsed() < hold.max(Duration::from_millis(500)) {
+        sequence += 1;
+        let samples = (0..256)
+            .map(|index| 0.1 * ((index / 2) as f32 * 0.03).sin())
+            .collect::<Vec<_>>();
+        let frame = WorkerFrame::new(
+            sequence,
+            worker_clock_tick().saturating_add(10_000),
+            2,
+            samples,
+        )
+        .unwrap();
+        let processed = worker.process(frame, Vec::new(), Instant::now()).unwrap();
+        assert!(processed.samples.iter().all(|sample| sample.is_finite()));
+        let mut client = [0i32; 4];
+        // SAFETY: GetClientRect/GetWindow only read the (live) parent window.
+        unsafe {
+            GetClientRect(parent as *mut _, &mut client);
+            child = GetWindow(parent as *mut _, 5); // GW_CHILD
+        }
+        fitted |= client[2] == i32::from(editor.width) && client[3] == i32::from(editor.height);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert!(
+        !child.is_null(),
+        "the plugin created no window in its parent"
+    );
+    assert!(fitted, "the parent was not sized to the {editor:?}");
+    worker
+        .close_editor(Instant::now())
+        .expect("the editor closes");
+    worker
+        .save_state(Instant::now())
+        .expect("state after close");
+    stop.store(true, Ordering::Release);
+    pump.join().unwrap();
+    assert!(worker.shutdown().unwrap().success());
+}
+
+/// Opt-in signal report for an installed VST3 effect: lists the exposed
+/// parameters, then plays a 220 Hz sine through 200 blocks (optionally with
+/// one parameter held at a value) and reports the output level, the largest
+/// difference from the input and the delay of the first audible output.
+/// Used to qualify vendor plugins (UADx first); it asserts only finite output.
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires AUDIOROUTER_VST3_FIXTURE and AUDIOROUTER_VST3_NATIVE_WORKER"]
+fn native_vst3_fixture_signal_report() {
+    let plugin_path = PathBuf::from(std::env::var("AUDIOROUTER_VST3_FIXTURE").expect("fixture"));
+    let worker_path =
+        PathBuf::from(std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER").expect("worker"));
+    let channels = std::env::var("AUDIOROUTER_VST3_CHANNELS")
+        .ok()
+        .map(|value| value.parse::<u16>().expect("1 or 2"))
+        .unwrap_or(2);
+    let held_parameter = std::env::var("AUDIOROUTER_VST3_PARAMETER")
+        .ok()
+        .map(|value| {
+            let (id, normalized) = value.split_once('=').expect("ID=VALUE");
+            (
+                id.parse::<u32>().expect("parameter ID"),
+                normalized.parse::<f32>().expect("normalized value"),
+            )
+        });
+    let root = plugin_path.parent().expect("fixture parent").to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root)).expect("inspect");
+    let started = Instant::now();
+    let mut worker = SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+        worker_path,
+        &identity,
+        std::slice::from_ref(&root),
+        channels,
+        48_000,
+        Instant::now(),
+    )
+    .expect("launch native VST3 worker");
+    let descriptors = worker
+        .describe_parameters(Instant::now())
+        .expect("parameter descriptors");
+    let latency = worker
+        .report_latency(
+            WorkerLatency::new(0, 48_000).expect("latency query"),
+            Instant::now(),
+        )
+        .expect("plugin latency");
+    println!(
+        "started in {:?}; {} exposed parameters; reported latency {} samples",
+        started.elapsed(),
+        descriptors.len(),
+        latency.samples
+    );
+    for descriptor in &descriptors {
+        println!(
+            "  parameter {} \"{}\" default {:.4}",
+            descriptor.parameter_id, descriptor.title, descriptor.default_value
+        );
+    }
+    if let Some(milliseconds) = std::env::var("AUDIOROUTER_VST3_WARMUP_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+    {
+        // Some vendor plugins finish licensing asynchronously after load.
+        std::thread::sleep(Duration::from_millis(milliseconds));
+    }
+    const FRAMES: usize = 128;
+    let mut peak_output = 0.0f32;
+    let mut peak_difference = 0.0f32;
+    let mut sum_squares = 0.0f64;
+    let mut first_audible_frame = None;
+    for block in 0..200u64 {
+        let mut samples = Vec::with_capacity(FRAMES * channels as usize);
+        for frame in 0..FRAMES {
+            let index = block as usize * FRAMES + frame;
+            let value = 0.25 * (2.0 * std::f32::consts::PI * 220.0 * index as f32 / 48_000.0).sin();
+            samples.extend(std::iter::repeat_n(value, channels as usize));
+        }
+        let input = samples.clone();
+        let events = held_parameter
+            .filter(|_| block == 0)
+            .map(|(parameter_id, normalized_value)| {
+                vec![ParameterEvent {
+                    parameter_id,
+                    normalized_value,
+                    sample_offset: 0,
+                }]
+            })
+            .unwrap_or_default();
+        let frame = WorkerFrame::new(
+            block + 1,
+            worker_clock_tick().saturating_add(10_000),
+            channels,
+            samples,
+        )
+        .expect("frame");
+        let processed = worker
+            .process(frame, events, Instant::now())
+            .expect("process");
+        for (index, (output, input)) in processed.samples.iter().zip(&input).enumerate() {
+            assert!(output.is_finite());
+            peak_output = peak_output.max(output.abs());
+            peak_difference = peak_difference.max((output - input).abs());
+            sum_squares += f64::from(*output) * f64::from(*output);
+            if first_audible_frame.is_none() && output.abs() > 1.0e-3 {
+                first_audible_frame = Some(block as usize * FRAMES + index / channels as usize);
+            }
+        }
+    }
+    let rms = (sum_squares / (200 * FRAMES * channels as usize) as f64).sqrt();
+    println!(
+        "signal: input peak 0.2500 rms {:.4}; output peak {peak_output:.4} rms {rms:.4}; \
+         largest difference from input {peak_difference:.4}; first audible output at frame {:?}",
+        0.25 / std::f64::consts::SQRT_2,
+        first_audible_frame
+    );
+    // Stop saves the plugin's state and the next Play restores it, so a
+    // snapshot must restore into a fresh instance as well as this one.
+    let state = worker.save_state(Instant::now()).expect("save state");
+    println!("state: saved");
+    worker
+        .restore_state(state.clone(), Instant::now())
+        .expect("restore state into the same instance");
+    assert!(worker.shutdown().unwrap().success());
+    let worker_path_again =
+        PathBuf::from(std::env::var("AUDIOROUTER_VST3_NATIVE_WORKER").expect("worker"));
+    let mut fresh = SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+        worker_path_again,
+        &identity,
+        std::slice::from_ref(&root),
+        channels,
+        48_000,
+        Instant::now(),
+    )
+    .expect("fresh worker");
+    fresh
+        .restore_state(state, Instant::now())
+        .expect("restore state into a fresh instance");
+    println!("state: restored into the same and a fresh instance");
+    assert!(fresh.shutdown().unwrap().success());
 }

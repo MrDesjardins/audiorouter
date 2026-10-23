@@ -108,6 +108,16 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "cargo release build failed with exit code $LASTEXITCODE"
     }
+    # VST3 effects run in the native worker; the Rust plugin worker hosts VST2
+    # only. It compiles against the pinned VST3 SDK checkout (ignored by Git).
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace "tools/m06-vst3-sdk/install.ps1")
+    if ($LASTEXITCODE -ne 0) {
+        throw "pinned VST3 SDK checkout failed with exit code $LASTEXITCODE"
+    }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace "tools/m06-vst3-worker/build.ps1") -Release -Output (Join-Path $workspace "target/release/audiorouter-vst3-worker.exe")
+    if ($LASTEXITCODE -ne 0) {
+        throw "native VST3 worker release build failed with exit code $LASTEXITCODE"
+    }
     if (-not $AppOnly) {
         & cargo build --release --locked -p audiorouter-driver-helper
         if ($LASTEXITCODE -ne 0) { throw "elevated driver helper release build failed with exit code $LASTEXITCODE" }
@@ -190,6 +200,7 @@ try {
     $binaries = @(
         @{ Name = "audiorouter-cli.exe"; Source = (Join-Path $workspace "target/release/audiorouter-cli.exe") }
         @{ Name = "audiorouter-plugin-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe") }
+        @{ Name = "audiorouter-vst3-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-vst3-worker.exe") }
         @{ Name = "audiorouter-shell.exe"; Source = (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe") }
     )
     if (-not $AppOnly) {

@@ -5,6 +5,7 @@
     "resources": {
       "../target/release/audiorouter-cli.exe": "audiorouter-cli.exe",
       "../target/release/audiorouter-plugin-worker.exe": "audiorouter-plugin-worker.exe",
+      "../target/release/audiorouter-vst3-worker.exe": "audiorouter-vst3-worker.exe",
       "../target/release/audiorouter-driver-helper.exe": "audiorouter-driver-helper.exe",
       "../target/release/tunnel-client-runtime.exe": "tunnel-client-runtime.exe",
       "../target/release/tunnel-client-runtime-LICENSE.txt": "tunnel-client-runtime-LICENSE.txt",

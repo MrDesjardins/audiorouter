@@ -24,6 +24,7 @@ export type LibraryEntry = {
     | "dehum"
     | "declick"
     | "inputSwitch"
+    | "outputSwitch"
     | "denoise"
     | "speechDenoise"
     | "spectralGate"
@@ -224,6 +225,14 @@ export const libraryEntries: LibraryEntry[] = [
     flow: "tool",
     kind: "inputSwitch",
     note: "Pass either input A or input B. Switching crossfades over 0.5 s (Shift-click for 2 s).",
+  },
+  {
+    id: "output-switch",
+    label: "Output Switch",
+    category: "Routing",
+    flow: "tool",
+    kind: "outputSwitch",
+    note: "Send one signal to output A or B, such as headphones or OBS. Only the selected side receives audio; switch with Properties or Stream Deck.",
   },
   { id: "recorder", label: "Recorder", category: "Output", flow: "tool", kind: "recorder" },
   { id: "mute", label: "Mute", category: "Effect", flow: "tool", kind: "mute" },

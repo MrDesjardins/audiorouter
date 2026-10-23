@@ -3436,6 +3436,7 @@ mod tests {
                 "graphicEq",
                 "inputSwitch",
                 "limiter",
+                "outputSwitch",
                 "parametricEq",
                 "pitch",
                 "spectralGate",

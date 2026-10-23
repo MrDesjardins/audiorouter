@@ -310,6 +310,16 @@ from Test Signal or Audio File sources; capture-only paths remain marked muted.
 Native preparation guidance distinguishes control connection readiness from
 audio readiness and explains the exact endpoint and authorization steps.
 
+- **UI-25 — Output Switch.** Provide an addable Output Switch routing node with
+  one input and two output ports, A and B. Name both ports in the canvas and
+  connection controls. Properties shows the selected output and lets the user
+  switch between A and B while audio is running; generic `nodes.toggle` and
+  Stream Deck discover the selected-side choice. Only the selected output
+  carries audio. The old output fades to silence before the new output fades
+  in, so both never receive a transition copy. If the selected port is
+  unconnected, the node is silent; it never falls back to the other port. Show
+  the selected side as routing state, not effect activity.
+
 While a connected backend's initial snapshot is pending, show loading status
 and withhold the editable graph. Failure offers reconnect rather than editable
 demonstration data. Numeric properties honor the backend's advertised step and

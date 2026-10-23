@@ -1,5 +1,207 @@
 # Active plan — post-0.0.8 maintenance
 
+## Overnight review, PR, merge and release 0.0.21 — 2026-10-23, owner request
+
+The owner asked, before going to sleep, for: (1) a quick code review of all
+changes since 0.0.20, (2) fixes for high-priority findings and the rest
+recorded as future fixes, (3) one PR with all the work, (4) merge it when
+ready, (5) a new release with every fix and feature. This message is the
+explicit PR, merge and release approval (AGENTS.md "Pull request approval").
+
+- Scope: branch `feature/vst3-plugin-windows` = plugin windows (f1eb76f2)
+  + `feature/output-switch` merged locally (1015b5be) + review fixes
+  (50aeaed9) + the 0.0.21 bump. Everything else since 0.0.20 is already on
+  main (#58, #59, #60 and earlier).
+- Review: `/code-review medium v0.0.20..HEAD`, 9 findings. Fixed: plugin
+  sliders resent every quantum (editor knobs reset), Output Switch side into
+  a shared Mixer (leak or wrong mute; now refused), Output Switch routes on
+  the single-endpoint worker, latency query ending the worker, two misplaced
+  doc comments. Open: [review follow-ups](../future/review-fixes-0.0.21.md)
+  R1–R6.
+- Checks on 50aeaed9: fmt and Clippy (workspace, shell) clean; plugin-host,
+  engine and control tests pass (plugin-host lib 78, engine lib 161, control
+  lib 264); UI format, typecheck, lint (0 errors, 25 warnings), 646 tests;
+  contracts typecheck and drift; docs validation (191 files, 1056 links).
+  The new switch-into-Mixer regression was not run against the old code
+  (the guard-disabled run was blocked), so it is not yet proven to fail
+  without the fix.
+- Not changed: `site/compare.html` VST2 wording (R6, blocked by the
+  permission check; owner decision).
+- Release: same app-only profile as 0.0.20; evidence will be in
+  `docs/plans/active/evidence/2026-10-23-release-0.0.21.md`.
+
+## UAD plugin plan and bring-your-own-plugin guide — 2026-10-22, owner request
+
+Objective: plan support for every UAD product family and give users one
+guide for installing, scanning, adding and troubleshooting their own VST3,
+VST2 and UAD plugins. Started as documentation only; U0 code followed (below).
+
+- Requirements: PLUG-01–PLUG-07 (no change), DSP-01, UI-17.
+- Decisions: the plan lives in `docs/plans/future/uad-plugin-support.md`
+  (not authorized for implementation); proposed PLUG-01 (instruments) and
+  PLUG-05 (latency change) changes are listed there as owner decisions. UAD
+  facts not observed on a real install are marked "confirm in U1"; the user
+  guide calls UAD-2 unqualified and every UA title untested until listed in
+  the compatibility snapshot.
+- Code facts recorded as gaps (read 2026-10-22): the VST3 worker takes no
+  class ID and loads the first initializing audio-effect class; UI plugin
+  nodes are mono; no `setBusArrangements`, no `getLatencySamples`, no VST3
+  editor; no VST2 shell enumeration.
+- Files: `docs/operations/bring-your-own-plugins.md` (new),
+  `docs/plans/future/uad-plugin-support.md` (new), links from
+  `docs/README.md`, `docs/plans/future/README.md` and
+  `docs/operations/plugin-compatibility.md`.
+- Validation: `tests/acceptance/docs.ps1` (links, anchors, fences) and
+  `git diff --check`.
+- Rollback: delete the two new files and the links.
+- U1 first run (2026-10-22, owner installed UA Connect's nine free UADx
+  titles): all load, process and save state offline; but the app cannot
+  start any VST3 plugin (`VST2 load failed: MissingEntryPoint`; the native
+  VST3 worker is not packaged or selected) and UADx stdout output corrupts
+  the native worker's protocol pipe. See
+  [UADx inventory evidence](evidence/2026-10-22-uadx-inventory.md); the
+  guide was corrected to say VST3 cannot play yet.
+- U0 implemented (2026-10-22, owner: "Do not change the website wording:
+  MAKE IT WORK. I want VST3 VST2 AND UAD to work"). Site wording unchanged.
+  - Control selects the worker by format (`PluginWorkerKind` in
+    `crates/control/src/plugins.rs`): `audiorouter-vst3-worker.exe`
+    (override `AUDIOROUTER_VST3_WORKER_PATH`) for VST3.
+  - Packaging: `tools/release/prepare-artifacts.ps1` builds it with
+    `tools/m06-vst3-worker/build.ps1 -Release`; both Tauri release configs
+    bundle it.
+  - Worker (`tools/m06-vst3-worker/main.cpp`): protocol pipes isolated from
+    plugin stdout; mono/stereo negotiation plus in-worker adaptation;
+    parameter descriptors filtered and capped at 256; instruments refused;
+    `Latency` answered.
+  - Host (`crates/plugin-host/src/lib.rs`): plain plugin path instead of
+    `\\?\` (UA PACE rejected the verbatim path and passed audio through);
+    a fixed Windows environment allowlist after `env_clear`; stderr
+    diagnostic read after exit.
+  - Checks: fmt; Clippy on plugin-host and control; their tests;
+    `worker_process` with test-fixtures (35 passed); AGain and ReaPlugs
+    acceptance; release self-tests; eight UADx effects processed mono and
+    stereo ([evidence](evidence/2026-10-22-uadx-inventory.md#u0-results-in-the-app-worker-2026-10-22)).
+    Not run: full-workspace Clippy, a shell Play on a live route.
+  - Guide, plan, compatibility snapshot, quickstart and worker README
+    updated.
+- First attended Play (2026-10-22) failed: "native graph rejected:
+  UnsupportedTopology". Cause, not VST3-specific: the UI starts a single
+  route on the single-endpoint worker, whose compiler accepts only one
+  channel width per chain (engine check: mic 1 → out 2, mic 2 → plugin 1
+  → out 2 and mic 1 → plugin 1 → out 2 all rejected, multi-path compiler
+  accepts all). Plugin blocks are mono, so any plugin between stereo
+  devices failed. Fix: `needsNativePaths` (`ui/src/draft.ts`) sends a
+  route with any width-changing connection to the multi-path worker;
+  regression in `ui/src/draft.test.ts`.
+- Second defect found while qualifying: after Stop, the next Play failed
+  with `plugin state restore failed: StateUnsupported`. The VST3 worker's
+  `StateStream::read` returned `kResultFalse` on a short read at the end,
+  and UADx `setState` rejected the state. It now returns `kResultOk` with
+  the count, as the SDK's `MemoryStream`; restore also uses the SDK order
+  (component `setState`, then controller `setComponentState`).
+  `native_vst3_fixture_signal_report` now round-trips state into the same
+  and a fresh instance: all eight UADx effects pass mono and stereo.
+- Checks after these fixes: `live_plugin_route_plays_again_after_stop`
+  (new, opt-in) on a copy of the owner's database, privacy-muted: Play,
+  Stop, Play of mic → `uaudio_ua_1176` → headphones, plugin `running`
+  both rounds. AGain `m06-vst3-worker.ps1` passed; plugin-host
+  `worker_process` (35) and control lib (262) passed; Clippy on both
+  crates; UI 567 tests, typecheck, lint, Prettier on changed files.
+  Release shell rebuilt 19:16 with a UI bundle built from HEAD plus the
+  `draft.ts` change only (other sessions' uncommitted UI work excluded).
+- Incident (my error, repaired): removing a temporary git worktree whose
+  `node_modules` were junctions with `git worktree remove --force`
+  followed the junctions and deleted `contracts/` (5 tracked files) and
+  most of `contracts/node_modules` and `ui/node_modules`. Restored with
+  `git checkout -- contracts/`, `npm ci` in `contracts` and `npm install`
+  in `ui` (lockfile unchanged; a running site Vite server kept `npm ci`
+  from replacing `ui/node_modules`). Never junction dependencies into a
+  temporary worktree; remove junctions with `rmdir` first.
+- Attended result (2026-10-22, owner, release shell 19:16 with VST3
+  worker 19:20): mic → `uaudio_ua_1176` → headphones "works very well".
+- Follow-up round (2026-10-22, owner: "the UI/UX must be consistent, drag
+  and drop should work. Then, do: [plugin windows, latency display, licence
+  errors, PolyMAX] Especially opening the plugin ui should be available
+  along with the sliders"). Requirements: PLUG-03, PLUG-05, PLUG-06,
+  SEC-07, UI-17.
+  - Drag and drop: Plugins-list cards drag onto the canvas like tools,
+    with the same live preview (`ui/src/libraryDrag.tsx`,
+    `SessionFlowCanvas.tsx`, `App.tsx`, `PluginPanels.tsx`). Regression:
+    `ui/e2e/drag-place.pw.ts` (plugin case, three themes; route harness
+    gained `__routeFixturePluginInventory`).
+  - PolyMAX: scans read VST3 `moduleinfo.json` sub-categories and UA
+    `manifest.json` `is_synth`; instruments get the new compatibility
+    `unsupportedInstrument` and leave the Plugins list (contracts, output
+    schema, control). Remembered lists keep the old verdict until rescanned.
+  - VST3 plugin windows (`tools/m06-vst3-worker/main.cpp`): the worker's
+    main thread is now the plugin's UI thread (OLE STA, message loop,
+    per-monitor DPI aware) and owns every controller/view call; a second
+    thread reads the pipe and processes audio, handing every other request
+    to the UI thread (`SendMessageTimeout`, 15 s, then the worker ends).
+    `IPlugView` attaches inside the shell's window, sizes it to fit, follows
+    resizes and applies the content scale; attach and detach are posted so
+    the shell's window thread can be blocked in the close RPC. Edits in the
+    window reach the processor with the next quantum; slider events reach
+    the controller so the window follows the sliders. The worker now calls
+    the module's `InitDll`/`ExitDll` (VSTGUI editors crashed with
+    `0xC000041D` without it). UI "Open plugin editor" is enabled for VST3.
+  - **Decision (owner, 2026-10-22): editor sandbox.** UADx editors are
+    WebView2 and failed with `CreateCoreWebView2Controller ERROR=Not enough
+    quota` (UA log) under the one-process job. Owner chose "only while
+    editor open": the host raises the job's active-process limit to 16 when
+    an editor opens and restores 1 when it closes; kill-on-close and the
+    512 MB per-process cap are unchanged, helpers stay in the job. Recorded
+    in SEC-07 (`docs/spec/13-security.md`). Rollback: set
+    `WORKER_EDITOR_MAX_ACTIVE_PROCESSES` to 1 (UADx windows stay blank).
+  - Sliders and window together: each state capture saves the slider values
+    it contains (`<state>.sliders.json` beside the state); Play applies only
+    sliders moved since that capture, so window edits are no longer undone
+    by older slider values (`plugin_sliders_to_apply`, unit test).
+  - Latency: the bridge asks the worker for the plugin's own delay at start
+    and after its editor closes, and adds it to `latency_samples`, which the
+    Properties delay already shows (`runtime_bridge_counts_the_plugin_reported_latency`).
+  - Licence: the bridge flags a single plugin that has returned loud input
+    (≥ −46 dBFS) unchanged for ~2 s and never changed it; telemetry
+    `plugin.unchangedAudio`; the inspector shows a reserved-space hint
+    (`ui/e2e/plugin-inspector.pw.ts`, three themes, no layout shift). It is
+    a hint, not an error: a neutral effect does the same.
+  - Checks: `native_vst3_editor_opens_in_a_pumping_parent` (new, opt-in)
+    passed for AGain and all eight UADx effects (1176: window sized 966x250,
+    VU moving, audio processed while open; no WebView2 error in UA's log); AGain acceptance; plugin-host lib (77) and
+    `worker_process` (36); control lib (263); Clippy on both crates;
+    contracts typecheck and drift; UI 567 tests, typecheck, lint, Prettier;
+    the two e2e files above. Not run yet: the shell's own editor window on a
+    live route, full-workspace Clippy.
+- Rebased onto main e6e575ff (owner: "pull from main before") on branch
+  `feature/vst3-plugin-windows`; there: fmt (workspace, shell), Clippy
+  (workspace and shell with the built UI), plugin-host 77 + `worker_process`
+  36, control 264, AGain editor and acceptance tests, contracts typecheck and
+  drift, UI format, typecheck, lint, 642 tests, `drag-place` and
+  `plugin-inspector` e2e. `plugin-inspector.pw.ts` now imports the guarded
+  `./browser-test` fixture that main requires.
+- Built for the owner (from the pre-rebase tree, UI from HEAD plus these
+  UI files only): `src-tauri/target/release/audiorouter-shell.exe` 22:42 and
+  `audiorouter-vst3-worker.exe` 22:41.
+- Owner test 2026-10-22: the 1176 window opened from the app on a live
+  route and "works very good". At the owner's request
+  `feature/output-switch` (834a327d, f224856e) was merged locally into this
+  branch before any PR.
+- Next: with the owner's approval (AGENTS.md "Pull request approval"), push
+  the branch and open the PR.
+
+## Output Switch — active feature branch (2026-10-22)
+
+The owner authorized a routing node with one input and two exclusive outputs,
+toggled in the app or on Stream Deck. Work is isolated on
+`feature/output-switch`; see the detailed
+[Output Switch plan](output-switch.md) for contracts, decisions, tasks and
+validation. Implementation and automated checks are complete. Local build:
+`C:\code\audiorouter\.worktrees\output-switch\src-tauri\target\debug\audiorouter-shell.exe`
+(worker and CLI sidecars are beside it). Local commit `834a327d` is on the
+feature branch. Owner testing is pending. The requested local-main merge is
+deferred while the shared `main` worktree has unrelated uncommitted changes
+and is 32 commits behind `origin/main`; see the detailed plan.
+
 ## Wave Link parity #4 — application sources and groups — 2026-10-22
 
 Objective: let a user add an application source from a selected `.exe` even

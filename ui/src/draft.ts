@@ -33,6 +33,7 @@ export type LibraryNodeKind = Extract<
   | "dehum"
   | "declick"
   | "inputSwitch"
+  | "outputSwitch"
   | "denoise"
   | "speechDenoise"
   | "spectralGate"
@@ -55,7 +56,14 @@ export type LibraryNodeKind = Extract<
 >;
 export type InsertableProcessorKind = Exclude<
   LibraryNodeKind,
-  "physicalInput" | "physicalOutput" | "testSignal" | "mixer" | "inputSwitch" | "networkSend" | "networkReceive"
+  | "physicalInput"
+  | "physicalOutput"
+  | "testSignal"
+  | "mixer"
+  | "inputSwitch"
+  | "outputSwitch"
+  | "networkSend"
+  | "networkReceive"
 >;
 
 /** Default UDP port of the Network Send/Receive tools (mirrors the domain). */
@@ -197,6 +205,15 @@ const libraryNodeDefinitions: Record<
       { name: "a", direction: "input", channels: 2 },
       { name: "b", direction: "input", channels: 2 },
       { name: "out", direction: "output", channels: 2 },
+    ],
+  },
+  outputSwitch: {
+    name: "Output Switch",
+    parameters: { selected: "a" },
+    ports: [
+      { name: "in", direction: "input", channels: 2 },
+      { name: "a", direction: "output", channels: 2 },
+      { name: "b", direction: "output", channels: 2 },
     ],
   },
   bassTreble: {
@@ -646,6 +663,15 @@ export function needsNativePaths(session: Session): boolean {
   // Network Send/Receive run only on the multi-path worker.
   if (session.nodes.some((node) => node.enabled && (node.kind === "networkSend" || node.kind === "networkReceive")))
     return true;
+  // An Output Switch is compiled only by the multi-path worker; the
+  // single-endpoint chain rejects it even with one connected output.
+  if (
+    session.nodes.some(
+      (node) =>
+        node.kind === "outputSwitch" && session.edges.some((edge) => edge.enabled && edge.destinationNode === node.id),
+    )
+  )
+    return true;
   // A Recorder is a fan-out branch; the single-endpoint worker compiles only
   // a linear chain and rejects it, while the multi-path worker records it.
   if (
@@ -664,6 +690,20 @@ export function needsNativePaths(session: Session): boolean {
   if (
     connectedDevices.filter((node) => node.kind === "physicalInput").length > 1 ||
     connectedDevices.filter((node) => node.kind === "physicalOutput").length > 1
+  )
+    return true;
+  // The single-endpoint worker compiles only a chain of one channel width; a
+  // connection between ports of different widths (a mono microphone into
+  // stereo headphones, a stereo source into a mono plugin) plays on the
+  // multi-path worker.
+  const channelsOf = (nodeId: string, portName: string) =>
+    session.nodes.find((node) => node.id === nodeId)?.ports.find((port) => port.name === portName)?.channels;
+  if (
+    session.edges.some(
+      (edge) =>
+        edge.enabled &&
+        channelsOf(edge.sourceNode, edge.sourcePort) !== channelsOf(edge.destinationNode, edge.destinationPort),
+    )
   )
     return true;
   const paths = independentPaths(session);

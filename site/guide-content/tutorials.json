@@ -205,6 +205,17 @@
     "check": "If the chosen input is silent, check its incoming source before repeatedly switching.",
     "listen": "Input A is drums/bass; Input B is a bell melody. Listen to either reference separately, then Output while changing selection. Slow fade lasts two seconds in this example."
   },
+  "outputSwitch": {
+    "route": ["One source", "Output Switch", "Headphones (A) or OBS cable (B)"],
+    "steps": [
+      "Connect one source to the Output Switch input.",
+      "Connect destination A to headphones and destination B to the virtual cable used by OBS.",
+      "Select A for private listening or B to send the signal to OBS. Change the choice while the route is playing."
+    ],
+    "success": "The selected destination receives audio and the other destination stays silent through the handoff.",
+    "check": "If neither destination is audible, check that the selected output port is connected and that its destination is active. An empty side remains silent by design.",
+    "listen": "The guide audition plays the selected signal once to illustrate that a destination is active. In AudioRouter, A and B are separate graph outputs, such as headphones and an OBS virtual input."
+  },
   "duck": {
     "route": ["Music target + voice key", "Duck", "Music output"],
     "steps": [

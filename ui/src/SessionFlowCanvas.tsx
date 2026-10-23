@@ -86,10 +86,12 @@ import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
 import { FlowActiveLayers, FlowArrow, FlowComets, FlowMotionProvider } from "./flowLine";
 import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
-import { appendLibraryNode as appendPreviewNode } from "./draft";
+import { appendLibraryNode as appendPreviewNode, appendPluginPlaceholderNode } from "./draft";
 import {
   draggedLibraryKind,
+  draggedPluginEntry,
   endLibraryDrag,
+  PLUGIN_DRAG_KIND,
   readLibraryDropKind,
   setLibraryDragOverCanvas,
   startLibraryDrag,
@@ -138,6 +140,8 @@ type SessionFlowCanvasProps = {
   onInsertProcessor?: (edgeId: string, kind: import("./draft").InsertableProcessorKind) => void;
   onRemoveNode?: (nodeId: string) => void;
   onAddLibraryNode?: (kind: LibraryNodeKind, position: { x: number; y: number }) => string | void;
+  /** Add a scanned plugin dragged from the Plugins list where it was dropped. */
+  onAddPluginNode?: (entry: import("@audiorouter/contracts").PluginScanEntry) => string | void;
   onAddVirtualBusNode?: (
     direction: "renderSource" | "captureSink",
     position: { x: number; y: number },
@@ -326,6 +330,7 @@ const NODE_FLOW_GROUPS: Record<NodeKind, LibraryFlowGroup> = {
   dehum: "tool",
   declick: "tool",
   inputSwitch: "tool",
+  outputSwitch: "tool",
   duck: "tool",
   denoise: "tool",
   speechDenoise: "tool",
@@ -389,6 +394,7 @@ const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
   delay: "Sync",
   bassTreble: "Bass & Treble",
   inputSwitch: "Input Switch",
+  outputSwitch: "Output Switch",
   duck: "Duck",
   speechDenoise: "Speech Denoise",
   spectralGate: "Spectral Gate",
@@ -1355,6 +1361,17 @@ export function inputSwitchSourceNames(session: Session, switchId: string): { a:
   return { a: name("a"), b: name("b") };
 }
 
+export function outputSwitchDestinationNames(
+  session: Session,
+  switchId: string,
+): { a: string | null; b: string | null } {
+  const name = (port: "a" | "b") => {
+    const edge = session.edges.find((item) => item.enabled && item.sourceNode === switchId && item.sourcePort === port);
+    return edge ? (session.nodes.find((node) => node.id === edge.destinationNode)?.name ?? null) : null;
+  };
+  return { a: name("a"), b: name("b") };
+}
+
 function GateVisual({
   telemetry,
   thresholdDb,
@@ -1796,6 +1813,7 @@ function NodeVisual({
   mixerInputList,
   duckTriggerName,
   switchSourceNames,
+  switchDestinationNames,
   routed,
   sessionRunning,
   sessionActionBusy,
@@ -1817,6 +1835,7 @@ function NodeVisual({
   onToggleRecording?: (nodeId: string, record: boolean) => void;
   recordingBusyNodeId?: string | null;
   switchSourceNames?: { a: string | null; b: string | null };
+  switchDestinationNames?: { a: string | null; b: string | null };
   routed: boolean;
   sessionRunning: boolean;
   sessionActionBusy: boolean;
@@ -2075,6 +2094,31 @@ function NodeVisual({
       </div>
     );
   }
+  if (node.kind === "outputSwitch") {
+    const selected = node.parameters.selected === "b" ? "b" : "a";
+    return (
+      <div className="node-input-switch nodrag nopan" role="group" aria-label={`${node.name} output selection`}>
+        {(["a", "b"] as const).map((side) => (
+          <button
+            key={side}
+            type="button"
+            className={selected === side ? "is-selected" : ""}
+            aria-pressed={selected === side}
+            disabled={!onSetNodeParameter}
+            title={`Send audio to output ${side.toUpperCase()}.`}
+            onClick={() => {
+              if (onSetNodeParameter && selected !== side) onSetNodeParameter(node.id, "selected", side);
+            }}
+          >
+            <b>{side.toUpperCase()}</b>
+            <small title={switchDestinationNames?.[side] ?? undefined}>
+              {switchDestinationNames?.[side] ?? "not connected"}
+            </small>
+          </button>
+        ))}
+      </div>
+    );
+  }
   if (node.kind === "bassTreble")
     return (
       <div className="node-fader-stack nodrag nopan">
@@ -2246,6 +2290,7 @@ export function SessionFlowCanvas({
   onInsertProcessor,
   onRemoveNode,
   onAddLibraryNode,
+  onAddPluginNode,
   onAddVirtualBusNode,
   diagnostics,
   sessionRunning,
@@ -2753,10 +2798,16 @@ export function SessionFlowCanvas({
     return { x: Math.round(flow.x - DROP_GRAB_OFFSET.x), y: Math.round(flow.y - DROP_GRAB_OFFSET.y) };
   };
   // A live preview of the dragged tool, drawn by the same node renderer.
+  const draggedPlugin = dropPreview?.kind === PLUGIN_DRAG_KIND ? draggedPluginEntry() : null;
   const previewNode =
     dropPreview && isLibraryNodeKind(dropPreview.kind)
       ? { ...appendPreviewNode({ ...session, nodes: [], edges: [] }, dropPreview.kind).nodes[0], id: DROP_PREVIEW_ID }
-      : null;
+      : draggedPlugin
+        ? {
+            ...appendPluginPlaceholderNode({ ...session, nodes: [], edges: [] }, draggedPlugin).nodes[0],
+            id: DROP_PREVIEW_ID,
+          }
+        : null;
   const nodes: FlowNode[] = (previewNode ? [...session.nodes, previewNode] : session.nodes).map((node, index) => {
     const layoutSize = ownValue(nodeSizes, node.id);
     const applicationCaptureState =
@@ -2892,6 +2943,9 @@ export function SessionFlowCanvas({
               mixerInputCount={mixerInputCount}
               mixerInputList={node.kind === "mixer" ? mixerInputs(session, node.id) : undefined}
               switchSourceNames={node.kind === "inputSwitch" ? inputSwitchSourceNames(session, node.id) : undefined}
+              switchDestinationNames={
+                node.kind === "outputSwitch" ? outputSwitchDestinationNames(session, node.id) : undefined
+              }
               duckTriggerName={
                 node.kind === "duck"
                   ? (session.nodes.find((candidate) => candidate.id === node.parameters.keyNodeId)?.name ?? null)
@@ -3110,6 +3164,7 @@ export function SessionFlowCanvas({
           }}
           onDrop={(event) => {
             const kind = readLibraryDropKind(event.dataTransfer);
+            const plugin = kind === PLUGIN_DRAG_KIND ? draggedPluginEntry() : null;
             event.preventDefault();
             const position = dropFlowPosition(
               event.clientX,
@@ -3124,7 +3179,15 @@ export function SessionFlowCanvas({
                 skipNextFitRef.current = false;
               }),
             );
-            if (isLibraryNodeKind(kind)) {
+            if (plugin) {
+              const nodeId = onAddPluginNode?.(plugin);
+              if (nodeId) {
+                const next = { ...positionsRef.current, [nodeId]: position };
+                positionsRef.current = next;
+                setPositions(next);
+                writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+              }
+            } else if (isLibraryNodeKind(kind)) {
               if (onAddLibraryNode) addLibraryNode(kind, position);
               else routeLibraryDrop(kind, position);
             } else if (isVirtualBusKind(kind)) {
