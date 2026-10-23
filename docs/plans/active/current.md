@@ -59,6 +59,17 @@ approval (AGENTS.md); this request did not include one.
   gate and audio-thread changes; a UADx editor session with many edits.
 - Rollback: revert the branch's commits; no storage migration. The
   contracts gained an optional `audioThread` field.
+- PR #65 (owner-approved). CI's dependency policy then failed on
+  GHSA-mrhx-c7xc-m3w5 (high: zod < 4.6.6 can exhaust memory validating
+  oversized collections), reached through `@elgato/utils` 0.6.1 in
+  `tools/streamdeck`, which still requires zod ^3. No zod 3 fix exists, and
+  `npm audit fix --force` would downgrade `@elgato/streamdeck` to 1.4.1.
+  Decision: an npm `overrides` pin of zod 4.6.7. The library imports only
+  `zod/v4-mini`, which zod 4 still exports. Checks: `npm-audit` passes; the
+  Stream Deck typecheck, its 26 tests and the build pass; Elgato's
+  JSON-RPC request/response schemas accept valid messages and reject bad
+  ones under zod 4.6.7. Remove the override once `@elgato/utils` depends on
+  a patched zod.
 
 ## Overnight review, PR, merge and release 0.0.21 — 2026-10-23, owner request
 
