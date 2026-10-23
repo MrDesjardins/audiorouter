@@ -1,5 +1,48 @@
 # Active plan — post-0.0.8 maintenance
 
+## Website comparison: AudioRouter and Elgato Wave Link — 2026-10-22
+
+Objective: add an accurate, neutral Wave Link 3.0 comparison to
+`site/compare.html`, alongside the existing Voicemeeter comparison.
+
+- Requirements: public feature claims must match current AudioRouter
+  compatibility evidence and cited vendor information; distinguish routing
+  models, inputs/mixes, effects, device support, automation, cost, source and
+  platform.
+- Prerequisites/evidence: Wave Link works with third-party mics/interfaces,
+  has up to 8 software/non-Wave channels and up to 5 mixes, is free, and
+  supports VST3 on Windows ([Elgato Wave Link specs](https://www.elgato.com/ww/en/s/wave-link-app),
+  [third-party microphone support](https://www.elgato.com/us/en/explorer/products/wave/which-microphones-work-with-wave-link/)).
+  AudioRouter's plugin boundary is documented in
+  `docs/operations/plugin-compatibility.md`; VST format support must not be
+  described as a universal UAD or vendor-plugin guarantee.
+- Decision: keep the Voicemeeter table intact and add a distinct Wave Link
+  table and “when Wave Link is the better choice” guidance. State that both
+  are free and that Wave Link's Stream Deck integration and device controls
+  are strengths; compare AudioRouter's route canvas, built-in processing,
+  isolated plugin workers, local automation API, and open source accurately.
+- Ordered tasks: add this plan entry; update compare-page metadata and add
+  the Wave Link comparison/source note; run social metadata check, local-link
+  and HTML checks, inspect the responsive page in Edge, and review the diff.
+- Validation: `node site/generate-social.mjs --check` after regeneration,
+  `git diff --check`, and Edge visual review at desktop/mobile widths. The
+  site has one dark theme. No product/runtime requirement ID changes.
+- Risks: vendor specifications or software behavior can change; date and
+  link the primary sources. Avoid implying every VST3 or UAD plugin works.
+- Rollback: revert the page and this plan entry; no application or user data
+  changes.
+- Evidence (Windows, Node 22.22.3, Microsoft Edge): `node
+  site/generate-social.mjs --check` passed (47 pages); `node
+  site/check-guides.mjs` passed (36 pages, 894 links/assets); a jsdom audit
+  found no missing local links or malformed rows in the 13 Wave Link feature
+  rows; `git diff --check` passed. Headless Edge at 1440 px and 390 px had no
+  horizontal overflow or page errors; screenshots are in the local temp
+  directory (`audiorouter-compare-desktop.png`,
+  `audiorouter-compare-mobile.png`). The full page was visually reviewed.
+- Next: review the diff and follow the separately authorized site
+  publication path.
+
+
 ## Quality Q4 - graph commit storage-failure recovery - 2026-10-22
 
 Objective: cover the approved quality roadmap's graph-commit persistence failure
