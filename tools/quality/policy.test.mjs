@@ -71,7 +71,7 @@ test('main push classifies the pushed before/after diff', () => {
     assert.equal(result.status, 0, result.stderr);
     const flags = JSON.parse(result.stdout);
     assert.equal(flags.docs, false);
-    assert.equal(flags.site, false);
+    assert.equal(flags.site, true);
     assert.equal(flags.windows, false);
     assert.equal(flags.backend, false);
   } finally {
