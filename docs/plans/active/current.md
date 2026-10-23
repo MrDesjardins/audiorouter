@@ -1,5 +1,12 @@
 # Active plan — post-0.0.8 maintenance
 
+## Wave Link parity, first round — 2026-10-22, owner request
+
+Tracked in its own plan, [Wave Link parity](wave-link-parity.md): level
+target zone on the Meter (UI-21) and hidden devices in pickers (UI-22), both
+UI-only. The candidate list is in
+[Wave Link parity candidates](../future/wave-link-parity.md).
+
 ## CI path selection — 2026-10-22
 
 Objective: keep website-only and Markdown-only changes out of AudioRouter's

@@ -6,6 +6,27 @@ import { formatUiError } from "./backend";
 const percent = (db: number) => Math.max(0, Math.min(100, ((db + 60) / 66) * 100));
 const dbText = (db: number) => (db <= -120 ? "−∞" : `${db.toFixed(1)} dBFS`);
 
+/** UI-21: where spoken peaks should land, in dBFS. */
+export const VOICE_ZONE = { lowDb: -18, highDb: -6 } as const;
+export type LevelVerdict = "waiting" | "quiet" | "zone" | "loud" | "tooLoud";
+
+/** Judge a voice from its displayed (held) peak; undefined means no reading. */
+export function levelVerdict(peakDb: number | undefined): LevelVerdict {
+  if (peakDb === undefined || Number.isNaN(peakDb) || peakDb < -50) return "waiting";
+  if (peakDb >= -1) return "tooLoud";
+  if (peakDb > VOICE_ZONE.highDb) return "loud";
+  if (peakDb >= VOICE_ZONE.lowDb) return "zone";
+  return "quiet";
+}
+
+const VERDICT_TEXT: Record<LevelVerdict, string> = {
+  waiting: "Voice guide: waiting for sound",
+  quiet: "Voice guide: too quiet. Raise the level before this point.",
+  zone: "Voice guide: in the zone",
+  loud: "Voice guide: loud. Lower the level a little.",
+  tooLoud: "Voice guide: too loud, close to clipping. Lower the level.",
+};
+
 /**
  * Display ballistics per channel: the RMS bar falls smoothly and the peak
  * line holds before falling, so the eye can follow speech. Readouts keep
@@ -46,6 +67,15 @@ export function MeterInspector({
     Array.from({ length: channels }, (_, channel) => (active ? (meter?.channelRmsDb[channel] ?? -120) : -120)),
     Array.from({ length: channels }, (_, channel) => (active ? meter?.channelCurrentPeakDb?.[channel] : undefined)),
   );
+  const verdict = levelVerdict(
+    active
+      ? display.reduce<number | undefined>(
+          (loudest, channel) =>
+            channel.peak === undefined ? loudest : Math.max(loudest ?? channel.peak, channel.peak),
+          undefined,
+        )
+      : undefined,
+  );
   const [busy, setBusy] = useState(false);
   const reset = async () => {
     if (!backend.resetMeter || busy) return;
@@ -77,6 +107,9 @@ export function MeterInspector({
       <div className={`meter-clip-status${clipped ? " meter-clipped" : ""}`} role="status">
         {clipped ? "Clipping recorded — reset to clear" : "No clipping recorded"}
       </div>
+      <p className={`meter-level-verdict is-${verdict}`} data-verdict={verdict}>
+        {VERDICT_TEXT[verdict]}
+      </p>
       <p className="muted">
         {!backend.connected
           ? "Disconnected: readings are unavailable."
@@ -121,6 +154,13 @@ export function MeterInspector({
                 aria-valuetext={dbText(rms)}
               >
                 <span className="meter-channel-fill" style={{ height: `${percent(display[channel].rms)}%` }} />
+                <span
+                  className="meter-target-zone"
+                  style={{
+                    bottom: `${percent(VOICE_ZONE.lowDb)}%`,
+                    height: `${percent(VOICE_ZONE.highDb) - percent(VOICE_ZONE.lowDb)}%`,
+                  }}
+                />
                 {display[channel].peak !== undefined && (
                   <span className="meter-current-marker" style={{ bottom: `${percent(display[channel].peak!)}%` }} />
                 )}
@@ -151,8 +191,9 @@ export function MeterInspector({
         })}
       </div>
       <p className="meter-inspector-legend">
-        Bar: RMS · thin line: recent peak (holds 1.2 s, then falls) · gold line: highest peak since reset. Above 0 dBFS
-        exceeds full scale. Numbers show exact current values.
+        Bar: RMS · thin line: recent peak (holds 1.2 s, then falls) · gold line: highest peak since reset · shaded band:
+        voice target zone, where spoken peaks should land (−18 to −6 dBFS). Above 0 dBFS exceeds full scale. Numbers
+        show exact current values.
       </p>
       {message && <p role="status">{message}</p>}
       <p className="muted">

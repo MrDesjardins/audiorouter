@@ -13,6 +13,7 @@ import { NumberField } from "./NumberField";
 import { AdvancedEqEditor } from "./AdvancedEqEditor";
 import { EqBackendContext, PluginParameterContext } from "./appContext";
 import { deviceChoiceLabel, sortDevicesAlphabetically } from "./endpointBinding";
+import { useHiddenDevices, visibleDevices } from "./hiddenDevices";
 import type { VirtualCableStatus } from "@audiorouter/contracts";
 import { cableEndpointName, cableUnavailableReason } from "./virtualCableStatus";
 
@@ -716,6 +717,19 @@ export function ApplicationCaptureBinding({
   );
 }
 
+const ALL_HIDDEN_TEXT =
+  "Every available device is hidden on this PC. Show one again in Status, under Audio devices on this PC.";
+
+/** A disabled last line saying how many devices this PC hides (UI-22). */
+function HiddenDevicesOption({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <option value="hidden-devices-note" disabled>
+      {count === 1 ? "1 device hidden" : `${count} devices hidden`} — show in Status › Audio devices on this PC
+    </option>
+  );
+}
+
 export function PhysicalInputBinding({
   devices,
   value,
@@ -731,23 +745,35 @@ export function PhysicalInputBinding({
   onRefresh: () => void;
   surround?: boolean;
 }) {
-  const activeCapture = sortDevicesAlphabetically(
-    devices.filter(
-      (device): device is Extract<DeviceListItem, { state: "active" }> =>
-        device.state === "active" && device.direction === "capture",
+  const hidden = useHiddenDevices();
+  const capture = visibleDevices(
+    sortDevicesAlphabetically(
+      devices.filter(
+        (device): device is Extract<DeviceListItem, { state: "active" }> =>
+          device.state === "active" && device.direction === "capture",
+      ),
     ),
+    hidden,
+    value,
   );
+  const activeCapture = capture.visible;
   // Surround to headphones can also loopback-capture a 5.1/7.1 playback device.
-  const surroundPlayback = surround
-    ? sortDevicesAlphabetically(
-        devices.filter(
-          (device): device is Extract<DeviceListItem, { state: "active" }> =>
-            device.state === "active" &&
-            device.direction === "render" &&
-            (device.format.channels === 6 || device.format.channels === 8),
-        ),
-      )
-    : [];
+  const playback = visibleDevices(
+    surround
+      ? sortDevicesAlphabetically(
+          devices.filter(
+            (device): device is Extract<DeviceListItem, { state: "active" }> =>
+              device.state === "active" &&
+              device.direction === "render" &&
+              (device.format.channels === 6 || device.format.channels === 8),
+          ),
+        )
+      : [],
+    hidden,
+    value,
+  );
+  const surroundPlayback = playback.visible;
+  const hiddenCount = capture.hiddenCount + playback.hiddenCount;
   return (
     <div className="node-binding-editor" aria-label="Physical input binding">
       <div>
@@ -785,10 +811,13 @@ export function PhysicalInputBinding({
             ))}
           </optgroup>
         )}
+        <HiddenDevicesOption count={hiddenCount} />
       </select>
       <small className={!value && activeCapture.length > 0 ? "node-binding-missing" : undefined}>
         {activeCapture.length === 0
-          ? "No active capture endpoints are available. Refresh the device list; a reboot is not normally required."
+          ? hiddenCount > 0
+            ? ALL_HIDDEN_TEXT
+            : "No active capture endpoints are available. Refresh the device list; a reboot is not normally required."
           : !value
             ? "No device is chosen for this node yet. Choose one, then Save."
             : "Voicemeeter Out B1 receives system sound only while the Voicemeeter mixer runs with B1 enabled. For an app-independent virtual cable, send Windows sound to CABLE Input and select CABLE Output here."}
@@ -813,11 +842,15 @@ export function PhysicalOutputBinding({
   onChange: (value: string) => void;
   onRefresh: () => void;
 }) {
-  const activeRender = sortDevicesAlphabetically(
-    devices.filter(
-      (device): device is Extract<DeviceListItem, { state: "active" }> =>
-        device.state === "active" && device.direction === "render",
+  const { visible: activeRender, hiddenCount } = visibleDevices(
+    sortDevicesAlphabetically(
+      devices.filter(
+        (device): device is Extract<DeviceListItem, { state: "active" }> =>
+          device.state === "active" && device.direction === "render",
+      ),
     ),
+    useHiddenDevices(),
+    value,
   );
   return (
     <div className="node-binding-editor" aria-label="Physical output binding">
@@ -837,10 +870,13 @@ export function PhysicalOutputBinding({
             {deviceChoiceLabel(device)}
           </option>
         ))}
+        <HiddenDevicesOption count={hiddenCount} />
       </select>
       <small className={!value && activeRender.length > 0 ? "node-binding-missing" : undefined}>
         {activeRender.length === 0
-          ? "No active render endpoints are available. Refresh the device list; a reboot is not normally required."
+          ? hiddenCount > 0
+            ? ALL_HIDDEN_TEXT
+            : "No active render endpoints are available. Refresh the device list; a reboot is not normally required."
           : !value
             ? "No device is chosen for this node yet. Choose one, then Save."
             : "This selection is used by the session's stopped native render binding."}

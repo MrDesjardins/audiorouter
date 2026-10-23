@@ -795,6 +795,19 @@ button:disabled {
 .this-pc-device-group li strong {
   overflow-wrap: anywhere;
 }
+/* UI-22: the switch keeps its place; a hidden device only dims its name. */
+.this-pc-device-shown {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+  color: var(--text-strong);
+  font-size: 0.8rem;
+}
+.this-pc-device-group li.is-hidden-device strong,
+.this-pc-device-group li.is-hidden-device small {
+  opacity: 0.6;
+}
 .tools-howto {
   margin-top: 0.9rem;
 }
@@ -5745,6 +5758,48 @@ input[type="color"] {
 }
 .meter-clipped {
   color: var(--danger, #ff8b8b);
+}
+/* UI-21: fixed-height verdict line; only its text and dot colour change. */
+.meter-level-verdict {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 1.5em;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-strong);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.meter-level-verdict::before {
+  content: "";
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--ambient-edge);
+}
+.meter-level-verdict.is-zone::before {
+  background: #31b97c;
+}
+.meter-level-verdict.is-quiet::before,
+.meter-level-verdict.is-loud::before {
+  background: #ffd166;
+}
+.meter-level-verdict.is-tooLoud::before {
+  background: #ef7070;
+}
+.meter-target-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed currentColor;
+  border-bottom: 1px dashed currentColor;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  color: var(--text-strong);
+  pointer-events: none;
 }
 .theme-light .meter-clipped {
   color: #a83232;

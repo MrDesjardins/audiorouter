@@ -805,6 +805,26 @@ While playing, each connection shows its audio. Moving lights travel toward the 
 The thin recent-peak line holds for 1.2 s and then falls, so speech peaks stay
 readable; the numbers always show the exact current values.
 
+The shaded band on the Meter is the **voice target zone**: spoken peaks should
+land between −18 and −6 dBFS. The **Voice guide** line above the meters follows
+the loudest channel's recent peak: *waiting for sound*, *too quiet*, *in the
+zone*, *loud* (above −6) or *too loud* (−1 dBFS or more, close to clipping).
+Adjust a Gain or Volume before the Meter until you are in the zone. The guide is
+for voice; music and game audio are mixed to other levels. It changes nothing
+in the audio.
+
+### Hiding devices you never use
+
+Windows lists every speaker and microphone it knows, including a monitor's
+speakers or a webcam microphone. In **Status › Audio devices on this PC**, clear
+**Show in pickers** next to a device to leave it out of the Input Device and
+Output Device pickers on this PC. The picker then ends with a greyed line such
+as "1 device hidden". A node that already uses a hidden device keeps showing it,
+so nothing about a saved route changes. Tick the switch again to bring the
+device back. The list is a preference of this PC's AudioRouter window only; it
+does not change Windows, sessions or other computers. After a driver update a
+device can get a new Windows ID and show up again; hide it again if needed.
+
 ### Tuning a Gate, Compressor or Limiter by voice
 
 Select the tool while the route plays and talk normally. **Live response**
