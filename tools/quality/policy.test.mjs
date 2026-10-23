@@ -70,6 +70,9 @@ test('main push classifies the pushed before/after diff', () => {
     });
     assert.equal(result.status, 0, result.stderr);
     const flags = JSON.parse(result.stdout);
+    const outputs = readFileSync(outputPath, 'utf8');
+    const encodedPages = outputs.match(/^site_pages_b64=(.*)$/m)?.[1] ?? '';
+    assert.deepEqual(Buffer.from(encodedPages, 'base64').toString('utf8').split('\n'), ['compare.html']);
     assert.equal(flags.docs, false);
     assert.equal(flags.site, true);
     assert.equal(flags.windows, false);

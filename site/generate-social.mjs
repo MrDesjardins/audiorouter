@@ -12,6 +12,11 @@ const origin = "https://audiorouter.org";
 const image = { url: origin + "/assets/social-preview.png", width: 1280, height: 640 };
 const fallbackDescription = "Free, open source visual audio router for Windows 11.";
 const check = process.argv.includes("--check");
+const encodedChangedPages = process.env.SITE_PAGES_B64;
+const changedPages = encodedChangedPages === undefined
+  ? null
+  : new Set(Buffer.from(encodedChangedPages, "base64").toString("utf8").split("\n").filter(Boolean));
+const checkChangedOnly = check && process.argv.includes("--check-changed") && changedPages !== null;
 
 const pages = [
   ...(await readdir(site)).filter((name) => name.endsWith(".html")),
@@ -35,6 +40,7 @@ async function update(path, text) {
 }
 
 for (const path of pages) {
+  if (checkChangedOnly && !changedPages.has(path)) continue;
   const html = await readFile(resolve(site, path), "utf8");
   const title = html.match(/<title>([^<]*)<\/title>/)?.[1]?.trim();
   if (!title) throw new Error(path + " has no <title>");

@@ -62,7 +62,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const flags = classifyChanges(files, { full });
   if (args.includes('--github')) {
     if (!process.env.GITHUB_OUTPUT) throw Error('GITHUB_OUTPUT is required');
-    appendFileSync(process.env.GITHUB_OUTPUT, Object.entries(flags).map(([key, value]) => `${key}=${value}\n`).join(''));
+    const sitePages = files.map(file => file.replaceAll('\\', '/').replace(/^\.\//, ''))
+      .filter(file => file.startsWith('site/') && file.endsWith('.html'))
+      .map(file => file.slice('site/'.length));
+    const outputs = Object.entries(flags).map(([key, value]) => `${key}=${value}\n`).join('');
+    appendFileSync(process.env.GITHUB_OUTPUT, outputs + `site_pages_b64=${Buffer.from(sitePages.join('\n'), 'utf8').toString('base64')}\n`);
   }
   console.log(JSON.stringify(flags, null, 2));
 }

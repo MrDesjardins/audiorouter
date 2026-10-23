@@ -4,7 +4,7 @@ const cargo = (...args) => ({ executable: 'cargo', args, windows: true });
 const ps = script => ({ executable: 'powershell', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script], windows: true });
 export const checks = {
   docs: [{ executable: 'node', args: ['tools/docs/validate.mjs'] }],
-  site: [{ executable: 'node', args: ['site/generate-social.mjs', '--check'] }, { executable: 'node', args: ['site/check-guides.mjs'] }],
+  site: [{ executable: 'node', args: ['site/generate-social.mjs', '--check', '--check-changed'] }, { executable: 'node', args: ['site/check-guides.mjs'] }],
   policy: [{ executable: 'node', args: ['--test', 'tools/quality/policy.test.mjs', 'tools/quality/verify.test.mjs'] }],
   'rust-format': [{ executable: 'cargo', args: ['fmt', '--all', '--', '--check'] }, { executable: 'cargo', args: ['fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check'] }],
   // custom-protocol embeds frontendDist, so build current assets before shell lint.

@@ -37,6 +37,7 @@ jobs:
       streamdeck: ${{ steps.detect.outputs.streamdeck }}
       docs: ${{ steps.detect.outputs.docs }}
       site: ${{ steps.detect.outputs.site }}
+      site_pages_b64: ${{ steps.detect.outputs.site_pages_b64 }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -97,7 +98,9 @@ jobs:
           node-version: 22.22.3
           package-manager-cache: false
 
-      - name: Validate website metadata and guides
+      - name: Validate changed website metadata and guides
+        env:
+          SITE_PAGES_B64: ${{ needs.changes.outputs.site_pages_b64 }}
         run: node tools/quality/verify.mjs --checks site
 
       - name: Upload verification results

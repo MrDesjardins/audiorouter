@@ -21,12 +21,13 @@ validation for the changed surface.
   lightweight website check; make docs/site jobs conditional; classify push
   events by their before/after commits; test site, Markdown, code and mixed
   change sets.
-- Validation: run the quality policy and verifier Node tests, inspect changed
-  workflow conditions, and let the PR's required Quality gate execute.
+- Validation: run the quality policy and verifier Node tests; check social
+  metadata only on changed website pages plus the shared sitemap/robots files;
+  run guide integrity checks and let the PR Quality gate execute.
 - Risks: path omissions could skip a relevant suite; unknown executable paths
   continue to select all product areas. Rollback: revert the classifier,
   workflow and tests together.
-- Evidence: CI policy tests on the review branch and the required Quality gate after the workflow update.
+- Evidence: policy tests passed; the first website check correctly exposed unrelated stale social tags on untouched guide pages, so the generator check is now scoped to changed pages. The updated gate is running.
 - Next: merge after the narrowed Quality gate succeeds.
 
 
