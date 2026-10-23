@@ -34,7 +34,7 @@ Sources (checked 2026-10-22): [Wave Link 3.0 software overview](https://www.elga
 | 7 | Soundboard clips from keys | Audio File play/pause/stop; no soundboard action | Stream Deck soundboard key bound to an Audio File node | Small–medium; see [Stream Deck extensions](stream-deck-extensions.md) |
 | 8 | Stream Deck profile generated from the setup | Manual key setup | Generate a profile from the session's nodes | Medium; profile format and Marketplace rules |
 | 9 | Mix-output actions (move headphones between mixes, toggle main output) | None | Pairs with #1 | Medium |
-| 10 | Sound Check (record your voice and hear it through the effects) | Recorder and Time Shift exist | One button in the input's Properties: record ~10 s, replay to the headphones | Needs a bounded, private, non-library recording and a replay path. Medium |
+| 10 | Sound Check (record your voice and hear it through the effects) | **In progress:** Audio File Properties records a bounded 10-second take from an already-routed Recorder and uses ordinary Audio File transport through downstream effects after plan/commit (UI-24). | One clear record-and-replay flow that does not require users to assemble an Audio File branch manually; the current flow still requires an existing Recorder branch and explicit route commit. | Medium |
 | 11 | Level target zone; Auto Gain Wizard | Meter shows RMS/peak/hold, no target | **in progress**: voice target zone and a level verdict on the Meter (UI-21). Auto gain stays future (AGC row in the [future README](README.md)) | Target zone: UI only, small |
 | 12 | Gain Lock; lock Windows default devices | AudioRouter never changes defaults | Optional guard that warns when another app changes a cable's level or the defaults | Needs Windows endpoint-volume notifications; medium |
 | 13 | Rename, copy, paste and reorder effects across channels (3.1) | Duplicate one node | Copy a selected chain to another route; save your own chain as a preset (`presets.save` is specified in API but not implemented) | Medium |
@@ -51,7 +51,7 @@ Sources (checked 2026-10-22): [Wave Link 3.0 software overview](https://www.elga
 
 ## Suggested order
 
-The not-running app picker and basic app groups (#4) are implemented on
-`feature/wave-link-app-sources` (PR and CI still pending); listen to any mix (#1 with #9) is next, then
-Sound Check (#10) and Mixer view (#3). The virtual cable (#2) remains the
-strategic item.
+The not-running app picker and basic app groups (#4) were merged in PR #59.
+Sound Check (#10) is in progress; Listen to any mix (#1 with #9) remains the
+next larger workflow gap, followed by Mixer view (#3). The virtual cable (#2)
+remains the strategic item.

@@ -1180,6 +1180,31 @@ export function addSourceToOccupiedOutput(
   return appendDraftConnection(mixerSession, sourceNodeId, sourcePortName, mixer.id, "in");
 }
 
+/** Inserts a Mixer before a one-input destination so a second source can join
+ * the existing path without replacing or duplicating the destination edge. */
+export function addSourceToOccupiedInput(
+  session: Session,
+  occupiedEdgeId: EntityId,
+  sourceNodeId: EntityId,
+  sourcePortName: string,
+): Session {
+  const occupied = session.edges.find((edge) => edge.id === occupiedEdgeId);
+  if (!occupied) throw new Error("The destination connection changed; try again");
+  const mixerSession = insertDraftMixer(session, occupiedEdgeId);
+  const mixer = mixerSession.nodes.at(-1);
+  if (!mixer || mixer.kind !== "mixer") throw new Error("Unable to add a Mixer before this input");
+  const preserved = {
+    ...mixerSession,
+    edges: mixerSession.edges.map((edge) =>
+      (edge.sourceNode === occupied.sourceNode && edge.destinationNode === mixer.id) ||
+      (edge.sourceNode === mixer.id && edge.destinationNode === occupied.destinationNode)
+        ? { ...edge, enabled: occupied.enabled }
+        : edge,
+    ),
+  };
+  return appendDraftConnection(preserved, sourceNodeId, sourcePortName, mixer.id, "in");
+}
+
 /** Reuse an existing Mixer when its input already contains the direct source
  * currently feeding the occupied output. This turns source → output into
  * source → Mixer → output instead of adding the same signal twice through a

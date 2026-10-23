@@ -71,7 +71,7 @@ export function AudioFileNodeEditor({
         onChange("fileName", media.fileName);
       }
       setMessage(
-        `Temporary take ready Â· ${Math.round(media.durationMs / 1000)} sec Â· expires in 24 hours. Plan and commit this source before playback.`,
+        `Sound Check ready Â· ${Math.round(media.durationMs / 1000)} sec Â· expires in 24 hours. Plan and commit this Audio File source before replaying it through the effects.`,
       );
       activeTakeId.current = null;
       setTakeState("idle");
@@ -86,7 +86,7 @@ export function AudioFileNodeEditor({
     if (!selectedRecorder || busy || !backend.connected || !sessionRunning) return;
     const recorderId = `audio-file-take-${Date.now().toString(36)}`;
     setBusy(true);
-    setMessage("Creating and arming a temporary WAV recorder on the selected graph branch...");
+    setMessage("Preparing a 10-second Sound Check from the selected Recorder branch...");
     try {
       const channels = recorderNode?.ports.find((port) => port.direction === "input")?.channels ?? 2;
       await backend.createRecorder({
@@ -108,11 +108,11 @@ export function AudioFileNodeEditor({
       activeTakeId.current = recorderId;
       setTakeState("recording");
       setMessage(
-        "Recording from the selected, already-routed Recorder node. The take stops automatically at 120 seconds.",
+        "Recording Sound Check from the selected, already-routed Recorder node. It stops automatically after 10 seconds.",
       );
       stopTimer.current = setTimeout(() => {
         void stopAndImportTake();
-      }, 120_000);
+      }, 10_000);
     } catch (error) {
       setMessage(formatUiError(error, "Temporary recording could not start."));
       setTakeState("idle");
@@ -134,7 +134,7 @@ export function AudioFileNodeEditor({
       onChange("mediaId", media.mediaId);
       onChange("fileName", media.fileName);
       setMessage(
-        `${media.fileName} · ${Math.round(media.durationMs / 1000)} sec · ${media.channels} channel${media.channels === 1 ? "" : "s"}. Plan and commit this source before playback.`,
+        `${media.fileName} · ${Math.round(media.durationMs / 1000)} sec · ${media.channels} channel${media.channels === 1 ? "" : "s"}. Plan and commit this Audio File source before replaying it through the effects.`,
       );
     } catch (error) {
       setMessage(formatUiError(error, "Audio import failed."));
@@ -160,10 +160,10 @@ export function AudioFileNodeEditor({
           }}
         />
       </label>
-      <section className="temporary-take" aria-label="Temporary voice take">
-        <p className="eyebrow">Temporary voice take</p>
+      <section className="temporary-take" aria-label="Sound Check">
+        <p className="eyebrow">Sound Check</p>
         <label>
-          Already-routed Recorder node
+          Voice path Recorder
           <select
             aria-label="Recorder node for temporary take"
             value={selectedRecorder}
@@ -180,7 +180,7 @@ export function AudioFileNodeEditor({
         </label>
         {takeState === "recording" ? (
           <button type="button" className="secondary" disabled={busy} onClick={() => void stopAndImportTake()}>
-            Stop and use take
+            Stop and prepare replay
           </button>
         ) : (
           <button
@@ -189,13 +189,14 @@ export function AudioFileNodeEditor({
             disabled={!backend.connected || !sessionRunning || busy || !selectedRecorder}
             onClick={() => void startTemporaryTake()}
           >
-            {takeState === "importing" ? "Importing take…" : "Record temporary take"}
+            {takeState === "importing" ? "Preparing Sound Check…" : "Record Sound Check"}
           </button>
         )}
         <small>
-          Connect an existing physical-input or application source through this Recorder node first. Start the prepared
-          session, then record here. Takes stop at 120 seconds and imported samples expire after 24 hours. This control
-          does not select or open a microphone.
+          Connect the voice source through this Recorder node and start the prepared session. Recording stops after 10
+          seconds or when you stop it. The sample expires after 24 hours. Plan and commit this Audio File source, then
+          use Play to hear it through the effects in the connected route. This control does not select or open a
+          microphone.
         </small>
       </section>
       <div className="audio-file-inspector-transport" aria-label="Audio file playback controls">
@@ -236,7 +237,9 @@ export function AudioFileNodeEditor({
           onChange={(event) => onChange("loop", event.target.checked)}
         />
       </label>
-      <PanelMessage message={message} />
+      <div className="audio-file-editor-status">
+        <PanelMessage message={message} />
+      </div>
       <small>
         Maximum imported file size is 64 MiB and duration 120 seconds. Playback uses this source in the current route
         preview and the exact prepared native output route.

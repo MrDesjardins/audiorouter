@@ -2350,6 +2350,11 @@ button.primary {
 .audio-file-editor {
   gap: 12px;
 }
+.audio-file-editor-status {
+  box-sizing: border-box;
+  height: 4.8rem;
+  overflow-y: auto;
+}
 .audio-file-inspector-transport {
   display: flex;
   align-items: center;

@@ -90,18 +90,24 @@ graph planning/commit path.
   full group-overlap safety.
 - Review handoff: commit `53816c46` is pushed in isolated branch
   `feature/wave-link-app-sources`; [PR #59](https://github.com/MrDesjardins/audiorouter/pull/59)
-  was opened before the owner's new PR-approval preference and is now closed.
+  was opened before the owner's new PR-approval preference, later reopened,
+  and merged by the owner on 2026-10-22.
   The owner tested the local build and reported that it is working. On
   2026-10-22 the owner authorized pushing these changes directly to `main`.
   GitHub rejected that push because branch rules require a PR and the
-  `Quality gate` status check. The feature branch is pushed through commit
-  `18e91b3f`; PR #59 remains closed, and no replacement PR is open. The hosted
-  CI run for PR #59 was cancelled. Keep CAP-10 overlap detection on the open
-  list.
-- Next: after explicit human approval to open a PR for the current branch and
-  changes, run the required gate and merge through GitHub. Then continue Wave
-  Link parity with Listen to any mix (#1 + #9), retaining CAP-10 overlap
-  detection as a separate app-group follow-up.
+  `Quality gate` status check. The feature branch was pushed through commit
+  `18e91b3f`; PR #59 was later merged by the owner, so no replacement PR was
+  opened. The hosted CI run for PR #59 was cancelled before the owner merged
+  it. Keep CAP-10
+  overlap detection on the open list.
+- Next: PR #59 was merged by the owner on 2026-10-22. The owner selected Sound
+  Check (#10), now tracked in [Wave Link parity](wave-link-parity.md). The owner
+  also reported occupied Advanced EQ inputs should add a Mixer rather than
+  replace the existing microphone; the fix is included in the local build.
+  The owner authorized committing and pushing this branch on 2026-10-22. Do
+  not open a PR without explicit human approval. After owner validation,
+  continue with Listen to any mix (#1 + #9); CAP-10 overlap detection remains a
+  separate app-group follow-up.
 
 ## Pull request approval preference 2026-10-22
 
@@ -109,8 +115,7 @@ The owner requests that no agent create or open a pull request until a human
 explicitly approves the exact branch and changes. Complete local validation,
 inspect the diff, and report the branch, commit and results before asking for
 that approval. Authorization to implement, commit, push or run CI is not PR
-approval. PR #59 was closed for local testing; the owner tested the local
-build, confirmed it works, and explicitly authorized a direct push to `main`.
+approval. PR #59 was eventually reopened and merged after owner testing.
 
 ## Wave Link parity, first round — 2026-10-22, owner request
 
