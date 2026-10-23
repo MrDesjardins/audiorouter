@@ -1,5 +1,16 @@
 # AudioRouter release notes
 
+## Unreleased
+
+- **Output Switch into a shared Mixer.** A switch side can now feed a Mixer
+  that also mixes other sources; the unselected side is silent and the other
+  sources keep their level (0.0.21 refused this route).
+- **Tools after the unselected switch side see silence.** A Meter, Duck or
+  plugin after the side that is not selected no longer shows or reacts to
+  its audio.
+- **Delete session right after start-up** now moves to a remaining session
+  instead of staying on the deleted one.
+
 ## 0.0.21 — 2026-10-23 (unsigned experimental preview)
 
 - **Plugin windows.** VST3 plugins, including Universal Audio UADx, now

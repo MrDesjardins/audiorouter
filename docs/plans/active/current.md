@@ -1,5 +1,23 @@
 # Active plan — post-0.0.8 maintenance
 
+## Review follow-ups R1–R7 and a second review — 2026-10-23, owner request
+
+The owner asked to improve the `site/compare.html` wording, fix every
+remaining 0.0.21 review item, confirm the nine findings are fixed with no
+new issues, then review again and fix what that finds. Branch
+`fix/review-followups-0.0.21` from main `534d243e`. A PR needs the owner's
+approval (AGENTS.md); this request did not include one.
+
+- Outcomes per item: [review follow-ups](../future/review-fixes-0.0.21.md)
+  (R1/R2 per-side switch gates, R3 not a defect plus a regression, R4 dead
+  code removed, R5 one dialog helper, R6 wording, R7 one product bug and
+  three test races fixed, CI retries once).
+- Verification of the five 0.0.21 fixes: their regressions still pass; the
+  switch-into-Mixer refusal is replaced by R1 support, and both new switch
+  tests fail with the side gate disabled (run 2026-10-23, then restored).
+- Checks: see the second-review entry below once run.
+- Rollback: revert the branch's commits; no storage or contract change.
+
 ## Overnight review, PR, merge and release 0.0.21 — 2026-10-23, owner request
 
 The owner asked, before going to sleep, for: (1) a quick code review of all
