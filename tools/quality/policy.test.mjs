@@ -2,13 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyChanges, expectedJobs, areas } from './policy.mjs';
 import { evaluateGate } from './gate.mjs';
-import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { spawnSync, execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checks, fullChecks } from './checks.mjs';
 
 const fixtures = [
-  ['docs', ['docs/spec/09-interface.md'], []],
+  ['docs', ['docs/spec/09-interface.md'], ['docs']],
+  ['agent instructions', ['AGENTS.md'], ['docs']],
   ['ui', ['ui/src/App.tsx'], ['ui', 'windows']],
   ['backend', ['crates/control/src/service.rs'], ['backend', 'rust', 'windows']],
   ['contracts consumers', ['contracts/src/index.ts'], ['contracts', 'backend', 'ui', 'streamdeck', 'rust']],
@@ -17,20 +20,67 @@ const fixtures = [
   ['ui lock', ['ui/package-lock.json'], ['ui', 'supply']],
   ['root lock', ['Cargo.lock'], ['backend', 'supply']],
   ['shell lock', ['src-tauri/Cargo.lock'], ['backend', 'release', 'supply']],
-  ['website guide', ['site/tools/group.html'], ['ui']],
-  ['CI change', ['.github/workflows/ci.yml'], areas],
+  ['website guide', ['site/tools/group.html'], ['site']],
+  ['website styles', ['site/assets/compare.css'], ['site']],
+  ['CI change', ['.github/workflows/ci.yml'], []],
+  ['Jev workflow', ['.github/workflows/jev-review.yml'], []],
   ['quality workflow', ['.github/workflows/quality.yml'], areas],
-  ['policy change', ['tools/quality/policy.mjs'], areas],
+  ['policy change', ['tools/quality/policy.mjs'], []],
+  ['documentation validator', ['tools/docs/validate.mjs'], ['docs']],
+  ['mixed website and backend', ['site/compare.html', 'crates/engine/src/lib.rs'], ['site', 'backend', 'rust', 'windows']],
   ['toolchain', ['rust-toolchain.toml'], areas],
   ['future executable', ['new-runner/config.js'], areas],
 ];
 for (const [name, files, enabled] of fixtures) test(`classifies ${name}`, () => {
   const flags = classifyChanges(files);
   for (const area of enabled) assert.equal(flags[area], true, area);
-  if (name === 'docs') for (const value of Object.values(flags)) assert.equal(value, false);
+  if (name === 'docs' || name === 'agent instructions') {
+    assert.equal(flags.docs, true);
+    for (const [key, value] of Object.entries(flags)) if (key !== 'docs') assert.equal(value, false, key);
+  }
+  if (name.startsWith('website')) {
+    assert.equal(flags.site, true);
+    assert.equal(flags.windows, false);
+    for (const area of ['backend', 'contracts', 'ui', 'probe', 'sdk', 'release', 'streamdeck', 'supply', 'docs']) assert.equal(flags[area], false, area);
+  }
   if (name.startsWith('streamdeck')) { assert.equal(flags.backend, false); assert.equal(flags.ui, false); }
 });
-test('full main/manual verification enables all areas', () => { for (const value of Object.values(classifyChanges([], { full: true }))) assert.equal(value, true); });
+test('full manual verification enables all areas', () => { for (const value of Object.values(classifyChanges([], { full: true }))) assert.equal(value, true); });
+test('main push classifies the pushed before/after diff', () => {
+  const root = mkdtempSync(join(tmpdir(), 'audiorouter-policy-'));
+  try {
+    execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'ci@example.invalid'], { cwd: root });
+    execFileSync('git', ['config', 'user.name', 'CI policy test'], { cwd: root });
+    writeFileSync(join(root, 'README.md'), 'baseline\n');
+    execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['commit', '-m', 'baseline'], { cwd: root, stdio: 'ignore' });
+    const before = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    mkdirSync(join(root, 'site'), { recursive: true });
+    writeFileSync(join(root, 'site', 'compare.html'), '<title>site</title>\n');
+    execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['commit', '-m', 'site update'], { cwd: root, stdio: 'ignore' });
+    const after = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    const eventPath = join(root, 'event.json'), outputPath = join(root, 'github-output.txt');
+    writeFileSync(eventPath, JSON.stringify({ before, after }));
+    const script = fileURLToPath(new URL('./policy.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [script, '--github', '--event', 'push'], {
+      cwd: root, encoding: 'utf8',
+      env: { ...process.env, GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: outputPath },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const flags = JSON.parse(result.stdout);
+    const outputs = readFileSync(outputPath, 'utf8');
+    const encodedPages = outputs.match(/^site_pages_b64=(.*)$/m)?.[1] ?? '';
+    assert.deepEqual(Buffer.from(encodedPages, 'base64').toString('utf8').split('\n'), ['compare.html']);
+    assert.equal(flags.docs, false);
+    assert.equal(flags.site, true);
+    assert.equal(flags.windows, false);
+    assert.equal(flags.backend, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 test('handles backslashes and paths with spaces; rejects path traversal', () => {
   assert.equal(classifyChanges(['ui\\src\\a b.ts']).ui, true);
   assert.throws(() => classifyChanges(['../ui/a.ts']));
@@ -53,6 +103,16 @@ test('aggregate rejects missing/failed classification and inconsistent derived f
   needs.changes.outputs.windows = 'false'; needs.windows.result = 'skipped';
   assert.ok(evaluateGate(needs).length);
   delete needs.changes.outputs.ui; assert.ok(evaluateGate(needs).length);
+});
+test('aggregate requires only the affected documentation or website check', () => {
+  const docs = needsFor(classifyChanges(['docs/README.md']));
+  assert.equal(docs.docs.result, 'success');
+  assert.equal(docs.site.result, 'skipped');
+  const site = needsFor(classifyChanges(['site/compare.html']));
+  assert.equal(site.site.result, 'success');
+  assert.equal(site.docs.result, 'skipped');
+  assert.equal(site.windows.result, 'skipped');
+  assert.equal(site.browser.result, 'skipped');
 });
 test('aggregate rejects even an unnecessary failed check', () => {
   const needs = needsFor(classifyChanges(['docs/README.md'])); needs.browser.result = 'failure'; assert.ok(evaluateGate(needs).length);
@@ -78,7 +138,7 @@ test('CI invokes the shared full inventory and gates every classified job', () =
   const expected = fullChecks(classifyChanges([], { full: true }));
   assert.deepEqual([...selected].sort(), expected.sort());
   for (const id of selected) assert.ok(Object.hasOwn(checks, id));
-  assert.match(workflow, /quality-gate:\s+name: Quality gate\s+if: always\(\)\s+needs: \[changes, docs, policy, supply-chain, windows, browser, streamdeck\]/);
+  assert.match(workflow, /quality-gate:\s+name: Quality gate\s+if: always\(\)\s+needs: \[changes, docs, site, policy, supply-chain, windows, browser, streamdeck\]/);
   assert.match(workflow, /NEEDS_RESULTS: \$\{\{ toJSON\(needs\) \}\}/);
   assert.match(workflow, /node tools\/quality\/gate\.mjs/);
   assert.match(workflow, /node tools\/quality\/policy\.mjs --github --event/);

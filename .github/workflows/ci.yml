@@ -5,8 +5,8 @@ name: AudioRouter CI
 # The toolchain matches the manual release workflow so lints do not change
 # underneath us.
 #
-# Pull requests run only the checks for the areas they touch (see the
-# `changes` job). Pushes to main and manual runs always run everything.
+# Pull requests and main pushes run only checks for changed areas (see the
+# `changes` job). Manual runs execute the full quality inventory.
 on:
   push:
     branches: [main]
@@ -35,6 +35,9 @@ jobs:
       rust: ${{ steps.detect.outputs.rust }}
       supply: ${{ steps.detect.outputs.supply }}
       streamdeck: ${{ steps.detect.outputs.streamdeck }}
+      docs: ${{ steps.detect.outputs.docs }}
+      site: ${{ steps.detect.outputs.site }}
+      site_pages_b64: ${{ steps.detect.outputs.site_pages_b64 }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -55,6 +58,8 @@ jobs:
 
   docs:
     name: Validate documentation
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Check out
@@ -68,6 +73,35 @@ jobs:
 
       - name: Validate documentation
         run: node tools/quality/verify.mjs --checks docs
+
+      - name: Upload verification results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  site:
+    name: Website checks
+    needs: changes
+    if: needs.changes.outputs.site == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+
+      - name: Validate changed website metadata and guides
+        env:
+          SITE_PAGES_B64: ${{ needs.changes.outputs.site_pages_b64 }}
+        run: node tools/quality/verify.mjs --checks site
 
       - name: Upload verification results
         if: always()
@@ -339,7 +373,7 @@ jobs:
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, docs, policy, supply-chain, windows, browser, streamdeck]
+    needs: [changes, docs, site, policy, supply-chain, windows, browser, streamdeck]
     runs-on: ubuntu-latest
     steps:
       - name: Check out

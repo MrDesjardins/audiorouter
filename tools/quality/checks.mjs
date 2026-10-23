@@ -4,6 +4,7 @@ const cargo = (...args) => ({ executable: 'cargo', args, windows: true });
 const ps = script => ({ executable: 'powershell', args: ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script], windows: true });
 export const checks = {
   docs: [{ executable: 'node', args: ['tools/docs/validate.mjs'] }],
+  site: [{ executable: 'node', args: ['site/generate-social.mjs', '--check', '--check-changed'] }, { executable: 'node', args: ['site/check-guides.mjs'] }],
   policy: [{ executable: 'node', args: ['--test', 'tools/quality/policy.test.mjs', 'tools/quality/verify.test.mjs'] }],
   'rust-format': [{ executable: 'cargo', args: ['fmt', '--all', '--', '--check'] }, { executable: 'cargo', args: ['fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check'] }],
   // custom-protocol embeds frontendDist, so build current assets before shell lint.
@@ -31,7 +32,8 @@ export const checks = {
 };
 export const fast = ['docs', 'policy', 'rust-format', 'contract-type', 'ui-format', 'ui-lint', 'ui-type', 'streamdeck-type'];
 export function fullChecks(flags) {
-  return [...new Set(['docs', 'policy',
+  return [...new Set(['policy',
+    ...(flags.docs ? ['docs'] : []), ...(flags.site ? ['site'] : []),
     ...(flags.backend ? ['rust-format', 'rust-clippy', 'rust-tests', 'shell-tests', 'cli-parity'] : []),
     ...(flags.backend || flags.contracts ? ['contract-type', 'contract-drift'] : []),
     ...(flags.ui ? ['ui-format', 'ui-lint', 'ui-tests', 'ui-build'] : []),
