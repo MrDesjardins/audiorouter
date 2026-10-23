@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyChanges, expectedJobs, areas } from './policy.mjs';
 import { evaluateGate } from './gate.mjs';
-import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { spawnSync, execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checks, fullChecks } from './checks.mjs';
 
@@ -25,6 +27,7 @@ const fixtures = [
   ['quality workflow', ['.github/workflows/quality.yml'], areas],
   ['policy change', ['tools/quality/policy.mjs'], []],
   ['documentation validator', ['tools/docs/validate.mjs'], ['docs']],
+  ['mixed website and backend', ['site/compare.html', 'crates/engine/src/lib.rs'], ['site', 'backend', 'rust', 'windows']],
   ['toolchain', ['rust-toolchain.toml'], areas],
   ['future executable', ['new-runner/config.js'], areas],
 ];
@@ -42,7 +45,38 @@ for (const [name, files, enabled] of fixtures) test(`classifies ${name}`, () => 
   }
   if (name.startsWith('streamdeck')) { assert.equal(flags.backend, false); assert.equal(flags.ui, false); }
 });
-test('full main/manual verification enables all areas', () => { for (const value of Object.values(classifyChanges([], { full: true }))) assert.equal(value, true); });
+test('full manual verification enables all areas', () => { for (const value of Object.values(classifyChanges([], { full: true }))) assert.equal(value, true); });
+test('main push classifies the pushed before/after diff', () => {
+  const root = mkdtempSync(join(tmpdir(), 'audiorouter-policy-'));
+  try {
+    execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'ci@example.invalid'], { cwd: root });
+    execFileSync('git', ['config', 'user.name', 'CI policy test'], { cwd: root });
+    writeFileSync(join(root, 'README.md'), 'baseline\n');
+    execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['commit', '-m', 'baseline'], { cwd: root, stdio: 'ignore' });
+    const before = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    writeFileSync(join(root, 'README.md'), 'website only\n');
+    execFileSync('git', ['add', '.'], { cwd: root });
+    execFileSync('git', ['commit', '-m', 'site update'], { cwd: root, stdio: 'ignore' });
+    const after = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    const eventPath = join(root, 'event.json'), outputPath = join(root, 'github-output.txt');
+    writeFileSync(eventPath, JSON.stringify({ before, after }));
+    const script = fileURLToPath(new URL('./policy.mjs', import.meta.url));
+    const result = spawnSync(process.execPath, [script, '--github', '--event', 'push'], {
+      cwd: root, encoding: 'utf8',
+      env: { ...process.env, GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: outputPath },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const flags = JSON.parse(result.stdout);
+    assert.equal(flags.docs, false);
+    assert.equal(flags.site, false);
+    assert.equal(flags.windows, false);
+    assert.equal(flags.backend, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 test('handles backslashes and paths with spaces; rejects path traversal', () => {
   assert.equal(classifyChanges(['ui\\src\\a b.ts']).ui, true);
   assert.throws(() => classifyChanges(['../ui/a.ts']));
