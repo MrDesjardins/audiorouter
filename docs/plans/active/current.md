@@ -92,11 +92,16 @@ graph planning/commit path.
   `feature/wave-link-app-sources`; [PR #59](https://github.com/MrDesjardins/audiorouter/pull/59)
   was opened before the owner's new PR-approval preference and is now closed.
   The owner tested the local build and reported that it is working. On
-  2026-10-22 the owner explicitly authorized pushing these changes directly
-  to `main`; do not reopen the PR. The hosted CI run was cancelled after the
-  PR was closed. Keep CAP-10 overlap detection on the open list.
-- Next: continue Wave Link parity with Listen to any mix (#1 + #9); retain
-  CAP-10 overlap detection as a separate app-group follow-up.
+  2026-10-22 the owner authorized pushing these changes directly to `main`.
+  GitHub rejected that push because branch rules require a PR and the
+  `Quality gate` status check. The feature branch is pushed through commit
+  `18e91b3f`; PR #59 remains closed, and no replacement PR is open. The hosted
+  CI run for PR #59 was cancelled. Keep CAP-10 overlap detection on the open
+  list.
+- Next: after explicit human approval to open a PR for the current branch and
+  changes, run the required gate and merge through GitHub. Then continue Wave
+  Link parity with Listen to any mix (#1 + #9), retaining CAP-10 overlap
+  detection as a separate app-group follow-up.
 
 ## Pull request approval preference 2026-10-22
 
