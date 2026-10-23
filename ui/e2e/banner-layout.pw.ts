@@ -145,11 +145,15 @@ test("long Timing content scrolls in the sidebar without pushing the canvas down
 });
 
 for (const theme of ["dark", "light", "high-contrast"]) {
-  test(`occupied input notice and Timing keep canvas usable in ${theme}`, async ({ page }, testInfo) => {
+  test(`occupied input Mixer insertion and Timing keep canvas usable in ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: 1280, height: 720 });
+    const fixture: Session = {
+      ...session,
+      nodes: [...session.nodes, node("file", "audioFile", "Sound Check clip", true)],
+    };
     await page.addInitScript((fixture) => {
       Object.assign(window, { __routeFixtureSession: fixture });
-    }, session);
+    }, fixture);
     await page.goto("/route-harness.html");
     await setColorTheme(page, theme);
     const canvas = page.locator(".session-flow-canvas");
@@ -160,6 +164,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       ["eq", 280, 180],
       ["mixer", 510, 60],
       ["output", 650, 180],
+      ["file", 90, 320],
     ] as const) {
       const title = await page.getByTestId(`rf__node-${id}`).locator(".flow-node-title").boundingBox();
       if (!title) throw new Error("Missing node title");
@@ -168,11 +173,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       await page.mouse.move(bounds.x + x, bounds.y + y, { steps: 10 });
       await page.mouse.up();
     }
-    // This is the reversed gesture in the user's screenshot: Mixer -> occupied EQ.
-    await connect(page, "mixer", "eq");
+    // The user's case: Audio File -> EQ that already receives the microphone.
+    await connect(page, "file", "eq");
     const notice = page.locator(".global-action-message");
-    await expect(notice).toContainText("Siege Advanced EQ already receives Siege game");
-    await expect(notice).toContainText("blue sending connector");
+    await expect(notice).toContainText(
+      "Added a Mixer so Siege game and Sound Check clip can both feed Siege Advanced EQ",
+    );
     await expect(page.locator(".inactive-route-warning")).toBeVisible();
     const notifications = page.getByRole("complementary", { name: "Notifications" });
     await expect(notifications).toHaveCSS("position", "fixed");
@@ -180,13 +186,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect(noticeBox.x + noticeBox.width).toBeLessThanOrEqual(1280);
     expect(noticeBox.y + noticeBox.height).toBeLessThanOrEqual(720);
     await page.screenshot({ path: testInfo.outputPath(`banners-${theme}.png`) });
-    await page.getByRole("button", { name: "Dismiss message", exact: true }).click();
-    await expect(notice).not.toContainText("already receives");
-    await expect(page.getByRole("button", { name: "Dismiss message", exact: true })).toHaveCount(0);
-    await expect(page.getByTestId("rf__edge-game-eq")).toHaveCount(1);
-    await connect(page, "mixer", "eq");
-    await notice.getByRole("button", { name: "Replace input connection", exact: true }).click();
     await expect(page.getByTestId("rf__edge-game-eq")).toHaveCount(0);
+    await expect(page.getByTestId("rf__node-mixer-1")).toBeVisible();
+    await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(3);
     await page.locator(".topbar").getByRole("button", { name: "Undo", exact: true }).click();
     await expect(page.getByTestId("rf__edge-game-eq")).toHaveCount(1);
     await connect(page, "eq", "mixer");

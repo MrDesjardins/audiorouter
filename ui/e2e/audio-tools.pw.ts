@@ -502,6 +502,26 @@ test("Audio File imports WAV media through the upload contract and exposes loop 
   await expect(node.getByRole("button", { name: /Play audio file/i })).toBeEnabled();
 });
 
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`Sound Check guidance and reserved status area render in ${theme}`, async ({ page }, testInfo) => {
+    await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
+    await page.goto("/route-harness.html");
+    await page.getByRole("tab", { name: "Tools" }).click();
+    await page.locator(".tool-card").filter({ hasText: "Audio file" }).first().click();
+    await page.getByTestId("rf__node-audioFile-1").click();
+    await page.getByRole("tab", { name: "Properties" }).click();
+
+    const inspector = page.locator(".main-content > .inspector");
+    const soundCheck = inspector.getByRole("region", { name: "Sound Check" });
+    await expect(soundCheck).toContainText("Recording stops after 10 seconds or when you stop it.");
+    await expect(soundCheck.getByRole("button", { name: "Record Sound Check" })).toBeDisabled();
+    const status = inspector.locator(".audio-file-editor-status");
+    const statusHeight = await status.evaluate((element) => Number.parseFloat(getComputedStyle(element).height));
+    expect(statusHeight).toBeGreaterThan(70);
+    await inspector.screenshot({ path: testInfo.outputPath(`sound-check-${theme}.png`) });
+  });
+}
+
 test("Advanced EQ edits filter points in properties", async ({ page }) => {
   await page.goto("/route-harness.html");
   await page.getByRole("tab", { name: "Tools" }).click();

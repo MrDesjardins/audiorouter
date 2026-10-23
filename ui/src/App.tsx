@@ -34,6 +34,7 @@ import { useReportUnsaved } from "./unsavedReport";
 import { QuitButton } from "./QuitButton";
 import {
   addSourceToOccupiedOutput,
+  addSourceToOccupiedInput,
   appendApplicationCaptureNode,
   appendApplicationCapturePathNode,
   appendApplicationCaptureGroup,
@@ -2271,21 +2272,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             return null;
           }
         }
-        setConnectionReplacement({
-          sessionId: session.id,
-          edgeId: occupied.id,
-          sourceNode,
-          sourcePort,
-          destinationNode,
-          destinationPort,
-        });
-        const directionHelp = destination?.ports.some((port) => port.direction === "output")
-          ? ` To send audio out of ${destinationName}, start at its blue sending connector and drag to the receiving tool's orange connector.`
-          : " An input accepts one source.";
-        setActionMessage(
-          `${destinationName} already receives ${priorName}.${directionHelp} Choose Replace input connection only to change what feeds ${destinationName}; Undo restores its previous input.`,
-        );
-        recordUiDiagnostic("Connection rejected: occupied destination input; replacement offered");
+        try {
+          const mixed = addSourceToOccupiedInput(current, occupied.id, sourceNode, sourcePort);
+          const mixer = mixed.nodes.at(-1);
+          recordDraftChange(mixed);
+          setConnectionReplacement(null);
+          setActionMessage(
+            `Added a Mixer so ${priorName} and ${current.nodes.find((node) => node.id === sourceNode)?.name ?? "the new source"} can both feed ${destinationName}. Adjust the Mixer, then Save route when ready.`,
+          );
+          if (mixer) {
+            setSelectedNodeId(mixer.id);
+            setSelectedNodeIds([mixer.id]);
+          }
+          return mixer?.id ?? null;
+        } catch (mixError) {
+          setActionMessage(formatUiError(mixError, "Unable to combine these sources."));
+          return null;
+        }
       } else {
         setConnectionReplacement(null);
         setActionMessage(formatUiError(error, "Unable to add connection."));

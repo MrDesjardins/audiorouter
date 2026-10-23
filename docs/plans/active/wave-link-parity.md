@@ -23,10 +23,169 @@ API contracts and saved sessions are unchanged:
 
 The full candidate list is in [Wave Link parity candidates](../future/wave-link-parity.md).
 
+## Current task — Sound Check (#10)
+
+Owner selected the next Wave Link parity task after merging the application
+picker/groups (#4) to `main` in PR #59. Implement a clear, bounded Sound Check
+flow using the existing temporary recording and Audio File playback paths.
+
+- Requirements: UI-05, UI-17, REC-04, REC-08, REC-12, SEC-03, SEC-06 and
+  SEC-09. Add UI-24 for the user-visible Sound Check behavior.
+- Baseline: the Audio File inspector already records from an existing
+  Recorder node on a running route, imports the completed WAV into 24-hour
+  temporary media, and has Play/Pause/Stop transport. It currently permits
+  120 seconds and gives a generic “plan and commit before playback” message.
+- Decision: cap Sound Check at 10 seconds, retain explicit manual stop, use
+  existing expiring media, and explain that the Audio File source must be
+  planned/committed before playback. Audio File playback follows its ordinary
+  downstream graph path, including effects. Require an already-routed
+  Recorder node; do not open a microphone, use browser capture, or mutate a
+  saved/running route implicitly. No new backend API or media format.
+- Ordered tasks: (1) update this plan and UI-24/spec/candidate status; (2)
+  revise Audio File inspector labels, 10-second timer and replay guidance;
+  (3) add focused UI regression coverage for the Sound Check controls and
+  timer; (4) fix the reported route-authoring defect: when a second source is
+  connected to an already-fed single-input tool, insert a Mixer before that
+  tool and preserve both sources instead of offering replacement only; (5)
+  add draft and route-harness regression coverage for the mixer topology;
+  (6) run UI format, lint, typecheck, relevant tests and production build;
+  (7) inspect the complete diff and build the local shell in this isolated
+  worktree for owner testing. No PR before explicit human approval.
+- Validation matrix: UI component/unit coverage for the bounded timer,
+  explicit stop, and playback guidance; UI lint/format/typecheck/tests/build;
+  Edge dark/light/high-contrast visual review if layout changes; Windows
+  desktop build. Live microphone playback is owner-run because it depends on
+  the owner's device and endpoint preparation.
+- Risks: a user may expect Sound Check to capture any microphone or play
+  without committing. The control therefore says it only records from the
+  selected Recorder branch and makes the plan/commit step clear. Existing
+  recorder persistence means closing the UI does not stop recording (REC-04).
+  The occupied-input Mixer insertion must preserve the prior edge's channel
+  matrix and remain a draft-only topology change until the user saves it.
+- Rollback: revert the scoped UI, spec, candidate list and plan changes; no
+  schema migration or backend lifecycle change.
+- Implementation (2026-10-22): the Audio File inspector calls the existing
+  temporary-take workflow “Sound Check,” limits its auto-stop to 10 seconds,
+  keeps explicit stop, and tells the user to plan/commit before playing the
+  sample through downstream effects. The status area has a reserved fixed
+  height. No backend, permission, persistence or route behavior changed.
+- Validation (Windows 11, Node 22.22.3, Edge): UI format, format check,
+  typecheck, lint (0 errors; 25 existing exhaustive-deps warnings), full UI
+  suite (73 files, 640 tests), production UI build, and documentation
+  acceptance (186 Markdown files, 1,029 links) passed. The focused UI test
+  covers automatic stop at 10 seconds, temporary media import and replay
+  guidance. The three Edge Sound Check theme cases each reported passed and
+  screenshots were reviewed in dark, light and high-contrast. The Playwright
+  process did not exit after reporting all cases passed and was interrupted;
+  treat its command exit as incomplete, and rerun with the next browser
+  qualification if needed. `git diff --check` passed after final updates.
+- Owner local-test build: the release UI, shell, plugin worker and CLI were
+  built from this worktree with output under `target/owner-local-test/release`.
+  Shell path:
+  `C:\code\audiorouter\.worktrees\wave-link-sound-check\target\owner-local-test\release\audiorouter-shell.exe`.
+  This is an unsigned local build, not a release. No live microphone or native
+  effect playback was tested.
+- Owner confirmation: the current graph workflow records and plays the voice
+  sample through effects, so Sound Check (#10) is functionally implemented.
+  The remaining Wave Link difference is convenience: AudioRouter still needs
+  an existing Recorder branch, an Audio File route, and an explicit save before
+  playback; a one-panel flow is a possible later UX improvement.
+- Next action: PR #60 was opened at the owner's explicit request on
+  2026-10-22. It includes the Sound Check comparison row and its setup notes.
+  Await review and CI, and leave merge to the owner. After review, continue
+  with Listen to any mix (#1 and #9); the in-panel Sound Check UX difference
+  remains an optional improvement.
+
+## Owner-reported route authoring defect — occupied processor input
+
+The owner reports that connecting an Audio File to Advanced EQ when the EQ
+already receives a microphone offers only input replacement. The expected
+behavior is to insert a Mixer before the EQ and connect both existing and new
+sources to it, matching AudioRouter's occupied-output Mixer insertion.
+
+- Requirements: UI-03; preserve GRAPH-01/02 and UI-17 behavior.
+- Ordered tasks: insert a draft Mixer into the occupied input edge, add the
+  new source to that Mixer, preserve the existing downstream edge matrix,
+  select the Mixer and explain the draft action; add unit and Edge regression
+  coverage for microphone + Audio File -> Mixer -> Advanced EQ; format, lint,
+  run focused and full UI checks, and rebuild locally.
+- Validation: verify exact draft topology, matrix preservation, undo, route
+  planning/commit on the harness, and the owner's local live playback.
+- Rollback: revert the shared occupied-input routing helper, tests and UI-03
+  clarification together. No backend or session schema change.
+- Implementation: `appendDraftConnection` rejects a second source on a regular
+  occupied input. The canvas already converted this collision into a Mixer
+  only for Physical Output; other inputs offered replacement. The handler now
+  inserts a draft Mixer before the occupied destination and adds the new
+  source to it. The original edge's enabled state and downstream channel map
+  are preserved. Added unit coverage for microphone + Audio File and updated
+  the Edge three-theme occupied-input scenario to assert topology and Undo.
+- Validation (Windows 11, Node 22.22.3, Edge): the focused draft suite passes
+  (21 tests); full UI suite passes (73 files, 640 tests); typecheck, lint (0
+  errors; 25 existing warnings), format and docs acceptance pass. All 6
+  `banner-layout.pw.ts` Edge cases reported passed, including all three themes,
+  but the Playwright process remained alive after the final pass and was
+  interrupted (command exit 1); treat browser command completion as
+  incomplete. Production UI build passes. Native release shell, plugin worker
+  and CLI builds pass in `target/owner-local-test/release` after the owner
+  closed the existing shell; the first rebuild attempt while it was running
+  failed with Windows access denied on the locked executable. Live audio was
+  not exercised by automation; owner should verify microphone + Audio File
+  through the inserted Mixer and Advanced EQ.
+- Comparison: `site/compare.html` now lists Sound Check in the Wave Link table,
+  distinguishing AudioRouter's working graph workflow from Wave Link's
+  in-panel workflow. The site verifier passes for the changed-page list; a
+  no-filter local invocation checked all pages and reports pre-existing stale
+  social metadata on generated tool pages.
+
+## Owner-reported Audio File editor bugs — loop control and Sound Check text
+
+The owner reported that Loop is disabled while the session is playing and that
+the Sound Check ready message renders a garbled separator (`Â·`). The editor
+passed its session-running disabled state to every setting, even though the
+app has a live parameter-save path for changes made during playback.
+
+- Requirements: UI-05, UI-17, UI-24.
+- Ordered tasks: let Loop follow backend connectivity and Sound Check busy
+  state rather than the session-running editor lock; add component coverage
+  that toggles Loop with the session running; correct the Sound Check separator
+  and assert the displayed text; format, lint, typecheck, run focused and full
+  UI tests, build the UI and inspect the diff.
+- Validation matrix: focused AudioFileNodeEditor component tests; UI format,
+  lint, typecheck, full test suite and production build; `git diff --check`.
+  This validates the editor interaction and live-save dispatch, not physical
+  audio continuity on an owner's route.
+- Rollback: revert the scoped Audio File editor/test, UI-05 sentence and this
+  execution record. No backend, route schema or persistence change.
+- Implementation: the Audio File inspector's general edit lock still protects
+  file selection and Sound Check work while the route runs, but Loop now only
+  depends on backend connectivity and Sound Check import activity. Its change
+  continues through the existing parameter-only auto-save. Corrected the
+  Sound Check ready separators in UTF-8. Added component assertions for the
+  exact ready message and toggling Loop while `sessionRunning` is true.
+- Validation (Windows 11, Node 22.22.3): the focused component suite passes
+  (2 tests); full UI suite passes (73 files, 641 tests); TypeScript 7
+  `typecheck:all`, Prettier format check, ESLint (0 errors, 25 existing
+  exhaustive-deps warnings), documentation acceptance (186 files, 1,029
+  links), `git diff --check`, and production UI build pass. The first test
+  attempt used an unavailable `toBeEnabled` matcher; replacing it with the
+  native `disabled` property made the focused and full suites pass. Release
+  shell, plugin worker and CLI builds pass under
+  `target/owner-local-loop-fix/release`. Shell artifact:
+  `C:\code\audiorouter\.worktrees\wave-link-sound-check\target\owner-local-loop-fix\release\audiorouter-shell.exe`.
+  The owner tested the local build on their route and confirmed Loop can be
+  toggled during playback and the status message renders correctly.
+- Handoff: owner-tested fixes were pushed to existing PR #60 in commit
+  `d8e4d5d7` on 2026-10-22. CI and human review remain; the owner handles
+  merge.
+- Next: continue with Listen to any mix (#1 + #9) after PR #60 review; CAP-10
+  app-group overlap detection remains a separate follow-up.
+
 ## Decisions
 
-- **UI-only first.** Listen-to-mix, Sound Check and app groups need backend
-  or engine work. They stay future until the owner picks one.
+- **UI-only first (historical).** The owner later selected Sound Check (#10).
+  This bounded UI workflow reuses existing recording/playback APIs; a
+  temporary monitor/capture path for full one-button parity remains future.
 - **No Stream Deck fades.** Every `nodes.set` is a saved plan/commit revision,
   so a client-side fade would add many revisions per press and delay the audio
   pump (lesson 2026-09-26, "Native audio must be pumped by the backend").

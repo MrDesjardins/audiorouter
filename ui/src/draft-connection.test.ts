@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendDraftConnection,
   appendEqPresetNode,
+  addSourceToOccupiedInput,
   appendLibraryNode,
   appendVoiceChainPreset,
   defaultChannelMatrix,
@@ -273,6 +274,30 @@ describe("appendDraftConnection", () => {
       edges: inserted.edges.map((edge) => (edge.sourceNode === "mic" ? { ...edge, matrix: [] } : edge)),
     };
     expect(() => removeSinglePathDraftMixer(malformed, "mixer-1")).toThrow("valid channel matrices");
+  });
+});
+
+describe("addSourceToOccupiedInput", () => {
+  it("inserts a Mixer before an occupied tool input and preserves both sources and the old edge state", () => {
+    const withAudioFile = appendLibraryNode(demoSession, "audioFile");
+    const connected = appendDraftConnection(withAudioFile, "mic", "out", "voice", "in");
+    const disabled = {
+      ...connected,
+      edges: connected.edges.map((edge) => ({ ...edge, enabled: false, matrix: [0.5] })),
+    };
+
+    const mixed = addSourceToOccupiedInput(disabled, "edge-1", "audioFile-1", "out");
+    const mixer = mixed.nodes.find((node) => node.kind === "mixer");
+
+    expect(mixer).toMatchObject({ kind: "mixer", name: "Mixer 1" });
+    expect(mixed.edges.map((edge) => [edge.sourceNode, edge.destinationNode])).toEqual([
+      ["mic", mixer?.id],
+      [mixer?.id, "voice"],
+      ["audioFile-1", mixer?.id],
+    ]);
+    expect(mixed.edges.map((edge) => edge.enabled)).toEqual([false, false, true]);
+    expect(mixed.edges[1]?.matrix).toEqual([0.5]);
+    expect(mixed.revision).toBe(demoSession.revision);
   });
 });
 
