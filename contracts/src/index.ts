@@ -466,8 +466,19 @@ export interface AudioServiceStats {
   maxGapMicros: number;
 }
 
+/** The dedicated multi-input audio thread, while it pumps (absent from older backends). */
+export interface AudioThreadStats {
+  passes: number;
+  /** Audio thread pumps more than 8 ms apart. */
+  lateGaps: number;
+  maxGapMicros: number;
+  pumpErrors: number;
+  skippedPasses: number;
+}
+
 export interface NativeEndpointPumpResult {
   audioService?: AudioServiceStats;
+  audioThread?: AudioThreadStats;
   sessionId: EntityId;
   generation: number;
   packets: number;
@@ -481,6 +492,7 @@ export interface NativeEndpointPumpResult {
 
 export interface NativeDuplexPumpResult {
   audioService?: AudioServiceStats;
+  audioThread?: AudioThreadStats;
   sessionId: EntityId;
   generation: number;
   input: Omit<NativeEndpointPumpResult, "sessionId" | "generation" | "recorderChunksDrained">;
@@ -489,6 +501,7 @@ export interface NativeDuplexPumpResult {
 
 export interface NativeRenderSourcePumpResult {
   audioService?: AudioServiceStats;
+  audioThread?: AudioThreadStats;
   sessionId: EntityId;
   generation: number;
   packets: number;
@@ -499,6 +512,7 @@ export interface NativeRenderSourcePumpResult {
 
 export interface NativeMultiInputPumpResult {
   audioService?: AudioServiceStats;
+  audioThread?: AudioThreadStats;
   sessionId: EntityId;
   generation: number;
   inputs: number;

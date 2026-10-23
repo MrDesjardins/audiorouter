@@ -28,6 +28,17 @@ use audiorouter_windows_audio::{
     NativeMultiInputWorker, NativeMultiInputWorkerError, WasapiSchedulerPump,
 };
 
+/// Start of the monotonic clock behind pump deadlines.
+static CLOCK_BASE: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+
+/// Microseconds since [`CLOCK_BASE`]; an atomic can hold it.
+fn clock_micros() -> u64 {
+    micros(CLOCK_BASE.get_or_init(Instant::now).elapsed())
+}
+
+/// No pump deadline: pumping continues while the control thread is busy.
+const NO_DEADLINE: u64 = u64::MAX;
+
 /// Time between audio thread passes; matches the backend loop's interval.
 const AUDIO_THREAD_INTERVAL: Duration = Duration::from_millis(1);
 
@@ -77,6 +88,9 @@ pub(crate) struct AudioThreadShared {
     /// Set by the control thread from its checks; the audio thread pumps only
     /// while it is true and the worker is running.
     enabled: AtomicBool,
+    /// [`clock_micros`] after which the last checks no longer vouch for
+    /// pumping (zero, the default, or [`NO_DEADLINE`] when nothing expires).
+    pump_deadline_micros: AtomicU64,
     shutdown: AtomicBool,
     /// A pump panicked; pumping stopped until the control thread reacts.
     faulted: AtomicBool,
@@ -93,6 +107,70 @@ pub(crate) struct AudioThreadShared {
     interval_max_gap_micros: AtomicU64,
     interval_max_pass_micros: AtomicU64,
     interval_skipped_passes: AtomicU64,
+    /// What the audio thread pumped since the worker was attached; the
+    /// control thread reports these instead of pumping itself.
+    pumped: PumpTotalsAtomic,
+}
+
+#[derive(Default)]
+struct PumpTotalsAtomic {
+    packets: AtomicU64,
+    captured_frames: AtomicU64,
+    processed_quanta: AtomicU64,
+    delivered_quanta: AtomicU64,
+    rendered_frames: AtomicU64,
+    render_backpressure_events: AtomicU64,
+}
+
+/// Running totals of one attached multi-input worker's pumps.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct PumpTotals {
+    pub packets: u64,
+    pub captured_frames: u64,
+    pub processed_quanta: u64,
+    pub delivered_quanta: u64,
+    pub rendered_frames: u64,
+    pub render_backpressure_events: u64,
+}
+
+impl PumpTotalsAtomic {
+    fn add(&self, totals: PumpTotals) {
+        self.packets.fetch_add(totals.packets, Ordering::Relaxed);
+        self.captured_frames
+            .fetch_add(totals.captured_frames, Ordering::Relaxed);
+        self.processed_quanta
+            .fetch_add(totals.processed_quanta, Ordering::Relaxed);
+        self.delivered_quanta
+            .fetch_add(totals.delivered_quanta, Ordering::Relaxed);
+        self.rendered_frames
+            .fetch_add(totals.rendered_frames, Ordering::Relaxed);
+        self.render_backpressure_events
+            .fetch_add(totals.render_backpressure_events, Ordering::Relaxed);
+    }
+
+    fn load(&self) -> PumpTotals {
+        PumpTotals {
+            packets: self.packets.load(Ordering::Relaxed),
+            captured_frames: self.captured_frames.load(Ordering::Relaxed),
+            processed_quanta: self.processed_quanta.load(Ordering::Relaxed),
+            delivered_quanta: self.delivered_quanta.load(Ordering::Relaxed),
+            rendered_frames: self.rendered_frames.load(Ordering::Relaxed),
+            render_backpressure_events: self.render_backpressure_events.load(Ordering::Relaxed),
+        }
+    }
+
+    fn reset(&self) {
+        for counter in [
+            &self.packets,
+            &self.captured_frames,
+            &self.processed_quanta,
+            &self.delivered_quanta,
+            &self.rendered_frames,
+            &self.render_backpressure_events,
+        ] {
+            counter.store(0, Ordering::Relaxed);
+        }
+    }
 }
 
 /// Counters of the audio thread for diagnostics.
@@ -131,6 +209,23 @@ impl AudioThreadShared {
         self.enabled.store(enabled, Ordering::Release);
     }
 
+    /// Let the audio thread pump only for `valid_for` after this call, or
+    /// with no limit (`None`). A driver lease the control thread renews
+    /// between requests sets a limit, so a long request cannot keep audio
+    /// flowing through an owner whose lease it never renewed.
+    pub(crate) fn set_pump_valid_for(&self, valid_for: Option<Duration>) {
+        let deadline = valid_for.map_or(NO_DEADLINE, |valid_for| {
+            clock_micros().saturating_add(micros(valid_for)).max(1)
+        });
+        self.pump_deadline_micros.store(deadline, Ordering::Release);
+    }
+
+    fn checks_expired(&self) -> bool {
+        let deadline = self.pump_deadline_micros.load(Ordering::Acquire);
+        // Zero is the unset default.
+        deadline != 0 && deadline != NO_DEADLINE && clock_micros() > deadline
+    }
+
     pub(crate) fn thread_started(&self) -> bool {
         self.started.load(Ordering::Acquire)
     }
@@ -147,6 +242,11 @@ impl AudioThreadShared {
             pump_errors: self.pump_errors.load(Ordering::Relaxed),
             skipped_passes: self.skipped_passes.load(Ordering::Relaxed),
         }
+    }
+
+    /// What the audio thread pumped since the current worker was attached.
+    pub(crate) fn pumped(&self) -> PumpTotals {
+        self.pumped.load()
     }
 
     /// The interval maxima since the previous call, then reset them.
@@ -179,7 +279,10 @@ impl AudioThreadShared {
     /// One audio thread pass: pump the worker if pumping is enabled and the
     /// slot is free. Returns whether a pump ran.
     fn pass(&self, max_packets: u32) -> bool {
-        if !self.enabled.load(Ordering::Acquire) || self.faulted.load(Ordering::Acquire) {
+        if !self.enabled.load(Ordering::Acquire)
+            || self.faulted.load(Ordering::Acquire)
+            || self.checks_expired()
+        {
             return false;
         }
         let mut slot = match self.slot.try_lock() {
@@ -199,7 +302,7 @@ impl AudioThreadShared {
             pump_once(worker, max_packets)
         }));
         match result {
-            Ok(Ok(())) => {}
+            Ok(Ok(totals)) => self.pumped.add(totals),
             Ok(Err(error)) => {
                 self.pump_errors.fetch_add(1, Ordering::Relaxed);
                 if slot.error.is_none() {
@@ -243,16 +346,29 @@ impl AudioThreadShared {
     }
 }
 
-/// Pump the worker once, exactly as the inline service pass does.
+/// Pump the worker once, exactly as the inline service pass does, and
+/// return what it moved.
 pub(crate) fn pump_once(
     worker: &mut NativeMultiInputWorker,
     max_packets: u32,
-) -> Result<(), NativeMultiInputWorkerError> {
-    if worker.has_output_owner() {
-        worker.pump_and_process_outputs(max_packets).map(|_| ())
+) -> Result<PumpTotals, NativeMultiInputWorkerError> {
+    let (input, delivered, render) = if worker.has_output_owner() {
+        worker.pump_and_process_outputs(max_packets)?
     } else {
-        worker.pump_available(max_packets).map(|_| ())
-    }
+        (
+            worker.pump_available(max_packets)?,
+            0,
+            WasapiSchedulerPump::default(),
+        )
+    };
+    Ok(PumpTotals {
+        packets: u64::from(input.packets),
+        captured_frames: u64::from(input.captured_frames),
+        processed_quanta: u64::from(input.processed_quanta),
+        delivered_quanta: u64::try_from(delivered).unwrap_or(u64::MAX),
+        rendered_frames: u64::from(render.rendered_frames),
+        render_backpressure_events: u64::from(render.render_backpressure_events),
+    })
 }
 
 /// The running audio thread. Dropping it stops and joins the thread, then
@@ -328,6 +444,7 @@ impl MultiInputWorkerHandle {
     pub(crate) fn attach(shared: &Arc<AudioThreadShared>, worker: NativeMultiInputWorker) -> Self {
         shared.set_enabled(false);
         shared.faulted.store(false, Ordering::Release);
+        shared.pumped.reset();
         let mut slot = shared.lock();
         slot.error = None;
         slot.owner = slot.owner.wrapping_add(1);

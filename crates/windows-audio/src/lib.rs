@@ -1746,6 +1746,11 @@ impl NativeBridgeRenderSourceBinding {
 
 #[cfg(windows)]
 impl NativeBridgeCaptureSinkBinding {
+    /// Half the driver lease: how often the control thread must renew it.
+    pub fn heartbeat_interval(&self) -> std::time::Duration {
+        self.heartbeat_interval
+    }
+
     pub fn create(
         device_path: &str,
         mapping_path: impl AsRef<std::path::Path>,

@@ -103,3 +103,47 @@ fn the_audio_thread_starts_reports_its_scheduling_and_stops_on_drop() {
     drop(thread);
     assert!(shared.shutdown.load(Ordering::Acquire));
 }
+
+#[test]
+fn pump_totals_accumulate_until_reset() {
+    // The control thread reports these totals while the audio thread pumps;
+    // they used to be hard-coded zeros.
+    let shared = AudioThreadShared::default();
+    let pass = PumpTotals {
+        packets: 2,
+        captured_frames: 480,
+        processed_quanta: 3,
+        delivered_quanta: 6,
+        rendered_frames: 384,
+        render_backpressure_events: 1,
+    };
+    shared.pumped.add(pass);
+    shared.pumped.add(pass);
+    assert_eq!(
+        shared.pumped(),
+        PumpTotals {
+            packets: 4,
+            captured_frames: 960,
+            processed_quanta: 6,
+            delivered_quanta: 12,
+            rendered_frames: 768,
+            render_backpressure_events: 2,
+        }
+    );
+    shared.pumped.reset();
+    assert_eq!(shared.pumped(), PumpTotals::default());
+}
+
+#[test]
+fn a_lease_bound_deadline_stops_pumping_until_the_checks_run_again() {
+    let shared = AudioThreadShared::default();
+    assert!(!shared.checks_expired(), "no deadline by default");
+    shared.set_pump_valid_for(None);
+    assert!(!shared.checks_expired());
+    shared.set_pump_valid_for(Some(Duration::ZERO));
+    std::thread::sleep(Duration::from_millis(2));
+    assert!(shared.checks_expired());
+    // The next successful checks renew it.
+    shared.set_pump_valid_for(Some(Duration::from_secs(60)));
+    assert!(!shared.checks_expired());
+}

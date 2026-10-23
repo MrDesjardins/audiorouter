@@ -539,6 +539,25 @@ describe("VB-Cable endpoint selection", () => {
     ).toBeTruthy();
   });
 
+  it("reports the audio thread's late gaps, not the control thread's, while it pumps", () => {
+    const stats = {
+      sessionId: demoSession.id,
+      generation: 1,
+      inputs: 2,
+      capturedFrames: 960,
+      submittedQuanta: 7,
+      outputCount: 1,
+      deliveredQuanta: 7,
+      renderedFrames: 896,
+      renderBackpressureEvents: 0,
+      audioService: { active: true, passes: 900, lateGaps: 0, maxGapMicros: 1200 },
+      audioThread: { passes: 950, lateGaps: 2, maxGapMicros: 12500, pumpErrors: 0, skippedPasses: 0 },
+    };
+    expect(formatNativePumpSummary(stats, true)).toBe(
+      "native multi-input 960 in / 896 out / 7 quanta / 7 branches / 2 late audio service gaps (max 12.5 ms)",
+    );
+  });
+
   it("formats recorder drain telemetry only for a running native route", async () => {
     const stats = {
       sessionId: demoSession.id,
