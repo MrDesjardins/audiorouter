@@ -79,9 +79,12 @@ graph planning/commit path.
   Group creation therefore warns clearly but cannot deduplicate or reject a
   selected parent/helper pair. Keep this as a CAP-10 follow-up before claiming
   full group-overlap safety.
-- Next: inspect and push this isolated change for current-base CI. After CI,
-  continue with Listen to any mix (#1 + #9); keep CAP-10 overlap detection on
-  the open list.
+- Review handoff: commit `53816c46` is pushed in isolated branch
+  `feature/wave-link-app-sources`; [PR #59](https://github.com/MrDesjardins/audiorouter/pull/59)
+  is open against current `main`. Local verification is complete; GitHub
+  current-base checks are queued. Do not merge automatically.
+- Next: finish PR #59 CI and owner review. Then continue with Listen to any
+  mix (#1 + #9); keep CAP-10 overlap detection on the open list.
 
 ## Wave Link parity, first round — 2026-10-22, owner request
 
