@@ -1,5 +1,34 @@
 # Active plan — post-0.0.8 maintenance
 
+## CI path selection — 2026-10-22
+
+Objective: keep website-only and Markdown-only changes out of AudioRouter's
+Windows build, Rust test and Edge browser suites while retaining focused
+validation for the changed surface.
+
+- Acceptance: website changes run website checks; Markdown changes run
+  documentation validation; product source changes continue to select their
+  existing checks; mixed changes run the union. Main pushes classify the
+  pushed diff, while manual dispatch remains a full run. The required
+  `Quality gate` accepts only explicitly skipped unaffected jobs.
+- Requirements: CI path-selection behavior; no product requirement or runtime
+  behavior changes.
+- Decisions: classify `site/` independently from app `ui/`; add explicit
+  `docs` and `site` outputs; keep the policy test and aggregate gate
+  unconditional; classify CI-policy edits through policy tests without
+  running product quality suites.
+- Ordered tasks: extend path classification and gate expectations; add a
+  lightweight website check; make docs/site jobs conditional; classify push
+  events by their before/after commits; test site, Markdown, code and mixed
+  change sets.
+- Validation: run the quality policy and verifier Node tests, inspect changed
+  workflow conditions, and let the PR's required Quality gate execute.
+- Risks: path omissions could skip a relevant suite; unknown executable paths
+  continue to select all product areas. Rollback: revert the classifier,
+  workflow and tests together.
+- Next: implement and verify the path-based selection.
+
+
 ## Website comparison: AudioRouter and Elgato Wave Link — 2026-10-22
 
 Objective: add an accurate, neutral Wave Link 3.0 comparison to
