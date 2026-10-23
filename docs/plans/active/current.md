@@ -103,10 +103,10 @@ graph planning/commit path.
 - Next: PR #59 was merged by the owner on 2026-10-22. The owner selected Sound
   Check (#10), now tracked in [Wave Link parity](wave-link-parity.md). The owner
   also reported occupied Advanced EQ inputs should add a Mixer rather than
-  replace the existing microphone; the fix is included in the local build.
-  The owner authorized committing and pushing this branch on 2026-10-22. Do
-  not open a PR without explicit human approval. After owner validation,
-  continue with Listen to any mix (#1 + #9); CAP-10 overlap detection remains a
+  replace the existing microphone; the fix and the updated Sound Check
+  comparison row are in PR #60, opened at the owner's explicit request on
+  2026-10-22. Await review and CI; the owner handles merge. Continue with
+  Listen to any mix (#1 + #9) after review; CAP-10 overlap detection remains a
   separate app-group follow-up.
 
 ## Pull request approval preference 2026-10-22

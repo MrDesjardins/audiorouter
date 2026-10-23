@@ -85,15 +85,16 @@ flow using the existing temporary recording and Audio File playback paths.
   `C:\code\audiorouter\.worktrees\wave-link-sound-check\target\owner-local-test\release\audiorouter-shell.exe`.
   This is an unsigned local build, not a release. No live microphone or native
   effect playback was tested.
-- Limitation: this closes the 10-second recording and replay-guidance portion
-  of Sound Check. A user still needs an existing Recorder branch and an
-  Audio File source in the desired route, then must plan/commit before Play;
-  full one-button parity remains open.
-- Next action: the owner authorized committing and pushing this branch on
-  2026-10-22. Push the feature branch, but do not open a PR until the owner
-  explicitly approves it. The owner should validate the occupied-input Mixer
-  behavior in the local build. After review, continue with Listen to any mix
-  (#1 and #9); full one-button Sound Check parity remains open.
+- Owner confirmation: the current graph workflow records and plays the voice
+  sample through effects, so Sound Check (#10) is functionally implemented.
+  The remaining Wave Link difference is convenience: AudioRouter still needs
+  an existing Recorder branch, an Audio File route, and an explicit save before
+  playback; a one-panel flow is a possible later UX improvement.
+- Next action: PR #60 was opened at the owner's explicit request on
+  2026-10-22. It includes the Sound Check comparison row and its setup notes.
+  Await review and CI, and leave merge to the owner. After review, continue
+  with Listen to any mix (#1 and #9); the in-panel Sound Check UX difference
+  remains an optional improvement.
 
 ## Owner-reported route authoring defect — occupied processor input
 
@@ -131,6 +132,11 @@ sources to it, matching AudioRouter's occupied-output Mixer insertion.
   failed with Windows access denied on the locked executable. Live audio was
   not exercised by automation; owner should verify microphone + Audio File
   through the inserted Mixer and Advanced EQ.
+- Comparison: `site/compare.html` now lists Sound Check in the Wave Link table,
+  distinguishing AudioRouter's working graph workflow from Wave Link's
+  in-panel workflow. The site verifier passes for the changed-page list; a
+  no-filter local invocation checked all pages and reports pre-existing stale
+  social metadata on generated tool pages.
 
 ## Decisions
 
