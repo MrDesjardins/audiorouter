@@ -8,9 +8,10 @@ toggled in the app or on Stream Deck. Work is isolated on
 [Output Switch plan](output-switch.md) for contracts, decisions, tasks and
 validation. Implementation and automated checks are complete. Local build:
 `C:\code\audiorouter\.worktrees\output-switch\src-tauri\target\debug\audiorouter-shell.exe`
-(worker and CLI sidecars are beside it). Owner testing is pending; no commit,
-push or PR is authorized until the owner tests the build and approves the
-reviewed branch and changes.
+(worker and CLI sidecars are beside it). Local commit `834a327d` is on the
+feature branch. Owner testing is pending. The requested local-main merge is
+deferred while the shared `main` worktree has unrelated uncommitted changes
+and is 32 commits behind `origin/main`; see the detailed plan.
 
 ## Wave Link parity #4 — application sources and groups — 2026-10-22
 

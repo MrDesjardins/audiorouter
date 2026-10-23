@@ -120,8 +120,14 @@ or PR is included.
   `C:\code\audiorouter\.worktrees\output-switch\src-tauri\target\debug\audiorouter-shell.exe`
   and test a real source toggling between Headphones and OBS. The plugin worker
   and CLI sidecars are in the same directory. This build does not establish
-  real endpoint/audio behavior. No commit, push or PR has been made; human
-  review and approval are required after local testing.
-- Next: owner tests the built app and reports any issues. After explicit
-  approval, prepare the reviewed branch for a PR; do not create the PR before
-  approval.
+  real endpoint/audio behavior. Commit `834a327d` records the implementation
+  on the local feature branch; nothing has been pushed and no PR has been
+  opened.
+- The owner requested a local-main merge. It is deferred because the shared
+  `main` worktree is 32 commits behind `origin/main` and has extensive
+  uncommitted edits in overlapping files. Preserve that worktree. Once those
+  edits are committed or otherwise cleared by their owners, update local main
+  and fast-forward it to `feature/output-switch` (main is currently an
+  ancestor). Do not push or open a PR without the owner's approval.
+- Next: owner tests the built app and reports any issues; then complete the
+  local-main fast-forward once the shared main worktree is safe.
