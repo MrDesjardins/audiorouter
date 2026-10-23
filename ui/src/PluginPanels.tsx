@@ -6,6 +6,7 @@ import { formatUiError, type UiBackend } from "./backend";
 import { pluginCatalog, STANDARD_PLUGIN_FOLDERS } from "./draft";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
+import { endLibraryDrag, startPluginDrag } from "./libraryDrag";
 
 export function PluginScanPanel({
   backend,
@@ -349,6 +350,10 @@ export function PluginToolsGroup({
               disabled={!connected}
               title={help}
               aria-description={help}
+              // Click adds the plugin; drag places it where it is dropped on the canvas.
+              draggable={connected}
+              onDragStart={(event) => startPluginDrag(event, item.entry, item.name)}
+              onDragEnd={endLibraryDrag}
               onClick={() => onAdd(item.entry)}
             >
               <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">
@@ -484,7 +489,6 @@ export function PluginEditorControls({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const inShell = typeof window !== "undefined" && Boolean(window.__TAURI_INTERNALS__?.invoke);
-  const isVst2 = node.parameters.format === "vst2";
   const openEditor = async () => {
     const invoke = window.__TAURI_INTERNALS__?.invoke;
     if (!invoke) return;
@@ -496,7 +500,7 @@ export function PluginEditorControls({
       setMessage(
         response?.error
           ? `Editor unavailable: ${response.error.message ?? "the backend refused"}`
-          : "Editor opened in its own window. Changes apply as you make them and are kept automatically when you close the window or press Stop.",
+          : "Editor opened in its own window. Changes apply as you make them and are kept automatically when you close the window or press Stop. The sliders below still work; the latest change wins.",
       );
     } catch (error) {
       setMessage(formatUiError(error, "The plugin editor could not be opened."));
@@ -529,15 +533,13 @@ export function PluginEditorControls({
         <button
           type="button"
           className="secondary"
-          disabled={busy || !running || !inShell || !isVst2}
+          disabled={busy || !running || !inShell}
           title={
-            !isVst2
-              ? "VST3 editors are not supported yet; use the parameters below."
-              : !inShell
-                ? "Editors open only in the desktop app."
-                : !running
-                  ? "Start the route first."
-                  : "Open the plugin's own window"
+            !inShell
+              ? "Editors open only in the desktop app."
+              : !running
+                ? "Start the route first."
+                : "Open the plugin's own window"
           }
           onClick={() => void openEditor()}
         >
@@ -563,9 +565,7 @@ export function PluginEditorControls({
         <small className="muted">
           {!running
             ? "Start the route to open the editor. Settings you change are kept automatically when you close the editor or press Stop."
-            : !isVst2
-              ? "This VST3 plugin's own editor cannot be opened yet; adjust it with the parameters below. Changes are kept when you press Stop."
-              : "Open the editor and make changes. They are kept when you close its window or press Stop."}
+            : "Open the editor and make changes. They are kept when you close its window or press Stop."}
         </small>
       )}
     </div>
@@ -624,6 +624,17 @@ export function PluginNodeInspector({
             dropped input blocks. These counts are shared by plugins in the same worker.
           </small>
         )}
+        {health && (
+          // Always laid out, shown only when it applies (UI-17: no layout shift).
+          <small
+            className="plugin-unchanged-audio"
+            aria-hidden={health.unchangedAudio ? undefined : true}
+            style={{ visibility: health.unchangedAudio ? "visible" : "hidden" }}
+          >
+            Your audio comes out of this plugin unchanged. If you expected an effect, the plugin may not be licensed or
+            activated: check it in its vendor&apos;s app (UA Connect for UADx plugins), then press Stop and Play.
+          </small>
+        )}
       </div>
       <button type="button" className="secondary" onClick={onUnload} disabled={disabled}>
         Unload plugin from draft
@@ -631,8 +642,8 @@ export function PluginNodeInspector({
       <small>
         Execution is bound to this exact binary and fingerprint; a changed file requires rescanning and re-adding it
         from Plugin scan. Unloading removes this node and its connections from the draft only — Plan and Commit changes
-        to save the removal. AudioRouter does not open the plugin's own native editor window in this build — adjust its
-        parameters with the controls below instead.
+        to save the removal. While the route plays, Open plugin editor shows the plugin's own window; the controls below
+        work too.
       </small>
     </div>
   );

@@ -113,7 +113,8 @@ export interface PluginScanEntry {
     compatibility:
       | "supportedVst3X64"
       | "supportedVst2X64Gated"
-      | "unsupportedFormat";
+      | "unsupportedFormat"
+      | "unsupportedInstrument";
   } | null;
   error: string | null;
   errorCode:
@@ -837,6 +838,12 @@ export interface DiagnosticsSnapshot {
       outputMisses?: number;
       /** Input quanta discarded because the in-flight queue had no storage. */
       inputDrops?: number;
+      /**
+       * The plugin has returned clearly audible input unchanged since it started.
+       * Normal for an effect at neutral settings; also what an unlicensed plugin
+       * that silently bypasses itself does.
+       */
+      unchangedAudio?: boolean;
     } | null;
     /** Present while a Denoise or FIR Filter Hz node is learning: its current noise profile. */
     noiseProfile?: string;

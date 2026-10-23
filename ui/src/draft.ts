@@ -666,6 +666,20 @@ export function needsNativePaths(session: Session): boolean {
     connectedDevices.filter((node) => node.kind === "physicalOutput").length > 1
   )
     return true;
+  // The single-endpoint worker compiles only a chain of one channel width; a
+  // connection between ports of different widths (a mono microphone into
+  // stereo headphones, a stereo source into a mono plugin) plays on the
+  // multi-path worker.
+  const channelsOf = (nodeId: string, portName: string) =>
+    session.nodes.find((node) => node.id === nodeId)?.ports.find((port) => port.name === portName)?.channels;
+  if (
+    session.edges.some(
+      (edge) =>
+        edge.enabled &&
+        channelsOf(edge.sourceNode, edge.sourcePort) !== channelsOf(edge.destinationNode, edge.destinationPort),
+    )
+  )
+    return true;
   const paths = independentPaths(session);
   if (paths.length > 1) return true;
   return paths.some(

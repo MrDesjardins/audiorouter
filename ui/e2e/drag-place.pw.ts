@@ -75,3 +75,75 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect(await viewport()).toBe(settled);
   });
 }
+
+const pluginInventory = [
+  {
+    directory: "C:\\Program Files\\Common Files\\VST3",
+    entries: [
+      {
+        path: "C:\\Program Files\\Common Files\\VST3\\uaudio_ua_1176.vst3",
+        identity: {
+          path: "C:\\Program Files\\Common Files\\VST3\\uaudio_ua_1176.vst3",
+          binaryPath:
+            "C:\\Program Files\\Common Files\\VST3\\uaudio_ua_1176.vst3\\Contents\\x86_64-win\\uaudio_ua_1176.vst3",
+          format: "vst3",
+          architecture: "x64",
+          fileBytes: 1024,
+          sha256: "a".repeat(64),
+          vendor: "Universal Audio",
+          version: "1.0.0",
+          classIds: [],
+          compatibility: "supportedVst3X64",
+        },
+        error: null,
+        errorCode: null,
+      },
+    ],
+  },
+];
+
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`dragging a scanned plugin places it like a tool in ${theme}`, async ({ page }, testInfo) => {
+    await page.addInitScript(
+      ({ session, theme, inventory }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        Object.assign(window, { __routeFixtureSession: session, __routeFixturePluginInventory: inventory });
+      },
+      { session: demoSession, theme, inventory: pluginInventory },
+    );
+    await page.setViewportSize({ width: 1500, height: 950 });
+    await page.goto("/route-harness.html");
+    await expect(page.getByTestId("rf__node-mic")).toBeVisible();
+    await page.getByRole("tab", { name: "Tools", exact: true }).click();
+    const card = page
+      .getByLabel("Plugins")
+      .locator(".tool-card")
+      .filter({ has: page.getByText("uaudio_ua_1176", { exact: true }) });
+    await card.scrollIntoViewIfNeeded();
+    await expect(card).toHaveAttribute("draggable", "true");
+    const canvas = page.locator(".session-flow-canvas");
+    const source = (await card.boundingBox())!;
+    const area = (await canvas.boundingBox())!;
+    const target = { x: area.x + area.width * 0.55, y: area.y + area.height * 0.7 };
+    await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(source.x + source.width / 2 - 40, source.y + source.height / 2, { steps: 4 });
+    await page.mouse.move(target.x, target.y, { steps: 16 });
+    await page.mouse.move(target.x + 1, target.y);
+    await page.mouse.move(target.x, target.y);
+    // The preview is the plugin node itself, under the pointer.
+    const preview = page.locator(".react-flow__node.flow-drop-preview");
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText("uaudio_ua_1176");
+    const ghostAt = await preview.evaluate(translate);
+    await page.screenshot({ path: testInfo.outputPath(`plugin-drag-preview-${theme}.png`) });
+    await page.mouse.up();
+    const placed = page.getByTestId("rf__node-plugin-1");
+    await expect(placed).toBeVisible();
+    await expect(placed).toContainText("uaudio_ua_1176 1");
+    await expect(preview).toHaveCount(0);
+    const placedAt = await placed.evaluate(translate);
+    expect(Math.abs(placedAt.x - ghostAt.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(placedAt.y - ghostAt.y)).toBeLessThanOrEqual(1);
+  });
+}

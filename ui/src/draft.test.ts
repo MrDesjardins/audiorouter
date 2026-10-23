@@ -984,6 +984,31 @@ describe("independent paths", () => {
     expect(needsNativePaths(monitored)).toBe(true);
   });
 
+  it("uses the multi-path worker when a connection changes the channel width", () => {
+    const withPorts = (id: string, kind: Session["nodes"][number]["kind"], input?: 1 | 2, output?: 1 | 2) => ({
+      ...node(id, kind),
+      ports: [
+        ...(input ? [{ name: "in", direction: "input" as const, channels: input }] : []),
+        ...(output ? [{ name: "out", direction: "output" as const, channels: output }] : []),
+      ],
+    });
+    const route = (mic: 1 | 2, plugin: 1 | 2, out: 1 | 2): Session => ({
+      ...demoSession,
+      nodes: [
+        withPorts("mic", "physicalInput", undefined, mic),
+        withPorts("fx", "plugin", plugin, plugin),
+        withPorts("headphones", "physicalOutput", out),
+      ],
+      edges: [edge("e1", "mic", "fx"), edge("e2", "fx", "headphones")],
+    });
+    // The owner's UADx route: mono microphone, mono plugin, stereo headphones.
+    expect(needsNativePaths(route(1, 1, 2))).toBe(true);
+    // Default stereo devices around a mono plugin block.
+    expect(needsNativePaths(route(2, 1, 2))).toBe(true);
+    expect(needsNativePaths(route(2, 2, 2))).toBe(false);
+    expect(needsNativePaths(route(1, 1, 1))).toBe(false);
+  });
+
   it("reuses a fed Mixer when routing its source branch to an already occupied output", () => {
     const session: Session = {
       ...demoSession,

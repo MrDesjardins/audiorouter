@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -18,31 +19,44 @@
 #include <fcntl.h>
 #include <io.h>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "pluginterfaces/base/ipluginbase.h"
 #include "pluginterfaces/base/ibstream.h"
+#include "pluginterfaces/gui/iplugview.h"
+#include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "pluginterfaces/vst/vstspeaker.h"
 
 namespace fs = std::filesystem;
 using namespace Steinberg;
 using GetPluginFactoryProc = IPluginFactory* (PLUGIN_API*)();
+// Windows module entry points (the SDK's module loader calls them around a
+// plugin's lifetime; VSTGUI editors need InitDll for their instance handle).
+using ModuleEntryProc = bool (PLUGIN_API*)();
 
 constexpr std::size_t kMaxMessageBytes = 4 * 1024 * 1024;
 constexpr std::size_t kMaxFrames = 4096;
 // Keep the native descriptor/event bound aligned with the Rust worker
 // contract. The bound remains finite and is enforced before queue growth.
 constexpr std::size_t kMaxParameters = 256;
+// Upper bound on a plugin's declared parameter list that the worker walks to
+// find its user-facing parameters.
+constexpr std::size_t kMaxScannedParameters = 65536;
 constexpr std::size_t kMaxStateBytes = 16 * 1024 * 1024;
 constexpr uint16_t kProtocolVersion = 1;
 
@@ -50,9 +64,60 @@ static std::runtime_error protocol_error(const std::string& message) {
     return std::runtime_error("protocol: " + message);
 }
 
+// Protocol pipes, duplicated before any plugin code loads. The process's own
+// stdin/stdout then point at NUL, so plugin printing (UADx plugins log a
+// banner at load) can never be read by the host as a frame header.
+static HANDLE g_protocol_input = INVALID_HANDLE_VALUE;
+static HANDLE g_protocol_output = INVALID_HANDLE_VALUE;
+
+static void isolate_protocol_pipes() {
+    const auto process = GetCurrentProcess();
+    if (!DuplicateHandle(process, GetStdHandle(STD_INPUT_HANDLE), process, &g_protocol_input, 0,
+                         FALSE, DUPLICATE_SAME_ACCESS) ||
+        !DuplicateHandle(process, GetStdHandle(STD_OUTPUT_HANDLE), process, &g_protocol_output, 0,
+                         FALSE, DUPLICATE_SAME_ACCESS)) {
+        throw std::runtime_error("could not duplicate worker protocol pipes");
+    }
+    const int null_descriptor = _open("NUL", _O_RDWR | _O_BINARY);
+    if (null_descriptor == -1 || _dup2(null_descriptor, 0) != 0 || _dup2(null_descriptor, 1) != 0) {
+        throw std::runtime_error("could not redirect worker stdio away from the protocol pipes");
+    }
+    _close(null_descriptor);
+    // Plugins with their own C runtime read the Win32 standard handles.
+    if (!SetStdHandle(STD_INPUT_HANDLE, reinterpret_cast<HANDLE>(_get_osfhandle(0))) ||
+        !SetStdHandle(STD_OUTPUT_HANDLE, reinterpret_cast<HANDLE>(_get_osfhandle(1)))) {
+        throw std::runtime_error("could not replace worker standard handles");
+    }
+}
+
+static bool read_exact(void* data, std::size_t size) {
+    auto* cursor = static_cast<uint8_t*>(data);
+    while (size > 0) {
+        DWORD read = 0;
+        const auto chunk = static_cast<DWORD>(std::min<std::size_t>(size, std::size_t{1} << 20));
+        if (!ReadFile(g_protocol_input, cursor, chunk, &read, nullptr) || read == 0) return false;
+        cursor += read;
+        size -= read;
+    }
+    return true;
+}
+
+static void write_all(const void* data, std::size_t size) {
+    const auto* cursor = static_cast<const uint8_t*>(data);
+    while (size > 0) {
+        DWORD written = 0;
+        const auto chunk = static_cast<DWORD>(std::min<std::size_t>(size, std::size_t{1} << 20));
+        if (!WriteFile(g_protocol_output, cursor, chunk, &written, nullptr) || written == 0) {
+            throw std::runtime_error("worker output write failed");
+        }
+        cursor += written;
+        size -= written;
+    }
+}
+
 static std::vector<uint8_t> read_frame() {
     uint8_t header[4]{};
-    if (!std::cin.read(reinterpret_cast<char*>(header), sizeof(header))) {
+    if (!read_exact(header, sizeof(header))) {
         throw std::runtime_error("worker input closed");
     }
     const auto length = static_cast<std::size_t>(header[0]) |
@@ -63,8 +128,7 @@ static std::vector<uint8_t> read_frame() {
         throw protocol_error("message length is outside the bounded contract");
     }
     std::vector<uint8_t> payload(length);
-    if (!std::cin.read(reinterpret_cast<char*>(payload.data()),
-                       static_cast<std::streamsize>(payload.size()))) {
+    if (!read_exact(payload.data(), payload.size())) {
         throw std::runtime_error("worker input frame truncated");
     }
     return payload;
@@ -79,12 +143,9 @@ static void write_frame(const std::string& payload) {
                               static_cast<uint8_t>((length >> 8) & 0xff),
                               static_cast<uint8_t>((length >> 16) & 0xff),
                               static_cast<uint8_t>((length >> 24) & 0xff)};
-    std::cout.write(reinterpret_cast<const char*>(header), sizeof(header));
-    std::cout.write(payload.data(), static_cast<std::streamsize>(payload.size()));
-    std::cout.flush();
-    if (!std::cout) {
-        throw std::runtime_error("worker output write failed");
-    }
+    std::string frame(reinterpret_cast<const char*>(header), sizeof(header));
+    frame += payload;
+    write_all(frame.data(), frame.size());
 }
 
 static std::size_t find_required(const std::string& json, const std::string& token,
@@ -449,6 +510,36 @@ public:
     }
 };
 
+// Parameter edits made in the plugin's own window. The UI thread adds them;
+// the audio thread hands them to the processor with the next quantum, as a
+// DAW does. One pending value per parameter, bounded like host events.
+class EditorEditQueue final {
+public:
+    void push(Vst::ParamID id, Vst::ParamValue value) {
+        if (!std::isfinite(value)) return;
+        value = std::clamp(value, 0.0, 1.0);
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (auto& edit : edits_) {
+            if (edit.first == id) {
+                edit.second = value;
+                return;
+            }
+        }
+        if (edits_.size() < kMaxParameters) edits_.emplace_back(id, value);
+    }
+
+    std::vector<std::pair<Vst::ParamID, Vst::ParamValue>> take() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return std::exchange(edits_, {});
+    }
+
+private:
+    std::mutex mutex_;
+    std::vector<std::pair<Vst::ParamID, Vst::ParamValue>> edits_;
+};
+
+static EditorEditQueue g_editor_edits;
+
 class ComponentHandler final : public Vst::IComponentHandler {
 public:
     tresult PLUGIN_API queryInterface(const TUID, void** object) override {
@@ -458,7 +549,10 @@ public:
     uint32 PLUGIN_API addRef() override { return 1; }
     uint32 PLUGIN_API release() override { return 1; }
     tresult PLUGIN_API beginEdit(Vst::ParamID) override { return kResultOk; }
-    tresult PLUGIN_API performEdit(Vst::ParamID, Vst::ParamValue) override { return kResultOk; }
+    tresult PLUGIN_API performEdit(Vst::ParamID id, Vst::ParamValue value) override {
+        g_editor_edits.push(id, value);
+        return kResultOk;
+    }
     tresult PLUGIN_API endEdit(Vst::ParamID) override { return kResultOk; }
     tresult PLUGIN_API restartComponent(int32) override { return kResultOk; }
 };
@@ -482,7 +576,10 @@ public:
         if (amount) std::memcpy(data, bytes_.data() + cursor_, amount);
         cursor_ += amount;
         if (read_count) *read_count = static_cast<int32>(amount);
-        return amount == static_cast<std::size_t>(count) ? kResultOk : kResultFalse;
+        // As the SDK's MemoryStream: a short read at the end succeeds and
+        // reports the count. Plugins that read their state in chunks until a
+        // short read (UADx) reject the whole state on kResultFalse.
+        return kResultOk;
     }
 
     tresult PLUGIN_API write(void* data, int32 count, int32* written_count = nullptr) override {
@@ -538,6 +635,10 @@ public:
         module_ = LoadLibraryExW(binary.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR |
                                                                LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
         if (!module_) throw std::runtime_error("VST3 LoadLibraryExW failed");
+        if (const auto init = reinterpret_cast<ModuleEntryProc>(GetProcAddress(module_, "InitDll"))) {
+            if (!init()) throw std::runtime_error("VST3 InitDll failed");
+            module_initialized_ = true;
+        }
         const auto get_factory = reinterpret_cast<GetPluginFactoryProc>(
             GetProcAddress(module_, "GetPluginFactory"));
         if (!get_factory) throw std::runtime_error("VST3 GetPluginFactory export is missing");
@@ -545,10 +646,21 @@ public:
         if (!factory_) throw std::runtime_error("VST3 factory is null");
         std::ostringstream class_failures;
         bool found_audio_class = false;
+        bool found_instrument = false;
+        IPluginFactory2* factory2 = nullptr;
+        factory_->queryInterface(IPluginFactory2_iid, reinterpret_cast<void**>(&factory2));
         for (int32 index = 0; index < factory_->countClasses(); ++index) {
             PClassInfo info{};
             require_result("getClassInfo", factory_->getClassInfo(index, &info));
             if (std::strcmp(info.category, kVstAudioEffectClass) != 0) continue;
+            // Instruments share the audio-module category; their
+            // sub-categories say "Instrument". AudioRouter has no MIDI input.
+            PClassInfo2 info2{};
+            if (factory2 && factory2->getClassInfo2(index, &info2) == kResultOk &&
+                std::strstr(info2.subCategories, "Instrument") != nullptr) {
+                found_instrument = true;
+                continue;
+            }
             found_audio_class = true;
             if (factory_->createInstance(info.cid, Vst::IComponent_iid,
                                          reinterpret_cast<void**>(&component_)) != kResultOk) {
@@ -580,7 +692,12 @@ public:
             }
             break;
         }
+        if (factory2) factory2->release();
         if (!component_) {
+            if (!found_audio_class && found_instrument) {
+                throw std::runtime_error(
+                    "VST3 plugin is an instrument; AudioRouter hosts audio effects only");
+            }
             if (!found_audio_class) {
                 throw std::runtime_error("VST3 factory has no audio effect class");
             }
@@ -617,11 +734,24 @@ public:
         } else if (controller_id_result != kNotImplemented && controller_id_result != kNoInterface) {
             require_result("controller class id", controller_id_result);
         }
+        require_result("processor interface", component_->queryInterface(
+            Vst::IAudioProcessor_iid, reinterpret_cast<void**>(&processor_)));
+        // A single-stream node is mono or stereo, and so is almost every
+        // effect, but not always the same way (UADx effects are stereo-only).
+        // Ask for the node's layout; if the plugin keeps its own, adapt
+        // between them in process().
+        auto effective_inputs = input_channels;
+        auto effective_outputs = output_channels;
+        if (input_channels.size() == 1 && output_channels.size() == 1) {
+            negotiate_main_bus(input_channels[0], output_channels[0]);
+            effective_inputs[0] = plugin_input_channels_;
+            effective_outputs[0] = plugin_output_channels_;
+        }
         for (std::size_t bus = 0; bus < input_channels.size(); ++bus) {
             Vst::BusInfo info{};
             require_result("input bus info", component_->getBusInfo(
                 Vst::kAudio, Vst::kInput, static_cast<int32>(bus), info));
-            if (info.channelCount != input_channels[bus]) {
+            if (info.channelCount != effective_inputs[bus]) {
                 throw std::runtime_error("native VST3 input bus " + std::to_string(bus) +
                                          " declares " + std::to_string(info.channelCount) +
                                          " channels, layout requests " +
@@ -634,7 +764,7 @@ public:
             Vst::BusInfo info{};
             require_result("output bus info", component_->getBusInfo(
                 Vst::kAudio, Vst::kOutput, static_cast<int32>(bus), info));
-            if (info.channelCount != output_channels[bus]) {
+            if (info.channelCount != effective_outputs[bus]) {
                 throw std::runtime_error("native VST3 output bus channels do not match layout");
             }
             require_result("output bus activation", component_->activateBus(
@@ -653,8 +783,6 @@ public:
             require_result("optional output bus deactivation", component_->activateBus(
                 Vst::kAudio, Vst::kOutput, bus, false));
         }
-        require_result("processor interface", component_->queryInterface(
-            Vst::IAudioProcessor_iid, reinterpret_cast<void**>(&processor_)));
         Vst::ProcessSetup setup{};
         setup.processMode = Vst::kRealtime;
         setup.symbolicSampleSize = Vst::kSample32;
@@ -686,6 +814,9 @@ public:
             component_->release();
         }
         if (factory_) factory_->release();
+        if (module_initialized_) {
+            if (const auto exit = reinterpret_cast<ModuleEntryProc>(GetProcAddress(module_, "ExitDll"))) exit();
+        }
         if (module_) FreeLibrary(module_);
     }
 
@@ -741,13 +872,15 @@ public:
             active_ = false;
         }
         try {
+            // The SDK's host order: the component takes its state first, then
+            // the controller mirrors it with setComponentState.
+            StateStream component_stream(component_state.data(), component_state.size());
+            require_result("VST3 component setState", component_->setState(&component_stream));
             if (controller_) {
                 StateStream controller_component_stream(component_state.data(), component_state.size());
                 require_result("VST3 controller component state", controller_->setComponentState(
                     &controller_component_stream));
             }
-            StateStream component_stream(component_state.data(), component_state.size());
-            require_result("VST3 component setState", component_->setState(&component_stream));
             if (!controller_state.empty()) {
                 if (!controller_) throw protocol_error("VST3 controller state is unavailable");
                 StateStream controller_stream(controller_state.data(), controller_state.size());
@@ -782,10 +915,21 @@ public:
         if (samples.size() % channels != 0) throw protocol_error("interleaved sample shape is invalid");
         const auto frames = samples.size() / channels;
         if (frames == 0 || frames > kMaxFrames) throw protocol_error("frame count is invalid");
-        std::vector<std::vector<float>> input(channels, std::vector<float>(frames));
-        std::vector<std::vector<float>> output(channels, std::vector<float>(frames));
-        for (std::size_t index = 0; index < samples.size(); ++index) {
-            input[index % channels][index / channels] = samples[index];
+        // Adapt the node's channels to the plugin's main bus: a mono node
+        // feeds both inputs of a stereo-only effect, and a stereo node is
+        // summed at half gain into a mono-only one (and the reverse on output).
+        std::vector<std::vector<float>> input(plugin_input_channels_, std::vector<float>(frames));
+        std::vector<std::vector<float>> output(plugin_output_channels_, std::vector<float>(frames));
+        for (std::size_t frame = 0; frame < frames; ++frame) {
+            const float* host = &samples[frame * channels];
+            if (plugin_input_channels_ == channels) {
+                for (uint16_t channel = 0; channel < channels; ++channel) input[channel][frame] = host[channel];
+            } else if (plugin_input_channels_ == 2) {
+                input[0][frame] = host[0];
+                input[1][frame] = host[0];
+            } else {
+                input[0][frame] = 0.5f * (host[0] + host[1]);
+            }
         }
         std::vector<ParameterEvent> ordered = events;
         std::stable_sort(ordered.begin(), ordered.end(),
@@ -795,15 +939,24 @@ public:
         while (event_index < ordered.size()) {
             const auto offset = ordered[event_index].offset;
             if (offset >= frames) throw protocol_error("parameter offset exceeds frame count");
-            process_segment(input, output, channels, start, offset, ordered, event_index);
+            process_segment(input, output, start, offset, ordered, event_index);
             start = offset;
         }
-        process_segment(input, output, channels, start, frames, ordered, event_index);
+        process_segment(input, output, start, frames, ordered, event_index);
         std::vector<float> result(samples.size());
-        for (std::size_t index = 0; index < result.size(); ++index) {
-            const auto sample = output[index % channels][index / channels];
-            if (!std::isfinite(sample)) throw std::runtime_error("VST3 produced non-finite output");
-            result[index] = sample;
+        for (std::size_t frame = 0; frame < frames; ++frame) {
+            for (uint16_t channel = 0; channel < channels; ++channel) {
+                float sample;
+                if (plugin_output_channels_ == channels) {
+                    sample = output[channel][frame];
+                } else if (plugin_output_channels_ == 2) {
+                    sample = 0.5f * (output[0][frame] + output[1][frame]);
+                } else {
+                    sample = output[0][frame];
+                }
+                if (!std::isfinite(sample)) throw std::runtime_error("VST3 produced non-finite output");
+                result[frame * channels + channel] = sample;
+            }
         }
         return result;
     }
@@ -866,6 +1019,8 @@ public:
 
     Vst::IEditController* controller() const { return controller_; }
 
+    uint32_t latency_samples() const { return processor_ ? processor_->getLatencySamples() : 0; }
+
 private:
     static void append_u32(std::vector<uint8_t>& output, uint32_t value) {
         output.push_back(static_cast<uint8_t>(value & 0xff));
@@ -881,9 +1036,47 @@ private:
                (static_cast<uint32_t>(input[offset + 3]) << 24);
     }
 
+    static Vst::SpeakerArrangement arrangement_for(uint16_t channels) {
+        return channels == 1 ? Vst::SpeakerArr::kMono : Vst::SpeakerArr::kStereo;
+    }
+
+    // Sets plugin_input_channels_/plugin_output_channels_ for the main bus.
+    void negotiate_main_bus(uint16_t requested_input, uint16_t requested_output) {
+        Vst::BusInfo input_info{};
+        Vst::BusInfo output_info{};
+        require_result("input bus info", component_->getBusInfo(Vst::kAudio, Vst::kInput, 0, input_info));
+        require_result("output bus info", component_->getBusInfo(Vst::kAudio, Vst::kOutput, 0, output_info));
+        if (input_info.channelCount != requested_input || output_info.channelCount != requested_output) {
+            std::vector<Vst::SpeakerArrangement> inputs(
+                static_cast<std::size_t>(component_->getBusCount(Vst::kAudio, Vst::kInput)));
+            std::vector<Vst::SpeakerArrangement> outputs(
+                static_cast<std::size_t>(component_->getBusCount(Vst::kAudio, Vst::kOutput)));
+            for (std::size_t bus = 0; bus < inputs.size(); ++bus) {
+                processor_->getBusArrangement(Vst::kInput, static_cast<int32>(bus), inputs[bus]);
+            }
+            for (std::size_t bus = 0; bus < outputs.size(); ++bus) {
+                processor_->getBusArrangement(Vst::kOutput, static_cast<int32>(bus), outputs[bus]);
+            }
+            inputs[0] = arrangement_for(requested_input);
+            outputs[0] = arrangement_for(requested_output);
+            // A refusal is normal; the plugin then keeps its own layout.
+            processor_->setBusArrangements(inputs.data(), static_cast<int32>(inputs.size()),
+                                           outputs.data(), static_cast<int32>(outputs.size()));
+            require_result("input bus info", component_->getBusInfo(Vst::kAudio, Vst::kInput, 0, input_info));
+            require_result("output bus info", component_->getBusInfo(Vst::kAudio, Vst::kOutput, 0, output_info));
+        }
+        if (input_info.channelCount < 1 || input_info.channelCount > 2 ||
+            output_info.channelCount < 1 || output_info.channelCount > 2) {
+            throw std::runtime_error("native VST3 main bus is neither mono nor stereo (" +
+                                     std::to_string(input_info.channelCount) + " in, " +
+                                     std::to_string(output_info.channelCount) + " out)");
+        }
+        plugin_input_channels_ = static_cast<uint16_t>(input_info.channelCount);
+        plugin_output_channels_ = static_cast<uint16_t>(output_info.channelCount);
+    }
+
     void process_segment(const std::vector<std::vector<float>>& input,
-                         std::vector<std::vector<float>>& output, uint16_t channels,
-                         std::size_t start, std::size_t end,
+                         std::vector<std::vector<float>>& output, std::size_t start, std::size_t end,
                          const std::vector<ParameterEvent>& events, std::size_t& event_index) {
         while (event_index < events.size() && events[event_index].offset == start) {
             int32 queue_index = -1;
@@ -899,15 +1092,13 @@ private:
         if (start == end) return;
         std::vector<Vst::Sample32*> inputs;
         std::vector<Vst::Sample32*> outputs;
-        for (uint16_t channel = 0; channel < channels; ++channel) {
-            inputs.push_back(const_cast<float*>(&input[channel][start]));
-            outputs.push_back(&output[channel][start]);
-        }
+        for (auto& channel : input) inputs.push_back(const_cast<float*>(&channel[start]));
+        for (auto& channel : output) outputs.push_back(&channel[start]);
         Vst::AudioBusBuffers input_bus{};
-        input_bus.numChannels = channels;
+        input_bus.numChannels = static_cast<int32>(inputs.size());
         input_bus.channelBuffers32 = inputs.data();
         Vst::AudioBusBuffers output_bus{};
-        output_bus.numChannels = channels;
+        output_bus.numChannels = static_cast<int32>(outputs.size());
         output_bus.channelBuffers32 = outputs.data();
         Vst::ProcessData data{};
         data.processMode = Vst::kRealtime;
@@ -972,6 +1163,7 @@ private:
     }
 
     HMODULE module_ = nullptr;
+    bool module_initialized_ = false;
     HostApplication host_application_;
     ComponentHandler component_handler_;
     IPluginFactory* factory_ = nullptr;
@@ -987,6 +1179,8 @@ private:
     bool processing_ = false;
     std::vector<uint16_t> requested_input_channels_;
     std::vector<uint16_t> requested_output_channels_;
+    uint16_t plugin_input_channels_ = 0;
+    uint16_t plugin_output_channels_ = 0;
     ParameterChanges changes_;
 };
 
@@ -1034,11 +1228,12 @@ static std::string quote_vst3_title(const Vst::String128& title) {
 static std::string parameter_descriptors_message(Vst::IEditController* controller) {
     if (!controller) return "{\"type\":\"Parameters\",\"payload\":{\"descriptors\":[]}}";
     const auto count = controller->getParameterCount();
-    if (count < 0 || count > static_cast<int32>(kMaxParameters)) {
-        throw protocol_error("VST3 parameter descriptor count exceeds the bounded contract");
+    if (count < 0 || count > static_cast<int32>(kMaxScannedParameters)) {
+        throw protocol_error("VST3 parameter count exceeds the bounded scan");
     }
     std::ostringstream output;
     std::unordered_set<Vst::ParamID> parameter_ids;
+    std::size_t exposed = 0;
     output << "{\"type\":\"Parameters\",\"payload\":{\"descriptors\":[";
     for (int32 index = 0; index < count; ++index) {
         Vst::ParameterInfo info{};
@@ -1046,11 +1241,21 @@ static std::string parameter_descriptors_message(Vst::IEditController* controlle
         if (!parameter_ids.insert(info.id).second) {
             throw protocol_error("VST3 parameter IDs are not unique");
         }
+        // Many plugins (UADx among them) declare hundreds of internal,
+        // hidden or read-only parameters. Expose only the user-automatable
+        // ones, up to the worker contract's descriptor bound.
+        constexpr int32 kNotUserFacing = Vst::ParameterInfo::kIsHidden |
+                                         Vst::ParameterInfo::kIsReadOnly |
+                                         Vst::ParameterInfo::kIsProgramChange;
+        if (!(info.flags & Vst::ParameterInfo::kCanAutomate) || (info.flags & kNotUserFacing)) {
+            continue;
+        }
+        if (exposed == kMaxParameters) break;
         if (!std::isfinite(info.defaultNormalizedValue) ||
             info.defaultNormalizedValue < 0.0 || info.defaultNormalizedValue > 1.0) {
             throw protocol_error("VST3 parameter default is outside the normalized contract");
         }
-        if (index != 0) output << ',';
+        if (exposed++ != 0) output << ',';
         output << "{\"parameter_id\":" << info.id << ",\"title\":"
                << quote_vst3_title(info.title) << ",\"default_value\":"
                << info.defaultNormalizedValue << ",\"minimum\":0,\"maximum\":1}";
@@ -1074,17 +1279,240 @@ static std::string processed_message(uint64_t sequence, uint64_t deadline, uint1
     return output.str();
 }
 
-// The native VST3 worker currently has no authenticated desktop-shell owner.
-// Keep editor requests a bounded, explicit unsupported response instead of
-// letting them fall through to audio-message parsing and killing processing.
+// A plugin without a Windows editor view answers editor requests with this
+// bounded code; the host reports it as "no editor" and keeps processing.
 static constexpr const char* kEditorUnavailableMessage =
     "{\"type\":\"Failure\",\"payload\":{\"code\":\"editorUnavailable\"}}";
+
+static constexpr const char* kEditorParentInvalidMessage =
+    "{\"type\":\"Failure\",\"payload\":{\"code\":\"editorParentInvalid\"}}";
 
 static constexpr const char* kStateUnsupportedMessage =
     "{\"type\":\"Failure\",\"payload\":{\"code\":\"StateUnsupported\"}}";
 
 static constexpr const char* kNoEditorMessage =
     "{\"type\":\"Editor\",\"payload\":{\"has_editor\":false,\"width\":0,\"height\":0}}";
+
+static constexpr const char* kEditorClosedMessage = "{\"type\":\"EditorClosed\"}";
+
+// Messages to the worker's UI thread, which owns every controller and view
+// call (VST3 requires them on the thread that created the plugin).
+constexpr UINT kUiRequestMessage = WM_APP + 1;      // lParam: UiRequest*, answered synchronously
+constexpr UINT kHostParametersMessage = WM_APP + 2; // lParam: owned HostParameterValues*
+constexpr UINT kAttachEditorMessage = WM_APP + 3;   // wParam: editor generation
+constexpr UINT kReleaseEditorsMessage = WM_APP + 4;
+constexpr UINT kAudioStoppedMessage = WM_APP + 5;
+constexpr UINT_PTR kParentSizeTimer = 1;
+constexpr UINT kParentSizePollMs = 200;
+// A UI thread that does not answer a request within this time is stuck in
+// plugin code; the worker then ends so the supervisor can contain it.
+constexpr UINT kUiRequestTimeoutMs = 15000;
+constexpr int32 kMaxEditorSide = 4096;
+
+using HostParameterValues = std::vector<std::pair<Vst::ParamID, Vst::ParamValue>>;
+
+static bool window_owned_by(HWND window, uint32_t process_id) {
+    if (!window || !IsWindow(window)) return false;
+    DWORD owner = 0;
+    return GetWindowThreadProcessId(window, &owner) != 0 && owner == process_id;
+}
+
+// Hosts a plugin's own editor (IPlugView) inside the window the desktop shell
+// authorized for it. UI thread only. Opening answers the host at once and
+// attaches the view in a posted message, and closing detaches it the same
+// way: the shell's window thread can be waiting on the host while the
+// request is answered, and the plugin's child window would otherwise wait on
+// that thread.
+class EditorHost final : public IPlugFrame {
+public:
+    EditorHost(Vst::IEditController* controller, HWND ui_window)
+        : controller_(controller), ui_window_(ui_window) {}
+
+    ~EditorHost() {
+        retire();
+        release_retired();
+    }
+
+    tresult PLUGIN_API queryInterface(const TUID iid, void** object) override {
+        if (!object) return kInvalidArgument;
+        if (FUnknownPrivate::iidEqual(iid, IPlugFrame_iid) ||
+            FUnknownPrivate::iidEqual(iid, FUnknown_iid)) {
+            *object = static_cast<IPlugFrame*>(this);
+            return kResultOk;
+        }
+        *object = nullptr;
+        return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+
+    tresult PLUGIN_API resizeView(IPlugView* view, ViewRect* rect) override {
+        if (!view || view != view_ || !rect || !valid_size(*rect)) return kInvalidArgument;
+        fit_parent(*rect);
+        view->onSize(rect);
+        last_client_width_ = rect->getWidth();
+        last_client_height_ = rect->getHeight();
+        return kResultTrue;
+    }
+
+    std::string describe() {
+        ViewRect rect{};
+        bool sized = false;
+        if (view_) {
+            sized = view_->getSize(&rect) == kResultOk;
+        } else {
+            IPlugView* view = create_view();
+            if (!view) return kNoEditorMessage;
+            sized = view->getSize(&rect) == kResultOk;
+            view->release();
+        }
+        const bool fits = sized && valid_size(rect);
+        return "{\"type\":\"Editor\",\"payload\":{\"has_editor\":true,\"width\":" +
+               std::to_string(fits ? rect.getWidth() : 0) + ",\"height\":" +
+               std::to_string(fits ? rect.getHeight() : 0) + "}}";
+    }
+
+    std::string open(uint64_t parent_window, uint32_t parent_process_id, const std::string& token) {
+        const auto parent = reinterpret_cast<HWND>(static_cast<uintptr_t>(parent_window));
+        if (token.empty() || parent_window == 0 || parent_process_id == 0 ||
+            !window_owned_by(parent, parent_process_id)) {
+            return kEditorParentInvalidMessage;
+        }
+        if (view_ && parent != parent_) retire();
+        if (!view_) {
+            view_ = create_view();
+            if (!view_) return kEditorUnavailableMessage;
+            view_->setFrame(this);
+            parent_ = parent;
+            parent_process_id_ = parent_process_id;
+            attached_ = false;
+            ++generation_;
+            PostMessageW(ui_window_, kAttachEditorMessage, static_cast<WPARAM>(generation_), 0);
+        }
+        return "{\"type\":\"EditorOpened\",\"payload\":{\"parent_window\":" +
+               std::to_string(parent_window) + "}}";
+    }
+
+    std::string close() {
+        if (view_) {
+            retire();
+            PostMessageW(ui_window_, kReleaseEditorsMessage, 0, 0);
+        }
+        return kEditorClosedMessage;
+    }
+
+    void attach(uint64_t generation) {
+        if (!view_ || attached_ || generation != generation_) return;
+        if (!window_owned_by(parent_, parent_process_id_)) {
+            retire();
+            release_retired();
+            return;
+        }
+        IPlugViewContentScaleSupport* scale = nullptr;
+        if (view_->queryInterface(IPlugViewContentScaleSupport_iid,
+                                  reinterpret_cast<void**>(&scale)) == kResultOk && scale) {
+            const auto dpi = GetDpiForWindow(parent_);
+            if (dpi > 0) scale->setContentScaleFactor(static_cast<float>(dpi) / 96.0f);
+            scale->release();
+        }
+        const auto result = view_->attached(reinterpret_cast<void*>(parent_), kPlatformTypeHWND);
+        if (result != kResultOk) {
+            std::cerr << "VST3 editor attach failed with VST3 result 0x" << std::hex
+                      << static_cast<uint32>(result) << std::dec << '\n';
+            retire();
+            release_retired();
+            return;
+        }
+        attached_ = true;
+        ViewRect rect{};
+        if (view_->getSize(&rect) == kResultOk && valid_size(rect)) {
+            fit_parent(rect);
+            last_client_width_ = rect.getWidth();
+            last_client_height_ = rect.getHeight();
+        }
+        SetTimer(ui_window_, kParentSizeTimer, kParentSizePollMs, nullptr);
+    }
+
+    // The user can resize the shell's window; a resizable editor follows it.
+    void follow_parent_size() {
+        if (!view_ || !attached_) return;
+        if (!IsWindow(parent_)) {
+            retire();
+            release_retired();
+            return;
+        }
+        RECT client{};
+        if (!GetClientRect(parent_, &client)) return;
+        const auto width = static_cast<int32>(client.right - client.left);
+        const auto height = static_cast<int32>(client.bottom - client.top);
+        if (width == last_client_width_ && height == last_client_height_) return;
+        last_client_width_ = width;
+        last_client_height_ = height;
+        if (width < 1 || height < 1 || view_->canResize() != kResultTrue) return;
+        ViewRect rect(0, 0, std::min(width, kMaxEditorSide), std::min(height, kMaxEditorSide));
+        view_->checkSizeConstraint(&rect);
+        view_->onSize(&rect);
+    }
+
+    void release_retired() {
+        for (auto& [view, attached] : retired_) {
+            if (attached) view->removed();
+            view->setFrame(nullptr);
+            view->release();
+        }
+        retired_.clear();
+    }
+
+private:
+    static bool valid_size(const ViewRect& rect) {
+        return rect.getWidth() >= 1 && rect.getWidth() <= kMaxEditorSide && rect.getHeight() >= 1 &&
+               rect.getHeight() <= kMaxEditorSide;
+    }
+
+    IPlugView* create_view() {
+        if (!controller_) return nullptr;
+        IPlugView* view = controller_->createView(Vst::ViewType::kEditor);
+        if (view && view->isPlatformTypeSupported(kPlatformTypeHWND) != kResultTrue) {
+            view->release();
+            view = nullptr;
+        }
+        return view;
+    }
+
+    void retire() {
+        KillTimer(ui_window_, kParentSizeTimer);
+        if (view_) retired_.emplace_back(view_, attached_);
+        view_ = nullptr;
+        attached_ = false;
+        parent_ = nullptr;
+        parent_process_id_ = 0;
+        ++generation_;
+    }
+
+    // Size the shell's window so its client area fits the editor. Posted
+    // (SWP_ASYNCWINDOWPOS): the shell's window thread may be busy.
+    void fit_parent(const ViewRect& rect) {
+        if (!valid_size(rect) || !IsWindow(parent_)) return;
+        RECT frame{0, 0, rect.getWidth(), rect.getHeight()};
+        const auto style = static_cast<DWORD>(GetWindowLongPtrW(parent_, GWL_STYLE));
+        const auto extended = static_cast<DWORD>(GetWindowLongPtrW(parent_, GWL_EXSTYLE));
+        const auto dpi = GetDpiForWindow(parent_);
+        if (!AdjustWindowRectExForDpi(&frame, style, FALSE, extended, dpi > 0 ? dpi : 96)) return;
+        SetWindowPos(parent_, nullptr, 0, 0, frame.right - frame.left, frame.bottom - frame.top,
+                     SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+    }
+
+    Vst::IEditController* controller_;
+    HWND ui_window_;
+    IPlugView* view_ = nullptr;
+    bool attached_ = false;
+    HWND parent_ = nullptr;
+    uint32_t parent_process_id_ = 0;
+    uint64_t generation_ = 0;
+    int32 last_client_width_ = 0;
+    int32 last_client_height_ = 0;
+    std::vector<std::pair<IPlugView*, bool>> retired_;
+};
 
 static void append_bus_list(std::ostringstream& output, const std::vector<uint16_t>& buses) {
     output << '[';
@@ -1184,6 +1612,204 @@ static Arguments parse_arguments(int argc, wchar_t** argv) {
     return result;
 }
 
+
+// A request the audio thread hands to the UI thread and waits for.
+struct UiRequest {
+    const std::string* json = nullptr;
+    std::string reply;
+    std::string error;
+    bool shutdown = false;
+};
+
+struct UiContext {
+    Vst3Effect* effect = nullptr;
+    EditorHost* editor = nullptr;
+};
+
+static UiContext g_ui;
+static HWND g_ui_window = nullptr;
+static std::atomic<bool> g_audio_stopped{false};
+
+// Every request except audio processing. Runs on the UI thread.
+static std::string handle_ui_request(const std::string& json, bool& shutdown) {
+    auto& effect = *g_ui.effect;
+    auto& editor = *g_ui.editor;
+    if (json == "{\"type\":\"Shutdown\"}") {
+        shutdown = true;
+        return {};
+    }
+    if (json == "{\"type\":\"DescribeEditor\"}") return editor.describe();
+    if (json == "{\"type\":\"DescribeParameters\"}") {
+        return parameter_descriptors_message(effect.controller());
+    }
+    if (json.find("\"type\":\"EditorOpen\"") != std::string::npos) {
+        const auto parent_window = required_uint_field(json, "\"parent_window\":");
+        const auto parent_process_id = required_uint_field(json, "\"parent_process_id\":");
+        if (parent_process_id > std::numeric_limits<uint32_t>::max()) {
+            return kEditorParentInvalidMessage;
+        }
+        return editor.open(parent_window, static_cast<uint32_t>(parent_process_id),
+                           parse_string_field(json, "\"authorization_token\":"));
+    }
+    if (json == "{\"type\":\"EditorClose\"}") return editor.close();
+    if (json.find("\"type\":\"StateSave\"") != std::string::npos) {
+        return state_message(1, effect.save_state());
+    }
+    if (json.find("\"type\":\"StateRestore\"") != std::string::npos) {
+        const auto version = required_uint_field(json, "\"version\":");
+        if (version == 0 || version > std::numeric_limits<uint32_t>::max()) {
+            throw protocol_error("state version is outside the bounded contract");
+        }
+        const auto bytes = parse_bytes(json);
+        try {
+            effect.restore_state(bytes);
+        } catch (const std::exception& error) {
+            const std::string diagnostic(error.what());
+            if (diagnostic.find("setState failed with VST3 result") != std::string::npos ||
+                diagnostic.find("controller setState failed with VST3 result") != std::string::npos ||
+                diagnostic.find("controller component state failed with VST3 result") != std::string::npos) {
+                return kStateUnsupportedMessage;
+            }
+            throw;
+        }
+        return state_message(static_cast<uint32_t>(version), bytes);
+    }
+    if (json.find("\"type\":\"Latency\"") != std::string::npos) {
+        const auto sample_rate = required_uint_field(json, "\"sample_rate_hz\":");
+        return "{\"type\":\"Latency\",\"payload\":{\"samples\":" +
+               std::to_string(effect.latency_samples()) + ",\"sample_rate_hz\":" +
+               std::to_string(sample_rate) + "}}";
+    }
+    throw protocol_error("expected Process or Shutdown");
+}
+
+static LRESULT CALLBACK ui_window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+    switch (message) {
+        case kUiRequestMessage: {
+            auto* request = reinterpret_cast<UiRequest*>(lparam);
+            try {
+                request->reply = handle_ui_request(*request->json, request->shutdown);
+            } catch (const std::exception& error) {
+                request->error = error.what();
+            }
+            return 0;
+        }
+        case kHostParametersMessage: {
+            std::unique_ptr<HostParameterValues> values(reinterpret_cast<HostParameterValues*>(lparam));
+            // Keep the plugin's own window in step with AudioRouter's sliders.
+            if (auto* controller = g_ui.effect->controller()) {
+                for (const auto& [id, value] : *values) controller->setParamNormalized(id, value);
+            }
+            return 0;
+        }
+        case kAttachEditorMessage:
+            try {
+                g_ui.editor->attach(static_cast<uint64_t>(wparam));
+            } catch (const std::exception& error) {
+                std::cerr << "VST3 editor attach failed: " << error.what() << '\n';
+            }
+            return 0;
+        case kReleaseEditorsMessage:
+            g_ui.editor->release_retired();
+            return 0;
+        case WM_TIMER:
+            if (wparam == kParentSizeTimer) g_ui.editor->follow_parent_size();
+            return 0;
+        case kAudioStoppedMessage:
+            return 0;
+        default:
+            return DefWindowProcW(window, message, wparam, lparam);
+    }
+}
+
+static HWND create_ui_window() {
+    WNDCLASSEXW window_class{};
+    window_class.cbSize = sizeof(window_class);
+    window_class.lpfnWndProc = ui_window_proc;
+    window_class.hInstance = GetModuleHandleW(nullptr);
+    window_class.lpszClassName = L"AudioRouterVst3WorkerUi";
+    if (!RegisterClassExW(&window_class)) throw std::runtime_error("could not register the worker UI window");
+    const auto window = CreateWindowExW(0, window_class.lpszClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                                        nullptr, window_class.hInstance, nullptr);
+    if (!window) throw std::runtime_error("could not create the worker UI window");
+    return window;
+}
+
+static bool is_audio_message(const std::string& json) {
+    return json.rfind("{\"type\":\"Process", 0) == 0;
+}
+
+// Reads every host message. Audio is processed here, so a busy plugin window
+// never delays a quantum; everything else is answered by the UI thread.
+static int audio_thread_main(const Arguments& arguments, const std::vector<uint16_t>& input_buses,
+                             const std::vector<uint16_t>& output_buses, bool multi_bus) {
+    auto& effect = *g_ui.effect;
+    while (true) {
+        const auto payload = read_frame();
+        const std::string json(payload.begin(), payload.end());
+        if (!is_audio_message(json)) {
+            UiRequest request;
+            request.json = &json;
+            DWORD_PTR ignored = 0;
+            if (!SendMessageTimeoutW(g_ui_window, kUiRequestMessage, 0, reinterpret_cast<LPARAM>(&request),
+                                     SMTO_NORMAL, kUiRequestTimeoutMs, &ignored)) {
+                // The UI thread is stuck inside plugin code and still owns
+                // `request`; end the process rather than return.
+                std::cerr << "native VST3 worker stopped: the plugin UI thread did not answer\n";
+                std::cerr.flush();
+                TerminateProcess(GetCurrentProcess(), 1);
+            }
+            if (!request.error.empty()) throw std::runtime_error(request.error);
+            if (request.shutdown) return 0;
+            write_frame(request.reply);
+            continue;
+        }
+        auto events = parse_parameters(json);
+        HostParameterValues host_values;
+        for (const auto& event : events) {
+            auto existing = std::find_if(host_values.begin(), host_values.end(),
+                                         [&](const auto& value) { return value.first == event.id; });
+            if (existing == host_values.end()) {
+                host_values.emplace_back(event.id, event.value);
+            } else {
+                existing->second = event.value;
+            }
+        }
+        // Edits from the plugin's window go first; a host event for the same
+        // parameter in this quantum still wins.
+        auto edits = g_editor_edits.take();
+        for (auto edit = edits.rbegin(); edit != edits.rend(); ++edit) {
+            events.insert(events.begin(), ParameterEvent{edit->first, static_cast<float>(edit->second), 0});
+        }
+        if (multi_bus) {
+            if (json.find("\"type\":\"ProcessBuses\"") == std::string::npos) {
+                throw protocol_error("expected ProcessBuses or Shutdown");
+            }
+            const auto frames = parse_bus_frames(json);
+            const auto output = effect.process_buses(frames, events);
+            write_frame(processed_buses_message(frames.front().sequence, frames.front().deadline,
+                                                input_buses, output_buses, output));
+        } else {
+            if (json.find("\"type\":\"Process\"") == std::string::npos) {
+                throw protocol_error("expected Process or Shutdown");
+            }
+            const auto sequence = required_uint_field(json, "\"sequence\":");
+            const auto deadline = required_uint_field(json, "\"deadline_tick\":");
+            const auto channels = required_uint_field(json, "\"channels\":");
+            if (channels != arguments.channels || channels > 2) throw protocol_error("channel mismatch");
+            const auto samples = parse_samples(json);
+            const auto output = effect.process(samples, arguments.channels, events);
+            write_frame(processed_message(sequence, deadline, arguments.channels, output));
+        }
+        if (!host_values.empty()) {
+            auto values = std::make_unique<HostParameterValues>(std::move(host_values));
+            if (PostMessageW(g_ui_window, kHostParametersMessage, 0, reinterpret_cast<LPARAM>(values.get()))) {
+                values.release();
+            }
+        }
+    }
+}
+
 int wmain(int argc, wchar_t** argv) {
     try {
         // Third-party plugin code runs in this disposable process. A plugin
@@ -1197,10 +1823,13 @@ int wmain(int argc, wchar_t** argv) {
         if (FAILED(WerSetFlags(WER_FAULT_REPORTING_NO_UI))) {
             throw std::runtime_error("could not disable Windows Error Reporting UI");
         }
-        if (_setmode(_fileno(stdin), _O_BINARY) == -1 ||
-            _setmode(_fileno(stdout), _O_BINARY) == -1) {
-            throw std::runtime_error("could not set worker pipes to binary mode");
-        }
+        // Plugin editors size themselves in physical pixels inside the
+        // shell's DPI-aware window.
+        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        // This thread is the plugin's UI thread; editors (some built on
+        // WebView2) expect a single-threaded COM apartment.
+        if (FAILED(OleInitialize(nullptr))) throw std::runtime_error("could not initialize COM");
+        isolate_protocol_pipes();
         const auto arguments = parse_arguments(argc, argv);
         const auto input_buses = arguments.input_buses.empty()
                                      ? std::vector<uint16_t>{arguments.channels}
@@ -1208,82 +1837,48 @@ int wmain(int argc, wchar_t** argv) {
         const auto output_buses = arguments.output_buses.empty()
                                       ? std::vector<uint16_t>{arguments.channels}
                                       : arguments.output_buses;
-        Vst3Effect effect(arguments.plugin, arguments.sample_rate, input_buses, output_buses);
-        const auto multi_bus = !arguments.input_buses.empty();
-        if (multi_bus) {
-            write_frame(hello_buses_message(arguments.hash, input_buses, output_buses));
-        } else {
-            write_frame("{\"type\":\"Hello\",\"payload\":{\"protocol_version\":1,\"plugin_sha256\":" +
-                        quote_json(arguments.hash) + ",\"channels\":" +
-                        std::to_string(arguments.channels) + "}}");
-        }
-        const auto ready = read_frame();
-        const std::string ready_json(ready.begin(), ready.end());
-        if (ready_json != "{\"type\":\"Ready\"}") throw protocol_error("expected Ready");
-        while (true) {
-            const auto payload = read_frame();
-            const std::string json(payload.begin(), payload.end());
-            if (json == "{\"type\":\"Shutdown\"}") return 0;
-            if (json == "{\"type\":\"DescribeEditor\"}") {
-                write_frame(kNoEditorMessage);
-                continue;
-            }
-            if (json == "{\"type\":\"DescribeParameters\"}") {
-                write_frame(parameter_descriptors_message(effect.controller()));
-                continue;
-            }
-            if (json.find("\"type\":\"EditorOpen\"") != std::string::npos ||
-                json == "{\"type\":\"EditorClose\"}") {
-                write_frame(kEditorUnavailableMessage);
-                continue;
-            }
-            if (json.find("\"type\":\"StateSave\"") != std::string::npos) {
-                write_frame(state_message(1, effect.save_state()));
-                continue;
-            }
-            if (json.find("\"type\":\"StateRestore\"") != std::string::npos) {
-                const auto version = required_uint_field(json, "\"version\":");
-                if (version == 0 || version > std::numeric_limits<uint32_t>::max()) {
-                    throw protocol_error("state version is outside the bounded contract");
-                }
-                const auto bytes = parse_bytes(json);
-                try {
-                    effect.restore_state(bytes);
-                    write_frame(state_message(static_cast<uint32_t>(version), bytes));
-                } catch (const std::exception& error) {
-                    const std::string diagnostic(error.what());
-                    if (diagnostic.find("setState failed with VST3 result") != std::string::npos ||
-                        diagnostic.find("controller setState failed with VST3 result") != std::string::npos ||
-                        diagnostic.find("controller component state failed with VST3 result") != std::string::npos) {
-                        write_frame(kStateUnsupportedMessage);
-                        continue;
-                    }
-                    throw;
-                }
-                continue;
-            }
-            const auto events = parse_parameters(json);
+        int exit_code = 1;
+        {
+            Vst3Effect effect(arguments.plugin, arguments.sample_rate, input_buses, output_buses);
+            const auto multi_bus = !arguments.input_buses.empty();
             if (multi_bus) {
-                if (json.find("\"type\":\"ProcessBuses\"") == std::string::npos) {
-                    throw protocol_error("expected ProcessBuses or Shutdown");
-                }
-                const auto frames = parse_bus_frames(json);
-                const auto output = effect.process_buses(frames, events);
-                write_frame(processed_buses_message(frames.front().sequence, frames.front().deadline,
-                                                    input_buses, output_buses, output));
+                write_frame(hello_buses_message(arguments.hash, input_buses, output_buses));
             } else {
-                if (json.find("\"type\":\"Process\"") == std::string::npos) {
-                    throw protocol_error("expected Process or Shutdown");
-                }
-                const auto sequence = required_uint_field(json, "\"sequence\":");
-                const auto deadline = required_uint_field(json, "\"deadline_tick\":");
-                const auto channels = required_uint_field(json, "\"channels\":");
-                if (channels != arguments.channels || channels > 2) throw protocol_error("channel mismatch");
-                const auto samples = parse_samples(json);
-                const auto output = effect.process(samples, arguments.channels, events);
-                write_frame(processed_message(sequence, deadline, arguments.channels, output));
+                write_frame("{\"type\":\"Hello\",\"payload\":{\"protocol_version\":1,\"plugin_sha256\":" +
+                            quote_json(arguments.hash) + ",\"channels\":" +
+                            std::to_string(arguments.channels) + "}}");
             }
+            const auto ready = read_frame();
+            const std::string ready_json(ready.begin(), ready.end());
+            if (ready_json != "{\"type\":\"Ready\"}") throw protocol_error("expected Ready");
+            g_ui_window = create_ui_window();
+            EditorHost editor(effect.controller(), g_ui_window);
+            g_ui.effect = &effect;
+            g_ui.editor = &editor;
+            std::thread audio([&] {
+                try {
+                    exit_code = audio_thread_main(arguments, input_buses, output_buses, multi_bus);
+                } catch (const std::exception& error) {
+                    std::cerr << "native VST3 worker stopped: " << error.what() << '\n';
+                }
+                g_audio_stopped.store(true, std::memory_order_release);
+                PostMessageW(g_ui_window, kAudioStoppedMessage, 0, 0);
+            });
+            // A plugin may post WM_QUIT itself; only the audio thread ends
+            // this loop.
+            while (!g_audio_stopped.load(std::memory_order_acquire)) {
+                MSG message{};
+                const auto result = GetMessageW(&message, nullptr, 0, 0);
+                if (result == -1) break;
+                if (result == 0) continue;
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+            audio.join();
+            g_ui.editor = nullptr;
         }
+        OleUninitialize();
+        return exit_code;
     } catch (const std::exception& error) {
         std::cerr << "native VST3 worker stopped: " << error.what() << '\n';
         return 1;

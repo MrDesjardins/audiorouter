@@ -5,6 +5,7 @@
  * pointer before the drop. A small label follows the pointer elsewhere.
  */
 import { useEffect, useSyncExternalStore } from "react";
+import type { PluginScanEntry } from "@audiorouter/contracts";
 
 export const LIBRARY_DROP_MIME = "application/x-audiorouter-library-kind";
 export const LIBRARY_DROP_TEXT_MIME = "text/plain";
@@ -59,7 +60,27 @@ export function startLibraryDrag(
 }
 
 export function endLibraryDrag() {
+  draggedPlugin = null;
   store.set(null);
+}
+
+/** The drag kind of a scanned plugin; the plugin itself travels beside it. */
+export const PLUGIN_DRAG_KIND = "plugin";
+let draggedPlugin: PluginScanEntry | null = null;
+
+/** Begin dragging a scanned plugin from the Plugins list onto the canvas. */
+export function startPluginDrag(
+  event: { dataTransfer: DataTransfer; clientX: number; clientY: number },
+  entry: PluginScanEntry,
+  label: string,
+) {
+  startLibraryDrag(event, PLUGIN_DRAG_KIND, label);
+  draggedPlugin = entry;
+}
+
+/** The plugin being dragged, if the current drag carries one. */
+export function draggedPluginEntry(): PluginScanEntry | null {
+  return state?.kind === PLUGIN_DRAG_KIND ? draggedPlugin : null;
 }
 
 export function setLibraryDragOverCanvas(overCanvas: boolean) {

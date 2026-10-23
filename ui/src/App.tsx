@@ -2166,6 +2166,28 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(formatUiError(error, "Unable to add the pass-through route."));
     }
   };
+  // A plugin dragged from the Plugins list onto the canvas lands where it is
+  // dropped, like a built-in tool; it never replaces a pending insertion.
+  const addDroppedPlugin = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
+    if (!backend.connected) {
+      setActionMessage("Connect the backend before changing the draft.");
+      return undefined;
+    }
+    try {
+      const next = appendPluginPlaceholderNode(draft, entry);
+      const inserted = next.nodes.at(-1);
+      recordDraftChange(next);
+      if (inserted) {
+        setSelectedNodeId(inserted.id);
+        setSelectedNodeIds([inserted.id]);
+      }
+      setActionMessage(`${inserted?.name ?? "Plugin"} added to the draft. Connect it, save, then press Play.`);
+      return inserted?.id;
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Could not add the plugin.");
+      return undefined;
+    }
+  };
   const addPluginToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
     if (!backend.connected) {
       setActionMessage("Connect the backend before changing the draft.");
@@ -2836,6 +2858,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       onToggleConnection={toggleConnection}
       onInsertProcessor={insertProcessor}
       onAddLibraryNode={addLibraryNode}
+      onAddPluginNode={addDroppedPlugin}
       onAddVirtualBusNode={addDroppedVirtualBusNode}
       onOpenPluginPicker={openPluginPicker}
       onOpenApplicationPicker={openApplicationPicker}

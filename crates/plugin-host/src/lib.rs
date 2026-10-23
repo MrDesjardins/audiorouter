@@ -138,6 +138,9 @@ pub enum PluginCompatibility {
     SupportedVst3X64,
     SupportedVst2X64Gated,
     UnsupportedFormat,
+    /// An x64 plugin whose metadata declares an instrument; AudioRouter has
+    /// no MIDI input, so it is listed with its reason but cannot be added.
+    UnsupportedInstrument,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -388,6 +391,8 @@ pub struct PluginMetadata {
     pub vendor: Option<String>,
     pub version: Option<String>,
     pub class_ids: Vec<String>,
+    /// The bundle declares itself an instrument (synth) in its metadata.
+    pub instrument: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -403,6 +408,12 @@ pub struct PluginIdentity {
 
 impl PluginIdentity {
     pub fn compatibility(&self) -> PluginCompatibility {
+        if self.metadata.instrument
+            && self.architecture == PeArchitecture::X64
+            && self.format != PluginFormat::Unknown
+        {
+            return PluginCompatibility::UnsupportedInstrument;
+        }
         if self.format == PluginFormat::Vst3 && self.architecture == PeArchitecture::X64 {
             PluginCompatibility::SupportedVst3X64
         } else if cfg!(windows)
@@ -616,6 +627,36 @@ fn inspect_binary_with_control(
 }
 
 fn read_plugin_metadata(bundle: &Path) -> PluginMetadata {
+    let mut metadata = read_module_info(bundle);
+    metadata.instrument = metadata.instrument || bundle_manifest_declares_synth(bundle);
+    metadata
+}
+
+/// Read a bounded JSON metadata file from `Contents/Resources` of a bundle.
+fn read_bundle_json(bundle: &Path, name: &str) -> Option<serde_json::Value> {
+    let file = fs::File::open(bundle.join("Contents").join("Resources").join(name)).ok()?;
+    let mut bytes = Vec::new();
+    if file
+        .take(MAX_PLUGIN_METADATA_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .is_err()
+        || bytes.len() as u64 > MAX_PLUGIN_METADATA_BYTES
+    {
+        return None;
+    }
+    serde_json::from_slice(&strip_json_trailing_commas(&bytes)).ok()
+}
+
+/// Universal Audio bundles carry no `moduleinfo.json`; their own
+/// `manifest.json` declares synths (`"is_synth": true`). Metadata only: the
+/// scan never runs plugin code.
+fn bundle_manifest_declares_synth(bundle: &Path) -> bool {
+    read_bundle_json(bundle, "manifest.json")
+        .and_then(|value| value.get("is_synth").and_then(serde_json::Value::as_bool))
+        .unwrap_or(false)
+}
+
+fn read_module_info(bundle: &Path) -> PluginMetadata {
     let path = bundle
         .join("Contents")
         .join("Resources")
@@ -689,7 +730,31 @@ fn read_plugin_metadata(bundle: &Path) -> PluginMetadata {
             class_ids = ordered;
         }
     }
+    // An instrument module declares only audio classes whose VST3
+    // sub-categories include "Instrument" (an array or a "|" list).
+    let audio_sub_categories = value
+        .get("Classes")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|class| {
+            class.get("Category").and_then(serde_json::Value::as_str) == Some("Audio Module Class")
+        })
+        .map(|class| match class.get("Sub Categories") {
+            Some(serde_json::Value::Array(items)) => items
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .any(|item| item == "Instrument"),
+            Some(serde_json::Value::String(list)) => {
+                list.split('|').any(|item| item == "Instrument")
+            }
+            _ => false,
+        })
+        .collect::<Vec<_>>();
+    let instrument = !audio_sub_categories.is_empty()
+        && audio_sub_categories.iter().all(|instrument| *instrument);
     PluginMetadata {
+        instrument,
         vendor,
         version,
         class_ids,
@@ -2513,12 +2578,46 @@ impl WorkerSandbox {
         }
         Ok(Self { handle })
     }
+
+    /// Change how many processes the job may hold. Opening a plugin's own
+    /// editor raises it (WebView2-based editors start helper processes,
+    /// which stay in the job and die with it); closing the editor restores
+    /// the single-process limit. Lowering it never ends a running process.
+    fn set_active_process_limit(&self, limit: u32) -> Result<(), String> {
+        let mut limits = JobObjectExtendedLimitInformation::default();
+        limits.basic.limit_flags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+            | JOB_OBJECT_LIMIT_ACTIVE_PROCESS
+            | JOB_OBJECT_LIMIT_PROCESS_MEMORY;
+        limits.basic.active_process_limit = limit;
+        limits.process_memory_limit = WORKER_MAX_PROCESS_MEMORY_BYTES;
+        // SAFETY: `self.handle` is the live job this value owns. `limits` is
+        // a live `#[repr(C)]` JOBOBJECT_EXTENDED_LIMIT_INFORMATION of exactly
+        // the length passed; Windows only reads it. Every other limit is
+        // restated unchanged, so only the process count differs.
+        let configured = unsafe {
+            set_information_job_object(
+                self.handle,
+                JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+                &limits as *const _ as *const std::ffi::c_void,
+                std::mem::size_of::<JobObjectExtendedLimitInformation>() as u32,
+            )
+        };
+        if configured {
+            Ok(())
+        } else {
+            Err("could not change the worker job's process limit".into())
+        }
+    }
 }
 
 #[cfg(not(windows))]
 impl WorkerSandbox {
     fn attach(_: &Child) -> Result<Self, String> {
         Ok(Self)
+    }
+
+    fn set_active_process_limit(&self, _: u32) -> Result<(), String> {
+        Ok(())
     }
 }
 
@@ -2540,10 +2639,39 @@ const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x0000_2000;
 const JOB_OBJECT_LIMIT_ACTIVE_PROCESS: u32 = 0x0000_0008;
 #[cfg(windows)]
 const JOB_OBJECT_LIMIT_PROCESS_MEMORY: u32 = 0x0000_0100;
-#[cfg(windows)]
 const WORKER_MAX_ACTIVE_PROCESSES: u32 = 1;
+/// The job's process limit while a plugin's own editor is open: the worker
+/// plus WebView2's browser, GPU, renderer and utility processes, with room.
+/// Decision record: docs/plans/active/current.md, 2026-10-22 editor sandbox.
+const WORKER_EDITOR_MAX_ACTIVE_PROCESSES: u32 = 16;
 #[cfg(windows)]
 const WORKER_MAX_PROCESS_MEMORY_BYTES: usize = 512 * 1024 * 1024;
+
+/// Windows system and user-profile variables a plugin worker inherits. No
+/// AudioRouter, credential or developer variable is on this list.
+const PLUGIN_WORKER_ENVIRONMENT: [&str; 21] = [
+    "SystemRoot",
+    "SystemDrive",
+    "windir",
+    "ComSpec",
+    "PATHEXT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "USERNAME",
+    "USERDOMAIN",
+    "COMPUTERNAME",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "ProgramData",
+    "ProgramFiles",
+    "ProgramFiles(x86)",
+    "ProgramW6432",
+    "CommonProgramFiles",
+    "PUBLIC",
+];
 
 #[cfg(windows)]
 #[repr(C)]
@@ -2798,7 +2926,7 @@ impl WorkerBusSession {
 /// preallocated transport rather than calling these blocking methods.
 pub struct WorkerProcess {
     child: Child,
-    _sandbox: WorkerSandbox,
+    sandbox: WorkerSandbox,
     writer: BufWriter<ChildStdin>,
     reader: Receiver<Result<WorkerMessage, WorkerMessageError>>,
     channels: u16,
@@ -3600,6 +3728,15 @@ impl SupervisedWorkerProcess {
         }
     }
 
+    /// The delay the (selected) plugin reports for itself, in samples at the
+    /// worker's sample rate (VST3 `getLatencySamples`, VST2 `initialDelay`).
+    pub fn plugin_latency_samples(&mut self, now: Instant) -> Result<u32, WorkerProcessError> {
+        let request =
+            WorkerLatency::new(0, self.sample_rate_hz).map_err(WorkerProcessError::Message)?;
+        self.report_latency(request, now)
+            .map(|latency| latency.samples)
+    }
+
     pub fn report_latency(
         &mut self,
         latency: WorkerLatency,
@@ -3934,12 +4071,67 @@ pub struct PluginRuntimeBridge {
     output_misses: Arc<AtomicU32>,
     input_drops: Arc<AtomicU32>,
     requests: Arc<Mutex<std::collections::VecDeque<(usize, BridgeRequest)>>>,
+    /// Each member plugin's own reported delay, in samples, read when the
+    /// bridge starts and again after its editor closes.
+    plugin_latency: Arc<Vec<AtomicU32>>,
+    /// Set once a single plugin has returned loud input unchanged for a
+    /// couple of seconds and has never changed it (see [`UnchangedAudioWatch`]).
+    unchanged_audio: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
     /// Frames per pipeline quantum, for reporting pipeline delay.
     quantum_frames: usize,
     instance_index: usize,
     /// Member handles keep the queue owner alive; only the owner joins it.
     owner: Option<Arc<PluginRuntimeBridge>>,
+}
+
+/// Watches whether a plugin ever changes the audio it is given. Quanta
+/// quieter than [`UnchangedAudioWatch::LOUD`] say nothing (many effects leave
+/// silence alone). Once a loud quantum comes back changed the watch stops for
+/// good; after about two seconds of loud quanta all returned unchanged it
+/// reports the plugin as passing audio through.
+#[derive(Debug)]
+struct UnchangedAudioWatch {
+    unchanged_loud_quanta: u32,
+    required_quanta: u32,
+    done: bool,
+}
+
+impl UnchangedAudioWatch {
+    /// About -46 dBFS.
+    const LOUD: f32 = 0.005;
+    /// Below the smallest change a real effect makes, above float noise.
+    const SAME: f32 = 1.0e-6;
+    const WINDOW_FRAMES: u32 = 96_000;
+
+    fn new(quantum_frames: usize) -> Self {
+        let quantum_frames = u32::try_from(quantum_frames.max(1)).unwrap_or(u32::MAX);
+        Self {
+            unchanged_loud_quanta: 0,
+            required_quanta: (Self::WINDOW_FRAMES / quantum_frames).max(1),
+            done: false,
+        }
+    }
+
+    /// Record one processed quantum. Returns the new verdict when it changes.
+    fn observe(&mut self, input: &[f32], output: &[f32]) -> Option<bool> {
+        if self.done || input.len() != output.len() {
+            return None;
+        }
+        if !input.iter().any(|sample| sample.abs() >= Self::LOUD) {
+            return None;
+        }
+        let unchanged = input
+            .iter()
+            .zip(output)
+            .all(|(input, output)| (input - output).abs() <= Self::SAME);
+        if !unchanged {
+            self.done = true;
+            return Some(false);
+        }
+        self.unchanged_loud_quanta = self.unchanged_loud_quanta.saturating_add(1);
+        (self.unchanged_loud_quanta == self.required_quanta).then_some(true)
+    }
 }
 
 /// Control request served by the plugin runtime thread between audio frames
@@ -4040,6 +4232,8 @@ impl PluginRuntimeBridge {
                 output_misses: Arc::clone(&head.output_misses),
                 input_drops: Arc::clone(&head.input_drops),
                 requests: Arc::clone(&head.requests),
+                plugin_latency: Arc::clone(&head.plugin_latency),
+                unchanged_audio: Arc::clone(&head.unchanged_audio),
                 worker: None,
                 quantum_frames: frames,
                 instance_index,
@@ -4086,6 +4280,22 @@ impl PluginRuntimeBridge {
                 .collect::<Vec<_>>(),
         );
         let thread_active = Arc::clone(&active);
+        // A failed query counts as no delay; a worker it ended is reported
+        // by the runtime thread's first frame.
+        let plugin_latency = Arc::new(
+            (0..members)
+                .map(|index| {
+                    let now = Instant::now();
+                    if members > 1 && worker.select_instance(index, now).is_err() {
+                        return AtomicU32::new(0);
+                    }
+                    AtomicU32::new(worker.plugin_latency_samples(now).unwrap_or(0))
+                })
+                .collect::<Vec<_>>(),
+        );
+        let thread_plugin_latency = Arc::clone(&plugin_latency);
+        let unchanged_audio = Arc::new(AtomicBool::new(false));
+        let thread_unchanged_audio = Arc::clone(&unchanged_audio);
         let requests = Arc::new(Mutex::new(std::collections::VecDeque::<(
             usize,
             BridgeRequest,
@@ -4105,6 +4315,9 @@ impl PluginRuntimeBridge {
                 let _scheduling = ProAudioThread::enter();
                 let mut sequence = 1_u64;
                 let mut samples = vec![0.0_f32; channels * frames];
+                // Single plugins only: a chain's members cannot be told apart.
+                let mut unchanged_watch = (members == 1).then(|| UnchangedAudioWatch::new(frames));
+                let mut input_copy = vec![0.0_f32; channels * frames];
                 while thread_running.load(Ordering::Acquire) {
                     // Serve control requests between frames; the worker
                     // protocol is strictly request/response, so they cannot
@@ -4151,11 +4364,20 @@ impl PluginRuntimeBridge {
                                 );
                             }
                             BridgeRequest::CloseEditor(reply) => {
-                                let _ = reply.send(
-                                    worker
-                                        .close_editor(now)
-                                        .map_err(|error| format!("{error:?}")),
-                                );
+                                let closed = worker
+                                    .close_editor(now)
+                                    .map_err(|error| format!("{error:?}"));
+                                // Settings changed in the editor can change
+                                // the plugin's delay (lookahead, oversampling).
+                                if closed.is_ok() {
+                                    if let (Ok(samples), Some(slot)) = (
+                                        worker.plugin_latency_samples(now),
+                                        thread_plugin_latency.get(index),
+                                    ) {
+                                        slot.store(samples, Ordering::Release);
+                                    }
+                                }
+                                let _ = reply.send(closed);
                             }
                         }
                         thread_health_state
@@ -4188,6 +4410,9 @@ impl PluginRuntimeBridge {
                         if !sample.is_finite() {
                             *sample = 0.0;
                         }
+                    }
+                    if unchanged_watch.is_some() {
+                        input_copy.copy_from_slice(&samples);
                     }
                     let deadline_tick = worker_clock_tick().saturating_add(1_000_000);
                     let frame =
@@ -4232,6 +4457,16 @@ impl PluginRuntimeBridge {
                         {
                             if let Err(quantum) = thread_output.push(quantum) {
                                 let _ = thread_free.push(quantum);
+                            }
+                            // A bypassed plugin passes audio unchanged on purpose.
+                            if let Some(watch) = unchanged_watch
+                                .as_mut()
+                                .filter(|_| thread_active[0].load(Ordering::Acquire))
+                            {
+                                if let Some(unchanged) = watch.observe(&input_copy, &result.samples)
+                                {
+                                    thread_unchanged_audio.store(unchanged, Ordering::Release);
+                                }
                             }
                             samples = result.samples;
                         }
@@ -4278,6 +4513,8 @@ impl PluginRuntimeBridge {
             output_misses: Arc::new(AtomicU32::new(0)),
             input_drops: Arc::new(AtomicU32::new(0)),
             requests,
+            plugin_latency,
+            unchanged_audio,
             worker: Some(worker_thread),
             quantum_frames: frames,
             instance_index: 0,
@@ -4295,6 +4532,14 @@ impl PluginRuntimeBridge {
     }
 
     /// Bounded callback counters; output misses include startup warm-up.
+    /// True when this plugin has returned clearly audible input unchanged
+    /// since it started. A licensed effect at neutral settings can do that,
+    /// but so does an unlicensed or unactivated plugin that bypasses itself
+    /// without reporting an error, so the UI only suggests checking.
+    pub fn passes_audio_unchanged(&self) -> bool {
+        self.unchanged_audio.load(Ordering::Acquire)
+    }
+
     pub fn continuity_counts(&self) -> (u32, u32) {
         (
             self.output_misses.load(Ordering::Relaxed),
@@ -4387,14 +4632,21 @@ impl PluginRuntimeBridge {
 }
 
 impl audiorouter_engine::RealtimePluginProcessor for PluginRuntimeBridge {
-    /// Quanta handed to the worker and not yet returned: the audio leaving
-    /// this stage is that many quanta older than the audio entering it.
+    /// Quanta handed to the worker and not yet returned (the audio leaving
+    /// this stage is that many quanta older than the audio entering it), plus
+    /// the delay the plugin reports for itself.
     fn latency_samples(&self) -> u32 {
+        let own = self
+            .plugin_latency
+            .get(self.instance_index)
+            .map_or(0, |samples| samples.load(Ordering::Acquire));
         if self.instance_index != 0 {
-            return 0;
+            return own;
         }
         let in_flight = self.free.capacity().saturating_sub(self.free.len());
-        u32::try_from(in_flight * self.quantum_frames).unwrap_or(u32::MAX)
+        u32::try_from(in_flight * self.quantum_frames)
+            .unwrap_or(u32::MAX)
+            .saturating_add(own)
     }
 
     fn process(&self, block: &mut audiorouter_engine::AudioBlock) {
@@ -4879,6 +5131,15 @@ impl WorkerProcess {
         // environment configuration. The executable is absolute and the
         // worker protocol passes all required configuration explicitly.
         command.env_clear();
+        // Plugin code still needs the ordinary Windows system and profile
+        // locations: Winsock refuses to start without `SystemRoot`, and
+        // vendor licensing (UA Connect, iLok) and WebView2 editors read the
+        // user's AppData. Only these fixed names pass through.
+        for name in PLUGIN_WORKER_ENVIRONMENT {
+            if let Some(value) = std::env::var_os(name) {
+                command.env(name, value);
+            }
+        }
         // The worker talks only over its piped stdio. Without a console of its
         // own it would otherwise get a new console window when started from
         // the windowless release shell, which the default terminal host can
@@ -4898,7 +5159,10 @@ impl WorkerProcess {
             &sample_rate_hz.to_string(),
         ]);
         if let Some(plugin_path) = plugin_path {
-            command.args(["--plugin-path", &plugin_path.to_string_lossy()]);
+            command.args([
+                "--plugin-path",
+                &loadable_plugin_path(plugin_path).to_string_lossy(),
+            ]);
         }
         let input_buses = bus_layout.map(|layout| {
             layout
@@ -4988,7 +5252,7 @@ impl WorkerProcess {
         });
         let mut process = Self {
             child,
-            _sandbox: sandbox,
+            sandbox,
             writer: BufWriter::new(stdin),
             reader,
             channels,
@@ -5132,6 +5396,22 @@ impl WorkerProcess {
         &mut self,
         authorization: &EditorParentAuthorization,
     ) -> Result<(), WorkerProcessError> {
+        self.sandbox
+            .set_active_process_limit(WORKER_EDITOR_MAX_ACTIVE_PROCESSES)
+            .map_err(WorkerProcessError::Spawn)?;
+        let opened = self.request_editor_open(authorization);
+        if opened.is_err() {
+            let _ = self
+                .sandbox
+                .set_active_process_limit(WORKER_MAX_ACTIVE_PROCESSES);
+        }
+        opened
+    }
+
+    fn request_editor_open(
+        &mut self,
+        authorization: &EditorParentAuthorization,
+    ) -> Result<(), WorkerProcessError> {
         self.write(&WorkerMessage::EditorOpen {
             parent_window: authorization.parent_window,
             parent_process_id: authorization.owner_process_id,
@@ -5153,6 +5433,11 @@ impl WorkerProcess {
     }
 
     pub fn close_editor(&mut self) -> Result<(), WorkerProcessError> {
+        // Back to one process whatever the answer; helpers already running
+        // keep going until the editor lets them go or the job closes.
+        let _ = self
+            .sandbox
+            .set_active_process_limit(WORKER_MAX_ACTIVE_PROCESSES);
         self.write(&WorkerMessage::EditorClose)
             .map_err(WorkerProcessError::Message)?;
         match self.read().map_err(WorkerProcessError::Message)? {
@@ -5333,12 +5618,6 @@ impl WorkerProcess {
     }
 
     fn with_diagnostic(&mut self, error: WorkerMessageError) -> WorkerMessageError {
-        let diagnostic = self
-            .diagnostic
-            .try_lock()
-            .ok()
-            .filter(|value| !value.is_empty())
-            .map(|value| value.clone());
         let mut exit_status = self.child.try_wait().ok().flatten();
         if exit_status.is_none() && matches!(error, WorkerMessageError::Io(_)) {
             // A worker can close stdout immediately before Windows publishes
@@ -5348,6 +5627,25 @@ impl WorkerProcess {
                 std::thread::sleep(Duration::from_millis(1));
                 exit_status = self.child.try_wait().ok().flatten();
                 if exit_status.is_some() {
+                    break;
+                }
+            }
+        }
+        // The stderr reader publishes the worker's reason (for example "is
+        // an instrument") only once the pipe closes, just after the exit.
+        let read_diagnostic = |diagnostic: &Mutex<String>| {
+            diagnostic
+                .try_lock()
+                .ok()
+                .filter(|value| !value.is_empty())
+                .map(|value| value.clone())
+        };
+        let mut diagnostic = read_diagnostic(&self.diagnostic);
+        if diagnostic.is_none() && exit_status.is_some() {
+            for _ in 0..50 {
+                std::thread::sleep(Duration::from_millis(1));
+                diagnostic = read_diagnostic(&self.diagnostic);
+                if diagnostic.is_some() {
                     break;
                 }
             }
@@ -5394,6 +5692,32 @@ fn processed_frame_matches(expected: &WorkerFrame, actual: &WorkerFrame) -> bool
         && actual.deadline_tick == expected.deadline_tick
         && actual.channels == expected.channels
         && actual.samples.len() == expected.samples.len()
+}
+
+/// The path a worker loads a verified plugin from. Canonical Windows paths
+/// are verbatim (`\\?\C:\...`); a module loaded through one reports that
+/// form as its own file name, and copy-protected plugins (PACE/iLok, used
+/// by UADx) then fail their signature check and pass audio through
+/// unprocessed. Use the ordinary drive or UNC form whenever it fits within
+/// `MAX_PATH`; longer paths keep the verbatim form.
+fn loadable_plugin_path(path: &Path) -> PathBuf {
+    const MAX_ORDINARY_PATH: usize = 259;
+    let text = path.to_string_lossy();
+    let ordinary = if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else if let Some(drive) = text
+        .strip_prefix(r"\\?\")
+        .filter(|rest| rest.as_bytes().get(1) == Some(&b':'))
+    {
+        drive.to_owned()
+    } else {
+        return path.to_path_buf();
+    };
+    if ordinary.len() <= MAX_ORDINARY_PATH {
+        PathBuf::from(ordinary)
+    } else {
+        path.to_path_buf()
+    }
 }
 
 fn validate_worker_executable(path: &Path) -> Result<PathBuf, String> {
@@ -7039,6 +7363,86 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_audio_watch_flags_only_a_plugin_that_never_changes_loud_audio() {
+        let loud = vec![0.25_f32, -0.25, 0.1, -0.1];
+        let quiet = vec![0.001_f32; 4];
+        let changed = vec![0.2_f32, -0.2, 0.08, -0.08];
+
+        // A 96 000-frame window of 32 000-frame quanta: three loud quanta.
+        let mut passthrough = UnchangedAudioWatch::new(32_000);
+        assert_eq!(passthrough.observe(&quiet, &quiet), None);
+        assert_eq!(passthrough.observe(&loud, &loud), None);
+        assert_eq!(passthrough.observe(&loud, &loud), None);
+        assert_eq!(passthrough.observe(&loud, &loud), Some(true));
+        assert_eq!(passthrough.observe(&loud, &loud), None);
+        // A later change clears the verdict for good.
+        assert_eq!(passthrough.observe(&loud, &changed), Some(false));
+        assert_eq!(passthrough.observe(&loud, &loud), None);
+
+        // Silence alone never counts, and an effect that changes the audio
+        // once is trusted from then on.
+        let mut effect = UnchangedAudioWatch::new(32_000);
+        for _ in 0..10 {
+            assert_eq!(effect.observe(&quiet, &quiet), None);
+        }
+        assert_eq!(effect.observe(&loud, &changed), Some(false));
+        for _ in 0..10 {
+            assert_eq!(effect.observe(&loud, &loud), None);
+        }
+    }
+
+    #[test]
+    fn instrument_bundles_are_recognized_from_their_metadata() {
+        let bundle_with = |name: &str, file: &str, json: &[u8]| {
+            let root = temp_root();
+            let bundle = root.join(name);
+            let binary_dir = bundle.join("Contents").join("x86_64-win");
+            fs::create_dir_all(&binary_dir).unwrap();
+            fs::write(binary_dir.join(name), pe_x64()).unwrap();
+            let resources = bundle.join("Contents").join("Resources");
+            fs::create_dir_all(&resources).unwrap();
+            fs::write(resources.join(file), json).unwrap();
+            let compatibility = inspect_binary(&bundle, std::slice::from_ref(&root))
+                .unwrap()
+                .compatibility();
+            fs::remove_dir_all(root).unwrap();
+            compatibility
+        };
+        // Standard VST3 module info: every audio class is an instrument.
+        let synth_classes = br#"{ "Classes": [
+            { "CID": "A", "Category": "Audio Module Class", "Sub Categories": ["Instrument", "Synth"] }
+        ] }"#;
+        assert_eq!(
+            bundle_with("synth.vst3", "moduleinfo.json", synth_classes),
+            PluginCompatibility::UnsupportedInstrument
+        );
+        let effect_classes = br#"{ "Classes": [
+            { "CID": "A", "Category": "Audio Module Class", "Sub Categories": "Fx|Dynamics" }
+        ] }"#;
+        assert_eq!(
+            bundle_with("effect.vst3", "moduleinfo.json", effect_classes),
+            PluginCompatibility::SupportedVst3X64
+        );
+        // Universal Audio's own bundle manifest.
+        assert_eq!(
+            bundle_with(
+                "uaudio_synth.vst3",
+                "manifest.json",
+                br#"{ "is_synth": true }"#
+            ),
+            PluginCompatibility::UnsupportedInstrument
+        );
+        assert_eq!(
+            bundle_with(
+                "uaudio_effect.vst3",
+                "manifest.json",
+                br#"{ "is_synth": false }"#
+            ),
+            PluginCompatibility::SupportedVst3X64
+        );
+    }
+
+    #[test]
     fn prefers_declared_audio_module_class_for_vst3_binding_identity() {
         let root = temp_root();
         let bundle = root.join("effect.vst3");
@@ -8482,6 +8886,46 @@ mod tests {
                 WorkerFrame::new(8, 99, 1, vec![0.1, 0.2]).unwrap(),
             ]),
             Err(WorkerAudioBusFramesError::IdentityMismatch)
+        );
+    }
+}
+
+#[cfg(test)]
+mod loadable_plugin_path_tests {
+    use super::loadable_plugin_path;
+    use std::path::{Path, PathBuf};
+
+    /// UADx (PACE) plugins loaded through a verbatim path fail their
+    /// signature check with `mixer.plugin.invalid_host_signature` and pass
+    /// audio through unprocessed; workers must get the ordinary form.
+    #[test]
+    fn verbatim_drive_and_unc_paths_become_ordinary_paths() {
+        assert_eq!(
+            loadable_plugin_path(Path::new(
+                r"\\?\C:\Program Files\Common Files\VST3\uaudio_ua_1176.vst3\Contents\x86_64-win\uaudio_ua_1176.vst3"
+            )),
+            PathBuf::from(
+                r"C:\Program Files\Common Files\VST3\uaudio_ua_1176.vst3\Contents\x86_64-win\uaudio_ua_1176.vst3"
+            )
+        );
+        assert_eq!(
+            loadable_plugin_path(Path::new(r"\\?\UNC\server\share\fx.dll")),
+            PathBuf::from(r"\\server\share\fx.dll")
+        );
+        assert_eq!(
+            loadable_plugin_path(Path::new(r"C:\Plugins\fx.dll")),
+            PathBuf::from(r"C:\Plugins\fx.dll")
+        );
+    }
+
+    #[test]
+    fn paths_too_long_for_the_ordinary_form_stay_verbatim() {
+        let long = format!(r"\\?\C:\{}\fx.dll", "a".repeat(300));
+        assert_eq!(loadable_plugin_path(Path::new(&long)), PathBuf::from(&long));
+        let device = r"\\?\GLOBALROOT\Device\fx.dll";
+        assert_eq!(
+            loadable_plugin_path(Path::new(device)),
+            PathBuf::from(device)
         );
     }
 }

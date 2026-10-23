@@ -86,10 +86,12 @@ import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
 import { FlowActiveLayers, FlowArrow, FlowComets, FlowMotionProvider } from "./flowLine";
 import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
-import { appendLibraryNode as appendPreviewNode } from "./draft";
+import { appendLibraryNode as appendPreviewNode, appendPluginPlaceholderNode } from "./draft";
 import {
   draggedLibraryKind,
+  draggedPluginEntry,
   endLibraryDrag,
+  PLUGIN_DRAG_KIND,
   readLibraryDropKind,
   setLibraryDragOverCanvas,
   startLibraryDrag,
@@ -138,6 +140,8 @@ type SessionFlowCanvasProps = {
   onInsertProcessor?: (edgeId: string, kind: import("./draft").InsertableProcessorKind) => void;
   onRemoveNode?: (nodeId: string) => void;
   onAddLibraryNode?: (kind: LibraryNodeKind, position: { x: number; y: number }) => string | void;
+  /** Add a scanned plugin dragged from the Plugins list where it was dropped. */
+  onAddPluginNode?: (entry: import("@audiorouter/contracts").PluginScanEntry) => string | void;
   onAddVirtualBusNode?: (
     direction: "renderSource" | "captureSink",
     position: { x: number; y: number },
@@ -2246,6 +2250,7 @@ export function SessionFlowCanvas({
   onInsertProcessor,
   onRemoveNode,
   onAddLibraryNode,
+  onAddPluginNode,
   onAddVirtualBusNode,
   diagnostics,
   sessionRunning,
@@ -2753,10 +2758,16 @@ export function SessionFlowCanvas({
     return { x: Math.round(flow.x - DROP_GRAB_OFFSET.x), y: Math.round(flow.y - DROP_GRAB_OFFSET.y) };
   };
   // A live preview of the dragged tool, drawn by the same node renderer.
+  const draggedPlugin = dropPreview?.kind === PLUGIN_DRAG_KIND ? draggedPluginEntry() : null;
   const previewNode =
     dropPreview && isLibraryNodeKind(dropPreview.kind)
       ? { ...appendPreviewNode({ ...session, nodes: [], edges: [] }, dropPreview.kind).nodes[0], id: DROP_PREVIEW_ID }
-      : null;
+      : draggedPlugin
+        ? {
+            ...appendPluginPlaceholderNode({ ...session, nodes: [], edges: [] }, draggedPlugin).nodes[0],
+            id: DROP_PREVIEW_ID,
+          }
+        : null;
   const nodes: FlowNode[] = (previewNode ? [...session.nodes, previewNode] : session.nodes).map((node, index) => {
     const layoutSize = ownValue(nodeSizes, node.id);
     const applicationCaptureState =
@@ -3110,6 +3121,7 @@ export function SessionFlowCanvas({
           }}
           onDrop={(event) => {
             const kind = readLibraryDropKind(event.dataTransfer);
+            const plugin = kind === PLUGIN_DRAG_KIND ? draggedPluginEntry() : null;
             event.preventDefault();
             const position = dropFlowPosition(
               event.clientX,
@@ -3124,7 +3136,15 @@ export function SessionFlowCanvas({
                 skipNextFitRef.current = false;
               }),
             );
-            if (isLibraryNodeKind(kind)) {
+            if (plugin) {
+              const nodeId = onAddPluginNode?.(plugin);
+              if (nodeId) {
+                const next = { ...positionsRef.current, [nodeId]: position };
+                positionsRef.current = next;
+                setPositions(next);
+                writeLayout(typeof window === "undefined" ? null : window.localStorage, layoutKey, next);
+              }
+            } else if (isLibraryNodeKind(kind)) {
               if (onAddLibraryNode) addLibraryNode(kind, position);
               else routeLibraryDrop(kind, position);
             } else if (isVirtualBusKind(kind)) {

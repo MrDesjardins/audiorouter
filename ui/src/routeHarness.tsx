@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { createDisconnectedBackend, type UiBackend } from "./backend";
 import { demoSession } from "./fixtures";
-import type { Session, DiscoveryDocument, DiagnosticsSnapshot } from "@audiorouter/contracts";
+import type { Session, DiscoveryDocument, DiagnosticsSnapshot, PluginScanResult } from "@audiorouter/contracts";
 import "./styles.css";
 
 let planned: Session | null = null;
@@ -25,6 +25,8 @@ const injected = globalThis as {
   __routeFixtureGameRound?: DiagnosticsSnapshot["gameRound"];
   __routeFixtureMcpClients?: Awaited<ReturnType<UiBackend["listClients"]>>;
   __routeFixtureMcpGrants?: string[];
+  /** Remembered plugin scans shown in the Plugins list. */
+  __routeFixturePluginInventory?: PluginScanResult[];
 };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
@@ -166,6 +168,13 @@ const verboseStatus = () => {
 const previewBackend: UiBackend = {
   ...fixtureBackend,
   connected: true,
+  ...(injected.__routeFixturePluginInventory
+    ? {
+        async pluginInventory() {
+          return { inventories: structuredClone(injected.__routeFixturePluginInventory ?? []) };
+        },
+      }
+    : {}),
   async listClients() {
     return injected.__routeFixtureMcpClients ?? fixtureBackend.listClients();
   },

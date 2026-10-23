@@ -1057,6 +1057,7 @@ impl ControlPlane {
                         "failureCount": health.failure_count,
                         "outputMisses": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().0).unwrap_or(0),
                         "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
+                        "unchangedAudio": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.passes_audio_unchanged()),
                     })
                 });
                 let noise_profile = processor.noise_profile_for_node(&node.id);
@@ -1190,6 +1191,7 @@ impl ControlPlane {
                         "failureCount": health.failure_count,
                         "outputMisses": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().0).unwrap_or(0),
                         "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
+                        "unchangedAudio": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.passes_audio_unchanged()),
                     })
                 });
                 let network = worker

@@ -724,6 +724,83 @@ fn live_native_paths_start_pump_and_report_signal_timing() {
     }
 }
 
+/// Play, Stop and Play a saved plugin route the way the desktop UI does for a
+/// route whose connections change channel width (`nativePaths.prepare`, then
+/// `session.start`), privacy-muted. Stop saves each plugin's state and the
+/// second Play restores it, so both rounds must run every plugin. Point it at
+/// a database copy.
+#[cfg(windows)]
+#[test]
+#[ignore = "live Windows audio devices and plugins"]
+fn live_plugin_route_plays_again_after_stop() {
+    let (Some(database), Ok(session_id)) = (
+        std::env::var_os("AUDIOROUTER_LIVE_PATHS_DATABASE"),
+        std::env::var("AUDIOROUTER_LIVE_PATHS_SESSION"),
+    ) else {
+        return;
+    };
+    let storage = audiorouter_storage::Storage::open(std::path::Path::new(&database)).unwrap();
+    let mut plane = ControlPlane::with_storage("live-plugin-route", storage);
+    let run_id = format!("live-plugin-route-{}", std::process::id());
+    let mut call = |method: &str, params: Value| {
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: (!params.is_null()).then_some(params),
+        });
+        assert!(response.error.is_none(), "{method}: {:?}", response.error);
+        response.result.unwrap()
+    };
+    call(
+        "safety.setPrivacyMute",
+        json!({ "muted": true, "idempotencyKey": format!("{run_id}-mute") }),
+    );
+    for round in 0..2 {
+        if round > 0 {
+            // As the UI: release the session's stopped adapter, then prepare.
+            call("nativeEndpoints.detach", json!({ "sessionId": session_id }));
+        }
+        call("nativePaths.prepare", json!({ "sessionId": session_id }));
+        let started = call(
+            "session.start",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-start-{round}") }),
+        );
+        eprintln!("round {round} started: {started}");
+        let generation = started["generation"].as_u64().unwrap();
+        let until = Instant::now() + Duration::from_secs(3);
+        while Instant::now() < until {
+            call(
+                "nativeMultiInputs.pump",
+                json!({ "sessionId": session_id, "generation": generation, "maxPackets": 64 }),
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let diagnostics = call("system.diagnostics", Value::Null);
+        let plugins = diagnostics["nodeTelemetry"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|item| item["plugin"].is_object())
+            .cloned()
+            .collect::<Vec<_>>();
+        for item in &plugins {
+            eprintln!("round {round} {} plugin={}", item["nodeId"], item["plugin"]);
+        }
+        call(
+            "session.stop",
+            json!({ "sessionId": session_id, "idempotencyKey": format!("{run_id}-stop-{round}") }),
+        );
+        assert!(!plugins.is_empty(), "the route reports its plugins");
+        assert!(
+            plugins
+                .iter()
+                .all(|item| item["plugin"]["state"] == "running"),
+            "every plugin runs: {plugins:?}"
+        );
+    }
+}
+
 /// Qualify the exact saved Meter topology without writing the user DB or
 /// recording audio. All test-owned output is privacy-muted. The caller
 /// supplies an API session snapshot and must ensure endpoints are free.

@@ -2,23 +2,55 @@
 
 use super::*;
 
+/// The two isolated worker executables: VST2 effects run in the Rust
+/// `audiorouter-plugin-worker`, VST3 effects in the native
+/// `audiorouter-vst3-worker` built from `tools/m06-vst3-worker`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PluginWorkerKind {
+    Vst2,
+    Vst3,
+}
+
+impl PluginWorkerKind {
+    pub(crate) fn for_format(format: audiorouter_plugin_host::PluginFormat) -> Self {
+        match format {
+            audiorouter_plugin_host::PluginFormat::Vst3 => Self::Vst3,
+            _ => Self::Vst2,
+        }
+    }
+
+    pub(crate) fn file_name(self) -> &'static str {
+        match (self, cfg!(windows)) {
+            (Self::Vst2, true) => "audiorouter-plugin-worker.exe",
+            (Self::Vst2, false) => "audiorouter-plugin-worker",
+            (Self::Vst3, true) => "audiorouter-vst3-worker.exe",
+            (Self::Vst3, false) => "audiorouter-vst3-worker",
+        }
+    }
+
+    pub(crate) fn override_variable(self) -> &'static str {
+        match self {
+            Self::Vst2 => "AUDIOROUTER_PLUGIN_WORKER_PATH",
+            Self::Vst3 => "AUDIOROUTER_VST3_WORKER_PATH",
+        }
+    }
+}
+
 pub(crate) fn packaged_plugin_worker_path(
     shell_executable: &std::path::Path,
+    kind: PluginWorkerKind,
 ) -> Option<std::path::PathBuf> {
     let directory = shell_executable.parent()?;
-    packaged_plugin_worker_candidates(directory)
+    packaged_plugin_worker_candidates(directory, kind)
         .into_iter()
         .find(|candidate| candidate.is_file())
 }
 
 pub(crate) fn packaged_plugin_worker_candidates(
     directory: &std::path::Path,
+    kind: PluginWorkerKind,
 ) -> [std::path::PathBuf; 2] {
-    let worker = if cfg!(windows) {
-        "audiorouter-plugin-worker.exe"
-    } else {
-        "audiorouter-plugin-worker"
-    };
+    let worker = kind.file_name();
     [
         directory.join(worker),
         directory.join("resources").join(worker),
@@ -27,16 +59,13 @@ pub(crate) fn packaged_plugin_worker_candidates(
 
 pub(crate) fn plugin_worker_unavailable_message(
     shell_executable: Option<&std::path::Path>,
+    kind: PluginWorkerKind,
 ) -> String {
-    let worker_name = if cfg!(windows) {
-        "audiorouter-plugin-worker.exe"
-    } else {
-        "audiorouter-plugin-worker"
-    };
+    let worker_name = kind.file_name();
     let locations = shell_executable
         .and_then(std::path::Path::parent)
         .map(|directory| {
-            packaged_plugin_worker_candidates(directory)
+            packaged_plugin_worker_candidates(directory, kind)
                 .into_iter()
                 .map(|path| format!("`{}`", path.display()))
                 .collect::<Vec<_>>()
@@ -44,18 +73,32 @@ pub(crate) fn plugin_worker_unavailable_message(
         })
         .unwrap_or_else(|| "the shell's install directory or its `resources` folder".into());
     format!(
-        "Plugin worker executable `{worker_name}` was not found. Checked {locations}. Install or rebuild the complete AudioRouter package so the worker is beside the shell or in `resources`, or set `AUDIOROUTER_PLUGIN_WORKER_PATH` to the worker's full path."
+        "Plugin worker executable `{worker_name}` was not found. Checked {locations}. Install or rebuild the complete AudioRouter package so the worker is beside the shell or in `resources`, or set `{}` to the worker's full path.",
+        kind.override_variable()
     )
 }
 
-pub(crate) fn plugin_worker_path() -> Option<std::path::PathBuf> {
-    std::env::var_os("AUDIOROUTER_PLUGIN_WORKER_PATH")
+pub(crate) fn plugin_worker_path(kind: PluginWorkerKind) -> Option<std::path::PathBuf> {
+    std::env::var_os(kind.override_variable())
         .map(std::path::PathBuf::from)
         .or_else(|| {
             std::env::current_exe()
                 .ok()
-                .and_then(|executable| packaged_plugin_worker_path(&executable))
+                .and_then(|executable| packaged_plugin_worker_path(&executable, kind))
         })
+}
+
+/// The worker for one plugin format, or the error that names where it was
+/// looked for.
+pub(crate) fn require_plugin_worker(
+    kind: PluginWorkerKind,
+) -> Result<std::path::PathBuf, ControlError> {
+    plugin_worker_path(kind).ok_or_else(|| {
+        ControlError::InvalidRequest(plugin_worker_unavailable_message(
+            std::env::current_exe().ok().as_deref(),
+            kind,
+        ))
+    })
 }
 
 /// Issuer of native-editor parent capabilities. The key never leaves this
@@ -98,7 +141,6 @@ pub(crate) struct PluginStageRequest {
 /// error the bridges started so far are dropped, which stops their workers.
 pub(crate) fn start_plugin_bridges(
     session: &Session,
-    worker_executable: &std::path::Path,
     requests: Vec<PluginStageRequest>,
     sample_rate_hz: u32,
 ) -> Result<Vec<(EntityId, Arc<audiorouter_plugin_host::PluginRuntimeBridge>)>, ControlError> {
@@ -145,6 +187,9 @@ pub(crate) fn start_plugin_bridges(
             .map(|id| prepared.get(id).expect("prepared plugin group"))
             .collect::<Vec<_>>();
         let (verified, configured_root, channels, _, _) = members[0];
+        let worker_executable =
+            require_plugin_worker(PluginWorkerKind::for_format(verified.format))?;
+        let worker_executable = worker_executable.as_path();
         let mut worker = if members.len() > 1 {
             let plugins = members.iter().map(|(identity, root, _, _, _)| audiorouter_plugin_host::WorkerChainPlugin {
                 path: identity.path.clone(), sha256: identity.sha256.clone(), configured_roots: vec![root.clone()],
@@ -672,11 +717,6 @@ impl ControlPlane {
         {
             return Ok(HashMap::new());
         }
-        let worker_executable = plugin_worker_path().ok_or_else(|| {
-            ControlError::InvalidRequest(plugin_worker_unavailable_message(
-                std::env::current_exe().ok().as_deref(),
-            ))
-        })?;
         let mut requests = Vec::new();
         for node in session
             .nodes
@@ -727,16 +767,21 @@ impl ControlPlane {
             // The node's latest capture (editor close, Save state, Stop) wins;
             // a capture from a different plugin binary is ignored. Otherwise
             // the state saved with the route (or imported with it) applies.
-            let latest = self
-                .storage
+            let latest_id = self.storage.as_ref().and_then(|storage| {
+                storage
+                    .plugin_node_state(session.id.as_str(), node.id.as_str())
+                    .ok()
+                    .flatten()
+            });
+            let latest = latest_id
+                .as_deref()
+                .and_then(|id| self.load_plugin_state_asset(id, fingerprint).ok());
+            // Slider values the latest capture already contains; see
+            // capture_plugin_state.
+            let captured_sliders = latest
                 .as_ref()
-                .and_then(|storage| {
-                    storage
-                        .plugin_node_state(session.id.as_str(), node.id.as_str())
-                        .ok()
-                        .flatten()
-                })
-                .and_then(|id| self.load_plugin_state_asset(&id, fingerprint).ok());
+                .and(latest_id.as_deref())
+                .and_then(|id| self.plugin_slider_snapshot(id));
             let state = match latest {
                 Some(state) => Some(state),
                 None => node
@@ -746,17 +791,17 @@ impl ControlPlane {
                     .map(|id| self.load_plugin_state_asset(id, fingerprint))
                     .transpose()?,
             };
-            let mut parameters = node
-                .parameters
-                .iter()
-                .filter_map(|(name, value)| {
-                    Some(audiorouter_plugin_host::ParameterEvent {
-                        parameter_id: name.strip_prefix("pluginParameter:")?.parse().ok()?,
-                        normalized_value: value.as_f64()? as f32,
-                        sample_offset: 0,
+            let mut parameters =
+                plugin_sliders_to_apply(&node.parameters, captured_sliders.as_ref())
+                    .into_iter()
+                    .filter_map(|(name, value)| {
+                        Some(audiorouter_plugin_host::ParameterEvent {
+                            parameter_id: name.strip_prefix("pluginParameter:")?.parse().ok()?,
+                            normalized_value: value.as_f64()? as f32,
+                            sample_offset: 0,
+                        })
                     })
-                })
-                .collect::<Vec<_>>();
+                    .collect::<Vec<_>>();
             parameters.sort_by_key(|event| event.parameter_id);
             requests.push(PluginStageRequest {
                 node_id: node.id.clone(),
@@ -768,9 +813,8 @@ impl ControlPlane {
                 parameters,
             });
         }
-        let started = self.while_servicing_audio(|| {
-            start_plugin_bridges(session, &worker_executable, requests, sample_rate_hz)
-        })?;
+        let started =
+            self.while_servicing_audio(|| start_plugin_bridges(session, requests, sample_rate_hz))?;
         // Keep controls for the existing graph intact if any new group fails
         // preparation. Publish per-node handles only once all groups exist.
         if let Ok(mut bridges) = self.plugin_bridges.lock() {
@@ -808,6 +852,21 @@ impl ControlPlane {
 
     /// Read and verify a stored plugin state for the plugin binary it was
     /// captured from.
+    /// The slider values saved with a captured state, when it has them
+    /// (captures from before 2026-10-22 do not).
+    fn plugin_slider_snapshot(&self, state_id: &str) -> Option<serde_json::Map<String, Value>> {
+        let root = self.storage.as_ref()?.plugin_state_directory()?;
+        let path = plugin_slider_snapshot_path(&root, state_id);
+        // Bounded: at most 256 numeric sliders.
+        if std::fs::metadata(&path).ok()?.len() > 64 * 1024 {
+            return None;
+        }
+        match serde_json::from_slice(&std::fs::read(path).ok()?).ok()? {
+            Value::Object(values) => Some(values),
+            _ => None,
+        }
+    }
+
     pub(crate) fn load_plugin_state_asset(
         &self,
         state_id: &str,
@@ -886,6 +945,7 @@ impl ControlPlane {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
+                        audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => "unsupportedInstrument",
                     }
                 }));
                 json!({
@@ -993,6 +1053,7 @@ impl ControlPlane {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
+                        audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => "unsupportedInstrument",
                     }
                 },
                 "error": null,
@@ -1048,12 +1109,18 @@ impl ControlPlane {
                 "plugin fingerprint changed since scan".into(),
             ));
         }
-        if identity.compatibility()
-            == audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat
-        {
-            return Err(ControlError::InvalidRequest(
-                "plugin format or architecture is unsupported".into(),
-            ));
+        match identity.compatibility() {
+            audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => {
+                return Err(ControlError::InvalidRequest(
+                    "plugin format or architecture is unsupported".into(),
+                ));
+            }
+            audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => {
+                return Err(ControlError::InvalidRequest(
+                    "plugin is an instrument; AudioRouter hosts audio effects only".into(),
+                ));
+            }
+            _ => {}
         }
         Ok((identity, root))
     }
@@ -1128,16 +1195,18 @@ impl ControlPlane {
         automatic: bool,
     ) -> Result<(String, usize), ControlError> {
         let (session_id, node_id) = (session_id.clone(), node_id.clone());
-        let fingerprint = self
+        let (fingerprint, sliders) = self
             .get_session(&session_id)?
             .nodes
             .iter()
             .find(|node| node.id == node_id && node.kind == NodeKind::Plugin)
             .and_then(|node| {
-                node.parameters
+                let fingerprint = node
+                    .parameters
                     .get("fingerprint")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
+                    .and_then(Value::as_str)?
+                    .to_owned();
+                Some((fingerprint, plugin_slider_values(&node.parameters)))
             })
             .ok_or_else(|| {
                 ControlError::InvalidRequest("nodeId is not a plugin node in this session".into())
@@ -1166,6 +1235,15 @@ impl ControlPlane {
         let path = audiorouter_plugin_host::write_state_asset(&root, &state_id, &asset).map_err(
             |error| ControlError::InvalidRequest(format!("plugin state write failed: {error:?}")),
         )?;
+        // The slider values this state already contains. At the next Play
+        // only sliders moved since then are applied over it, so a change made
+        // in the plugin's own window is not undone by an older slider value.
+        if let Err(error) = std::fs::write(
+            plugin_slider_snapshot_path(&root, &state_id),
+            Value::Object(sliders).to_string(),
+        ) {
+            eprintln!("AudioRouter plugin slider snapshot write failed: {error}");
+        }
         storage
             .save_plugin_state(&audiorouter_storage::PluginStateRecord {
                 id: state_id.clone(),
@@ -1191,6 +1269,7 @@ impl ControlPlane {
             {
                 let _ = storage.remove_plugin_state(&previous);
                 let _ = std::fs::remove_file(root.join(format!("{previous}.bin")));
+                let _ = std::fs::remove_file(plugin_slider_snapshot_path(&root, &previous));
             }
         }
         Ok((state_id, asset.bytes.len()))
@@ -1225,7 +1304,7 @@ impl ControlPlane {
                 })?;
             bridge.open_editor(authorization).map_err(|error| {
                 ControlError::InvalidRequest(if error.contains("editorUnavailable") || error.contains("UnsupportedFeature") {
-                    "this plugin has no editor window AudioRouter can open (VST3 editors are not supported yet); use its parameters in Properties".into()
+                    "this plugin has no editor window AudioRouter can open; use its parameters in Properties".into()
                 } else {
                     format!("plugin editor failed to open: {error}")
                 })
@@ -1256,11 +1335,7 @@ impl ControlPlane {
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
         let (identity, root) = self.scanned_plugin_identity(path)?;
-        let executable = plugin_worker_path().ok_or_else(|| {
-            ControlError::InvalidRequest(plugin_worker_unavailable_message(
-                std::env::current_exe().ok().as_deref(),
-            ))
-        })?;
+        let executable = require_plugin_worker(PluginWorkerKind::for_format(identity.format))?;
         let worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
             #[cfg(windows)]
             {
@@ -1316,6 +1391,41 @@ impl ControlPlane {
             })).collect::<Vec<_>>()
         }))
     }
+}
+
+/// A plugin node's slider values (`pluginParameter:<id>`).
+fn plugin_slider_values(
+    parameters: &serde_json::Map<String, Value>,
+) -> serde_json::Map<String, Value> {
+    parameters
+        .iter()
+        .filter(|(name, value)| name.starts_with("pluginParameter:") && value.is_number())
+        .map(|(name, value)| (name.clone(), value.clone()))
+        .collect()
+}
+
+fn plugin_slider_snapshot_path(root: &std::path::Path, state_id: &str) -> std::path::PathBuf {
+    root.join(format!("{state_id}.sliders.json"))
+}
+
+/// The slider values to apply over a restored state at Play: all of them
+/// without a snapshot, otherwise only those set since the state was captured.
+fn plugin_sliders_to_apply(
+    parameters: &serde_json::Map<String, Value>,
+    captured: Option<&serde_json::Map<String, Value>>,
+) -> Vec<(String, Value)> {
+    plugin_slider_values(parameters)
+        .into_iter()
+        .filter(|(name, value)| {
+            let Some(captured) = captured else {
+                return true;
+            };
+            match (value.as_f64(), captured.get(name).and_then(Value::as_f64)) {
+                (Some(now), Some(then)) => (now - then).abs() > 1.0e-9,
+                _ => true,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
