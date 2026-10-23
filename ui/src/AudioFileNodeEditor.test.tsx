@@ -97,8 +97,35 @@ describe("Audio File Sound Check", () => {
     expect(backend.importTemporaryRecording).toHaveBeenCalledWith("take-row");
     expect(onChange).toHaveBeenCalledWith("mediaId", "temporary-media");
     expect(onChange).toHaveBeenCalledWith("fileName", "voice.wav");
+    expect(screen.getByText(/Sound Check ready · 10 sec · expires in 24 hours/)).toBeTruthy();
     expect(
       screen.getByText(/Plan and commit this Audio File source before replaying it through the effects/),
     ).toBeTruthy();
+  });
+
+  it("keeps Loop editable while the session is running", () => {
+    const { audioNode, backend, recorder } = soundCheckFixture();
+    const onChange = vi.fn();
+    render(
+      <AudioFileNodeEditor
+        node={audioNode}
+        backend={backend}
+        disabled
+        transportDisabled={false}
+        sessionRunning
+        state="playing"
+        sessionId={demoSession.id}
+        currentSessionIdRef={{ current: demoSession.id }}
+        recorderNodes={[recorder]}
+        recorderStatuses={[]}
+        onChange={onChange}
+        onTransport={vi.fn()}
+      />,
+    );
+
+    const loop = screen.getByRole("checkbox", { name: "Loop" });
+    expect((loop as HTMLInputElement).disabled).toBe(false);
+    fireEvent.click(loop);
+    expect(onChange).toHaveBeenCalledWith("loop", true);
   });
 });

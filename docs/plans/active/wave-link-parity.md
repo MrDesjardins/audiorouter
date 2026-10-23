@@ -138,6 +138,46 @@ sources to it, matching AudioRouter's occupied-output Mixer insertion.
   no-filter local invocation checked all pages and reports pre-existing stale
   social metadata on generated tool pages.
 
+## Owner-reported Audio File editor bugs — loop control and Sound Check text
+
+The owner reported that Loop is disabled while the session is playing and that
+the Sound Check ready message renders a garbled separator (`Â·`). The editor
+passed its session-running disabled state to every setting, even though the
+app has a live parameter-save path for changes made during playback.
+
+- Requirements: UI-05, UI-17, UI-24.
+- Ordered tasks: let Loop follow backend connectivity and Sound Check busy
+  state rather than the session-running editor lock; add component coverage
+  that toggles Loop with the session running; correct the Sound Check separator
+  and assert the displayed text; format, lint, typecheck, run focused and full
+  UI tests, build the UI and inspect the diff.
+- Validation matrix: focused AudioFileNodeEditor component tests; UI format,
+  lint, typecheck, full test suite and production build; `git diff --check`.
+  This validates the editor interaction and live-save dispatch, not physical
+  audio continuity on an owner's route.
+- Rollback: revert the scoped Audio File editor/test, UI-05 sentence and this
+  execution record. No backend, route schema or persistence change.
+- Implementation: the Audio File inspector's general edit lock still protects
+  file selection and Sound Check work while the route runs, but Loop now only
+  depends on backend connectivity and Sound Check import activity. Its change
+  continues through the existing parameter-only auto-save. Corrected the
+  Sound Check ready separators in UTF-8. Added component assertions for the
+  exact ready message and toggling Loop while `sessionRunning` is true.
+- Validation (Windows 11, Node 22.22.3): the focused component suite passes
+  (2 tests); full UI suite passes (73 files, 641 tests); TypeScript 7
+  `typecheck:all`, Prettier format check, ESLint (0 errors, 25 existing
+  exhaustive-deps warnings), documentation acceptance (186 files, 1,029
+  links), `git diff --check`, and production UI build pass. The first test
+  attempt used an unavailable `toBeEnabled` matcher; replacing it with the
+  native `disabled` property made the focused and full suites pass. Release
+  shell, plugin worker and CLI builds pass under
+  `target/owner-local-loop-fix/release`. Shell artifact:
+  `C:\code\audiorouter\.worktrees\wave-link-sound-check\target\owner-local-loop-fix\release\audiorouter-shell.exe`.
+  The owner tested the local build on their route and confirmed Loop can be
+  toggled during playback and the status message renders correctly.
+- Next: commit and push these approved fixes to existing PR #60; human
+  review/merge remains with the owner.
+
 ## Decisions
 
 - **UI-only first (historical).** The owner later selected Sound Check (#10).

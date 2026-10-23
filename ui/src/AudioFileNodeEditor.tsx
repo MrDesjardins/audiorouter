@@ -71,7 +71,7 @@ export function AudioFileNodeEditor({
         onChange("fileName", media.fileName);
       }
       setMessage(
-        `Sound Check ready Â· ${Math.round(media.durationMs / 1000)} sec Â· expires in 24 hours. Plan and commit this Audio File source before replaying it through the effects.`,
+        `Sound Check ready · ${Math.round(media.durationMs / 1000)} sec · expires in 24 hours. Plan and commit this Audio File source before replaying it through the effects.`,
       );
       activeTakeId.current = null;
       setTakeState("idle");
@@ -233,7 +233,7 @@ export function AudioFileNodeEditor({
         <input
           type="checkbox"
           checked={node.parameters.loop === true}
-          disabled={disabled || busy}
+          disabled={!backend.connected || busy}
           onChange={(event) => onChange("loop", event.target.checked)}
         />
       </label>

@@ -105,9 +105,14 @@ graph planning/commit path.
   also reported occupied Advanced EQ inputs should add a Mixer rather than
   replace the existing microphone; the fix and the updated Sound Check
   comparison row are in PR #60, opened at the owner's explicit request on
-  2026-10-22. Await review and CI; the owner handles merge. Continue with
-  Listen to any mix (#1 + #9) after review; CAP-10 overlap detection remains a
-  separate app-group follow-up.
+  2026-10-22. The owner then reported that Audio File Loop was disabled during
+  playback and Sound Check status text had a mojibake separator. The fixes
+  are recorded in the detailed parity plan; the owner tested the local build
+  and confirmed both fixes work. Changes are approved for commit and push to
+  the existing PR #60. Await review and CI; the owner handles merge. Continue
+  with Listen to any mix
+  (#1 + #9) after review; CAP-10 overlap detection remains a separate
+  app-group follow-up.
 
 ## Pull request approval preference 2026-10-22
 
