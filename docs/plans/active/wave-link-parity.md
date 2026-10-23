@@ -175,8 +175,11 @@ app has a live parameter-save path for changes made during playback.
   `C:\code\audiorouter\.worktrees\wave-link-sound-check\target\owner-local-loop-fix\release\audiorouter-shell.exe`.
   The owner tested the local build on their route and confirmed Loop can be
   toggled during playback and the status message renders correctly.
-- Next: commit and push these approved fixes to existing PR #60; human
-  review/merge remains with the owner.
+- Handoff: owner-tested fixes were pushed to existing PR #60 in commit
+  `d8e4d5d7` on 2026-10-22. CI and human review remain; the owner handles
+  merge.
+- Next: continue with Listen to any mix (#1 + #9) after PR #60 review; CAP-10
+  app-group overlap detection remains a separate follow-up.
 
 ## Decisions
 

@@ -108,8 +108,8 @@ graph planning/commit path.
   2026-10-22. The owner then reported that Audio File Loop was disabled during
   playback and Sound Check status text had a mojibake separator. The fixes
   are recorded in the detailed parity plan; the owner tested the local build
-  and confirmed both fixes work. Changes are approved for commit and push to
-  the existing PR #60. Await review and CI; the owner handles merge. Continue
+  and confirmed both fixes work. Fixes were pushed to existing PR #60 in
+  commit `d8e4d5d7`. Await review and CI; the owner handles merge. Continue
   with Listen to any mix
   (#1 + #9) after review; CAP-10 overlap detection remains a separate
   app-group follow-up.
