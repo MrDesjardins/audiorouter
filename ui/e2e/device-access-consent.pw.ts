@@ -1,4 +1,4 @@
-import { openAppSettings } from "./workbench";
+import { openAppSettings, stereoDemoSession } from "./workbench";
 import { test, expect } from "./browser-test";
 import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
 
@@ -6,16 +6,19 @@ import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
 // to open audio devices, then play, instead of a "Permission denied" banner.
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`a fresh install asks once to use audio devices, then plays, in ${theme}`, async ({ page }, testInfo) => {
-    await page.addInitScript((theme) => {
-      localStorage.setItem("audiorouter.ui.theme", theme);
-      Object.assign(window, { __routeFixtureFreshInstall: true });
-    }, theme);
+    await page.addInitScript(
+      ({ theme, session }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        Object.assign(window, { __routeFixtureFreshInstall: true, __routeFixtureSession: session });
+      },
+      { theme, session: stereoDemoSession },
+    );
     await page.goto("/route-harness.html");
     await openConnectionForm(page);
     const editor = page.locator(".workbench-connection-editor");
     for (const [source, target] of [
-      ["Microphone · out · 1ch", "Voice gain · in · 1ch"],
-      ["Voice gain · out · 1ch", "Headphones · in · 2ch"],
+      ["Microphone · out · 2ch", "Voice gain · in · 2ch"],
+      ["Voice gain · out · 2ch", "Headphones · in · 2ch"],
     ]) {
       await editor.getByLabel("Source output port").selectOption({ label: source });
       await editor.getByLabel("Destination input port").selectOption({ label: target });

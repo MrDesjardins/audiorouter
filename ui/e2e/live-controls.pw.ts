@@ -1,13 +1,14 @@
 import { test, expect, type Page } from "./browser-test";
-import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
+import { openConnectionForm, openDeviceTroubleshooting, stereoDemoSession } from "./workbench";
 
 async function playingRoute(page: Page, mode = "") {
+  await page.addInitScript((session) => Object.assign(window, { __routeFixtureSession: session }), stereoDemoSession);
   await page.goto(`/route-harness.html?flags=${mode}`);
   await openConnectionForm(page);
   const editor = page.locator(".workbench-connection-editor");
   for (const [source, target] of [
-    ["Microphone · out · 1ch", "Voice gain · in · 1ch"],
-    ["Voice gain · out · 1ch", "Headphones · in · 2ch"],
+    ["Microphone · out · 2ch", "Voice gain · in · 2ch"],
+    ["Voice gain · out · 2ch", "Headphones · in · 2ch"],
   ]) {
     await editor.getByLabel("Source output port").selectOption({ label: source });
     await editor.getByLabel("Destination input port").selectOption({ label: target });
