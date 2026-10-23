@@ -2585,7 +2585,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(error instanceof Error ? error.message : "Could not add application capture.");
     }
   };
-  const addApplicationGroupFromPicker = (chosen: ApplicationRow[], executablePaths: string[]) => {
+  const addApplicationGroupFromPicker = (chosen: ApplicationRow[], executablePaths: string[]): boolean => {
     try {
       const current = draftRef.current;
       const { session: next, mixerId } = appendApplicationCaptureGroup(current, chosen, executablePaths);
@@ -2598,8 +2598,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         `Added ${addedCount} application sources and a Mixer. Check that none of the selected apps launches another selected app, then plan and save the draft.`,
       );
       closeApplicationPicker();
+      return true;
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Could not create app group.");
+      return false;
     }
   };
   const rebindApplicationCapture = (nodeId: string, application: ApplicationRow) => {

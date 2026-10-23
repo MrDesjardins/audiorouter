@@ -48,6 +48,11 @@ test("creates an app group without changing existing graph connections in all th
     await page.screenshot({ path: testInfo.outputPath(`app-group-${theme}.png`), fullPage: false });
   }
   await expect(page.getByTestId("rf__node-mic")).toBeVisible();
+  // Reopening the picker starts a new group instead of re-adding these apps.
+  await page.getByRole("button", { name: "Choose an application source" }).click();
+  await page.getByRole("button", { name: "App group", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Create app group" })).toBeDisabled();
+  await expect(page.getByText("C:\\Games\\game.exe")).toHaveCount(0);
 });
 
 test("keeps the application picker readable and stable in every theme", async ({ page }, testInfo) => {

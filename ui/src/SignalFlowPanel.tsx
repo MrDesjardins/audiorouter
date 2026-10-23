@@ -82,7 +82,8 @@ export function SignalFlowPanel({
   setApplicationPickerSelection: Dispatch<SetStateAction<string>>;
   addApplicationCaptureFromPicker: (application: ApplicationRow) => void;
   addApplicationCapturePathFromPicker: (path: string) => void;
-  addApplicationGroupFromPicker: (applications: ApplicationRow[], executablePaths: string[]) => void;
+  /** Returns whether the group was added (the picker then starts empty next time). */
+  addApplicationGroupFromPicker: (applications: ApplicationRow[], executablePaths: string[]) => boolean;
 }) {
   const [applicationMode, setApplicationMode] = useState<"single" | "group">("single");
   const [groupApplicationKeys, setGroupApplicationKeys] = useState<string[]>([]);
@@ -314,7 +315,7 @@ export function SignalFlowPanel({
                   <input
                     aria-label="Application executable path"
                     value={executablePath}
-                    placeholder="C:\\Games\\game.exe"
+                    placeholder="C:\Games\game.exe"
                     onChange={(event) => setExecutablePath(event.target.value)}
                   />
                 </label>
@@ -463,7 +464,10 @@ export function SignalFlowPanel({
                       const chosen = capturable.filter((application) =>
                         groupApplicationKeys.includes(applicationKey(application)),
                       );
-                      addApplicationGroupFromPicker(chosen, groupExecutablePaths);
+                      if (addApplicationGroupFromPicker(chosen, groupExecutablePaths)) {
+                        setGroupApplicationKeys([]);
+                        setGroupExecutablePaths([]);
+                      }
                     }}
                   >
                     Create app group

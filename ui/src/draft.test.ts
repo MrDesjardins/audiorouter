@@ -308,6 +308,22 @@ describe("appendLibraryNode", () => {
     expect(duplicated.revision).toBe(demoSession.revision);
     const twice = duplicateDraftNode(duplicated, "voice");
     expect(twice.nodes.at(-1)?.id).toBe("voice-copy-2");
+    // Copying a copy numbers from the original instead of nesting.
+    const ofCopy = duplicateDraftNode(twice, "voice-copy-1");
+    expect(ofCopy.nodes.at(-1)?.id).toBe("voice-copy-3");
+  });
+
+  it("keeps pasted IDs within the backend's 128-byte limit", () => {
+    const long = { ...demoSession.nodes.find((node) => node.id === "voice")!, id: `v${"é".repeat(63)}` };
+    const session = { ...demoSession, nodes: [...demoSession.nodes, long] };
+    let next = session;
+    for (let index = 0; index < 3; index += 1) next = duplicateDraftNode(next, long.id);
+    const ids = next.nodes.slice(-3).map((node) => node.id);
+    expect(new Set(ids).size).toBe(3);
+    for (const id of ids) {
+      expect(new TextEncoder().encode(id).length).toBeLessThanOrEqual(128);
+      expect(id).toMatch(/-copy-\d$/);
+    }
   });
 
   it("pastes a configured node into another session with a fresh identity and no associations", () => {
