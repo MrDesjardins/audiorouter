@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { checks, fullChecks } from './checks.mjs';
 
 const fixtures = [
-  ['docs', ['docs/spec/09-interface.md'], []],
+  ['docs', ['docs/spec/09-interface.md'], ['docs']],
+  ['agent instructions', ['AGENTS.md'], ['docs']],
   ['ui', ['ui/src/App.tsx'], ['ui', 'windows']],
   ['backend', ['crates/control/src/service.rs'], ['backend', 'rust', 'windows']],
   ['contracts consumers', ['contracts/src/index.ts'], ['contracts', 'backend', 'ui', 'streamdeck', 'rust']],
@@ -17,17 +18,28 @@ const fixtures = [
   ['ui lock', ['ui/package-lock.json'], ['ui', 'supply']],
   ['root lock', ['Cargo.lock'], ['backend', 'supply']],
   ['shell lock', ['src-tauri/Cargo.lock'], ['backend', 'release', 'supply']],
-  ['website guide', ['site/tools/group.html'], ['ui']],
-  ['CI change', ['.github/workflows/ci.yml'], areas],
+  ['website guide', ['site/tools/group.html'], ['site']],
+  ['website styles', ['site/assets/compare.css'], ['site']],
+  ['CI change', ['.github/workflows/ci.yml'], []],
+  ['Jev workflow', ['.github/workflows/jev-review.yml'], []],
   ['quality workflow', ['.github/workflows/quality.yml'], areas],
-  ['policy change', ['tools/quality/policy.mjs'], areas],
+  ['policy change', ['tools/quality/policy.mjs'], []],
+  ['documentation validator', ['tools/docs/validate.mjs'], ['docs']],
   ['toolchain', ['rust-toolchain.toml'], areas],
   ['future executable', ['new-runner/config.js'], areas],
 ];
 for (const [name, files, enabled] of fixtures) test(`classifies ${name}`, () => {
   const flags = classifyChanges(files);
   for (const area of enabled) assert.equal(flags[area], true, area);
-  if (name === 'docs') for (const value of Object.values(flags)) assert.equal(value, false);
+  if (name === 'docs' || name === 'agent instructions') {
+    assert.equal(flags.docs, true);
+    for (const [key, value] of Object.entries(flags)) if (key !== 'docs') assert.equal(value, false, key);
+  }
+  if (name.startsWith('website')) {
+    assert.equal(flags.site, true);
+    assert.equal(flags.windows, false);
+    for (const area of ['backend', 'contracts', 'ui', 'probe', 'sdk', 'release', 'streamdeck', 'supply', 'docs']) assert.equal(flags[area], false, area);
+  }
   if (name.startsWith('streamdeck')) { assert.equal(flags.backend, false); assert.equal(flags.ui, false); }
 });
 test('full main/manual verification enables all areas', () => { for (const value of Object.values(classifyChanges([], { full: true }))) assert.equal(value, true); });
@@ -54,6 +66,16 @@ test('aggregate rejects missing/failed classification and inconsistent derived f
   assert.ok(evaluateGate(needs).length);
   delete needs.changes.outputs.ui; assert.ok(evaluateGate(needs).length);
 });
+test('aggregate requires only the affected documentation or website check', () => {
+  const docs = needsFor(classifyChanges(['docs/README.md']));
+  assert.equal(docs.docs.result, 'success');
+  assert.equal(docs.site.result, 'skipped');
+  const site = needsFor(classifyChanges(['site/compare.html']));
+  assert.equal(site.site.result, 'success');
+  assert.equal(site.docs.result, 'skipped');
+  assert.equal(site.windows.result, 'skipped');
+  assert.equal(site.browser.result, 'skipped');
+});
 test('aggregate rejects even an unnecessary failed check', () => {
   const needs = needsFor(classifyChanges(['docs/README.md'])); needs.browser.result = 'failure'; assert.ok(evaluateGate(needs).length);
 });
@@ -78,7 +100,7 @@ test('CI invokes the shared full inventory and gates every classified job', () =
   const expected = fullChecks(classifyChanges([], { full: true }));
   assert.deepEqual([...selected].sort(), expected.sort());
   for (const id of selected) assert.ok(Object.hasOwn(checks, id));
-  assert.match(workflow, /quality-gate:\s+name: Quality gate\s+if: always\(\)\s+needs: \[changes, docs, policy, supply-chain, windows, browser, streamdeck\]/);
+  assert.match(workflow, /quality-gate:\s+name: Quality gate\s+if: always\(\)\s+needs: \[changes, docs, site, policy, supply-chain, windows, browser, streamdeck\]/);
   assert.match(workflow, /NEEDS_RESULTS: \$\{\{ toJSON\(needs\) \}\}/);
   assert.match(workflow, /node tools\/quality\/gate\.mjs/);
   assert.match(workflow, /node tools\/quality\/policy\.mjs --github --event/);

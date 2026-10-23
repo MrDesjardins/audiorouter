@@ -26,7 +26,8 @@ validation for the changed surface.
 - Risks: path omissions could skip a relevant suite; unknown executable paths
   continue to select all product areas. Rollback: revert the classifier,
   workflow and tests together.
-- Next: implement and verify the path-based selection.
+- Evidence: CI policy tests on the review branch and the required Quality gate after the workflow update.
+- Next: merge after the narrowed Quality gate succeeds.
 
 
 ## Website comparison: AudioRouter and Elgato Wave Link — 2026-10-22
