@@ -81,6 +81,7 @@ describe("output fan-out across library tools", () => {
     dehum: true,
     declick: true,
     inputSwitch: true,
+    outputSwitch: true,
     duck: true,
     denoise: true,
     speechDenoise: true,
@@ -865,6 +866,22 @@ describe("Input Switch routes", () => {
     expect(next.nodes.find((node) => node.id === switchId)!.parameters).toEqual({ selected: "a", fade: "normal" });
     expect(mixerRouteSources(next)?.map((node) => node.kind)).toEqual(["applicationCapture", "physicalInput"]);
     expect(() => appendDraftConnection(next, "mic", "out", switchId, "a")).toThrow(/already has a connection/);
+  });
+});
+
+describe("Output Switch routes", () => {
+  it("adds one input and two named exclusive outputs", () => {
+    const session = appendLibraryNode(
+      { ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] },
+      "outputSwitch",
+    );
+    const outputSwitch = session.nodes.find((node) => node.kind === "outputSwitch")!;
+    expect(outputSwitch.parameters).toEqual({ selected: "a" });
+    expect(outputSwitch.ports).toEqual([
+      { name: "in", direction: "input", channels: 2 },
+      { name: "a", direction: "output", channels: 2 },
+      { name: "b", direction: "output", channels: 2 },
+    ]);
   });
 });
 

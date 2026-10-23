@@ -1681,6 +1681,62 @@
       ]
     },
     {
+      "kind": "outputSwitch",
+      "title": "Output Switch",
+      "purpose": "Send one signal to one of two destinations, such as headphones or an OBS virtual input.",
+      "concept": "Connect one source to the input, then connect destination A and destination B to the two outputs. The selected destination receives the signal; the other stays silent.",
+      "signalBehavior": "Switching fades the active destination down over 10 ms, then fades the new destination up over 10 ms. Both destinations are never active together, and an unconnected selected side stays silent.",
+      "properties": [
+        {
+          "key": "selected",
+          "label": "Active output",
+          "type": "string",
+          "default": "a",
+          "options": ["a", "b"],
+          "meaning": "Which output port receives audio.",
+          "increase": "Choose B to send audio to output B.",
+          "decrease": "Choose A to send audio to output A.",
+          "example": "Use A for headphones and B for the virtual cable feeding OBS.",
+          "caution": "Selecting an empty output is silent; the switch never falls back to the other side."
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Choose between headphones and OBS",
+          "steps": [
+            "Connect your microphone or processed voice to the Output Switch input.",
+            "Connect output A to your headphones and output B to the virtual cable selected by OBS.",
+            "Select A for private listening or B to send the voice to OBS."
+          ]
+        },
+        {
+          "title": "Switch while playing",
+          "steps": [
+            "Start the route and confirm the selected destination receives audio.",
+            "Choose the other destination in Properties, on the canvas node, or with a Stream Deck toggle action.",
+            "Confirm the previous destination becomes silent after the short handoff."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "Output Switch is not Input Switch: it sends one input to one of two output destinations.",
+        "Both output ports may feed multiple destinations, but only the selected side is audible.",
+        "Selecting an unconnected side produces silence instead of falling back."
+      ],
+      "suggestedVisual": {
+        "type": "outputSwitch",
+        "title": "One signal, one active destination",
+        "description": "Show a shared input, two destination branches, and the selected branch highlighted while the other remains silent.",
+        "accessibility": "User-controlled selection, keyboard-operable controls, and a text explanation. All example signals are synthetic and illustrative, not live audio or qualification evidence."
+      },
+      "sources": [
+        "crates/control/src/catalog.rs",
+        "docs/spec/04-graph.md",
+        "docs/spec/07-processing.md",
+        "ui/src/ToolVisuals.tsx"
+      ]
+    },
+    {
       "kind": "duck",
       "title": "Duck",
       "purpose": "Lower this branch when another signal or a supported game phase triggers it.",

@@ -334,6 +334,21 @@ fn toggles_flip_flags_on_off_settings_and_two_way_choices() {
         .unwrap()["value"],
         "a"
     );
+    call(
+        &mut plane,
+        "nodes.add",
+        json!({ "kind": "outputSwitch", "name": "Output Switch", "idempotencyKey": "o" }),
+    )
+    .unwrap();
+    assert_eq!(
+        call(
+            &mut plane,
+            "nodes.toggle",
+            json!({ "node": "Output Switch", "target": "selected", "idempotencyKey": "o1" })
+        )
+        .unwrap()["value"],
+        "b"
+    );
     assert_eq!(
         call(
             &mut plane,

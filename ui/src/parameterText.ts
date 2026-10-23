@@ -256,6 +256,9 @@ const TEXT: Record<string, Record<string, ParameterText>> = {
     selected: { label: "Active input", help: "Which input you hear: A or B." },
     fade: { label: "Switch speed", help: "Normal changes over half a second; Slow fades over two seconds." },
   },
+  outputSwitch: {
+    selected: { label: "Active output", help: "Which destination receives audio: A or B." },
+  },
 };
 
 const OPTION_LABELS: Record<string, string> = {

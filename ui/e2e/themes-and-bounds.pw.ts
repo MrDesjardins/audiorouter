@@ -24,6 +24,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     for (const [name, kind, control] of [
       ["Dehum", "dehum", "Harmonics precise value"],
       ["Input Switch", "inputSwitch", "Active input"],
+      ["Output Switch", "outputSwitch", "Active output"],
       ["Network Send", "networkSend", "Receiving computer's IP address"],
       ["Network Receive", "networkReceive", "Sending computer's IP address"],
     ]) {

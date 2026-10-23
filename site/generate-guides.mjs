@@ -45,6 +45,7 @@ const visualTypes = {
   firFilter: "fir",
   mute: "mute",
   inputSwitch: "inputSwitch",
+  outputSwitch: "outputSwitch",
   duck: "duck",
   timeShift: "buffer",
   mixer: "mixerTwoTrack",
@@ -164,6 +165,7 @@ const audioKinds = new Set([
   "firFilter",
   "mute",
   "inputSwitch",
+  "outputSwitch",
   "duck",
   "timeShift",
   "mixer",
@@ -195,6 +197,7 @@ const searchTitles = {
   firFilter: "Convolution: apply an impulse response (IR) live",
   mute: "Mute one audio path without touching the others",
   inputSwitch: "Switch between two audio inputs instantly",
+  outputSwitch: "Switch one audio signal between two output destinations",
   duck: "Audio ducking: lower music or game audio automatically",
   timeShift: "Pause and replay live audio (time shift)",
   mixer: "Mix several audio sources into one on Windows",
@@ -519,6 +522,8 @@ for (let i = 0; i < tools.length; i++) {
           ? '<label class="guide-demo-select">Branch state<select data-demo-option="muted" aria-label="Illustration mute state"><option value="false">Signal passes</option><option value="true">Muted</option></select></label>'
           : t.kind === "inputSwitch"
             ? '<div class="guide-band-selects"><label>Selected input<select data-demo-option="selected" aria-label="Illustration selected input"><option value="a">Input A</option><option value="b">Input B</option></select></label><label>Fade<select data-demo-option="fade" aria-label="Illustration switch fade"><option value="normal">Normal · 0.5 s</option><option value="slow">Slow · 2 s</option></select></label></div>'
+            : t.kind === "outputSwitch"
+              ? '<label class="guide-demo-select">Selected destination<select data-demo-option="selected" aria-label="Illustration selected output"><option value="a">A · Headphones</option><option value="b">B · OBS cable</option></select></label>'
             : "") +
     "" +
     (controls.length

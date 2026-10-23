@@ -330,6 +330,7 @@ const NODE_FLOW_GROUPS: Record<NodeKind, LibraryFlowGroup> = {
   dehum: "tool",
   declick: "tool",
   inputSwitch: "tool",
+  outputSwitch: "tool",
   duck: "tool",
   denoise: "tool",
   speechDenoise: "tool",
@@ -393,6 +394,7 @@ const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
   delay: "Sync",
   bassTreble: "Bass & Treble",
   inputSwitch: "Input Switch",
+  outputSwitch: "Output Switch",
   duck: "Duck",
   speechDenoise: "Speech Denoise",
   spectralGate: "Spectral Gate",
@@ -1359,6 +1361,17 @@ export function inputSwitchSourceNames(session: Session, switchId: string): { a:
   return { a: name("a"), b: name("b") };
 }
 
+export function outputSwitchDestinationNames(
+  session: Session,
+  switchId: string,
+): { a: string | null; b: string | null } {
+  const name = (port: "a" | "b") => {
+    const edge = session.edges.find((item) => item.enabled && item.sourceNode === switchId && item.sourcePort === port);
+    return edge ? (session.nodes.find((node) => node.id === edge.destinationNode)?.name ?? null) : null;
+  };
+  return { a: name("a"), b: name("b") };
+}
+
 function GateVisual({
   telemetry,
   thresholdDb,
@@ -1800,6 +1813,7 @@ function NodeVisual({
   mixerInputList,
   duckTriggerName,
   switchSourceNames,
+  switchDestinationNames,
   routed,
   sessionRunning,
   sessionActionBusy,
@@ -1821,6 +1835,7 @@ function NodeVisual({
   onToggleRecording?: (nodeId: string, record: boolean) => void;
   recordingBusyNodeId?: string | null;
   switchSourceNames?: { a: string | null; b: string | null };
+  switchDestinationNames?: { a: string | null; b: string | null };
   routed: boolean;
   sessionRunning: boolean;
   sessionActionBusy: boolean;
@@ -2074,6 +2089,31 @@ function NodeVisual({
           >
             <b>{side.toUpperCase()}</b>
             <small title={switchSourceNames?.[side] ?? undefined}>{switchSourceNames?.[side] ?? "not connected"}</small>
+          </button>
+        ))}
+      </div>
+    );
+  }
+  if (node.kind === "outputSwitch") {
+    const selected = node.parameters.selected === "b" ? "b" : "a";
+    return (
+      <div className="node-input-switch nodrag nopan" role="group" aria-label={`${node.name} output selection`}>
+        {(["a", "b"] as const).map((side) => (
+          <button
+            key={side}
+            type="button"
+            className={selected === side ? "is-selected" : ""}
+            aria-pressed={selected === side}
+            disabled={!onSetNodeParameter}
+            title={`Send audio to output ${side.toUpperCase()}.`}
+            onClick={() => {
+              if (onSetNodeParameter && selected !== side) onSetNodeParameter(node.id, "selected", side);
+            }}
+          >
+            <b>{side.toUpperCase()}</b>
+            <small title={switchDestinationNames?.[side] ?? undefined}>
+              {switchDestinationNames?.[side] ?? "not connected"}
+            </small>
           </button>
         ))}
       </div>
@@ -2903,6 +2943,9 @@ export function SessionFlowCanvas({
               mixerInputCount={mixerInputCount}
               mixerInputList={node.kind === "mixer" ? mixerInputs(session, node.id) : undefined}
               switchSourceNames={node.kind === "inputSwitch" ? inputSwitchSourceNames(session, node.id) : undefined}
+              switchDestinationNames={
+                node.kind === "outputSwitch" ? outputSwitchDestinationNames(session, node.id) : undefined
+              }
               duckTriggerName={
                 node.kind === "duck"
                   ? (session.nodes.find((candidate) => candidate.id === node.parameters.keyNodeId)?.name ?? null)

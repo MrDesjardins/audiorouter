@@ -123,6 +123,7 @@ pub enum NodeKind {
     Dehum,
     Declick,
     InputSwitch,
+    OutputSwitch,
     Denoise,
     SpeechDenoise,
     FirFilter,
@@ -141,7 +142,7 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 35] = [
+    pub const ALL: [Self; 36] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -168,6 +169,7 @@ impl NodeKind {
         Self::Dehum,
         Self::Declick,
         Self::InputSwitch,
+        Self::OutputSwitch,
         Self::Denoise,
         Self::SpeechDenoise,
         Self::FirFilter,
@@ -207,6 +209,7 @@ impl NodeKind {
             Self::Dehum => "dehum",
             Self::Declick => "declick",
             Self::InputSwitch => "input-switch",
+            Self::OutputSwitch => "output-switch",
             Self::Denoise => "denoise",
             Self::SpeechDenoise => "speech-denoise",
             Self::FirFilter => "fir-filter",
@@ -329,7 +332,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 35] {
+pub fn node_registry() -> [NodeTypeSpec; 36] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -349,6 +352,7 @@ pub fn node_registry() -> [NodeTypeSpec; 35] {
             | NodeKind::Dehum
             | NodeKind::Declick
             | NodeKind::InputSwitch
+            | NodeKind::OutputSwitch
             | NodeKind::Duck
             | NodeKind::FunVoiceChanger
             | NodeKind::Denoise
@@ -383,6 +387,7 @@ pub fn node_registry() -> [NodeTypeSpec; 35] {
             | NodeKind::Meter
             | NodeKind::TestSignal
             | NodeKind::InputSwitch
+            | NodeKind::OutputSwitch
             | NodeKind::Duck => "low",
             NodeKind::AudioFile => "low",
             NodeKind::ParametricEq => "medium",
@@ -1577,6 +1582,9 @@ pub enum ValidationError {
     WrongDirection {
         path: String,
     },
+    InvalidPortLayout {
+        path: String,
+    },
     InvalidChannels {
         path: String,
         channels: u8,
@@ -1641,6 +1649,9 @@ impl std::fmt::Display for ValidationError {
                     f,
                     "{path}: source must be output and destination must be input"
                 )
+            }
+            Self::InvalidPortLayout { path } => {
+                write!(f, "{path}: ports do not match this node's required layout")
             }
             Self::InvalidChannels { path, channels } => {
                 write!(
@@ -1804,6 +1815,34 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 });
             }
         }
+        if node.kind == NodeKind::OutputSwitch {
+            let input = node
+                .ports
+                .iter()
+                .find(|port| port.name == "in" && port.direction == PortDirection::Input);
+            let output_a = node
+                .ports
+                .iter()
+                .find(|port| port.name == "a" && port.direction == PortDirection::Output);
+            let output_b = node
+                .ports
+                .iter()
+                .find(|port| port.name == "b" && port.direction == PortDirection::Output);
+            let valid = node.ports.len() == 3
+                && input.is_some()
+                && output_a.is_some()
+                && output_b.is_some()
+                && input.is_some_and(|input| {
+                    (input.channels == 1 || input.channels == 2)
+                        && output_a.is_some_and(|port| port.channels == input.channels)
+                        && output_b.is_some_and(|port| port.channels == input.channels)
+                });
+            if !valid {
+                errors.push(ValidationError::InvalidPortLayout {
+                    path: format!("{path}.ports"),
+                });
+            }
+        }
         if node.parameters.len() > MAX_PARAMETERS_PER_NODE {
             errors.push(ValidationError::LimitExceeded {
                 path: format!("{path}.parameters"),
@@ -1880,6 +1919,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                     })
                 }
                 (NodeKind::InputSwitch, "selected") => {
+                    value.as_str().is_some_and(|side| matches!(side, "a" | "b"))
+                }
+                (NodeKind::OutputSwitch, "selected") => {
                     value.as_str().is_some_and(|side| matches!(side, "a" | "b"))
                 }
                 (NodeKind::InputSwitch, "fade") => value
@@ -3360,6 +3402,45 @@ mod tests {
     }
 
     #[test]
+    fn output_switch_requires_one_input_and_two_same_width_named_outputs() {
+        let mut switch = node("switch", NodeKind::OutputSwitch, PortDirection::Input);
+        switch.ports = vec![
+            Port {
+                name: "in".into(),
+                direction: PortDirection::Input,
+                channels: 2,
+            },
+            Port {
+                name: "a".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            },
+            Port {
+                name: "b".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            },
+        ];
+        switch
+            .parameters
+            .insert("selected".into(), serde_json::json!("a"));
+        assert!(validate_session(&session(vec![switch.clone()], vec![])).is_ok());
+
+        switch.ports[2].channels = 1;
+        assert!(validate_session(&session(vec![switch.clone()], vec![]))
+            .unwrap_err()
+            .iter()
+            .any(|error| matches!(error, ValidationError::InvalidPortLayout { .. })));
+
+        switch.ports[2].channels = 2;
+        switch.ports[1].direction = PortDirection::Input;
+        assert!(validate_session(&session(vec![switch], vec![]))
+            .unwrap_err()
+            .iter()
+            .any(|error| matches!(error, ValidationError::InvalidPortLayout { .. })));
+    }
+
+    #[test]
     fn accepts_valid_directed_graph() {
         assert!(validate_session(&session(
             vec![
@@ -4293,7 +4374,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 35);
+        assert_eq!(registry.len(), 36);
         let voice = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::FunVoiceChanger)

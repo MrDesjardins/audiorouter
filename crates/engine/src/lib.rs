@@ -3142,12 +3142,14 @@ pub struct CompiledMixerFanoutGraph {
     input_chains: Vec<Option<MixerInputChain>>,
     /// Present when the convergence node is an Input Switch (two inputs).
     input_switch: Option<InputSwitchState>,
+    output_switches: Vec<OutputSwitchState>,
     processing_graph: Option<RuntimeGraph>,
     privacy_mute: PrivacyMute,
     input_node_ids: Vec<audiorouter_domain::EntityId>,
     output_matrices: Vec<Vec<f32>>,
     output_node_ids: Vec<audiorouter_domain::EntityId>,
     output_sources: Vec<OutputBranchSource>,
+    output_gates: Vec<Vec<OutputSwitchGate>>,
     output_chains: Vec<OutputProcessorChain>,
     /// Direct destinations of a final pre-Mixer tool reuse that input's
     /// processed quantum, before Mixer gain or other sources are added.
@@ -3172,6 +3174,59 @@ enum OutputBranchSource {
     Mixed,
     Input(usize),
     Chain(usize),
+}
+
+#[derive(Clone, Copy)]
+struct OutputSwitchGate {
+    switch: usize,
+    side_b: bool,
+    muted: bool,
+}
+
+/// Exclusive output routing. Position 0 sends to A, 1 is silence, and 2
+/// sends to B. Moving between sides therefore fades down before fading up.
+struct OutputSwitchState {
+    node_id: audiorouter_domain::EntityId,
+    target: f32,
+    step_per_frame: f32,
+    position: std::sync::atomic::AtomicU32,
+    block_start: std::sync::atomic::AtomicU32,
+    block_end: std::sync::atomic::AtomicU32,
+}
+
+impl OutputSwitchState {
+    fn new(node_id: audiorouter_domain::EntityId, selected_b: bool) -> Self {
+        let target = if selected_b { 2.0 } else { 0.0 };
+        Self {
+            node_id,
+            target,
+            step_per_frame: 1.0 / (0.01 * INTERNAL_SAMPLE_RATE_HZ as f32),
+            position: std::sync::atomic::AtomicU32::new(target.to_bits()),
+            block_start: std::sync::atomic::AtomicU32::new(target.to_bits()),
+            block_end: std::sync::atomic::AtomicU32::new(target.to_bits()),
+        }
+    }
+
+    fn advance(&self, frames: usize) {
+        let start = f32::from_bits(self.position.load(Ordering::Relaxed));
+        let delta = self.step_per_frame * frames as f32;
+        let end = if start < self.target {
+            (start + delta).min(self.target)
+        } else {
+            (start - delta).max(self.target)
+        };
+        self.position.store(end.to_bits(), Ordering::Relaxed);
+        self.block_start.store(start.to_bits(), Ordering::Relaxed);
+        self.block_end.store(end.to_bits(), Ordering::Relaxed);
+    }
+
+    fn gain(position: f32, side_b: bool) -> f32 {
+        if side_b {
+            (position - 1.0).clamp(0.0, 1.0)
+        } else {
+            (1.0 - position).clamp(0.0, 1.0)
+        }
+    }
 }
 
 /// Each authored branch processor is prepared once, in dependency order.
@@ -3859,6 +3914,9 @@ impl CompiledMixerFanoutGraph {
     }
 
     fn prepare_output_chains(&self, mixed: &AudioBlock) -> Result<(), BlockError> {
+        for switch in &self.output_switches {
+            switch.advance(mixed.frames());
+        }
         // Clear readiness for this quantum before any dependency is read.
         for chain in &self.output_chains {
             chain.ready.store(false, Ordering::Release);
@@ -3919,6 +3977,28 @@ impl CompiledMixerFanoutGraph {
             destination.map_from(source, &self.output_matrices[index])
         }) {
             result?;
+        }
+        for gate in &self.output_gates[index] {
+            let switch = &self.output_switches[gate.switch];
+            let start = f32::from_bits(switch.block_start.load(Ordering::Relaxed));
+            let end = f32::from_bits(switch.block_end.load(Ordering::Relaxed));
+            let frames = destination.frames();
+            for channel in 0..destination.channels() {
+                if let Some(samples) = destination.channel_mut(channel) {
+                    for (frame, sample) in samples.iter_mut().enumerate() {
+                        let position = if frames <= 1 {
+                            end
+                        } else {
+                            start + (end - start) * frame as f32 / (frames - 1) as f32
+                        };
+                        *sample *= if gate.muted {
+                            0.0
+                        } else {
+                            OutputSwitchState::gain(position, gate.side_b)
+                        };
+                    }
+                }
+            }
         }
         // Branch DSP may generate or retain audio even with a muted input.
         // Enforce privacy after every branch, including pre-Mixer captures.
@@ -4559,6 +4639,19 @@ impl RealtimeMixerFanout {
             if let (Some(next), Some(previous)) = (&graph.input_switch, &path.graph.input_switch) {
                 next.position
                     .store(previous.position.load(Ordering::Relaxed), Ordering::Relaxed);
+            }
+            for next in &graph.output_switches {
+                if let Some(previous) = path
+                    .graph
+                    .output_switches
+                    .iter()
+                    .find(|previous| previous.node_id == next.node_id)
+                {
+                    let position = previous.position.load(Ordering::Relaxed);
+                    next.position.store(position, Ordering::Relaxed);
+                    next.block_start.store(position, Ordering::Relaxed);
+                    next.block_end.store(position, Ordering::Relaxed);
+                }
             }
             for next in graph
                 .output_chains
@@ -6932,6 +7025,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
             | NodeKind::NetworkReceive
             | NodeKind::Mixer
             | NodeKind::Recorder => {}
+            NodeKind::OutputSwitch => return Err(GraphCompileError::UnsupportedTopology),
             NodeKind::Meter => {
                 let index = stages
                     .iter()
@@ -7184,6 +7278,8 @@ struct OutputBranchCompiler<'a> {
     output_matrices: Vec<Vec<f32>>,
     output_node_ids: Vec<audiorouter_domain::EntityId>,
     output_sources: Vec<OutputBranchSource>,
+    output_gates: Vec<Vec<OutputSwitchGate>>,
+    output_switches: Vec<OutputSwitchState>,
     output_chains: Vec<OutputProcessorChain>,
 }
 
@@ -7197,6 +7293,7 @@ impl OutputBranchCompiler<'_> {
         source_id: &audiorouter_domain::EntityId,
         source_port: &str,
         source_channels: u8,
+        gates: &[OutputSwitchGate],
     ) -> Result<(), GraphCompileError> {
         use audiorouter_domain::{NodeKind, PortDirection};
         let session = self.session;
@@ -7225,18 +7322,114 @@ impl OutputBranchCompiler<'_> {
         if edge.source_node != *source_id
             || edge.source_port != source_port
             || edge.matrix.len() != usize::from(source_channels) * usize::from(input.channels)
-            || !self.participants.insert(node.id.clone())
         {
             return Err(GraphCompileError::UnsupportedTopology);
         }
         if sink {
-            if node.bypass || self.output_node_ids.len() >= MAX_FANOUT_BRANCHES {
+            if node.bypass
+                || self.output_node_ids.len() >= MAX_FANOUT_BRANCHES
+                || !self.participants.insert(node.id.clone())
+            {
                 return Err(GraphCompileError::UnsupportedTopology);
             }
             self.output_matrices.push(edge.matrix.clone());
             self.output_node_ids.push(node.id.clone());
             self.output_sources.push(source);
+            self.output_gates.push(gates.to_vec());
             return Ok(());
+        }
+        if node.kind == NodeKind::OutputSwitch {
+            if !self.participants.insert(node.id.clone()) {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+            let outputs = node
+                .ports
+                .iter()
+                .filter(|port| port.direction == PortDirection::Output)
+                .collect::<Vec<_>>();
+            if node.ports.len() != 3
+                || node
+                    .ports
+                    .iter()
+                    .filter(|port| port.direction == PortDirection::Input)
+                    .count()
+                    != 1
+                || outputs.len() != 2
+                || !outputs.iter().any(|port| port.name == "a")
+                || !outputs.iter().any(|port| port.name == "b")
+                || outputs.iter().any(|port| port.channels != input.channels)
+            {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+            let children = session
+                .edges
+                .iter()
+                .filter(|child| child.enabled && child.source_node == node.id)
+                .collect::<Vec<_>>();
+            if children.is_empty()
+                || children
+                    .iter()
+                    .any(|child| !matches!(child.source_port.as_str(), "a" | "b"))
+            {
+                return Err(GraphCompileError::UnsupportedTopology);
+            }
+            let state_index = self.output_switches.len();
+            self.output_switches.push(OutputSwitchState::new(
+                node.id.clone(),
+                node.parameters
+                    .get("selected")
+                    .and_then(|value| value.as_str())
+                    == Some("b"),
+            ));
+            let graph = compile_processor_chain(
+                session.id.as_str(),
+                &format!("output_switch_{}", node.id.as_str()),
+                &[],
+                input.channels,
+                self.generation,
+                self.plugins,
+                self.audio_media,
+            )?;
+            let chain_index = self.output_chains.len();
+            self.output_chains.push(OutputProcessorChain {
+                source,
+                entry_matrix: edge.matrix.clone(),
+                graph,
+                channels: usize::from(input.channels),
+                block: RealtimeDsp::new(
+                    AudioBlock::new(usize::from(input.channels), PROCESSING_QUANTUM_FRAMES)
+                        .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+                ),
+                ready: AtomicBool::new(false),
+                convergence: None,
+            });
+            let mut child_gates = gates.to_vec();
+            for child in children {
+                let side_b = child.source_port == "b";
+                let port_channels = outputs
+                    .iter()
+                    .find(|port| port.name == child.source_port)
+                    .ok_or(GraphCompileError::UnsupportedTopology)?
+                    .channels;
+                child_gates.push(OutputSwitchGate {
+                    switch: state_index,
+                    side_b,
+                    muted: !node.enabled || node.bypass,
+                });
+                self.compile(
+                    child,
+                    OutputBranchSource::Chain(chain_index),
+                    &node.id,
+                    &child.source_port,
+                    port_channels,
+                    &child_gates,
+                )?;
+                child_gates.pop();
+            }
+            return Ok(());
+        }
+        if !self.participants.insert(node.id.clone()) {
+            return Err(GraphCompileError::UnsupportedTopology);
         }
         if !is_chain_processor(node.kind)
             || (node.kind == NodeKind::Plugin && !self.plugins.contains_key(&node.id))
@@ -7288,6 +7481,7 @@ impl OutputBranchCompiler<'_> {
                 &node.id,
                 &output.name,
                 output.channels,
+                gates,
             )?;
         }
         Ok(())
@@ -7422,6 +7616,8 @@ fn compile_path_graph(
         output_matrices: Vec::new(),
         output_node_ids: Vec::new(),
         output_sources: Vec::new(),
+        output_gates: Vec::new(),
+        output_switches: Vec::new(),
         output_chains: Vec::new(),
     };
     for edge in branch_edges {
@@ -7431,6 +7627,7 @@ fn compile_path_graph(
             &current_node_id,
             &branch_source_port,
             branch_source_channels,
+            &[],
         )?;
     }
     let mut input_output_branches = Vec::new();
@@ -7481,6 +7678,7 @@ fn compile_path_graph(
                     &feed.source_node,
                     &feed.source_port,
                     channels,
+                    &[],
                 )?;
             }
         }
@@ -7489,6 +7687,8 @@ fn compile_path_graph(
         output_matrices,
         output_node_ids,
         output_sources,
+        output_gates,
+        output_switches,
         output_chains,
         ..
     } = branches;
@@ -7532,6 +7732,8 @@ fn compile_path_graph(
         output_matrices,
         output_node_ids,
         output_sources,
+        output_gates,
+        output_switches,
         output_chains,
         input_output_branches,
     };
@@ -12236,6 +12438,159 @@ mod tests {
                 other.map(|set| set.path_count())
             ),
         }
+    }
+
+    #[test]
+    fn output_switch_routes_one_side_and_breaks_before_making_the_other_live() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let port = |name: &str, direction| Port {
+            name: name.into(),
+            direction,
+            channels: 1,
+        };
+        let node = |id: &str, kind, ports: Vec<Port>, parameters: serde_json::Value| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(parameters).unwrap(),
+            ports,
+        };
+        let edge = |id: &str, source: &str, source_port: &str, destination: &str| Edge {
+            id: EntityId::new(id),
+            source_node: EntityId::new(source),
+            source_port: source_port.into(),
+            destination_node: EntityId::new(destination),
+            destination_port: "in".into(),
+            matrix: vec![1.0],
+            enabled: true,
+        };
+        let session = |selected: &str| Session {
+            id: EntityId::new("output-switch-test"),
+            name: "Output Switch test".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![
+                node(
+                    "mic",
+                    NodeKind::PhysicalInput,
+                    vec![port("out", PortDirection::Output)],
+                    serde_json::json!({}),
+                ),
+                node(
+                    "switch",
+                    NodeKind::OutputSwitch,
+                    vec![
+                        port("in", PortDirection::Input),
+                        port("a", PortDirection::Output),
+                        port("b", PortDirection::Output),
+                    ],
+                    serde_json::json!({ "selected": selected }),
+                ),
+                node(
+                    "headphones",
+                    NodeKind::PhysicalOutput,
+                    vec![port("in", PortDirection::Input)],
+                    serde_json::json!({}),
+                ),
+                node(
+                    "obs",
+                    NodeKind::PhysicalOutput,
+                    vec![port("in", PortDirection::Input)],
+                    serde_json::json!({}),
+                ),
+            ],
+            edges: vec![
+                edge("mic-switch", "mic", "out", "switch"),
+                edge("switch-headphones", "switch", "a", "headphones"),
+                edge("switch-obs", "switch", "b", "obs"),
+            ],
+        };
+        let compile = |selected: &str| {
+            compile_native_paths_with_plugins_and_audio(
+                &session(selected),
+                RuntimeGeneration::new(1),
+                &Default::default(),
+                &Default::default(),
+            )
+            .unwrap()
+        };
+        let frames = PROCESSING_QUANTUM_FRAMES;
+        let on_a = compile("a");
+        let graph_a = &on_a.paths()[0];
+        let mut source = AudioBlock::new(1, frames).unwrap();
+        source.channel_mut(0).unwrap().fill(0.5);
+        let mut scratch = AudioBlock::new(graph_a.mixer_channels(), frames).unwrap();
+        let mut headphones = AudioBlock::new(1, frames).unwrap();
+        let mut obs = AudioBlock::new(1, frames).unwrap();
+        let mut outputs = [&mut headphones, &mut obs];
+        graph_a
+            .process(&[source], &mut scratch, &mut outputs)
+            .unwrap();
+        assert!(headphones
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| (*sample - 0.5).abs() < 1e-6));
+        assert!(obs
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| sample.abs() < 1e-6));
+
+        let on_b = compile("b");
+        let graph_b = &on_b.paths()[0];
+        graph_b.output_switches[0]
+            .position
+            .store(0.0_f32.to_bits(), Ordering::Relaxed);
+        let mut saw_b = false;
+        for _ in 0..8 {
+            let mut source = AudioBlock::new(1, frames).unwrap();
+            source.channel_mut(0).unwrap().fill(0.5);
+            headphones.clear();
+            obs.clear();
+            let mut outputs = [&mut headphones, &mut obs];
+            graph_b
+                .process(&[source], &mut scratch, &mut outputs)
+                .unwrap();
+            let a = headphones.channel(0).unwrap();
+            let b = obs.channel(0).unwrap();
+            for (a, b) in a.iter().zip(b) {
+                assert!(*a == 0.0 || *b == 0.0, "outputs overlapped: {a}, {b}");
+            }
+            saw_b |= b.iter().any(|sample| *sample > 0.1);
+            if saw_b {
+                assert!(a.iter().all(|sample| sample.abs() < 1e-6));
+            }
+        }
+        assert!(saw_b, "the selected B output did not become active");
+
+        let mut disconnected = session("b");
+        disconnected
+            .edges
+            .retain(|edge| edge.id.as_str() != "switch-obs");
+        let no_fallback = compile_native_paths_with_plugins_and_audio(
+            &disconnected,
+            RuntimeGeneration::new(1),
+            &Default::default(),
+            &Default::default(),
+        )
+        .unwrap();
+        let graph = &no_fallback.paths()[0];
+        let mut source = AudioBlock::new(1, frames).unwrap();
+        source.channel_mut(0).unwrap().fill(0.5);
+        let mut scratch = AudioBlock::new(graph.mixer_channels(), frames).unwrap();
+        let mut fallback = AudioBlock::new(1, frames).unwrap();
+        graph
+            .process(&[source], &mut scratch, &mut [&mut fallback])
+            .unwrap();
+        assert!(fallback
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| sample.abs() < 1e-6));
     }
 
     #[test]

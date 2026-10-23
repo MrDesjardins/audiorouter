@@ -31,6 +31,7 @@ export type NodeKind =
   | "dehum"
   | "declick"
   | "inputSwitch"
+  | "outputSwitch"
   | "denoise"
   | "speechDenoise"
   | "firFilter"

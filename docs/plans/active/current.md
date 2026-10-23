@@ -152,9 +152,25 @@ VST2 and UAD plugins. Started as documentation only; U0 code followed (below).
 - Built for the owner (from the pre-rebase tree, UI from HEAD plus these
   UI files only): `src-tauri/target/release/audiorouter-shell.exe` 22:42 and
   `audiorouter-vst3-worker.exe` 22:41.
-- Next: the owner opens the 1176 window from the app on a live route; then,
-  with the owner's approval (AGENTS.md "Pull request approval"), push the
-  branch and open the PR.
+- Owner test 2026-10-22: the 1176 window opened from the app on a live
+  route and "works very good". At the owner's request
+  `feature/output-switch` (834a327d, f224856e) was merged locally into this
+  branch before any PR.
+- Next: with the owner's approval (AGENTS.md "Pull request approval"), push
+  the branch and open the PR.
+
+## Output Switch — active feature branch (2026-10-22)
+
+The owner authorized a routing node with one input and two exclusive outputs,
+toggled in the app or on Stream Deck. Work is isolated on
+`feature/output-switch`; see the detailed
+[Output Switch plan](output-switch.md) for contracts, decisions, tasks and
+validation. Implementation and automated checks are complete. Local build:
+`C:\code\audiorouter\.worktrees\output-switch\src-tauri\target\debug\audiorouter-shell.exe`
+(worker and CLI sidecars are beside it). Local commit `834a327d` is on the
+feature branch. Owner testing is pending. The requested local-main merge is
+deferred while the shared `main` worktree has unrelated uncommitted changes
+and is 32 commits behind `origin/main`; see the detailed plan.
 
 ## Wave Link parity #4 — application sources and groups — 2026-10-22
 

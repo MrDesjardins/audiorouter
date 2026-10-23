@@ -41,6 +41,7 @@ Sources (checked 2026-10-22): [Wave Link 3.0 software overview](https://www.elga
 | 14 | Hide unused devices from pickers (3.1) | Every active endpoint is listed | **in progress**: per-PC hidden devices, managed in Status › Audio devices on this PC (UI-22) | UI only, small |
 | 15 | Import Wave Link 2 settings | Session import of AudioRouter files only | Import a Wave Link or Voicemeeter setup into a graph | Needs their file formats; medium |
 | 16 | Voice Focus (AI noise and echo reduction) | Speech denoise; no echo cancellation | Echo cancellation for speaker users; model-based isolation is already a future row | High (licence, latency, failure policy) |
+| 17 | Output Switch (one signal selects one of two destinations) | No routing node selects between two output branches | One input, output A/B; only selected branch receives audio; toggle from Properties or Stream Deck | Small–medium after engine branch-routing support; remain exclusive while switching |
 
 ## Not pursued
 
@@ -52,7 +53,10 @@ Sources (checked 2026-10-22): [Wave Link 3.0 software overview](https://www.elga
 ## Suggested order
 
 The not-running app picker and basic app groups (#4) were merged in PR #59.
-Sound Check (#10) is implemented with the existing graph workflow; a simpler
-in-panel experience remains an opportunity. Listen to any mix (#1 with #9)
-remains the next larger workflow gap, followed by Mixer view (#3). The virtual
-cable (#2) remains the strategic item.
+Sound Check (#10) and its follow-up were merged in PR #60. The Meter target
+zone (#11) and hidden devices (#14) were merged in PR #58. Output Switch
+(#17) is implemented on `feature/output-switch` and awaits owner testing; it
+chooses where one signal is sent and does not provide the separate temporary
+listen-to-any-mix monitor path (#1). Listen to any mix (#1 + #9) remains the
+next broader workflow; Mixer view (#3) follows.
+The virtual cable (#2) remains the strategic item.
