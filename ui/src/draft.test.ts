@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ApplicationInfo, Session } from "@audiorouter/contracts";
 import {
   addSourceToOccupiedOutput,
+  appendApplicationCaptureGroup,
   appendApplicationCaptureNode,
+  appendApplicationCapturePathNode,
   applicationCaptureChoices,
   applicationOnlyRouteSource,
   independentPaths,
@@ -641,6 +643,67 @@ describe("appendApplicationCaptureNode", () => {
       },
       ports: [{ name: "out", direction: "output", channels: 2 }],
     });
+  });
+
+  it("adds a closed application's executable selector without storing a PID", () => {
+    const next = appendApplicationCapturePathNode(demoSession, "C:\\Games\\game.exe");
+    expect(next.nodes.at(-1)).toMatchObject({
+      kind: "applicationCapture",
+      name: "game.exe capture 1",
+      parameters: {
+        executable: "game.exe",
+        executablePath: "C:\\Games\\game.exe",
+        processPolicy: "allVerifiedInstances",
+      },
+    });
+    expect(next.nodes.at(-1)?.parameters).not.toHaveProperty("processId");
+    expect(next.edges).toEqual(demoSession.edges);
+  });
+
+  it.each(["", "game.exe", "C:\\Games\\game.txt", "C:\\Games\\bad?.exe", "C:\\Games\\bad.exe\n"])(
+    "rejects an invalid executable path: %s",
+    (path) => {
+      expect(() => appendApplicationCapturePathNode(demoSession, path)).toThrow(/full Windows path|\.exe/);
+    },
+  );
+
+  it("expands a group into app sources connected to one Mixer and de-duplicates paths", () => {
+    const running: ApplicationInfo = {
+      processId: 42,
+      executable: "chat.exe",
+      executablePath: "C:\\Apps\\chat.exe",
+      creationTime100ns: "123",
+      audioActivity: "active",
+      captureCapability: "observed",
+      audioSessionCount: 1,
+      activeAudioSessionCount: 1,
+      captureSessionCount: 0,
+      renderSessionCount: 1,
+      audioDisplayNames: ["Chat"],
+    };
+    const result = appendApplicationCaptureGroup(demoSession, [running], ["c:\\apps\\CHAT.exe", "D:\\Games\\game.exe"]);
+    const sources = result.session.nodes.filter((node) => node.kind === "applicationCapture");
+    const mixer = result.session.nodes.find((node) => node.id === result.mixerId)!;
+    expect(sources).toHaveLength(2);
+    expect(sources[0].parameters.processPolicy).toBe("allVerifiedInstances");
+    expect(sources[0].parameters).not.toHaveProperty("processId");
+    expect(sources[1].parameters).toEqual({
+      executable: "game.exe",
+      executablePath: "D:\\Games\\game.exe",
+      processPolicy: "allVerifiedInstances",
+    });
+    expect(
+      result.session.edges.filter((edge) => edge.destinationNode === mixer.id && edge.destinationPort === "in"),
+    ).toHaveLength(2);
+    expect(result.session.edges).toHaveLength(demoSession.edges.length + 2);
+    for (const edge of demoSession.edges) expect(result.session.edges).toContainEqual(edge);
+  });
+
+  it("rejects a group with fewer than two unique app selectors atomically", () => {
+    expect(() => appendApplicationCaptureGroup(demoSession, [], ["C:\\Apps\\chat.exe"])).toThrow(/at least two/);
+    expect(() => appendApplicationCaptureGroup(demoSession, [], ["C:\\Apps\\chat.exe", "c:\\apps\\CHAT.exe"])).toThrow(
+      /at least two/,
+    );
   });
 });
 

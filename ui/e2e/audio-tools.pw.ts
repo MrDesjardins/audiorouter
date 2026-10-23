@@ -573,7 +573,7 @@ test("the workspace plans and commits a connected multi-input processing route",
   }
   await page.getByRole("tab", { name: "Tools" }).click();
   await page.getByRole("button", { name: "Choose an application source" }).click();
-  await page.getByRole("button", { name: "Add capture source" }).click();
+  await page.getByRole("button", { name: "Add running app" }).click();
   await expect(page.getByTestId("rf__node-application-capture-1")).toBeVisible();
   await openDeviceTroubleshooting(page);
   await page.locator(".right-workbench").getByLabel("Native render endpoint").selectOption("render-preview");

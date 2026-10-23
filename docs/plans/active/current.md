@@ -1,5 +1,117 @@
 # Active plan — post-0.0.8 maintenance
 
+## Wave Link parity #4 — application sources and groups — 2026-10-22
+
+Objective: let a user add an application source from a selected `.exe` even
+when that app is closed, and create a group of multiple app sources feeding a
+Mixer. Preserve the existing per-process-tree selector contract and normal
+graph planning/commit path.
+
+- Requirements: CAP-05, CAP-06, CAP-10, UI-23; GRAPH-01/02 and UI-17 apply.
+- Prerequisites/evidence: application sources already persist an executable
+  basename/path and support `allVerifiedInstances`; running-app selection is
+  currently limited to `applications.list`. The desktop has a native COM file
+  dialog for session files. An app group can be represented without a new
+  backend node kind: separate `applicationCapture` nodes connected to a Mixer.
+- Decisions: persist only an executable selector for a picked `.exe`, never
+  the current PID; use `allVerifiedInstances`, and let backend preparation
+  resolve the verified live instance(s). A group is a creation convenience
+  expanded into ordinary application nodes and one Mixer, so each app can be
+  renamed/rebound/removed independently. Select multiple running app entries
+  or add `.exe` paths; de-duplicate identical normalized executable paths.
+  The Windows picker uses the existing isolated COM-dialog pattern and offers
+  a typed full-path fallback in browser previews. Do not auto-start or reroute
+  apps. Do not silently claim parent/child deduplication unless backend
+  evidence establishes it; surface the CAP-10 limitation for candidate groups
+  and record any required backend follow-up explicitly. Fix the global checkbox
+  min-height so app-group switches match the existing 2.55 × 1.4 rem switch;
+  review this shared switch change in all three themes.
+- Ordered tasks: (1) add UI-23 picker/group contract and update this plan and
+  future list; (2) add strict path-to-selector helper and atomic group graph
+  expansion (app sources → Mixer); (3) add native `.exe` open dialog and
+  browser path entry; (4) wire single and grouped flows into the canvas
+  picker; (5) regress closed-app persistence, grouped topology, duplicate
+  paths, malformed paths, and composition with existing sources/outputs;
+  (6) run UI format, lint, typecheck, unit tests, production build, focused
+  Edge tests in dark/light/high-contrast, relevant Rust format/Clippy/tests,
+  documentation validation and diff review.
+- Validation matrix: pure draft tests for executable selectors and atomic
+  composition; component tests for app selection and error states; Windows
+  Edge route-harness scenarios for closed apps, groups, existing sources,
+  and no layout shift; Rust shell checks for the new Windows dialog command;
+  docs links/anchors and `git diff --check`. CI supplies the final current-base
+  check. No live audio is required to validate graph construction; do not
+  claim runtime process capture from UI evidence.
+- Risks: invalid, non-EXE, moved, protected or ambiguous applications must
+  remain stopped/silent with backend errors; app groups can duplicate audio
+  when one chosen process tree contains another until CAP-10 overlap detection
+  is verified. Rollback: revert UI-23, the scoped picker/draft/dialog changes,
+  tests and docs together; no session schema migration or audio-driver change.
+- Implementation (2026-10-22): closed-app paths create `allVerifiedInstances`
+  selectors with basename and full path, no PID; running single-app selection
+  retains the existing exact-instance behavior. Group creation accepts running
+  apps and/or executable paths, normalizes duplicate paths, and atomically
+  expands them into ordinary capture nodes plus a Mixer. Added a Windows
+  `.exe` Open dialog on its own COM STA thread. No session schema, backend API,
+  graph node kind, or playback policy changed. The picker warns against
+  parent/helper combinations and the action summary repeats the caution. The
+  checked global switch sizing is 2.55 × 1.4 rem; it fixes existing checkbox
+  switches too.
+- Validation (Windows 11, 2026-10-22, Node 22.22.3, Edge; pinned Rust 1.96.0): UI format
+  and format check pass; TypeScript 7 `typecheck:all` passes; ESLint exits 0
+  with 25 existing exhaustive-deps warnings and no errors; all 72 UI test files
+  pass (638 tests); production build passes (existing >500 KB chunk warning).
+  Focused Edge route-harness tests pass 3/3: closed-app path selection,
+  two-source Mixer expansion while preserving prior edges, and picker stability
+  in dark/light/high-contrast. Screenshots reviewed from
+  `%TEMP%/audiorouter-playwright-results/application-sources.pw.ts--669c1-e-and-stable-in-every-theme/`.
+  The first run of the added three-theme test hit a non-unique test locator;
+  using an exact accessible name fixed the fixture, and the complete rerun
+  passed. Shell Clippy (`--all-targets --all-features -D warnings`) passes;
+  workspace Clippy passes; `cargo test --manifest-path src-tauri/Cargo.toml
+  --locked` passes (83 passed, 4 ignored); both Rust format checks pass.
+  Documentation acceptance passes (186 Markdown files, 1,027 links), and
+  `git diff --check` passes. Not run: live process-loopback capture, native
+  file-dialog interaction in a packaged shell, or group behavior with
+  parent/child process trees.
+- Owner local-test build (Windows 11): `npm.cmd run build --prefix ui` passed,
+  then `cargo build --release --manifest-path src-tauri/Cargo.toml
+  --features custom-protocol`, `cargo build --release -p
+  audiorouter-plugin-host --bin audiorouter-plugin-worker`, and `cargo build
+  --release -p audiorouter-cli` passed with `CARGO_TARGET_DIR` set to
+  `target/owner-local-test`. Shell artifact:
+  `C:\code\audiorouter\.worktrees\wave-link-app-sources\target\owner-local-test\release\audiorouter-shell.exe`.
+  The plugin worker and CLI are beside it. This is a local unsigned build,
+  not an installer or release qualification.
+- Deviation/blocker: current API does not expose process ancestry and backend
+  CAP-10 does not yet detect parent/helper overlap between app-capture nodes.
+  Group creation therefore warns clearly but cannot deduplicate or reject a
+  selected parent/helper pair. Keep this as a CAP-10 follow-up before claiming
+  full group-overlap safety.
+- Review handoff: commit `53816c46` is pushed in isolated branch
+  `feature/wave-link-app-sources`; [PR #59](https://github.com/MrDesjardins/audiorouter/pull/59)
+  was opened before the owner's new PR-approval preference and is now closed.
+  The owner tested the local build and reported that it is working. On
+  2026-10-22 the owner authorized pushing these changes directly to `main`.
+  GitHub rejected that push because branch rules require a PR and the
+  `Quality gate` status check. The feature branch is pushed through commit
+  `18e91b3f`; PR #59 remains closed, and no replacement PR is open. The hosted
+  CI run for PR #59 was cancelled. Keep CAP-10 overlap detection on the open
+  list.
+- Next: after explicit human approval to open a PR for the current branch and
+  changes, run the required gate and merge through GitHub. Then continue Wave
+  Link parity with Listen to any mix (#1 + #9), retaining CAP-10 overlap
+  detection as a separate app-group follow-up.
+
+## Pull request approval preference 2026-10-22
+
+The owner requests that no agent create or open a pull request until a human
+explicitly approves the exact branch and changes. Complete local validation,
+inspect the diff, and report the branch, commit and results before asking for
+that approval. Authorization to implement, commit, push or run CI is not PR
+approval. PR #59 was closed for local testing; the owner tested the local
+build, confirmed it works, and explicitly authorized a direct push to `main`.
+
 ## Wave Link parity, first round — 2026-10-22, owner request
 
 Tracked in its own plan, [Wave Link parity](wave-link-parity.md): level

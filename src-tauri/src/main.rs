@@ -977,6 +977,24 @@ async fn choose_session_file(
     }
 }
 
+/// Show the Windows Open dialog for one existing `.exe` and return its path.
+#[tauri::command]
+async fn choose_application_executable(
+    window: tauri::WebviewWindow,
+) -> Result<Option<String>, String> {
+    #[cfg(windows)]
+    {
+        let owner = window.hwnd().map(|hwnd| hwnd.0 as isize).unwrap_or(0);
+        session_file_dialog::choose_executable(owner)
+            .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        Err("application file dialogs are only available on Windows".into())
+    }
+}
+
 fn write_probe_marker(path: &std::path::Path, contents: &[u8]) -> Result<(), String> {
     let parent = path
         .parent()
@@ -2002,6 +2020,7 @@ fn main() {
             open_tool_guide,
             open_plugin_editor,
             choose_session_file,
+            choose_application_executable,
             session_id,
             mcp_activity_list,
             backend_diagnostics_list,

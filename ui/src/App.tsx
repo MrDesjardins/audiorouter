@@ -35,6 +35,8 @@ import { QuitButton } from "./QuitButton";
 import {
   addSourceToOccupiedOutput,
   appendApplicationCaptureNode,
+  appendApplicationCapturePathNode,
+  appendApplicationCaptureGroup,
   applicationOnlyRouteSource,
   generatedOnlyRoute,
   needsNativePaths,
@@ -2581,6 +2583,38 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(error instanceof Error ? error.message : "Could not add application capture.");
     }
   };
+  const addApplicationCapturePathFromPicker = (path: string) => {
+    try {
+      const next = appendApplicationCapturePathNode(draftRef.current, path);
+      const added = next.nodes.at(-1);
+      if (!added) throw new Error("Application capture node was not created");
+      recordDraftChange(next);
+      setSelectedNodeId(added.id);
+      setActionMessage(
+        `Added ${String(added.parameters.executable)} as a saved application selector. It captures only after a verified process match is found and the route is started.`,
+      );
+      closeApplicationPicker();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Could not add application capture.");
+    }
+  };
+  const addApplicationGroupFromPicker = (chosen: ApplicationRow[], executablePaths: string[]) => {
+    try {
+      const current = draftRef.current;
+      const { session: next, mixerId } = appendApplicationCaptureGroup(current, chosen, executablePaths);
+      const addedCount =
+        next.nodes.filter((node) => node.kind === "applicationCapture").length -
+        current.nodes.filter((node) => node.kind === "applicationCapture").length;
+      recordDraftChange(next);
+      setSelectedNodeId(mixerId);
+      setActionMessage(
+        `Added ${addedCount} application sources and a Mixer. Check that none of the selected apps launches another selected app, then plan and save the draft.`,
+      );
+      closeApplicationPicker();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Could not create app group.");
+    }
+  };
   const rebindApplicationCapture = (nodeId: string, application: ApplicationRow) => {
     try {
       recordDraftChange(rebindApplicationCaptureNode(draftRef.current, nodeId, application));
@@ -3246,6 +3280,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     applicationsError={applicationsError}
                     setApplicationPickerSelection={setApplicationPickerSelection}
                     addApplicationCaptureFromPicker={addApplicationCaptureFromPicker}
+                    addApplicationCapturePathFromPicker={addApplicationCapturePathFromPicker}
+                    addApplicationGroupFromPicker={addApplicationGroupFromPicker}
                   />
                 )}
               </LiveTelemetry>

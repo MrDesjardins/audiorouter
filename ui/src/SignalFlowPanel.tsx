@@ -1,10 +1,11 @@
 // The Signal flow panel: canvas, connection form and the connection, plug-in and application dialogs (moved from App.tsx).
+import { useState } from "react";
 import type { Dispatch, MouseEvent, ReactElement, RefObject, SetStateAction } from "react";
 import type { DiagnosticsSnapshot, Node, PluginScanEntry, Session } from "@audiorouter/contracts";
 import type { ApplicationRow, UiBackend } from "./backend";
 import { applicationCaptureChoices, applicationChoiceKey } from "./draft";
 import { LoadedPluginsPanel, PluginScanPanel } from "./PluginPanels";
-import { ApplicationChoiceOptions } from "./NodeEditors";
+import { ApplicationChoiceOptions, applicationChoiceLabel } from "./NodeEditors";
 
 export function SignalFlowPanel({
   flowCanvas,
@@ -42,6 +43,8 @@ export function SignalFlowPanel({
   applicationsError,
   setApplicationPickerSelection,
   addApplicationCaptureFromPicker,
+  addApplicationCapturePathFromPicker,
+  addApplicationGroupFromPicker,
 }: {
   flowCanvas: ReactElement;
   backend: UiBackend;
@@ -78,7 +81,14 @@ export function SignalFlowPanel({
   applicationsError: string | null;
   setApplicationPickerSelection: Dispatch<SetStateAction<string>>;
   addApplicationCaptureFromPicker: (application: ApplicationRow) => void;
+  addApplicationCapturePathFromPicker: (path: string) => void;
+  addApplicationGroupFromPicker: (applications: ApplicationRow[], executablePaths: string[]) => void;
 }) {
+  const [applicationMode, setApplicationMode] = useState<"single" | "group">("single");
+  const [groupApplicationKeys, setGroupApplicationKeys] = useState<string[]>([]);
+  const [groupExecutablePaths, setGroupExecutablePaths] = useState<string[]>([]);
+  const [executablePath, setExecutablePath] = useState("");
+  const [pickerMessage, setPickerMessage] = useState("");
   return (
     <section id="signal-flow-panel" className="canvas-panel" aria-labelledby="canvas-heading">
       <div className="section-heading">
@@ -272,15 +282,103 @@ export function SignalFlowPanel({
                   </button>
                 </div>
                 <p id="application-picker-description" className="muted">
-                  Pick a running application to capture its audio as an input node. After restart, AudioRouter
-                  reconnects when it finds one verified matching instance; if several match, choose the intended
-                  instance again. Playback does not start just because the app is open.
+                  Add a running app or choose its .exe while it is closed. AudioRouter saves the executable identity,
+                  not a process ID, then checks for a verified match when you start the route. App groups create
+                  separate sources feeding a Mixer; avoid selecting an app together with a helper it launches.
                 </p>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className={applicationMode === "single" ? "primary" : "secondary"}
+                    aria-pressed={applicationMode === "single"}
+                    onClick={() => setApplicationMode("single")}
+                  >
+                    One application
+                  </button>
+                  <button
+                    type="button"
+                    className={applicationMode === "group" ? "primary" : "secondary"}
+                    aria-pressed={applicationMode === "group"}
+                    onClick={() => setApplicationMode("group")}
+                  >
+                    App group
+                  </button>
+                </div>
                 <div className="actions">
                   <button type="button" className="secondary" onClick={refreshApplications}>
                     Refresh applications
                   </button>
                 </div>
+                <label>
+                  Application executable path
+                  <input
+                    aria-label="Application executable path"
+                    value={executablePath}
+                    placeholder="C:\\Games\\game.exe"
+                    onChange={(event) => setExecutablePath(event.target.value)}
+                  />
+                </label>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={async () => {
+                      const invoke = window.__TAURI_INTERNALS__?.invoke;
+                      if (!invoke) {
+                        setPickerMessage("Type the full path to the application's .exe file.");
+                        return;
+                      }
+                      try {
+                        const path = await invoke("choose_application_executable");
+                        if (typeof path === "string" && path) setExecutablePath(path);
+                        setPickerMessage("");
+                      } catch (error) {
+                        setPickerMessage(error instanceof Error ? error.message : "Unable to open the file picker.");
+                      }
+                    }}
+                  >
+                    Browse for .exe
+                  </button>
+                  {applicationMode === "group" ? (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => {
+                        const path = executablePath.trim();
+                        if (!path) {
+                          setPickerMessage("Choose or type an .exe path first.");
+                          return;
+                        }
+                        setGroupExecutablePaths((paths) =>
+                          paths.some((item) => item.toLocaleLowerCase() === path.toLocaleLowerCase())
+                            ? paths
+                            : [...paths, path],
+                        );
+                        setExecutablePath("");
+                        setPickerMessage("");
+                      }}
+                    >
+                      Add path to group
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!backend.connected}
+                      onClick={() => {
+                        addApplicationCapturePathFromPicker(executablePath);
+                        setPickerMessage("");
+                      }}
+                    >
+                      Add this app source
+                    </button>
+                  )}
+                </div>
+                <p className="muted application-picker-status" role="status" aria-live="polite">
+                  <span title={pickerMessage || "Choose an .exe from disk, or type its full path."}>
+                    {pickerMessage || "Choose an .exe from disk, or type its full path."}
+                  </span>
+                </p>
                 {applicationsError ? (
                   <p className="muted" role="status">
                     Application inventory unavailable: {applicationsError}
@@ -291,35 +389,85 @@ export function SignalFlowPanel({
                   </p>
                 ) : (
                   <>
-                    <label>
-                      Application
-                      <select
-                        aria-label="Application to capture"
-                        value={selected ? applicationKey(selected) : ""}
-                        onChange={(event) => setApplicationPickerSelection(event.target.value)}
-                      >
-                        <ApplicationChoiceOptions applications={applications} />
-                      </select>
-                    </label>
-                    {selected && (
-                      <p className="muted" role="status">
-                        {selected.executable} ·{" "}
-                        {selected.audioSessionCount > 0
-                          ? `audio `
-                          : "no audio session yet; capture begins when it plays sound"}
-                      </p>
+                    {applicationMode === "single" ? (
+                      <>
+                        <label>
+                          Running application
+                          <select
+                            aria-label="Application to capture"
+                            value={selected ? applicationKey(selected) : ""}
+                            onChange={(event) => setApplicationPickerSelection(event.target.value)}
+                          >
+                            <ApplicationChoiceOptions applications={applications} />
+                          </select>
+                        </label>
+                        {selected && (
+                          <p className="muted" role="status">
+                            {selected.executable} ·{" "}
+                            {selected.audioSessionCount > 0
+                              ? "audio active"
+                              : "no audio session yet; capture begins when it plays sound"}
+                          </p>
+                        )}
+                        <div className="actions">
+                          <button
+                            type="button"
+                            className="primary"
+                            onClick={() => selected && addApplicationCaptureFromPicker(selected)}
+                            disabled={!backend.connected || !selected}
+                          >
+                            Add running app
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <fieldset className="application-group-options" disabled={!backend.connected}>
+                        <legend>Applications in this group</legend>
+                        {capturable.map((application) => {
+                          const key = applicationKey(application);
+                          return (
+                            <label key={key} className="checkbox-row">
+                              <input
+                                type="checkbox"
+                                checked={groupApplicationKeys.includes(key)}
+                                onChange={(event) =>
+                                  setGroupApplicationKeys((keys) =>
+                                    event.target.checked ? [...keys, key] : keys.filter((item) => item !== key),
+                                  )
+                                }
+                              />
+                              <span>{applicationChoiceLabel(application)}</span>
+                            </label>
+                          );
+                        })}
+                        {groupExecutablePaths.map((path) => (
+                          <label key={path.toLocaleLowerCase()} className="checkbox-row">
+                            <input
+                              type="checkbox"
+                              checked
+                              onChange={() => setGroupExecutablePaths((paths) => paths.filter((item) => item !== path))}
+                            />
+                            <span>{path}</span>
+                          </label>
+                        ))}
+                      </fieldset>
                     )}
-                    <div className="actions">
-                      <button
-                        type="button"
-                        className="primary"
-                        onClick={() => selected && addApplicationCaptureFromPicker(selected)}
-                        disabled={!backend.connected || !selected}
-                      >
-                        Add capture source
-                      </button>
-                    </div>
                   </>
+                )}
+                {applicationMode === "group" && (
+                  <button
+                    type="button"
+                    className="primary"
+                    disabled={!backend.connected || groupApplicationKeys.length + groupExecutablePaths.length < 2}
+                    onClick={() => {
+                      const chosen = capturable.filter((application) =>
+                        groupApplicationKeys.includes(applicationKey(application)),
+                      );
+                      addApplicationGroupFromPicker(chosen, groupExecutablePaths);
+                    }}
+                  >
+                    Create app group
+                  </button>
                 )}
                 <p className="muted">
                   For advanced options (application-capture policy, preparing the native worker), use the Applications
