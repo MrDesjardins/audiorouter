@@ -62,6 +62,17 @@ copy the thread, COM initialisation, dialog options and CoTaskMem
 copy-then-free of `choose`/`show`. Parameterise one helper with the filter and
 title so a future fix to the unsafe code cannot miss a copy.
 
+### R7 — Edge suite flakes on hosted runners
+
+During the 0.0.21 merge (2026-10-23) five CI runs each failed one different
+Edge test that passed on rerun and locally (9/9 repeats for the first):
+`compact-workspace` "debounced live autosave … in dark",
+`session-workflows` "… survive backend restart" (after Delete session),
+`canvas-layout-review` "new connections keep both chosen sides …" and
+`plugin-inspector` "… in high-contrast" (two harness loads in one 30 s
+budget; now 60 s). Find each test's wait on timing rather than state, and
+consider Playwright retries with a flake report instead of whole-job reruns.
+
 ### R6 — Site comparison wording for VST2
 
 PR #57 changed `site/compare.html` from "Load x64 VST2 and VST3 effects …

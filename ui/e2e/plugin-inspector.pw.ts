@@ -58,6 +58,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
   test(`a plugin that passes audio unchanged suggests a licence check without moving the panel in ${theme}`, async ({
     page,
   }, testInfo) => {
+    // Two full harness loads; slow hosted runners exceeded the 30 s default.
+    test.setTimeout(60_000);
     const health = await openPlugin(page, theme, true);
     const note = health.locator(".plugin-unchanged-audio");
     await expect(note).toBeVisible();
