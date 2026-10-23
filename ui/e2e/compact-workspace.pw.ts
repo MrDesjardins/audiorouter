@@ -79,11 +79,35 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
     const canvas = page.getByLabel("Signal-flow graph");
     const before = (await canvas.boundingBox())!;
+    // The autosave state lasts a 400 ms debounce. A stalled hosted runner
+    // missed it while polling (2026-10-23), so record every state the node
+    // shows instead of polling for a passing one.
+    await page.evaluate(() => {
+      const seen: string[] = [];
+      Object.assign(window, { __voiceSaveStates: seen });
+      const record = () => {
+        const content = document.querySelector('[data-testid="rf__node-voice"] .flow-node-content');
+        const state = content?.getAttribute("data-save-state");
+        const label = content?.querySelector(".node-save-indicator")?.textContent;
+        if (state) seen.push(`state:${state}`);
+        if (label) seen.push(`label:${label}`);
+      };
+      new MutationObserver(record).observe(document.body, {
+        subtree: true,
+        attributes: true,
+        childList: true,
+        characterData: true,
+      });
+    });
+    const planCalls = () =>
+      page.evaluate(() => (window as unknown as { __routeFixturePlanCalls(): number }).__routeFixturePlanCalls());
     await page.getByRole("group", { name: "Gain choices" }).getByRole("button", { name: "−6 dB", exact: true }).click();
     const content = page.getByTestId("rf__node-voice").locator(".flow-node-content");
-    await expect(content).toHaveAttribute("data-save-state", "autosave");
-    await expect(content.locator(".node-save-indicator")).toHaveText("Autosaving…");
+    await expect.poll(planCalls).toBe(1);
     await expect(content.locator(".node-save-indicator")).toHaveCount(0);
+    const seen = await page.evaluate(() => (window as unknown as { __voiceSaveStates: string[] }).__voiceSaveStates);
+    expect(seen).toContain("state:autosave");
+    expect(seen).toContain("label:Autosaving…");
     const save = page.locator(".topbar").getByRole("button", { name: "Save", exact: true });
     await expect(save).toBeDisabled();
     expect((await canvas.boundingBox())!).toEqual(before);

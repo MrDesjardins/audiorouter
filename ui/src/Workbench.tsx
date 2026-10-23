@@ -279,7 +279,6 @@ export function Workbench({
   canCommit?: boolean;
   pendingPlan?: boolean;
   actionMessage?: string | null;
-  onReplaceInputConnection?: () => void;
   sessions: Session[];
   selectedSessionId: string;
   onSelectSession: (id: string) => void;
