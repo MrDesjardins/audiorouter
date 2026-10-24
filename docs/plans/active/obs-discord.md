@@ -224,8 +224,25 @@ in a game.
   - UI: `ui/src/appUsage.ts` (device usage, cable pairing, the Discord
     check), with tests built on the owner's topology, including the
     2026-10-03 "CABLE In 16ch" failure.
-- Waiting: compiling and testing are on hold. Siege was running with 0.8 GB
-  free memory, which matches the no-heavy-builds rule.
-- Next: run `cargo test -p audiorouter-windows-audio -p audiorouter-control`,
-  Clippy and fmt, and the UI typecheck and Vitest. Then the Apps tab, the
-  top-bar strip and the device-node footers.
+  - UI: the Apps tab (`AppsPanel.tsx`), the top-bar strip
+    (`AppStatusStrip.tsx`) and `useApplicationUsage.ts` (refresh on focus,
+    10 s poll only while Apps is open and visible, last good list kept on
+    failure). Both rows always render, and the badge and chip widths are
+    fixed (UI-17).
+  - Specs: UI-26 (Apps) and CAP-15 (endpoint session inventory). Quickstart
+    has a "Checking Discord's devices (Apps tab)" section. The docs check
+    passes.
+- Waiting: compiling and testing are on hold while the owner plays
+  (no-heavy-builds rule).
+- Next, in order:
+  1. `cargo fmt` (both) and Clippy (workspace and `src-tauri`,
+     `--all-features`).
+  2. `cargo test -p audiorouter-windows-audio -p audiorouter-control
+     -p audiorouter-cli`.
+  3. UI `npm ci`, typecheck, lint and Vitest; contracts typecheck and drift.
+  4. Edge screenshots of Apps in the three themes, with layout-offset
+     sampling while the check changes.
+  5. Time the `apps.list` handler on the live PC and watch
+     `audioService.lateGaps`; compare its endpoints with the read-only
+     session script.
+  6. Then the device-node "Used by" footers (rest of D1).
