@@ -346,6 +346,10 @@ practice. Decision needed from the owner: A, B, or a smaller first step
 
 ## Next action
 
-Owner chooses the Listen to any mix option above. Then add its
-requirement IDs, ordered tasks and validation matrix here before any code.
+Listen to any mix is not authorized. On 2026-10-23 the owner was unsure it
+is worth the risk. The agent's recommendation was to defer it: a
+hand-wired Input Switch already selects between two mixes, and option B
+would change the core compiler. Revisit only if the owner asks. Then add
+the chosen option's requirement IDs, ordered tasks and validation matrix
+here before any code.
 The owner's Output Switch hardware test from PR #65 is still outstanding.
