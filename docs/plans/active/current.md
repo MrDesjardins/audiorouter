@@ -17,6 +17,17 @@ clean worktree with `create-draft-release.ps1 -Tag v0.0.22 -AppOnly`
 packaged shell, download the draft and `verify-artifacts.ps1`, publish as
 a prerelease, record evidence in `evidence/2026-10-24-release-0.0.22.md`.
 
+- Released: [v0.0.22](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.22)
+  on `097c0354`, published 2026-10-24 20:21 UTC as a prerelease
+  ([evidence](evidence/2026-10-24-release-0.0.22.md)). Keep 0.0.21 for
+  rollback. The build found that `tools/m06-vst3-sdk/install.ps1` could not
+  find Git's bash when started from Git Bash; fixed after the tag
+  (`2694cbad`).
+- Next: the owner installs 0.0.22 and checks the Apps tab with Discord and
+  OBS; then the background application inventory
+  ([future work](../future/obs-discord-integration.md#follow-up-build-the-application-inventory-off-the-control-thread)).
+  Watch the next coverage nightly for the drift-test change.
+
 CI notice kept on purpose: GitHub annotates every Linux job with "The
 ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026".
 Those jobs only run Node scripts on pinned `setup-node` versions, so
