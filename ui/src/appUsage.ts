@@ -150,14 +150,19 @@ export function sixteenChannelTwin(device: DeviceListItem, devices: readonly Dev
   );
 }
 
+/** "CABLE-A Output (VB-Audio Virtual Cable A)" as "CABLE-A Output". */
+const shortName = (name: string) => name.replace(VB_CABLE, "").trim();
+
 const names = (uses: readonly DeviceUse[]) => uses.map((use) => use.label).join(" and ");
 
 /** One app on a device node's device, or on the other end of its cable. */
 export interface NodeAppUse {
   label: string;
   appId: KnownAppId | null;
-  /** How the app relates to the audio this node carries, in plain words. */
+  /** How the app relates to this node, short enough for one Properties row. */
   role: string;
+  /** The same as a full sentence, for tooltips. */
+  detail: string;
   /**
    * "heard": records the other end of this node's cable, so it hears what
    * the node sends. "source": plays into the cable this node records.
@@ -211,7 +216,8 @@ export function nodeDeviceUsers(
       appId: use.appId,
       // Windows reports a loopback recorder like a player (spec CAP), and a
       // call app's speaker is a player: neither hears what this node sends.
-      role: output
+      role: output ? "plays here too, e.g. as its speaker" : "records this device too",
+      detail: output
         ? `plays to ${deviceName} too (for example as its speaker), or records what plays there`
         : `records ${deviceName} too`,
       relation: "shared",
@@ -225,7 +231,8 @@ export function nodeDeviceUsers(
         uses.push({
           label: use.label,
           appId: use.appId,
-          role: output
+          role: output ? `hears it on ${shortName(partner.name)}` : `plays into ${shortName(partner.name)}`,
+          detail: output
             ? `records ${partner.name}, so it hears what this node sends`
             : `plays into ${partner.name}, so this node receives its sound`,
           relation: output ? "heard" : "source",
@@ -234,7 +241,7 @@ export function nodeDeviceUsers(
       const astray = twin ? active(twin.id, "capture").filter((use) => use.appId !== null) : [];
       if (twin && astray.length > 0) {
         warning = `${names(astray)} ${astray.length === 1 ? "records" : "record"} from ${twin.name}, not ${partner.name}`;
-        alert = `${names(astray)} ${astray.length === 1 ? "is" : "are"} on ${twin.name.replace(VB_CABLE, "").trim()}`;
+        alert = `${names(astray)} ${astray.length === 1 ? "is" : "are"} on ${shortName(twin.name)}`;
       }
     }
     // Discord or OBS on the raw microphone skips the processing this session

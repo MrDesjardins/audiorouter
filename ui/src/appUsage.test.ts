@@ -400,13 +400,15 @@ describe("device node users (D1 footers)", () => {
         {
           label: "Discord",
           appId: "discord",
-          role: "records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+          role: "hears it on CABLE-A Output",
+          detail: "records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
           relation: "heard",
         },
         {
           label: "OBS",
           appId: "obs",
-          role: "records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+          role: "hears it on CABLE-A Output",
+          detail: "records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
           relation: "heard",
         },
       ],
@@ -417,7 +419,9 @@ describe("device node users (D1 footers)", () => {
       {
         label: "RainbowSix",
         appId: null,
-        role: "plays to CABLE Input (VB-Audio Virtual Cable) too (for example as its speaker), or records what plays there",
+        role: "plays here too, e.g. as its speaker",
+        detail:
+          "plays to CABLE Input (VB-Audio Virtual Cable) too (for example as its speaker), or records what plays there",
         relation: "shared",
       },
     ]);
@@ -458,13 +462,15 @@ describe("device node users (D1 footers)", () => {
         {
           label: "Discord",
           appId: "discord",
-          role: "records Microphone (PD200X Podcast Microphone) too",
+          role: "records this device too",
+          detail: "records Microphone (PD200X Podcast Microphone) too",
           relation: "shared",
         },
         {
           label: "Audacity",
           appId: null,
-          role: "records Microphone (PD200X Podcast Microphone) too",
+          role: "records this device too",
+          detail: "records Microphone (PD200X Podcast Microphone) too",
           relation: "shared",
         },
       ],
