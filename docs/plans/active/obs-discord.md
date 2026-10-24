@@ -632,3 +632,30 @@ has been requested or granted for this branch.
     tests, UI typecheck, lint and Vitest, contracts typecheck and drift,
     Edge screenshots of the OBS card in three themes with offset sampling,
     then one attended Fix and Restore on a copied OBS profile.
+- Set up for Discord (D2, Discord slice), 2026-10-24 (owner: "Let's do 1
+  and 2"). Branch `feature/discord-setup`, from `main`, separate from
+  the D1 footers.
+  - Scope: the Discord goal only. OBS, "Record clips" and "Hear game and
+    Discord" goal cards stay open for the OBS stages; the flow is one card
+    in Apps rather than a modal, so they can join it as steps.
+  - `ui/src/discordRoute.ts`: `discordSetupOptions` (microphones,
+    whole cables, busy cables, preselection) and `appendDiscordRoute`
+    (one draft change; reuses free device nodes; refuses a fed cable or a
+    second voice route). `DiscordSetup.tsx`: step 1 form, step 2
+    Discord steps with Copy device name.
+  - Entry points: the Discord microphone row (replacing "Set up a virtual
+    cable" when there is no voice cable; the flow itself links to Virtual
+    Cables when none is installed) and the first-run guide.
+  - Route harness: same `__routeFixtureApplications` and
+    `__routeFixtureDevices` hunk as the D1 branch (identical, merges
+    cleanly).
+  - Checks: Vitest `discordRoute.test.ts` (6) and
+    `DiscordSetup.test.tsx` (4); Edge `discord-setup.pw.ts` (add, card
+    turns Check then Ready after Discord moves to the cable, one Undo
+    removes all four nodes, review line and Add button keep their place
+    when the summary changes, screenshots in three themes, reviewed).
+  - Also: UI typecheck, lint (0 warnings), Vitest 732/732, docs check.
+    After an Undo the flow returns to step 1; it is tied to the session it
+    was opened in. The full development Edge suite is not yet qualified
+    (first run lacked `e2e_backend.exe`; the re-run was stopped for low
+    memory before reaching this branch).

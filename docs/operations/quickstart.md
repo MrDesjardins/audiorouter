@@ -825,6 +825,22 @@ Adjust a Gain or Volume before the Meter until you are in the zone. The guide is
 for voice; music and game audio are mixed to other levels. It changes nothing
 in the audio.
 
+### Setting up Discord in two steps
+
+On a new route, **Apps** › Discord › **Set up for Discord** (also in the
+first-run guide) builds the voice route for you:
+
+1. Choose your microphone and a virtual cable. AudioRouter preselects your
+   Windows microphone for calls and a cable this session does not use yet.
+   Leave **Clean up my voice** on to add a Gate, Compressor and Limiter
+   you can adjust later. **Add route** adds it to your draft; one **Undo**
+   removes it.
+2. **Save**, press **Play**, then in Discord set Input Device to the
+   cable's Output (for example *CABLE-A Output*). The Discord card turns
+   Ready once Discord records it in a call.
+
+No cable installed yet? The flow sends you to **Virtual Cables** first.
+
 ### Checking Discord's devices (Apps tab)
 
 Open **Apps** in the right sidebar to check that Discord uses the devices

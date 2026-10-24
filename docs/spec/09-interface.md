@@ -348,6 +348,20 @@ audio readiness and explains the exact endpoint and authorization steps.
   - **Refresh:** on window focus, every 10 s while the tab is open, and
     never while hidden. The last good result is kept through a failure.
   - **Writes:** AudioRouter never changes Discord or Windows settings.
+  - **Set up for Discord (D2):** offered by the microphone row when the
+    session sends no voice to a cable, and by the first-run guide.
+    - Step 1 offers active non-cable microphones (session's own, else the
+      Windows default for calls) and whole VB-Cables, never a 16ch twin; a
+      cable the session already uses is named as busy and not preselected.
+      An optional Gate, Compressor and Limiter chain is on by default.
+    - **Add route** adds microphone → chain → cable Input to the draft as
+      one undo step, reusing free nodes already bound to those devices. It
+      refuses a cable another source already plays into and a second voice
+      route to the same cable. The review and any refusal share four
+      reserved lines (UI-17).
+    - Step 2 names the cable Output to choose in Discord, with Copy device
+      name; the Discord card checks it live. No PC cable: the flow links to
+      Virtual Cables instead.
   - **OBS Studio card (SEC-15):** shows "What OBS hears": each audio
     source, its device and what reaches it (Voice, Voice without effects,
     Discord, other session sources), with the problem in words.

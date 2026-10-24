@@ -112,6 +112,9 @@ export function appDevices(
 
 const VB_CABLE = /\((VB-Audio[^)]*)\)\s*$/i;
 
+/** Whether a Windows device name is a VB-Audio virtual cable endpoint. */
+export const isVirtualCableName = (name: string) => VB_CABLE.test(name);
+
 /**
  * The other side of a VB-Cable: "CABLE-A Input (VB-Audio Virtual Cable A)"
  * (playback) pairs with "CABLE-A Output (VB-Audio Virtual Cable A)"

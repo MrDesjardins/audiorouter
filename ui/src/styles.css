@@ -7744,3 +7744,56 @@ input[type="color"] {
 .theme-high-contrast .obs-sources tr.is-muted {
   opacity: 1;
 }
+
+/* "Set up for Discord" (D2): stacked captions above full-width fields. */
+.discord-setup-step {
+  flex: none;
+  font-size: 0.8rem;
+  color: var(--muted, #9aa6b8);
+}
+.discord-setup p {
+  margin: 0;
+}
+.discord-setup-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+.discord-setup-field select {
+  width: 100%;
+}
+.discord-setup-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+}
+/* Four reserved lines: the summary and an error swap in place (UI-17). */
+.discord-setup-review {
+  height: 5.2em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+.discord-setup-review.is-error {
+  color: #ffb4a8;
+}
+.theme-light .discord-setup-review.is-error {
+  color: #a3261a;
+}
+.theme-high-contrast .discord-setup-review.is-error {
+  color: #fff;
+  text-decoration: underline;
+}
+.discord-setup-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+}
+.discord-setup-list .app-copy-name {
+  display: grid;
+  width: fit-content;
+  margin-top: 0.3rem;
+}

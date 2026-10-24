@@ -154,6 +154,8 @@ import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from
 import { ConnectionForm } from "./ConnectionForm";
 import { SetupWorkbench } from "./SetupWorkbench";
 import { AppsPanel } from "./AppsPanel";
+import { DiscordSetup, type DiscordSetupChoice } from "./DiscordSetup";
+import { appendDiscordRoute, discordSetupOptions } from "./discordRoute";
 import { AppStatusStrip } from "./AppStatusStrip";
 import { discordCheck, pendingDiscordCheck, sessionInvolvesDiscord, voiceCableOutputs } from "./appUsage";
 import { APP_USAGE_FOLLOW_UP_MS, useApplicationUsage } from "./useApplicationUsage";
@@ -324,6 +326,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     );
   }, []);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("tools");
+  // "Set up for Discord" (D2), open for one session; each opening keys a
+  // fresh form, and `added` (Discord's microphone) is step 2.
+  const [discordSetup, setDiscordSetup] = useState<{
+    key: number;
+    sessionId: string;
+    added: import("@audiorouter/contracts").DeviceListItem | null;
+  } | null>(null);
   // The Apps tab and top-bar strip start after the first snapshot: the backend
   // serves one request at a time, and `apps.list` sent first held back the
   // start-up snapshot and so the first screen. The desktop backend now builds
@@ -2239,6 +2248,29 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(formatUiError(error, "Unable to add the pass-through route."));
     }
   };
+  const openDiscordSetup = () => {
+    setWorkbenchTab("apps");
+    setDiscordSetup((current) =>
+      current?.sessionId === draftRef.current.id
+        ? current
+        : { key: Date.now(), sessionId: draftRef.current.id, added: null },
+    );
+  };
+  /** Adds the Discord route as one undoable draft change; returns an error to show, or null. */
+  const addDiscordRoute = (choice: DiscordSetupChoice): string | null => {
+    if (!backend.connected) return "Connect to AudioRouter before changing the draft.";
+    try {
+      const result = appendDiscordRoute(draft, devices, choice);
+      recordDraftChange(result.session);
+      setDiscordSetup((current) => current && { ...current, added: result.discordMicrophone });
+      setActionMessage(
+        `Added your voice route to the draft. Save, then Play, and choose ${result.discordMicrophone.name} as Discord's microphone.`,
+      );
+      return null;
+    } catch (error) {
+      return formatUiError(error, "Unable to add the Discord route.");
+    }
+  };
   // A plugin dragged from the Plugins list onto the canvas lands where it is
   // dropped, like a built-in tool; it never replaces a pending insertion.
   const addDroppedPlugin = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
@@ -2946,6 +2978,26 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         refreshObs();
       }}
       onOpenVirtualCables={() => setWorkbenchTab("virtualCables")}
+      onSetUpDiscord={openDiscordSetup}
+      discordSetup={
+        discordSetup?.sessionId === draft.id && (
+          <DiscordSetup
+            key={discordSetup.key}
+            options={discordSetupOptions(draft, devices)}
+            connected={backend.connected}
+            // After an Undo the route is gone, so the form comes back.
+            added={
+              discordSetup.added &&
+              voiceCableOutputs(draft, devices).some((device) => device.id === discordSetup.added?.id)
+                ? discordSetup.added
+                : null
+            }
+            onAdd={addDiscordRoute}
+            onClose={() => setDiscordSetup(null)}
+            onOpenVirtualCables={() => setWorkbenchTab("virtualCables")}
+          />
+        )
+      }
       obs={
         <ObsCard
           key={draft.id}
@@ -3048,6 +3100,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             connected={backend.connected}
             onRefresh={() => refreshDevices()}
             onOpenTools={() => setWorkbenchTab("tools")}
+            onSetUpDiscord={openDiscordSetup}
           />
         </>
       }
