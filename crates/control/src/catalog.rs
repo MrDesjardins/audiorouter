@@ -420,16 +420,27 @@ impl ControlPlane {
     }
 
     pub(crate) fn dispatch_apps_list(&mut self) -> Result<Value, ControlError> {
+        if let Some(inventory) = &self.application_inventory {
+            return inventory.list();
+        }
         if let Some((captured_at, snapshot)) = &self.application_snapshot {
             if captured_at.elapsed() < APPLICATION_SNAPSHOT_TTL {
                 return Ok(snapshot.clone());
             }
         }
+        let snapshot = Self::build_application_inventory()?;
+        self.application_snapshot = Some((Instant::now(), snapshot.clone()));
+        Ok(snapshot)
+    }
+
+    /// Enumerate processes and their audio sessions (30-100 ms on a real
+    /// PC). Runs on the inventory thread once the backend service starts.
+    pub(crate) fn build_application_inventory() -> Result<Value, ControlError> {
         let applications =
             audiorouter_windows_audio::enumerate_applications().map_err(audio_control_error)?;
         let audio = audiorouter_windows_audio::enumerate_application_audio()
             .map_err(audio_control_error)?;
-        let snapshot = json!(applications
+        Ok(json!(applications
             .into_iter()
             .map(|application| {
                 let session = audio.iter().find(|item| item.process_id == application.process_id);
@@ -455,9 +466,7 @@ impl ControlPlane {
                     })).collect()),
                 })
             })
-            .collect::<Vec<_>>());
-        self.application_snapshot = Some((Instant::now(), snapshot.clone()));
-        Ok(snapshot)
+            .collect::<Vec<_>>()))
     }
 
     pub(crate) fn dispatch_processors_response(

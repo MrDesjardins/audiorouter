@@ -159,7 +159,9 @@ recorded previous values.
 
 ## Follow-up: build the application inventory off the control thread
 
-Owner decision 2026-10-24: after 0.0.22, not before it.
+Owner decision 2026-10-24: after 0.0.22, not before it. Started
+2026-10-24 on `feature/apps-inventory-thread`; see
+[the active plan](../active/current.md#application-inventory-thread-2026-10-24-owner-request).
 
 `apps.list` enumerates processes and their audio sessions synchronously on
 the backend's control thread (`dispatch_apps_list` in

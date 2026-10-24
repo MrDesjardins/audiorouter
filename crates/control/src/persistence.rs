@@ -262,6 +262,7 @@ impl ControlPlane {
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
             application_snapshot: None,
+            application_inventory: None,
             application_capture_runtime: None,
             plugin_inventories: HashMap::new(),
             plugin_bridges: Default::default(),

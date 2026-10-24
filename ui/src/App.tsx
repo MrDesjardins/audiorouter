@@ -156,7 +156,7 @@ import { SetupWorkbench } from "./SetupWorkbench";
 import { AppsPanel } from "./AppsPanel";
 import { AppStatusStrip } from "./AppStatusStrip";
 import { discordCheck, pendingDiscordCheck, sessionInvolvesDiscord, voiceCableOutputs } from "./appUsage";
-import { useApplicationUsage } from "./useApplicationUsage";
+import { APP_USAGE_FOLLOW_UP_MS, useApplicationUsage } from "./useApplicationUsage";
 import { ObsCard, type ObsActions } from "./ObsCard";
 import { obsCheck } from "./obsUsage";
 import { useObsStatus } from "./useObsStatus";
@@ -325,8 +325,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, []);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("tools");
   // The Apps tab and top-bar strip start after the first snapshot: the backend
-  // serves one request at a time, and `apps.list` (30-100 ms) sent first held
-  // back the start-up snapshot and so the first screen.
+  // serves one request at a time, and `apps.list` sent first held back the
+  // start-up snapshot and so the first screen. The desktop backend now builds
+  // the list on its own thread, but a backend without its service (CLI,
+  // harness) still enumerates inline for 30-100 ms.
   const startupSnapshotLoaded = !backend.connected || snapshotState.snapshot !== null;
   const appChecksReady = backend.connected && startupSnapshotLoaded;
   // Which apps use which devices, for the Apps tab and the top-bar strip.
@@ -413,6 +415,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [nativePumpStats, setNativePumpStats] = useState<NativePumpStats | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   const applicationRefreshGeneration = useRef(0);
+  const applicationFollowUp = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(applicationFollowUp.current), []);
   const deviceRefreshGeneration = useRef(0);
   const sessionRefreshGeneration = useRef(0);
   const recordingRefreshGeneration = useRef(0);
@@ -449,7 +453,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       mounted = false;
     };
   }, [backend, snapshotCache, rememberedSessionId]);
-  const refreshApplications = () => {
+  const readApplications = () => {
     const generation = ++applicationRefreshGeneration.current;
     void backend
       .listApplications()
@@ -463,6 +467,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setApplications([]);
         setApplicationsError(formatUiError(error, "Application inventory unavailable"));
       });
+  };
+  // The backend answers with the list it has and rebuilds it off its control
+  // thread; read again once the newer list is ready (useApplicationUsage).
+  const refreshApplications = () => {
+    readApplications();
+    window.clearTimeout(applicationFollowUp.current);
+    applicationFollowUp.current = window.setTimeout(readApplications, APP_USAGE_FOLLOW_UP_MS);
   };
   const refreshDevices = ({ announce = true }: { announce?: boolean } = {}) => {
     const generation = ++deviceRefreshGeneration.current;

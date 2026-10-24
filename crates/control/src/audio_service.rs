@@ -326,6 +326,16 @@ impl ControlPlane {
             self.audio_thread =
                 audio_thread::AudioThread::spawn(self.audio_thread_shared.clone()).ok();
         }
+        // `apps.list` enumerates for 30-100 ms; build it on its own thread so
+        // no request waits behind it. If the thread cannot start, it stays
+        // inline.
+        #[cfg(windows)]
+        if self.application_inventory.is_none() {
+            self.application_inventory = app_inventory::AppInventory::spawn(std::sync::Arc::new(
+                Self::build_application_inventory,
+            ))
+            .ok();
+        }
     }
 
     /// Whether the attached multi-input worker plays `generation`: the one it
