@@ -656,5 +656,9 @@ has been requested or granted for this branch.
     control's offset unchanged, screenshots in dark, light and high
     contrast, reviewed).
   - Full checks on the PC: UI lint (0 warnings), typecheck, Vitest
-    727/727, full development Edge suite 231 passed, 2 skipped. No PR
-    until the owner approves one.
+    727/727, Edge `device-used-by.pw.ts`. The full development Edge
+    suite is not yet qualified: the first run (231 passed, 115 failed)
+    had no `e2e_backend.exe` in this worktree, so 112 real-backend tests
+    could not start, and 3 more need checking; a re-run with the backend
+    built was stopped at 38/348 when the PC ran low on memory. No PR until
+    the suite is clean and the owner approves one.
