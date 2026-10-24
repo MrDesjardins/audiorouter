@@ -109,6 +109,7 @@ const DROP_PREVIEW_ID = "__drop-preview";
 const DROP_GRAB_OFFSET = { x: 90, y: 28 };
 import { nextPeakHold, type PeakHold } from "./dynamics";
 import { DuckGlyph } from "./DuckGlyph";
+import type { NodeDeviceUsers } from "./appUsage";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
 export { LIBRARY_DROP_MIME } from "./libraryDrag";
@@ -174,6 +175,12 @@ type SessionFlowCanvasProps = {
   onOpenApplicationPicker?: () => void;
   onConnectionRejected?: (message: string) => void;
   canEdit?: boolean;
+  /**
+   * The apps on each device node's device (D1); null until the first check,
+   * absent when apps cannot be checked (no backend). Device nodes always
+   * reserve the footer line (UI-17).
+   */
+  deviceUsers?: Map<string, NodeDeviceUsers> | null;
 };
 
 // Every node below renders its own complete set of Handle components (one
@@ -838,6 +845,31 @@ function formatDb(value: number) {
 
 function nodeTelemetryFor(node: Node | undefined, diagnostics: DiagnosticsSnapshot | null | undefined) {
   return node ? (diagnostics?.nodeTelemetry.find((item) => item.nodeId === node.id) ?? null) : null;
+}
+
+/**
+ * "Used by Discord · OBS" on a device node (D1). The line is always there on
+ * device nodes, one line high and truncated, so a change never resizes the
+ * card (UI-17); the tooltip names each app's role.
+ */
+function DeviceUsersLine({ users: state }: { users: NodeDeviceUsers | null | "unavailable" }) {
+  // null: the first check has not answered yet.
+  const users = typeof state === "object" ? state : null;
+  const text = state === "unavailable" ? "Apps not checked" : (users?.summary ?? "Checking apps…");
+  const detail = [
+    ...(users?.uses.map((use) => `${use.label} ${use.role}`) ?? []),
+    ...(users?.warning ? [`Check: ${users.warning}`] : []),
+  ].join("\n");
+  return (
+    <small
+      className={`node-used-by${users?.warning ? " is-warning" : ""}${users?.uses.length ? "" : " is-empty"}`}
+      title={detail || undefined}
+      aria-label={users?.warning ? `${text}. Check: ${users.warning}` : text}
+    >
+      {users?.warning ? "! " : ""}
+      {text}
+    </small>
+  );
 }
 
 function MiniMeter({ telemetry }: { telemetry: ReturnType<typeof nodeTelemetryFor> }) {
@@ -2310,6 +2342,7 @@ export function SessionFlowCanvas({
   onOpenApplicationPicker,
   onConnectionRejected,
   canEdit = true,
+  deviceUsers,
 }: SessionFlowCanvasProps) {
   const graphRunning = sessionRunning ?? diagnostics?.schedulerTelemetry?.activeGeneration != null;
   const layoutKey = `audiorouter.ui.layout.${session.id}`;
@@ -2969,6 +3002,11 @@ export function SessionFlowCanvas({
               onTimeShiftTransport={onTimeShiftTransport}
               timeShiftStatuses={timeShiftStatuses}
             />
+            {(node.kind === "physicalInput" || node.kind === "physicalOutput") && (
+              <DeviceUsersLine
+                users={deviceUsers === undefined ? "unavailable" : deviceUsers && (deviceUsers.get(node.id) ?? null)}
+              />
+            )}
             <small className="node-port-count">
               {node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}
             </small>

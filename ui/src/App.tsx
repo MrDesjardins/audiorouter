@@ -157,7 +157,13 @@ import { AppsPanel } from "./AppsPanel";
 import { DiscordSetup, type DiscordSetupChoice } from "./DiscordSetup";
 import { appendDiscordRoute, discordSetupOptions } from "./discordRoute";
 import { AppStatusStrip } from "./AppStatusStrip";
-import { discordCheck, pendingDiscordCheck, sessionInvolvesDiscord, voiceCableOutputs } from "./appUsage";
+import {
+  discordCheck,
+  nodeDeviceUsers,
+  pendingDiscordCheck,
+  sessionInvolvesDiscord,
+  voiceCableOutputs,
+} from "./appUsage";
 import { APP_USAGE_FOLLOW_UP_MS, useApplicationUsage } from "./useApplicationUsage";
 import { ObsCard, type ObsActions } from "./ObsCard";
 import { obsCheck } from "./obsUsage";
@@ -345,7 +351,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     () => (appChecksReady ? () => backend.listApplications() : null),
     [backend, appChecksReady],
   );
-  const applicationUsage = useApplicationUsage(listApplicationUsage, { polling: workbenchTab === "apps" });
+  // Device nodes show which apps use their device (D1), so poll while the
+  // canvas has one; the backend builds the list off its control thread.
+  const draftHasDeviceNode = Boolean(
+    draft?.nodes.some((node) => node.kind === "physicalInput" || node.kind === "physicalOutput"),
+  );
+  const applicationUsage = useApplicationUsage(listApplicationUsage, {
+    polling: workbenchTab === "apps" || draftHasDeviceNode,
+  });
   // OBS Studio facts (DEC-22): cheap reads of the backend's OBS thread.
   const obsStatus = useObsStatus(appChecksReady ? backend : null, { active: workbenchTab === "apps" });
   const obsActions = useMemo<ObsActions | null>(() => {
@@ -366,6 +379,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         ? discordCheck(draft, applicationUsage.applications, devices, applicationUsage.stale)
         : pendingDiscordCheck(),
     [applicationUsage.loaded, applicationUsage.applications, applicationUsage.stale, draft, devices],
+  );
+  const deviceUsers = useMemo(
+    () => (draft && applicationUsage.loaded ? nodeDeviceUsers(draft, devices, applicationUsage.applications) : null),
+    [applicationUsage.loaded, applicationUsage.applications, draft, devices],
   );
   const obsAppCheck = useMemo(
     () => obsCheck(draft, obsStatus.status, applicationUsage.applications, devices, obsStatus.stale),
@@ -2939,6 +2956,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       onOpenApplicationPicker={openApplicationPicker}
       onConnectionRejected={setActionMessage}
       canEdit={backend.connected}
+      deviceUsers={backend.connected ? deviceUsers : undefined}
     />
   );
   const connectionWorkbenchContent = (
@@ -3451,6 +3469,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     applications={applications}
                     applicationsError={applicationsError}
                     refreshApplications={refreshApplications}
+                    deviceUsers={backend.connected ? deviceUsers : undefined}
                     rebindApplicationCapture={rebindApplicationCapture}
                     setRenderEndpointId={setRenderEndpointId}
                     captureEndpointId={captureEndpointId}

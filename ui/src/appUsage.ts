@@ -150,6 +150,98 @@ export function sixteenChannelTwin(device: DeviceListItem, devices: readonly Dev
   );
 }
 
+const names = (uses: readonly DeviceUse[]) => uses.map((use) => use.label).join(" and ");
+
+/** One app on a device node's device, or on the other end of its cable. */
+export interface NodeAppUse {
+  label: string;
+  appId: KnownAppId | null;
+  /** How the app relates to the audio this node carries, in plain words. */
+  role: string;
+}
+
+/** What a Physical Input or Output node's footer and Properties show. */
+export interface NodeDeviceUsers {
+  /**
+   * One line for the canvas footer, for example "Used by Discord · OBS", or
+   * the warning's short form ("Discord is on CABLE-A Out 16ch").
+   */
+  summary: string;
+  /** Every app with its role, for the tooltip and Properties. */
+  uses: NodeAppUse[];
+  /** An app on a sibling device it should not use, or null. */
+  warning: string | null;
+}
+
+/**
+ * The apps using each device node's device right now (D1). A node that plays
+ * into a virtual cable also lists the apps recording from the cable's other
+ * end: that is how Discord hears what the node sends. Only active sessions
+ * count; idle ones linger on devices an app used before (see `appDevices`).
+ */
+export function nodeDeviceUsers(
+  session: Session,
+  devices: readonly DeviceListItem[],
+  applications: readonly ApplicationInfo[],
+): Map<string, NodeDeviceUsers> {
+  const usage = deviceUsage(applications);
+  const active = (deviceId: string, direction: "capture" | "render") =>
+    (usage.get(deviceId) ?? []).filter((use) => use.active && use.direction === direction);
+  const result = new Map<string, NodeDeviceUsers>();
+  const microphones = microphoneNodes(session, devices);
+  const voiceCables = voiceCableOutputs(session, devices);
+  for (const node of session.nodes) {
+    if (node.kind !== "physicalInput" && node.kind !== "physicalOutput") continue;
+    const endpointId = endpointOf(session, node.id);
+    const device = endpointId ? devices.find((item) => item.id === endpointId) : undefined;
+    if (!endpointId) {
+      result.set(node.id, { summary: "No device chosen", uses: [], warning: null });
+      continue;
+    }
+    const output = node.kind === "physicalOutput";
+    const uses: NodeAppUse[] = (output ? active(endpointId, "render") : active(endpointId, "capture")).map((use) => ({
+      label: use.label,
+      appId: use.appId,
+      // Windows reports a loopback recorder like a player (spec CAP).
+      role: output ? "plays to it or records it" : "records from it",
+    }));
+    const partner = device ? cablePartner(device, devices) : null;
+    let warning: string | null = null;
+    // The footer's short form of the warning: one line on a narrow card.
+    let alert: string | null = null;
+    if (partner) {
+      for (const use of output ? active(partner.id, "capture") : active(partner.id, "render"))
+        uses.push({
+          label: use.label,
+          appId: use.appId,
+          role: output ? `records from ${partner.name}` : `plays into ${partner.name}`,
+        });
+      const twin = output ? sixteenChannelTwin(partner, devices) : null;
+      const astray = twin ? active(twin.id, "capture").filter((use) => use.appId !== null) : [];
+      if (twin && astray.length > 0) {
+        warning = `${names(astray)} ${astray.length === 1 ? "records" : "record"} from ${twin.name}, not ${partner.name}`;
+        alert = `${names(astray)} ${astray.length === 1 ? "is" : "are"} on ${twin.name.replace(VB_CABLE, "").trim()}`;
+      }
+    }
+    // Discord or OBS on the raw microphone skips the processing this session
+    // sends to its voice cable.
+    if (!output && microphones.includes(node.id) && voiceCables.length > 0) {
+      const raw = active(endpointId, "capture").filter((use) => use.appId !== null);
+      if (raw.length > 0) {
+        warning = `${names(raw)} ${raw.length === 1 ? "records" : "record"} this microphone without your processing; choose ${voiceCables.map((cable) => cable.name).join(" or ")} instead`;
+        alert = `${names(raw)} ${raw.length === 1 ? "skips" : "skip"} your processing`;
+      }
+    }
+    const labels = [...new Set(uses.map((use) => use.label))];
+    result.set(node.id, {
+      summary: alert ?? (labels.length > 0 ? `Used by ${labels.join(" · ")}` : "No app using it right now"),
+      uses,
+      warning,
+    });
+  }
+  return result;
+}
+
 const SOURCES_AND_SILENT_BYPASSES: readonly Node["kind"][] = [
   "physicalInput",
   "applicationCapture",
