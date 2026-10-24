@@ -825,6 +825,36 @@ Adjust a Gain or Volume before the Meter until you are in the zone. The guide is
 for voice; music and game audio are mixed to other levels. It changes nothing
 in the audio.
 
+### Checking Discord's devices (Apps tab)
+
+Open **Apps** in the right sidebar to check that Discord uses the devices
+your route expects.
+
+**What it checks:**
+- AudioRouter asks Windows which apps use each audio device and compares
+  that with the session.
+- **Microphone:** Discord should record from the cable your processed voice
+  goes to, for example *CABLE-A Output*.
+- **Speaker:** Discord should not play into the cable that carries your
+  voice, nor into the 16-channel twin of a cable AudioRouter plays to.
+
+**When something is wrong:**
+- **Show me how** gives the exact Discord setting.
+- **Copy device name** copies the device name to paste in Discord.
+- After changing it, switch back to AudioRouter and the check updates by
+  itself.
+
+**What it does not change:** AudioRouter only reads. It never changes
+Discord or Windows settings.
+
+**What you'll see:**
+- A **Discord** chip next to "Audio running" when the session captures
+  Discord or sends your microphone to a virtual cable; click it to open
+  Apps.
+- **Other apps using audio** lists which device each other app uses.
+  "Plays to it or records it" is as precise as Windows can be, because an
+  app recording a device's output looks the same as one playing to it.
+
 ### Hiding devices you never use
 
 Windows lists every speaker and microphone it knows, including a monitor's
