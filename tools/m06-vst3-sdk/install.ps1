@@ -8,8 +8,17 @@ $ErrorActionPreference = 'Stop'
 # Git's submodule helper is a POSIX shell script. Some managed PowerShell
 # launchers expose only Git's cmd directory, so provide Git's private helper
 # directories for this process without changing the user's persistent PATH.
+# Git Bash puts mingw64\bin\git.exe first on PATH, two levels below the Git
+# root rather than one (cmd\git.exe), so walk up to the folder that holds
+# usr\bin\bash.exe (0.0.22 release build, started from Git Bash).
 $gitCommand = (Get-Command git -ErrorAction Stop).Source
-$gitRoot = Split-Path -Parent (Split-Path -Parent $gitCommand)
+$gitRoot = Split-Path -Parent $gitCommand
+while ($gitRoot -and -not (Test-Path -LiteralPath (Join-Path $gitRoot 'usr\bin\bash.exe'))) {
+    $gitRoot = Split-Path -Parent $gitRoot
+}
+if (-not $gitRoot) {
+    throw "Git for Windows bash was not found above $gitCommand"
+}
 $env:Path = "$gitRoot\cmd;$gitRoot\usr\bin;$gitRoot\mingw64\bin;$env:Path"
 
 $repository = 'https://github.com/steinbergmedia/vst3sdk.git'
