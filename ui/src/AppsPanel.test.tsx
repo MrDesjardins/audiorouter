@@ -94,8 +94,13 @@ describe("AppsPanel", () => {
     const { rerender } = render(panel(pendingDiscordCheck()));
     const rows = () => [...document.querySelectorAll(".app-check-row strong")].map((item) => item.textContent);
     expect(rows()).toEqual(["Microphone", "Speaker"]);
+    const links = () => document.querySelectorAll(".app-link-button").length;
+    expect(links()).toBe(2);
     rerender(panel(needsCheck));
     expect(rows()).toEqual(["Microphone", "Speaker"]);
+    // Each row keeps its link line; only the row with a fix can use it.
+    expect(links()).toBe(2);
+    expect(screen.getAllByRole("button", { name: "Show me how" })).toHaveLength(1);
   });
 
   it("lists other apps with their role, and says plainly when there are none", () => {

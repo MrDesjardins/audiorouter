@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ApplicationInfo, DeviceListItem } from "@audiorouter/contracts";
 import {
   DISCORD_RECOMMENDED_SETTINGS,
@@ -33,6 +33,11 @@ export function AppStateBadge({ state }: { state: AppCheckState }) {
 
 function CopyName({ name }: { name: string }) {
   const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 2_000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
   return (
     <button
       type="button"
@@ -57,6 +62,7 @@ function CopyName({ name }: { name: string }) {
 
 function CheckRow({ row }: { row: AppCheckRow }) {
   const [open, setOpen] = useState(false);
+  const fix = row.state === "check" ? (row.expectedName ?? null) : null;
   return (
     <li className={`app-check-row is-${row.state}`}>
       <span className="app-check-icon" aria-hidden="true">
@@ -70,25 +76,25 @@ function CheckRow({ row }: { row: AppCheckRow }) {
           </span>
         </span>
         <small>{row.message}</small>
-        {row.state === "check" && row.expectedName && (
-          <>
-            <button
-              type="button"
-              className="app-link-button"
-              aria-expanded={open}
-              onClick={() => setOpen((value) => !value)}
-            >
-              Show me how
-            </button>
-            {open && (
-              <span className="app-check-steps">
-                <span>
-                  {DISCORD_STEPS[row.id]} <strong>{row.expectedName}</strong>.
-                </span>
-                <CopyName name={row.expectedName} />
-              </span>
-            )}
-          </>
+        {/* The link's line is kept on every row, so a row turning from
+            ready to check does not grow (UI-17); only opening the steps does. */}
+        <button
+          type="button"
+          className={fix ? "app-link-button" : "app-link-button app-label-hidden"}
+          aria-expanded={fix ? open : undefined}
+          aria-hidden={!fix}
+          disabled={!fix}
+          onClick={() => setOpen((value) => !value)}
+        >
+          Show me how
+        </button>
+        {fix && open && (
+          <span className="app-check-steps">
+            <span>
+              {DISCORD_STEPS[row.id]} <strong>{fix}</strong>.
+            </span>
+            <CopyName name={fix} />
+          </span>
         )}
       </span>
     </li>
