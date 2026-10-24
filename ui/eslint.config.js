@@ -1,7 +1,8 @@
-// ESLint flat config for the UI (code review P2-2). CI fails on errors only.
-// `react-hooks/exhaustive-deps` is a warning: blindly adding dependencies to
-// effects fed by 20 Hz telemetry can create render loops, so each one is
-// fixed only when a stale closure is proven.
+// ESLint flat config for the UI (code review P2-2). CI fails on any error.
+// `react-hooks/exhaustive-deps` is an error. Never satisfy it by blindly
+// adding dependencies: effects fed by 20 Hz telemetry can then loop. A
+// callback that must be current but must not restart the effect goes
+// through `useEffectEvent`; a value is depended on as a primitive or memo.
 import js from "@eslint/js";
 import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -35,7 +36,7 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "warn",
+      "react-hooks/exhaustive-deps": "error",
     },
   },
 );

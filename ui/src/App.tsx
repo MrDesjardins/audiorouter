@@ -11,7 +11,7 @@ import { UpdatesPanel } from "./UpdateNotice";
 import { setUpdateCheckEnabled } from "./updateCheck";
 import { FirstRunGuide } from "./FirstRunGuide";
 import { useCanvasGroups } from "./CanvasGroups";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
@@ -324,11 +324,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     );
   }, []);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("tools");
+  // The Apps tab and top-bar strip start after the first snapshot: the backend
+  // serves one request at a time, and `apps.list` (30-100 ms) sent first held
+  // back the start-up snapshot and so the first screen.
+  const startupSnapshotLoaded = !backend.connected || snapshotState.snapshot !== null;
+  const appChecksReady = backend.connected && startupSnapshotLoaded;
   // Which apps use which devices, for the Apps tab and the top-bar strip.
-  const listApplicationUsage = useMemo(() => (backend.connected ? () => backend.listApplications() : null), [backend]);
+  const listApplicationUsage = useMemo(
+    () => (appChecksReady ? () => backend.listApplications() : null),
+    [backend, appChecksReady],
+  );
   const applicationUsage = useApplicationUsage(listApplicationUsage, { polling: workbenchTab === "apps" });
   // OBS Studio facts (DEC-22): cheap reads of the backend's OBS thread.
-  const obsStatus = useObsStatus(backend.connected ? backend : null, { active: workbenchTab === "apps" });
+  const obsStatus = useObsStatus(appChecksReady ? backend : null, { active: workbenchTab === "apps" });
   const obsActions = useMemo<ObsActions | null>(() => {
     const { obsConnect, obsDisconnect, obsPreview, obsApply, obsRestore } = backend;
     if (!backend.connected || !obsConnect || !obsDisconnect || !obsPreview || !obsApply || !obsRestore) return null;
@@ -370,7 +378,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setSelectedNodeIds([id]);
     setWorkbenchTab("properties");
   };
-  const diagnosticStorage = browserDiagnosticStorage();
+  // Read once: the storage object never changes, which keeps recordUiDiagnostic stable.
+  const [diagnosticStorage] = useState(browserDiagnosticStorage);
   const uiDiagnosticsRef = useRef<string[]>(readClientDiagnostics(diagnosticStorage));
   const [uiDiagnostics, setUiDiagnostics] = useState<string[]>(uiDiagnosticsRef.current);
   const [mcpActivity, setMcpActivity] = useState<McpActivity[]>([]);
@@ -595,11 +604,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const telemetryStore = useTelemetryStore();
   const diagnosticsRef = useRef(snapshot?.diagnostics ?? null);
   diagnosticsRef.current = snapshot?.diagnostics ?? null;
-  const recordUiDiagnostic = (message: string) => {
-    const next = appendClientDiagnostic(diagnosticStorage, uiDiagnosticsRef.current, message);
-    uiDiagnosticsRef.current = next;
-    setUiDiagnostics(next);
-  };
+  const recordUiDiagnostic = useCallback(
+    (message: string) => {
+      const next = appendClientDiagnostic(diagnosticStorage, uiDiagnosticsRef.current, message);
+      uiDiagnosticsRef.current = next;
+      setUiDiagnostics(next);
+    },
+    [diagnosticStorage],
+  );
   useEffect(() => {
     writeTheme(optionalLocalStorage(), theme);
   }, [theme]);
@@ -647,7 +659,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       window.removeEventListener("error", onError);
       window.removeEventListener("unhandledrejection", onReject);
     };
-  }, []);
+  }, [recordUiDiagnostic]);
   // The Logs tab's verbose switch; stable per backend so the panel reads it once.
   const verboseLogging = useMemo(
     () =>
@@ -660,7 +672,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     [backend],
   );
   // Failed backend requests, with the correlation ID that finds them in shell.jsonl and backend.jsonl (P2-3).
-  useEffect(() => onRpcFailure(recordUiDiagnostic), []);
+  useEffect(() => onRpcFailure(recordUiDiagnostic), [recordUiDiagnostic]);
   useEffect(() => {
     if ((workbenchTab !== "mcp" && workbenchTab !== "diagnostics") || !window.__TAURI_INTERNALS__?.invoke) return;
     let active = true;
@@ -717,7 +729,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       active = false;
       window.clearInterval(timer);
     };
-  }, [workbenchTab]);
+  }, [workbenchTab, recordUiDiagnostic]);
   useEffect(() => {
     writeShortcuts(optionalLocalStorage(), shortcuts);
   }, [shortcuts]);
@@ -767,18 +779,17 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     backendActiveSessionRef.current = sessionId;
     setSelectedSessionId(sessionId);
   };
+  const selectedSessionListed = availableSessions.some((item) => item.id === selectedSessionId);
   useEffect(() => {
-    if (availableSessions.some((item) => item.id === selectedSessionId)) {
-      writeLastSession(browserDiagnosticStorage(), selectedSessionId);
-    }
-  }, [selectedSessionId, listedSessions, snapshot?.session, createdSessions]);
+    if (selectedSessionListed) writeLastSession(diagnosticStorage, selectedSessionId);
+  }, [selectedSessionId, selectedSessionListed, diagnosticStorage]);
   currentSessionIdRef.current = session.id;
   const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId) ?? draft.nodes[0];
   useEffect(() => {
     recordUiDiagnostic(
       `Graph checkpoint: ${draft.nodes.length} nodes, ${draft.edges.length} connections; revision ${session.revision}`,
     );
-  }, [draft.nodes.length, draft.edges.length, session.revision]);
+  }, [draft.nodes.length, draft.edges.length, session.revision, recordUiDiagnostic]);
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   const routeChanged = !sameSessionDraft(draft, session);
   // Lets the shell free the WebView on close only when nothing would be lost.
@@ -786,8 +797,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useEffect(() => {
     setAudioSourceStates({});
   }, [session.id]);
+  const refreshApplicationsOnChange = useEffectEvent(() => refreshApplications());
   useEffect(() => {
-    if (selectedNode?.kind === "applicationCapture" && backend.connected) refreshApplications();
+    if (selectedNode?.kind === "applicationCapture" && backend.connected) refreshApplicationsOnChange();
   }, [selectedNode?.id, selectedNode?.kind, backend.connected]);
   useAudioFileStatus({
     backend,
@@ -808,8 +820,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setCaptureEndpointId(hint.captureEndpointId ?? "");
     setRenderEndpointId(hint.renderEndpointId ?? "");
   }, [session.id]);
+  // Read when the session changes: before the first snapshot or session list,
+  // `session` is only the demo placeholder.
+  const waitingForFirstSession = useEffectEvent(() => backend.connected && !snapshot && availableSessions.length === 0);
   useEffect(() => {
-    if (backend.connected && !snapshot && availableSessions.length === 0) return;
+    if (waitingForFirstSession()) return;
     const previous = authoritativeSession.current;
     const transition = hasAuthoritativeSession.current
       ? reconcileSessionDraft(draftRef.current, previous, session)
@@ -843,7 +858,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     });
     setConnectionSource("");
     setConnectionDestination("");
-  }, [session]);
+  }, [session, recordUiDiagnostic]);
   useEffect(() => {
     let active = true;
     void backend
@@ -984,7 +999,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       active = false;
     };
   }, [backend]);
+  // After the first snapshot, like the Apps strip: the picker does not need it sooner.
   useEffect(() => {
+    if (!startupSnapshotLoaded) return;
     let active = true;
     void backend
       .listApplications()
@@ -1003,7 +1020,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     return () => {
       active = false;
     };
-  }, [backend]);
+  }, [backend, startupSnapshotLoaded]);
   useEffect(() => {
     let active = true;
     void backend
@@ -1129,6 +1146,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const undoDraft = () => restoreDraftHistory("undo");
   const redoDraft = () => restoreDraftHistory("redo");
+  const onHistoryShortcut = useEffectEvent((direction: "undo" | "redo") => restoreDraftHistory(direction));
   useEffect(() => {
     const onHistoryKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey)) return;
@@ -1142,11 +1160,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!numeric && isEditableShortcutTarget(event.target)) return;
       event.preventDefault();
       if (numeric instanceof HTMLElement) numeric.blur();
-      restoreDraftHistory(key === "y" || event.shiftKey ? "redo" : "undo");
+      onHistoryShortcut(key === "y" || event.shiftKey ? "redo" : "undo");
     };
     window.addEventListener("keydown", onHistoryKey);
     return () => window.removeEventListener("keydown", onHistoryKey);
-  }, [backend.connected, graphBusy, sessionActionBusy, draftHistory]);
+  }, []);
   const changeNodeFlag = async (flag: "enabled" | "bypass", value: boolean) => {
     if (sessionBusy.current || nodeFlagBusy.current || graphBusy || !backend.connected) return;
     const next = setNodeDraftFlag(draftRef.current, selectedNode.id, flag, value);
@@ -2418,14 +2436,20 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(formatUiError(error, "Unable to add voice preset."));
     }
   };
+  // Canvas and library requests, handled with the latest draft.
+  const onInsertProcessor = useEffectEvent((edgeId: string, kind: InsertableProcessorKind) =>
+    insertProcessor(edgeId, kind),
+  );
+  const onAppendPreset = useEffectEvent((presetId: EqPresetId) => appendPreset(presetId));
+  const onAppendVoicePreset = useEffectEvent((presetId: VoiceChainPresetId) => appendVoicePreset(presetId));
   useEffect(() => {
     const handleInsertProcessor = (event: Event) => {
       const detail = (event as CustomEvent<{ edgeId?: string; kind?: InsertableProcessorKind }>).detail;
-      if (detail.edgeId && detail.kind) insertProcessor(detail.edgeId, detail.kind);
+      if (detail.edgeId && detail.kind) onInsertProcessor(detail.edgeId, detail.kind);
     };
     globalThis.addEventListener("audiorouter:insert-processor", handleInsertProcessor);
     return () => globalThis.removeEventListener("audiorouter:insert-processor", handleInsertProcessor);
-  }, [backend, draft]);
+  }, []);
   useEffect(() => {
     const handleRemoveNode = (event: Event) => {
       const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId;
@@ -2449,19 +2473,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useEffect(() => {
     const handleAppendEqPreset = (event: Event) => {
       const detail = (event as CustomEvent<{ presetId?: EqPresetId }>).detail;
-      if (detail.presetId) appendPreset(detail.presetId);
+      if (detail.presetId) onAppendPreset(detail.presetId);
     };
     globalThis.addEventListener("audiorouter:append-eq-preset", handleAppendEqPreset);
     return () => globalThis.removeEventListener("audiorouter:append-eq-preset", handleAppendEqPreset);
-  }, [backend, draft]);
+  }, []);
   useEffect(() => {
     const handleAppendVoicePreset = (event: Event) => {
       const detail = (event as CustomEvent<{ presetId?: VoiceChainPresetId }>).detail;
-      if (detail.presetId) appendVoicePreset(detail.presetId);
+      if (detail.presetId) onAppendVoicePreset(detail.presetId);
     };
     globalThis.addEventListener("audiorouter:append-voice-preset", handleAppendVoicePreset);
     return () => globalThis.removeEventListener("audiorouter:append-voice-preset", handleAppendVoicePreset);
-  }, [backend, draft]);
+  }, []);
   const addDroppedCanvasNode = (kind: string, _dropPosition?: { x: number; y: number }) => {
     if (kind === "virtualRenderSource" || kind === "virtualCaptureSink") {
       const direction = kind === "virtualRenderSource" ? "renderSource" : "captureSink";

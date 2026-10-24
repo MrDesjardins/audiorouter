@@ -214,6 +214,45 @@ owner is not in a game, then the attended OBS check on a copied profile.
 
 ## Progress
 
+### PR warnings and app strip loading — 2026-10-24, owner request
+
+The owner saw ESLint warnings as annotations on PR #67 and asked to analyze
+and fix them, why they had been missed, and to make sure the Discord and
+OBS strip does not slow the rest of the app's loading.
+
+Warnings: the PR's ten annotations were the first ten of 25
+`react-hooks/exhaustive-deps` warnings that `main` already had (same 25 on
+both, compared by file and message). Earlier reports called them
+"pre-existing" and moved on. None was a proven stale closure; each read a
+callback or derived value that should be current without restarting its
+effect. Repairs, by kind:
+
+- Callbacks (panel `refresh`, `refreshApplications`, undo/redo, the
+  insert/preset event handlers, hook parameters such as
+  `recordUiDiagnostic` and the state setters passed into
+  `useWorkspaceEvents`, `useDiagnosticsRefresh`, `useNativeCounters`,
+  `useAudioFileStatus`): `useEffectEvent`, so the 20 Hz and 1 s loops keep
+  their current restart conditions.
+- `recordUiDiagnostic` is a `useCallback` over a storage read once, and is
+  now a real dependency.
+- Derived values: EQ bands memoized on `node.parameters`; the selected
+  recording and the endpoint checks use primitives or the device list;
+  last-session saving depends on whether the selection is listed.
+- Prevention: `exhaustive-deps` is an error and `npm run lint` uses
+  `--max-warnings 0`; AGENTS.md asks for every PR annotation to be read
+  and fixed or justified, and records the lesson.
+
+Start-up: the backend serves one request at a time. The Apps strip's
+first `apps.list` (measured 30-100 ms on the owner's PC, against a 35 ms
+CLI baseline) and `obs.status` were sent before the start-up snapshot, and
+on a first launch the picker's `apps.list` was too. Now all three wait for
+the first snapshot. `App.startupOrder.test.tsx` checks the order with and
+without a remembered session, and fails with the gate removed.
+
+Checks: UI format, `--max-warnings 0` lint, typecheck, 79 files / 721
+tests passed. Edge suites were not run locally (they need a debug backend
+compile while the owner may be in a call); CI runs all of them.
+
 ### Discord out of a call, and the site screenshot — 2026-10-23, owner request
 
 Manual test on the owner's PC: the Discord card said "Waiting" while

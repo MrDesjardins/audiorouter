@@ -41,10 +41,17 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
   scripts) bypass it, so still run the commands above.
 - **The UI is formatted and linted too.** Before committing `ui/` changes,
   run `npm --prefix ui run format` and `npm --prefix ui run lint`; CI fails
-  on `format:check` differences and on ESLint errors (the pre-commit hook
-  formats staged `ui/src` and `ui/e2e` files). Fix an `exhaustive-deps`
-  warning only for a proven stale closure, never by adding dependencies
-  blindly (20 Hz telemetry render loops).
+  on `format:check` differences and on any ESLint error or warning (the
+  pre-commit hook formats staged `ui/src` and `ui/e2e` files).
+  `exhaustive-deps` is an error: never satisfy it by adding dependencies
+  blindly (20 Hz telemetry render loops). Route a callback that must be
+  current but must not restart the effect through `useEffectEvent`, and
+  depend on a derived value as a primitive or a memo.
+- **Warnings are work, not background.** Do not wave away a warning,
+  annotation or deprecation as "pre-existing". Before reporting a branch
+  ready, read every check annotation on its PR (`gh api
+  repos/<owner>/<repo>/check-runs/<id>/annotations`), then fix each one or
+  record why it stays, in the code or the plan.
 - **Use the pinned toolchain.** `rust-toolchain.toml` pins Rust 1.96.0, the
   version CI and the release workflow use. Do not change it in a feature
   change; a toolchain bump is its own change with its own formatting and
@@ -98,6 +105,15 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-24 — A known warning count hides new warnings; keep it at zero and read PR annotations.**
+  Evidence: [OBS and Discord plan, lint warnings repair](docs/plans/active/obs-discord.md#pr-warnings-and-app-strip-loading-2026-10-24-owner-request),
+  PR #67 CI annotations. Scope: UI lint, CI annotations, any check that
+  reports warnings without failing. Consequence: 25 `exhaustive-deps`
+  warnings were reported as "pre-existing" on every branch, so nobody
+  fixed them, and the PR showed them to the owner as review comments.
+  Lint now fails on any warning, and a branch is ready only after its
+  annotations are read and fixed or justified.
 
 - **2026-10-22 — Hand plugins a plain path and a real environment; "loads and processes" is not "applies the effect".**
   Evidence: [UADx evidence, U0 results](docs/plans/active/evidence/2026-10-22-uadx-inventory.md#u0-results-in-the-app-worker-2026-10-22),

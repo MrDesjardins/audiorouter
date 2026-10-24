@@ -91,21 +91,21 @@ export function layoutPointCallouts(points: LabelPoint[]): PointCallout[] {
   return placed;
 }
 
-function readBands(node: Node): Band[] {
+function readBands(parameters: Node["parameters"]): Band[] {
   return Array.from({ length: BAND_COUNT }, (_, index) => {
     const key = `band${index}`;
-    const type = node.parameters[`${key}Type`];
+    const type = parameters[`${key}Type`];
     return {
       index,
       enabled:
-        node.parameters[`${key}Enabled`] === true ||
-        (index === 0 && node.parameters[`${key}Enabled`] === undefined && node.parameters.frequencyHz !== undefined),
+        parameters[`${key}Enabled`] === true ||
+        (index === 0 && parameters[`${key}Enabled`] === undefined && parameters.frequencyHz !== undefined),
       type: FILTERS.some(([id]) => id === type) ? (type as FilterType) : "peaking",
       frequencyHz: Number(
-        node.parameters[`${key}FrequencyHz`] ?? (index === 0 ? node.parameters.frequencyHz : undefined) ?? 1000,
+        parameters[`${key}FrequencyHz`] ?? (index === 0 ? parameters.frequencyHz : undefined) ?? 1000,
       ),
-      gainDb: Number(node.parameters[`${key}GainDb`] ?? (index === 0 ? node.parameters.gainDb : undefined) ?? 0),
-      q: Number(node.parameters[`${key}Q`] ?? (index === 0 ? node.parameters.q : undefined) ?? 1),
+      gainDb: Number(parameters[`${key}GainDb`] ?? (index === 0 ? parameters.gainDb : undefined) ?? 0),
+      q: Number(parameters[`${key}Q`] ?? (index === 0 ? parameters.q : undefined) ?? 1),
     };
   });
 }
@@ -121,7 +121,7 @@ export function AdvancedEqEditor({
   connected: boolean;
   onChange: (name: string, value: boolean | number | string) => void;
 }) {
-  const bands = readBands(node);
+  const bands = useMemo(() => readBands(node.parameters), [node.parameters]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [response, setResponse] = useState<ProcessorResponse | null>(null);
   const [responseError, setResponseError] = useState<string | null>(null);
@@ -183,7 +183,7 @@ export function AdvancedEqEditor({
       live = false;
       window.clearTimeout(timer);
     };
-  }, [backend, connected, node.parameters]);
+  }, [backend, connected, bands]);
 
   const addPoint = (frequencyHz = 1000, gainDb = 0) => {
     if (!connected) return;

@@ -375,15 +375,12 @@ export function RecordingActions({
   const [selectedId, setSelectedId] = useState("");
   const [newPath, setNewPath] = useState("");
   const selected = recordings.find((recording) => recording.id === selectedId) ?? recordings[0];
+  const shownId = selected?.id ?? "";
+  const shownPath = selected?.path ?? "";
   useEffect(() => {
-    if (selected) {
-      setSelectedId(selected.id);
-      setNewPath(selected.path);
-    } else {
-      setSelectedId("");
-      setNewPath("");
-    }
-  }, [selected?.id, selected?.path]);
+    setSelectedId(shownId);
+    setNewPath(shownPath);
+  }, [shownId, shownPath]);
   if (!selected) return null;
   return (
     <section className="panel recording-actions" aria-labelledby="recording-actions-heading">

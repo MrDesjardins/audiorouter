@@ -1,5 +1,5 @@
 // Manual device-binding and virtual-device panels of the Advanced tab (moved from App.tsx).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
@@ -51,8 +51,10 @@ export function VirtualDeviceLifecyclePanel({
           setMessage(formatUiError(error, "Virtual-device inventory unavailable."));
       });
   };
+  // Refresh when the backend connects or changes, with the latest state.
+  const refreshOnChange = useEffectEvent(() => refresh());
   useEffect(() => {
-    if (backend.connected) refresh();
+    if (backend.connected) refreshOnChange();
     else {
       setDevices([]);
       setPlan(null);
@@ -337,8 +339,10 @@ export function VirtualRoutePanel({ backend }: { backend: UiBackend }) {
           setMessage(formatUiError(error, "Virtual-route inventory unavailable."));
       });
   };
+  // Refresh when the backend connects or changes, with the latest state.
+  const refreshOnChange = useEffectEvent(() => refresh());
   useEffect(() => {
-    if (backend.connected) refresh();
+    if (backend.connected) refreshOnChange();
     else {
       setState(null);
       setRouteText("[]");
@@ -502,15 +506,17 @@ export function NativeEndpointPanel({
     const hint = readEndpointBindingHint(sessionId);
     setCaptureEndpointId(hint.captureEndpointId ?? "");
     setRenderEndpointId(hint.renderEndpointId ?? "");
-  }, [sessionId]);
+  }, [sessionId, setCaptureEndpointId, setRenderEndpointId]);
   useEffect(() => {
     if (devices.length === 0) return;
+    const isActive = (id: string, direction: "capture" | "render") =>
+      devices.some((device) => device.id === id && device.state === "active" && device.direction === direction);
     // An empty value with a saved hint is deliberate: it represents a stale
     // binding awaiting replacement. Do not let an inventory effect scheduled
     // before a button click overwrite a newly selected pair.
-    if (captureEndpointId && !activeCapture.some((device) => device.id === captureEndpointId)) setCaptureEndpointId("");
-    if (renderEndpointId && !activeRender.some((device) => device.id === renderEndpointId)) setRenderEndpointId("");
-  }, [devices, sessionId, captureEndpointId, renderEndpointId]);
+    if (captureEndpointId && !isActive(captureEndpointId, "capture")) setCaptureEndpointId("");
+    if (renderEndpointId && !isActive(renderEndpointId, "render")) setRenderEndpointId("");
+  }, [devices, sessionId, captureEndpointId, renderEndpointId, setCaptureEndpointId, setRenderEndpointId]);
   const prepare = async () => {
     if (busy || !backend.connected) return;
     if (!backend.prepareNativeEndpoint) {
