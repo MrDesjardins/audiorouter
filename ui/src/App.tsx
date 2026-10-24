@@ -339,14 +339,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
   const [connectionSource, setConnectionSource] = useState("");
   const [connectionDestination, setConnectionDestination] = useState("");
-  const [connectionReplacement, setConnectionReplacement] = useState<{
-    sessionId: string;
-    edgeId: string;
-    sourceNode: string;
-    sourcePort: string;
-    destinationNode: string;
-    destinationPort: string;
-  } | null>(null);
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
   const connectionDialogReturnFocus = useRef<HTMLElement | null>(null);
   const connectionDialog = useRef<HTMLElement | null>(null);
@@ -1068,7 +1060,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       coalesce && history.past.length > 0 ? { ...history, future: [] } : recordDraft(history, previous, next),
     );
     setDraft(next);
-    setConnectionReplacement(null);
     setPendingWarnings([]);
     setAcknowledgedWarnings(new Set());
     setPendingOperation(null);
@@ -1086,7 +1077,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setDraftHistory(transition.history);
     draftRef.current = restored;
     setDraft(restored);
-    setConnectionReplacement(null);
     setPendingWarnings([]);
     setAcknowledgedWarnings(new Set());
     setPendingOperation(null);
@@ -1574,7 +1564,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     try {
       await backend.deleteSession(session.id, uiIdempotencyKey("session-delete"));
       setCreatedSessions((current) => current.filter((item) => item.id !== session.id));
-      const fallback = availableSessions.find((item) => item.id !== session.id);
+      // Ask the backend which sessions remain: right after start-up the cached
+      // list can still be empty, which left the window on the deleted session.
+      let remaining = availableSessions;
+      try {
+        const items = await backend.listSessions();
+        ++sessionRefreshGeneration.current;
+        setListedSessions(items);
+        remaining = items;
+      } catch {
+        // Keep the cached list; the next refresh reports the inventory error.
+      }
+      const fallback = remaining.find((item) => item.id !== session.id);
       if (fallback) await switchSession(fallback.id);
       setActionMessage(`Deleted session ${session.name}.`);
     } catch (error) {
@@ -2055,7 +2056,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setNativeGenerations({});
     setNativePumpStats(null);
     setAudioSourceStates({});
-    setConnectionReplacement(null);
     setSelectedSessionId(id);
     if (backend.connected) void snapshotCache.refresh(backend, id).then(setSnapshotState);
     const name = availableSessions.find((item) => item.id === id)?.name ?? "the selected session";
@@ -2263,7 +2263,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     edge.destinationPort === destinationPort,
                 );
                 recordDraftChange(rerouted);
-                setConnectionReplacement(null);
                 setActionMessage(
                   `Connected ${requestedSource.name} to ${destinationName} and removed the direct ${priorName} branch so the same signal is not heard twice.`,
                 );
@@ -2280,7 +2279,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             const mixed = addSourceToOccupiedOutput(current, occupied.id, sourceNode, sourcePort);
             const mixer = mixed.nodes.at(-1);
             recordDraftChange(mixed);
-            setConnectionReplacement(null);
             setActionMessage(
               `Added a Mixer so ${priorName} and ${current.nodes.find((node) => node.id === sourceNode)?.name ?? "the new source"} can share ${destinationName}. Adjust the Mixer, then Save route when ready.`,
             );
@@ -2298,7 +2296,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           const mixed = addSourceToOccupiedInput(current, occupied.id, sourceNode, sourcePort);
           const mixer = mixed.nodes.at(-1);
           recordDraftChange(mixed);
-          setConnectionReplacement(null);
           setActionMessage(
             `Added a Mixer so ${priorName} and ${current.nodes.find((node) => node.id === sourceNode)?.name ?? "the new source"} can both feed ${destinationName}. Adjust the Mixer, then Save route when ready.`,
           );
@@ -2312,44 +2309,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           return null;
         }
       } else {
-        setConnectionReplacement(null);
         setActionMessage(formatUiError(error, "Unable to add connection."));
       }
       return null;
-    }
-  };
-  const replaceInputConnection = () => {
-    const pending = connectionReplacement;
-    const current = draftRef.current;
-    if (
-      !pending ||
-      pending.sessionId !== session.id ||
-      !current.edges.some(
-        (edge) =>
-          edge.id === pending.edgeId &&
-          edge.destinationNode === pending.destinationNode &&
-          edge.destinationPort === pending.destinationPort,
-      )
-    ) {
-      setConnectionReplacement(null);
-      setActionMessage("That connection changed. Try connecting the nodes again.");
-      return;
-    }
-    try {
-      const next = appendDraftConnection(
-        removeDraftConnection(current, pending.edgeId),
-        pending.sourceNode,
-        pending.sourcePort,
-        pending.destinationNode,
-        pending.destinationPort,
-      );
-      recordDraftChange(next);
-      setActionMessage(
-        "Input connection replaced in the draft. Undo restores the previous route; Save route when ready.",
-      );
-    } catch (error) {
-      setConnectionReplacement(null);
-      setActionMessage(formatUiError(error, "Unable to replace the input connection."));
     }
   };
   const addConnection = () => {
@@ -2623,7 +2585,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(error instanceof Error ? error.message : "Could not add application capture.");
     }
   };
-  const addApplicationGroupFromPicker = (chosen: ApplicationRow[], executablePaths: string[]) => {
+  const addApplicationGroupFromPicker = (chosen: ApplicationRow[], executablePaths: string[]): boolean => {
     try {
       const current = draftRef.current;
       const { session: next, mixerId } = appendApplicationCaptureGroup(current, chosen, executablePaths);
@@ -2636,8 +2598,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         `Added ${addedCount} application sources and a Mixer. Check that none of the selected apps launches another selected app, then plan and save the draft.`,
       );
       closeApplicationPicker();
+      return true;
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Could not create app group.");
+      return false;
     }
   };
   const rebindApplicationCapture = (nodeId: string, application: ApplicationRow) => {
@@ -3131,11 +3095,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 <span className="global-action-message-text" title={text}>
                   {text}
                 </span>
-                {backend.connected && connectionReplacement && actionMessage?.includes("Replace input connection") && (
-                  <button type="button" className="secondary" onClick={replaceInputConnection}>
-                    Replace input connection
-                  </button>
-                )}
                 {backend.connected && actionMessage?.includes("Troubleshooting") && workbenchTab !== "advanced" && (
                   <button type="button" className="secondary" onClick={() => setWorkbenchTab("advanced")}>
                     Open Advanced
@@ -3154,7 +3113,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     title="Dismiss message"
                     onClick={() => {
                       setActionMessage(null);
-                      setConnectionReplacement(null);
                     }}
                   >
                     ×
@@ -3415,7 +3373,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   setAcknowledgedWarnings(new Set());
                   setPendingOperation(null);
                   setPendingGraphPlan(null);
-                  setConnectionReplacement(null);
                   setActionMessage("Draft discarded.");
                 }}
                 onPlan={() => void planChanges()}
@@ -3423,11 +3380,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 canCommit={acknowledgedWarnings.size === pendingWarnings.length && !graphBusy}
                 pendingPlan={Boolean(pendingGraphPlan)}
                 actionMessage={actionMessage}
-                onReplaceInputConnection={
-                  connectionReplacement && actionMessage?.includes("Replace input connection")
-                    ? replaceInputConnection
-                    : undefined
-                }
                 apiBuilder={(baseUrl) => (
                   <RequestBuilder
                     sessions={availableSessions}

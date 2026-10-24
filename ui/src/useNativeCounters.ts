@@ -22,7 +22,9 @@ export type NativePumpStats =
 
 export function formatNativePumpSummary(stats: NativePumpStats | null, running: boolean): string | null {
   const summary = formatNativePumpCounters(stats, running);
-  const service = stats?.audioService;
+  // While the dedicated audio thread pumps, its gaps are the ones heard;
+  // the control thread's service passes only report.
+  const service = stats?.audioThread ?? stats?.audioService;
   if (summary === null || !service || service.lateGaps === 0) return summary;
   // Late backend service passes are the audible-continuity risk: report them.
   return `${summary} / ${service.lateGaps} late audio service gap${service.lateGaps === 1 ? "" : "s"} (max ${(service.maxGapMicros / 1000).toFixed(1)} ms)`;

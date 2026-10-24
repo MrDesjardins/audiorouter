@@ -817,6 +817,7 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
                 "audioService": audio_service_output_schema(),
+                "audioThread": audio_thread_output_schema(),
                 "packets": { "type": "integer", "minimum": 0 },
                 "capturedFrames": { "type": "integer", "minimum": 0 },
                 "processedQuanta": { "type": "integer", "minimum": 0 },
@@ -834,6 +835,7 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
                 "audioService": audio_service_output_schema(),
+                "audioThread": audio_thread_output_schema(),
                 "input": {
                     "type": "object",
                     "properties": {
@@ -870,6 +872,7 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
                 "audioService": audio_service_output_schema(),
+                "audioThread": audio_thread_output_schema(),
                 "packets": { "type": "integer", "minimum": 0 },
                 "processedQuanta": { "type": "integer", "minimum": 0 },
                 "renderedFrames": { "type": "integer", "minimum": 0 },
@@ -884,6 +887,7 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "generation": { "type": "integer", "minimum": 1 },
                 "audioService": audio_service_output_schema(),
+                "audioThread": audio_thread_output_schema(),
                 "inputs": { "type": "integer", "minimum": 0 },
                 "capturedFrames": { "type": "integer", "minimum": 0 },
                 "submittedQuanta": { "type": "integer", "minimum": 0 },

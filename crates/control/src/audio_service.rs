@@ -350,6 +350,14 @@ impl ControlPlane {
             if let Some(worker) = self.native_multi_input_worker.as_ref() {
                 worker.set_pumping(checked.is_ok());
             }
+            // Capture-sink leases are renewed only here: past half a lease
+            // without these checks the audio thread pauses (fail closed).
+            self.audio_thread_shared.set_pump_valid_for(
+                self.native_capture_sink_bindings
+                    .values()
+                    .map(audiorouter_windows_audio::NativeBridgeCaptureSinkBinding::heartbeat_interval)
+                    .min(),
+            );
         }
         let generation = checked?;
         let pumped = if self.audio_thread.is_some() {
@@ -442,7 +450,7 @@ impl ControlPlane {
 
     /// With an audio thread pumping, report what it parked instead of
     /// pumping here: its first error since the last call (formatted as the
-    /// inline pump formats it), or the worker's counters with no new quanta.
+    /// inline pump formats it), or the totals it pumped since Play.
     /// A panic on the audio thread is re-raised here, so the backend
     /// supervisor restarts the backend as it did for an inline pump panic.
     #[cfg(windows)]
@@ -467,16 +475,19 @@ impl ControlPlane {
                 "native {pump} pump failed: {error:?}"
             )));
         }
+        // Totals since Play: the audio thread pumps between these reads, so
+        // a per-read delta would almost always be zero.
+        let pumped = self.audio_thread_shared.pumped();
         Ok(json!({
             "sessionId": session_id,
             "generation": generation,
-            "inputs": 0,
-            "capturedFrames": 0,
-            "submittedQuanta": 0,
+            "inputs": pumped.packets,
+            "capturedFrames": pumped.captured_frames,
+            "submittedQuanta": pumped.processed_quanta,
             "outputCount": worker.output_count(),
-            "deliveredQuanta": 0,
-            "renderedFrames": 0,
-            "renderBackpressureEvents": 0,
+            "deliveredQuanta": pumped.delivered_quanta,
+            "renderedFrames": pumped.rendered_frames,
+            "renderBackpressureEvents": pumped.render_backpressure_events,
             "outputUnderruns": worker.output_underruns(),
         }))
     }

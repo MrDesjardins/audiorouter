@@ -368,4 +368,54 @@ mod tests {
             "simulated storage failure"
         );
     }
+    #[test]
+    fn the_recorder_thread_writes_audio_while_the_control_thread_never_drains() {
+        // A slow control request stops the backend's service pass, but the
+        // audio thread keeps feeding recorder taps. Ten times the queue's
+        // capacity goes through with no `drain_pending` call from this thread.
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-threaded-independent-{}-{}",
+            std::process::id(),
+            unix_epoch_seconds()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let writer = SegmentedWavRecorderWorker::new(
+            RecordingPathPolicy::new(&root).unwrap(),
+            "fixture",
+            "rec",
+            WavFormat::Pcm16,
+            1,
+            48_000,
+            4,
+            4,
+            48_000,
+        )
+        .unwrap();
+        let path = writer.initial_path().to_owned();
+        let mut worker = ThreadedRecorderWorker::new(Box::new(writer), 4).unwrap();
+        worker.arm().unwrap();
+        worker.start(0).unwrap();
+        let queue = worker.queue.clone();
+        let tap = worker.shared_audio_tap().unwrap();
+        let mut audio = AudioBlock::new(1, 128).unwrap();
+        audio.channel_mut(0).unwrap().fill(0.25);
+        let blocks = 40_u64;
+        for index in 0..blocks {
+            tap.on_processed_block(index * 128, &audio);
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !queue.is_empty() {
+                assert!(std::time::Instant::now() < deadline, "queue not drained");
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        }
+        assert_eq!(queue.overruns(), 0);
+        let finalized = worker.finalize(blocks * 128).unwrap();
+        assert!(finalized.file_finalized, "{}", finalized.state);
+        assert_eq!(
+            crate::test_support::assert_playable_wav(&path),
+            blocks * 128 * 2
+        );
+        drop(worker);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

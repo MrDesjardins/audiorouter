@@ -153,6 +153,9 @@ test("new connections keep both chosen sides when older geometry is undone", asy
   await page.goto("/backend-harness.html");
   await page.getByRole("button", { name: "Arrange", exact: true }).click();
   await page.getByRole("button", { name: "Remove connection mic-voice", exact: true }).click();
+  // Drag only once the removal is drawn; dragging earlier recreated the
+  // connection that was still in the draft (CI flake, 2026-10-23).
+  await expect(page.getByRole("button", { name: "Remove connection mic-voice", exact: true })).toHaveCount(0);
   const source = page.getByTestId("rf__node-mic").locator('.source[data-debug-side="bottom"]');
   const target = page.getByTestId("rf__node-voice").locator('.target[data-debug-side="top"]');
   const from = (await source.boundingBox())!;

@@ -64,7 +64,9 @@ pub(super) fn compile(
     };
     let mut prepared = HashMap::<EntityId, OutputBranchSource>::new();
     let mut inherited_gates = HashMap::<EntityId, Vec<OutputSwitchGate>>::new();
-    let mut output_switch_indices = HashMap::<EntityId, usize>::new();
+    // Output Switch node -> (state index, fails closed), and its gated side chains.
+    let mut output_switch_indices = HashMap::<EntityId, (usize, bool)>::new();
+    let mut side_sources = HashMap::<(EntityId, String), OutputBranchSource>::new();
     let mut pending = session.nodes.iter().collect::<Vec<_>>();
     for (index, source) in sources.iter().enumerate() {
         if !matches!(
@@ -116,6 +118,7 @@ pub(super) fn compile(
                 ),
                 ready: AtomicBool::new(false),
                 convergence: None,
+                gate: None,
             });
             source_ref = OutputBranchSource::Chain(chain_index);
         }
@@ -135,43 +138,41 @@ pub(super) fn compile(
             .ok_or_else(unsupported)?;
         let node = pending.remove(position);
         let feeds = incoming(&node.id);
-        // Gates apply to a node's whole output, so a node mixing several
-        // feeds cannot gate one of them: refuse rather than leak the
-        // unselected side or mute the other feeds.
-        if feeds.len() > 1
-            && feeds.iter().any(|edge| {
-                output_switch_indices.contains_key(&edge.source_node)
-                    || inherited_gates
-                        .get(&edge.source_node)
-                        .is_some_and(|gates| !gates.is_empty())
-            })
-        {
-            return Err(unsupported());
-        }
-        let mut gates = if feeds.len() == 1 {
-            inherited_gates
-                .get(&feeds[0].source_node)
+        // Each Output Switch side is gated where it leaves the switch (its
+        // side chain), so a Mixer can sum it with other feeds. A sink also
+        // re-applies the gates that every path to it passes through, which
+        // silences what tools after the side add (tails, plugin noise).
+        let mut feed_gates = Vec::with_capacity(feeds.len());
+        for edge in &feeds {
+            let mut chain = inherited_gates
+                .get(&edge.source_node)
                 .cloned()
-                .unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        if let Some(edge) = feeds.first() {
-            if let Some(index) = output_switch_indices.get(&edge.source_node) {
-                if !matches!(edge.source_port.as_str(), "a" | "b") {
-                    return Err(unsupported());
-                }
-                gates.push(OutputSwitchGate {
-                    switch: *index,
+                .unwrap_or_default();
+            if let Some(&(index, muted)) = output_switch_indices.get(&edge.source_node) {
+                chain.push(OutputSwitchGate {
+                    switch: index,
                     side_b: edge.source_port == "b",
-                    muted: session
-                        .nodes
-                        .iter()
-                        .find(|node| node.id == edge.source_node)
-                        .is_some_and(|node| !node.enabled || node.bypass),
+                    muted,
                 });
             }
+            feed_gates.push(chain);
         }
+        let gates = feed_gates
+            .first()
+            .map(|first| {
+                first
+                    .iter()
+                    .copied()
+                    .filter(|gate| feed_gates.iter().all(|other| other.contains(gate)))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let source_of = |edge: &audiorouter_domain::Edge| {
+            side_sources
+                .get(&(edge.source_node.clone(), edge.source_port.clone()))
+                .copied()
+                .unwrap_or(prepared[&edge.source_node])
+        };
         let sink = matches!(
             node.kind,
             NodeKind::PhysicalOutput
@@ -184,7 +185,7 @@ pub(super) fn compile(
                 return Err(unsupported());
             }
             if node.enabled {
-                graph.output_sources.push(prepared[&feeds[0].source_node]);
+                graph.output_sources.push(source_of(feeds[0]));
                 graph.output_matrices.push(scaled_matrix(
                     &feeds[0].matrix,
                     if node.bypass { 0.0 } else { 1.0 },
@@ -195,7 +196,8 @@ pub(super) fn compile(
             }
             // Sinks are not legal parents, but recording an identity here allows
             // the compile-time progress check to diagnose malformed topology.
-            prepared.insert(node.id.clone(), prepared[&feeds[0].source_node]);
+            let parent = source_of(feeds[0]);
+            prepared.insert(node.id.clone(), parent);
             inherited_gates.insert(node.id.clone(), gates);
             continue;
         }
@@ -210,67 +212,52 @@ pub(super) fn compile(
             .filter(|port| port.direction == PortDirection::Output)
             .collect::<Vec<_>>();
         if node.kind == NodeKind::OutputSwitch {
-            if feeds.len() != 1
-                || node.ports.len() != 3
-                || node
-                    .ports
-                    .iter()
-                    .filter(|port| port.direction == PortDirection::Input)
-                    .count()
-                    != 1
-                || output_ports.len() != 2
-                || !output_ports.iter().any(|port| port.name == "a")
-                || !output_ports.iter().any(|port| port.name == "b")
-                || output_ports
-                    .iter()
-                    .any(|port| port.channels != input.channels)
-            {
+            if feeds.len() != 1 {
                 return Err(unsupported());
             }
-            let children = session
-                .edges
-                .iter()
-                .filter(|edge| edge.enabled && edge.source_node == node.id)
-                .collect::<Vec<_>>();
-            if children.is_empty()
-                || children
-                    .iter()
-                    .any(|edge| !matches!(edge.source_port.as_str(), "a" | "b"))
-            {
-                return Err(unsupported());
-            }
+            let children = output_switch_children(session, node, input.channels)?;
             let state_index = graph.output_switches.len();
-            graph.output_switches.push(OutputSwitchState::new(
-                node.id.clone(),
-                node.parameters
-                    .get("selected")
-                    .and_then(|value| value.as_str())
-                    == Some("b"),
-            ));
-            output_switch_indices.insert(node.id.clone(), state_index);
+            graph
+                .output_switches
+                .push(OutputSwitchState::for_node(node));
             // A disabled or bypassed routing node fails closed on both sides.
-            let index = graph.output_chains.len();
-            graph.output_chains.push(OutputProcessorChain {
-                source: prepared[&feeds[0].source_node],
-                entry_matrix: feeds[0].matrix.clone(),
-                graph: compile_processor_chain(
-                    session.id.as_str(),
-                    &format!("output_switch_{}", node.id.as_str()),
-                    &[],
-                    input.channels,
-                    generation,
-                    plugins,
-                    audio_media,
-                )?,
-                channels: usize::from(input.channels),
-                block: RealtimeDsp::new(
-                    AudioBlock::new(usize::from(input.channels), PROCESSING_QUANTUM_FRAMES)
-                        .map_err(|_| unsupported())?,
-                ),
-                ready: AtomicBool::new(false),
-                convergence: None,
-            });
-            prepared.insert(node.id.clone(), OutputBranchSource::Chain(index));
+            let muted = !node.enabled || node.bypass;
+            let parent = source_of(feeds[0]);
+            let mut sides = Vec::new();
+            for side in ["a", "b"] {
+                if !children.iter().any(|edge| edge.source_port == side) {
+                    continue;
+                }
+                let index = graph.output_chains.len();
+                graph
+                    .output_chains
+                    .push(OutputProcessorChain::output_switch_side(
+                        session.id.as_str(),
+                        &node.id,
+                        parent,
+                        feeds[0].matrix.clone(),
+                        input.channels,
+                        generation,
+                        plugins,
+                        audio_media,
+                        OutputSwitchGate {
+                            switch: state_index,
+                            side_b: side == "b",
+                            muted,
+                        },
+                    )?);
+                sides.push((side, index));
+            }
+            output_switch_indices.insert(node.id.clone(), (state_index, muted));
+            for (side, index) in sides {
+                side_sources.insert(
+                    (node.id.clone(), side.to_owned()),
+                    OutputBranchSource::Chain(index),
+                );
+            }
+            // Only the side chains are read; this entry keeps the progress
+            // check able to order the switch's children.
+            prepared.insert(node.id.clone(), parent);
             inherited_gates.insert(node.id.clone(), gates);
             continue;
         }
@@ -293,10 +280,7 @@ pub(super) fn compile(
             }
             Some(CachedConvergence {
                 node_id: node.id.clone(),
-                sources: feeds
-                    .iter()
-                    .map(|edge| prepared[&edge.source_node])
-                    .collect(),
+                sources: feeds.iter().map(|edge| source_of(edge)).collect(),
                 mixer: MixerStage::new(
                     usize::from(output.channels),
                     feeds
@@ -355,7 +339,7 @@ pub(super) fn compile(
             audio_media,
         )?;
         graph.output_chains.push(OutputProcessorChain {
-            source: prepared[&feeds[0].source_node],
+            source: source_of(feeds[0]),
             entry_matrix: feeds[0].matrix.clone(),
             graph: runtime,
             channels: usize::from(output.channels),
@@ -365,6 +349,7 @@ pub(super) fn compile(
             ),
             ready: AtomicBool::new(false),
             convergence,
+            gate: None,
         });
         prepared.insert(node.id.clone(), OutputBranchSource::Chain(index));
         inherited_gates.insert(node.id.clone(), gates);
@@ -589,65 +574,164 @@ mod tests {
         assert!(output["obs-monitor"].abs() < 1e-6);
     }
 
-    #[test]
-    fn output_switch_side_into_a_shared_mixer_is_refused_rather_than_leaked() {
-        // A gate covers a node's whole output, so a switch side mixed with
-        // another feed would either leak while unselected or mute that feed.
-        let mut session = fixture();
-        let switch_id = EntityId::new("output-switch");
+    fn output_switch_node(id: &EntityId, selected: &str) -> Node {
         let port = |name: &str, direction| Port {
             name: name.into(),
             direction,
             channels: 2,
         };
-        session.nodes.push(Node {
-            id: switch_id.clone(),
+        Node {
+            id: id.clone(),
             name: "Output Switch".into(),
             kind: NodeKind::OutputSwitch,
             type_version: 1,
             enabled: true,
             bypass: false,
-            parameters: serde_json::from_value(serde_json::json!({ "selected": "a" })).unwrap(),
+            parameters: serde_json::from_value(serde_json::json!({ "selected": selected }))
+                .unwrap(),
             ports: vec![
                 port("in", PortDirection::Input),
                 port("a", PortDirection::Output),
                 port("b", PortDirection::Output),
             ],
-        });
-        // game-eq -> switch; a -> game-output, b -> game-mix (shared with discord).
-        let feed = session
-            .edges
-            .iter_mut()
-            .find(|edge| edge.id.as_str() == "game-eq-game-mix")
-            .unwrap();
-        feed.destination_node = switch_id.clone();
-        for (side, destination) in [("a", "obs-out"), ("b", "game-mix")] {
-            session.edges.push(Edge {
-                id: EntityId::new(format!("output-switch-{side}")),
-                source_node: switch_id.clone(),
-                source_port: side.into(),
-                destination_node: EntityId::new(destination),
-                destination_port: "in".into(),
-                matrix: vec![1.0, 0.0, 0.0, 1.0],
-                enabled: true,
-            });
         }
-        let mut obs = session
-            .nodes
-            .iter()
-            .find(|node| node.id.as_str() == "game-output")
-            .unwrap()
-            .clone();
-        obs.id = EntityId::new("obs-out");
-        session.nodes.push(obs);
+    }
 
-        assert!(compile_native_paths_with_plugins_and_audio(
-            &session,
-            RuntimeGeneration::new(5),
-            &Default::default(),
-            &Default::default(),
-        )
-        .is_err());
+    fn stereo_edge(id: &str, source: &str, port: &str, destination: &str) -> Edge {
+        Edge {
+            id: EntityId::new(id),
+            source_node: EntityId::new(source),
+            source_port: port.into(),
+            destination_node: EntityId::new(destination),
+            destination_port: "in".into(),
+            matrix: vec![1.0, 0.0, 0.0, 1.0],
+            enabled: true,
+        }
+    }
+
+    #[test]
+    fn output_switch_side_mixes_with_other_feeds_and_gates_tools_after_it() {
+        // game-eq -> switch; a -> obs-out, b -> side-meter -> game-mix, which
+        // also mixes Discord. The unselected side must be silent at the Mixer
+        // and at the Meter, and Discord must keep its level in both positions.
+        for selected in ["a", "b"] {
+            let mut session = fixture();
+            let switch_id = EntityId::new("output-switch");
+            session.nodes.push(output_switch_node(&switch_id, selected));
+            let feed = session
+                .edges
+                .iter_mut()
+                .find(|edge| edge.id.as_str() == "game-eq-game-mix")
+                .unwrap();
+            feed.destination_node = switch_id.clone();
+            let template = session
+                .nodes
+                .iter()
+                .find(|node| node.id.as_str() == "voice-meter")
+                .unwrap()
+                .clone();
+            session.nodes.push(Node {
+                id: EntityId::new("side-meter"),
+                ..template
+            });
+            let mut obs = session
+                .nodes
+                .iter()
+                .find(|node| node.id.as_str() == "game-output")
+                .unwrap()
+                .clone();
+            obs.id = EntityId::new("obs-out");
+            session.nodes.push(obs);
+            session.edges.extend([
+                stereo_edge("switch-a", "output-switch", "a", "obs-out"),
+                stereo_edge("switch-b", "output-switch", "b", "side-meter"),
+                stereo_edge("side-meter-game-mix", "side-meter", "out", "game-mix"),
+            ]);
+
+            let set = compile_fixture(&session);
+            assert_eq!(set.path_count(), 1);
+            let graph = &set.paths()[0];
+            let output = run(graph);
+            let game = if selected == "b" { 0.2 } else { 0.0 };
+            assert!(
+                (output["obs-out"] - (0.2 - game)).abs() < 1e-6,
+                "{selected}"
+            );
+            assert!(
+                (output["game-output"] - (0.3 + game)).abs() < 1e-6,
+                "{selected}"
+            );
+            assert!(
+                (output["monitor"] - (0.4 + game)).abs() < 1e-6,
+                "{selected}"
+            );
+            assert!((output["voice-output"] - 0.1).abs() < 1e-6, "{selected}");
+            let meter = graph
+                .meter_snapshot_for_node(&EntityId::new("side-meter"))
+                .unwrap();
+            assert!((meter.peak_abs - game).abs() < 1e-6, "{selected}");
+        }
+    }
+
+    #[test]
+    fn output_switch_gates_a_meter_on_the_unselected_side_of_a_single_chain() {
+        // mic -> switch; a -> voice-output, b -> side-meter -> game-output.
+        let mut session = fixture();
+        session.nodes.retain(|node| {
+            matches!(
+                node.id.as_str(),
+                "mic" | "voice-meter" | "voice-output" | "game-output"
+            )
+        });
+        session.edges.clear();
+        let switch_id = EntityId::new("output-switch");
+        session.nodes.push(output_switch_node(&switch_id, "a"));
+        let mic = session
+            .nodes
+            .iter_mut()
+            .find(|node| node.id.as_str() == "mic")
+            .unwrap();
+        mic.ports[0].channels = 2;
+        session.edges.extend([
+            stereo_edge("mic-switch", "mic", "out", "output-switch"),
+            stereo_edge("switch-a", "output-switch", "a", "voice-output"),
+            stereo_edge("switch-b", "output-switch", "b", "voice-meter"),
+            stereo_edge("meter-out", "voice-meter", "out", "game-output"),
+        ]);
+        let set = compile_fixture(&session);
+        let graph = &set.paths()[0];
+        let mut input = AudioBlock::new(2, PROCESSING_QUANTUM_FRAMES).unwrap();
+        for channel in 0..2 {
+            input.channel_mut(channel).unwrap().fill(0.25);
+        }
+        let mut scratch = AudioBlock::new(2, PROCESSING_QUANTUM_FRAMES).unwrap();
+        let mut outputs = graph
+            .output_node_ids
+            .iter()
+            .map(|_| AudioBlock::new(2, PROCESSING_QUANTUM_FRAMES).unwrap())
+            .collect::<Vec<_>>();
+        graph
+            .process(
+                std::slice::from_ref(&input),
+                &mut scratch,
+                &mut outputs.iter_mut().collect::<Vec<_>>(),
+            )
+            .unwrap();
+        let level = |id: &str| {
+            let index = graph
+                .output_node_ids
+                .iter()
+                .position(|node| node.as_str() == id)
+                .unwrap();
+            outputs[index].channel(0).unwrap()[0]
+        };
+        assert!((level("voice-output") - 0.25).abs() < 1e-6);
+        assert!(level("game-output").abs() < 1e-6);
+        let meter = graph
+            .meter_snapshot_for_node(&EntityId::new("voice-meter"))
+            .unwrap();
+        assert_eq!(meter.observed_frames, PROCESSING_QUANTUM_FRAMES as u64);
+        assert!(meter.peak_abs < 1e-6, "{}", meter.peak_abs);
     }
 
     #[test]

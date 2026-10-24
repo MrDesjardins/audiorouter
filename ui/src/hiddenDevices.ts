@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 
 /**
  * Devices hidden from the Input Device and Output Device pickers on this PC
@@ -15,30 +16,16 @@ const validId = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0 && value.length <= MAX_DEVICE_ID_LENGTH;
 
 export function readHiddenDevices(storage: Pick<StorageLike, "getItem"> | null): ReadonlySet<string> {
-  try {
-    const value: unknown = JSON.parse(storage?.getItem(HIDDEN_DEVICES_KEY) ?? "[]");
-    if (!Array.isArray(value)) return new Set();
-    return new Set(value.filter(validId).slice(0, MAX_HIDDEN_DEVICES));
-  } catch {
-    return new Set();
-  }
+  const value = readPresentationJson(storage, HIDDEN_DEVICES_KEY);
+  if (!Array.isArray(value)) return new Set();
+  return new Set(value.filter(validId).slice(0, MAX_HIDDEN_DEVICES));
 }
 
 export function writeHiddenDevices(storage: Pick<StorageLike, "setItem"> | null, ids: ReadonlySet<string>): void {
-  try {
-    storage?.setItem(HIDDEN_DEVICES_KEY, JSON.stringify([...ids].filter(validId).slice(0, MAX_HIDDEN_DEVICES)));
-  } catch {
-    /* Optional presentation preference. */
-  }
+  writePresentationJson(storage, HIDDEN_DEVICES_KEY, [...ids].filter(validId).slice(0, MAX_HIDDEN_DEVICES));
 }
 
-const defaultStorage = (): StorageLike | null => {
-  try {
-    return typeof window === "undefined" ? null : window.localStorage;
-  } catch {
-    return null;
-  }
-};
+const defaultStorage = optionalLocalStorage;
 
 let current: ReadonlySet<string> | null = null;
 const listeners = new Set<() => void>();

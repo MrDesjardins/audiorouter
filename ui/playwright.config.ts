@@ -8,6 +8,12 @@ export default defineConfig({
   // stalled Edge's "element is stable" waits (run 37560544251). PowerShell
   // drops a `--` separator, so this cannot be passed through `npm run e2e`.
   workers: process.env.CI ? 1 : undefined,
+  // Hosted runners stall for seconds at a time (cold Vite compiles, GC): a
+  // first page load missed the 5 s default (2026-10-23). One retry keeps a
+  // single stall from failing the job; the list reporter still names every
+  // retried test as "flaky", so flakes stay visible and get fixed.
+  expect: { timeout: process.env.CI ? 10_000 : 5_000 },
+  retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
   outputDir: `${process.env.TEMP ?? "."}/audiorouter-playwright-results`,
   use: { baseURL: "http://127.0.0.1:4186", browserName: "chromium", channel: "msedge", viewport: { width: 1440, height: 1000 }, trace: "retain-on-failure", screenshot: "only-on-failure" },

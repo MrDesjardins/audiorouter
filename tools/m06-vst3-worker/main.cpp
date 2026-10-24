@@ -533,6 +533,17 @@ public:
         return std::exchange(edits_, {});
     }
 
+    // Put back edits that did not fit in a quantum. A newer edit of the same
+    // parameter, made meanwhile, is kept.
+    void restore(const std::vector<std::pair<Vst::ParamID, Vst::ParamValue>>& leftover) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto& edit : leftover) {
+            const bool newer = std::any_of(edits_.begin(), edits_.end(),
+                                           [&](const auto& pending) { return pending.first == edit.first; });
+            if (!newer && edits_.size() < kMaxParameters) edits_.push_back(edit);
+        }
+    }
+
 private:
     std::mutex mutex_;
     std::vector<std::pair<Vst::ParamID, Vst::ParamValue>> edits_;
@@ -1776,11 +1787,26 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
             }
         }
         // Edits from the plugin's window go first; a host event for the same
-        // parameter in this quantum still wins.
+        // parameter in this quantum wins, so that edit is dropped. A quantum
+        // carries at most kMaxParameters parameters (the processor's queue
+        // limit); edits that do not fit wait for the next quantum.
         auto edits = g_editor_edits.take();
-        for (auto edit = edits.rbegin(); edit != edits.rend(); ++edit) {
-            events.insert(events.begin(), ParameterEvent{edit->first, static_cast<float>(edit->second), 0});
+        std::vector<ParameterEvent> editor_events;
+        std::vector<std::pair<Vst::ParamID, Vst::ParamValue>> deferred;
+        std::size_t room = kMaxParameters - std::min(kMaxParameters, host_values.size());
+        for (const auto& edit : edits) {
+            const bool host_sets_it = std::any_of(host_values.begin(), host_values.end(),
+                                                  [&](const auto& value) { return value.first == edit.first; });
+            if (host_sets_it) continue;
+            if (room == 0) {
+                deferred.push_back(edit);
+                continue;
+            }
+            --room;
+            editor_events.push_back(ParameterEvent{edit.first, static_cast<float>(edit.second), 0});
         }
+        if (!deferred.empty()) g_editor_edits.restore(deferred);
+        events.insert(events.begin(), editor_events.begin(), editor_events.end());
         if (multi_bus) {
             if (json.find("\"type\":\"ProcessBuses\"") == std::string::npos) {
                 throw protocol_error("expected ProcessBuses or Shutdown");

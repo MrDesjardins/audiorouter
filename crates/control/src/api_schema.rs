@@ -219,6 +219,23 @@ pub(crate) fn audio_service_output_schema() -> Value {
     })
 }
 
+/// The dedicated multi-input audio thread's continuity, present while it
+/// runs. Its gaps, not the control thread's, are the audible risk then.
+pub(crate) fn audio_thread_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "passes": { "type": "integer", "minimum": 0 },
+            "lateGaps": { "type": "integer", "minimum": 0 },
+            "maxGapMicros": { "type": "integer", "minimum": 0 },
+            "pumpErrors": { "type": "integer", "minimum": 0 },
+            "skippedPasses": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["passes", "lateGaps", "maxGapMicros", "pumpErrors", "skippedPasses"],
+        "additionalProperties": false
+    })
+}
+
 pub(crate) fn object_schema(properties: Value, required: &[&str]) -> Value {
     let required = required
         .iter()

@@ -1,5 +1,76 @@
 # Active plan — post-0.0.8 maintenance
 
+## Review follow-ups R1–R7 and a second review — 2026-10-23, owner request
+
+The owner asked to improve the `site/compare.html` wording, fix every
+remaining 0.0.21 review item, confirm the nine findings are fixed with no
+new issues, then review again and fix what that finds. Branch
+`fix/review-followups-0.0.21` from main `534d243e`. A PR needs the owner's
+approval (AGENTS.md); this request did not include one.
+
+- Outcomes per item: [review follow-ups](../future/review-fixes-0.0.21.md)
+  (R1/R2 per-side switch gates, R3 not a defect plus a regression, R4 dead
+  code removed, R5 one dialog helper, R6 wording, R7 one product bug and
+  three test races fixed, CI retries once).
+- Verification of the five 0.0.21 fixes: their regressions still pass; the
+  switch-into-Mixer refusal is replaced by R1 support, and both new switch
+  tests fail with the side gate disabled (run 2026-10-23, then restored).
+- Second review: `/code-review high v0.0.20..HEAD` (after the R1–R7
+  commits), 10 findings, all checked against the code and fixed:
+  1. With the audio thread pumping, `nativeMultiInputs.pump` returned
+     hard-coded zero counters, so the status line could not tell a healthy
+     route from a stalled one. It now reports the thread's totals since Play
+     (`PumpTotals`), and the late-gap warning reads the audio thread's gaps
+     (`audioThread`, now in the API output schema and contracts; the schema
+     had `additionalProperties: false` while the backend already sent it).
+  2. VST3 worker: plugin-window edits were added to host events with no
+     combined limit, so a quantum could exceed 256 parameters and stop the
+     worker. Edits now share the limit; the rest wait a quantum, and a host
+     event for the same parameter wins.
+  3. Capture-sink driver leases were renewed only between control requests
+     while the audio thread kept pumping. With such a lease the audio thread
+     now pumps only within half a lease of the last successful checks.
+  4. The App group picker kept the previous group's selection after Create.
+  5. A switch side was faded twice (gain squared); the sink now only
+     silences a fully closed side.
+  6. The executable placeholder showed `C:\\Games\\game.exe`.
+  7. Switch gates did per-sample work in steady state; now a no-op at gain 1
+     and a clear at gain 0.
+  8. Hidden devices used their own storage helper with no size bound; now
+     the shared presentation helpers.
+  9. Output Switch checks and side chains were copied in both compilers; now
+     `output_switch_children` and `OutputProcessorChain::output_switch_side`.
+     `domain::validate_session` keeps its own shape check (the backend's
+     authority on saved sessions).
+  10. Copying a copy nested IDs (`-copy-1-copy-1`) with no 128-byte bound;
+      it now numbers from the original and truncates to fit.
+- Checks after both rounds (2026-10-23, Windows 11, Rust 1.96.0): fmt and
+  strict Clippy clean (workspace, shell); `cargo test --workspace --locked`
+  (exit 0, 1,160 passed, 0 failed); UI format, lint (0 errors, 25 warnings),
+  typecheck, 648 unit tests; contracts typecheck and drift; docs and site
+  checks; Edge: compact-workspace, canvas-layout(-review), session-workflows,
+  device-access-consent, drag-place, canvas copy/paste, clipboard,
+  application-sources, device-binding (60 tests), the two de-flaked tests
+  20/20 repeats; VST3 worker rebuilt (release) and
+  `verified_native_vst3_worker_processes_an_opt_in_fixture` passed with
+  mda-vst3. New regressions were run against the unfixed code for R1/R2
+  and the App group picker (each failed, then passed with the fix).
+- Not done: live audio on hardware (sine-continuity harness) for the switch
+  gate and audio-thread changes; a UADx editor session with many edits.
+- Rollback: revert the branch's commits; no storage migration. The
+  contracts gained an optional `audioThread` field.
+- PR #65 (owner-approved). CI's dependency policy then failed on
+  GHSA-mrhx-c7xc-m3w5 (high: zod < 4.6.6 can exhaust memory validating
+  oversized collections), reached through `@elgato/utils` 0.6.1 in
+  `tools/streamdeck`, which still requires zod ^3. No zod 3 fix exists, and
+  `npm audit fix --force` would downgrade `@elgato/streamdeck` to 1.4.1.
+  Decision: an npm `overrides` pin of zod 4.6.7. The library imports only
+  `zod/v4-mini`, which zod 4 still exports. Checks: `npm-audit` passes; the
+  Stream Deck typecheck, its 26 tests and the build pass; Elgato's
+  JSON-RPC request/response schemas accept valid messages and reject bad
+  ones under zod 4.6.7. Remove the override once `@elgato/utils` depends on
+  a patched zod.
+
 ## Overnight review, PR, merge and release 0.0.21 — 2026-10-23, owner request
 
 The owner asked, before going to sleep, for: (1) a quick code review of all

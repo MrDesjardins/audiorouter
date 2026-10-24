@@ -39,7 +39,7 @@ test("copy and paste a configured node across sessions with menus and shortcuts"
   await expect(pasteMenu.getByRole("menuitem", { name: "Paste tool" })).toBeEnabled();
   await page.screenshot({ path: testInfo.outputPath("paste-menu-dark.png") });
   await pasteMenu.getByRole("menuitem", { name: "Paste tool" }).click();
-  const menuPasted = page.getByTestId("rf__node-voice-copy-1-copy-1");
+  const menuPasted = page.getByTestId("rf__node-voice-copy-2");
   await expect(menuPasted).toBeVisible();
   const canvasBounds = await canvas.boundingBox();
   const pastedBounds = await menuPasted.boundingBox();

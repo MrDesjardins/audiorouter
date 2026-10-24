@@ -1432,12 +1432,27 @@ export function copyDraftNode(session: Session, nodeId: EntityId): Node {
 }
 
 /** Pastes a copied node as an unconnected draft node with a destination-unique ID. */
+/** The backend's `MAX_ENTITY_ID_BYTES` (UTF-8 bytes of a node ID). */
+const MAX_ENTITY_ID_BYTES = 128;
+const utf8Length = (text: string) => new TextEncoder().encode(text).length;
+
 export function pasteDraftNode(session: Session, copied: Node): Session {
+  // Copying a copy numbers from the original ID ("voice-copy-2", not
+  // "voice-copy-1-copy-1"), and the ID stays within the backend's limit.
+  const original = copied.id.replace(/(-copy-\d+)+$/, "") || copied.id;
+  const pastedId = (suffix: number) => {
+    const ending = `-copy-${suffix}`;
+    let base = original;
+    while (base.length > 0 && utf8Length(base + ending) > MAX_ENTITY_ID_BYTES) {
+      base = Array.from(base).slice(0, -1).join("");
+    }
+    return base + ending;
+  };
   let suffix = 1;
-  let id = `${copied.id}-copy-${suffix}`;
+  let id = pastedId(suffix);
   while (session.nodes.some((node) => node.id === id)) {
     suffix += 1;
-    id = `${copied.id}-copy-${suffix}`;
+    id = pastedId(suffix);
   }
   const baseName = copied.name.replace(/ copy \d+$/, "");
   let nameSuffix = 1;

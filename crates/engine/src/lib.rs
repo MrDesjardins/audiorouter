@@ -3176,7 +3176,7 @@ enum OutputBranchSource {
     Chain(usize),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct OutputSwitchGate {
     switch: usize,
     side_b: bool,
@@ -3229,6 +3229,105 @@ impl OutputSwitchState {
     }
 }
 
+/// Check an Output Switch's ports (one input, outputs "a" and "b" of the
+/// input's width) and return its enabled child edges, each from "a" or "b".
+/// Both multi-path compilers use it, so a session compiles the same way
+/// with or without connected Mixers.
+fn output_switch_children<'s>(
+    session: &'s audiorouter_domain::Session,
+    node: &audiorouter_domain::Node,
+    input_channels: u8,
+) -> Result<Vec<&'s audiorouter_domain::Edge>, GraphCompileError> {
+    use audiorouter_domain::PortDirection;
+    let outputs = node
+        .ports
+        .iter()
+        .filter(|port| port.direction == PortDirection::Output)
+        .collect::<Vec<_>>();
+    let inputs = node
+        .ports
+        .iter()
+        .filter(|port| port.direction == PortDirection::Input)
+        .count();
+    if node.ports.len() != 3
+        || inputs != 1
+        || outputs.len() != 2
+        || !outputs.iter().any(|port| port.name == "a")
+        || !outputs.iter().any(|port| port.name == "b")
+        || outputs.iter().any(|port| port.channels != input_channels)
+    {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    let children = session
+        .edges
+        .iter()
+        .filter(|edge| edge.enabled && edge.source_node == node.id)
+        .collect::<Vec<_>>();
+    if children.is_empty()
+        || children
+            .iter()
+            .any(|edge| !matches!(edge.source_port.as_str(), "a" | "b"))
+    {
+        return Err(GraphCompileError::UnsupportedTopology);
+    }
+    Ok(children)
+}
+
+impl OutputSwitchState {
+    fn for_node(node: &audiorouter_domain::Node) -> Self {
+        Self::new(
+            node.id.clone(),
+            node.parameters
+                .get("selected")
+                .and_then(|value| value.as_str())
+                == Some("b"),
+        )
+    }
+}
+
+impl OutputProcessorChain {
+    /// One Output Switch side: the switch's input, mapped by its incoming
+    /// edge and then gated by `gate`.
+    #[allow(clippy::too_many_arguments)]
+    fn output_switch_side(
+        session_id: &str,
+        node_id: &audiorouter_domain::EntityId,
+        source: OutputBranchSource,
+        entry_matrix: Vec<f32>,
+        channels: u8,
+        generation: RuntimeGeneration,
+        plugins: &HashMap<audiorouter_domain::EntityId, Arc<dyn RealtimePluginProcessor>>,
+        audio_media: &HashMap<String, Arc<DecodedAudio>>,
+        gate: OutputSwitchGate,
+    ) -> Result<Self, GraphCompileError> {
+        Ok(Self {
+            source,
+            entry_matrix,
+            graph: compile_processor_chain(
+                session_id,
+                &format!(
+                    "output_switch_{}_{}",
+                    node_id.as_str(),
+                    if gate.side_b { "b" } else { "a" }
+                ),
+                &[],
+                channels,
+                generation,
+                plugins,
+                audio_media,
+            )?,
+            channels: usize::from(channels),
+            block: RealtimeDsp::new(
+                AudioBlock::new(usize::from(channels), PROCESSING_QUANTUM_FRAMES)
+                    .map_err(|_| GraphCompileError::UnsupportedTopology)?,
+            ),
+            ready: AtomicBool::new(false),
+            convergence: None,
+            gate: Some(gate),
+        })
+    }
+}
+
 /// Each authored branch processor is prepared once, in dependency order.
 /// Its output is cached for all children; stateful tools never run per sink.
 struct OutputProcessorChain {
@@ -3241,6 +3340,10 @@ struct OutputProcessorChain {
     /// Several authored parents converge here. All are earlier cached stages;
     /// no recursive processing or source duplication occurs in the callback.
     convergence: Option<CachedConvergence>,
+    /// One side of an Output Switch: the switch's input with that side's
+    /// gain applied, so every tool, Meter and Mixer after the side sees the
+    /// gated signal rather than only the final sink.
+    gate: Option<OutputSwitchGate>,
 }
 
 struct CachedConvergence {
@@ -3955,6 +4058,9 @@ impl CompiledMixerFanoutGraph {
                 self.with_output_source(chain.source, mixed, |source| {
                     block.map_from(source, &chain.entry_matrix)?;
                     chain.graph.process(block);
+                    if let Some(gate) = &chain.gate {
+                        self.apply_switch_gate(gate, block);
+                    }
                     Ok::<(), BlockError>(())
                 })
             });
@@ -3978,32 +4084,62 @@ impl CompiledMixerFanoutGraph {
         }) {
             result?;
         }
-        for gate in &self.output_gates[index] {
-            let switch = &self.output_switches[gate.switch];
-            let start = f32::from_bits(switch.block_start.load(Ordering::Relaxed));
-            let end = f32::from_bits(switch.block_end.load(Ordering::Relaxed));
-            let frames = destination.frames();
-            for channel in 0..destination.channels() {
-                if let Some(samples) = destination.channel_mut(channel) {
-                    for (frame, sample) in samples.iter_mut().enumerate() {
-                        let position = if frames <= 1 {
-                            end
-                        } else {
-                            start + (end - start) * frame as f32 / (frames - 1) as f32
-                        };
-                        *sample *= if gate.muted {
-                            0.0
-                        } else {
-                            OutputSwitchState::gain(position, gate.side_b)
-                        };
-                    }
-                }
-            }
+        // The side chains already gate (and fade) their signal. A sink only
+        // silences a side that is fully closed for the whole quantum, which
+        // also mutes what tools after it add (tails, plugin noise) without
+        // fading twice.
+        if self.output_gates[index]
+            .iter()
+            .any(|gate| self.switch_gate_gains(gate) == (0.0, 0.0))
+        {
+            destination.clear();
         }
         // Branch DSP may generate or retain audio even with a muted input.
         // Enforce privacy after every branch, including pre-Mixer captures.
         self.privacy_mute.apply(destination);
         Ok(())
+    }
+
+    /// Scale `block` by one Output Switch side's gain for this quantum,
+    /// ramping across the block while the switch moves.
+    fn apply_switch_gate(&self, gate: &OutputSwitchGate, block: &mut AudioBlock) {
+        match self.switch_gate_gains(gate) {
+            // Steady state: nothing to do, or silence.
+            (1.0, 1.0) => {}
+            (0.0, 0.0) => block.clear(),
+            _ => {
+                let switch = &self.output_switches[gate.switch];
+                let start = f32::from_bits(switch.block_start.load(Ordering::Relaxed));
+                let end = f32::from_bits(switch.block_end.load(Ordering::Relaxed));
+                let frames = block.frames();
+                for channel in 0..block.channels() {
+                    if let Some(samples) = block.channel_mut(channel) {
+                        for (frame, sample) in samples.iter_mut().enumerate() {
+                            let position = if frames <= 1 {
+                                end
+                            } else {
+                                start + (end - start) * frame as f32 / (frames - 1) as f32
+                            };
+                            *sample *= OutputSwitchState::gain(position, gate.side_b);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// One switch side's gain at the start and end of this quantum.
+    fn switch_gate_gains(&self, gate: &OutputSwitchGate) -> (f32, f32) {
+        if gate.muted {
+            return (0.0, 0.0);
+        }
+        let switch = &self.output_switches[gate.switch];
+        let start = f32::from_bits(switch.block_start.load(Ordering::Relaxed));
+        let end = f32::from_bits(switch.block_end.load(Ordering::Relaxed));
+        (
+            OutputSwitchState::gain(start, gate.side_b),
+            OutputSwitchState::gain(end, gate.side_b),
+        )
     }
 
     /// Mix all inputs into a cleared scratch block, running any per-input
@@ -7342,86 +7478,47 @@ impl OutputBranchCompiler<'_> {
             if !self.participants.insert(node.id.clone()) {
                 return Err(GraphCompileError::UnsupportedTopology);
             }
-            let outputs = node
-                .ports
-                .iter()
-                .filter(|port| port.direction == PortDirection::Output)
-                .collect::<Vec<_>>();
-            if node.ports.len() != 3
-                || node
-                    .ports
-                    .iter()
-                    .filter(|port| port.direction == PortDirection::Input)
-                    .count()
-                    != 1
-                || outputs.len() != 2
-                || !outputs.iter().any(|port| port.name == "a")
-                || !outputs.iter().any(|port| port.name == "b")
-                || outputs.iter().any(|port| port.channels != input.channels)
-            {
-                return Err(GraphCompileError::UnsupportedTopology);
-            }
-            let children = session
-                .edges
-                .iter()
-                .filter(|child| child.enabled && child.source_node == node.id)
-                .collect::<Vec<_>>();
-            if children.is_empty()
-                || children
-                    .iter()
-                    .any(|child| !matches!(child.source_port.as_str(), "a" | "b"))
-            {
-                return Err(GraphCompileError::UnsupportedTopology);
-            }
+            let children = output_switch_children(session, node, input.channels)?;
             let state_index = self.output_switches.len();
-            self.output_switches.push(OutputSwitchState::new(
-                node.id.clone(),
-                node.parameters
-                    .get("selected")
-                    .and_then(|value| value.as_str())
-                    == Some("b"),
-            ));
-            let graph = compile_processor_chain(
-                session.id.as_str(),
-                &format!("output_switch_{}", node.id.as_str()),
-                &[],
-                input.channels,
-                self.generation,
-                self.plugins,
-                self.audio_media,
-            )?;
-            let chain_index = self.output_chains.len();
-            self.output_chains.push(OutputProcessorChain {
-                source,
-                entry_matrix: edge.matrix.clone(),
-                graph,
-                channels: usize::from(input.channels),
-                block: RealtimeDsp::new(
-                    AudioBlock::new(usize::from(input.channels), PROCESSING_QUANTUM_FRAMES)
-                        .map_err(|_| GraphCompileError::UnsupportedTopology)?,
-                ),
-                ready: AtomicBool::new(false),
-                convergence: None,
-            });
+            self.output_switches.push(OutputSwitchState::for_node(node));
+            // One gated chain per used side, prepared before its children.
+            let mut side_chains = [None::<usize>; 2];
             let mut child_gates = gates.to_vec();
             for child in children {
                 let side_b = child.source_port == "b";
-                let port_channels = outputs
-                    .iter()
-                    .find(|port| port.name == child.source_port)
-                    .ok_or(GraphCompileError::UnsupportedTopology)?
-                    .channels;
-                child_gates.push(OutputSwitchGate {
+                // A disabled or bypassed routing node fails closed on both sides.
+                let gate = OutputSwitchGate {
                     switch: state_index,
                     side_b,
                     muted: !node.enabled || node.bypass,
-                });
+                };
+                let chain_index = match side_chains[usize::from(side_b)] {
+                    Some(index) => index,
+                    None => {
+                        let index = self.output_chains.len();
+                        self.output_chains
+                            .push(OutputProcessorChain::output_switch_side(
+                                session.id.as_str(),
+                                &node.id,
+                                source,
+                                edge.matrix.clone(),
+                                input.channels,
+                                self.generation,
+                                self.plugins,
+                                self.audio_media,
+                                gate,
+                            )?);
+                        side_chains[usize::from(side_b)] = Some(index);
+                        index
+                    }
+                };
+                child_gates.push(gate);
                 self.compile(
                     child,
                     OutputBranchSource::Chain(chain_index),
                     &node.id,
                     &child.source_port,
-                    port_channels,
+                    input.channels,
                     &child_gates,
                 )?;
                 child_gates.pop();
@@ -7473,6 +7570,7 @@ impl OutputBranchCompiler<'_> {
             ),
             ready: AtomicBool::new(false),
             convergence: None,
+            gate: None,
         });
         for child in children {
             self.compile(
@@ -12546,7 +12644,7 @@ mod tests {
             .position
             .store(0.0_f32.to_bits(), Ordering::Relaxed);
         let mut saw_b = false;
-        for _ in 0..8 {
+        for quantum in 0..8 {
             let mut source = AudioBlock::new(1, frames).unwrap();
             source.channel_mut(0).unwrap().fill(0.5);
             headphones.clear();
@@ -12559,6 +12657,16 @@ mod tests {
             let b = obs.channel(0).unwrap();
             for (a, b) in a.iter().zip(b) {
                 assert!(*a == 0.0 || *b == 0.0, "outputs overlapped: {a}, {b}");
+            }
+            if quantum == 0 {
+                // The fade is linear and applied once (10 ms = 480 frames),
+                // not squared by a second gate at the sink.
+                let end = frames as f32 / 480.0;
+                assert!(
+                    (a[frames - 1] - 0.5 * (1.0 - end)).abs() < 1e-4,
+                    "{}",
+                    a[frames - 1]
+                );
             }
             saw_b |= b.iter().any(|sample| *sample > 0.1);
             if saw_b {
