@@ -156,3 +156,31 @@ can be stopped after any stage.
 Rollback: each stage is additive and can be reverted alone. No session
 format change is planned. OBS changes made by O2 are restorable from the
 recorded previous values.
+
+## Follow-up: build the application inventory off the control thread
+
+Owner decision 2026-10-24: after 0.0.22, not before it.
+
+`apps.list` enumerates processes and their audio sessions synchronously on
+the backend's control thread (`dispatch_apps_list` in
+`crates/control/src/catalog.rs`). On the owner's PC it costs 30-100 ms,
+during which every other request waits; it runs on window focus and every
+10 s while the Apps tab is open. Live audio for routes started from the app
+is unaffected (they run on the `audiorouter-audio` thread), and 0.0.22
+already keeps the Apps checks behind the start-up snapshot.
+
+Design, mirroring the OBS thread (`crates/control/src/obs.rs`):
+
+- A backend thread (COM initialized for it) builds the inventory and
+  starts with the backend, so the first `apps.list` finds a warm list.
+- `apps.list` returns the latest list at once and asks that thread to
+  refresh it when it is older than a short limit; it never enumerates on
+  the control thread.
+- After a refresh request (window focus), the UI reads again a moment
+  later, as the OBS card does, so a changed Discord setting still appears
+  within about half a second.
+- Without a backend service (CLI, tests), enumeration stays inline, as the
+  audio thread does.
+- Tests: the control thread answers `apps.list` without enumerating; the
+  thread stops with its owner; a failed enumeration keeps the last list and
+  reports it as stale.

@@ -1351,18 +1351,22 @@ mod tests {
     }
 
     /// Feed `quanta` blocks of a 997 Hz tone (left) and its negation (right)
-    /// through `tap` at `speed` times real time from a separate thread.
+    /// through `tap` at `speed` times real time from a separate thread. The
+    /// thread returns how far behind its schedule the host ever held it.
     fn feed_tone(
         tap: NetworkSendTap,
         quanta: usize,
         speed: f64,
         channels: usize,
-    ) -> std::thread::JoinHandle<()> {
+    ) -> std::thread::JoinHandle<Duration> {
         std::thread::spawn(move || {
             let mut block = AudioBlock::new(channels, 128).unwrap();
             let start = Instant::now();
             let quantum = Duration::from_secs_f64(128.0 / 48_000.0 / speed);
+            let mut most_late = Duration::ZERO;
             for index in 0..quanta {
+                most_late = most_late
+                    .max(Instant::now().saturating_duration_since(start + quantum * index as u32));
                 for channel in 0..channels {
                     let sign = if channel == 0 { 1.0 } else { -1.0 };
                     for (frame, sample) in
@@ -1382,6 +1386,7 @@ mod tests {
                     std::thread::sleep(wait);
                 }
             }
+            most_late
         })
     }
 
@@ -1421,60 +1426,45 @@ mod tests {
     /// Two computers never share a clock. A sender running 0.3 % fast or
     /// slow must neither starve nor flood the receiver: the buffer stays
     /// near its target, with no gap and no skip, for the whole run.
+    ///
+    /// A host that holds the sending thread back for most of the 40 ms
+    /// buffer empties it, and the receiver rightly plays a gap: the coverage
+    /// nightly of 2026-10-24 (run 40076776528) underran mid-run with the
+    /// fast sender, which has no final drain, and counted 4 steps. Such an
+    /// attempt says nothing about drift correction, so it is repeated; an
+    /// attempt with an on-time sender is judged strictly.
     #[test]
     fn sender_clock_drift_is_absorbed_without_gaps_or_growing_delay() {
         let _realtime = realtime_test();
+        const SENDER_STALL_BUDGET: Duration = Duration::from_millis(25);
         let runs = [1.003_f64, 0.997].map(|speed| {
             std::thread::spawn(move || {
-                let port = free_port();
-                let receiver =
-                    NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 40.0).unwrap();
-                let sender =
-                    NetworkSender::start(SocketAddr::from(([127, 0, 0, 1], port))).unwrap();
-                // 6 s of audio: 18 ms of drift each way without correction.
-                let feeder = feed_tone(sender.tap(), 2_250, speed, 2);
-                // Sample the delay (buffer depth) between 1 s and 5 s.
-                let (frames, depth) = std::thread::scope(|scope| {
-                    let monitor = scope.spawn(|| {
-                        std::thread::sleep(Duration::from_secs(1));
-                        let mut depth = (f64::MAX, 0.0_f64);
-                        for _ in 0..40 {
-                            let ms = receiver.stats().buffered_frames as f64 * 1_000.0 / 48_000.0;
-                            depth = (depth.0.min(ms), depth.1.max(ms));
-                            std::thread::sleep(Duration::from_millis(100));
-                        }
-                        depth
-                    });
-                    let frames = play_stereo(&receiver, 2_150);
-                    (frames, monitor.join().unwrap())
-                });
-                feeder.join().unwrap();
-                assert!(
-                    depth.0 >= 20.0 && depth.1 <= 60.0,
-                    "{speed}: delay stayed near 40 ms: {depth:?}"
-                );
-                let stats = receiver.stats();
-                let first = frames
-                    .iter()
-                    .position(|(left, _)| left.abs() > 0.05)
-                    .expect("tone arrives");
-                let steady = &frames[first + 256..frames.len().saturating_sub(4_800)];
-                let coefficient =
-                    (2.0 * (2.0 * std::f64::consts::PI * 997.0 / 48_000.0).cos()) as f32;
-                // Drift correction moves one frame per quantum: a 0.8 %
-                // pitch nudge, never a step. Gaps or skips would be steps.
-                let steps = steady
-                    .windows(3)
-                    .filter(|window| {
-                        (window[2].0 - (coefficient * window[1].0 - window[0].0)).abs() > 0.05
-                    })
-                    .count();
-                (speed, steps, stats)
+                for attempt in 1..=3 {
+                    let result = drift_attempt(speed);
+                    if result.sender_late <= SENDER_STALL_BUDGET {
+                        return result;
+                    }
+                    eprintln!(
+                        "drift {speed}: attempt {attempt} not judged, the host held the sender {:?} late",
+                        result.sender_late
+                    );
+                }
+                panic!("{speed}: the host stalled the sender in every attempt");
             })
         });
         for run in runs {
-            let (speed, steps, stats) = run.join().unwrap();
-            eprintln!("drift {speed}: {steps} steps; {stats:?}");
+            let DriftAttempt {
+                speed,
+                steps,
+                stats,
+                depth,
+                sender_late,
+            } = run.join().unwrap();
+            eprintln!("drift {speed}: {steps} steps, sender {sender_late:?} late; {stats:?}");
+            assert!(
+                depth.0 >= 20.0 && depth.1 <= 60.0,
+                "{speed}: delay stayed near 40 ms: {depth:?}"
+            );
             assert_eq!(stats.lost_packets, 0, "{speed}: {stats:?}");
             assert_eq!(
                 stats.overflow_packets, 0,
@@ -1485,6 +1475,58 @@ mod tests {
                 "{speed}: at most the final drain: {stats:?}"
             );
             assert!(steps <= 2, "{speed}: {steps} audible steps");
+        }
+    }
+
+    struct DriftAttempt {
+        speed: f64,
+        steps: usize,
+        stats: NetworkReceiveStats,
+        depth: (f64, f64),
+        sender_late: Duration,
+    }
+
+    fn drift_attempt(speed: f64) -> DriftAttempt {
+        let port = free_port();
+        let receiver = NetworkReceiver::start("127.0.0.1".parse().unwrap(), port, 40.0).unwrap();
+        let sender = NetworkSender::start(SocketAddr::from(([127, 0, 0, 1], port))).unwrap();
+        // 6 s of audio: 18 ms of drift each way without correction.
+        let feeder = feed_tone(sender.tap(), 2_250, speed, 2);
+        // Sample the delay (buffer depth) between 1 s and 5 s.
+        let (frames, depth) = std::thread::scope(|scope| {
+            let monitor = scope.spawn(|| {
+                std::thread::sleep(Duration::from_secs(1));
+                let mut depth = (f64::MAX, 0.0_f64);
+                for _ in 0..40 {
+                    let ms = receiver.stats().buffered_frames as f64 * 1_000.0 / 48_000.0;
+                    depth = (depth.0.min(ms), depth.1.max(ms));
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+                depth
+            });
+            let frames = play_stereo(&receiver, 2_150);
+            (frames, monitor.join().unwrap())
+        });
+        let sender_late = feeder.join().unwrap();
+        let stats = receiver.stats();
+        let first = frames
+            .iter()
+            .position(|(left, _)| left.abs() > 0.05)
+            .expect("tone arrives");
+        let steady = &frames[first + 256..frames.len().saturating_sub(4_800)];
+        let coefficient = (2.0 * (2.0 * std::f64::consts::PI * 997.0 / 48_000.0).cos()) as f32;
+        // Drift correction moves one frame per quantum: a 0.8 %
+        // pitch nudge, never a step. Gaps or skips would be steps.
+        let steps = steady
+            .windows(3)
+            .filter(|window| (window[2].0 - (coefficient * window[1].0 - window[0].0)).abs() > 0.05)
+            .count();
+        DriftAttempt {
+            speed,
+            steps,
+            stats,
+            depth,
+            sender_late,
         }
     }
 

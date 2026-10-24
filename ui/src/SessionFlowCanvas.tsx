@@ -2612,7 +2612,10 @@ export function SessionFlowCanvas({
       return;
     }
     const frame = globalThis.requestAnimationFrame(() =>
-      flowInstanceRef.current?.fitView({ padding: 0.2, duration: 180 }),
+      flowInstanceRef.current?.fitView({
+        padding: 0.2,
+        duration: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 180,
+      }),
     );
     return () => globalThis.cancelAnimationFrame(frame);
   }, [session.nodes.length]);
