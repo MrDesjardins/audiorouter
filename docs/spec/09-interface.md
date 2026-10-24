@@ -345,9 +345,21 @@ audio readiness and explains the exact endpoint and authorization steps.
   - **Top-bar strip:** shows a fixed-width Discord chip with icon and word
     when the session captures Discord or sends the microphone to a virtual
     cable. Whether it shows depends only on the session (UI-17).
-  - **Refresh:** on window focus, every 10 s while the tab is open, and
-    never while hidden. The last good result is kept through a failure.
+  - **Refresh:** on window focus, every 10 s while the tab is open or the
+    canvas has a device node, and never while hidden. Each refresh reads
+    again shortly after, once the backend has rebuilt its inventory. The
+    last good result is kept through a failure.
   - **Writes:** AudioRouter never changes Discord or Windows settings.
+  - **Device nodes:** each Physical Input and Output card keeps one footer
+    line naming the apps with an active session on its device ("Used by
+    Discord · OBS"). A node that plays into a virtual cable also names the
+    apps recording from the cable's other end. Properties lists each app
+    with its role (records from it; plays to it or records it; records
+    from the cable's other end) in three reserved rows. A known app on the
+    cable's 16-channel twin, or on the raw microphone while the session
+    feeds a voice cable, is a warning: amber, marked "!", with its short
+    form on the card and the full sentence in Properties. Neither the card
+    nor the panel changes size when the apps change (UI-17).
   - **OBS Studio card (SEC-15):** shows "What OBS hears": each audio
     source, its device and what reaches it (Voice, Voice without effects,
     Discord, other session sources), with the problem in words.

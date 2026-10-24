@@ -632,3 +632,29 @@ has been requested or granted for this branch.
     tests, UI typecheck, lint and Vitest, contracts typecheck and drift,
     Edge screenshots of the OBS card in three themes with offset sampling,
     then one attended Fix and Restore on a copied OBS profile.
+- Device-node "Used by" footers (rest of D1), 2026-10-24 (owner: "Let's
+  do 1 and 2", the footers then "Set up for Discord"). Branch
+  `feature/device-used-by`.
+  - `nodeDeviceUsers` (`ui/src/appUsage.ts`): for each Physical Input and
+    Output node, the apps with an active session on its device. A node that
+    plays into a VB-Cable also lists the apps recording from the cable's
+    other end, which is how Discord hears it. Idle sessions do not count.
+    Two warnings: Discord or OBS on the cable's 16ch twin, and Discord or
+    OBS on the raw microphone while the session feeds a voice cable.
+  - Canvas: one fixed line on device nodes ("Used by Discord · OBS", the
+    warning's short form in amber with "!", "Checking apps…", "Apps not
+    checked" offline). Tooltip names each app's role.
+  - Properties: "Apps using this device", three reserved rows; a warning
+    wraps over two, and extra apps fold into "and N more".
+  - Polling: every 10 s while the canvas has a device node (was: only on
+    the Apps tab), which is cheap since the inventory thread (#71).
+  - Route harness: `__routeFixtureApplications` and
+    `__routeFixtureDevices` inject the app and device lists.
+  - Checks: 5 Vitest cases (cable partner, idle sessions, 16ch twin, raw
+    microphone, unbound node); Edge `device-used-by.pw.ts` (text, tooltip,
+    warning after a refocus, card height, Properties offset and the next
+    control's offset unchanged, screenshots in dark, light and high
+    contrast, reviewed).
+  - Full checks on the PC: UI lint (0 warnings), typecheck, Vitest
+    727/727, full development Edge suite 231 passed, 2 skipped. No PR
+    until the owner approves one.

@@ -4,7 +4,14 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { createDisconnectedBackend, type UiBackend } from "./backend";
 import { demoSession } from "./fixtures";
-import type { Session, DiscoveryDocument, DiagnosticsSnapshot, PluginScanResult } from "@audiorouter/contracts";
+import type {
+  ApplicationInfo,
+  DeviceListItem,
+  Session,
+  DiscoveryDocument,
+  DiagnosticsSnapshot,
+  PluginScanResult,
+} from "@audiorouter/contracts";
 import "./styles.css";
 
 let planned: Session | null = null;
@@ -27,6 +34,9 @@ const injected = globalThis as {
   __routeFixtureMcpGrants?: string[];
   /** Remembered plugin scans shown in the Plugins list. */
   __routeFixturePluginInventory?: PluginScanResult[];
+  /** `apps.list` and `devices.list` answers, for the app checks (D1). */
+  __routeFixtureApplications?: ApplicationInfo[];
+  __routeFixtureDevices?: DeviceListItem[];
 };
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
@@ -358,6 +368,7 @@ const previewBackend: UiBackend = {
     return { sessionId, nodeId, state: sourceStates.get(nodeId) ?? "stopped", loop: false };
   },
   async listApplications() {
+    if (injected.__routeFixtureApplications) return structuredClone(injected.__routeFixtureApplications);
     return [
       {
         processId: 4242,
@@ -376,6 +387,7 @@ const previewBackend: UiBackend = {
     ];
   },
   async listDevices() {
+    if (injected.__routeFixtureDevices) return structuredClone(injected.__routeFixtureDevices);
     const format = { sampleRateHz: 48_000, channels: 2, bitsPerSample: 32, formatTag: 3, bytesPerFrame: 8 };
     const periods = { default100ns: 100_000, minimum100ns: 30_000 };
     return [

@@ -51,6 +51,7 @@ import {
 import { AudioFileNodeEditor } from "./AudioFileNodeEditor";
 import { setVirtualBusDraftCable } from "./draft";
 import { useVirtualCableStatus } from "./virtualCableStatus";
+import type { NodeDeviceUsers } from "./appUsage";
 
 export function PropertiesPanel({
   layoutItems = [],
@@ -73,6 +74,7 @@ export function PropertiesPanel({
   applications,
   applicationsError,
   refreshApplications,
+  deviceUsers,
   rebindApplicationCapture,
   setRenderEndpointId,
   captureEndpointId,
@@ -118,6 +120,8 @@ export function PropertiesPanel({
   applications: ApplicationRow[];
   applicationsError: string | null;
   refreshApplications: () => void;
+  /** Apps on each device node's device (D1); null while checking, absent offline. */
+  deviceUsers?: Map<string, NodeDeviceUsers> | null;
   rebindApplicationCapture: (nodeId: string, application: ApplicationRow) => void;
   setRenderEndpointId: Dispatch<SetStateAction<string>>;
   captureEndpointId: string;
@@ -488,6 +492,13 @@ export function PropertiesPanel({
             }}
           />
         )}
+        {(selectedNode.kind === "physicalInput" || selectedNode.kind === "physicalOutput") && (
+          <DeviceAppsSection
+            users={
+              deviceUsers === undefined ? "unavailable" : deviceUsers && (deviceUsers.get(selectedNode.id) ?? null)
+            }
+          />
+        )}
         {(selectedNode.kind === "networkSend" || selectedNode.kind === "networkReceive") && (
           <NetworkNodeEditor
             node={selectedNode}
@@ -608,5 +619,48 @@ export function PropertiesPanel({
         <NodeIdentity nodeId={selectedNode.id} />
       </section>
     </>
+  );
+}
+
+/** At most this many rows; the box keeps their height so polling never moves the panel (UI-17). */
+const DEVICE_APP_ROWS = 3;
+
+/** "Apps using this device" for a Physical Input or Output node (D1). */
+function DeviceAppsSection({ users }: { users: NodeDeviceUsers | null | "unavailable" }) {
+  const details = typeof users === "object" && users ? users : null;
+  // A warning wraps over two rows, so its device names stay readable.
+  const room = DEVICE_APP_ROWS - (details?.warning ? 2 : 0);
+  const rows: { key: string; text: string; warning?: boolean }[] = (details?.uses ?? []).map((use) => ({
+    key: `${use.label} ${use.role}`,
+    text: `${use.label} ${use.role}`,
+  }));
+  if (rows.length > room) {
+    const hidden = rows.length - room + 1;
+    rows.splice(room - 1, rows.length, { key: "more", text: `and ${hidden} more` });
+  }
+  if (details?.warning) rows.unshift({ key: "warning", text: `Check: ${details.warning}`, warning: true });
+  const empty =
+    users === "unavailable"
+      ? "Apps not checked: connect to AudioRouter."
+      : details === null
+        ? "Checking apps…"
+        : rows.length === 0
+          ? "No app is using it right now."
+          : null;
+  return (
+    <section className="device-apps" aria-labelledby="device-apps-heading">
+      <h4 id="device-apps-heading">Apps using this device</h4>
+      <ul className="device-apps-list" aria-live="polite">
+        {empty ? (
+          <li className="muted">{empty}</li>
+        ) : (
+          rows.map((row) => (
+            <li key={row.key} className={row.warning ? "is-warning" : undefined} title={row.text}>
+              {row.text}
+            </li>
+          ))
+        )}
+      </ul>
+    </section>
   );
 }
