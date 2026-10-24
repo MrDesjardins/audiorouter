@@ -6,6 +6,7 @@ import {
   deviceUsage,
   discordCheck,
   knownAppOf,
+  sessionInvolvesDiscord,
   sixteenChannelTwin,
   voiceCableOutputs,
 } from "./appUsage";
@@ -195,8 +196,24 @@ describe("Discord check", () => {
     expect(check.rows[1].message).toContain("twice");
   });
 
+  it("shows the top-bar chip from the session alone", () => {
+    expect(sessionInvolvesDiscord(session, devices)).toBe(true);
+    const plain = {
+      ...session,
+      nodes: session.nodes.filter((item) => item.id !== "discord" && item.id !== "voice-out"),
+    };
+    expect(sessionInvolvesDiscord(plain, devices)).toBe(false);
+    expect(sessionInvolvesDiscord(null, devices)).toBe(false);
+  });
+
   it("never judges what Windows does not report", () => {
-    expect(discordCheck(session, [], devices)).toMatchObject({ state: "notRunning", rows: [] });
+    const notRunning = discordCheck(session, [], devices);
+    expect(notRunning.state).toBe("notRunning");
+    // The same two rows in every state, so the card never changes size.
+    expect(notRunning.rows.map((row) => [row.id, row.state])).toEqual([
+      ["microphone", "info"],
+      ["speaker", "info"],
+    ]);
     const idle = discordCheck(session, [app("Discord.exe", [])], devices);
     expect(idle.state).toBe("unknown");
     expect(idle.rows.map((row) => row.state)).toEqual(["info", "info"]);

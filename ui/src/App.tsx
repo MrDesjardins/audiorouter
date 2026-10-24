@@ -153,6 +153,10 @@ import { DIAGNOSTICS_REFRESH_INTERVAL_MS, useDiagnosticsRefresh } from "./useDia
 import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from "./useNativeCounters";
 import { ConnectionForm } from "./ConnectionForm";
 import { SetupWorkbench } from "./SetupWorkbench";
+import { AppsPanel } from "./AppsPanel";
+import { AppStatusStrip } from "./AppStatusStrip";
+import { discordCheck, pendingDiscordCheck, sessionInvolvesDiscord } from "./appUsage";
+import { useApplicationUsage } from "./useApplicationUsage";
 import { DeviceTroubleshooting } from "./DeviceTroubleshooting";
 import { RecordingWorkbench } from "./RecordingWorkbench";
 import { AdvancedWorkbench } from "./AdvancedWorkbench";
@@ -317,6 +321,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     );
   }, []);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("tools");
+  // Which apps use which devices, for the Apps tab and the top-bar strip.
+  const listApplicationUsage = useMemo(() => (backend.connected ? () => backend.listApplications() : null), [backend]);
+  const applicationUsage = useApplicationUsage(listApplicationUsage, { polling: workbenchTab === "apps" });
   // UI-18: optional daily new-version check (GitHub public releases list).
   const [updateChecks, setUpdateChecks] = useState(updateCheckEnabled);
   const availableUpdate = useUpdateCheck(updateChecks && !isAutomatedHarness());
@@ -2853,6 +2860,26 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       sessions={availableSessions}
     />
   );
+  const discordAppCheck = useMemo(
+    () =>
+      applicationUsage.loaded ? discordCheck(draft, applicationUsage.applications, devices) : pendingDiscordCheck(),
+    [applicationUsage.loaded, applicationUsage.applications, draft, devices],
+  );
+  // Shown from the session alone, never because an app started (UI-17).
+  const appStripChecks = useMemo(
+    () => (backend.connected && sessionInvolvesDiscord(draft, devices) ? [discordAppCheck] : []),
+    [backend, draft, devices, discordAppCheck],
+  );
+  const appsWorkbenchContent = (
+    <AppsPanel
+      discord={discordAppCheck}
+      devices={devices}
+      applications={applicationUsage.loaded ? applicationUsage.applications : []}
+      stale={applicationUsage.stale}
+      connected={backend.connected}
+      onRefresh={applicationUsage.refresh}
+    />
+  );
   const cableWorkbenchContent = (
     <SetupWorkbench
       section="virtualCables"
@@ -3003,6 +3030,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             <span className="status-detail" title={statusSummary}>
               {connectionLabel}
             </span>
+            <AppStatusStrip checks={appStripChecks} onOpen={() => setWorkbenchTab("apps")} />
             <span className="history-toolbar">
               <button
                 type="button"
@@ -3466,6 +3494,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 clientsPanel={<ClientsPanel backend={backend} />}
                 statusContent={statusWorkbenchContent}
                 virtualCablesContent={cableWorkbenchContent}
+                appsContent={appsWorkbenchContent}
                 uiOptionsContent={uiOptionsWorkbenchContent}
                 timingContent={
                   <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>

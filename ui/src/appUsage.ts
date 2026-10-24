@@ -194,6 +194,17 @@ function capturesApp(session: Session, appId: KnownAppId): string[] {
     .map((node) => node.id);
 }
 
+/**
+ * Whether the session is set up for Discord: it captures Discord, or it
+ * sends the microphone to a virtual cable that Discord would use. This
+ * decides whether the top-bar chip is shown, so it depends only on the
+ * session the user edits, never on what is running (UI-17).
+ */
+export function sessionInvolvesDiscord(session: Session | null, devices: readonly DeviceListItem[]): boolean {
+  if (!session) return false;
+  return capturesApp(session, "discord").length > 0 || voiceCableOutputs(session, devices).length > 0;
+}
+
 export type AppCheckState = "ready" | "check" | "notRunning" | "unknown";
 
 export interface AppCheckRow {
@@ -227,12 +238,22 @@ export function discordCheck(
   devices: readonly DeviceListItem[],
 ): AppCheck {
   const use = appDevices(applications, "discord");
+  // Always two rows, so the card keeps its size as Discord starts and stops (UI-17).
   if (!use.running)
     return {
       appId: "discord",
       state: "notRunning",
       summary: "Discord is not running. Start it to check its devices.",
-      rows: [],
+      rows: [
+        {
+          id: "microphone",
+          label: "Microphone",
+          deviceName: null,
+          state: "info",
+          message: "Checked when Discord runs.",
+        },
+        { id: "speaker", label: "Speaker", deviceName: null, state: "info", message: "Checked when Discord runs." },
+      ],
     };
   const rows: AppCheckRow[] = [];
   const voice = session ? voiceCableOutputs(session, devices) : [];
@@ -366,6 +387,19 @@ export function discordCheck(
           ? "Ready"
           : "Waiting for Discord to use audio",
     rows,
+  };
+}
+
+/** The check shown before the first answer arrives: the same two rows, so nothing moves. */
+export function pendingDiscordCheck(): AppCheck {
+  return {
+    appId: "discord",
+    state: "unknown",
+    summary: "Checking which apps use your devices…",
+    rows: [
+      { id: "microphone", label: "Microphone", deviceName: null, state: "info", message: "Checking…" },
+      { id: "speaker", label: "Speaker", deviceName: null, state: "info", message: "Checking…" },
+    ],
   };
 }
 
