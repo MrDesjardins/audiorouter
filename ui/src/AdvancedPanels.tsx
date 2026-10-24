@@ -1,5 +1,5 @@
 // Panels of the Advanced side-panel tab (moved from App.tsx).
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ChangeEvent } from "react";
 import type { Node, RecordingRecoveryItem } from "@audiorouter/contracts";
 import { formatUiError, type ClientRow, type UiBackend } from "./backend";
 import { uiIdempotencyKey } from "./idempotency";
@@ -98,9 +98,11 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
           if (generation === refreshGeneration.current) setNativeRegistration("unavailable");
         });
   };
+  // Refresh when the backend connects or changes, with the latest state.
+  const refreshOnChange = useEffectEvent(() => refresh());
   useEffect(() => {
     setPlan(null);
-    refresh();
+    refreshOnChange();
   }, [backend, backend.connected]);
   const createPlan = async () => {
     if (busy || !backend.connected) return;
@@ -322,8 +324,10 @@ export function GraphHistoryPanel({
         if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Revision history unavailable."));
       });
   };
+  // Refresh when the backend or session changes, with the latest state.
+  const refreshOnChange = useEffectEvent(() => refresh());
   useEffect(() => {
-    refresh();
+    refreshOnChange();
   }, [backend, backend.connected, session.id, session.revision]);
   const undoLast = async () => {
     if (busy || !backend.connected) return;
@@ -407,8 +411,10 @@ export function ClientsPanel({ backend }: { backend: UiBackend }) {
         if (generation === refreshGeneration.current) setMessage(formatUiError(error, "Client list unavailable."));
       });
   };
+  // Refresh when the backend connects or changes, with the latest state.
+  const refreshOnChange = useEffectEvent(() => refresh());
   useEffect(() => {
-    refresh();
+    refreshOnChange();
   }, [backend, backend.connected]);
   const authorize = async () => {
     const clientId = newClientId.trim();

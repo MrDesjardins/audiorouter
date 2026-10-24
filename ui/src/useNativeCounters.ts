@@ -1,5 +1,5 @@
 // Native route counters, read once a second while routes play (moved from App.tsx).
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useEffectEvent, type Dispatch, type SetStateAction } from "react";
 import type {
   NativeDuplexPumpResult,
   NativeEndpointPumpResult,
@@ -66,6 +66,9 @@ export function useNativeCounters({
   setNativePumpStats: Dispatch<SetStateAction<NativePumpStats | null>>;
   recordUiDiagnostic: (message: string) => void;
 }) {
+  // Callbacks from the caller: always the latest, never a reason to restart the loop.
+  const reportFailure = useEffectEvent((message: string) => recordUiDiagnostic(message));
+  const showStats = useEffectEvent((stats: NativePumpStats | null) => setNativePumpStats(stats));
   useEffect(() => {
     const pumpNativeEndpoint = backend.pumpNativeEndpoint;
     const pumpNativeDuplex = backend.pumpNativeDuplex;
@@ -105,14 +108,14 @@ export function useNativeCounters({
                 : pumpKind === "renderSource"
                   ? await pumpNativeRenderSource!(sessionId, route.generation, 64)
                   : await pumpNativeEndpoint!(sessionId, route.generation, 64);
-          if (sessionId === session.id) setNativePumpStats(result);
+          if (sessionId === session.id) showStats(result);
         }
         failing = false;
       } catch (error) {
-        setNativePumpStats(null);
+        showStats(null);
         // Diagnostics remain backend-owned; do not retry or substitute
         // endpoints here. Record the first failure of a run, not every tick.
-        if (!failing) recordUiDiagnostic(`Native route counters unavailable (${safeErrorName(error)})`);
+        if (!failing) reportFailure(`Native route counters unavailable (${safeErrorName(error)})`);
         failing = true;
       } finally {
         pumping = false;

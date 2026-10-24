@@ -1,5 +1,5 @@
 // Audio File / Test Signal transport status polling (moved from App.tsx).
-import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useEffectEvent, type Dispatch, type SetStateAction } from "react";
 import type { Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import { safeErrorName } from "./ErrorBoundary";
@@ -25,6 +25,9 @@ export function useAudioFileStatus({
   setAudioSourceStates: Dispatch<SetStateAction<AudioSourceStates>>;
   recordUiDiagnostic: (message: string) => void;
 }) {
+  // Callbacks from the caller: always the latest, never a reason to restart polling.
+  const reportFailure = useEffectEvent((message: string) => recordUiDiagnostic(message));
+  const updateStates = useEffectEvent((update: SetStateAction<AudioSourceStates>) => setAudioSourceStates(update));
   useEffect(() => {
     const playingNodes = draft.nodes
       .filter(
@@ -32,7 +35,7 @@ export function useAudioFileStatus({
       )
       .slice(0, 16);
     if (!sessionRunning) {
-      if (Object.keys(audioSourceStates).length > 0) setAudioSourceStates({});
+      if (Object.keys(audioSourceStates).length > 0) updateStates({});
       return;
     }
     if (!backend.connected || playingNodes.length === 0) return;
@@ -47,7 +50,7 @@ export function useAudioFileStatus({
         ),
       )
         .then((states) =>
-          setAudioSourceStates((current) => {
+          updateStates((current) => {
             let changed = false;
             const next = { ...current };
             for (const [nodeId, result] of states)
@@ -63,7 +66,7 @@ export function useAudioFileStatus({
         })
         .catch((error: unknown) => {
           // Keep the last states shown; note the first failure of a run.
-          if (!statusFailing) recordUiDiagnostic(`Audio file status unavailable (${safeErrorName(error)})`);
+          if (!statusFailing) reportFailure(`Audio file status unavailable (${safeErrorName(error)})`);
           statusFailing = true;
         })
         .finally(() => {

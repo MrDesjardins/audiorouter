@@ -7384,3 +7384,363 @@ input[type="color"] {
   border-color: #fff;
   color: #fff;
 }
+
+/* Apps tab and top-bar app strip (OBS and Discord, DEC-22). State uses an
+   icon and a word as well as colour; every live slot keeps its size (UI-17). */
+.apps-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+.apps-toolbar p {
+  margin: 0;
+  min-width: 0;
+}
+.apps-toolbar button {
+  flex: none;
+}
+.app-card {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+.app-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+.app-card-heading h3 {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.app-monogram {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 7px;
+  border: 1px solid var(--ambient-edge);
+  background: var(--ambient-surface-hi);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+/* Fixed width: the word changes with the state. */
+.app-state-badge {
+  flex: none;
+  width: 7.2rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--ambient-edge);
+  text-align: center;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.app-card-summary {
+  margin: 0;
+  /* Room for two lines, the longest summary. */
+  min-height: 2.6em;
+}
+.app-check-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-check-row {
+  display: grid;
+  grid-template-columns: 1.3rem minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+}
+.app-check-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 1px solid var(--ambient-edge);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.app-check-body {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.app-check-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.app-check-device {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #c6d0de;
+}
+.app-check-body small {
+  /* Room for three lines, the longest message in a narrow sidebar. */
+  min-height: 3.9em;
+  overflow-wrap: anywhere;
+}
+.app-link-button {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--cyan);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.app-check-steps {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem;
+  border-radius: 9px;
+  border: 1px solid var(--ambient-edge);
+  background: var(--ambient-surface);
+  font-size: 0.85rem;
+}
+.app-copy-name {
+  display: inline-grid;
+  justify-self: start;
+}
+.app-copy-name > span {
+  grid-area: 1 / 1;
+}
+.app-label-hidden {
+  visibility: hidden;
+}
+.app-recommended summary {
+  cursor: pointer;
+}
+.app-recommended ul,
+.app-usage-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.app-recommended li,
+.app-usage-list li {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.app-usage-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-check-row.is-ready .app-check-icon,
+.app-state-badge.is-ready,
+.app-status-chip.is-ready .app-status-icon {
+  color: #aaffc7;
+  border-color: rgb(114 227 162 / 45%);
+  background: rgb(63 167 105 / 22%);
+}
+.app-check-row.is-check .app-check-icon,
+.app-state-badge.is-check,
+.app-status-chip.is-check .app-status-icon {
+  color: #ffd889;
+  border-color: rgb(246 169 40 / 45%);
+  background: rgb(246 169 40 / 16%);
+}
+.app-state-badge.is-notRunning,
+.app-state-badge.is-unknown,
+.app-check-row.is-info .app-check-icon {
+  color: #c6d0de;
+}
+.app-status-strip {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+/* Fixed width per chip, whatever its state. */
+.status-cluster .app-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  width: 5.6rem;
+  padding: 0.2rem 0.3rem 0.2rem 0.55rem;
+  font-size: 0.78rem;
+}
+.app-status-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-status-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  border: 1px solid var(--ambient-edge);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.theme-light .app-check-device {
+  color: #3b4656;
+}
+.theme-light .app-check-row.is-ready .app-check-icon,
+.theme-light .app-state-badge.is-ready,
+.theme-light .app-status-chip.is-ready .app-status-icon {
+  color: #1d6b43;
+  border-color: rgb(29 107 67 / 45%);
+  background: rgb(63 167 105 / 16%);
+}
+.theme-light .app-check-row.is-check .app-check-icon,
+.theme-light .app-state-badge.is-check,
+.theme-light .app-status-chip.is-check .app-status-icon {
+  color: #8a5a00;
+  border-color: rgb(138 90 0 / 45%);
+  background: rgb(246 169 40 / 18%);
+}
+.theme-light .app-state-badge.is-notRunning,
+.theme-light .app-state-badge.is-unknown,
+.theme-light .app-check-row.is-info .app-check-icon {
+  color: #3b4656;
+}
+.theme-light .app-link-button {
+  color: #075f80;
+}
+.theme-high-contrast .app-monogram,
+.theme-high-contrast .app-state-badge,
+.theme-high-contrast .app-check-icon,
+.theme-high-contrast .app-status-icon,
+.theme-high-contrast .app-check-steps {
+  color: #fff;
+  border-color: #fff;
+  background: #000;
+}
+.theme-high-contrast .app-check-device {
+  color: #fff;
+}
+.theme-high-contrast .app-link-button {
+  color: #ffff00;
+}
+/* OBS card (DEC-22). */
+.app-monogram.is-wide {
+  width: auto;
+  padding: 0 0.35rem;
+  font-size: 0.68rem;
+}
+/* Two labels in one cell: the widest sets the width (UI-17). */
+.app-swap {
+  display: inline-grid;
+}
+.app-swap > span {
+  grid-area: 1 / 1;
+}
+.obs-connect {
+  display: grid;
+  gap: 0.55rem;
+}
+.obs-steps {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+}
+.obs-password {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+.obs-password input {
+  width: 100%;
+}
+.obs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Reserve four lines; longer errors scroll instead of moving the card. */
+.obs-note {
+  height: 5.2em;
+  min-height: 5.2em;
+  line-height: 1.3;
+  overflow-y: auto;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.obs-sources {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.obs-sources th,
+.obs-sources td {
+  padding: 0.3rem 0.25rem;
+  border-bottom: 1px solid var(--ambient-edge);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.obs-sources thead th {
+  color: #c6d0de;
+  font-weight: 600;
+}
+.obs-sources tbody th {
+  font-weight: 600;
+}
+.obs-sources tr.is-muted {
+  opacity: 0.7;
+}
+.obs-problem {
+  display: block;
+  margin-top: 0.2rem;
+  color: #ffd889;
+}
+.obs-fix-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+  padding: 0;
+  list-style: none;
+}
+.obs-fix-list label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+}
+.obs-fix-list label span {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.theme-light .obs-sources thead th {
+  color: #3b4656;
+}
+.theme-light .obs-problem {
+  color: #8a5a00;
+}
+.theme-high-contrast .obs-sources th,
+.theme-high-contrast .obs-sources td {
+  border-color: #fff;
+  color: #fff;
+}
+.theme-high-contrast .obs-problem {
+  color: #ffff00;
+}
+.theme-high-contrast .obs-sources tr.is-muted {
+  opacity: 1;
+}

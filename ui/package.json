@@ -8,7 +8,7 @@
     "build": "npm run typecheck:all && vite build --configLoader runner",
     "typecheck": "node ./node_modules/typescript-7/bin/tsc --noEmit -p tsconfig.json",
     "typecheck:all": "node ./node_modules/typescript-7/bin/tsc --noEmit -p tsconfig.all.json",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings 0",
     "format": "prettier --write src e2e",
     "format:check": "prettier --check src e2e",
     "test": "vitest run --configLoader runner --exclude \"e2e/**\"",

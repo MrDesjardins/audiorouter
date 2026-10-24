@@ -37,6 +37,10 @@ pub use software_device::{
 pub const MAX_APPLICATION_AUDIO_DISPLAY_NAMES: usize = 64;
 /// Maximum UTF-8 byte length of one retained OS-provided session name.
 pub const MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES: usize = 256;
+/// Maximum number of distinct endpoints retained per process.
+pub const MAX_APPLICATION_AUDIO_ENDPOINTS: usize = 64;
+/// Maximum UTF-8 byte length of one retained endpoint ID.
+pub const MAX_APPLICATION_AUDIO_ENDPOINT_ID_BYTES: usize = 512;
 /// Maximum number of process identities retained by application discovery.
 pub const MAX_APPLICATIONS: usize = 4096;
 
@@ -4032,6 +4036,19 @@ pub struct ApplicationAudioInfo {
     pub capture_session_count: u32,
     pub render_session_count: u32,
     pub display_names: Vec<String>,
+    /// The endpoints this process has a session on. A loopback recorder of
+    /// an endpoint also holds a render session there, so `Render` means
+    /// "plays to, or records the output of".
+    pub endpoints: Vec<ApplicationAudioEndpoint>,
+}
+
+/// One endpoint a process has an audio session on.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApplicationAudioEndpoint {
+    pub endpoint_id: String,
+    pub direction: EndpointDirection,
+    /// At least one of the process's sessions on this endpoint is active.
+    pub active: bool,
 }
 
 fn sort_application_inventory(applications: &mut [ApplicationInfo]) {
@@ -4048,6 +4065,42 @@ fn sort_application_audio_inventory(inventory: &mut [ApplicationAudioInfo]) {
     for item in inventory {
         item.display_names.sort_unstable();
         item.display_names.dedup();
+        item.endpoints.sort_by(|left, right| {
+            (
+                &left.endpoint_id,
+                left.direction == EndpointDirection::Render,
+            )
+                .cmp(&(
+                    &right.endpoint_id,
+                    right.direction == EndpointDirection::Render,
+                ))
+        });
+    }
+}
+
+/// Record one session's endpoint, merging repeats and keeping the bounds.
+fn retain_audio_endpoint(
+    endpoints: &mut Vec<ApplicationAudioEndpoint>,
+    endpoint_id: &str,
+    direction: EndpointDirection,
+    active: bool,
+) {
+    if endpoint_id.is_empty() || endpoint_id.len() > MAX_APPLICATION_AUDIO_ENDPOINT_ID_BYTES {
+        return;
+    }
+    if let Some(existing) = endpoints
+        .iter_mut()
+        .find(|item| item.endpoint_id == endpoint_id && item.direction == direction)
+    {
+        existing.active |= active;
+        return;
+    }
+    if endpoints.len() < MAX_APPLICATION_AUDIO_ENDPOINTS {
+        endpoints.push(ApplicationAudioEndpoint {
+            endpoint_id: endpoint_id.to_owned(),
+            direction,
+            active,
+        });
     }
 }
 
@@ -8104,8 +8157,9 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
 
     // SAFETY: CoInitializeEx takes no pointers, and CoUninitialize runs only after
     // the closure has returned, so every interface it created has been dropped.
-    // Each COM call uses a live interface on this thread. GetDisplayName returns
-    // a CoTaskMem string that is read and then freed exactly once.
+    // Each COM call uses a live interface on this thread. GetDisplayName and
+    // GetId return CoTaskMem strings that are read and then freed exactly once
+    // (GetId through take_endpoint_id).
     unsafe {
         let initialized = CoInitializeEx(None, COINIT_MULTITHREADED);
         initialized.ok()?;
@@ -8117,6 +8171,11 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
                 let devices = enumerator.EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE)?;
                 for index in 0..devices.GetCount()? {
                     let device = devices.Item(index)?;
+                    let endpoint_id = device
+                        .GetId()
+                        .ok()
+                        .and_then(|id| take_endpoint_id(id).ok())
+                        .unwrap_or_default();
                     let Ok(manager) = device.Activate::<IAudioSessionManager2>(CLSCTX_ALL, None)
                     else {
                         continue;
@@ -8154,12 +8213,23 @@ pub fn enumerate_application_audio() -> Result<Vec<ApplicationAudioInfo>, AudioE
                                     capture_session_count: 0,
                                     render_session_count: 0,
                                     display_names: Vec::new(),
+                                    endpoints: Vec::new(),
                                 });
                         entry.total_session_count = entry.total_session_count.saturating_add(1);
                         if state == AudioSessionStateActive {
                             entry.active_session_count =
                                 entry.active_session_count.saturating_add(1);
                         }
+                        retain_audio_endpoint(
+                            &mut entry.endpoints,
+                            &endpoint_id,
+                            if is_capture {
+                                EndpointDirection::Capture
+                            } else {
+                                EndpointDirection::Render
+                            },
+                            state == AudioSessionStateActive,
+                        );
                         if is_capture {
                             entry.capture_session_count =
                                 entry.capture_session_count.saturating_add(1);
@@ -12280,6 +12350,7 @@ mod tests {
                 capture_session_count: 0,
                 render_session_count: 1,
                 display_names: vec!["zulu".into(), "alpha".into(), "alpha".into()],
+                endpoints: Vec::new(),
             },
             ApplicationAudioInfo {
                 process_id: 4,
@@ -12288,6 +12359,23 @@ mod tests {
                 capture_session_count: 1,
                 render_session_count: 1,
                 display_names: vec!["voice".into()],
+                endpoints: vec![
+                    ApplicationAudioEndpoint {
+                        endpoint_id: "{b}".into(),
+                        direction: EndpointDirection::Render,
+                        active: true,
+                    },
+                    ApplicationAudioEndpoint {
+                        endpoint_id: "{a}".into(),
+                        direction: EndpointDirection::Render,
+                        active: false,
+                    },
+                    ApplicationAudioEndpoint {
+                        endpoint_id: "{a}".into(),
+                        direction: EndpointDirection::Capture,
+                        active: true,
+                    },
+                ],
             },
         ];
         sort_application_audio_inventory(&mut inventory);
@@ -12299,6 +12387,60 @@ mod tests {
             vec![4, 20]
         );
         assert_eq!(inventory[1].display_names, vec!["alpha", "zulu"]);
+        assert_eq!(
+            inventory[0]
+                .endpoints
+                .iter()
+                .map(|item| (item.endpoint_id.as_str(), item.direction))
+                .collect::<Vec<_>>(),
+            vec![
+                ("{a}", EndpointDirection::Capture),
+                ("{a}", EndpointDirection::Render),
+                ("{b}", EndpointDirection::Render),
+            ]
+        );
+    }
+
+    #[test]
+    fn audio_endpoints_merge_repeats_and_are_bounded() {
+        let mut endpoints = Vec::new();
+        retain_audio_endpoint(&mut endpoints, "{cable}", EndpointDirection::Render, false);
+        // A second session on the same endpoint merges; any active one wins.
+        retain_audio_endpoint(&mut endpoints, "{cable}", EndpointDirection::Render, true);
+        // The same endpoint ID in the other direction is a separate entry.
+        retain_audio_endpoint(&mut endpoints, "{cable}", EndpointDirection::Capture, false);
+        // An unreadable or oversized ID is dropped.
+        retain_audio_endpoint(&mut endpoints, "", EndpointDirection::Render, true);
+        retain_audio_endpoint(
+            &mut endpoints,
+            &"x".repeat(MAX_APPLICATION_AUDIO_ENDPOINT_ID_BYTES + 1),
+            EndpointDirection::Render,
+            true,
+        );
+        assert_eq!(
+            endpoints,
+            vec![
+                ApplicationAudioEndpoint {
+                    endpoint_id: "{cable}".into(),
+                    direction: EndpointDirection::Render,
+                    active: true,
+                },
+                ApplicationAudioEndpoint {
+                    endpoint_id: "{cable}".into(),
+                    direction: EndpointDirection::Capture,
+                    active: false,
+                },
+            ]
+        );
+        for index in 0..MAX_APPLICATION_AUDIO_ENDPOINTS * 2 {
+            retain_audio_endpoint(
+                &mut endpoints,
+                &format!("{{e{index}}}"),
+                EndpointDirection::Capture,
+                false,
+            );
+        }
+        assert_eq!(endpoints.len(), MAX_APPLICATION_AUDIO_ENDPOINTS);
     }
 
     #[test]

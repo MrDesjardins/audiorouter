@@ -534,6 +534,7 @@ describe("application capture identity", () => {
     captureSessionCount: 0,
     renderSessionCount: audioSessionCount,
     audioDisplayNames: [],
+    audioEndpoints: [],
   });
 
   it("lists running applications without a microphone session and folds same-path helpers", () => {
@@ -646,6 +647,7 @@ describe("appendApplicationCaptureNode", () => {
       captureSessionCount: 0,
       renderSessionCount: 1,
       audioDisplayNames: ["Game"],
+      audioEndpoints: [],
     });
     expect(next.nodes.at(-1)).toMatchObject({
       id: "application-capture-1",
@@ -697,6 +699,7 @@ describe("appendApplicationCaptureNode", () => {
       captureSessionCount: 0,
       renderSessionCount: 1,
       audioDisplayNames: ["Chat"],
+      audioEndpoints: [],
     };
     const result = appendApplicationCaptureGroup(demoSession, [running], ["c:\\apps\\CHAT.exe", "D:\\Games\\game.exe"]);
     const sources = result.session.nodes.filter((node) => node.kind === "applicationCapture");
@@ -774,6 +777,7 @@ describe("Mixer route sources", () => {
     captureSessionCount: 0,
     renderSessionCount: 1,
     audioDisplayNames: [],
+    audioEndpoints: [],
   });
   const route = (): Session => {
     let next = appendLibraryNode(
@@ -874,6 +878,7 @@ describe("Input Switch routes", () => {
       captureSessionCount: 0,
       renderSessionCount: 1,
       audioDisplayNames: [],
+      audioEndpoints: [],
     });
     const switchId = next.nodes.find((node) => node.kind === "inputSwitch")!.id;
     const appId = next.nodes.find((node) => node.kind === "applicationCapture")!.id;

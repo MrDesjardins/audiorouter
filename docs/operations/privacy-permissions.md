@@ -37,6 +37,9 @@ The important scopes are deliberately separate:
   and library entries.
 - `pluginScan` — inspect explicitly selected plugin files.
 - `deviceAdministration` — plan/apply managed virtual-device desired state.
+- `integrationWrite` — connect to OBS Studio and change its audio sources
+  after a preview (DEC-22). Only the desktop shell holds it; MCP, CLI and
+  the HTTP API can read OBS but not change it.
 - `startup.write` — authorize startup desired-state changes; native OS
 registration is performed only by the explicit desktop shell command.
 

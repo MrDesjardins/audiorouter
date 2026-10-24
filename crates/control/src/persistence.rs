@@ -314,6 +314,7 @@ impl ControlPlane {
             native_multi_input_mono_nodes: Vec::new(),
             network_log: network_log::Sampler::default(),
             siege_round_feed: Default::default(),
+            obs: Default::default(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,

@@ -648,7 +648,8 @@ export type PermissionScope =
   | "capture"
   | "record"
   | "startupWrite"
-  | "deviceAdministration";
+  | "deviceAdministration"
+  | "integrationWrite";
 
 export type SideEffectClass =
   | "readOnly"
@@ -1198,6 +1199,85 @@ export interface ApplicationInfo {
   captureSessionCount: number;
   renderSessionCount: number;
   audioDisplayNames: string[];
+  /**
+   * Endpoints this process has an audio session on. A loopback recorder of an
+   * output also holds a render session there, so "render" means "plays to, or
+   * records the output of".
+   */
+  audioEndpoints: ApplicationAudioEndpoint[];
+}
+
+export interface ApplicationAudioEndpoint {
+  deviceId: string;
+  direction: "capture" | "render";
+  active: boolean;
+}
+
+/** How AudioRouter is connected to OBS Studio (DEC-22). */
+export type ObsConnection =
+  | "off"
+  | "connecting"
+  | "connected"
+  /** OBS is closed, or its WebSocket server is off. */
+  | "serverOff"
+  | "needsPassword"
+  | "wrongPassword"
+  | "failed";
+
+export type ObsSpecialInput = "desktop1" | "desktop2" | "mic1" | "mic2" | "mic3" | "mic4";
+
+/** One OBS audio source, as OBS reports it. */
+export interface ObsAudioInput {
+  name: string;
+  uuid: string | null;
+  /** inputCapture: a recording device. outputCapture: what a playback device plays. */
+  kind: "inputCapture" | "outputCapture" | "applicationCapture";
+  /** OBS's global devices from Settings › Audio (Desktop Audio, Mic/Aux). */
+  special: ObsSpecialInput | null;
+  /** Windows endpoint ID, or "default"; null for an application capture. */
+  deviceId: string | null;
+  /** Executable an application capture follows. */
+  application: string | null;
+  muted: boolean | null;
+  /** Showing in OBS Program; null for saved files or unavailable facts. */
+  active: boolean | null;
+  /** Enabled OBS audio tracks (1–6), or null when unknown. */
+  audioTracks: number[] | null;
+  /** Monitor Only suppresses output to tracks; null when unknown. */
+  monitorOnly: boolean | null;
+}
+
+export interface ObsStatus {
+  installed: boolean;
+  connection: ObsConnection;
+  /** live: read from OBS now. savedFile: OBS's last saved scene collection. */
+  source: "live" | "savedFile" | null;
+  sceneCollection: string | null;
+  inputs: ObsAudioInput[];
+  passwordSource: "obsSettings" | "pasted" | null;
+  lastChange: {
+    state: "none" | "applying" | "applied" | "restoring" | "restored" | "failed";
+    changed: number;
+    restorable: boolean;
+    error: "changedInObs" | "refusedByObs" | "connectionLost" | null;
+  };
+}
+
+export type ObsChangeRequest =
+  | { inputName: string; deviceId: string }
+  | { inputName: string; muted: boolean };
+
+export interface ObsPlannedChange {
+  inputName: string;
+  field: "device" | "muted";
+  before: string | boolean;
+  after: string | boolean;
+}
+
+export interface ObsPreview {
+  previewId: string;
+  changes: ObsPlannedChange[];
+  expiresInSeconds: number;
 }
 
 export interface JsonRpcRequest<Params = unknown> {
@@ -1370,6 +1450,13 @@ export type ImplementedMethod =
   | "virtualRoutes.replace"
   | "apps.list"
   | "applications.list"
+  | "obs.status"
+  | "obs.refresh"
+  | "obs.connect"
+  | "obs.disconnect"
+  | "obs.preview"
+  | "obs.apply"
+  | "obs.restore"
   | "nodes.types"
   | "routes.inspect"
   | "graph.history"
@@ -1523,6 +1610,14 @@ export type MethodParams = {
   };
   "apps.list": undefined;
   "applications.list": undefined;
+  "obs.status": undefined;
+  "obs.refresh": undefined;
+  /** The password is read from OBS settings when omitted; it is never stored. */
+  "obs.connect": { password?: string; idempotencyKey: string };
+  "obs.disconnect": { idempotencyKey: string };
+  "obs.preview": { changes: ObsChangeRequest[] };
+  "obs.apply": { previewId: string; idempotencyKey: string };
+  "obs.restore": { idempotencyKey: string };
   "nodes.types": undefined;
   "routes.inspect": { sessionId: EntityId; destinationNode: EntityId };
   "graph.history": { sessionId: EntityId; cursor?: string; limit?: number };
@@ -1677,6 +1772,13 @@ export type MethodResult = {
   "virtualRoutes.replace": VirtualRouteReplaceResult;
   "apps.list": ApplicationInfo[];
   "applications.list": ApplicationInfo[];
+  "obs.status": ObsStatus;
+  "obs.refresh": { queued: true };
+  "obs.connect": { connection: "connecting" };
+  "obs.disconnect": { connection: "off" };
+  "obs.preview": ObsPreview;
+  "obs.apply": { state: "applying"; changes: number };
+  "obs.restore": { state: "restoring" };
   "nodes.types": DiscoveryDocument["nodeTypes"];
   "routes.inspect": RouteInspection;
   "graph.history": GraphHistoryPage;

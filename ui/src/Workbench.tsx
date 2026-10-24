@@ -77,6 +77,7 @@ export type WorkbenchTab =
   | "timing"
   | "session"
   | "status"
+  | "apps"
   | "virtualCables"
   | "uiOptions"
   | "recording"
@@ -122,6 +123,16 @@ const TAB_HELP: Record<Exclude<WorkbenchTab, "properties">, { title: string; con
       <p>
         Check the six readiness indicators and the audio devices available on this PC. Choose a node’s device in
         Properties.
+      </p>
+    ),
+  },
+  apps: {
+    title: "How Apps works",
+    content: (
+      <p>
+        AudioRouter asks Windows which apps use each audio device and compares that with your route. It only reads: it
+        never changes Discord, your games or Windows. Change a setting in the app, then switch back here to see the
+        check update.
       </p>
     ),
   },
@@ -248,6 +259,7 @@ export function Workbench({
   clientsPanel,
   statusContent,
   virtualCablesContent,
+  appsContent,
   uiOptionsContent,
   timingContent,
   recordingContent,
@@ -302,6 +314,7 @@ export function Workbench({
   clientsPanel: ReactNode;
   statusContent: ReactNode;
   virtualCablesContent: ReactNode;
+  appsContent: ReactNode;
   uiOptionsContent: ReactNode;
   timingContent?: ReactNode;
   recordingContent: ReactNode;
@@ -370,6 +383,7 @@ export function Workbench({
     ["timing", "Timing"],
     ["session", "Session"],
     ["status", "Status"],
+    ["apps", "Apps"],
     ["virtualCables", "Virtual Cables"],
     ["uiOptions", "UI Options"],
     ["recording", "Recording"],
@@ -518,6 +532,12 @@ export function Workbench({
         <section className="workbench-page" role="tabpanel">
           <h2>Status</h2>
           {statusContent}
+        </section>
+      )}
+      {tab === "apps" && (
+        <section className="workbench-page" role="tabpanel">
+          <h2>Apps</h2>
+          {appsContent}
         </section>
       )}
       {tab === "virtualCables" && (

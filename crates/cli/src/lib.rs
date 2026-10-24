@@ -3386,6 +3386,7 @@ mod tests {
                 && application.get("captureSessionCount").is_some()
                 && application.get("renderSessionCount").is_some()
                 && application.get("audioDisplayNames").is_some()
+                && application["audioEndpoints"].is_array()
         }));
         let applications: Value =
             serde_json::from_str(&run(["applications", "list", "--json"]).unwrap()).unwrap();

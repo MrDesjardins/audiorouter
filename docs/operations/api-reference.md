@@ -128,7 +128,14 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `virtualDevices.remove` | `deviceAdministration` | external operation; requires an idempotency key; explicitly removes one owned managed software device |
 | `virtualRoutes.list` | `read` | read-only; returns explicit durable cross-session routes |
 | `virtualRoutes.replace` | `deviceAdministration` | mutating; revision-checked and requires an idempotency key |
-| `apps.list` | `read` | read-only |
+| `apps.list` | `read` | read-only; `audioEndpoints` names each endpoint the process has a session on (`render` also covers a loopback recorder of that output) |
+| `obs.status` | `read` | read-only; OBS Studio facts from the backend's OBS thread: installed, connection, `live` or `savedFile` source, scene collection, up to 64 audio sources (UUID, kind, device ID, application, muted, active in Program, enabled audio tracks 1–6, Monitor Only) and the last change. Activity, tracks and monitoring are null for saved files or unavailable facts. Never returns the password |
+| `obs.refresh` | `read` | read-only; asks the OBS thread to read OBS again (or the saved scene collection while OBS is closed) |
+| `obs.connect` | `integrationWrite` | mutating; connects to OBS's WebSocket server on `127.0.0.1` with the password from OBS's settings, or an optional pasted `password` (at most 256 bytes). Not journaled; the password stays in memory only |
+| `obs.disconnect` | `integrationWrite` | mutating; closes the connection and forgets the password and the restore list |
+| `obs.preview` | `integrationWrite` | plan-only; `changes` (1–16 of `{inputName, deviceId}` or `{inputName, muted}`) checked against the current OBS sources and Windows devices; returns `previewId`, before/after per change and `expiresInSeconds` (300) |
+| `obs.apply` | `integrationWrite` | external operation; requires an idempotency key and a current `previewId`; leaves a source that changed in OBS since as it is (`changedInObs`) |
+| `obs.restore` | `integrationWrite` | external operation; requires an idempotency key; puts back the values the last apply replaced, unless they changed in OBS since |
 | `applications.list` | `read` | read-only; returns bounded process identity, including nullable executable path and creation timestamp |
 | `nodes.types` | `read` | read-only |
 | `nodes.describe` | `read` | read-only |

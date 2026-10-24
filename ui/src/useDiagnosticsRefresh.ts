@@ -1,5 +1,5 @@
 // Live diagnostics and meter refresh while audio plays (moved from App.tsx).
-import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { useEffect, useEffectEvent, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { DiagnosticsSnapshot } from "@audiorouter/contracts";
 import type { UiBackend, UiSnapshotState } from "./backend";
 import { differsOnlyInTelemetry, type TelemetryStore } from "./liveTelemetry";
@@ -26,6 +26,9 @@ export function useDiagnosticsRefresh({
   setSnapshotState: Dispatch<SetStateAction<UiSnapshotState>>;
   recordUiDiagnostic: (message: string) => void;
 }) {
+  // Callbacks from the caller: always the latest, never a reason to restart the 20 Hz loop.
+  const reportFailure = useEffectEvent((message: string) => recordUiDiagnostic(message));
+  const updateSnapshot = useEffectEvent((update: SetStateAction<UiSnapshotState>) => setSnapshotState(update));
   useEffect(() => {
     if (!backend.connected || !sessionRunning) return;
     let active = true;
@@ -43,7 +46,7 @@ export function useDiagnosticsRefresh({
         if (basis && differsOnlyInTelemetry(basis, diagnostics))
           telemetryStore.set({ basis, nodeTelemetry: diagnostics.nodeTelemetry });
         else
-          setSnapshotState((current) =>
+          updateSnapshot((current) =>
             current.snapshot ? { ...current, snapshot: { ...current.snapshot, diagnostics } } : current,
           );
         failing = false;
@@ -51,7 +54,7 @@ export function useDiagnosticsRefresh({
         // Keep the last known diagnostics; the event/snapshot path reports
         // connection failures and never replaces observations with guesses.
         // Record the first failure of a run, not one row per 50 ms tick.
-        if (!failing) recordUiDiagnostic(`Live diagnostics refresh failed (${safeErrorName(error)})`);
+        if (!failing) reportFailure(`Live diagnostics refresh failed (${safeErrorName(error)})`);
         failing = true;
       } finally {
         refreshing = false;
@@ -63,5 +66,5 @@ export function useDiagnosticsRefresh({
       active = false;
       window.clearInterval(timer);
     };
-  }, [backend, sessionRunning, telemetryStore]);
+  }, [backend, sessionRunning, telemetryStore, diagnosticsRef]);
 }

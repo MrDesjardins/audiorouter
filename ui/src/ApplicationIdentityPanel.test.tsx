@@ -15,6 +15,7 @@ const application: ApplicationRow = {
   captureSessionCount: 0,
   renderSessionCount: 1,
   audioDisplayNames: ["Game"],
+  audioEndpoints: [],
 };
 
 describe("ApplicationIdentityPanel", () => {

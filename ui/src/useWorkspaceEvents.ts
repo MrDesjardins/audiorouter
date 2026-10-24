@@ -1,5 +1,5 @@
 // Backend state-event subscription of the workspace (moved from App.tsx).
-import { useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { useEffect, useEffectEvent, type Dispatch, type RefObject, type SetStateAction } from "react";
 import type { RecordingRow, Session, StateEventCategory } from "@audiorouter/contracts";
 import {
   formatUiError,
@@ -68,6 +68,24 @@ export function useWorkspaceEvents({
   setRecorderStatuses: Dispatch<SetStateAction<RecorderStatus[]>>;
   setRecorderStatusAvailable: Dispatch<SetStateAction<boolean>>;
 }) {
+  // Callbacks from the caller: always the latest, never a reason to restart polling.
+  const follow = useEffectEvent((sessionId: string) => followBackendActiveSession(sessionId));
+  const showMessage = useEffectEvent((message: string) => setActionMessage(message));
+  const updateSnapshot = useEffectEvent((update: SetStateAction<UiSnapshotState>) => setSnapshotState(update));
+  const refreshInventories = useEffectEvent(() => {
+    refreshApplications();
+    refreshDevices({ announce: false });
+    void refreshSessions();
+  });
+  const showRecordings = useEffectEvent((items: RecordingRow[]) => {
+    setRecordings(items);
+    setRecordingsError(null);
+  });
+  const showRecordingsError = useEffectEvent((message: string) => setRecordingsError(message));
+  const showRecorders = useEffectEvent((items: RecorderStatus[] | null) => {
+    if (items) setRecorderStatuses(items);
+    setRecorderStatusAvailable(items !== null);
+  });
   useEffect(() => {
     if (!backend.connected || !hasSnapshot) return;
     let active = true;
@@ -87,17 +105,17 @@ export function useWorkspaceEvents({
         const selectionChangedEvent = result.events.find((event) => event.category === "session.selectionChanged");
         const activeSession =
           selectionChangedEvent && backend.getActiveSession ? await backend.getActiveSession() : null;
-        if (activeSession?.sessionId) followBackendActiveSession(activeSession.sessionId);
+        if (activeSession?.sessionId) follow(activeSession.sessionId);
         const bridgeEvent = result.events.find(
           (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
         );
         if (bindingInvalidatedEvent) {
-          setActionMessage(
+          showMessage(
             "Native endpoint binding changed; audio is stopped. Review the exact endpoints and rebind before restarting.",
           );
         } else if (bridgeEvent) {
           const bus = bridgeEvent.operationId ?? "an affected bus";
-          setActionMessage(
+          showMessage(
             bridgeEvent.category === "virtualBridge.expired"
               ? `Virtual bridge lease expired for ${bus}; the route is silenced until it is deliberately restarted.`
               : `Virtual bridge failure detected for ${bus}; the route is silenced until it is deliberately recovered.`,
@@ -106,31 +124,23 @@ export function useWorkspaceEvents({
         if (result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend, activeSession?.sessionId ?? session.id);
           if (active) {
-            setSnapshotState(nextState);
-            refreshApplications();
-            refreshDevices({ announce: false });
-            void refreshSessions();
+            updateSnapshot(nextState);
+            refreshInventories();
             void backend
               .listRecordings(session.id)
               .then((items) => {
-                if (active) {
-                  setRecordings(items);
-                  setRecordingsError(null);
-                }
+                if (active) showRecordings(items);
               })
               .catch((error) => {
-                if (active) setRecordingsError(formatUiError(error, "Recording library unavailable"));
+                if (active) showRecordingsError(formatUiError(error, "Recording library unavailable"));
               });
             void backend
               .listRecorders()
               .then((items) => {
-                if (active) {
-                  setRecorderStatuses(items);
-                  setRecorderStatusAvailable(true);
-                }
+                if (active) showRecorders(items);
               })
               .catch(() => {
-                if (active) setRecorderStatusAvailable(false);
+                if (active) showRecorders(null);
               });
             if (!nextState.stale)
               eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
@@ -140,7 +150,7 @@ export function useWorkspaceEvents({
         }
       } catch (error) {
         if (active)
-          setSnapshotState((current) => ({
+          updateSnapshot((current) => ({
             ...current,
             stale: true,
             error: formatUiError(error, "Event subscription failed"),
@@ -155,5 +165,5 @@ export function useWorkspaceEvents({
       active = false;
       window.clearInterval(timer);
     };
-  }, [backend, session.id, snapshotCache, hasSnapshot]);
+  }, [backend, session.id, snapshotCache, hasSnapshot, eventCursor]);
 }

@@ -27,6 +27,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -2482,9 +2483,11 @@ export function SessionFlowCanvas({
     replaceEdgeSides(sides);
     onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
   };
+  // Read when the layout resets for another session; a node count change alone does not reset it.
+  const sessionNodeCount = useEffectEvent(() => session.nodes.length);
   useEffect(() => {
     initialFitDoneRef.current = false;
-    nextLayoutIndexRef.current = session.nodes.length;
+    nextLayoutIndexRef.current = sessionNodeCount();
     const next = readLayout(optionalLocalStorage(), layoutKey);
     positionsRef.current = next;
     setPositions(next);

@@ -111,7 +111,9 @@ impl ClientGrant {
     /// this is not an enrolled role and must not be used for remote, MCP, or
     /// CLI clients. PluginScan (explicit metadata scans of chosen folders;
     /// plugins only ever execute in isolated workers) was authorized for the
-    /// local shell by the user on 2026-09-25.
+    /// local shell by the user on 2026-09-25. IntegrationWrite (connect to
+    /// OBS and change its sources after a confirmed preview) was authorized
+    /// for the local shell by the user on 2026-10-23 (DEC-22).
     pub fn for_desktop_shell() -> Self {
         let mut grant = Self::with_scopes([
             PermissionScope::Read,
@@ -120,6 +122,7 @@ impl ClientGrant {
             PermissionScope::Record,
             PermissionScope::StartupWrite,
             PermissionScope::PluginScan,
+            PermissionScope::IntegrationWrite,
         ]);
         // Opening audio devices on Play needs the user's one-time consent
         // in the app (devices.setAccess), persisted in the database.
@@ -332,6 +335,11 @@ pub(crate) fn validate_method_params(
         "startup.apply" => &["planId", "idempotencyKey"],
         "diagnostics.getVerbose" => &[],
         "diagnostics.setVerbose" => &["enabled"],
+        "obs.status" | "obs.refresh" => &[],
+        "obs.connect" => &["password", "idempotencyKey"],
+        "obs.disconnect" | "obs.restore" => &["idempotencyKey"],
+        "obs.preview" => &["changes"],
+        "obs.apply" => &["previewId", "idempotencyKey"],
         "system.describe"
         | "status.get"
         | "system.diagnostics"
