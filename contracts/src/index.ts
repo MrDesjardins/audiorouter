@@ -1198,6 +1198,18 @@ export interface ApplicationInfo {
   captureSessionCount: number;
   renderSessionCount: number;
   audioDisplayNames: string[];
+  /**
+   * Endpoints this process has an audio session on. A loopback recorder of an
+   * output also holds a render session there, so "render" means "plays to, or
+   * records the output of".
+   */
+  audioEndpoints: ApplicationAudioEndpoint[];
+}
+
+export interface ApplicationAudioEndpoint {
+  deviceId: string;
+  direction: "capture" | "render";
+  active: boolean;
 }
 
 export interface JsonRpcRequest<Params = unknown> {

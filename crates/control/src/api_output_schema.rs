@@ -665,9 +665,27 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                             "type": "string",
                             "maxLength": audiorouter_windows_audio::MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES
                         }
+                    },
+                    "audioEndpoints": {
+                        "type": "array",
+                        "maxItems": audiorouter_windows_audio::MAX_APPLICATION_AUDIO_ENDPOINTS,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "deviceId": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": audiorouter_windows_audio::MAX_APPLICATION_AUDIO_ENDPOINT_ID_BYTES
+                                },
+                                "direction": { "enum": ["capture", "render"] },
+                                "active": { "type": "boolean" }
+                            },
+                            "required": ["deviceId", "direction", "active"],
+                            "additionalProperties": false
+                        }
                     }
                 },
-                "required": ["processId", "executable", "executablePath", "creationTime100ns", "audioActivity", "captureCapability", "audioSessionCount", "activeAudioSessionCount", "captureSessionCount", "renderSessionCount", "audioDisplayNames"],
+                "required": ["processId", "executable", "executablePath", "creationTime100ns", "audioActivity", "captureCapability", "audioSessionCount", "activeAudioSessionCount", "captureSessionCount", "renderSessionCount", "audioDisplayNames", "audioEndpoints"],
                 "additionalProperties": false
             }
         }),

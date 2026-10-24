@@ -445,6 +445,14 @@ impl ControlPlane {
                     "captureSessionCount": session.map_or(0, |item| item.capture_session_count),
                     "renderSessionCount": session.map_or(0, |item| item.render_session_count),
                     "audioDisplayNames": session.map_or_else(Vec::new, |item| item.display_names.clone()),
+                    "audioEndpoints": session.map_or_else(Vec::new, |item| item.endpoints.iter().map(|endpoint| json!({
+                        "deviceId": endpoint.endpoint_id,
+                        "direction": match endpoint.direction {
+                            audiorouter_windows_audio::EndpointDirection::Capture => "capture",
+                            audiorouter_windows_audio::EndpointDirection::Render => "render",
+                        },
+                        "active": endpoint.active,
+                    })).collect()),
                 })
             })
             .collect::<Vec<_>>());
