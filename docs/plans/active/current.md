@@ -1,5 +1,12 @@
 # Active plan — post-0.0.8 maintenance
 
+## OBS and Discord premium experience — 2026-10-23, owner request
+
+The owner authorized stages D1, O1, D2 and O2 of [OBS and Discord setup
+help](../future/obs-discord-integration.md) (DEC-22) and asked for a UX plan
+first. Tracked in its own plan: [OBS and Discord](obs-discord.md). X1
+(Discord RPC) needs Discord's approval and is not authorized.
+
 ## Review follow-ups R1–R7 and a second review — 2026-10-23, owner request
 
 The owner asked to improve the `site/compare.html` wording, fix every

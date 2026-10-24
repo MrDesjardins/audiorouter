@@ -1,6 +1,8 @@
 # OBS and Discord setup help
 
-Status: proposed. Not authorized for implementation. Investigation on
+Status: stages D1, O1, D2 and O2 authorized by the owner on 2026-10-23 (UX and
+work order in the [active plan](../active/obs-discord.md)); X1 is not.
+Investigation on
 2026-10-23 at the owner's request ("Investigate OBS. We can do exception for
 few very popular applications like OBS, Discord"). This exception is recorded
 as DEC-22 in the [delivery specification](../../spec/15-delivery.md). It
