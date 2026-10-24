@@ -1,4 +1,24 @@
+import type { Page } from "@playwright/test";
 import { test, expect } from "./real-backend";
+
+/** The session is adopted and measured, and the view has stopped moving. */
+async function canvasSettled(page: Page) {
+  const ready = page.getByTestId("canvas-readiness");
+  await expect(ready).toHaveAttribute("data-session-id", "e2e-session");
+  await expect(ready).toHaveAttribute("data-ready", "true");
+  let previous = "";
+  await expect
+    .poll(
+      async () => {
+        const current = (await page.locator(".react-flow__viewport").getAttribute("style")) ?? "";
+        const same = current === previous;
+        previous = current;
+        return same;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
+}
 
 test("foreign saved position fields cannot replace geometry identities", async ({ page }) => {
   await page.addInitScript(() =>
@@ -151,11 +171,18 @@ test("connector edits and geometry undo in order and a new edit clears redo", as
 test("new connections keep both chosen sides when older geometry is undone", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/backend-harness.html");
+  // Act only on a settled canvas. Clicking Arrange before the session was
+  // adopted let the adoption's layout reset and view fit move the
+  // connection's remove button and the handles under the pointer (CI
+  // flake on PR #68, 2026-10-24).
+  await canvasSettled(page);
   await page.getByRole("button", { name: "Arrange", exact: true }).click();
+  await canvasSettled(page);
   await page.getByRole("button", { name: "Remove connection mic-voice", exact: true }).click();
   // Drag only once the removal is drawn; dragging earlier recreated the
   // connection that was still in the draft (CI flake, 2026-10-23).
   await expect(page.getByRole("button", { name: "Remove connection mic-voice", exact: true })).toHaveCount(0);
+  await canvasSettled(page);
   const source = page.getByTestId("rf__node-mic").locator('.source[data-debug-side="bottom"]');
   const target = page.getByTestId("rf__node-voice").locator('.target[data-debug-side="top"]');
   const from = (await source.boundingBox())!;

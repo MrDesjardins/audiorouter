@@ -23,6 +23,30 @@ Those jobs only run Node scripts on pinned `setup-node` versions, so
 following the label is the intended behavior; pinning `ubuntu-24.04` would
 only postpone the same move. Revisit if a Linux job fails after the move.
 
+Two flakes fixed on the release branch (owner reports, 2026-10-24):
+
+- **Edge, PR #68 run 40121219491:** "new connections keep both chosen
+  sides when older geometry is undone" left the remove button present for
+  10 s. A debug trace of a local failure (about 1 in 40–200 runs at 4
+  workers) showed the test clicking Arrange about 70 ms before the session
+  was adopted. The adoption reset the layout and refitted the view, so the
+  button and handles moved under the pointer. The node-count fit also
+  animated for 180 ms under reduced motion, unlike the other two fits; it now
+  honours `prefers-reduced-motion`. The test waits for `canvas-readiness`
+  (session adopted, geometry measured) and a still viewport before each
+  interaction. Result: 500/500 runs at 4 workers with no retries, the three
+  canvas suites (29 tests) pass, and lint, typecheck and 721 unit tests pass.
+- **Coverage nightly run 40076776528 (main):**
+  `sender_clock_drift_is_absorbed_without_gaps_or_growing_delay` counted 4
+  steps with the 1.003 sender. It had one underrun, which must be mid-run:
+  that sender finishes after the receiver stops reading, so there is no
+  final drain. The instrumented runner held the sending thread back for most
+  of the 40 ms buffer, and the gap that followed was correct behavior. The
+  feeder now reports its worst lateness. An attempt where the sender ran
+  more than 25 ms late is not judged and is repeated, up to 3 attempts; an
+  on-time attempt is judged as strictly as before. Locally the sender runs
+  about 1 ms late and the 13 network-audio tests pass.
+
 ## OBS and Discord premium experience — 2026-10-23, owner request
 
 The owner authorized stages D1, O1, D2 and O2 of [OBS and Discord setup
