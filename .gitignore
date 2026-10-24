@@ -14,8 +14,14 @@
 /ui/dist-review-*/
 /.env
 
-# Agent worktrees (Claude Code)
+# Agent worktrees and local agent settings (Claude Code, Codex)
 .claude/worktrees/
+/.worktrees/
+/.codex/
+
+# Default outputs of tools/m06-vst3-worker/build.ps1.
+/tools/m06-vst3-worker/*.exe
+/tools/m06-vst3-worker/*.obj
 
 # Vite dependency cache of the site preview.
 /site/.vite/
