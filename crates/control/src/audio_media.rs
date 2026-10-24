@@ -102,15 +102,28 @@ impl ControlPlane {
                     || (node.kind == NodeKind::FirFilter
                         && node.parameters.contains_key("mediaId")))
         }) {
+            // Each failure names the node and its file, and carries the node
+            // ID, so the user sees which tool to fix (owner report, 2026-10-24).
+            let not_ready = |message: String| ControlError::NodeNotReady {
+                node_id: node.id.as_str().to_owned(),
+                message,
+            };
+            let file_name = node
+                .parameters
+                .get("fileName")
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("its audio file");
             let media_id = node
                 .parameters
                 .get("mediaId")
                 .and_then(Value::as_str)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| {
-                    ControlError::InvalidRequest(
-                        "select a WAV or MP3 file for every Audio File source".into(),
-                    )
+                    not_ready(format!(
+                        "\"{}\" has no audio file yet. Choose a WAV or MP3 file in its Properties.",
+                        node.name
+                    ))
                 })?;
             if media.contains_key(media_id) {
                 continue;
@@ -124,17 +137,19 @@ impl ControlPlane {
                 .load_audio_media(media_id)
                 .map_err(storage_error)?
                 .ok_or_else(|| {
-                    ControlError::InvalidRequest(
-                        "audio source media is missing; select the file again".into(),
-                    )
+                    not_ready(format!(
+                        "\"{}\" cannot play: AudioRouter no longer has \"{file_name}\". Choose the file again in its Properties.",
+                        node.name
+                    ))
                 })?;
             let decoded = self
                 .while_servicing_audio(|| {
                     audiorouter_engine::decode_audio_bytes(bytes, &format, sample_rate_hz)
                 })
                 .map_err(|error| {
-                    ControlError::InvalidRequest(format!(
-                        "audio source could not be decoded: {error}"
+                    not_ready(format!(
+                        "\"{}\" cannot play \"{file_name}\": the file could not be decoded ({error}).",
+                        node.name
                     ))
                 })?;
             media.insert(media_id.to_owned(), Arc::new(decoded));

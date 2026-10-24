@@ -225,3 +225,45 @@ fn temporary_take_import_is_bounded_expires_and_removes_only_its_own_file() {
     assert!(ordinary.exists(), "ordinary recordings are not consumed");
     let _ = std::fs::remove_file(ordinary);
 }
+
+#[test]
+fn a_missing_audio_file_names_its_node_for_the_canvas() {
+    let storage = Storage::open_memory().unwrap();
+    let mut plane = ControlPlane::with_storage("missing-media", storage);
+    let mut owned = session();
+    owned.nodes.push(Node {
+        id: EntityId::new("audioFile-1"),
+        kind: NodeKind::AudioFile,
+        type_version: 1,
+        name: "Audio file 1".into(),
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::from_value(json!({
+            "mediaId": "audio-media-3",
+            "fileName": "Temporary voice take.wav",
+            "loop": false
+        }))
+        .unwrap(),
+        ports: vec![Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        }],
+    });
+    let error = plane.session_audio_media(&owned, 48_000).unwrap_err();
+    let ControlError::NodeNotReady { node_id, message } = &error else {
+        panic!("expected NodeNotReady, got {error:?}");
+    };
+    assert_eq!(node_id, "audioFile-1");
+    assert_eq!(
+        message,
+        "\"Audio file 1\" cannot play: AudioRouter no longer has \"Temporary voice take.wav\". Choose the file again in its Properties."
+    );
+    let response = application_error_response(Some(json!(1)), error);
+    let failure = response.error.unwrap();
+    assert!(failure.message.starts_with("\"Audio file 1\" cannot play"));
+    let data = failure.data.unwrap();
+    assert_eq!(data["code"], "nodeNotReady");
+    assert_eq!(data["fieldPath"], "nodes/audioFile-1");
+    assert_eq!(data["resourceIds"], json!(["audioFile-1"]));
+}

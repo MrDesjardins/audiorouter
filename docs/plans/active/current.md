@@ -3466,6 +3466,33 @@ occurrence, read the `shell.panic` record, fix the owning code and qualify a
 sleep/resume with a native route running. A restarted backend leaves routes
 stopped until Play.
 
+### Defect 2026-10-24: a saved Audio File broke a day later, and Play did not say which node
+
+- Reproduction (owner, 0.0.22 test build): session "PD200X Radio Voice",
+  Play: "audio source media is missing; select the file again", with no
+  mark on the canvas and no node named. A copy of the database showed
+  "Audio file 1" playing `audio-media-3`, a "Temporary voice take.wav"
+  import, which `audioMedia.importTemporaryRecording` stores with a
+  24-hour expiry and the next media insert prunes. Saving the session
+  never made it permanent. Affects every version with Sound Check (UI-24).
+- Fix (branch `fix/audio-file-media`): saving a session (plain and
+  journaled saves) clears the expiry of every media it references
+  (`keep_session_audio_media`). Media errors are a new
+  `ControlError::NodeNotReady` (`data.code` `nodeNotReady`, `fieldPath`
+  `nodes/<id>`, `resourceIds` the node) whose message names the node and
+  its file. The UI marks that node (outline and a "Cannot play" tag over
+  the card edge, no resize), selects it and opens Properties; the mark
+  stays until the node changes or Play succeeds.
+- Migration: none. Media already pruned cannot come back: the owner must
+  choose the file again once in that node.
+- Checks: storage `saving_a_session_keeps_the_temporary_take_it_plays`
+  (plain and journaled saves, unreferenced take still expires); control
+  `a_missing_audio_file_names_its_node_for_the_canvas`; Vitest
+  `backend.test.ts`; Edge `node-not-ready.pw.ts` (three themes,
+  card size unchanged, mark cleared by a working Play). Storage,
+  control and transport tests, both Clippy runs, fmt, UI lint and Vitest
+  pass. The full Edge suite is not run yet.
+
 ## Risks, evidence and rollback
 
 Stats.cc's undocumented feed can change; unknown state releases Duck.
