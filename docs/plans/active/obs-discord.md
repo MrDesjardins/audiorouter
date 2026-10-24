@@ -232,6 +232,12 @@ in a game.
   - Specs: UI-26 (Apps) and CAP-15 (endpoint session inventory). Quickstart
     has a "Checking Discord's devices (Apps tab)" section. The docs check
     passes.
+- Review fixes, 2026-10-23, not yet run:
+  - The check judges the matching microphone when Discord records from two
+    devices at once.
+  - Every row keeps its "Show me how" line, so a row turning from ready to
+    check does not grow (UI-17).
+  - "Copied" returns to "Copy device name" after 2 s.
 - Waiting: compiling and testing are on hold while the owner plays
   (no-heavy-builds rule).
 - Next, in order:
