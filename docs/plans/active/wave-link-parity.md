@@ -292,8 +292,60 @@ Observations, not changed here (existing behavior):
   intercepted until the toast closes; the keyboard works. The e2e test uses
   the keyboard.
 
+## Next candidate — Listen to any mix (#1 and #9), design proposal (2026-10-23)
+
+Wave Link puts an ear icon on each mix; clicking it moves the headphones
+to that mix. AudioRouter has no such control. Today the owner must wire an
+Input Switch (DSP-14: two inputs, one output, live equal-power crossfade)
+in front of the headphones by hand. Requirement IDs to add: a DSP/GRAPH
+entry for the chosen node or overlay, a UI entry for the ear control, and
+AUTO coverage for the Stream Deck.
+
+Constraints from the specification:
+
+- VDEV-06: no invisible monitor or pass-through may exist outside topology
+  inspection, so a listen path must appear on the canvas and in the
+  topology API.
+- CAP-10: feedback and duplicate checks must cover the listen path, for
+  example listening to a mix that already loops back from the headphones.
+- The privacy rules: listening must never change what the voice-chat output
+  receives, and a failed protected path stays silent.
+- `nodes.toggle`/`nodes.set` go through plan/commit, so every switch is
+  applied live and saved as a revision (see Output Switch). That is
+  acceptable for a deliberate selection, but not for anything that fires
+  repeatedly.
+
+Option A — a saved **Listen** selector (recommended first):
+
+- What it is: a routing node with up to 4 named inputs (an N-way Input
+  Switch, reusing its live crossfade) feeding the headphones. "Listen here"
+  on a Mixer or output connects that mix to a free selector input (one
+  undoable plan/commit), and the ear icon selects it.
+- Pros: it is ordinary, visible graph routing. Stream Deck switching works
+  through `nodes.toggle`/`nodes.set` with no new RPC. Validation, privacy
+  and feedback checks already apply.
+- Costs: the engine needs an N-input selector, plus the UI ear control and
+  the setup action. Each switch is a saved revision, like the Input Switch
+  today. Medium.
+
+Option B — a temporary listen overlay:
+
+- What it is: the backend adds a runtime-only tap from any node to the
+  headphones. It is not saved, it is shown on the canvas with a
+  "Listening" badge, and it is removed on Stop, session switch or restart.
+  If the headphones are busy, it needs an implicit mix stage.
+- Pros: one click from any node, with no saved change.
+- Costs and risks: it needs a new overlay concept in the compiler,
+  activation, topology API and every adapter. Its feedback and privacy
+  checks must run on saved graph plus overlay, and the hidden implicit
+  mixer would sit against VDEV-06. High.
+
+Recommendation: build A. Revisit B only if A's setup step is too much in
+practice. Decision needed from the owner: A, B, or a smaller first step
+(an ear icon that only drives an existing Input Switch, no new node).
+
 ## Next action
 
-Owner review of the two features in the next build. Then pick the next
-candidate from the [Wave Link parity list](../future/wave-link-parity.md).
-Recommended: the not-running app picker (#4), then Listen here (#1).
+Owner chooses the Listen to any mix option above. Then add its
+requirement IDs, ordered tasks and validation matrix here before any code.
+The owner's Output Switch hardware test from PR #65 is still outstanding.

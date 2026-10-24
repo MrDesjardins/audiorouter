@@ -1,9 +1,25 @@
 # Application quality and regression prevention
 
 Status: implementation authorized by the owner on 2026-10-21 ("Let's do it!").
-Q1's initial full CI passed and main protection is active; its updated-base CI
-and declared-skip demonstration remain. Q2/Q3 continue in separate small PRs.
-Hardware and release evidence
+Progress at 2026-10-23 (main `00044cc9`):
+
+- Q1 is merged (PR #50): the change-to-check classifier, the shared
+  checks, the required Quality gate, main ruleset 25451476, and the
+  declared-skip run 39713611409.
+- Q2's history and presentation-persistence slices are merged
+  (PR #52, and #53 through the stacked branch that #55 also used; both
+  heads are on main).
+- Q3's optimized production-browser smoke and readiness probe are merged.
+  The packaged WebView2 smoke (Q3.2) is still open.
+- One Q4 slice, the graph-commit storage-failure recovery test (PR #56), is
+  merged.
+- 2026-10-23: Edge CI keeps one diagnostic retry, but `failOnFlakyTests`
+  now fails the job on any flaky test. PR #65 had let a retried pass count
+  as green, contrary to the delivery rules. Proven with a probe that fails
+  on its first attempt only: exit 0 without the option, exit 1 with it.
+
+Open: Q2 sequence/property and mutation tests; Q3.2; Q4 items 1–7 beyond
+the storage slice; Q5; Q6 on each release. Hardware and release evidence
 remain separate gates. Existing acceptance targets remain binding.
 
 ## Objective
