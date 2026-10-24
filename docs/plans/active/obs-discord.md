@@ -208,3 +208,24 @@ contracts updated in the same change.
 
 Step 1, D1 backend. Compile and test after checking that the owner is not
 in a game.
+
+## Progress
+
+- 2026-10-23, decision: D1 extends `apps.list` with a required
+  `audioEndpoints` array of `{deviceId, direction, active}`, instead of
+  adding a new method. It is one call with the existing read grant, and
+  the UI already lists applications.
+- Implemented, not yet compiled or run:
+  - `windows-audio` records each session's endpoint ID. `GetId` is freed
+    through `take_endpoint_id`. Bounded to 64 endpoints per process and 512
+    bytes per ID.
+  - The output schema, contract, CLI and catalog tests, and the API
+    reference are updated.
+  - UI: `ui/src/appUsage.ts` (device usage, cable pairing, the Discord
+    check), with tests built on the owner's topology, including the
+    2026-10-03 "CABLE In 16ch" failure.
+- Waiting: compiling and testing are on hold. Siege was running with 0.8 GB
+  free memory, which matches the no-heavy-builds rule.
+- Next: run `cargo test -p audiorouter-windows-audio -p audiorouter-control`,
+  Clippy and fmt, and the UI typecheck and Vitest. Then the Apps tab, the
+  top-bar strip and the device-node footers.

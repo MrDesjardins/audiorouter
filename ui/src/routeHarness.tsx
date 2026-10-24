@@ -364,6 +364,7 @@ const previewBackend: UiBackend = {
         executable: "Music.exe",
         executablePath: "C:\\Apps\\Music.exe",
         audioDisplayNames: ["Music"],
+        audioEndpoints: [],
         audioActivity: "active",
         captureCapability: "observed",
         audioSessionCount: 1,

@@ -1043,6 +1043,15 @@ fn describe_exposes_input_and_output_schemas_for_methods() {
             ["maxLength"],
         audiorouter_windows_audio::MAX_APPLICATION_AUDIO_DISPLAY_NAME_BYTES
     );
+    assert_eq!(
+        applications["outputSchema"]["items"]["properties"]["audioEndpoints"]["maxItems"],
+        audiorouter_windows_audio::MAX_APPLICATION_AUDIO_ENDPOINTS
+    );
+    assert_eq!(
+        applications["outputSchema"]["items"]["properties"]["audioEndpoints"]["items"]
+            ["properties"]["deviceId"]["maxLength"],
+        audiorouter_windows_audio::MAX_APPLICATION_AUDIO_ENDPOINT_ID_BYTES
+    );
     let recordings = methods
         .iter()
         .find(|method| method["name"] == "recordings.list")
@@ -1138,6 +1147,17 @@ fn canonical_application_list_alias_uses_the_same_discovery_result() {
             && application.get("captureSessionCount").is_some()
             && application.get("renderSessionCount").is_some()
             && application.get("audioDisplayNames").is_some()
+            && application["audioEndpoints"]
+                .as_array()
+                .is_some_and(|endpoints| {
+                    endpoints.iter().all(|endpoint| {
+                        endpoint["deviceId"]
+                            .as_str()
+                            .is_some_and(|id| !id.is_empty())
+                            && matches!(endpoint["direction"].as_str(), Some("capture" | "render"))
+                            && endpoint["active"].is_boolean()
+                    })
+                })
     }));
 }
 

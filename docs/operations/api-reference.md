@@ -128,7 +128,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `virtualDevices.remove` | `deviceAdministration` | external operation; requires an idempotency key; explicitly removes one owned managed software device |
 | `virtualRoutes.list` | `read` | read-only; returns explicit durable cross-session routes |
 | `virtualRoutes.replace` | `deviceAdministration` | mutating; revision-checked and requires an idempotency key |
-| `apps.list` | `read` | read-only |
+| `apps.list` | `read` | read-only; `audioEndpoints` names each endpoint the process has a session on (`render` also covers a loopback recorder of that output) |
 | `applications.list` | `read` | read-only; returns bounded process identity, including nullable executable path and creation timestamp |
 | `nodes.types` | `read` | read-only |
 | `nodes.describe` | `read` | read-only |
