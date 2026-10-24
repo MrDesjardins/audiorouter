@@ -163,6 +163,16 @@ describe("Discord check", () => {
     ]);
   });
 
+  it("judges the matching microphone when Discord records from two devices", () => {
+    // Windows sorts endpoint IDs, so the raw mic can come first.
+    const check = discordCheck(
+      session,
+      [app("Discord.exe", [records("mic"), records("cable-a-out"), plays("cable-in")])],
+      devices,
+    );
+    expect(check.rows[0]).toMatchObject({ state: "ready", deviceName: "CABLE-A Output (VB-Audio Virtual Cable A)" });
+  });
+
   it("names the 16ch speaker that blocked Game Sound Out on 2026-10-03", () => {
     const check = discordCheck(session, [app("Discord.exe", [records("cable-a-out"), plays("cable-in-16")])], devices);
     expect(check.state).toBe("check");

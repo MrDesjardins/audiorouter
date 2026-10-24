@@ -264,7 +264,9 @@ export function discordCheck(
         .filter((id): id is string => id !== null)
     : [];
 
-  const microphone = use.capture[0] ?? null;
+  // Discord can record from more than one device for a moment (switching, a
+  // mic test); judge the one that matches when any does.
+  const microphone = use.capture.find((id) => voice.some((device) => device.id === id)) ?? use.capture[0] ?? null;
   const microphoneName = microphone ? nameOf(devices, microphone) : null;
   if (microphone === null) {
     rows.push({
