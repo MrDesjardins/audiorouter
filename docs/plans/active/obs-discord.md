@@ -272,6 +272,14 @@ the PR. No merge or auto-merge: owner will perform manual acceptance first.
 Next: monitor the PR's Windows/Edge and contract checks and repair failures
 without compiling locally while the owner plays.
 
+CI follow-up: [40063300519](https://github.com/MrDesjardins/audiorouter/actions/runs/40063300519)
+on `f84ac309` failed during the UI typecheck preceding Clippy: the
+`useObsStatus.test.tsx` refresh mock widened `{queued: true}` to boolean,
+incompatible with the literal API result. Pin the fixture literal with
+`as const`. This was not a Rust/Clippy execution or a runtime test failure;
+the downstream jobs in that job were skipped. Policy, docs, site and
+Stream Deck checks passed. Next: rerun CI on the correction.
+
 ### Coverage audit — 2026-10-23, owner asks whether all bugs are verified
 
 Scope SEC-15/UI-26: audit actual test cases against state/identity boundaries;

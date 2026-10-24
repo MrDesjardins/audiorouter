@@ -15,7 +15,7 @@ const status: ObsStatus = {
 };
 
 function backend(): Required<ObsBackend> {
-  return { obsStatus: vi.fn(async () => status), obsRefresh: vi.fn(async () => ({ queued: true })) };
+  return { obsStatus: vi.fn(async () => status), obsRefresh: vi.fn(async () => ({ queued: true as const })) };
 }
 
 afterEach(() => {
