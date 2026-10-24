@@ -57,7 +57,11 @@ const records = (deviceId: string, active = true): ApplicationAudioEndpoint => (
   direction: "capture",
   active,
 });
-const plays = (deviceId: string, active = true): ApplicationAudioEndpoint => ({ deviceId, direction: "render", active });
+const plays = (deviceId: string, active = true): ApplicationAudioEndpoint => ({
+  deviceId,
+  direction: "render",
+  active,
+});
 
 function node(id: string, kind: string, parameters: Record<string, string> = {}) {
   return { id, kind, typeVersion: 1, name: id, enabled: true, bypass: false, parameters, ports: [] };
@@ -90,12 +94,7 @@ const session = {
     node("headphones", "physicalOutput", { endpointId: "headphones" }),
     node("game-out", "physicalOutput", { endpointId: "cable-in" }),
   ],
-  edges: [
-    edge("mic", "chain"),
-    edge("chain", "voice-out"),
-    edge("discord", "mix"),
-    edge("mix", "headphones"),
-  ],
+  edges: [edge("mic", "chain"), edge("chain", "voice-out"), edge("discord", "mix"), edge("mix", "headphones")],
 } as unknown as Session;
 
 describe("device usage", () => {
@@ -120,12 +119,19 @@ describe("device usage", () => {
     expect(knownAppOf("ow-obs.exe")).toBeNull();
   });
 
-  it("lists an app's active devices before idle ones", () => {
+  it("judges only active sessions, not devices an app used before", () => {
     const use = appDevices(
       [app("Discord.exe", [plays("headphones", false)]), app("Discord.exe", [plays("cable-in")])],
       "discord",
     );
-    expect(use).toEqual({ running: true, capture: [], render: ["cable-in", "headphones"] });
+    expect(use).toEqual({ running: true, capture: [], render: ["cable-in"] });
+    // The stale headphone session must not read as "heard twice".
+    const check = discordCheck(
+      session,
+      [app("Discord.exe", [records("cable-a-out"), plays("headphones", false), plays("cable-in")])],
+      devices,
+    );
+    expect(check.state).toBe("ready");
   });
 });
 
@@ -148,11 +154,7 @@ describe("cables", () => {
 
 describe("Discord check", () => {
   it("is ready on the owner's working setup", () => {
-    const check = discordCheck(
-      session,
-      [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])],
-      devices,
-    );
+    const check = discordCheck(session, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])], devices);
     expect(check.state).toBe("ready");
     expect(check.rows.map((row) => [row.id, row.state, row.deviceName])).toEqual([
       ["microphone", "ready", "CABLE-A Output (VB-Audio Virtual Cable A)"],
@@ -161,11 +163,7 @@ describe("Discord check", () => {
   });
 
   it("names the 16ch speaker that blocked Game Sound Out on 2026-10-03", () => {
-    const check = discordCheck(
-      session,
-      [app("Discord.exe", [records("cable-a-out"), plays("cable-in-16")])],
-      devices,
-    );
+    const check = discordCheck(session, [app("Discord.exe", [records("cable-a-out"), plays("cable-in-16")])], devices);
     expect(check.state).toBe("check");
     const speaker = check.rows.find((row) => row.id === "speaker")!;
     expect(speaker.state).toBe("check");
@@ -180,6 +178,15 @@ describe("Discord check", () => {
     expect(message("mic").message).toContain("without AudioRouter's effects");
     expect(message("cable-a-out-16").message).toContain("16-channel");
     expect(message("cable-out").message).toContain("AudioRouter sends your processed voice to");
+  });
+
+  it("warns when the call's audio would come back as Discord's microphone", () => {
+    const check = discordCheck(session, [app("Discord.exe", [records("cable-a-out"), plays("cable-a-in")])], devices);
+    expect(check.rows[1]).toMatchObject({ state: "check" });
+    expect(check.rows[1].message).toContain("hear themselves");
+    // Without a session the same loop is still found from Discord's own devices.
+    const alone = discordCheck(null, [app("Discord.exe", [records("cable-out"), plays("cable-in")])], devices);
+    expect(alone.rows[1].message).toContain("hear themselves");
   });
 
   it("warns when Discord is heard twice in the headphones", () => {

@@ -70,25 +70,33 @@ export function deviceUsage(applications: readonly ApplicationInfo[]): Map<strin
     }
   }
   for (const uses of usage.values())
-    uses.sort((left, right) => Number(right.appId !== null) - Number(left.appId !== null) || left.label.localeCompare(right.label));
+    uses.sort(
+      (left, right) =>
+        Number(right.appId !== null) - Number(left.appId !== null) || left.label.localeCompare(right.label),
+    );
   return usage;
 }
 
-/** The devices one app uses, split by direction. */
+/**
+ * The devices one app is using right now, split by direction. Only active
+ * sessions count: Discord keeps idle sessions on devices it used before
+ * (seen on the owner's PC, 2026-10-23), and judging those would raise false
+ * warnings.
+ */
 export function appDevices(
   applications: readonly ApplicationInfo[],
   appId: KnownAppId,
 ): { running: boolean; capture: string[]; render: string[] } {
   const mine = applications.filter((application) => knownAppOf(application.executable) === appId);
-  const pick = (direction: "capture" | "render") => {
-    const ids = mine.flatMap((application) =>
-      (application.audioEndpoints ?? []).filter((endpoint) => endpoint.direction === direction),
-    );
-    // Active sessions first: Discord keeps idle sessions on old devices.
-    const active = ids.filter((endpoint) => endpoint.active).map((endpoint) => endpoint.deviceId);
-    const idle = ids.filter((endpoint) => !endpoint.active).map((endpoint) => endpoint.deviceId);
-    return [...new Set([...active, ...idle])];
-  };
+  const pick = (direction: "capture" | "render") => [
+    ...new Set(
+      mine.flatMap((application) =>
+        (application.audioEndpoints ?? [])
+          .filter((endpoint) => endpoint.direction === direction && endpoint.active)
+          .map((endpoint) => endpoint.deviceId),
+      ),
+    ),
+  ];
   return { running: mine.length > 0, capture: pick("capture"), render: pick("render") };
 }
 
@@ -228,6 +236,12 @@ export function discordCheck(
     };
   const rows: AppCheckRow[] = [];
   const voice = session ? voiceCableOutputs(session, devices) : [];
+  const sessionInputs = session
+    ? session.nodes
+        .filter((node) => node.kind === "physicalInput")
+        .map((node) => endpointOf(session, node.id))
+        .filter((id): id is string => id !== null)
+    : [];
 
   const microphone = use.capture[0] ?? null;
   const microphoneName = microphone ? nameOf(devices, microphone) : null;
@@ -250,9 +264,7 @@ export function discordCheck(
   } else if (voice.length > 0) {
     const expected = voice[0];
     const twin = sixteenChannelTwin(expected, devices);
-    const usesRawMic = session?.nodes.some(
-      (node) => node.kind === "physicalInput" && endpointOf(session, node.id) === microphone,
-    );
+    const usesRawMic = sessionInputs.includes(microphone);
     rows.push({
       id: "microphone",
       label: "Microphone",
@@ -292,6 +304,7 @@ export function discordCheck(
         .map((id) => devices.find((device) => device.id === id))
         .find((device) => device && sixteenChannelTwin(device, devices)?.id === speaker)
     : undefined;
+  const speakerPartner = speakerDevice ? cablePartner(speakerDevice, devices) : null;
   if (speaker === null) {
     rows.push({
       id: "speaker",
@@ -299,6 +312,19 @@ export function discordCheck(
       deviceName: null,
       state: "info",
       message: "Discord is not playing sound yet.",
+    });
+  } else if (
+    speakerPartner !== null &&
+    (speakerPartner.id === microphone || voice.some((device) => device.id === speakerPartner.id))
+  ) {
+    // The call's audio would come back as Discord's own microphone.
+    rows.push({
+      id: "speaker",
+      label: "Speaker",
+      deviceName: speakerName,
+      state: "check",
+      message:
+        "Discord plays into the cable that carries your voice, so people in your call hear themselves. Choose another output for Discord.",
     });
   } else if (busyTwin) {
     rows.push({
@@ -324,8 +350,7 @@ export function discordCheck(
       label: "Speaker",
       deviceName: speakerName,
       state: "ready",
-      message:
-        captureNodes.length > 0 ? "AudioRouter captures Discord from the app itself." : "Discord plays here.",
+      message: captureNodes.length > 0 ? "AudioRouter captures Discord from the app itself." : "Discord plays here.",
     });
   }
 
