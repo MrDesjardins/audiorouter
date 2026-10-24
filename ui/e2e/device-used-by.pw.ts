@@ -116,7 +116,27 @@ test("device nodes name the apps on their device without moving anything", async
   await expect(footer).toHaveText("Used by Discord");
   await expect(footer).toHaveAttribute("title", "Discord records from CABLE-A Output (VB-Audio Virtual Cable A)");
   await expect(page.getByTestId("rf__node-headphones").locator(".node-used-by")).toHaveText("Used by Discord");
-  await expect(page.getByTestId("rf__node-mic").locator(".node-used-by")).toHaveText("No app using it right now");
+  await expect(page.getByTestId("rf__node-mic").locator(".node-used-by")).toHaveText("No app using it");
+  // The footer never widens the card or pushes its ports out.
+  const micCard = page.getByTestId("rf__node-mic");
+  await micCard.screenshot({ path: testInfo.outputPath("device-used-by-mic-card.png") });
+  const cardBox = (await micCard.boundingBox())!;
+  const footerBox = (await micCard.locator(".node-used-by").boundingBox())!;
+  expect(footerBox.x + footerBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+  // A long list of apps on the microphone keeps the card's width.
+  const many = ["Discord.exe", "obs64.exe", "Spotify.exe", "RainbowSix.exe", "chrome.exe"].map((executable, index) => ({
+    ...discord([{ deviceId: "mic", direction: "capture", active: true }]),
+    processId: 20 + index,
+    executable,
+  }));
+  await report(page, many);
+  const micFooter = micCard.locator(".node-used-by");
+  await expect(micFooter).toContainText("Discord and OBS skip your processing");
+  expect((await micCard.boundingBox())!.width).toBe(cardBox.width);
+  const longBox = (await micFooter.boundingBox())!;
+  expect(longBox.x + longBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+  await micCard.screenshot({ path: testInfo.outputPath("device-used-by-mic-card-long.png") });
+  await report(page, onCable);
 
   await voice.click();
   const section = page.locator(".device-apps");

@@ -231,7 +231,7 @@ export function nodeDeviceUsers(
     }
     const labels = [...new Set(uses.map((use) => use.label))];
     result.set(node.id, {
-      summary: alert ?? (labels.length > 0 ? `Used by ${labels.join(" · ")}` : "No app using it right now"),
+      summary: alert ?? (labels.length > 0 ? `Used by ${labels.join(" · ")}` : "No app using it"),
       uses,
       warning,
     });
