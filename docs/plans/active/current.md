@@ -26,6 +26,14 @@ pass (84 tests). The integration plan records missing backend failure-path
 tests as well as the compiled/native/browser checks still on hold; this is
 not exhaustive verification or a closed O1/O2 gate.
 
+Owner approved another review and opening a PR while still playing:
+[draft #67](https://github.com/MrDesjardins/audiorouter/pull/67), branch
+`docs/obs-discord-integration`, code commit `5de6565f`. Final review adds
+worker shutdown, bounded file reads/connection queues, parallel-write
+guards and backend failure-path tests. 86 focused UI tests and local
+format/lint/docs/site checks pass. CI is running remotely; its current head
+and results are on the PR. Keep it unmerged for the owner's manual test.
+
 ## Review follow-ups R1–R7 and a second review — 2026-10-23, owner request
 
 The owner asked to improve the `site/compare.html` wording, fix every

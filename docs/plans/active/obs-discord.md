@@ -263,6 +263,15 @@ connected-server precedence made that test fail. No hardware/OBS writes,
 local Rust compile/Clippy/typecheck or Edge run are claimed. CI must supply
 those automated results; the copied-profile and real-device gates stay open.
 
+PR opened at the owner's explicit request: [#67](https://github.com/MrDesjardins/audiorouter/pull/67),
+draft, branch `docs/obs-discord-integration`, reviewed code commit
+`5de6565f456a558e01cd00c36b80e7927077df08`, base main `7671fc56`.
+Initial [CI run](https://github.com/MrDesjardins/audiorouter/actions/runs/40063148434)
+started; no passing CI claim yet. Current head/check state is linked from
+the PR. No merge or auto-merge: owner will perform manual acceptance first.
+Next: monitor the PR's Windows/Edge and contract checks and repair failures
+without compiling locally while the owner plays.
+
 ### Coverage audit — 2026-10-23, owner asks whether all bugs are verified
 
 Scope SEC-15/UI-26: audit actual test cases against state/identity boundaries;
