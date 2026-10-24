@@ -214,6 +214,43 @@ owner is not in a game, then the attended OBS check on a copied profile.
 
 ## Progress
 
+### Discord out of a call, and the site screenshot — 2026-10-23, owner request
+
+Manual test on the owner's PC: the Discord card said "Waiting" while
+Discord was open but not in a voice channel, although its microphone was
+CABLE-A Output. `apps.list` showed every Discord session inactive: a
+capture session on CABLE-A Output and idle render sessions on CABLE,
+CABLE-B and the Focusrite. In a call the card showed Ready, as designed.
+
+Owner asked to judge "the last call" and to say the card waits for a
+voice channel. Change (`ui/src/appUsage.ts`):
+
+- `appDevices` also returns idle-only capture and render devices.
+- Out of a call, idle sessions can only confirm, never warn. The
+  microphone is Ready ("Seen in Discord's last call") only when every idle
+  capture is a voice cable; a stale raw-mic session beside it leaves the
+  row waiting. The speaker is judged only when exactly one idle output
+  exists and it would be Ready (the owner's three idle outputs stay
+  "Checked when you join a voice channel in Discord").
+- Summaries: "Ready, from Discord's last call. Join a voice channel to
+  check again." and "Waiting for you to join a voice channel in Discord".
+- Tests: `appUsage.test.ts` (owner's idle sessions, single idle output,
+  mixed idle microphones, idle "heard twice" output not judged).
+
+Site: the owner's Apps tab screenshot (`site/assets/apps-discord-obs.png`)
+replaces the hero diagram on `apps.html`; the page describes the OBS card
+as it now works (the earlier "in development" choice is superseded by the
+owner's request; the release note still says the Apps tab ships after
+0.0.21), and the by-hand OBS steps cover a headset mix that includes the
+voice (stop the sidetone, or record a game cable plus Application Audio
+Capture).
+
+Checks: `npm --prefix ui test` 78 files / 719 tests passed; typecheck,
+format and lint clean (0 errors; the 25 warnings are pre-existing, none in
+`appUsage.ts`); release shell rebuilt with the change. Headless Edge
+screenshots of `apps.html` at 1366 px; the owner's screenshot shows the
+new card text in the built app.
+
 ### Final review and PR — 2026-10-23, owner authorized
 
 Owner: "another round of review ... I am still playing ... Then, make a PR.

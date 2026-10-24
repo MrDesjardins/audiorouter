@@ -125,7 +125,13 @@ describe("device usage", () => {
       [app("Discord.exe", [plays("headphones", false)]), app("Discord.exe", [plays("cable-in")])],
       "discord",
     );
-    expect(use).toEqual({ running: true, capture: [], render: ["cable-in"] });
+    expect(use).toEqual({
+      running: true,
+      capture: [],
+      render: ["cable-in"],
+      idleCapture: [],
+      idleRender: ["headphones"],
+    });
     // The stale headphone session must not read as "heard twice".
     const check = discordCheck(
       session,
@@ -292,6 +298,54 @@ describe("Discord check", () => {
     };
     expect(sessionInvolvesDiscord(plain, devices)).toBe(false);
     expect(sessionInvolvesDiscord(null, devices)).toBe(false);
+  });
+
+  it("confirms the last call's devices out of a call, and says to join a voice channel", () => {
+    // The owner's Discord out of a call on 2026-10-23: every session idle,
+    // with older outputs kept beside the one the call used.
+    const idle = discordCheck(
+      session,
+      [
+        app("Discord.exe", [records("cable-a-out", false), plays("cable-in", false), plays("headphones", false)]),
+        app("Discord.exe", [plays("headphones", false)]),
+      ],
+      devices,
+    );
+    expect(idle.state).toBe("ready");
+    expect(idle.summary).toContain("last call");
+    expect(idle.rows[0]).toMatchObject({ state: "ready", deviceName: "CABLE-A Output (VB-Audio Virtual Cable A)" });
+    expect(idle.rows[0].message).toContain("last call");
+    // Two idle outputs: Windows does not say which one the call used.
+    expect(idle.rows[1]).toMatchObject({ state: "info", deviceName: null });
+    expect(idle.rows[1].message).toContain("voice channel");
+
+    const oneOutput = discordCheck(
+      session,
+      [app("Discord.exe", [records("cable-a-out", false), plays("cable-in", false)])],
+      devices,
+    );
+    expect(oneOutput.rows[1]).toMatchObject({ state: "ready", deviceName: "CABLE Input (VB-Audio Virtual Cable)" });
+    expect(oneOutput.rows[1].message).toContain("last call");
+  });
+
+  it("never warns from idle sessions", () => {
+    // A raw-mic session beside the cable may be the newer choice: wait for a call.
+    const mixed = discordCheck(
+      session,
+      [app("Discord.exe", [records("mic", false), records("cable-a-out", false), plays("headphones", false)])],
+      devices,
+    );
+    expect(mixed.state).toBe("unknown");
+    expect(mixed.summary).toBe("Waiting for you to join a voice channel in Discord");
+    expect(mixed.rows.map((row) => row.state)).toEqual(["info", "info"]);
+    // An idle output that would be heard twice is not judged either.
+    const heardTwice = discordCheck(
+      session,
+      [app("Discord.exe", [records("cable-a-out", false), plays("headphones", false)])],
+      devices,
+    );
+    expect(heardTwice.state).toBe("ready");
+    expect(heardTwice.rows[1].state).toBe("info");
   });
 
   it("never judges what Windows does not report", () => {

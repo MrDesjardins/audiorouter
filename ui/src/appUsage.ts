@@ -78,26 +78,36 @@ export function deviceUsage(applications: readonly ApplicationInfo[]): Map<strin
 }
 
 /**
- * The devices one app is using right now, split by direction. Only active
- * sessions count: Discord keeps idle sessions on devices it used before
- * (seen on the owner's PC, 2026-10-23), and judging those would raise false
+ * The devices one app is using right now, split by direction, and the
+ * devices it only keeps idle sessions on. Discord keeps idle sessions on
+ * devices it used before (seen on the owner's PC, 2026-10-23): out of a
+ * call, its microphone and speaker are idle, but so are older devices. Idle
+ * devices may confirm a setting; judging them as wrong would raise false
  * warnings.
  */
 export function appDevices(
   applications: readonly ApplicationInfo[],
   appId: KnownAppId,
-): { running: boolean; capture: string[]; render: string[] } {
+): { running: boolean; capture: string[]; render: string[]; idleCapture: string[]; idleRender: string[] } {
   const mine = applications.filter((application) => knownAppOf(application.executable) === appId);
-  const pick = (direction: "capture" | "render") => [
+  const pick = (direction: "capture" | "render", active: boolean) => [
     ...new Set(
       mine.flatMap((application) =>
         (application.audioEndpoints ?? [])
-          .filter((endpoint) => endpoint.direction === direction && endpoint.active)
+          .filter((endpoint) => endpoint.direction === direction && endpoint.active === active)
           .map((endpoint) => endpoint.deviceId),
       ),
     ),
   ];
-  return { running: mine.length > 0, capture: pick("capture"), render: pick("render") };
+  const capture = pick("capture", true);
+  const render = pick("render", true);
+  return {
+    running: mine.length > 0,
+    capture,
+    render,
+    idleCapture: pick("capture", false).filter((id) => !capture.includes(id)),
+    idleRender: pick("render", false).filter((id) => !render.includes(id)),
+  };
 }
 
 const VB_CABLE = /\((VB-Audio[^)]*)\)\s*$/i;
@@ -335,13 +345,28 @@ export function discordCheck(
   // mic test); judge the one that matches when any does.
   const microphone = use.capture.find((id) => voice.some((device) => device.id === id)) ?? use.capture[0] ?? null;
   const microphoneName = microphone ? nameOf(devices, microphone) : null;
-  if (microphone === null) {
+  // Out of a call, an idle voice cable confirms the last call's microphone,
+  // but only when every idle microphone is one: a stale raw-mic session could
+  // be the newer choice, and Windows does not say which came last.
+  const lastMicrophone =
+    use.idleCapture.length > 0 && use.idleCapture.every((id) => voice.some((device) => device.id === id))
+      ? use.idleCapture[0]
+      : null;
+  if (microphone === null && lastMicrophone !== null) {
+    rows.push({
+      id: "microphone",
+      label: "Microphone",
+      deviceName: nameOf(devices, lastMicrophone),
+      state: "ready",
+      message: `Carries your processed voice. ${LAST_CALL}`,
+    });
+  } else if (microphone === null) {
     rows.push({
       id: "microphone",
       label: "Microphone",
       deviceName: null,
       state: "info",
-      message: "Discord is not recording yet. Join a voice channel to check its microphone.",
+      message: "Checked when you join a voice channel in Discord.",
     });
   } else if (voice.some((device) => device.id === microphone)) {
     rows.push({
@@ -382,8 +407,6 @@ export function discordCheck(
     });
   }
 
-  const speaker = use.render[0] ?? null;
-  const speakerName = speaker ? nameOf(devices, speaker) : null;
   const captureNodes = session ? capturesApp(session, "discord") : [];
   const discordOutputs = session ? outputsReachedFrom(session, captureNodes) : [];
   const sessionOutputs = session
@@ -392,66 +415,70 @@ export function discordCheck(
         .map((node) => endpointOf(session, node.id))
         .filter((id): id is string => id !== null)
     : [];
-  const speakerDevice = speaker ? devices.find((device) => device.id === speaker) : undefined;
-  const busyTwin = speakerDevice
-    ? sessionOutputs
-        .map((id) => devices.find((device) => device.id === id))
-        .find((device) => device && sixteenChannelTwin(device, devices)?.id === speaker)
-    : undefined;
-  const speakerPartner = speakerDevice ? cablePartner(speakerDevice, devices) : null;
-  if (speaker === null) {
-    rows.push({
-      id: "speaker",
-      label: "Speaker",
-      deviceName: null,
-      state: "info",
-      message: "Discord is not playing sound yet.",
-    });
-  } else if (
-    speakerPartner !== null &&
-    (speakerPartner.id === microphone || voice.some((device) => device.id === speakerPartner.id))
-  ) {
-    // The call's audio would come back as Discord's own microphone.
-    rows.push({
-      id: "speaker",
-      label: "Speaker",
-      deviceName: speakerName,
-      state: "check",
-      message:
-        "Discord plays into the cable that carries your voice, so people in your call hear themselves. Choose another output for Discord.",
-    });
-  } else if (busyTwin) {
-    rows.push({
-      id: "speaker",
-      label: "Speaker",
-      deviceName: speakerName,
-      state: "check",
-      message: `This is the 16-channel side of ${busyTwin.name}, which AudioRouter plays to. Windows lets only one of them be used, so choose ${busyTwin.name}.`,
-      expectedName: busyTwin.name,
-    });
-  } else if (captureNodes.length > 0 && discordOutputs.includes(speaker)) {
-    rows.push({
-      id: "speaker",
-      label: "Speaker",
-      deviceName: speakerName,
-      state: "check",
-      message:
-        "AudioRouter already sends Discord here, and Discord also plays here itself, so you hear it twice. Choose a virtual cable as Discord's output.",
-    });
-  } else {
-    rows.push({
-      id: "speaker",
-      label: "Speaker",
-      deviceName: speakerName,
+  const judgeSpeaker = (speaker: string): AppCheckRow => {
+    const speakerName = nameOf(devices, speaker);
+    const speakerDevice = devices.find((device) => device.id === speaker);
+    const busyTwin = speakerDevice
+      ? sessionOutputs
+          .map((id) => devices.find((device) => device.id === id))
+          .find((device) => device && sixteenChannelTwin(device, devices)?.id === speaker)
+      : undefined;
+    const speakerPartner = speakerDevice ? cablePartner(speakerDevice, devices) : null;
+    const base = { id: "speaker", label: "Speaker", deviceName: speakerName } as const;
+    if (
+      speakerPartner !== null &&
+      (speakerPartner.id === (microphone ?? lastMicrophone) || voice.some((device) => device.id === speakerPartner.id))
+    )
+      // The call's audio would come back as Discord's own microphone.
+      return {
+        ...base,
+        state: "check",
+        message:
+          "Discord plays into the cable that carries your voice, so people in your call hear themselves. Choose another output for Discord.",
+      };
+    if (busyTwin)
+      return {
+        ...base,
+        state: "check",
+        message: `This is the 16-channel side of ${busyTwin.name}, which AudioRouter plays to. Windows lets only one of them be used, so choose ${busyTwin.name}.`,
+        expectedName: busyTwin.name,
+      };
+    if (captureNodes.length > 0 && discordOutputs.includes(speaker))
+      return {
+        ...base,
+        state: "check",
+        message:
+          "AudioRouter already sends Discord here, and Discord also plays here itself, so you hear it twice. Choose a virtual cable as Discord's output.",
+      };
+    return {
+      ...base,
       state: "ready",
       message: captureNodes.length > 0 ? "AudioRouter captures Discord from the app itself." : "Discord plays here.",
-    });
+    };
+  };
+  if (use.render.length > 0) rows.push(judgeSpeaker(use.render[0]));
+  else {
+    // Out of a call, trust a single idle output only when it would be ready;
+    // Discord also leaves idle sessions on outputs it no longer uses.
+    const last = use.idleRender.length === 1 ? judgeSpeaker(use.idleRender[0]) : null;
+    rows.push(
+      last?.state === "ready"
+        ? { ...last, message: `${last.message} ${LAST_CALL}` }
+        : {
+            id: "speaker",
+            label: "Speaker",
+            deviceName: null,
+            state: "info",
+            message: "Checked when you join a voice channel in Discord.",
+          },
+    );
   }
 
   const problems = rows.filter((row) => row.state === "check").length;
   // A working speaker alone cannot confirm that the processed microphone
   // reaches Discord (for example when its cable output is disabled).
   const confirmed = rows.some((row) => row.id === "microphone" && row.state === "ready");
+  const inCall = use.capture.length > 0;
   return {
     appId: "discord",
     state: problems > 0 ? "check" : confirmed ? "ready" : "unknown",
@@ -459,11 +486,18 @@ export function discordCheck(
       problems > 0
         ? `${problems} setting${problems === 1 ? "" : "s"} to check`
         : confirmed
-          ? "Ready"
-          : "Waiting for Discord to use audio",
+          ? inCall
+            ? "Ready"
+            : "Ready, from Discord's last call. Join a voice channel to check again."
+          : inCall
+            ? "Waiting for your voice to reach a virtual cable"
+            : "Waiting for you to join a voice channel in Discord",
     rows,
   };
 }
+
+/** Added to a row judged from an idle session, outside a call. */
+const LAST_CALL = "Seen in Discord's last call.";
 
 /** The check shown before the first answer arrives: the same two rows, so nothing moves. */
 export function pendingDiscordCheck(): AppCheck {
