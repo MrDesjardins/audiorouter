@@ -114,6 +114,26 @@ async function renderReady(element: Parameters<typeof render>[0]) {
 }
 
 describe("session refresh and playback regressions", () => {
+  it("opens Apps after a delayed initial snapshot without changing hook order", async () => {
+    const { backend } = await fixture();
+    const initial = await backend.snapshot();
+    let resolve!: (value: typeof initial) => void;
+    backend.snapshot.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    render(<App backend={backend} />);
+    expect(screen.queryByRole("tab", { name: "Apps" })).toBeNull();
+    await act(async () => {
+      resolve(initial);
+    });
+    const apps = await screen.findByRole("tab", { name: "Apps" });
+    fireEvent.click(apps);
+    expect(screen.getByRole("heading", { name: "Discord" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "OBS Studio" })).toBeTruthy();
+  });
+
   it("rebinds a stopped native worker to the selected endpoints before Play", async () => {
     const { backend } = await fixture();
     window.localStorage.setItem(

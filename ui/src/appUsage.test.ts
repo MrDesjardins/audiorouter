@@ -168,6 +168,70 @@ describe("cables", () => {
 });
 
 describe("Discord check", () => {
+  it("does not keep a Ready badge after the endpoint inventory fails", () => {
+    const check = discordCheck(
+      session,
+      [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])],
+      devices,
+      true,
+    );
+    expect(check.state).toBe("unknown");
+    expect(check.summary).toContain("Could not refresh Discord");
+  });
+  it.each(["mic", "voice-out"])("does not call a disabled %s voice path ready", (id) => {
+    const silent = {
+      ...session,
+      nodes: session.nodes.map((item) => (item.id === id ? { ...item, enabled: false } : item)),
+    };
+    expect(voiceCableOutputs(silent, devices)).toEqual([]);
+    const check = discordCheck(silent, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])], devices);
+    expect(check.rows[0].state).not.toBe("ready");
+    expect(check.state).not.toBe("ready");
+  });
+
+  it("follows only the selected switch ports, and bypasses ordinary disabled effects dry", () => {
+    const switched = {
+      ...session,
+      nodes: [...session.nodes, node("switch", "outputSwitch", { selected: "a" })],
+      edges: [
+        edge("mic", "switch"),
+        { ...edge("switch", "voice-out"), sourcePort: "b" },
+        { ...edge("switch", "headphones"), sourcePort: "a" },
+      ],
+    } as unknown as Session;
+    expect(voiceCableOutputs(switched, devices)).toEqual([]);
+    const selected = {
+      ...switched,
+      nodes: switched.nodes.map((item) => (item.id === "switch" ? { ...item, parameters: { selected: "b" } } : item)),
+    };
+    expect(voiceCableOutputs(selected, devices).map((item) => item.id)).toEqual(["cable-a-out"]);
+    const dry = {
+      ...session,
+      nodes: session.nodes.map((item) => (item.id === "chain" ? { ...item, enabled: false } : item)),
+    };
+    expect(voiceCableOutputs(dry, devices).map((item) => item.id)).toEqual(["cable-a-out"]);
+  });
+
+  it("does not follow an unselected Input Switch input or a disabled Mixer", () => {
+    const switched = {
+      ...session,
+      nodes: [
+        node("mic", "physicalInput", { endpointId: "mic" }),
+        node("switch", "inputSwitch", { selected: "a" }),
+        node("voice-out", "physicalOutput", { endpointId: "cable-a-in" }),
+      ],
+      edges: [{ ...edge("mic", "switch"), destinationPort: "b" }, edge("switch", "voice-out")],
+    } as unknown as Session;
+    expect(voiceCableOutputs(switched, devices)).toEqual([]);
+    const silent = {
+      ...session,
+      nodes: session.nodes.map((item) =>
+        item.id === "chain" ? { ...item, kind: "mixer" as const, enabled: false } : item,
+      ),
+    };
+    expect(voiceCableOutputs(silent, devices)).toEqual([]);
+  });
+
   it("is ready on the owner's working setup", () => {
     const check = discordCheck(session, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])], devices);
     expect(check.state).toBe("ready");

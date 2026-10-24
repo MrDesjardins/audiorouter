@@ -322,7 +322,10 @@ audio readiness and explains the exact endpoint and authorization steps.
 - **UI-26 — Apps (DEC-22).** A right-sidebar **Apps** tab compares what
   Discord uses (CAP-15) with the session.
   - **Microphone:** the expected device is the recording side of a virtual
-    cable the microphone path reaches.
+    cable the microphone path reaches. Follow the selected switch ports;
+    disabled/bypassed sources, sinks and Mixers cannot confirm that path.
+    Disabled compatible effects retain their dry path. A working speaker
+    alone cannot mark the microphone setup Ready.
   - **Speaker problems:**
     - The 16-channel twin of a cable the session plays to.
     - The cable that carries the voice, so the call would hear itself.
@@ -335,7 +338,10 @@ audio readiness and explains the exact endpoint and authorization steps.
     - Only active sessions are judged.
     - The card keeps two rows in every state.
   - **Recommended settings:** Discord noise suppression, automatic gain
-    control and echo cancellation are listed as advice, not read.
+    control and echo cancellation are listed as conditional advice, not read:
+    None when using Denoise, AGC Off when using Compressor, and echo
+    cancellation Off only with headphones. A failed inventory refresh marks
+    the retained check Waiting, including its top-bar chip.
   - **Top-bar strip:** shows a fixed-width Discord chip with icon and word
     when the session captures Discord or sends the microphone to a virtual
     cable. Whether it shows depends only on the session (UI-17).
@@ -347,23 +353,43 @@ audio readiness and explains the exact endpoint and authorization steps.
     Discord, other session sources), with the problem in words.
     - **Problems:** the raw microphone instead of the voice cable; the
       16-channel twin of the voice cable; an output capture (Desktop
-      Audio) that also plays the voice, so the voice is on the stream
-      twice. Muted sources are not judged.
+      Audio) that also carries voice on an overlapping OBS audio track.
+      Duplicate voice requires live facts: both sources active in Program,
+      explicitly unmuted, not Monitor Only, and sharing an enabled track.
+      Unknown activity, mute, monitoring or track facts and saved-file
+      inventories never establish duplication. This identifies duplication
+      on an OBS track, not which track the stream uses.
+      A default recording device resolves to Windows' communications role;
+      a default playback device resolves to its console role, as OBS does.
     - **States:** not installed; closed (the last saved scene collection,
       read only, with no fix); running but not connected (three steps to
       turn on OBS's WebSocket server, then **Connect to OBS**; a password
       field appears only when OBS refuses or asks for one); connected.
     - **Fix in OBS** (connected only): a dialog lists one ticked checkbox
-      per fix. AudioRouter previews exactly the ticked changes, then
-      applies that preview; an error keeps the dialog open with the
+      per fix. Proposals and selections remain fixed while the dialog is
+      open; polling cannot reassign a checkbox to a different source.
+      AudioRouter previews exactly the ticked changes, verifies their
+      starting values against the opened dialog, then applies that preview.
+      A changed starting value requires cancel/check again; a disconnected
+      OBS, collection change or observed replacement/removal of a proposed
+      source cancels any pending preview. An error keeps the dialog open with the
       reason. **Restore previous OBS settings** is enabled only while the
       last change can be restored. **Disconnect** forgets the password and
       the restore list; after Connect, AudioRouter reconnects by itself
       when OBS restarts.
+      Apply and Restore recheck the scene collection and source UUID;
+      renamed or replaced sources are left unchanged. A source without a
+      reported UUID is read-only and has no automated fix.
     - **Refresh:** status every 2 s while the tab is open, 15 s elsewhere,
-      400 ms while connecting or changing; OBS is read again on window
-      focus and when the tab opens. The last good status is kept through
-      a failure, and the note line keeps its height (UI-17).
+      400 ms while connecting or changing, with one status read in flight.
+      OBS itself is inspected every 10 s on the Apps tab and 15 s elsewhere
+      while visible and idle, on window focus and when the tab opens.
+      Background inspections pause during a connection/change. Timers and
+      late responses cannot affect an unmounted view or another backend.
+      A failed status read keeps the last facts, marks Waiting and disables
+      changes until a successful read. Restore rejections and partial-change
+      counts remain visible in a fixed four-line note slot; longer notes
+      scroll (UI-17). A previous success cannot hide a new rejection.
     - **Top-bar strip:** an OBS chip when the session has a voice cable.
 
 While a connected backend's initial snapshot is pending, show loading status

@@ -1,4 +1,4 @@
-import type { ApplicationInfo, DeviceListItem, Session } from "@audiorouter/contracts";
+import type { ApplicationInfo, DeviceListItem, Node, Session } from "@audiorouter/contracts";
 
 /**
  * Which apps use which audio devices, from the backend's read-only session
@@ -137,13 +137,50 @@ export function sixteenChannelTwin(device: DeviceListItem, devices: readonly Dev
   );
 }
 
+const SOURCES_AND_SILENT_BYPASSES: readonly Node["kind"][] = [
+  "physicalInput",
+  "applicationCapture",
+  "endpointLoopback",
+  "audioFile",
+  "testSignal",
+  "networkReceive",
+  "virtualRenderSource",
+  "physicalOutput",
+  "virtualCaptureSink",
+  "mixer",
+  "inputSwitch",
+  "outputSwitch",
+];
+
+/** Steady-state signal reachability, not simply the saved wire topology.
+ * Ordinary disabled effects pass dry; sources, sinks and mixers silence.
+ * The backend remains authoritative for runtime readiness and failures.
+ */
+function passesSignal(node: Node): boolean {
+  if (SOURCES_AND_SILENT_BYPASSES.includes(node.kind) && (!node.enabled || node.bypass)) return false;
+  return node.kind !== "mute" || !node.enabled || node.bypass || node.parameters.muted !== true;
+}
+
 function downstream(session: Session, start: readonly string[]): Set<string> {
-  const reached = new Set(start);
-  const queue = [...start];
+  const nodes = new Map(session.nodes.map((node) => [node.id, node]));
+  const reached = new Set(
+    start.filter((id) => {
+      const node = nodes.get(id);
+      return node && passesSignal(node);
+    }),
+  );
+  const queue = [...reached];
   while (queue.length > 0) {
-    const node = queue.shift()!;
+    const id = queue.shift()!;
+    const source = nodes.get(id)!;
     for (const edge of session.edges) {
-      if (!edge.enabled || edge.sourceNode !== node || reached.has(edge.destinationNode)) continue;
+      if (!edge.enabled || edge.sourceNode !== id || reached.has(edge.destinationNode)) continue;
+      const destination = nodes.get(edge.destinationNode);
+      if (!destination || !passesSignal(destination)) continue;
+      if (source.kind === "outputSwitch" && edge.sourcePort !== (source.parameters.selected ?? "a")) continue;
+      if (destination.kind === "inputSwitch" && edge.destinationPort !== (destination.parameters.selected ?? "a"))
+        continue;
+      if (destination.kind === "mixer" && destination.parameters[`inputVolume:${id}`] === 0) continue;
       reached.add(edge.destinationNode);
       queue.push(edge.destinationNode);
     }
@@ -261,7 +298,12 @@ export function discordCheck(
   session: Session | null,
   applications: readonly ApplicationInfo[],
   devices: readonly DeviceListItem[],
+  stale = false,
 ): AppCheck {
+  if (stale) {
+    const previous = discordCheck(session, applications, devices);
+    return { ...previous, state: "unknown", summary: "Could not refresh Discord; showing the last check." };
+  }
   const use = appDevices(applications, "discord");
   // Always two rows, so the card keeps its size as Discord starts and stops (UI-17).
   if (!use.running)
@@ -407,7 +449,9 @@ export function discordCheck(
   }
 
   const problems = rows.filter((row) => row.state === "check").length;
-  const confirmed = rows.some((row) => row.state === "ready");
+  // A working speaker alone cannot confirm that the processed microphone
+  // reaches Discord (for example when its cable output is disabled).
+  const confirmed = rows.some((row) => row.id === "microphone" && row.state === "ready");
   return {
     appId: "discord",
     state: problems > 0 ? "check" : confirmed ? "ready" : "unknown",
@@ -436,7 +480,15 @@ export function pendingDiscordCheck(): AppCheck {
 
 /** Settings AudioRouter's own tools replace; shown as advice, never read. */
 export const DISCORD_RECOMMENDED_SETTINGS = [
-  { setting: "Noise suppression", value: "None", why: "AudioRouter's Denoise already cleans your voice." },
-  { setting: "Automatic gain control", value: "Off", why: "It fights the Compressor and changes your level." },
-  { setting: "Echo cancellation", value: "Off", why: "Use headphones; it can cut your voice." },
+  { setting: "Noise suppression", value: "None if using Denoise", why: "Avoid cleaning the same microphone twice." },
+  {
+    setting: "Automatic gain control",
+    value: "Off if using Compressor",
+    why: "Two level controls can fight each other.",
+  },
+  {
+    setting: "Echo cancellation",
+    value: "Off with headphones",
+    why: "Keep echo cancellation if your speakers can feed back into the microphone.",
+  },
 ] as const;

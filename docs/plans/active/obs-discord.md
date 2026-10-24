@@ -214,6 +214,218 @@ owner is not in a game, then the attended OBS check on a copied profile.
 
 ## Progress
 
+### Final review and PR — 2026-10-23, owner authorized
+
+Owner: "another round of review ... I am still playing ... Then, make a PR.
+I wont merge it and will perform the manual test but at least the CI will
+be done." This explicitly authorizes committing/pushing this reviewed branch
+and opening its PR. No merge, auto-merge, release, heavy local build or Edge
+run. Existing uncommitted repairs listed below are part of this request.
+
+Requirements SEC-15/UI-26/CAP-15/GRAPH-05/17. Review the complete branch diff,
+especially background-thread shutdown, source identity, restore/conflict and
+failure handling, credential boundaries, schemas and polling. Add focused
+backend failure-path regressions for remote Windows CI; run available
+lightweight UI/docs/format checks locally. Report exact branch/commit and
+local limitations, then open an unmerged PR and monitor/repair CI. Keep
+manual OBS/Discord and three-theme evidence open. Rollback: revert the
+feature commits; no database/session migration. Next: complete review and
+regressions before committing the scoped paths.
+
+Final review changes: stop/wake the OBS worker when its control-plane owner
+is dropped, without joining on the control thread; cancel requests before
+the next socket operation. Coalesce pending connection choices/passwords
+and refuse parallel apply/restore. Enforce file limits during the actual
+read from an opened handle, not only a path metadata check. Move installed
+folder detection off the control thread into the OBS snapshot; an identified
+connection is authoritative even before the application inventory catches
+up (including portable OBS). Failed Discord inventory reads now mark its
+badge Waiting too. Discord advice is conditional on using Denoise,
+Compressor or headphones; no assumed processing or speaker setup.
+
+Added Rust fake-server/pure regressions for no-auth servers, refused partial
+apply and restore, reconnect/restore after connection loss, preview expiry,
+parallel-change refusal, worker shutdown, bounded connection queues and file
+input bounds. These are queued for remote Windows CI, not locally executed.
+The earlier audit's missing-test list is historical; these cases now have
+test source. Lost acknowledgments after OBS has committed a write remain a
+protocol ambiguity; only acknowledged writes are reported as completed.
+
+Local pre-PR results (Windows, while the owner plays): 86/86 tests in the
+six focused UI/lifecycle files; `npm --prefix ui run format` and `lint`
+passed (0 errors, 25 pre-existing warnings) using the main checkout's
+installed CLI/config through PATH; no install/junction. Both Rust formatters
+and checks pass. Docs: 194 files / 1,072 links; website metadata/social:
+49 pages; guide checks: 37 pages, all pass. Complete diff reviewed against
+fresh `origin/main` 7671fc56. A contradictory not-installed fixture still
+claimed a connected server; corrected it to disconnected after the new
+connected-server precedence made that test fail. No hardware/OBS writes,
+local Rust compile/Clippy/typecheck or Edge run are claimed. CI must supply
+those automated results; the copied-profile and real-device gates stay open.
+
+### Coverage audit — 2026-10-23, owner asks whether all bugs are verified
+
+Scope SEC-15/UI-26: audit actual test cases against state/identity boundaries;
+add missing lightweight dialog/hook regressions and fix proven UI defects.
+Preserve prior work. Rust/native/browser checks remain on hold; a passing
+focused suite is not a completed integration gate. Rollback: revert only
+this audit's focused UI changes. Next: verify source replacement and
+collection-change cancellation, then report the untested backend failures.
+
+Result: a new same-name/source-replacement regression failed (the dialog
+stayed open after its source UUID changed). The dialog now rechecks the
+observed UUIDs of its proposals against those captured at open, and cancels
+when a source disappears or changes identity. The collection-switch/delayed
+preview regression already passed. After the fix, all six relevant UI
+files (`appUsage`, `obsUsage`, `ObsCard`, `useObsStatus`, `AppsPanel`, and the
+complete `App.lifecycle` suite) pass: 84/84, Windows Node/jsdom, one worker.
+Command: local Vitest/config below with all six includes; output
+`target/review-obs/ui-coverage-audit-tests.txt`. This supersedes the earlier
+focused counts, not the pending native evidence. No claim of exhaustive
+coverage or zero bugs.
+
+Coverage gaps: the fake-v5 Rust tests exist for authentication, inspection,
+apply/restore, source/collection identity and bounded parsing, but have not
+compiled or run here. Dedicated backend preview-expiry, refused/lost
+connection during partial apply, partial Restore and transport-reconnect
+regressions are not yet authored. Complete those cases before claiming
+SEC-15 coverage, then run Rust/Clippy, UI/contracts typecheck and drift,
+the complete UI suite and Edge/theme/layout checks after the hold. Real OBS
+Fix/Restore on a copied profile and Discord audio/endpoint checks remain
+manual integration evidence. Focused UI passes cannot substitute for them.
+
+### Before manual testing — 2026-10-23, owner request
+
+Scope: UI-26, UI-17 and SEC-15. Preserve the review repairs below and all
+other working-tree changes. Improve OBS inspection freshness and hook
+lifecycle (bounded single-flight reads and timer cleanup), freeze the repair
+dialog's selected proposals and verify its displayed starting values against
+the backend preview before applying, and make restore/partial-failure status
+accurate. No extra integration or external write is authorized by this work.
+
+Steps: reproduce with focused hook/card tests; repair ownership, polling and
+status paths; run lightweight Vitest, scoped lint/format and docs checks;
+inspect diff and record results. Builds, contracts drift and Edge stay on the
+owner's hold. Any changed UI still needs three-theme visual verification once
+the hold ends. Rollback: revert only this follow-up's scoped edits; no data
+migration. Next: add the regressions, then repair the proven behaviors.
+
+Implemented: one status read and one refresh acknowledgment in flight;
+periodic OBS inspections (10 s in Apps / 15 s elsewhere, visible and idle),
+timer cleanup and rejection of old-backend/unmounted callbacks. Stale facts
+are marked Waiting in the card/strip and changes are disabled. Dialog
+proposals/choices are captured at open; the returned preview must match
+their starting and target values before apply. A disconnected OBS or changed
+collection cancels a delayed preview. Restore rejection overrides an older
+success; partial failures report the completed count. Status notes use a
+fixed four-line scrollable slot; its visual/theme check is still pending.
+
+Additional startup defect found by scoped lint: the original Apps integration
+put three `useMemo` calls below AppContent's loading return. Moved them into
+the unconditional hook section. The new delayed-snapshot lifecycle test
+passes; temporarily restoring the old hook position made that exact test
+fail with `Rendered more hooks`, then the fixed source was restored in
+`finally`. Output: `target/review-obs/app-hook-order-before.txt`.
+
+Lightweight evidence: the first follow-up run reproduced five failures
+(periodic inspection, overlapping reads, unmounted timer, moving checkbox
+proposals and hidden Restore rejection). After repairs, the four focused
+files pass 55/55 tests, exit 0, in Windows jsdom/Node. Same local Vitest
+command/config as below, expanded to include `ObsCard.test.tsx` and
+`useObsStatus.test.tsx`; output `target/review-obs/ui-followup-tests.txt`.
+The four test paths can be passed as positional Vitest filters to reproduce
+that subset (the local config also now includes the lifecycle file).
+The new App lifecycle regression passed separately (1 passed, 17 unrelated
+tests skipped); no full lifecycle-suite result is claimed. This is React
+behavior evidence, not browser styling or native OBS evidence.
+
+Final checks: scoped ESLint passed (0 errors, the 11 existing App hook
+warnings); scoped Prettier passed; docs passed (194 files, 1,072 links);
+`git diff --check` passed. Reviewed the follow-up diff. The OBS card is also
+keyed by AudioRouter session so an open dialog cannot survive a session
+switch. No real OBS setting or Discord configuration was changed.
+
+Next: the already-pending Rust/contract and three-theme Edge checks, followed
+by the copied-profile manual Fix/Restore test when the owner is ready.
+
+### Review repairs — 2026-10-23, owner authorized
+
+Requirements: SEC-15, UI-26, GRAPH-05/17. Worktree clean at 012d319a.
+Objective: prevent cross-collection OBS writes, respect silent graph paths,
+resolve OBS default capture through the communications role, and judge
+duplicate voice only with confirmed active sources and overlapping tracks.
+
+Steps: add focused regressions; bind apply/restore to collection and source
+UUID and revalidate on the OBS thread; correct graph traversal and default
+role; expose bounded source activity and track facts with contracts/schema;
+update documentation and inspect the complete diff. Missing activity/track
+facts must remain unknown, including the saved-file fallback.
+
+Verification: lightweight UI regression probes and formatting/docs checks
+now; Rust tests/Clippy, contracts drift, and Edge three-theme checks remain
+on hold while the owner is unavailable for heavy checks. Fake-server tests
+must cover collection switches and same-name source replacement for both
+apply and restore; UI tests cover disabled paths, switches, split defaults,
+inactive sources, disjoint tracks and unknown facts. Attended Fix/Restore
+on a copied OBS profile remains a separate Windows acceptance gate.
+
+Rollback: revert these scoped repairs; no session/database migration.
+Risk: OBS cannot atomically compare and set several source properties;
+recheck collection and UUID immediately before each write and use UUID
+addressing so same-name replacement cannot be selected accidentally.
+Implementation and lightweight checks are recorded below; builds/Edge stay on hold.
+
+Implemented in this worktree (not committed):
+- SEC-15: preview/restore retain the scene collection and source UUID;
+  the OBS thread rechecks collection, name/UUID identity and the original
+  field, then writes by UUID. Collection is checked again just before the
+  write. Missing UUIDs stay read-only. No new permission or stored secret.
+- UI-26, GRAPH-05/17: reachability excludes disabled/bypassed sources,
+  outputs and Mixers, follows selected input/output switch ports, and keeps
+  ordinary disabled effects dry. A working Discord speaker alone no longer
+  marks the microphone Ready.
+- UI-26: OBS Default capture uses communications, playback uses console.
+  Live source activity, six bounded track flags and monitoring mode are
+  exposed through `obs.status`, its schema and TypeScript contract.
+  Duplicate voice requires confirmed active, unmuted, non-monitor-only
+  sources on overlapping tracks. Saved/missing facts stay unknown; a source
+  with unknown activity does not trigger advice to add another microphone.
+- Compatibility: three nullable fields added to the unreleased OBS status
+  source objects (`active`, `audioTracks`, `monitorOnly`); no session format
+  migration. Older OBS servers omitting public UUIDs get read-only sources.
+  Shared-track duplication is not a claim about the stream's selected track.
+
+Evidence, Windows host, 2026-10-23, lightweight checks only:
+- Focused Vitest before repair: 13 failures / 21 passes, reproducing disabled
+  source/output, switch-port, split-default and inactive/disjoint/unknown
+  OBS fact cases. One intermediate split-default fixture accidentally kept
+  two communications defaults; corrected the fixture to one per role.
+- After repair: 36/36 in `appUsage.test.ts` and `obsUsage.test.ts`, exit 0.
+  Command: `node C:/code/audiorouter/ui/node_modules/vitest/vitest.mjs run
+  --config target/review-obs/vitest.config.mjs --configLoader runner`.
+  Ignored local config resolves the main checkout's installed Vitest and
+  this worktree's contracts, with one worker; no dependency install/junction.
+  Output: `target/review-obs/ui-tests.txt`.
+- Scoped ESLint using the main checkout's installed CLI/config: exit 0,
+  no diagnostics for the four changed UI files; output
+  `target/review-obs/ui-lint.txt`. Scoped Prettier write/check passed.
+- Both `cargo fmt` runs and both `-- --check` runs passed; formatting
+  touched only edited Rust files. `node tools/docs/validate.mjs` passed
+  (194 Markdown files / 1,072 local links on the final run); `git diff --check` passed.
+- Fake-server regressions added for apply and restore after a collection
+  switch (including retained UUIDs) or same-name source replacement; UUID
+  write addressing, missing-UUID read-only fallback, track bounds and
+  inactive/unknown facts. They are **not run**: Rust compiles remain on hold
+  at the owner's latest instruction. Rustfmt parsing is not compile/test
+  evidence. No real OBS connection/write or hardware check was performed.
+
+Next action after the hold: `cargo test -p audiorouter-control obs::tests
+--locked -- --test-threads=1`, then control/CLI/domain/HTTP suites, strict
+Clippy, UI/contracts typecheck and contracts drift (which compiles the CLI).
+Then Edge three-theme/status checks and attended Fix/Restore on a copied OBS
+profile. The O1/O2 gate remains open until that evidence exists. No PR approval
+has been requested or granted for this branch.
+
 - 2026-10-23, decision: D1 extends `apps.list` with a required
   `audioEndpoints` array of `{deviceId, direction, active}`, instead of
   adding a new method. It is one call with the existing read grant, and

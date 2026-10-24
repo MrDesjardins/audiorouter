@@ -8,6 +8,8 @@ export const OBS_STATUS_POLL_MS = 2_000;
 export const OBS_STATUS_IDLE_POLL_MS = 15_000;
 /** While a connection or change is in progress. */
 export const OBS_STATUS_BUSY_POLL_MS = 400;
+/** Read OBS itself, rather than only the cached backend snapshot. */
+export const OBS_INSPECTION_POLL_MS = 10_000;
 
 export interface ObsStatusState {
   status: ObsStatus | null;
@@ -28,8 +30,7 @@ function busy(status: ObsStatus | null): boolean {
 /**
  * The backend's OBS facts. `obs.status` only reads the backend's OBS thread
  * state, so it is cheap; `obs.refresh` asks that thread to read OBS again and
- * runs when the window regains focus (the user may have changed OBS) and on
- * `refresh()`.
+ * runs periodically while visible, on window focus and on `refresh()`.
  */
 export function useObsStatus(
   backend: ObsBackend | null,
@@ -38,10 +39,16 @@ export function useObsStatus(
   const [state, setState] = useState<ObsStatusState>({ status: null, stale: false });
   const generation = useRef(0);
   const last = useRef<string | null>(null);
+  const inFlight = useRef(false);
+  const refreshInFlight = useRef(false);
+  const delayedPoll = useRef<number | null>(null);
+  const mounted = useRef(false);
+  const currentBackend = useRef(backend);
 
   const poll = useCallback(() => {
-    if (!backend?.obsStatus) return;
+    if (!mounted.current || backend !== currentBackend.current || !backend?.obsStatus || inFlight.current) return;
     const current = generation.current;
+    inFlight.current = true;
     backend
       .obsStatus()
       .then((status) => {
@@ -57,32 +64,65 @@ export function useObsStatus(
       .catch(() => {
         if (current !== generation.current) return;
         setState((previous) => (previous.stale ? previous : { ...previous, stale: true }));
+      })
+      .finally(() => {
+        if (current === generation.current) inFlight.current = false;
       });
   }, [backend]);
 
   const refresh = useCallback(() => {
-    if (!backend?.obsRefresh) return;
+    if (!mounted.current || backend !== currentBackend.current) return;
+    if (!backend?.obsRefresh) {
+      poll();
+      return;
+    }
+    if (refreshInFlight.current) return;
+    const current = generation.current;
+    refreshInFlight.current = true;
     backend
       .obsRefresh()
-      .then(() => window.setTimeout(poll, OBS_STATUS_BUSY_POLL_MS))
-      .catch(() => poll());
+      .then(() => {
+        if (current !== generation.current) return;
+        if (delayedPoll.current !== null) window.clearTimeout(delayedPoll.current);
+        delayedPoll.current = window.setTimeout(() => {
+          delayedPoll.current = null;
+          if (document.visibilityState === "visible") poll();
+        }, OBS_STATUS_BUSY_POLL_MS);
+      })
+      .catch(() => {
+        if (current === generation.current) poll();
+      })
+      .finally(() => {
+        if (current === generation.current) refreshInFlight.current = false;
+      });
   }, [backend, poll]);
 
   useEffect(() => {
+    mounted.current = true;
+    currentBackend.current = backend;
     generation.current += 1;
     last.current = null;
+    inFlight.current = false;
+    refreshInFlight.current = false;
+    setState({ status: null, stale: false });
     poll();
-    const onFocus = () => refresh();
+    const onFocus = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
     const onVisible = () => {
       if (document.visibilityState === "visible") refresh();
     };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
+      mounted.current = false;
+      generation.current += 1;
+      if (delayedPoll.current !== null) window.clearTimeout(delayedPoll.current);
+      delayedPoll.current = null;
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [poll, refresh]);
+  }, [backend, poll, refresh]);
 
   const inProgress = busy(state.status);
   useEffect(() => {
@@ -94,9 +134,20 @@ export function useObsStatus(
     return () => window.clearInterval(timer);
   }, [active, backend, inProgress, poll]);
 
+  useEffect(() => {
+    if (!backend?.obsRefresh || inProgress) return;
+    const timer = window.setInterval(
+      () => {
+        if (document.visibilityState === "visible") refresh();
+      },
+      active ? OBS_INSPECTION_POLL_MS : OBS_STATUS_IDLE_POLL_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, [active, backend, inProgress, refresh]);
+
   // Opening the Apps tab reads OBS again.
   useEffect(() => {
-    if (active) refresh();
+    if (active && document.visibilityState === "visible") refresh();
   }, [active, refresh]);
 
   return { ...state, refresh, poll };

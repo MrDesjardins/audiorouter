@@ -1239,6 +1239,12 @@ export interface ObsAudioInput {
   /** Executable an application capture follows. */
   application: string | null;
   muted: boolean | null;
+  /** Showing in OBS Program; null for saved files or unavailable facts. */
+  active: boolean | null;
+  /** Enabled OBS audio tracks (1–6), or null when unknown. */
+  audioTracks: number[] | null;
+  /** Monitor Only suppresses output to tracks; null when unknown. */
+  monitorOnly: boolean | null;
 }
 
 export interface ObsStatus {

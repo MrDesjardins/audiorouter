@@ -17,9 +17,10 @@
 //! logged either.
 
 use std::collections::VecDeque;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -104,6 +105,9 @@ pub(crate) struct ObsAudioInput {
     /// The executable an Application Audio Capture follows.
     pub(crate) application: Option<String>,
     pub(crate) muted: Option<bool>,
+    pub(crate) active: Option<bool>,
+    pub(crate) audio_tracks: Option<Vec<u8>>,
+    pub(crate) monitor_only: Option<bool>,
 }
 
 impl ObsAudioInput {
@@ -116,6 +120,9 @@ impl ObsAudioInput {
             "deviceId": self.device_id,
             "application": self.application,
             "muted": self.muted,
+            "active": self.active,
+            "audioTracks": self.audio_tracks,
+            "monitorOnly": self.monitor_only,
         })
     }
 }
@@ -251,6 +258,7 @@ impl Change {
 
 #[derive(Debug, Default)]
 struct Snapshot {
+    installed: bool,
     connection: Connection,
     source: Option<Source>,
     scene_collection: Option<String>,
@@ -265,11 +273,30 @@ struct Snapshot {
     password_source: Option<&'static str>,
 }
 
+/// A write is bound to the inspected collection and public source identity.
+/// Never fall back to a name when a source UUID is unavailable or disappears.
+#[derive(Clone)]
+struct BoundChange {
+    collection: String,
+    uuid: String,
+    change: Change,
+}
+
+impl BoundChange {
+    fn inverse(&self) -> Self {
+        Self {
+            collection: self.collection.clone(),
+            uuid: self.uuid.clone(),
+            change: self.change.inverse(),
+        }
+    }
+}
+
 enum Command {
     Connect { password: Option<String> },
     Disconnect,
     Refresh,
-    Apply(Vec<Change>),
+    Apply(Vec<BoundChange>),
     Restore,
 }
 
@@ -277,6 +304,7 @@ struct Shared {
     snapshot: Mutex<Snapshot>,
     commands: Mutex<VecDeque<Command>>,
     wake: Condvar,
+    stopping: Arc<AtomicBool>,
 }
 
 impl Shared {
@@ -286,6 +314,13 @@ impl Shared {
 
     fn push(&self, command: Command) {
         let mut commands = self.commands.lock().unwrap_or_else(PoisonError::into_inner);
+        // Keep at most one pending connection choice/password. A disconnect
+        // supersedes queued connects; apply/restore are single-flight below.
+        if matches!(&command, Command::Connect { .. }) {
+            commands.retain(|item| !matches!(item, Command::Connect { .. }));
+        } else if matches!(&command, Command::Disconnect) {
+            commands.retain(|item| !matches!(item, Command::Connect { .. } | Command::Disconnect));
+        }
         // A newer refresh makes a queued one redundant.
         if matches!(command, Command::Refresh)
             && commands.iter().any(|item| matches!(item, Command::Refresh))
@@ -300,7 +335,9 @@ impl Shared {
         let commands = self.commands.lock().unwrap_or_else(PoisonError::into_inner);
         let (mut commands, _) = self
             .wake
-            .wait_timeout_while(commands, wait, |commands| commands.is_empty())
+            .wait_timeout_while(commands, wait, |commands| {
+                commands.is_empty() && !self.stopping.load(Ordering::Acquire)
+            })
             .unwrap_or_else(PoisonError::into_inner);
         commands.pop_front()
     }
@@ -327,7 +364,7 @@ impl ObsPaths {
 struct Preview {
     id: String,
     inspection: u64,
-    changes: Vec<Change>,
+    changes: Vec<BoundChange>,
     created: Instant,
 }
 
@@ -360,6 +397,7 @@ impl ObsIntegration {
                 snapshot: Mutex::new(Snapshot::default()),
                 commands: Mutex::new(VecDeque::new()),
                 wake: Condvar::new(),
+                stopping: Arc::new(AtomicBool::new(false)),
             }),
             paths,
             started: false,
@@ -385,14 +423,9 @@ impl ObsIntegration {
 
     pub(crate) fn status(&mut self) -> Value {
         self.ensure_started();
-        let installed = self
-            .paths
-            .settings
-            .as_deref()
-            .is_some_and(|folder| folder.is_dir());
         let snapshot = self.shared.snapshot();
         json!({
-            "installed": installed,
+            "installed": snapshot.installed,
             "connection": snapshot.connection.name(),
             "source": snapshot.source.map(|source| match source {
                 Source::Live => "live",
@@ -442,14 +475,40 @@ impl ObsIntegration {
         if snapshot.connection != Connection::Connected || snapshot.source != Some(Source::Live) {
             return Err("connect to OBS before previewing a change".into());
         }
+        if matches!(
+            snapshot.change,
+            ChangeState::Applying | ChangeState::Restoring
+        ) {
+            return Err("an OBS change is already in progress".into());
+        }
         let changes = plan_changes(&snapshot.inputs, requested, endpoints)?;
+        let collection = snapshot
+            .scene_collection
+            .as_ref()
+            .ok_or("OBS did not identify its scene collection; refresh before changing it")?;
+        let changes = changes
+            .into_iter()
+            .map(|change| {
+                let uuid = snapshot
+                    .inputs
+                    .iter()
+                    .find(|input| input.name == change.input())
+                    .and_then(|input| input.uuid.clone())
+                    .ok_or("OBS did not identify this source; change it in OBS instead")?;
+                Ok(BoundChange {
+                    collection: collection.clone(),
+                    uuid,
+                    change,
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
         let inspection = snapshot.inspection;
         drop(snapshot);
         self.previews += 1;
         let id = format!("obs-preview-{}", self.previews);
         let value = json!({
             "previewId": id,
-            "changes": changes.iter().map(Change::to_json).collect::<Vec<_>>(),
+            "changes": changes.iter().map(|bound| bound.change.to_json()).collect::<Vec<_>>(),
             "expiresInSeconds": OBS_PREVIEW_SECONDS,
         });
         self.preview = Some(Preview {
@@ -473,6 +532,12 @@ impl ObsIntegration {
             if snapshot.connection != Connection::Connected {
                 return Err("OBS is not connected".into());
             }
+            if matches!(
+                snapshot.change,
+                ChangeState::Applying | ChangeState::Restoring
+            ) {
+                return Err("an OBS change is already in progress".into());
+            }
             if snapshot.inspection != preview.inspection {
                 return Err("OBS changed since the preview; preview the change again".into());
             }
@@ -488,6 +553,12 @@ impl ObsIntegration {
         self.preview = None;
         {
             let mut snapshot = self.shared.snapshot();
+            if matches!(
+                snapshot.change,
+                ChangeState::Applying | ChangeState::Restoring
+            ) {
+                return Err("an OBS change is already in progress".into());
+            }
             if !snapshot.restorable {
                 return Err("there is no OBS change to restore".into());
             }
@@ -499,6 +570,21 @@ impl ObsIntegration {
         }
         self.shared.push(Command::Restore);
         Ok(json!({ "state": "restoring" }))
+    }
+}
+
+impl Drop for ObsIntegration {
+    fn drop(&mut self) {
+        // Never join a socket thread on the control plane. Cancel queued
+        // work/passwords and wake it; bounded I/O and request cancellation
+        // release the connection after the in-flight operation returns.
+        self.shared.stopping.store(true, Ordering::Release);
+        self.shared
+            .commands
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clear();
+        self.shared.wake.notify_one();
     }
 }
 
@@ -632,7 +718,6 @@ pub(crate) fn base64(bytes: &[u8]) -> String {
 /// it holds the password.
 #[derive(Default)]
 pub(crate) struct WebSocketSettings {
-    pub(crate) enabled: Option<bool>,
     pub(crate) port: Option<u16>,
     pub(crate) auth_required: Option<bool>,
     pub(crate) password: Option<String>,
@@ -643,7 +728,6 @@ pub(crate) fn parse_websocket_settings(text: &str) -> WebSocketSettings {
         return WebSocketSettings::default();
     };
     WebSocketSettings {
-        enabled: settings.get("server_enabled").and_then(Value::as_bool),
         port: settings
             .get("server_port")
             .and_then(Value::as_u64)
@@ -659,11 +743,18 @@ pub(crate) fn parse_websocket_settings(text: &str) -> WebSocketSettings {
 }
 
 fn read_bounded(path: &Path, limit: u64) -> Option<String> {
-    let metadata = std::fs::metadata(path).ok()?;
+    let file = std::fs::File::open(path).ok()?;
+    let metadata = file.metadata().ok()?;
     if !metadata.is_file() || metadata.len() > limit {
         return None;
     }
-    std::fs::read_to_string(path).ok()
+    let mut text = String::new();
+    // Enforce the limit on the read too: OBS may grow/replace a file after
+    // the metadata check. Inspect the opened handle, not another path lookup.
+    file.take(limit.checked_add(1)?)
+        .read_to_string(&mut text)
+        .ok()?;
+    (u64::try_from(text.len()).ok()? <= limit).then_some(text)
 }
 
 fn websocket_settings(paths: &ObsPaths) -> WebSocketSettings {
@@ -731,6 +822,19 @@ fn bounded_string(value: Option<&Value>, limit: usize) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// OBS has six track flags. An incomplete/malformed response is unknown,
+/// not an empty track list or an assumption that track 1 is enabled.
+fn parse_audio_tracks(value: &Value) -> Option<Vec<u8>> {
+    let tracks = value.as_object()?;
+    let mut enabled = Vec::new();
+    for track in 1..=6u8 {
+        if tracks.get(&track.to_string())?.as_bool()? {
+            enabled.push(track);
+        }
+    }
+    Some(enabled)
+}
+
 /// The executable from an Application Audio Capture's `window` setting,
 /// "title:class:executable" with ':' inside a part written as "#3A".
 pub(crate) fn window_executable(window: &str) -> Option<String> {
@@ -771,6 +875,9 @@ fn audio_input(
         device_id,
         application,
         muted,
+        active: None,
+        audio_tracks: None,
+        monitor_only: None,
     }
 }
 
@@ -836,6 +943,7 @@ enum RequestError {
 struct LiveSession {
     socket: WebSocket<TcpStream>,
     requests: u64,
+    stopping: Arc<AtomicBool>,
 }
 
 enum Incoming {
@@ -876,7 +984,11 @@ fn send(socket: &mut WebSocket<TcpStream>, value: &Value) -> Result<(), ()> {
 
 impl LiveSession {
     /// Connect and identify. The error is the state to show.
-    fn open(port: u16, password: Option<&str>) -> Result<Self, Connection> {
+    fn open(
+        port: u16,
+        password: Option<&str>,
+        stopping: Arc<AtomicBool>,
+    ) -> Result<Self, Connection> {
         let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
         let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
             .map_err(|_| Connection::ServerOff)?;
@@ -925,6 +1037,7 @@ impl LiveSession {
                     return Ok(Self {
                         socket,
                         requests: 0,
+                        stopping,
                     })
                 }
                 Ok(Incoming::Message(_)) => {}
@@ -937,6 +1050,9 @@ impl LiveSession {
     }
 
     fn request(&mut self, request_type: &str, data: Value) -> Result<Value, RequestError> {
+        if self.stopping.load(Ordering::Acquire) {
+            return Err(RequestError::Lost);
+        }
         self.requests += 1;
         let id = format!("audiorouter-{}", self.requests);
         send(
@@ -1052,48 +1168,96 @@ impl LiveSession {
                 Err(RequestError::Lost) => return Err(RequestError::Lost),
             };
             let special = special_of(&name);
-            inputs.push(audio_input(
+            let active = match self.request("GetSourceActive", json!({ "sourceName": name })) {
+                Ok(data) => data.get("videoActive").and_then(Value::as_bool),
+                Err(RequestError::Refused) => None,
+                Err(RequestError::Lost) => return Err(RequestError::Lost),
+            };
+            let audio_tracks =
+                match self.request("GetInputAudioTracks", json!({ "inputName": name })) {
+                    Ok(data) => parse_audio_tracks(&data["inputAudioTracks"]),
+                    Err(RequestError::Refused) => None,
+                    Err(RequestError::Lost) => return Err(RequestError::Lost),
+                };
+            let monitor_only =
+                match self.request("GetInputAudioMonitorType", json!({ "inputName": name })) {
+                    Ok(data) => match data["monitorType"].as_str() {
+                        Some(
+                            "OBS_MONITORING_TYPE_NONE" | "OBS_MONITORING_TYPE_MONITOR_AND_OUTPUT",
+                        ) => Some(false),
+                        Some("OBS_MONITORING_TYPE_MONITOR_ONLY") => Some(true),
+                        _ => None,
+                    },
+                    Err(RequestError::Refused) => None,
+                    Err(RequestError::Lost) => return Err(RequestError::Lost),
+                };
+            let mut input = audio_input(
                 name,
                 uuid,
                 kind,
                 special,
                 settings.get("inputSettings").unwrap_or(&Value::Null),
                 muted,
-            ));
+            );
+            input.active = active;
+            input.audio_tracks = audio_tracks;
+            input.monitor_only = monitor_only;
+            inputs.push(input);
         }
         Ok((collection, inputs))
     }
 
     /// The current value of a change's field, as OBS reports it now.
-    fn current_matches(&mut self, change: &Change) -> Result<bool, RequestError> {
-        match change {
-            Change::Device { input, before, .. } => {
-                let settings = self.request("GetInputSettings", json!({ "inputName": input }))?;
+    fn current_matches(&mut self, bound: &BoundChange) -> Result<bool, RequestError> {
+        if !self.collection_matches(&bound.collection)? {
+            return Ok(false);
+        }
+        // Renaming/deleting/recreating a source must invalidate both apply and
+        // restore, even when the new source has the same name and device.
+        let list = self.request("GetInputList", json!({}))?;
+        let identity_matches = list["inputs"].as_array().is_some_and(|inputs| {
+            inputs.iter().any(|input| {
+                input["inputUuid"].as_str() == Some(bound.uuid.as_str())
+                    && input["inputName"].as_str() == Some(bound.change.input())
+            })
+        });
+        if !identity_matches {
+            return Ok(false);
+        }
+        match &bound.change {
+            Change::Device { before, .. } => {
+                let settings =
+                    self.request("GetInputSettings", json!({ "inputUuid": bound.uuid }))?;
                 let current = settings["inputSettings"]
                     .get("device_id")
                     .and_then(Value::as_str)
                     .unwrap_or("default");
                 Ok(current == before)
             }
-            Change::Muted { input, before, .. } => {
-                let data = self.request("GetInputMute", json!({ "inputName": input }))?;
+            Change::Muted { before, .. } => {
+                let data = self.request("GetInputMute", json!({ "inputUuid": bound.uuid }))?;
                 Ok(data.get("inputMuted").and_then(Value::as_bool) == Some(*before))
             }
         }
     }
 
-    fn set(&mut self, change: &Change) -> Result<(), RequestError> {
-        match change {
-            Change::Device { input, after, .. } => self
+    fn collection_matches(&mut self, collection: &str) -> Result<bool, RequestError> {
+        let data = self.request("GetSceneCollectionList", json!({}))?;
+        Ok(data["currentSceneCollectionName"].as_str() == Some(collection))
+    }
+
+    fn set(&mut self, bound: &BoundChange) -> Result<(), RequestError> {
+        match &bound.change {
+            Change::Device { after, .. } => self
                 .request(
                     "SetInputSettings",
-                    json!({ "inputName": input, "inputSettings": { "device_id": after }, "overlay": true }),
+                    json!({ "inputUuid": bound.uuid, "inputSettings": { "device_id": after }, "overlay": true }),
                 )
                 .map(drop),
-            Change::Muted { input, after, .. } => self
+            Change::Muted { after, .. } => self
                 .request(
                     "SetInputMute",
-                    json!({ "inputName": input, "inputMuted": after }),
+                    json!({ "inputUuid": bound.uuid, "inputMuted": after }),
                 )
                 .map(drop),
         }
@@ -1101,10 +1265,18 @@ impl LiveSession {
 
     /// Make each change whose current value is still the one previewed, in
     /// order, stopping at the first that is not. Returns the changes made.
-    fn apply(&mut self, changes: &[Change]) -> (Vec<Change>, Option<&'static str>) {
+    fn apply(&mut self, changes: &[BoundChange]) -> (Vec<BoundChange>, Option<&'static str>) {
         let mut made = Vec::new();
         for change in changes {
             match self.current_matches(change) {
+                Ok(true) => {}
+                Ok(false) => return (made, Some("changedInObs")),
+                Err(RequestError::Refused) => return (made, Some("refusedByObs")),
+                Err(RequestError::Lost) => return (made, Some("connectionLost")),
+            }
+            // OBS has no compare-and-set request. Check again as late as
+            // possible, then address the write by UUID, never by reused name.
+            match self.collection_matches(&change.collection) {
                 Ok(true) => {}
                 Ok(false) => return (made, Some("changedInObs")),
                 Err(RequestError::Refused) => return (made, Some("refusedByObs")),
@@ -1121,8 +1293,13 @@ impl LiveSession {
 }
 
 fn show_saved(shared: &Shared, paths: &ObsPaths) {
+    let installed = paths
+        .settings
+        .as_deref()
+        .is_some_and(|folder| folder.is_dir());
     let saved = saved_scene_collection(paths);
     let mut snapshot = shared.snapshot();
+    snapshot.installed = installed;
     match saved {
         Some((collection, inputs)) => {
             snapshot.source = Some(Source::SavedFile);
@@ -1140,6 +1317,9 @@ fn show_saved(shared: &Shared, paths: &ObsPaths) {
 fn show_live(shared: &Shared, collection: Option<String>, inputs: Vec<ObsAudioInput>) {
     let mut snapshot = shared.snapshot();
     snapshot.connection = Connection::Connected;
+    // A successfully identified OBS server is stronger evidence than its
+    // config folder (portable installations may keep settings elsewhere).
+    snapshot.installed = true;
     snapshot.source = Some(Source::Live);
     snapshot.scene_collection = collection;
     snapshot.inputs = inputs;
@@ -1151,14 +1331,17 @@ fn run(shared: &Shared, paths: &ObsPaths) {
     let mut session: Option<LiveSession> = None;
     let mut wanted = false;
     let mut pasted: Option<String> = None;
-    let mut restore: Vec<Change> = Vec::new();
-    loop {
+    let mut restore: Vec<BoundChange> = Vec::new();
+    while !shared.stopping.load(Ordering::Acquire) {
         let wait = if session.is_some() {
             IDLE_READ
         } else {
             IDLE_WAIT
         };
         let command = shared.next(wait);
+        if shared.stopping.load(Ordering::Acquire) {
+            break;
+        }
         match command {
             Some(Command::Connect { password }) => {
                 wanted = true;
@@ -1213,7 +1396,7 @@ fn run(shared: &Shared, paths: &ObsPaths) {
                 let (made, error) = live.apply(&changes);
                 if !made.is_empty() {
                     // Restore undoes this fix, most recent change first.
-                    restore = made.iter().rev().map(Change::inverse).collect();
+                    restore = made.iter().rev().map(BoundChange::inverse).collect();
                 }
                 let state = if error.is_none() {
                     ChangeState::Applied
@@ -1270,7 +1453,7 @@ fn finish_change(
     state: ChangeState,
     changed: usize,
     error: Option<&'static str>,
-    restore: &[Change],
+    restore: &[BoundChange],
 ) {
     let mut snapshot = shared.snapshot();
     snapshot.change = state;
@@ -1301,7 +1484,7 @@ fn connect(shared: &Shared, paths: &ObsPaths, pasted: Option<&str>) -> Option<Li
             _ => (None, None),
         },
     };
-    let opened = LiveSession::open(port, password.as_deref());
+    let opened = LiveSession::open(port, password.as_deref(), Arc::clone(&shared.stopping));
     drop(password);
     match opened {
         Ok(mut live) => match live.inspect() {

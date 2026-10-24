@@ -341,6 +341,26 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       poll: obsStatus.poll,
     };
   }, [backend, obsStatus.poll]);
+  const discordAppCheck = useMemo(
+    () =>
+      applicationUsage.loaded
+        ? discordCheck(draft, applicationUsage.applications, devices, applicationUsage.stale)
+        : pendingDiscordCheck(),
+    [applicationUsage.loaded, applicationUsage.applications, applicationUsage.stale, draft, devices],
+  );
+  const obsAppCheck = useMemo(
+    () => obsCheck(draft, obsStatus.status, applicationUsage.applications, devices, obsStatus.stale),
+    [draft, obsStatus.status, obsStatus.stale, applicationUsage.applications, devices],
+  );
+  // Shown from the session alone, never because an app started (UI-17):
+  // Discord when the session captures it or has a voice cable, OBS when it
+  // has a voice cable.
+  const appStripChecks = useMemo(() => {
+    if (!backend.connected) return [];
+    const checks = sessionInvolvesDiscord(draft, devices) ? [discordAppCheck] : [];
+    if (draft && voiceCableOutputs(draft, devices).length > 0) checks.push(obsAppCheck);
+    return checks;
+  }, [backend, draft, devices, discordAppCheck, obsAppCheck]);
   // UI-18: optional daily new-version check (GitHub public releases list).
   const [updateChecks, setUpdateChecks] = useState(updateCheckEnabled);
   const availableUpdate = useUpdateCheck(updateChecks && !isAutomatedHarness());
@@ -2877,24 +2897,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       sessions={availableSessions}
     />
   );
-  const discordAppCheck = useMemo(
-    () =>
-      applicationUsage.loaded ? discordCheck(draft, applicationUsage.applications, devices) : pendingDiscordCheck(),
-    [applicationUsage.loaded, applicationUsage.applications, draft, devices],
-  );
-  const obsAppCheck = useMemo(
-    () => obsCheck(draft, obsStatus.status, applicationUsage.applications, devices),
-    [draft, obsStatus.status, applicationUsage.applications, devices],
-  );
-  // Shown from the session alone, never because an app started (UI-17):
-  // Discord when the session captures it or has a voice cable, OBS when it
-  // has a voice cable.
-  const appStripChecks = useMemo(() => {
-    if (!backend.connected) return [];
-    const checks = sessionInvolvesDiscord(draft, devices) ? [discordAppCheck] : [];
-    if (draft && voiceCableOutputs(draft, devices).length > 0) checks.push(obsAppCheck);
-    return checks;
-  }, [backend, draft, devices, discordAppCheck, obsAppCheck]);
   const refreshApps = applicationUsage.refresh;
   const refreshObs = obsStatus.refresh;
   const appsWorkbenchContent = (
@@ -2909,7 +2911,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         refreshObs();
       }}
       onOpenVirtualCables={() => setWorkbenchTab("virtualCables")}
-      obs={<ObsCard check={obsAppCheck} status={obsStatus.status} actions={obsActions} />}
+      obs={
+        <ObsCard
+          key={draft.id}
+          check={obsAppCheck}
+          status={obsStatus.status}
+          actions={obsStatus.stale ? null : obsActions}
+        />
+      }
     />
   );
   const cableWorkbenchContent = (

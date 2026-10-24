@@ -867,7 +867,15 @@ source, its device, and what reaches it from your session.
   cable.
 - **Voice twice:** Desktop Audio (or another output capture) also plays your
   voice, for example because your headphones are the default device and you
-  monitor yourself. Muted sources are not judged.
+  monitor yourself. The warning requires both sources to be active,
+  unmuted, sending to an overlapping audio track, and not Monitor Only.
+  Sources in inactive scenes and sources on separate tracks do not establish
+  duplicate voice. Unknown facts stay unknown; the saved setup cannot prove
+  what is on stream now. A shared OBS track is not necessarily the stream's
+  selected track.
+
+OBS's **Default** microphone uses Windows' default communications device;
+its **Default** desktop capture uses the default console playback device.
 
 **When OBS is closed:** the card shows the setup OBS saved last, read only.
 
@@ -885,6 +893,19 @@ want to keep, then choose **Change**. AudioRouter changes only those
 sources, and leaves alone any source you changed in OBS in the meantime.
 **Restore previous OBS settings** puts the old devices back. **Disconnect**
 forgets the password and the restore list.
+
+Apply and Restore check the scene collection and source identity as well as
+the setting. Switching collections or replacing/renaming a source prevents
+an old fix from changing it. If OBS does not report a source UUID, that
+source stays read-only; change its device in OBS instead.
+
+The OBS check updates while AudioRouter stays open: every 10 seconds on the
+Apps tab, and when you return to the window. A failed status read keeps the
+previous check visible with a Waiting message and disables changes until
+the connection recovers. The Fix dialog keeps your choices steady while
+status updates; if OBS's starting setting has changed, cancel and check
+again. Partial failures say how many settings completed, and Restore errors
+are shown even after an earlier successful change.
 
 **What it does not change:** only the device or mute of existing OBS audio
 sources, and only when you confirm. It never reads your stream key, and

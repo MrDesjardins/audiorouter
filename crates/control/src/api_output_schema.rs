@@ -1552,9 +1552,13 @@ pub(crate) fn obs_status_output_schema() -> Value {
                         "special": { "enum": ["desktop1", "desktop2", "mic1", "mic2", "mic3", "mic4", null] },
                         "deviceId": { "type": ["string", "null"], "maxLength": crate::obs::MAX_OBS_DEVICE_ID_BYTES },
                         "application": name,
-                        "muted": { "type": ["boolean", "null"] }
+                        "muted": { "type": ["boolean", "null"] },
+                        "active": { "type": ["boolean", "null"] },
+                        "audioTracks": { "type": ["array", "null"], "maxItems": 6, "uniqueItems": true,
+                            "items": { "type": "integer", "minimum": 1, "maximum": 6 } },
+                        "monitorOnly": { "type": ["boolean", "null"] }
                     },
-                    "required": ["name", "uuid", "kind", "special", "deviceId", "application", "muted"],
+                    "required": ["name", "uuid", "kind", "special", "deviceId", "application", "muted", "active", "audioTracks", "monitorOnly"],
                     "additionalProperties": false
                 }
             },

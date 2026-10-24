@@ -7,6 +7,25 @@ help](../future/obs-discord-integration.md) (DEC-22) and asked for a UX plan
 first. Tracked in its own plan: [OBS and Discord](obs-discord.md). X1
 (Discord RPC) needs Discord's approval and is not authorized.
 
+Review repairs authorized and implemented 2026-10-23: collection/UUID-bound
+OBS writes, effective voice-path checks, correct OBS default-device roles,
+and activity/track-aware duplication checks (SEC-15, UI-26, GRAPH-05/17).
+36 focused UI tests, scoped lint/format, Rust formatting and docs checks pass.
+Rust compile/tests, contracts drift and Edge remain on the owner's hold;
+see the [repair evidence and exact next checks](obs-discord.md).
+
+Before-manual-test follow-up: fresh OBS inspections, stable/validated repair
+choices, visible Restore errors and stale-state handling; fixed conditional
+Apps hooks that could crash startup. Focused UI/card/hook tests pass 55/55;
+the delayed-startup App regression passes separately and fails with the old
+hook placement. The OBS note's four-line layout still needs Edge theme QA.
+
+Coverage audit: fixed another observed source-replacement/dialog identity
+case after its regression failed. All six relevant UI/lifecycle files now
+pass (84 tests). The integration plan records missing backend failure-path
+tests as well as the compiled/native/browser checks still on hold; this is
+not exhaustive verification or a closed O1/O2 gate.
+
 ## Review follow-ups R1–R7 and a second review — 2026-10-23, owner request
 
 The owner asked to improve the `site/compare.html` wording, fix every

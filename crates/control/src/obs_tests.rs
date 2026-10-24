@@ -61,6 +61,9 @@ fn input(name: &str, kind: AudioKind, device: Option<&str>, muted: Option<bool>)
         device_id: device.map(str::to_owned),
         application: None,
         muted,
+        active: None,
+        audio_tracks: None,
+        monitor_only: None,
     }
 }
 
@@ -105,7 +108,6 @@ fn websocket_settings_keep_only_bounded_values() {
         })
         .to_string(),
     );
-    assert_eq!(settings.enabled, Some(true));
     assert_eq!(settings.port, Some(4455));
     assert_eq!(settings.auth_required, Some(true));
     assert_eq!(settings.password.as_deref(), Some("abc123"));
@@ -120,7 +122,7 @@ fn websocket_settings_keep_only_bounded_values() {
     assert_eq!(odd.port, None, "a privileged or invalid port is ignored");
     assert!(odd.password.is_none(), "an oversized password is ignored");
     assert!(parse_websocket_settings("not json").password.is_none());
-    assert!(parse_websocket_settings("[]").enabled.is_none());
+    assert!(parse_websocket_settings("[]").port.is_none());
 }
 
 #[test]
@@ -312,13 +314,24 @@ fn planned_changes_name_the_value_they_replace() {
 
 type FakeInputs = Arc<Mutex<BTreeMap<String, (String, Value, bool)>>>;
 
+struct FakeContext {
+    collection: String,
+    uuids: BTreeMap<String, String>,
+    active: Option<bool>,
+    tracks: Value,
+    monitor_type: Option<&'static str>,
+    refuse_write: Option<String>,
+    drop_write_uuid: Option<String>,
+}
+
 /// A fake obs-websocket v5 server on 127.0.0.1, serving connections one
-/// after another. "Desktop Audio" is left out of `GetInputList`, as OBS
-/// may do for its global devices.
+/// after another. Removing a UUID also removes that source from the public
+/// input list, modelling private global inputs on older OBS servers.
 struct FakeObs {
     port: u16,
     inputs: FakeInputs,
     writes: Arc<Mutex<Vec<Value>>>,
+    context: Arc<Mutex<FakeContext>>,
 }
 
 fn fake_obs(password: &'static str) -> FakeObs {
@@ -355,17 +368,39 @@ fn fake_obs(password: &'static str) -> FakeObs {
         ),
     ])));
     let writes = Arc::new(Mutex::new(Vec::new()));
+    let context = Arc::new(Mutex::new(FakeContext {
+        collection: "Streaming".into(),
+        uuids: inputs
+            .lock()
+            .unwrap()
+            .keys()
+            .map(|name| (name.clone(), format!("uuid-{name}")))
+            .collect(),
+        active: Some(true),
+        tracks: json!({ "1": true, "2": false, "3": false, "4": false, "5": false, "6": false }),
+        monitor_type: Some("OBS_MONITORING_TYPE_NONE"),
+        refuse_write: None,
+        drop_write_uuid: None,
+    }));
+    let served_context = Arc::clone(&context);
     let (served_inputs, served_writes) = (Arc::clone(&inputs), Arc::clone(&writes));
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(stream) = stream else { break };
-            serve(stream, password, &served_inputs, &served_writes);
+            serve(
+                stream,
+                password,
+                &served_inputs,
+                &served_writes,
+                &served_context,
+            );
         }
     });
     FakeObs {
         port,
         inputs,
         writes,
+        context,
     }
 }
 
@@ -373,16 +408,25 @@ fn text(value: Value) -> Message {
     Message::Text(value.to_string().into())
 }
 
-fn serve(stream: TcpStream, password: &str, inputs: &FakeInputs, writes: &Mutex<Vec<Value>>) {
+fn serve(
+    stream: TcpStream,
+    password: &str,
+    inputs: &FakeInputs,
+    writes: &Mutex<Vec<Value>>,
+    context: &Mutex<FakeContext>,
+) {
     let Ok(mut socket) = tungstenite::accept(stream) else {
         return;
     };
     let (salt, challenge) = ("c2FsdC1mb3ItdGVzdHM=", "Y2hhbGxlbmdlLWZvci10ZXN0cw==");
-    let hello = json!({ "op": 0, "d": {
+    let mut hello = json!({ "op": 0, "d": {
         "obsWebSocketVersion": "5.6.3",
         "rpcVersion": 1,
         "authentication": { "challenge": challenge, "salt": salt }
     }});
+    if password.is_empty() {
+        hello["d"].as_object_mut().unwrap().remove("authentication");
+    }
     if socket.send(text(hello)).is_err() {
         return;
     }
@@ -397,8 +441,9 @@ fn serve(stream: TcpStream, password: &str, inputs: &FakeInputs, writes: &Mutex<
             Some(1) => {
                 assert_eq!(message["d"]["rpcVersion"], 1);
                 assert_eq!(message["d"]["eventSubscriptions"], 0);
-                if message["d"]["authentication"]
-                    != authentication(password, salt, challenge).as_str()
+                if !password.is_empty()
+                    && message["d"]["authentication"]
+                        != authentication(password, salt, challenge).as_str()
                 {
                     let _ = socket.close(Some(CloseFrame {
                         code: CloseCode::from(AUTHENTICATION_FAILED),
@@ -414,7 +459,20 @@ fn serve(stream: TcpStream, password: &str, inputs: &FakeInputs, writes: &Mutex<
             }
             Some(6) => {
                 let request = &message["d"];
-                let (ok, data) = respond(request, inputs, writes);
+                let should_drop = {
+                    let context = context.lock().unwrap();
+                    matches!(
+                        request["requestType"].as_str(),
+                        Some("SetInputSettings" | "SetInputMute")
+                    ) && context.drop_write_uuid.as_deref().is_some_and(|uuid| {
+                        request["requestData"]["inputUuid"].as_str() == Some(uuid)
+                    })
+                };
+                if should_drop {
+                    let _ = socket.close(None);
+                    return;
+                }
+                let (ok, data) = respond(request, inputs, writes, context);
                 let response = json!({ "op": 7, "d": {
                     "requestType": request["requestType"],
                     "requestId": request["requestId"],
@@ -430,14 +488,31 @@ fn serve(stream: TcpStream, password: &str, inputs: &FakeInputs, writes: &Mutex<
     }
 }
 
-fn respond(request: &Value, inputs: &FakeInputs, writes: &Mutex<Vec<Value>>) -> (bool, Value) {
+fn respond(
+    request: &Value,
+    inputs: &FakeInputs,
+    writes: &Mutex<Vec<Value>>,
+    context: &Mutex<FakeContext>,
+) -> (bool, Value) {
     let data = &request["requestData"];
-    let name = data["inputName"].as_str().unwrap_or_default();
+    let context = context.lock().unwrap();
+    let name = data["inputName"]
+        .as_str()
+        .or_else(|| data["sourceName"].as_str())
+        .or_else(|| {
+            let uuid = data["inputUuid"].as_str()?;
+            context
+                .uuids
+                .iter()
+                .find(|(_, value)| value.as_str() == uuid)
+                .map(|(name, _)| name.as_str())
+        })
+        .unwrap_or_default();
     let mut inputs = inputs.lock().unwrap();
     match request["requestType"].as_str().unwrap_or_default() {
         "GetSceneCollectionList" => (
             true,
-            json!({ "currentSceneCollectionName": "Streaming", "sceneCollections": ["Streaming"] }),
+            json!({ "currentSceneCollectionName": context.collection, "sceneCollections": [context.collection] }),
         ),
         "GetSpecialInputs" => (
             true,
@@ -447,9 +522,9 @@ fn respond(request: &Value, inputs: &FakeInputs, writes: &Mutex<Vec<Value>>) -> 
         "GetInputList" => {
             let listed: Vec<Value> = inputs
                 .iter()
-                .filter(|(name, _)| name.as_str() != "Desktop Audio")
+                .filter(|(name, _)| context.uuids.contains_key(name.as_str()))
                 .map(|(name, (kind, _, _))| {
-                    json!({ "inputName": name, "inputUuid": format!("uuid-{name}"),
+                    json!({ "inputName": name, "inputUuid": context.uuids[name],
                             "inputKind": kind, "unversionedInputKind": kind })
                 })
                 .collect();
@@ -466,7 +541,16 @@ fn respond(request: &Value, inputs: &FakeInputs, writes: &Mutex<Vec<Value>>) -> 
             Some((_, _, muted)) => (true, json!({ "inputMuted": muted })),
             None => (false, Value::Null),
         },
+        "GetSourceActive" => (
+            true,
+            json!({ "videoActive": context.active, "videoShowing": true }),
+        ),
+        "GetInputAudioTracks" => (true, json!({ "inputAudioTracks": context.tracks })),
+        "GetInputAudioMonitorType" => (true, json!({ "monitorType": context.monitor_type })),
         "SetInputSettings" => {
+            if context.refuse_write.as_deref() == Some(name) {
+                return (false, Value::Null);
+            }
             writes.lock().unwrap().push(request.clone());
             assert_eq!(data["overlay"], true, "only the named setting changes");
             match inputs.get_mut(name) {
@@ -480,6 +564,9 @@ fn respond(request: &Value, inputs: &FakeInputs, writes: &Mutex<Vec<Value>>) -> 
             }
         }
         "SetInputMute" => {
+            if context.refuse_write.as_deref() == Some(name) {
+                return (false, Value::Null);
+            }
             writes.lock().unwrap().push(request.clone());
             match inputs.get_mut(name) {
                 Some((_, _, muted)) => {
@@ -541,8 +628,7 @@ fn connects_with_the_password_from_obs_settings_and_reads_audio_sources() {
         .iter()
         .map(|input| input["name"].as_str().unwrap())
         .collect();
-    // The global device missing from the input list comes first; the
-    // browser source is not audio.
+    // The browser source is not audio.
     assert_eq!(names, ["Desktop Audio", "Discord", "Mic/Aux"]);
     let desktop = input_named(&status, "Desktop Audio");
     assert_eq!(desktop["special"], "desktop1");
@@ -553,6 +639,9 @@ fn connects_with_the_password_from_obs_settings_and_reads_audio_sources() {
     assert_eq!(mic["deviceId"], MIC);
     assert_eq!(mic["muted"], false);
     assert_eq!(mic["uuid"], "uuid-Mic/Aux");
+    assert_eq!(mic["active"], true);
+    assert_eq!(mic["audioTracks"], json!([1]));
+    assert_eq!(mic["monitorOnly"], false);
     let discord = input_named(&status, "Discord");
     assert_eq!(discord["kind"], "applicationCapture");
     assert_eq!(discord["application"], "Discord.exe");
@@ -635,6 +724,143 @@ fn a_setting_changed_in_obs_after_the_preview_is_not_overwritten() {
 }
 
 #[test]
+fn apply_refuses_a_different_collection_or_a_recreated_same_name_source() {
+    for replacement in ["collection", "uuid"] {
+        let obs = fake_obs(PASSWORD);
+        let mut integration = connected(&obs, Some(PASSWORD));
+        let preview = integration
+            .preview(
+                &[json!({ "inputName": "Mic/Aux", "deviceId": CABLE_A_OUTPUT })],
+                None,
+            )
+            .unwrap();
+        {
+            let mut context = obs.context.lock().unwrap();
+            if replacement == "collection" {
+                // Even a copied collection retaining the UUID must be refused.
+                context.collection = "Other collection".into();
+            } else {
+                context
+                    .uuids
+                    .insert("Mic/Aux".into(), "replacement-uuid".into());
+            }
+        }
+        integration
+            .apply(preview["previewId"].as_str().unwrap())
+            .unwrap();
+        let status = wait_for(&mut integration, |status| {
+            status["lastChange"]["state"] == "failed"
+        });
+        assert_eq!(
+            status["lastChange"]["error"], "changedInObs",
+            "{replacement}: {status}"
+        );
+        assert!(obs.writes.lock().unwrap().is_empty(), "{replacement}");
+        assert_eq!(obs.inputs.lock().unwrap()["Mic/Aux"].1["device_id"], MIC);
+    }
+}
+
+#[test]
+fn restore_refuses_a_different_collection_or_a_recreated_same_name_source() {
+    for replacement in ["collection", "uuid"] {
+        let obs = fake_obs(PASSWORD);
+        let mut integration = connected(&obs, Some(PASSWORD));
+        let preview = integration
+            .preview(
+                &[json!({ "inputName": "Mic/Aux", "deviceId": CABLE_A_OUTPUT })],
+                None,
+            )
+            .unwrap();
+        integration
+            .apply(preview["previewId"].as_str().unwrap())
+            .unwrap();
+        let applied = wait_for(&mut integration, |status| {
+            status["lastChange"]["state"] == "applied"
+        });
+        assert_eq!(applied["lastChange"]["state"], "applied", "{applied}");
+        assert!(obs.writes.lock().unwrap()[0]["requestData"]["inputName"].is_null());
+        assert_eq!(
+            obs.writes.lock().unwrap()[0]["requestData"]["inputUuid"],
+            "uuid-Mic/Aux"
+        );
+        {
+            let mut context = obs.context.lock().unwrap();
+            if replacement == "collection" {
+                context.collection = "Other collection".into();
+            } else {
+                context
+                    .uuids
+                    .insert("Mic/Aux".into(), "replacement-uuid".into());
+            }
+        }
+        integration.restore().unwrap();
+        let status = wait_for(&mut integration, |status| {
+            status["lastChange"]["state"] == "failed"
+        });
+        assert_eq!(
+            status["lastChange"]["error"], "changedInObs",
+            "{replacement}: {status}"
+        );
+        assert_eq!(obs.writes.lock().unwrap().len(), 1, "{replacement}");
+        assert_eq!(
+            obs.inputs.lock().unwrap()["Mic/Aux"].1["device_id"],
+            CABLE_A_OUTPUT
+        );
+        assert_eq!(status["lastChange"]["restorable"], true);
+    }
+}
+
+#[test]
+fn a_source_without_a_public_uuid_is_read_only() {
+    let obs = fake_obs(PASSWORD);
+    obs.context.lock().unwrap().uuids.remove("Desktop Audio");
+    let mut integration = connected(&obs, Some(PASSWORD));
+    assert!(input_named(&integration.status(), "Desktop Audio")["uuid"].is_null());
+    assert!(integration
+        .preview(
+            &[json!({ "inputName": "Desktop Audio", "muted": true })],
+            None
+        )
+        .is_err());
+    assert!(obs.writes.lock().unwrap().is_empty());
+}
+
+#[test]
+fn track_flags_are_bounded_and_incomplete_flags_stay_unknown() {
+    assert_eq!(
+        parse_audio_tracks(
+            &json!({ "1": true, "2": false, "3": true, "4": false, "5": false, "6": true })
+        ),
+        Some(vec![1, 3, 6])
+    );
+    for value in [
+        Value::Null,
+        json!([]),
+        json!({ "1": true }),
+        json!({ "1": true, "2": false, "3": true, "4": false, "5": false, "6": "true" }),
+    ] {
+        assert_eq!(parse_audio_tracks(&value), None);
+    }
+}
+
+#[test]
+fn live_inspection_retains_inactive_sources_and_unknown_audio_facts() {
+    let obs = fake_obs(PASSWORD);
+    {
+        let mut context = obs.context.lock().unwrap();
+        context.active = Some(false);
+        context.tracks = Value::Null;
+        context.monitor_type = None;
+    }
+    let mut integration = connected(&obs, Some(PASSWORD));
+    let status = integration.status();
+    let mic = input_named(&status, "Mic/Aux");
+    assert_eq!(mic["active"], false);
+    assert!(mic["audioTracks"].is_null());
+    assert!(mic["monitorOnly"].is_null());
+}
+
+#[test]
 fn a_wrong_or_missing_password_is_reported_and_a_pasted_one_connects() {
     let obs = fake_obs(PASSWORD);
     let mut wrong = ObsIntegration::new(ObsPaths {
@@ -706,6 +932,8 @@ fn a_closed_obs_shows_the_saved_scene_collection() {
     assert_eq!(status["source"], "savedFile", "{status}");
     assert_eq!(status["connection"], "off");
     assert_eq!(input_named(&status, "Mic/Aux")["deviceId"], MIC);
+    assert!(input_named(&status, "Mic/Aux")["active"].is_null());
+    assert!(input_named(&status, "Mic/Aux")["audioTracks"].is_null());
     integration.connect(None);
     let status = wait_for(&mut integration, |status| {
         status["connection"] == "serverOff"
@@ -718,4 +946,206 @@ fn a_closed_obs_shows_the_saved_scene_collection() {
             .is_err(),
         "a saved file is never changed"
     );
+}
+
+#[test]
+fn a_server_without_authentication_needs_no_password() {
+    let obs = fake_obs("");
+    let mut integration = connected(&obs, None);
+    assert!(integration.status()["passwordSource"].is_null());
+}
+
+#[test]
+fn a_partial_refused_apply_keeps_the_successful_change_restorable() {
+    let obs = fake_obs(PASSWORD);
+    let mut integration = connected(&obs, Some(PASSWORD));
+    obs.context.lock().unwrap().refuse_write = Some("Mic/Aux".into());
+    let preview = integration
+        .preview(
+            &[
+                json!({ "inputName": "Desktop Audio", "muted": true }),
+                json!({ "inputName": "Mic/Aux", "deviceId": CABLE_A_OUTPUT }),
+            ],
+            None,
+        )
+        .unwrap();
+    integration
+        .apply(preview["previewId"].as_str().unwrap())
+        .unwrap();
+    let status = wait_for(&mut integration, |status| {
+        status["lastChange"]["state"] == "failed"
+    });
+    assert_eq!(status["lastChange"]["error"], "refusedByObs", "{status}");
+    assert_eq!(status["lastChange"]["changed"], 1);
+    assert_eq!(status["lastChange"]["restorable"], true);
+    assert!(obs.inputs.lock().unwrap()["Desktop Audio"].2);
+    assert_eq!(obs.inputs.lock().unwrap()["Mic/Aux"].1["device_id"], MIC);
+    integration.restore().unwrap();
+    let status = wait_for(&mut integration, |status| {
+        status["lastChange"]["state"] == "restored"
+    });
+    assert_eq!(status["lastChange"]["state"], "restored", "{status}");
+    assert!(!obs.inputs.lock().unwrap()["Desktop Audio"].2);
+}
+
+#[test]
+fn a_partial_restore_can_resume_without_repeating_completed_changes() {
+    let obs = fake_obs(PASSWORD);
+    let mut integration = connected(&obs, Some(PASSWORD));
+    let preview = integration
+        .preview(
+            &[
+                json!({ "inputName": "Mic/Aux", "deviceId": CABLE_A_OUTPUT }),
+                json!({ "inputName": "Desktop Audio", "muted": true }),
+            ],
+            None,
+        )
+        .unwrap();
+    integration
+        .apply(preview["previewId"].as_str().unwrap())
+        .unwrap();
+    let applied = wait_for(&mut integration, |status| {
+        status["lastChange"]["state"] == "applied"
+    });
+    assert_eq!(applied["lastChange"]["state"], "applied", "{applied}");
+    obs.context.lock().unwrap().refuse_write = Some("Mic/Aux".into());
+    integration.restore().unwrap();
+    let failed = wait_for(&mut integration, |status| {
+        status["lastChange"]["state"] == "failed"
+    });
+    assert_eq!(failed["lastChange"]["changed"], 1, "{failed}");
+    assert_eq!(failed["lastChange"]["restorable"], true);
+    assert!(!obs.inputs.lock().unwrap()["Desktop Audio"].2);
+    assert_eq!(
+        obs.inputs.lock().unwrap()["Mic/Aux"].1["device_id"],
+        CABLE_A_OUTPUT
+    );
+    obs.context.lock().unwrap().refuse_write = None;
+    integration.restore().unwrap();
+    let restored = wait_for(&mut integration, |status| {
+        status["lastChange"]["state"] == "restored"
+    });
+    assert_eq!(restored["lastChange"]["state"], "restored", "{restored}");
+    assert_eq!(restored["lastChange"]["changed"], 1);
+    assert_eq!(restored["lastChange"]["restorable"], false);
+    assert_eq!(obs.writes.lock().unwrap().len(), 4);
+}
+
+#[test]
+fn connection_loss_preserves_confirmed_changes_for_restore_after_reconnect() {
+    let obs = fake_obs(PASSWORD);
+    let mut integration = connected(&obs, Some(PASSWORD));
+    obs.context.lock().unwrap().drop_write_uuid = Some("uuid-Mic/Aux".into());
+    let preview = integration
+        .preview(
+            &[
+                json!({ "inputName": "Desktop Audio", "muted": true }),
+                json!({ "inputName": "Mic/Aux", "deviceId": CABLE_A_OUTPUT }),
+            ],
+            None,
+        )
+        .unwrap();
+    integration
+        .apply(preview["previewId"].as_str().unwrap())
+        .unwrap();
+    let failed = wait_for(&mut integration, |status| {
+        status["lastChange"]["state"] == "failed"
+    });
+    assert_eq!(failed["lastChange"]["error"], "connectionLost", "{failed}");
+    assert_eq!(failed["lastChange"]["changed"], 1);
+    assert_eq!(failed["lastChange"]["restorable"], true);
+    obs.context.lock().unwrap().drop_write_uuid = None;
+    integration.connect(None);
+    let reconnected = wait_for(&mut integration, |status| {
+        status["connection"] == "connected"
+    });
+    assert_eq!(reconnected["connection"], "connected", "{reconnected}");
+    integration.restore().unwrap();
+    let restored = wait_for(&mut integration, |status| {
+        status["lastChange"]["state"] == "restored"
+    });
+    assert_eq!(restored["lastChange"]["state"], "restored", "{restored}");
+    assert!(!obs.inputs.lock().unwrap()["Desktop Audio"].2);
+}
+
+#[test]
+fn previews_expire_and_parallel_changes_are_refused_before_queueing() {
+    let mut integration = ObsIntegration::new(ObsPaths {
+        settings: None,
+        port: None,
+    });
+    {
+        let mut snapshot = integration.shared.snapshot();
+        snapshot.connection = Connection::Connected;
+        snapshot.source = Some(Source::Live);
+        snapshot.scene_collection = Some("Streaming".into());
+        let mut source = input("Mic/Aux", AudioKind::InputCapture, Some(MIC), Some(false));
+        source.uuid = Some("uuid-mic".into());
+        snapshot.inputs.push(source);
+    }
+    let changes = [json!({ "inputName": "Mic/Aux", "deviceId": CABLE_A_OUTPUT })];
+    let preview = integration.preview(&changes, None).unwrap();
+    integration.preview.as_mut().unwrap().created =
+        Instant::now() - Duration::from_secs(OBS_PREVIEW_SECONDS + 1);
+    assert!(integration
+        .apply(preview["previewId"].as_str().unwrap())
+        .unwrap_err()
+        .contains("expired"));
+    integration.shared.snapshot().change = ChangeState::Applying;
+    integration.shared.snapshot().restorable = true;
+    assert!(integration.preview(&changes, None).is_err());
+    assert!(integration.restore().is_err());
+    assert!(integration.shared.commands.lock().unwrap().is_empty());
+}
+
+#[test]
+fn dropping_the_owner_releases_the_obs_thread_and_connection() {
+    let obs = fake_obs(PASSWORD);
+    let integration = connected(&obs, Some(PASSWORD));
+    let worker = Arc::downgrade(&integration.shared);
+    drop(integration);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while worker.upgrade().is_some() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        worker.upgrade().is_none(),
+        "OBS worker retained a dropped backend"
+    );
+    // The single-client fake server accepts a replacement only after the
+    // old connection is released as well.
+    let _replacement = connected(&obs, Some(PASSWORD));
+}
+
+#[test]
+fn pending_connection_choices_are_bounded_and_disconnect_forgets_passwords() {
+    let integration = ObsIntegration::new(ObsPaths {
+        settings: None,
+        port: None,
+    });
+    for index in 0..100 {
+        integration.shared.push(Command::Connect {
+            password: Some(format!("test-secret-{index}")),
+        });
+        integration.shared.push(Command::Refresh);
+    }
+    assert_eq!(integration.shared.commands.lock().unwrap().len(), 2);
+    integration.shared.push(Command::Disconnect);
+    let commands = integration.shared.commands.lock().unwrap();
+    assert!(!commands
+        .iter()
+        .any(|item| matches!(item, Command::Connect { .. })));
+    assert_eq!(commands.len(), 2);
+}
+
+#[test]
+fn bounded_files_reject_oversize_invalid_utf8_and_directories() {
+    let folder = settings_folder(None);
+    let file = folder.join("bounded.json");
+    std::fs::write(&file, b"1234").unwrap();
+    assert_eq!(read_bounded(&file, 4).as_deref(), Some("1234"));
+    assert!(read_bounded(&file, 3).is_none());
+    std::fs::write(&file, [0xff]).unwrap();
+    assert!(read_bounded(&file, 4).is_none());
+    assert!(read_bounded(&folder, 4).is_none());
 }

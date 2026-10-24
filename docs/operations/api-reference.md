@@ -129,7 +129,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `virtualRoutes.list` | `read` | read-only; returns explicit durable cross-session routes |
 | `virtualRoutes.replace` | `deviceAdministration` | mutating; revision-checked and requires an idempotency key |
 | `apps.list` | `read` | read-only; `audioEndpoints` names each endpoint the process has a session on (`render` also covers a loopback recorder of that output) |
-| `obs.status` | `read` | read-only; OBS Studio facts from the backend's OBS thread: installed, connection, `live` or `savedFile` source, scene collection, up to 64 audio sources (kind, device ID, application, muted) and the last change. Never returns the password |
+| `obs.status` | `read` | read-only; OBS Studio facts from the backend's OBS thread: installed, connection, `live` or `savedFile` source, scene collection, up to 64 audio sources (UUID, kind, device ID, application, muted, active in Program, enabled audio tracks 1–6, Monitor Only) and the last change. Activity, tracks and monitoring are null for saved files or unavailable facts. Never returns the password |
 | `obs.refresh` | `read` | read-only; asks the OBS thread to read OBS again (or the saved scene collection while OBS is closed) |
 | `obs.connect` | `integrationWrite` | mutating; connects to OBS's WebSocket server on `127.0.0.1` with the password from OBS's settings, or an optional pasted `password` (at most 256 bytes). Not journaled; the password stays in memory only |
 | `obs.disconnect` | `integrationWrite` | mutating; closes the connection and forgets the password and the restore list |

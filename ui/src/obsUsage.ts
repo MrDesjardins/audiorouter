@@ -63,16 +63,16 @@ const SOURCE_KINDS: readonly NodeKind[] = [
   "virtualRenderSource",
 ];
 
-/** The device OBS records: "default" is the Windows default (console role) device. */
+/** OBS uses the communications default for capture and console for playback. */
 function resolveDevice(
   input: ObsAudioInput,
   devices: readonly DeviceListItem[],
 ): { device: DeviceListItem | null; isDefault: boolean } {
   const direction = input.kind === "inputCapture" ? "capture" : "render";
+  const role = direction === "capture" ? "communications" : "console";
   if (input.deviceId === "default")
     return {
-      device:
-        devices.find((device) => device.direction === direction && device.defaultRoles.includes("console")) ?? null,
+      device: devices.find((device) => device.direction === direction && device.defaultRoles.includes(role)) ?? null,
       isDefault: true,
     };
   return { device: devices.find((device) => device.id === input.deviceId) ?? null, isDefault: false };
@@ -114,16 +114,18 @@ export function obsCheck(
   status: ObsStatus | null,
   applications: readonly ApplicationInfo[],
   devices: readonly DeviceListItem[],
+  stale = false,
 ): ObsCheck {
   if (!status) return pendingObsCheck();
   const running = appDevices(applications, "obs").running;
-  const view: ObsView = !status.installed
-    ? "notInstalled"
-    : !running
-      ? "closed"
-      : status.connection === "connected"
-        ? "connected"
-        : "connect";
+  const view: ObsView =
+    status.connection === "connected"
+      ? "connected"
+      : !status.installed
+        ? "notInstalled"
+        : !running
+          ? "closed"
+          : "connect";
   const voice = session ? voiceCableOutputs(session, devices) : [];
   const microphones = session ? microphoneNodes(session, devices) : [];
   const microphoneIds = session
@@ -136,7 +138,7 @@ export function obsCheck(
         .map((node) => endpointOf(session, node.id))
         .filter((id): id is string => id !== null)
     : [];
-  const canFix = view === "connected";
+  const canFix = !stale && view === "connected" && status.source === "live" && status.sceneCollection !== null;
 
   const carriesVoice = new Set<string>();
   const sources: ObsSourceRow[] = status.inputs.map((input) => {
@@ -185,12 +187,23 @@ export function obsCheck(
         row.fixLabel = `${input.name}: ${device.name} → ${busy.name}`;
       }
     }
-    if (!row.muted && (row.hears.includes("Voice") || voiceRenders.includes(device.id))) carriesVoice.add(input.name);
+    // A saved source or an unmuted source in another scene is not evidence
+    // that the voice reaches any OBS output now. Missing facts stay unknown.
+    if (
+      status.source === "live" &&
+      input.active === true &&
+      input.muted === false &&
+      input.monitorOnly === false &&
+      input.audioTracks &&
+      input.audioTracks.length > 0 &&
+      (row.hears.includes("Voice") || voiceRenders.includes(device.id))
+    )
+      carriesVoice.add(input.name);
     return row;
   });
 
-  // The voice reaches the stream through two sources: a desktop capture that
-  // also plays the voice doubles (and delays) it.
+  // Confirmed sources can duplicate voice only on a shared OBS audio track.
+  // The streaming/recording profile's selected tracks are not inferred here.
   if (session && carriesVoice.size > 1) {
     // A playback device the session feeds without the voice (game, chat).
     const elsewhere = sessionOutputs.find(
@@ -199,7 +212,14 @@ export function obsCheck(
     for (const row of sources) {
       const input = status.inputs.find((item) => item.name === row.name);
       if (!input || input.kind !== "outputCapture" || !carriesVoice.has(row.name) || row.problem) continue;
-      row.problem = "Also plays your voice, so your voice is on the stream twice.";
+      const overlaps = status.inputs.some(
+        (other) =>
+          other.name !== input.name &&
+          carriesVoice.has(other.name) &&
+          other.audioTracks?.some((track) => input.audioTracks?.includes(track)),
+      );
+      if (!overlaps) continue;
+      row.problem = "Also plays your voice, so your voice is recorded twice on the same OBS audio track.";
       const target = elsewhere ? devices.find((device) => device.id === elsewhere) : undefined;
       if (target) {
         row.fix = { inputName: row.name, deviceId: target.id };
@@ -207,23 +227,27 @@ export function obsCheck(
       }
     }
   }
-  if (!canFix)
-    for (const row of sources) {
+  for (const row of sources) {
+    // Older OBS servers may omit a source UUID. Keep those sources read-only.
+    if (!canFix || !status.inputs.find((input) => input.name === row.name)?.uuid) {
       row.fix = null;
       row.fixLabel = null;
     }
+  }
 
   const problems = sources.filter((row) => row.problem !== null).length;
-  const state: AppCheckState =
-    view === "notInstalled" || view === "closed"
+  const state: AppCheckState = stale
+    ? "unknown"
+    : view === "notInstalled" || view === "closed"
       ? "notRunning"
       : problems > 0
         ? "check"
         : carriesVoice.size > 0
           ? "ready"
           : "unknown";
-  const summary =
-    view === "notInstalled"
+  const summary = stale
+    ? "Could not refresh OBS; showing the last check."
+    : view === "notInstalled"
       ? "OBS Studio is not installed on this PC."
       : view === "closed"
         ? status.source === "savedFile"
@@ -235,9 +259,11 @@ export function obsCheck(
             ? "Ready"
             : view === "connect"
               ? "Connect to check OBS's audio sources."
-              : voice.length > 0
-                ? `No OBS source records your processed voice. Add an Audio Input Capture with ${voice[0].name}.`
-                : "No OBS source records your voice.";
+              : sources.some((row) => row.hears.includes("Voice"))
+                ? "Voice source found. Check its scene, mute, monitoring and audio tracks in OBS."
+                : voice.length > 0
+                  ? `No OBS source records your processed voice. Add an Audio Input Capture with ${voice[0].name}.`
+                  : "No OBS source records your voice.";
   return { appId: "obs", state, summary, rows: [], view, sources };
 }
 
