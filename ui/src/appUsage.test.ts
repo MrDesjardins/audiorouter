@@ -151,6 +151,20 @@ describe("cables", () => {
     const disabled = { ...session, edges: [edge("mic", "chain"), edge("chain", "voice-out", false)] };
     expect(voiceCableOutputs(disabled, devices)).toEqual([]);
   });
+
+  it("does not take sound coming in from a cable for your voice", () => {
+    // Game audio read from CABLE Output and sent on to CABLE-A Input is not a microphone.
+    const relay = {
+      ...session,
+      nodes: [
+        node("game-in", "physicalInput", { endpointId: "cable-out" }),
+        node("relay-out", "physicalOutput", { endpointId: "cable-a-in" }),
+      ],
+      edges: [edge("game-in", "relay-out")],
+    } as unknown as Session;
+    expect(voiceCableOutputs(relay, devices)).toEqual([]);
+    expect(sessionInvolvesDiscord(relay, devices)).toBe(false);
+  });
 });
 
 describe("Discord check", () => {
@@ -228,6 +242,7 @@ describe("Discord check", () => {
     expect(idle.state).toBe("unknown");
     expect(idle.rows.map((row) => row.state)).toEqual(["info", "info"]);
     const noVoiceCable = discordCheck(null, [app("Discord.exe", [records("mic")])], devices);
-    expect(noVoiceCable.rows[0].state).toBe("info");
+    // Not a warning, but a way forward: the row offers the cable setup.
+    expect(noVoiceCable.rows[0]).toMatchObject({ state: "info", action: "virtualCables" });
   });
 });

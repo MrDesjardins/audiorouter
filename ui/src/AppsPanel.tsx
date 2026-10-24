@@ -60,9 +60,10 @@ function CopyName({ name }: { name: string }) {
   );
 }
 
-function CheckRow({ row }: { row: AppCheckRow }) {
+function CheckRow({ row, onOpenVirtualCables }: { row: AppCheckRow; onOpenVirtualCables?: () => void }) {
   const [open, setOpen] = useState(false);
   const fix = row.state === "check" ? (row.expectedName ?? null) : null;
+  const openCables = row.action === "virtualCables" ? (onOpenVirtualCables ?? null) : null;
   return (
     <li className={`app-check-row is-${row.state}`}>
       <span className="app-check-icon" aria-hidden="true">
@@ -78,16 +79,22 @@ function CheckRow({ row }: { row: AppCheckRow }) {
         <small>{row.message}</small>
         {/* The link's line is kept on every row, so a row turning from
             ready to check does not grow (UI-17); only opening the steps does. */}
-        <button
-          type="button"
-          className={fix ? "app-link-button" : "app-link-button app-label-hidden"}
-          aria-expanded={fix ? open : undefined}
-          aria-hidden={!fix}
-          disabled={!fix}
-          onClick={() => setOpen((value) => !value)}
-        >
-          Show me how
-        </button>
+        {openCables ? (
+          <button type="button" className="app-link-button" onClick={openCables}>
+            Set up a virtual cable
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={fix ? "app-link-button" : "app-link-button app-label-hidden"}
+            aria-expanded={fix ? open : undefined}
+            aria-hidden={!fix}
+            disabled={!fix}
+            onClick={() => setOpen((value) => !value)}
+          >
+            Show me how
+          </button>
+        )}
         {fix && open && (
           <span className="app-check-steps">
             <span>
@@ -101,7 +108,7 @@ function CheckRow({ row }: { row: AppCheckRow }) {
   );
 }
 
-function DiscordCard({ check }: { check: AppCheck }) {
+function DiscordCard({ check, onOpenVirtualCables }: { check: AppCheck; onOpenVirtualCables?: () => void }) {
   return (
     <section className="panel app-card" aria-labelledby="app-card-discord" data-app="discord">
       <header className="app-card-heading">
@@ -116,7 +123,7 @@ function DiscordCard({ check }: { check: AppCheck }) {
       </p>
       <ul className="app-check-list">
         {check.rows.map((row) => (
-          <CheckRow key={row.id} row={row} />
+          <CheckRow key={row.id} row={row} onOpenVirtualCables={onOpenVirtualCables} />
         ))}
       </ul>
       <details className="app-recommended">
@@ -181,6 +188,7 @@ export function AppsPanel({
   stale,
   connected,
   onRefresh,
+  onOpenVirtualCables,
 }: {
   discord: AppCheck;
   devices: DeviceListItem[];
@@ -188,6 +196,8 @@ export function AppsPanel({
   stale: boolean;
   connected: boolean;
   onRefresh: () => void;
+  /** Opens the Virtual Cables tab, for a session that has no voice cable yet. */
+  onOpenVirtualCables?: () => void;
 }) {
   return (
     <>
@@ -203,7 +213,7 @@ export function AppsPanel({
           Check now
         </button>
       </div>
-      <DiscordCard check={discord} />
+      <DiscordCard check={discord} onOpenVirtualCables={onOpenVirtualCables} />
       <OtherApps applications={applications} devices={devices} />
     </>
   );

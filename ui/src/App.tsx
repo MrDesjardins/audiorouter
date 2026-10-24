@@ -2878,6 +2878,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       stale={applicationUsage.stale}
       connected={backend.connected}
       onRefresh={applicationUsage.refresh}
+      onOpenVirtualCables={() => setWorkbenchTab("virtualCables")}
     />
   );
   const cableWorkbenchContent = (

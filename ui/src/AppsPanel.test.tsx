@@ -112,6 +112,34 @@ describe("AppsPanel", () => {
   });
 });
 
+describe("AppsPanel, no voice cable yet", () => {
+  it("offers the cable setup in the reserved link line", () => {
+    const onOpenVirtualCables = vi.fn();
+    const noCable: AppCheck = {
+      ...needsCheck,
+      state: "unknown",
+      rows: [
+        { ...needsCheck.rows[0], state: "info", expectedName: undefined, action: "virtualCables" },
+        needsCheck.rows[1],
+      ],
+    };
+    render(
+      <AppsPanel
+        discord={noCable}
+        devices={devices}
+        applications={[]}
+        stale={false}
+        connected
+        onRefresh={vi.fn()}
+        onOpenVirtualCables={onOpenVirtualCables}
+      />,
+    );
+    expect(document.querySelectorAll(".app-link-button").length).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: "Set up a virtual cable" }));
+    expect(onOpenVirtualCables).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("AppStatusStrip", () => {
   it("names the state for screen readers and opens Apps", () => {
     const onOpen = vi.fn();

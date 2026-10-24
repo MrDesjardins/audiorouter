@@ -175,7 +175,30 @@ function outputsReachedFrom(session: Session, sourceIds: readonly string[]): str
  * is what Discord and OBS should use as their microphone.
  */
 export function voiceCableOutputs(session: Session, devices: readonly DeviceListItem[]): DeviceListItem[] {
-  const microphones = session.nodes.filter((node) => node.kind === "physicalInput").map((node) => node.id);
+  return voiceCablesFrom(session, devices, microphoneNodes(session, devices));
+}
+
+/**
+ * The session's microphones: inputs that are not a virtual cable. A cable's
+ * Output brings another app's sound in (game audio, a call), so what it
+ * reaches is not your voice.
+ */
+function microphoneNodes(session: Session, devices: readonly DeviceListItem[]): string[] {
+  return session.nodes
+    .filter((node) => {
+      if (node.kind !== "physicalInput") return false;
+      const endpoint = endpointOf(session, node.id);
+      const name = endpoint ? nameOf(devices, endpoint) : null;
+      return !(name && VB_CABLE.test(name));
+    })
+    .map((node) => node.id);
+}
+
+function voiceCablesFrom(
+  session: Session,
+  devices: readonly DeviceListItem[],
+  microphones: readonly string[],
+): DeviceListItem[] {
   return outputsReachedFrom(session, microphones)
     .map((id) => devices.find((device) => device.id === id))
     .filter((device): device is DeviceListItem => device !== undefined)
@@ -216,6 +239,8 @@ export interface AppCheckRow {
   message: string;
   /** Device name to suggest, for the "Copy device name" action. */
   expectedName?: string;
+  /** A place in AudioRouter that fixes this row. */
+  action?: "virtualCables";
 }
 
 export interface AppCheck {
@@ -298,7 +323,9 @@ export function discordCheck(
           ? `This is the 16-channel side of the same cable. Choose ${expected.name} instead.`
           : usesRawMic
             ? `This is your microphone without AudioRouter's effects. Choose ${expected.name} to send your processed voice.`
-            : `AudioRouter sends your processed voice to ${expected.name}.`,
+            : voice.length > 1
+              ? `AudioRouter sends your processed voice to ${voice.map((device) => device.name).join(" and ")}. Choose one of them.`
+              : `AudioRouter sends your processed voice to ${expected.name}.`,
       expectedName: expected.name,
     });
   } else {
@@ -307,7 +334,9 @@ export function discordCheck(
       label: "Microphone",
       deviceName: microphoneName,
       state: "info",
-      message: "This session does not send your voice to a virtual cable, so there is nothing to compare.",
+      message:
+        "This session does not send your voice to a virtual cable yet. Send it to a cable, then choose that cable as Discord's microphone.",
+      action: "virtualCables",
     });
   }
 
