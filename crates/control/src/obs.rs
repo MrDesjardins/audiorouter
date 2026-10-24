@@ -65,28 +65,28 @@ const SPECIAL_INPUTS: [(&str, &str); 6] = [
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum AudioKind {
     /// Audio Input Capture: records a Windows recording device.
-    InputCapture,
+    Input,
     /// Audio Output Capture: records what a Windows playback device plays.
-    OutputCapture,
+    Output,
     /// Application Audio Capture: records one program.
-    ApplicationCapture,
+    Application,
 }
 
 impl AudioKind {
     fn from_obs(kind: &str) -> Option<Self> {
         match kind {
-            "wasapi_input_capture" => Some(Self::InputCapture),
-            "wasapi_output_capture" => Some(Self::OutputCapture),
-            "wasapi_process_output_capture" => Some(Self::ApplicationCapture),
+            "wasapi_input_capture" => Some(Self::Input),
+            "wasapi_output_capture" => Some(Self::Output),
+            "wasapi_process_output_capture" => Some(Self::Application),
             _ => None,
         }
     }
 
     fn name(self) -> &'static str {
         match self {
-            Self::InputCapture => "inputCapture",
-            Self::OutputCapture => "outputCapture",
-            Self::ApplicationCapture => "applicationCapture",
+            Self::Input => "inputCapture",
+            Self::Output => "outputCapture",
+            Self::Application => "applicationCapture",
         }
     }
 }
@@ -623,9 +623,9 @@ pub(crate) fn plan_changes(
             (Some(device), None) => {
                 let after = device.as_str().ok_or("deviceId must be a string")?;
                 let direction = match input.kind {
-                    AudioKind::InputCapture => EndpointDirection::Capture,
-                    AudioKind::OutputCapture => EndpointDirection::Render,
-                    AudioKind::ApplicationCapture => {
+                    AudioKind::Input => EndpointDirection::Capture,
+                    AudioKind::Output => EndpointDirection::Render,
+                    AudioKind::Application => {
                         return Err(format!("{name:?} records an application, not a device"))
                     }
                 };
@@ -851,7 +851,7 @@ fn audio_input(
     muted: Option<bool>,
 ) -> ObsAudioInput {
     let (device_id, application) = match kind {
-        AudioKind::ApplicationCapture => (
+        AudioKind::Application => (
             None,
             settings
                 .get("window")

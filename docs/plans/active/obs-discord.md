@@ -287,6 +287,13 @@ E0063). Initialize it with the same default as `ControlPlane::new`; the
 existing storage initialization tests exercise that constructor. Next:
 rerun remote compilation and the previously skipped suites.
 
+CI [40063735127](https://github.com/MrDesjardins/audiorouter/actions/runs/40063735127)
+cleared that compiler error, then strict Clippy rejected the shared `Capture`
+suffix of the internal `AudioKind` variants. Rename those to `Input`,
+`Output`, `Application`; wire values remain `inputCapture`, `outputCapture`,
+`applicationCapture`. Both formatting checks and diff check pass locally;
+the next CI run must execute the downstream suites.
+
 ### Coverage audit — 2026-10-23, owner asks whether all bugs are verified
 
 Scope SEC-15/UI-26: audit actual test cases against state/identity boundaries;

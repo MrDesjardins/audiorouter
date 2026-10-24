@@ -191,7 +191,7 @@ fn a_saved_scene_collection_lists_its_audio_sources() {
         [
             (
                 "Desktop Audio",
-                AudioKind::OutputCapture,
+                AudioKind::Output,
                 Some("desktop1"),
                 Some("default"),
                 None,
@@ -199,23 +199,16 @@ fn a_saved_scene_collection_lists_its_audio_sources() {
             ),
             (
                 "Mic/Aux",
-                AudioKind::InputCapture,
+                AudioKind::Input,
                 Some("mic1"),
                 Some(CABLE_A_OUTPUT),
                 None,
                 Some(true)
             ),
-            (
-                "Raw mic",
-                AudioKind::InputCapture,
-                None,
-                Some(MIC),
-                None,
-                None
-            ),
+            ("Raw mic", AudioKind::Input, None, Some(MIC), None, None),
             (
                 "Discord",
-                AudioKind::ApplicationCapture,
+                AudioKind::Application,
                 None,
                 None,
                 Some("Discord.exe"),
@@ -230,14 +223,14 @@ fn a_saved_scene_collection_lists_its_audio_sources() {
 #[test]
 fn planned_changes_name_the_value_they_replace() {
     let inputs = [
-        input("Mic/Aux", AudioKind::InputCapture, Some(MIC), Some(false)),
+        input("Mic/Aux", AudioKind::Input, Some(MIC), Some(false)),
         input(
             "Desktop Audio",
-            AudioKind::OutputCapture,
+            AudioKind::Output,
             Some("default"),
             Some(false),
         ),
-        input("Discord", AudioKind::ApplicationCapture, None, Some(false)),
+        input("Discord", AudioKind::Application, None, Some(false)),
     ];
     let endpoints = [
         endpoint(MIC, EndpointDirection::Capture),
@@ -1079,7 +1072,7 @@ fn previews_expire_and_parallel_changes_are_refused_before_queueing() {
         snapshot.connection = Connection::Connected;
         snapshot.source = Some(Source::Live);
         snapshot.scene_collection = Some("Streaming".into());
-        let mut source = input("Mic/Aux", AudioKind::InputCapture, Some(MIC), Some(false));
+        let mut source = input("Mic/Aux", AudioKind::Input, Some(MIC), Some(false));
         source.uuid = Some("uuid-mic".into());
         snapshot.inputs.push(source);
     }
