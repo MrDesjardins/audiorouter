@@ -425,6 +425,64 @@ fn built_in_roles_are_deny_by_default_for_sensitive_scopes() {
     assert!(
         ClientGrant::with_scopes([PermissionScope::PluginScan]).allows(PermissionScope::PluginScan)
     );
+    // Changing OBS is for the person at the desktop, never an enrolled
+    // client (MCP, CLI, Stream Deck).
+    assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::IntegrationWrite));
+    for role in [
+        ClientRole::Observer,
+        ClientRole::Editor,
+        ClientRole::Operator,
+    ] {
+        assert!(!ClientGrant::for_role(role).allows(PermissionScope::IntegrationWrite));
+    }
+}
+
+#[test]
+fn obs_methods_read_freely_but_change_obs_only_with_integration_write() {
+    let mut plane = ControlPlane::new("obs-grant-test");
+    let operator = ClientGrant::for_role(ClientRole::Operator);
+    let request = |method: &str, params: Value| JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: method.into(),
+        params: Some(params),
+    };
+    for (method, params) in [
+        ("obs.connect", json!({ "idempotencyKey": "obs-1" })),
+        ("obs.disconnect", json!({ "idempotencyKey": "obs-2" })),
+        ("obs.preview", json!({ "changes": [] })),
+        (
+            "obs.apply",
+            json!({ "previewId": "obs-preview-1", "idempotencyKey": "obs-3" }),
+        ),
+        ("obs.restore", json!({ "idempotencyKey": "obs-4" })),
+    ] {
+        let response = plane.dispatch_authorized(request(method, params), &operator);
+        let error = response
+            .error
+            .unwrap_or_else(|| panic!("{method} was allowed"));
+        assert_eq!(error.code, -32001, "{method}");
+    }
+    let shell = ClientGrant::for_desktop_shell();
+    let status = plane.dispatch_authorized(request("obs.status", json!({})), &operator);
+    assert!(status.error.is_none(), "{:?}", status.error);
+    let status = status.result.unwrap();
+    assert!(status["connection"].is_string());
+    assert!(status["inputs"].is_array());
+    // A password parameter is bounded and never echoed.
+    let refused = plane.dispatch_authorized(
+        request(
+            "obs.connect",
+            json!({ "idempotencyKey": "obs-5", "password": "x".repeat(300) }),
+        ),
+        &shell,
+    );
+    assert!(refused.error.is_some());
+    assert!(!serde_json::to_string(&refused)
+        .unwrap()
+        .contains(&"x".repeat(300)));
+    let unknown = plane.dispatch_authorized(request("obs.status", json!({ "x": 1 })), &shell);
+    assert!(unknown.error.is_some(), "unknown parameters are refused");
 }
 
 #[test]

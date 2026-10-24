@@ -155,8 +155,11 @@ import { ConnectionForm } from "./ConnectionForm";
 import { SetupWorkbench } from "./SetupWorkbench";
 import { AppsPanel } from "./AppsPanel";
 import { AppStatusStrip } from "./AppStatusStrip";
-import { discordCheck, pendingDiscordCheck, sessionInvolvesDiscord } from "./appUsage";
+import { discordCheck, pendingDiscordCheck, sessionInvolvesDiscord, voiceCableOutputs } from "./appUsage";
 import { useApplicationUsage } from "./useApplicationUsage";
+import { ObsCard, type ObsActions } from "./ObsCard";
+import { obsCheck } from "./obsUsage";
+import { useObsStatus } from "./useObsStatus";
 import { DeviceTroubleshooting } from "./DeviceTroubleshooting";
 import { RecordingWorkbench } from "./RecordingWorkbench";
 import { AdvancedWorkbench } from "./AdvancedWorkbench";
@@ -324,6 +327,20 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // Which apps use which devices, for the Apps tab and the top-bar strip.
   const listApplicationUsage = useMemo(() => (backend.connected ? () => backend.listApplications() : null), [backend]);
   const applicationUsage = useApplicationUsage(listApplicationUsage, { polling: workbenchTab === "apps" });
+  // OBS Studio facts (DEC-22): cheap reads of the backend's OBS thread.
+  const obsStatus = useObsStatus(backend.connected ? backend : null, { active: workbenchTab === "apps" });
+  const obsActions = useMemo<ObsActions | null>(() => {
+    const { obsConnect, obsDisconnect, obsPreview, obsApply, obsRestore } = backend;
+    if (!backend.connected || !obsConnect || !obsDisconnect || !obsPreview || !obsApply || !obsRestore) return null;
+    return {
+      connect: (password) => obsConnect.call(backend, password),
+      disconnect: () => obsDisconnect.call(backend),
+      preview: (changes) => obsPreview.call(backend, changes),
+      apply: (previewId) => obsApply.call(backend, previewId),
+      restore: () => obsRestore.call(backend),
+      poll: obsStatus.poll,
+    };
+  }, [backend, obsStatus.poll]);
   // UI-18: optional daily new-version check (GitHub public releases list).
   const [updateChecks, setUpdateChecks] = useState(updateCheckEnabled);
   const availableUpdate = useUpdateCheck(updateChecks && !isAutomatedHarness());
@@ -2865,11 +2882,21 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       applicationUsage.loaded ? discordCheck(draft, applicationUsage.applications, devices) : pendingDiscordCheck(),
     [applicationUsage.loaded, applicationUsage.applications, draft, devices],
   );
-  // Shown from the session alone, never because an app started (UI-17).
-  const appStripChecks = useMemo(
-    () => (backend.connected && sessionInvolvesDiscord(draft, devices) ? [discordAppCheck] : []),
-    [backend, draft, devices, discordAppCheck],
+  const obsAppCheck = useMemo(
+    () => obsCheck(draft, obsStatus.status, applicationUsage.applications, devices),
+    [draft, obsStatus.status, applicationUsage.applications, devices],
   );
+  // Shown from the session alone, never because an app started (UI-17):
+  // Discord when the session captures it or has a voice cable, OBS when it
+  // has a voice cable.
+  const appStripChecks = useMemo(() => {
+    if (!backend.connected) return [];
+    const checks = sessionInvolvesDiscord(draft, devices) ? [discordAppCheck] : [];
+    if (draft && voiceCableOutputs(draft, devices).length > 0) checks.push(obsAppCheck);
+    return checks;
+  }, [backend, draft, devices, discordAppCheck, obsAppCheck]);
+  const refreshApps = applicationUsage.refresh;
+  const refreshObs = obsStatus.refresh;
   const appsWorkbenchContent = (
     <AppsPanel
       discord={discordAppCheck}
@@ -2877,8 +2904,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       applications={applicationUsage.loaded ? applicationUsage.applications : []}
       stale={applicationUsage.stale}
       connected={backend.connected}
-      onRefresh={applicationUsage.refresh}
+      onRefresh={() => {
+        refreshApps();
+        refreshObs();
+      }}
       onOpenVirtualCables={() => setWorkbenchTab("virtualCables")}
+      obs={<ObsCard check={obsAppCheck} status={obsStatus.status} actions={obsActions} />}
     />
   );
   const cableWorkbenchContent = (

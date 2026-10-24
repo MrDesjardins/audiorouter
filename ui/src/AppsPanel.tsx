@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ApplicationInfo, DeviceListItem } from "@audiorouter/contracts";
 import {
   DISCORD_RECOMMENDED_SETTINGS,
@@ -150,7 +150,8 @@ function OtherApps({ applications, devices }: { applications: ApplicationInfo[];
     .filter((device) => device.state === "active")
     .map((device) => ({
       device,
-      uses: (usage.get(device.id) ?? []).filter((use) => use.active && use.appId !== "discord"),
+      // Discord and OBS have their own cards.
+      uses: (usage.get(device.id) ?? []).filter((use) => use.active && use.appId === null),
     }))
     .filter((row) => row.uses.length > 0);
   return (
@@ -189,6 +190,7 @@ export function AppsPanel({
   connected,
   onRefresh,
   onOpenVirtualCables,
+  obs,
 }: {
   discord: AppCheck;
   devices: DeviceListItem[];
@@ -198,6 +200,8 @@ export function AppsPanel({
   onRefresh: () => void;
   /** Opens the Virtual Cables tab, for a session that has no voice cable yet. */
   onOpenVirtualCables?: () => void;
+  /** The OBS card, built by the caller from `obs.status`. */
+  obs?: ReactNode;
 }) {
   return (
     <>
@@ -214,6 +218,7 @@ export function AppsPanel({
         </button>
       </div>
       <DiscordCard check={discord} onOpenVirtualCables={onOpenVirtualCables} />
+      {obs}
       <OtherApps applications={applications} devices={devices} />
     </>
   );

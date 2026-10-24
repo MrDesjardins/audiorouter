@@ -1470,8 +1470,110 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 }
             ]
         }),
+        "obs.status" => obs_status_output_schema(),
+        "obs.refresh" => json!({
+            "type": "object",
+            "properties": { "queued": { "const": true } },
+            "required": ["queued"],
+            "additionalProperties": false
+        }),
+        "obs.connect" | "obs.disconnect" => json!({
+            "type": "object",
+            "properties": { "connection": { "enum": ["connecting", "off"] } },
+            "required": ["connection"],
+            "additionalProperties": false
+        }),
+        "obs.preview" => {
+            let value = json!({ "type": ["string", "boolean"], "maxLength": crate::obs::MAX_OBS_DEVICE_ID_BYTES });
+            json!({
+                "type": "object",
+                "properties": {
+                    "previewId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                    "changes": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": crate::obs::MAX_OBS_CHANGES,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "inputName": { "type": "string", "minLength": 1, "maxLength": crate::obs::MAX_OBS_NAME_BYTES },
+                                "field": { "enum": ["device", "muted"] },
+                                "before": value,
+                                "after": value
+                            },
+                            "required": ["inputName", "field", "before", "after"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "expiresInSeconds": { "const": crate::obs::OBS_PREVIEW_SECONDS }
+                },
+                "required": ["previewId", "changes", "expiresInSeconds"],
+                "additionalProperties": false
+            })
+        }
+        "obs.apply" => json!({
+            "type": "object",
+            "properties": {
+                "state": { "const": "applying" },
+                "changes": { "type": "integer", "minimum": 1, "maximum": crate::obs::MAX_OBS_CHANGES }
+            },
+            "required": ["state", "changes"],
+            "additionalProperties": false
+        }),
+        "obs.restore" => json!({
+            "type": "object",
+            "properties": { "state": { "const": "restoring" } },
+            "required": ["state"],
+            "additionalProperties": false
+        }),
         _ => json!({ "type": "object" }),
     }
+}
+
+/// `obs.status`: facts only; the UI judges them against the session.
+pub(crate) fn obs_status_output_schema() -> Value {
+    let name = json!({ "type": ["string", "null"], "maxLength": crate::obs::MAX_OBS_NAME_BYTES });
+    json!({
+        "type": "object",
+        "properties": {
+            "installed": { "type": "boolean" },
+            "connection": { "enum": ["off", "connecting", "connected", "serverOff", "needsPassword", "wrongPassword", "failed"] },
+            "source": { "enum": ["live", "savedFile", null] },
+            "sceneCollection": name,
+            "inputs": {
+                "type": "array",
+                "maxItems": crate::obs::MAX_OBS_AUDIO_INPUTS,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "minLength": 1, "maxLength": crate::obs::MAX_OBS_NAME_BYTES },
+                        "uuid": name,
+                        "kind": { "enum": ["inputCapture", "outputCapture", "applicationCapture"] },
+                        "special": { "enum": ["desktop1", "desktop2", "mic1", "mic2", "mic3", "mic4", null] },
+                        "deviceId": { "type": ["string", "null"], "maxLength": crate::obs::MAX_OBS_DEVICE_ID_BYTES },
+                        "application": name,
+                        "muted": { "type": ["boolean", "null"] }
+                    },
+                    "required": ["name", "uuid", "kind", "special", "deviceId", "application", "muted"],
+                    "additionalProperties": false
+                }
+            },
+            "passwordSource": { "enum": ["obsSettings", "pasted", null] },
+            "lastChange": {
+                "type": "object",
+                "properties": {
+                    "state": { "enum": ["none", "applying", "applied", "restoring", "restored", "failed"] },
+                    "changed": { "type": "integer", "minimum": 0, "maximum": crate::obs::MAX_OBS_CHANGES },
+                    "restorable": { "type": "boolean" },
+                    "error": { "enum": ["changedInObs", "refusedByObs", "connectionLost", null] }
+                },
+                "required": ["state", "changed", "restorable", "error"],
+                "additionalProperties": false
+            }
+        },
+        "required": ["installed", "connection", "source", "sceneCollection", "inputs", "passwordSource", "lastChange"],
+        "additionalProperties": false
+    })
 }
 
 pub(crate) fn status_output_schema() -> Value {

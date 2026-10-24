@@ -233,6 +233,16 @@ export interface UiBackend {
   /** `nodes.set`, the same method the API tab's request builder generates (REST `POST /api/v1/nodes/set`). */
   setNode?(params: MethodParams["nodes.set"]): Promise<MethodResult["nodes.set"]>;
   listApplications(): Promise<ApplicationRow[]>;
+  /** OBS Studio (DEC-22): facts from OBS, or its saved setup while it is closed. */
+  obsStatus?(): Promise<MethodResult["obs.status"]>;
+  /** Ask the backend to read OBS again; the next obsStatus shows the result. */
+  obsRefresh?(): Promise<MethodResult["obs.refresh"]>;
+  /** Without a password, the backend reads it from OBS settings on this PC. */
+  obsConnect?(password?: string): Promise<MethodResult["obs.connect"]>;
+  obsDisconnect?(): Promise<MethodResult["obs.disconnect"]>;
+  obsPreview?(changes: MethodParams["obs.preview"]["changes"]): Promise<MethodResult["obs.preview"]>;
+  obsApply?(previewId: string): Promise<MethodResult["obs.apply"]>;
+  obsRestore?(): Promise<MethodResult["obs.restore"]>;
   listDevices(): Promise<DeviceListItem[]>;
   prepareNativeEndpoint?(
     sessionId: string,
@@ -864,6 +874,30 @@ export function createLiveBackend(
     },
     async listApplications() {
       return client.request("applications.list", undefined);
+    },
+    async obsStatus() {
+      return client.request("obs.status", undefined);
+    },
+    async obsRefresh() {
+      return client.request("obs.refresh", undefined);
+    },
+    async obsConnect(password) {
+      return client.request("obs.connect", {
+        ...(password ? { password } : {}),
+        idempotencyKey: uiIdempotencyKey("obs-connect"),
+      });
+    },
+    async obsDisconnect() {
+      return client.request("obs.disconnect", { idempotencyKey: uiIdempotencyKey("obs-disconnect") });
+    },
+    async obsPreview(changes) {
+      return client.request("obs.preview", { changes });
+    },
+    async obsApply(previewId) {
+      return client.request("obs.apply", { previewId, idempotencyKey: uiIdempotencyKey("obs-apply") });
+    },
+    async obsRestore() {
+      return client.request("obs.restore", { idempotencyKey: uiIdempotencyKey("obs-restore") });
     },
     async listDevices() {
       const devices: DeviceListItem[] = await collectPagedRows((cursor) =>

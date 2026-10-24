@@ -137,7 +137,19 @@ fn host_allowed(host: Option<&str>, origin: Option<&str>, hosts: &[String]) -> b
 /// Methods only the desktop window may call: approving a recording folder is
 /// the user's own file-root decision (REC-07, SEC authorization UX), so a
 /// token holder on localhost cannot redirect recordings.
-pub const DESKTOP_ONLY_METHODS: &[&str] = &["recordings.setRoot", "devices.setAccess"];
+/// Methods the HTTP API refuses: they need the person at the AudioRouter
+/// window (a folder choice, device consent, OBS changes after a preview the
+/// person confirmed, DEC-22). Reading OBS (`obs.status`, `obs.refresh`) stays
+/// available.
+pub const DESKTOP_ONLY_METHODS: &[&str] = &[
+    "recordings.setRoot",
+    "devices.setAccess",
+    "obs.connect",
+    "obs.disconnect",
+    "obs.preview",
+    "obs.apply",
+    "obs.restore",
+];
 
 pub fn operation_path(name: &str) -> String {
     format!("/api/v1/{}", name.replace('.', "/"))
@@ -365,7 +377,11 @@ fn handle(
                 return fail(
                     stream,
                     403,
-                    "Choose the recording folder in the AudioRouter window",
+                    if method.starts_with("obs.") {
+                        "Connect to and change OBS in the AudioRouter window"
+                    } else {
+                        "Choose the recording folder in the AudioRouter window"
+                    },
                 );
             }
             method
@@ -637,6 +653,28 @@ mod tests {
         assert_eq!(status, 403, "{refused}");
         let (status, access) = call(&api, "/api/v1/devices/getAccess", Some(json!({})));
         assert_eq!(status, 200, "{access}");
+        // A token holder cannot connect to or change OBS (DEC-22).
+        for (path, body) in [
+            (
+                "/api/v1/obs/connect",
+                json!({"idempotencyKey":"deck-obs-1"}),
+            ),
+            (
+                "/api/v1/obs/preview",
+                json!({"changes":[{"inputName":"Mic/Aux","muted":true}]}),
+            ),
+            (
+                "/api/v1/obs/apply",
+                json!({"previewId":"obs-preview-1","idempotencyKey":"deck-obs-2"}),
+            ),
+            (
+                "/api/v1/obs/restore",
+                json!({"idempotencyKey":"deck-obs-3"}),
+            ),
+        ] {
+            let (status, refused) = call(&api, path, Some(body));
+            assert_eq!(status, 403, "{path}: {refused}");
+        }
         // Mistakes come back as 400 with a readable reason.
         let (status, error) = call(
             &api,

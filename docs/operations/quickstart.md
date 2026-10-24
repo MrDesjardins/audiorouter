@@ -855,6 +855,41 @@ Discord or Windows settings.
   "Plays to it or records it" is as precise as Windows can be, because an
   app recording a device's output looks the same as one playing to it.
 
+### Checking and fixing OBS Studio (Apps tab)
+
+The **OBS Studio** card in **Apps** shows *What OBS hears*: each audio
+source, its device, and what reaches it from your session.
+
+**What it checks:**
+- **Voice without effects:** a Mic/Aux source records your microphone
+  directly instead of the cable your processed voice goes to.
+- **16-channel cable:** a source records the 16-channel twin of your voice
+  cable.
+- **Voice twice:** Desktop Audio (or another output capture) also plays your
+  voice, for example because your headphones are the default device and you
+  monitor yourself. Muted sources are not judged.
+
+**When OBS is closed:** the card shows the setup OBS saved last, read only.
+
+**To connect** (needed for Fix in OBS):
+1. In OBS, open **Tools › WebSocket Server Settings**.
+2. Tick **Enable WebSocket server**, then choose **OK**.
+3. In AudioRouter, choose **Connect to OBS**.
+
+AudioRouter reads the server password from OBS's settings on this PC. If
+OBS refuses it, paste the password from **Show Connect Info**. The password
+stays in memory while connected; it is never saved or shown.
+
+**Fix in OBS:** lists one change per problem, all ticked. Untick any you
+want to keep, then choose **Change**. AudioRouter changes only those
+sources, and leaves alone any source you changed in OBS in the meantime.
+**Restore previous OBS settings** puts the old devices back. **Disconnect**
+forgets the password and the restore list.
+
+**What it does not change:** only the device or mute of existing OBS audio
+sources, and only when you confirm. It never reads your stream key, and
+the MCP, CLI and HTTP API can read OBS but cannot change it.
+
 ### Hiding devices you never use
 
 Windows lists every speaker and microphone it knows, including a monitor's

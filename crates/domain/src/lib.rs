@@ -787,6 +787,9 @@ pub enum PermissionScope {
     PluginScan,
     StartupWrite,
     DeviceAdministration,
+    /// Change another application's settings, after a preview the user
+    /// confirmed (DEC-22: OBS sources). Held by the desktop shell only.
+    IntegrationWrite,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -806,7 +809,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 124] = [
+pub const API_METHODS: [ApiMethodSpec; 131] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1302,6 +1305,43 @@ pub const API_METHODS: [ApiMethodSpec; 124] = [
         name: "applications.list",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    // OBS Studio (DEC-22). Reading is ordinary; connecting reads OBS's
+    // password and changing a source goes through preview, apply, restore.
+    ApiMethodSpec {
+        name: "obs.status",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "obs.refresh",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "obs.connect",
+        permission: PermissionScope::IntegrationWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "obs.disconnect",
+        permission: PermissionScope::IntegrationWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "obs.preview",
+        permission: PermissionScope::IntegrationWrite,
+        side_effect: SideEffectClass::PlanOnly,
+    },
+    ApiMethodSpec {
+        name: "obs.apply",
+        permission: PermissionScope::IntegrationWrite,
+        side_effect: SideEffectClass::ExternalOperation,
+    },
+    ApiMethodSpec {
+        name: "obs.restore",
+        permission: PermissionScope::IntegrationWrite,
+        side_effect: SideEffectClass::ExternalOperation,
     },
     ApiMethodSpec {
         name: "nodes.types",

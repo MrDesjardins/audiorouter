@@ -92,10 +92,12 @@ OBS card states, each keeping its size:
   closed".
 - **Running, not connected:** *Connect to OBS* opens three inline steps:
   1. In OBS: Tools › WebSocket Server Settings › Enable.
-  2. Copy the server password.
-  3. Paste it here.
+  2. Tick Enable WebSocket server, then OK.
+  3. Connect. AudioRouter reads the password from OBS's settings; a
+     password field appears only if OBS refuses it.
 
-  The note says "Stored only on this PC for your Windows account".
+  The note says the password stays in memory and is never stored or shown
+  (revised 2026-10-23, see Progress).
 - **Connected:** shows "What OBS hears":
 
 ```
@@ -158,7 +160,8 @@ it matters, and offers **Fix in OBS** (connected) or **Show me how**.
 - **`obs.status` / `obs.connect` / `obs.inspect` / `obs.preview` /
   `obs.apply` / `obs.restore` (O1/O2):**
   - A websocket v5 client in the backend, on `127.0.0.1:4455` only, with a
-    DPAPI-stored password.
+    password read from OBS's settings on Connect (or pasted) and kept in
+    memory only (revised 2026-10-23; no DPAPI copy).
   - Fallback to a bounded, read-only scene-collection file when OBS is
     closed.
   - `obs.apply` needs a new `IntegrationWrite` grant, which the shell
@@ -206,8 +209,8 @@ contracts updated in the same change.
 
 ## Next action
 
-Step 1, D1 backend. Compile and test after checking that the owner is not
-in a game.
+Compile and test D1, O1 and O2 (list under Progress, "Waiting") once the
+owner is not in a game, then the attended OBS check on a copied profile.
 
 ## Progress
 
@@ -271,3 +274,42 @@ in a game.
      `audioService.lateGaps`; compare its endpoints with the read-only
      session script.
   6. Then the device-node "Used by" footers (rest of D1).
+- O1 and O2, 2026-10-23 (owner: "Yes do both please"), implemented, not
+  yet compiled or run:
+  - Decision change: no DPAPI. On Connect, the backend reads the WebSocket
+    password from OBS's own `obs-websocket/config.json` for this Windows
+    user, or takes one the user pastes. It lives only in the OBS thread's
+    memory, is never journaled (`obs.connect` skips the idempotency
+    journal), logged or returned. Storing a second copy would add a secret
+    to protect and nothing for the user. Recorded in DEC-22 and SEC-15.
+  - Decision: a new `integrationWrite` scope for connect, disconnect,
+    preview, apply and restore. The desktop shell holds it; Observer,
+    Editor and Operator (MCP, CLI) do not. The HTTP adapter forwards with
+    the shell grant, so it refuses the OBS write methods with 403.
+  - Backend: `crates/control/src/obs.rs`. A background thread
+    `audiorouter-obs` owns all socket and file I/O, so the control thread
+    never waits on OBS; methods read a snapshot or queue a command.
+    obs-websocket v5 client on `127.0.0.1` (port from OBS's settings),
+    read of the saved scene collection while OBS is closed, preview (at
+    most 16 changes, 300 s, tied to the inspection), apply and restore
+    that leave alone any source changed in OBS since, and automatic
+    reconnect after Connect. Tests in `obs_tests.rs` use a fake v5 server
+    and never read the developer's OBS files.
+  - API: seven `obs.*` methods in the domain catalog (124 → 131),
+    schemas, grants, contracts and the API reference.
+  - UI: `obsUsage.ts` (what each source hears, the three problems, fixes
+    only while connected), `useObsStatus.ts`, `ObsCard.tsx` (connect
+    steps, password field only on refusal, Fix in OBS dialog, Restore,
+    Disconnect), the OBS strip chip when the session has a voice cable.
+    Tests: `obsUsage.test.ts` (owner's topology), `ObsCard.test.tsx`.
+  - Specs: UI-26 OBS card, SEC-03/SEC-15, the API method table, DEC-22
+    revision, quickstart "Checking and fixing OBS Studio".
+  - Not done, deliberately: the separate-tracks option and the toast from
+    the original sketch (the card's note line shows the outcome instead).
+    The site page keeps OBS "in development" until a release ships it.
+  - Waiting (owner playing): `cargo fmt` is clean. Still to run: Clippy
+    (workspace and `src-tauri`), `cargo test -p audiorouter-control
+    -p audiorouter-domain -p audiorouter-cli` and the `src-tauri` HTTP
+    tests, UI typecheck, lint and Vitest, contracts typecheck and drift,
+    Edge screenshots of the OBS card in three themes with offset sampling,
+    then one attended Fix and Restore on a copied OBS profile.

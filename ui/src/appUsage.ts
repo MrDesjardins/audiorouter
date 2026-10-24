@@ -151,13 +151,13 @@ function downstream(session: Session, start: readonly string[]): Set<string> {
   return reached;
 }
 
-function endpointOf(session: Session, nodeId: string): string | null {
+export function endpointOf(session: Session, nodeId: string): string | null {
   const value = session.nodes.find((node) => node.id === nodeId)?.parameters.endpointId;
   return typeof value === "string" && value ? value : null;
 }
 
 /** Playback devices a set of sources reaches through the session's enabled edges. */
-function outputsReachedFrom(session: Session, sourceIds: readonly string[]): string[] {
+export function outputsReachedFrom(session: Session, sourceIds: readonly string[]): string[] {
   const reached = downstream(session, sourceIds);
   return [
     ...new Set(
@@ -183,7 +183,7 @@ export function voiceCableOutputs(session: Session, devices: readonly DeviceList
  * Output brings another app's sound in (game audio, a call), so what it
  * reaches is not your voice.
  */
-function microphoneNodes(session: Session, devices: readonly DeviceListItem[]): string[] {
+export function microphoneNodes(session: Session, devices: readonly DeviceListItem[]): string[] {
   return session.nodes
     .filter((node) => {
       if (node.kind !== "physicalInput") return false;

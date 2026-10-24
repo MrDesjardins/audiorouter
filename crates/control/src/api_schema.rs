@@ -158,6 +158,13 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "apps.list" | "applications.list" => {
             "List discoverable application identities and observed Windows audio-session activity for binding."
         }
+        "obs.status" => "Report the OBS connection and OBS audio sources: live from OBS, or from its last saved scene collection while it is closed.",
+        "obs.refresh" => "Read OBS audio sources again, reconnecting if OBS has started since.",
+        "obs.connect" => "Connect to OBS on this PC through its WebSocket server, with the password from OBS settings or a pasted one. The password is never stored or returned.",
+        "obs.disconnect" => "Disconnect from OBS and forget its password and any pending restore.",
+        "obs.preview" => "Check OBS source changes and return each with the value it replaces. Nothing is sent to OBS.",
+        "obs.apply" => "Make the changes of a confirmed preview in OBS, skipping any source changed in OBS since the preview.",
+        "obs.restore" => "Put back the OBS values the last apply replaced.",
         "nodes.types" => "List supported node types and their availability.",
         "routes.inspect" => "Inspect upstream route provenance for a destination node.",
         "graph.history" => "List bounded committed graph revisions for a session.",
@@ -938,6 +945,46 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         "connections.remove" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
             &["from", "to", "idempotencyKey"],
+        ),
+        "obs.connect" => object_schema(
+            json!({
+                "password": { "type": "string", "minLength": 1, "maxLength": crate::obs::MAX_OBS_PASSWORD_BYTES, "writeOnly": true },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["idempotencyKey"],
+        ),
+        "obs.disconnect" | "obs.restore" => object_schema(
+            json!({
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["idempotencyKey"],
+        ),
+        "obs.preview" => object_schema(
+            json!({
+                "changes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": crate::obs::MAX_OBS_CHANGES,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "inputName": { "type": "string", "minLength": 1, "maxLength": crate::obs::MAX_OBS_NAME_BYTES },
+                            "deviceId": { "type": "string", "minLength": 1, "maxLength": crate::obs::MAX_OBS_DEVICE_ID_BYTES },
+                            "muted": { "type": "boolean" }
+                        },
+                        "required": ["inputName"],
+                        "additionalProperties": false
+                    }
+                }
+            }),
+            &["changes"],
+        ),
+        "obs.apply" => object_schema(
+            json!({
+                "previewId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["previewId", "idempotencyKey"],
         ),
         _ => object_schema(json!({}), &[]),
     }

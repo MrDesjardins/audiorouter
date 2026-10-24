@@ -38,6 +38,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 mod network_log;
+mod obs;
 pub mod os_transition;
 mod siege_round;
 mod simple;
@@ -380,6 +381,8 @@ pub struct ControlPlane {
     network_log: network_log::Sampler,
     /// Stats.cc client for Ducks following the Siege round (started on demand).
     siege_round_feed: siege_round::SiegeRoundFeed,
+    /// OBS Studio client (DEC-22); its thread starts on first use.
+    obs: obs::ObsIntegration,
     native_endpoint_taps: Option<AudioTapSet>,
     native_endpoint_taps_secondary: Option<AudioTapSet>,
     native_endpoint_rejections: u64,
@@ -527,6 +530,7 @@ impl ControlPlane {
             native_multi_input_mono_nodes: Vec::new(),
             network_log: network_log::Sampler::default(),
             siege_round_feed: Default::default(),
+            obs: Default::default(),
             native_endpoint_taps: None,
             native_endpoint_taps_secondary: None,
             native_endpoint_rejections: 0,
@@ -759,6 +763,9 @@ impl ControlPlane {
                     "virtualRoutes.list" => self.dispatch_virtual_routes_list(),
                     "virtualRoutes.replace" => self.dispatch_virtual_routes_replace(request.params),
                     "apps.list" | "applications.list" => self.dispatch_apps_list(),
+                    method if method.starts_with("obs.") => {
+                        self.dispatch_obs(method, request.params)
+                    }
                     "nodes.types" => Ok(self.describe()["nodeTypes"].clone()),
                     "nodes.describe" => Ok(self.describe()["nodeTypes"].clone()),
                     "presets.list" => Ok(self.describe()["presets"].clone()),

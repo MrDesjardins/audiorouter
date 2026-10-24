@@ -7632,3 +7632,112 @@ input[type="color"] {
 .theme-high-contrast .app-link-button {
   color: #ffff00;
 }
+/* OBS card (DEC-22). */
+.app-monogram.is-wide {
+  width: auto;
+  padding: 0 0.35rem;
+  font-size: 0.68rem;
+}
+/* Two labels in one cell: the widest sets the width (UI-17). */
+.app-swap {
+  display: inline-grid;
+}
+.app-swap > span {
+  grid-area: 1 / 1;
+}
+.obs-connect {
+  display: grid;
+  gap: 0.55rem;
+}
+.obs-steps {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+}
+.obs-password {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+.obs-password input {
+  width: 100%;
+}
+.obs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Two lines kept for status text, so messages do not move the card. */
+.obs-note {
+  min-height: 2.6em;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.obs-sources {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.obs-sources th,
+.obs-sources td {
+  padding: 0.3rem 0.25rem;
+  border-bottom: 1px solid var(--ambient-edge);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.obs-sources thead th {
+  color: #c6d0de;
+  font-weight: 600;
+}
+.obs-sources tbody th {
+  font-weight: 600;
+}
+.obs-sources tr.is-muted {
+  opacity: 0.7;
+}
+.obs-problem {
+  display: block;
+  margin-top: 0.2rem;
+  color: #ffd889;
+}
+.obs-fix-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+  padding: 0;
+  list-style: none;
+}
+.obs-fix-list label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+}
+.obs-fix-list label span {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.theme-light .obs-sources thead th {
+  color: #3b4656;
+}
+.theme-light .obs-problem {
+  color: #8a5a00;
+}
+.theme-high-contrast .obs-sources th,
+.theme-high-contrast .obs-sources td {
+  border-color: #fff;
+  color: #fff;
+}
+.theme-high-contrast .obs-problem {
+  color: #ffff00;
+}
+.theme-high-contrast .obs-sources tr.is-muted {
+  opacity: 1;
+}

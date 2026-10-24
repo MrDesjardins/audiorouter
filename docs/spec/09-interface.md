@@ -342,6 +342,29 @@ audio readiness and explains the exact endpoint and authorization steps.
   - **Refresh:** on window focus, every 10 s while the tab is open, and
     never while hidden. The last good result is kept through a failure.
   - **Writes:** AudioRouter never changes Discord or Windows settings.
+  - **OBS Studio card (SEC-15):** shows "What OBS hears": each audio
+    source, its device and what reaches it (Voice, Voice without effects,
+    Discord, other session sources), with the problem in words.
+    - **Problems:** the raw microphone instead of the voice cable; the
+      16-channel twin of the voice cable; an output capture (Desktop
+      Audio) that also plays the voice, so the voice is on the stream
+      twice. Muted sources are not judged.
+    - **States:** not installed; closed (the last saved scene collection,
+      read only, with no fix); running but not connected (three steps to
+      turn on OBS's WebSocket server, then **Connect to OBS**; a password
+      field appears only when OBS refuses or asks for one); connected.
+    - **Fix in OBS** (connected only): a dialog lists one ticked checkbox
+      per fix. AudioRouter previews exactly the ticked changes, then
+      applies that preview; an error keeps the dialog open with the
+      reason. **Restore previous OBS settings** is enabled only while the
+      last change can be restored. **Disconnect** forgets the password and
+      the restore list; after Connect, AudioRouter reconnects by itself
+      when OBS restarts.
+    - **Refresh:** status every 2 s while the tab is open, 15 s elsewhere,
+      400 ms while connecting or changing; OBS is read again on window
+      focus and when the tab opens. The last good status is kept through
+      a failure, and the note line keeps its height (UI-17).
+    - **Top-bar strip:** an OBS chip when the session has a voice cable.
 
 While a connected backend's initial snapshot is pending, show loading status
 and withhold the editable graph. Failure offers reconnect rather than editable

@@ -395,6 +395,9 @@ fn select_shell_grant(
             PermissionScope::StartupWrite,
             // Metadata scans of chosen plugin folders (authorized 2026-09-25).
             PermissionScope::PluginScan,
+            // Connect to OBS and change its sources after a confirmed
+            // preview (authorized 2026-10-23, DEC-22).
+            PermissionScope::IntegrationWrite,
             PermissionScope::DeviceAdministration,
         ])));
     }
