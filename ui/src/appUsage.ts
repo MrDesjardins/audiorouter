@@ -557,13 +557,29 @@ export function discordCheck(
         message: `This is the 16-channel side of ${busyTwin.name}, which AudioRouter plays to. Windows lets only one of them be used, so choose ${busyTwin.name}.`,
         expectedName: busyTwin.name,
       };
-    if (captureNodes.length > 0 && discordOutputs.includes(speaker))
+    if (captureNodes.length > 0 && discordOutputs.includes(speaker)) {
+      // On a cable, the doubled Discord is in what records its other end,
+      // not in your ears (owner report, 2026-10-24: Discord's speaker and the
+      // session's Outplayed mix share CABLE Input).
+      if (speakerPartner !== null) {
+        const recorders = (deviceUsage(applications).get(speakerPartner.id) ?? [])
+          .filter((use) => use.active && use.direction === "capture" && use.appId !== "discord")
+          .map((use) => use.label);
+        return {
+          ...base,
+          state: "check",
+          message: `AudioRouter also sends Discord to this cable, so ${
+            recorders.length > 0 ? recorders.join(" and ") : "anything recording " + speakerPartner.name
+          } gets Discord twice. Choose an output for Discord that nothing records, or stop sending Discord here in AudioRouter.`,
+        };
+      }
       return {
         ...base,
         state: "check",
         message:
           "AudioRouter already sends Discord here, and Discord also plays here itself, so you hear it twice. Choose a virtual cable as Discord's output.",
       };
+    }
     return {
       ...base,
       state: "ready",
