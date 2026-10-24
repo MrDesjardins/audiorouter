@@ -373,6 +373,7 @@ pub fn rpc_failure_log_summary(error: &serde_json::Value) -> serde_json::Value {
                     | "restartRequired"
                     | "planExpired"
                     | "planLimitReached"
+                    | "nodeNotReady"
             )
         });
     let operation = error

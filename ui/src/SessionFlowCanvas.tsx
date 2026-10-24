@@ -166,6 +166,8 @@ type SessionFlowCanvasProps = {
     { state: "live" | "delayed" | "paused"; delaySeconds: number; bufferedSeconds: number }
   >;
   recorderStatuses?: RecorderStatus[];
+  /** Nodes the last Play refused, with the backend's reason (`nodeNotReady`). */
+  nodeIssues?: Record<string, string>;
   onSetNodeParameter?: (nodeId: string, name: string, value: boolean | number | string) => void;
   /** One-click Record / Stop on a Recorder node. */
   onToggleRecording?: (nodeId: string, record: boolean) => void;
@@ -2294,6 +2296,7 @@ export function SessionFlowCanvas({
   onAddPluginNode,
   onAddVirtualBusNode,
   diagnostics,
+  nodeIssues,
   sessionRunning,
   sessionActionBusy = false,
   testSignalPlaybackReady = false,
@@ -2841,6 +2844,12 @@ export function SessionFlowCanvas({
             onMouseDownCapture={captureConnectionHandle}
             onPointerDownCapture={captureConnectionHandle}
           >
+            {/* Over the card's top edge, so marking it never resizes it (UI-17). */}
+            {nodeIssues?.[node.id] && (
+              <span className="node-issue-tag" role="alert" title={nodeIssues[node.id]}>
+                ! Cannot play
+              </span>
+            )}
             {node.ports
               .filter((port) => port.direction === "input")
               .map((port) => {
@@ -3032,7 +3041,7 @@ export function SessionFlowCanvas({
           </div>
         ),
       },
-      className: `${layoutSize ? "has-layout-size " : ""}${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
+      className: `${layoutSize ? "has-layout-size " : ""}${nodeIssues?.[node.id] ? "has-node-issue " : ""}${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
       // The drop preview is only a picture: no dragging, selecting or connecting.
       draggable: node.id !== DROP_PREVIEW_ID,
       selectable: node.id !== DROP_PREVIEW_ID,

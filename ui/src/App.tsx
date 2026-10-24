@@ -22,6 +22,7 @@ import { VersionLine } from "./UpdateNotice";
 import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
 import {
   formatUiError,
+  notReadyNode,
   isRevisionConflict,
   SnapshotCache,
   type ApplicationRow,
@@ -1693,6 +1694,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     recordUiDiagnostic("Released the stopped audio adapter of another session");
     return backend.refreshDiagnostics();
   };
+  // Nodes the last Play refused (`nodeNotReady`), with the node's parameters
+  // at that moment: the mark stays until the node is changed or Play works.
+  const [nodeIssues, setNodeIssues] = useState<{
+    sessionId: string;
+    issues: Record<string, { message: string; parameters: string }>;
+  } | null>(null);
+  const visibleNodeIssues: Record<string, string> = {};
+  if (nodeIssues?.sessionId === draft.id)
+    for (const [nodeId, issue] of Object.entries(nodeIssues.issues)) {
+      const node = draft.nodes.find((candidate) => candidate.id === nodeId);
+      if (node && JSON.stringify(node.parameters) === issue.parameters) visibleNodeIssues[nodeId] = issue.message;
+    }
   const startSession = async (): Promise<boolean> => {
     if (sessionBusy.current || !backend.connected) return false;
     if (graphBusy) {
@@ -2004,6 +2017,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           : `Audio session is running (generation ${result.generation}).`,
       );
       recordUiDiagnostic(`Native session started: generation ${result.generation}`);
+      setNodeIssues(null);
       return true;
     } catch (error) {
       setNativePumpStats(null);
@@ -2014,6 +2028,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
       const message = formatUiError(error, "Unable to start session.");
       setActionMessage(message);
+      const refused = notReadyNode(error);
+      const refusedNode = refused ? draftRef.current.nodes.find((node) => node.id === refused.nodeId) : undefined;
+      if (refused && refusedNode) {
+        setNodeIssues({
+          sessionId: draftRef.current.id,
+          issues: {
+            [refused.nodeId]: { message: refused.message, parameters: JSON.stringify(refusedNode.parameters) },
+          },
+        });
+        // Show which tool to fix: select it and open its Properties.
+        selectNodeProperties(refused.nodeId);
+      }
       recordUiDiagnostic("Session start failed; review the current error and backend activity.");
       return false;
     } finally {
@@ -2842,6 +2868,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // meter ticks reach the canvas only through its telemetry store.
   const flowCanvas = (
     <SessionFlowCanvas
+      nodeIssues={visibleNodeIssues}
       groups={groupState.groups}
       selectedGroupId={groupState.selectedGroupId}
       selectedGroupIds={groupState.selectedGroupIds}

@@ -7744,3 +7744,40 @@ input[type="color"] {
 .theme-high-contrast .obs-sources tr.is-muted {
   opacity: 1;
 }
+
+/* A node the last Play refused (nodeNotReady): a red outline and a tag over
+   the card's top edge; neither changes the card's size (UI-17). */
+.session-flow-canvas .react-flow__node.has-node-issue {
+  outline: 2px solid #ff6b6b;
+  outline-offset: 2px;
+}
+.node-issue-tag {
+  position: absolute;
+  top: -0.75rem;
+  left: 0.7rem;
+  z-index: 1;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid #ff6b6b;
+  border-radius: 999px;
+  color: #ffd6d6;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2rem;
+  white-space: nowrap;
+  background: #4a1414;
+}
+.theme-light .node-issue-tag {
+  color: #8f1212;
+  background: #ffe3e3;
+}
+.theme-light .session-flow-canvas .react-flow__node.has-node-issue {
+  outline-color: #c62828;
+}
+.theme-high-contrast .node-issue-tag {
+  border-color: #fff;
+  color: #fff;
+  background: #a00000;
+}
+.theme-high-contrast .session-flow-canvas .react-flow__node.has-node-issue {
+  outline-color: #fff;
+}

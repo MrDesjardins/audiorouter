@@ -3,6 +3,7 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { createDisconnectedBackend, type UiBackend } from "./backend";
+import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
 import type { Session, DiscoveryDocument, DiagnosticsSnapshot, PluginScanResult } from "@audiorouter/contracts";
 import "./styles.css";
@@ -28,6 +29,8 @@ const injected = globalThis as {
   /** Remembered plugin scans shown in the Plugins list. */
   __routeFixturePluginInventory?: PluginScanResult[];
 };
+/** A JSON-RPC error the next Play answers with, set by a test at any time. */
+type StartErrorFixture = ConstructorParameters<typeof AudioRouterRpcError>[0];
 let committed = structuredClone(injected.__routeFixtureSession ?? demoSession);
 let previewCandidate: Session | null = null;
 let running = injected.__routeFixtureRunning === true;
@@ -272,6 +275,8 @@ const previewBackend: UiBackend = {
   },
   async startSession(sessionId, _idempotencyKey, candidate) {
     lifecycleCalls.push("start");
+    const startError = (window as { __routeFixtureStartError?: StartErrorFixture }).__routeFixtureStartError;
+    if (startError) throw new AudioRouterRpcError(startError);
     if (!prepared || sessionId !== committed.id) throw new Error("Fixture audio is not prepared");
     if (candidate) {
       const validationError = graphValidationError(candidate);

@@ -8,6 +8,7 @@ import {
   rememberDeviceNames,
   SnapshotCache,
   type UiBackend,
+  notReadyNode,
 } from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
@@ -1500,5 +1501,30 @@ describe("permission errors", () => {
       "Permission denied: this app is not granted the PluginScan permission needed for this action, so the backend refused it. Nothing was changed.",
     );
     expect(actionMessageTone(message)).toBe("error");
+  });
+});
+
+describe("a refused Play that names its node (nodeNotReady)", () => {
+  const error = new AudioRouterRpcError({
+    code: -32000,
+    message: '"Audio file 1" cannot play: AudioRouter no longer has "Temporary voice take.wav".',
+    data: {
+      code: "nodeNotReady",
+      fieldPath: "nodes/audioFile-1",
+      resourceIds: ["audioFile-1"],
+      retryable: false,
+      remediation: "open the named node's Properties, fix it, then press Play again",
+    },
+  });
+
+  it("gives the node to mark on the canvas", () => {
+    expect(notReadyNode(error)).toEqual({ nodeId: "audioFile-1", message: error.message });
+    expect(notReadyNode(new Error("other"))).toBeNull();
+  });
+
+  it("shows the backend's sentence without the error code", () => {
+    const text = formatUiError(error, "Unable to start session.");
+    expect(text).toContain('"Audio file 1" cannot play');
+    expect(text).not.toContain("nodeNotReady");
   });
 });
