@@ -391,7 +391,7 @@ describe("device node users (D1 footers)", () => {
 
   it("counts only active sessions, so an app out of a call is not listed", () => {
     const users = nodeDeviceUsers(session, devices, [app("Discord.exe", [records("cable-a-out", false)])]);
-    expect(users.get("voice-out")).toMatchObject({ summary: "No app using it right now", warning: null });
+    expect(users.get("voice-out")).toMatchObject({ summary: "No app using it", warning: null });
   });
 
   it("warns when an app records from the cable's 16ch twin instead", () => {

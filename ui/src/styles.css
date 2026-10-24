@@ -2497,6 +2497,9 @@ button.primary {
 .flow-node-content .node-used-by {
   display: block;
   min-width: 0;
+  /* The line never sizes the card: a long one ends in an ellipsis rather
+     than widening the card past its saved size and pushing its ports out. */
+  contain: inline-size;
   height: 1.3rem;
   padding: 0.1rem 0.35rem;
   overflow: hidden;
