@@ -238,6 +238,25 @@ in a game.
   - Every row keeps its "Show me how" line, so a row turning from ready to
     check does not grow (UI-17).
   - "Copied" returns to "Copy device name" after 2 s.
+- UX review, 2026-10-23 (owner request: a new user, then an experienced one):
+  - Fixed: a cable input routed to another cable was taken for the voice,
+    so the check could suggest the wrong cable. Only non-cable inputs count
+    as microphones now.
+  - Fixed: a session with no voice cable was a dead end ("nothing to
+    compare"). The row now offers "Set up a virtual cable", which opens
+    the Virtual Cables tab.
+  - Fixed: with several voice cables, the message names all of them.
+  - Open, for D2: a new user still has to build the mic → cable route by
+    hand. "Set up for Discord" (one undoable route plus the Discord steps)
+    is the real answer.
+  - Open: the Apps tab is the 6th of 13 sidebar tabs, and the strip chip
+    only appears once the session involves Discord. Consider a first-run
+    hint when Discord is running and the session has no voice cable.
+  - Open: "plays to it or records it" stays vague, because Windows cannot
+    separate a loopback recorder from a player.
+- Website: `site/apps.html` (Discord and OBS), linked from the header,
+  footer and homepage. OBS is marked "in development"; the page states that
+  the Apps tab comes after 0.0.21.
 - Waiting: compiling and testing are on hold while the owner plays
   (no-heavy-builds rule).
 - Next, in order:
