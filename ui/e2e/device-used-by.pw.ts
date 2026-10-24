@@ -113,9 +113,13 @@ test("device nodes name the apps on their device without moving anything", async
   await page.goto("/route-harness.html");
   const voice = page.getByTestId("rf__node-voice");
   const footer = voice.locator(".node-used-by");
-  await expect(footer).toHaveText("Used by Discord");
-  await expect(footer).toHaveAttribute("title", "Discord records from CABLE-A Output (VB-Audio Virtual Cable A)");
-  await expect(page.getByTestId("rf__node-headphones").locator(".node-used-by")).toHaveText("Used by Discord");
+  await expect(footer).toHaveText("Heard by Discord");
+  await expect(footer).toHaveAttribute(
+    "title",
+    "Discord records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+  );
+  // Discord's speaker: it shares the device, it does not hear this node.
+  await expect(page.getByTestId("rf__node-headphones").locator(".node-used-by")).toHaveText("Shared with Discord");
   await expect(page.getByTestId("rf__node-mic").locator(".node-used-by")).toHaveText("No app using it");
   // The footer never widens the card or pushes its ports out.
   const micCard = page.getByTestId("rf__node-mic");
@@ -123,6 +127,14 @@ test("device nodes name the apps on their device without moving anything", async
   const cardBox = (await micCard.boundingBox())!;
   const footerBox = (await micCard.locator(".node-used-by").boundingBox())!;
   expect(footerBox.x + footerBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+  // Its text starts where the port lines below start.
+  const textLeft = (selector: string) =>
+    micCard.locator(selector).evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return range.getBoundingClientRect().left;
+    });
+  expect(Math.abs((await textLeft(".node-used-by")) - (await textLeft(".node-port-count")))).toBeLessThan(0.5);
   // A long list of apps on the microphone keeps the card's width.
   const many = ["Discord.exe", "obs64.exe", "Spotify.exe", "RainbowSix.exe", "chrome.exe"].map((executable, index) => ({
     ...discord([{ deviceId: "mic", direction: "capture", active: true }]),
@@ -140,7 +152,7 @@ test("device nodes name the apps on their device without moving anything", async
 
   await voice.click();
   const section = page.locator(".device-apps");
-  await expect(section).toContainText("Discord records from CABLE-A Output");
+  await expect(section).toContainText("Discord records CABLE-A Output");
   const below = section.locator("xpath=following-sibling::*[1]");
   const before = {
     card: (await voice.boundingBox())!,

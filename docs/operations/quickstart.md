@@ -870,11 +870,19 @@ Discord or Windows settings.
 - **Other apps using audio** lists which device each other app uses.
   "Plays to it or records it" is as precise as Windows can be, because an
   app recording a device's output looks the same as one playing to it.
-- **On the canvas:** each input and output card has a line such as "Used by
-  Discord · OBS". A card that plays into a virtual cable names the apps
-  that record from the cable's other end, so your voice cable shows
-  Discord once Discord uses it. Select the card to see each app's role
-  under **Apps using this device** in Properties.
+- **On the canvas:** each input and output card has a line saying how
+  apps relate to it:
+  - **Heard by Discord**: the card plays into a virtual cable and Discord
+    records the cable's other end, so Discord hears what the card sends.
+  - **Shared with Discord**: Discord plays to the same device, for
+    example as its speaker. It does not hear what the card sends.
+  - **Sound from Siege**: on an input card, the game plays into the cable
+    the card records.
+  - **Also recorded by Discord**: on an input card, Discord records the
+    same device.
+
+  Select the card to see each app's role under **Apps using this device**
+  in Properties.
 - An amber line marked **!** means an app is on the wrong device, for
   example "Discord is on CABLE-A Out 16ch" or "Discord skips your
   processing" (Discord records your microphone directly). Properties
