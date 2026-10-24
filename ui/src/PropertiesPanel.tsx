@@ -630,9 +630,10 @@ function DeviceAppsSection({ users }: { users: NodeDeviceUsers | null | "unavail
   const details = typeof users === "object" && users ? users : null;
   // A warning wraps over two rows, so its device names stay readable.
   const room = DEVICE_APP_ROWS - (details?.warning ? 2 : 0);
-  const rows: { key: string; text: string; warning?: boolean }[] = (details?.uses ?? []).map((use) => ({
+  const rows: { key: string; text: string; title?: string; warning?: boolean }[] = (details?.uses ?? []).map((use) => ({
     key: `${use.label} ${use.role}`,
     text: `${use.label} ${use.role}`,
+    title: `${use.label} ${use.detail}`,
   }));
   if (rows.length > room) {
     const hidden = rows.length - room + 1;
@@ -655,7 +656,7 @@ function DeviceAppsSection({ users }: { users: NodeDeviceUsers | null | "unavail
           <li className="muted">{empty}</li>
         ) : (
           rows.map((row) => (
-            <li key={row.key} className={row.warning ? "is-warning" : undefined} title={row.text}>
+            <li key={row.key} className={row.warning ? "is-warning" : undefined} title={row.title ?? row.text}>
               {row.text}
             </li>
           ))

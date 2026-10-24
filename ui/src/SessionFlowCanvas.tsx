@@ -857,7 +857,7 @@ function DeviceUsersLine({ users: state }: { users: NodeDeviceUsers | null | "un
   const users = typeof state === "object" ? state : null;
   const text = state === "unavailable" ? "Apps not checked" : (users?.summary ?? "Checking apps…");
   const detail = [
-    ...(users?.uses.map((use) => `${use.label} ${use.role}`) ?? []),
+    ...(users?.uses.map((use) => `${use.label} ${use.detail}`) ?? []),
     ...(users?.warning ? [`Check: ${users.warning}`] : []),
   ].join("\n");
   return (

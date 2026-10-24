@@ -152,13 +152,28 @@ test("device nodes name the apps on their device without moving anything", async
 
   await voice.click();
   const section = page.locator(".device-apps");
-  await expect(section).toContainText("Discord records CABLE-A Output");
+  await expect(section).toContainText("Discord hears it on CABLE-A Output");
   const below = section.locator("xpath=following-sibling::*[1]");
   const before = {
     card: (await voice.boundingBox())!,
     section: (await section.boundingBox())!,
     below: await below.boundingBox(),
   };
+
+  // Every row fits the panel; the full sentence is in its tooltip (owner
+  // report: "Discord plays to CABLE Input (VB-Audio Virtual Cable) too (for
+  // example as its speak…" was cut off).
+  for (const id of ["headphones", "voice"]) {
+    await page.getByTestId(`rf__node-${id}`).click();
+    const rows = section.locator("li");
+    await expect(rows.first()).not.toHaveText("Checking apps…");
+    for (const row of await rows.all())
+      expect(await row.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  }
+  await expect(section.locator("li").first()).toHaveAttribute(
+    "title",
+    "Discord records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+  );
 
   // Discord moves to the cable's 16ch twin: the footer warns, nothing moves.
   await report(page, onTwin);
