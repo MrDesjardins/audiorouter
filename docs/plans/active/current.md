@@ -1,5 +1,28 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.22 — 2026-10-24, owner request
+
+The owner merged #67 (Discord and OBS, `dfc17cea`) and asked for a new
+release with it. Same app-only unsigned prerelease profile as 0.0.21
+(NFR-06, DIST-01–08); no storage migration, no session format change since
+`v0.0.21`, so 0.0.21 stays the rollback.
+
+Tasks: (1) release prep PR `release/0.0.22`: version bump by package name
+(21 files, only `audiorouter-*` lock entries), 0.0.22 notes, the Apps page
+version note, the background-inventory follow-up in
+[OBS and Discord future work](../future/obs-discord-integration.md#follow-up-build-the-application-inventory-off-the-control-thread);
+owner approves and merges. (2) Annotated tag `v0.0.22` on main; build in a
+clean worktree with `create-draft-release.ps1 -Tag v0.0.22 -AppOnly`
+(owner asked first: heavy build). (3) `fresh_install_shell` on the exact
+packaged shell, download the draft and `verify-artifacts.ps1`, publish as
+a prerelease, record evidence in `evidence/2026-10-24-release-0.0.22.md`.
+
+CI notice kept on purpose: GitHub annotates every Linux job with "The
+ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026".
+Those jobs only run Node scripts on pinned `setup-node` versions, so
+following the label is the intended behavior; pinning `ubuntu-24.04` would
+only postpone the same move. Revisit if a Linux job fails after the move.
+
 ## OBS and Discord premium experience — 2026-10-23, owner request
 
 The owner authorized stages D1, O1, D2 and O2 of [OBS and Discord setup

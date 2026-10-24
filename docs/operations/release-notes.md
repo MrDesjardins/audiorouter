@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.0.22 — 2026-10-24 (unsigned experimental preview)
+
+- **New Apps tab: Discord and OBS.** The Apps tab in the right sidebar
+  checks that Discord and OBS Studio use the devices your route expects,
+  and a chip next to "Audio running" shows the same state. See
+  [Discord and OBS](https://audiorouter.org/apps.html).
+- **Discord.** AudioRouter reads which devices Discord uses from Windows
+  (no Discord login or plugin) and names the device to choose when
+  Discord records your raw microphone, plays into the cable that carries
+  your voice, uses the 16-channel side of a cable, or would be heard twice.
+  Outside a voice channel it confirms the microphone from Discord's last
+  call, and otherwise says it waits for you to join one. It never warns
+  about a device Discord is not using right now.
+- **OBS Studio.** After you turn on OBS's WebSocket server and choose
+  **Connect**, the OBS card shows what each audio source hears through
+  your route and flags a raw microphone, your voice on the stream twice,
+  or a 16-channel cable side. **Fix in OBS** shows each change before it
+  is made and applies it only after you confirm; **Restore previous OBS
+  settings** undoes it. The WebSocket password is kept in memory only.
 - **Output Switch into a shared Mixer.** A switch side can now feed a Mixer
   that also mixes other sources; the unselected side is silent and the other
   sources keep their level (0.0.21 refused this route).
@@ -17,6 +36,16 @@
   turn knobs while AudioRouter also sends slider values.
 - **App group picker** starts empty after you create a group.
 - Copying a copied tool names it from the original (`voice-copy-2`).
+- **Faster first screen.** The Apps checks wait until the session has
+  loaded, so they never delay it.
+
+Windows 11 x64; app and installer unsigned. Experimental prerelease, not a
+fully M08-qualified consumer release. No database migration, driver
+installation or Windows default-device changes; sessions saved by 0.0.22
+still open in 0.0.21. Close AudioRouter before upgrading and keep 0.0.21
+plus configuration backups for rollback. Clean-machine install/upgrade,
+missing-WebView2, accessibility, hardware and driver-signing gates remain
+open.
 
 ## 0.0.21 — 2026-10-23 (unsigned experimental preview)
 
