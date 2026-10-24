@@ -28,6 +28,45 @@ a prerelease, record evidence in `evidence/2026-10-24-release-0.0.22.md`.
   ([future work](../future/obs-discord-integration.md#follow-up-build-the-application-inventory-off-the-control-thread)).
   Watch the next coverage nightly for the drift-test change.
 
+## Application inventory thread — 2026-10-24, owner request
+
+Objective: `apps.list` no longer enumerates on the backend's control thread
+(30-100 ms during which every request waited), per the
+[design](../future/obs-discord-integration.md#follow-up-build-the-application-inventory-off-the-control-thread).
+Requirements: UI-17 (no layout shift: the last list stays), the
+`apps.list`/`applications.list` contract in `docs/spec/10-api.md`
+(unchanged: still the array of application entries).
+
+Decisions:
+
+- `crates/control/src/app_inventory.rs`: an `audiorouter-apps` thread
+  started in `mark_audio_service_started` (the production serve path, like
+  the audio thread) builds the list at once and on request. `apps.list`
+  returns the latest list and requests a rebuild when it is 500 ms old.
+  The enumerator initializes COM itself, so the thread needs no setup.
+- A failed rebuild keeps the last list for 30 s, then `apps.list` returns
+  the failure, so a list never silently stays old. The output schemas of
+  `status`/health stay unchanged. The first request waits up to 1 s for the
+  first list (built at backend start), then answers a retryable
+  `serviceUnavailable`.
+- Without the service (CLI, `e2e_backend`, unit planes) enumeration stays
+  inline with the 100 ms cache. `ControlError` derives `Clone` so a kept
+  failure can be returned again.
+- UI: each refresh in `useApplicationUsage` and the picker's
+  `refreshApplications` reads twice, now and 600 ms later, so a changed
+  Discord setting shows within about half a second.
+
+Checks (Windows, this PC): `app_inventory` tests (answers at once while a
+slow rebuild runs, only `audiorouter-apps` enumerates, at most one queued
+rebuild, stale limit, first failure, drop joins the thread); the service
+plane answers `apps.list` without filling the inline cache; control crate
+298 tests and Clippy clean; UI lint 0 warnings, typecheck, 722 unit tests;
+Edge `application-sources` and `banner-layout` (9 tests).
+
+Not yet checked: the request latency in the desktop shell while the Apps
+tab polls (needs the owner's PC free of a running AudioRouter). Rollback:
+revert the branch; `apps.list` returns to inline enumeration.
+
 CI notice kept on purpose: GitHub annotates every Linux job with "The
 ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026".
 Those jobs only run Node scripts on pinned `setup-node` versions, so

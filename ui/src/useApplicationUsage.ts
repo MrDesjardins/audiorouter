@@ -3,6 +3,8 @@ import type { ApplicationInfo } from "@audiorouter/contracts";
 
 /** While the Apps tab is open; elsewhere only focus and explicit refreshes. */
 export const APP_USAGE_POLL_MS = 10_000;
+/** The second read of each refresh, after the backend rebuilt its list. */
+export const APP_USAGE_FOLLOW_UP_MS = 600;
 
 export interface ApplicationUsageState {
   applications: ApplicationInfo[];
@@ -33,8 +35,12 @@ export function usageFingerprint(applications: readonly ApplicationInfo[]): stri
  *   is visible;
  * - on `refresh()`.
  *
- * `apps.list` runs on the backend's control thread, so it is never polled
- * fast and never while the window is hidden.
+ * The backend answers `apps.list` at once with the list its inventory thread
+ * built last, and asks that thread for a newer one when it has aged. Each
+ * refresh therefore reads twice: now, and `APP_USAGE_FOLLOW_UP_MS` later to
+ * pick up the newer list (a changed Discord setting shows within about
+ * half a second). It is never polled fast and never while the window is
+ * hidden.
  */
 export function useApplicationUsage(
   listApplications: (() => Promise<ApplicationInfo[]>) | null,
@@ -44,8 +50,9 @@ export function useApplicationUsage(
   const fingerprint = useRef<string | null>(null);
   const generation = useRef(0);
   const inFlight = useRef(false);
+  const followUp = useRef<number | undefined>(undefined);
 
-  const refresh = useCallback(() => {
+  const read = useCallback(() => {
     if (!listApplications || inFlight.current) return;
     inFlight.current = true;
     const current = ++generation.current;
@@ -71,6 +78,14 @@ export function useApplicationUsage(
         if (current === generation.current) inFlight.current = false;
       });
   }, [listApplications]);
+
+  const refresh = useCallback(() => {
+    read();
+    window.clearTimeout(followUp.current);
+    followUp.current = window.setTimeout(read, APP_USAGE_FOLLOW_UP_MS);
+  }, [read]);
+
+  useEffect(() => () => window.clearTimeout(followUp.current), []);
 
   useEffect(() => {
     // A new backend: forget the old answer and anything still in flight.

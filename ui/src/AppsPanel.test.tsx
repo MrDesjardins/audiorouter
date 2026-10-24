@@ -5,7 +5,12 @@ import type { ApplicationInfo, DeviceListItem } from "@audiorouter/contracts";
 import { AppsPanel } from "./AppsPanel";
 import { AppStatusStrip } from "./AppStatusStrip";
 import { pendingDiscordCheck, type AppCheck } from "./appUsage";
-import { APP_USAGE_POLL_MS, useApplicationUsage, usageFingerprint } from "./useApplicationUsage";
+import {
+  APP_USAGE_FOLLOW_UP_MS,
+  APP_USAGE_POLL_MS,
+  useApplicationUsage,
+  usageFingerprint,
+} from "./useApplicationUsage";
 
 afterEach(() => {
   cleanup();
@@ -176,23 +181,43 @@ describe("useApplicationUsage", () => {
     expect(list).toHaveBeenCalledTimes(1);
     expect(result.current).toMatchObject({ loaded: true, stale: false, applications: [siege] });
 
+    // Each refresh reads once more after the backend rebuilt its list, and
+    // then nothing until the next focus: no polling while not asked.
     await act(async () => {
       vi.advanceTimersByTime(APP_USAGE_POLL_MS * 3);
     });
-    expect(list).toHaveBeenCalledTimes(1);
+    expect(list).toHaveBeenCalledTimes(2);
 
     await act(async () => {
       window.dispatchEvent(new Event("focus"));
     });
-    expect(list).toHaveBeenCalledTimes(2);
+    expect(list).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      vi.advanceTimersByTime(APP_USAGE_FOLLOW_UP_MS);
+    });
+    expect(list).toHaveBeenCalledTimes(4);
 
     rerender({ polling: true });
     list.mockImplementationOnce(() => Promise.reject(new Error("backend busy")));
     await act(async () => {
       vi.advanceTimersByTime(APP_USAGE_POLL_MS);
     });
-    expect(list).toHaveBeenCalledTimes(3);
+    expect(list).toHaveBeenCalledTimes(5);
     expect(result.current).toMatchObject({ stale: true, applications: [siege] });
+  });
+
+  it("shows the list the backend rebuilt after a refresh, without another focus", async () => {
+    vi.useFakeTimers();
+    const discord = { ...siege, processId: 9, executable: "Discord.exe" };
+    // The backend first answers with the list it had, then with the new one.
+    const list = vi.fn(() => Promise.resolve([siege]));
+    const { result } = renderHook(() => useApplicationUsage(list, { polling: false }));
+    await act(async () => {});
+    list.mockImplementation(() => Promise.resolve([siege, discord]));
+    await act(async () => {
+      vi.advanceTimersByTime(APP_USAGE_FOLLOW_UP_MS);
+    });
+    expect(result.current.applications).toEqual([siege, discord]);
   });
 
   it("does nothing without a connected backend", async () => {

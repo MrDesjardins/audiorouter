@@ -1119,6 +1119,26 @@ fn describe_exposes_input_and_output_schemas_for_methods() {
     }
 }
 
+/// Once the backend service runs, `apps.list` reads the list its inventory
+/// thread built; this thread never enumerates (30-100 ms on a real PC).
+#[cfg(windows)]
+#[test]
+fn the_backend_service_answers_the_application_list_from_its_inventory_thread() {
+    let mut plane = ControlPlane::default();
+    assert!(plane.application_inventory.is_none());
+    plane.mark_audio_service_started();
+    assert!(plane.application_inventory.is_some());
+    let first = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "apps.list".into(),
+        params: None,
+    });
+    assert!(first.result.unwrap().is_array());
+    // The inline cache is never filled: nothing enumerated on this thread.
+    assert!(plane.application_snapshot.is_none());
+}
+
 #[test]
 fn canonical_application_list_alias_uses_the_same_discovery_result() {
     let mut plane = ControlPlane::default();

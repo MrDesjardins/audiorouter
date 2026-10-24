@@ -49,6 +49,7 @@ mod threaded_recorder;
 // modules reach crate-internal helpers through their `use super::*`.
 mod api_output_schema;
 mod api_schema;
+mod app_inventory;
 mod audio_media;
 mod audio_service;
 #[cfg(windows)]
@@ -178,7 +179,7 @@ const STATE_CATEGORIES: [&str; 22] = [
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ControlError {
     InvalidRequest(String),
     Audio {
@@ -303,6 +304,9 @@ pub struct ControlPlane {
     operation_order: VecDeque<String>,
     idempotency_hashes: HashMap<String, String>,
     application_snapshot: Option<(Instant, Value)>,
+    /// Builds `apps.list` off this thread once the backend service runs;
+    /// without it (CLI, tests) the list is built inline.
+    application_inventory: Option<app_inventory::AppInventory>,
     application_capture_runtime: Option<ApplicationCaptureRuntime>,
     plugin_inventories: HashMap<String, Value>,
     /// Live plugin runtime bridges by (session, node), for state capture and
@@ -478,6 +482,7 @@ impl ControlPlane {
             operation_order: VecDeque::new(),
             idempotency_hashes: HashMap::new(),
             application_snapshot: None,
+            application_inventory: None,
             application_capture_runtime: None,
             plugin_inventories: HashMap::new(),
             plugin_bridges: Default::default(),
