@@ -280,6 +280,13 @@ incompatible with the literal API result. Pin the fixture literal with
 the downstream jobs in that job were skipped. Policy, docs, site and
 Stream Deck checks passed. Next: rerun CI on the correction.
 
+CI [40063539376](https://github.com/MrDesjardins/audiorouter/actions/runs/40063539376)
+passed the UI typecheck/build, then Rust compilation found the storage-backed
+`ControlPlane` initializer missing the new `obs` field (`persistence.rs`,
+E0063). Initialize it with the same default as `ControlPlane::new`; the
+existing storage initialization tests exercise that constructor. Next:
+rerun remote compilation and the previously skipped suites.
+
 ### Coverage audit — 2026-10-23, owner asks whether all bugs are verified
 
 Scope SEC-15/UI-26: audit actual test cases against state/identity boundaries;
