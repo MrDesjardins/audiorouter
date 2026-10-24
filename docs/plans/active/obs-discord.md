@@ -662,3 +662,11 @@ has been requested or granted for this branch.
     could not start, and 3 more need checking; a re-run with the backend
     built was stopped at 38/348 when the PC ran low on memory. No PR until
     the suite is clean and the owner approves one.
+  - Owner test, 2026-10-24: (1) the footer pushed the output port outside
+    a card with a saved size, and (2) its text was indented from the port
+    lines: the line no longer sizes the card (`contain: inline-size`) and
+    aligns its text with the port lines; Edge checks width, containment
+    and text alignment. (3) "Used by Discord" on Game Sound Out read as
+    "Discord hears the game"; Windows showed Discord's speaker on CABLE
+    Input, the same cable. The footer now names the relation: Heard by,
+    Sound from, Shared with, Also recorded by (Vitest regression).

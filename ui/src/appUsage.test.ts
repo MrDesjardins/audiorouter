@@ -374,19 +374,41 @@ describe("device node users (D1 footers)", () => {
       app("RainbowSix.exe", [plays("cable-in")]),
     ]);
     expect(users.get("voice-out")).toEqual({
-      summary: "Used by Discord · OBS",
+      summary: "Heard by Discord, OBS",
       uses: [
-        { label: "Discord", appId: "discord", role: "records from CABLE-A Output (VB-Audio Virtual Cable A)" },
-        { label: "OBS", appId: "obs", role: "records from CABLE-A Output (VB-Audio Virtual Cable A)" },
+        {
+          label: "Discord",
+          appId: "discord",
+          role: "records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+          relation: "heard",
+        },
+        {
+          label: "OBS",
+          appId: "obs",
+          role: "records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+          relation: "heard",
+        },
       ],
       warning: null,
     });
-    expect(users.get("headphones")?.summary).toBe("Used by Discord");
+    expect(users.get("headphones")?.summary).toBe("Shared with Discord");
     expect(users.get("game-out")?.uses).toEqual([
-      { label: "RainbowSix", appId: null, role: "plays to it or records it" },
+      {
+        label: "RainbowSix",
+        appId: null,
+        role: "plays to CABLE Input (VB-Audio Virtual Cable) too (for example as its speaker), or records what plays there",
+        relation: "shared",
+      },
     ]);
     // Only device nodes get a line.
     expect(users.has("chain")).toBe(false);
+  });
+
+  it("does not say Discord hears a game it only shares a cable with (owner report, 2026-10-24)", () => {
+    // Discord's speaker is CABLE Input, which the game output also plays into.
+    const users = nodeDeviceUsers(session, devices, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])]);
+    expect(users.get("game-out")?.summary).toBe("Shared with Discord");
+    expect(users.get("voice-out")?.summary).toBe("Heard by Discord");
   });
 
   it("counts only active sessions, so an app out of a call is not listed", () => {
@@ -412,8 +434,18 @@ describe("device node users (D1 footers)", () => {
       // The footer names the problem; the full warning is in Properties.
       summary: "Discord skips your processing",
       uses: [
-        { label: "Discord", appId: "discord", role: "records from it" },
-        { label: "Audacity", appId: null, role: "records from it" },
+        {
+          label: "Discord",
+          appId: "discord",
+          role: "records Microphone (PD200X Podcast Microphone) too",
+          relation: "shared",
+        },
+        {
+          label: "Audacity",
+          appId: null,
+          role: "records Microphone (PD200X Podcast Microphone) too",
+          relation: "shared",
+        },
       ],
       warning:
         "Discord records this microphone without your processing; choose CABLE-A Output (VB-Audio Virtual Cable A) instead",

@@ -2501,6 +2501,9 @@ button.primary {
      than widening the card past its saved size and pushing its ports out. */
   contain: inline-size;
   height: 1.3rem;
+  /* The text lines up with the port lines below; the warning's box reaches
+     into the card's padding instead of indenting the text. */
+  margin-inline: calc(-0.35rem - 1px);
   padding: 0.1rem 0.35rem;
   overflow: hidden;
   border: 1px solid transparent;

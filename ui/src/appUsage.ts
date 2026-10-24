@@ -155,12 +155,18 @@ export interface NodeAppUse {
   appId: KnownAppId | null;
   /** How the app relates to the audio this node carries, in plain words. */
   role: string;
+  /**
+   * "heard": records the other end of this node's cable, so it hears what
+   * the node sends. "source": plays into the cable this node records.
+   * "shared": uses the node's own device too.
+   */
+  relation: "heard" | "source" | "shared";
 }
 
 /** What a Physical Input or Output node's footer and Properties show. */
 export interface NodeDeviceUsers {
   /**
-   * One line for the canvas footer, for example "Used by Discord · OBS", or
+   * One line for the canvas footer, for example "Heard by Discord · OBS", or
    * the warning's short form ("Discord is on CABLE-A Out 16ch").
    */
   summary: string;
@@ -196,11 +202,16 @@ export function nodeDeviceUsers(
       continue;
     }
     const output = node.kind === "physicalOutput";
+    const deviceName = device?.name ?? "this device";
     const uses: NodeAppUse[] = (output ? active(endpointId, "render") : active(endpointId, "capture")).map((use) => ({
       label: use.label,
       appId: use.appId,
-      // Windows reports a loopback recorder like a player (spec CAP).
-      role: output ? "plays to it or records it" : "records from it",
+      // Windows reports a loopback recorder like a player (spec CAP), and a
+      // call app's speaker is a player: neither hears what this node sends.
+      role: output
+        ? `plays to ${deviceName} too (for example as its speaker), or records what plays there`
+        : `records ${deviceName} too`,
+      relation: "shared",
     }));
     const partner = device ? cablePartner(device, devices) : null;
     let warning: string | null = null;
@@ -211,7 +222,10 @@ export function nodeDeviceUsers(
         uses.push({
           label: use.label,
           appId: use.appId,
-          role: output ? `records from ${partner.name}` : `plays into ${partner.name}`,
+          role: output
+            ? `records ${partner.name}, so it hears what this node sends`
+            : `plays into ${partner.name}, so this node receives its sound`,
+          relation: output ? "heard" : "source",
         });
       const twin = output ? sixteenChannelTwin(partner, devices) : null;
       const astray = twin ? active(twin.id, "capture").filter((use) => use.appId !== null) : [];
@@ -229,9 +243,17 @@ export function nodeDeviceUsers(
         alert = `${names(raw)} ${raw.length === 1 ? "skips" : "skip"} your processing`;
       }
     }
-    const labels = [...new Set(uses.map((use) => use.label))];
+    // Say how each app relates, not just "used by": Discord playing its call
+    // into the same cable as a game does not hear the game (owner report).
+    const labelsOf = (relation: NodeAppUse["relation"]) =>
+      [...new Set(uses.filter((use) => use.relation === relation).map((use) => use.label))].join(", ");
+    const parts = [
+      labelsOf("heard") && `Heard by ${labelsOf("heard")}`,
+      labelsOf("source") && `Sound from ${labelsOf("source")}`,
+      labelsOf("shared") && (output ? `Shared with ${labelsOf("shared")}` : `Also recorded by ${labelsOf("shared")}`),
+    ].filter(Boolean);
     result.set(node.id, {
-      summary: alert ?? (labels.length > 0 ? `Used by ${labels.join(" · ")}` : "No app using it"),
+      summary: alert ?? (parts.length > 0 ? parts.join(" · ") : "No app using it"),
       uses,
       warning,
     });

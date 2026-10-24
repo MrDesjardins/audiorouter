@@ -351,11 +351,14 @@ audio readiness and explains the exact endpoint and authorization steps.
     last good result is kept through a failure.
   - **Writes:** AudioRouter never changes Discord or Windows settings.
   - **Device nodes:** each Physical Input and Output card keeps one footer
-    line naming the apps with an active session on its device ("Used by
-    Discord · OBS"). A node that plays into a virtual cable also names the
-    apps recording from the cable's other end. Properties lists each app
-    with its role (records from it; plays to it or records it; records
-    from the cable's other end) in three reserved rows. A known app on the
+    line naming the apps with an active session on its device or its
+    cable's other end, by relation: "Heard by" (records the other end of
+    the cable this node plays into), "Sound from" (plays into the cable
+    this input records), "Shared with" (also plays to, or loopback-records,
+    this output's device) and "Also recorded by" (also records this input's
+    device). Sharing never claims the app hears the node. The line never
+    sizes the card and its text aligns with the port lines. Properties
+    lists each app with its role in three reserved rows. A known app on the
     cable's 16-channel twin, or on the raw microphone while the session
     feeds a voice cable, is a warning: amber, marked "!", with its short
     form on the card and the full sentence in Properties. Neither the card

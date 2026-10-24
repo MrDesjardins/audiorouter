@@ -848,7 +848,7 @@ function nodeTelemetryFor(node: Node | undefined, diagnostics: DiagnosticsSnapsh
 }
 
 /**
- * "Used by Discord · OBS" on a device node (D1). The line is always there on
+ * "Heard by Discord, OBS" on a device node (D1). The line is always there on
  * device nodes, one line high and truncated, so a change never resizes the
  * card (UI-17); the tooltip names each app's role.
  */
