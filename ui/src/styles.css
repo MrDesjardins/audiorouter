@@ -1239,17 +1239,16 @@ button:disabled {
 }
 .main-content {
   grid-template-columns: minmax(0, 1fr) minmax(290px, 350px);
-  grid-template-rows: max-content minmax(0, 1fr) minmax(0, 0.72fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0.72fr);
   gap: 0.65rem;
 }
 .main-content > * {
   display: none;
 }
+/* The header's play state already says whether the session runs; this row
+   took a grid row and a gap for one word, so it stays out of the layout. */
 .main-content > .workspace-title {
-  display: flex;
-  grid-column: 1 / -1;
-  grid-row: 1;
-  margin: 0;
+  display: none;
 }
 .workspace-title .session-name,
 .workspace-title .muted,
@@ -1259,19 +1258,19 @@ button:disabled {
 .main-content > #signal-flow-panel {
   display: flex;
   grid-column: 1;
-  grid-row: 2 / 4;
+  grid-row: 1 / 3;
 }
 .main-content > .inspector {
   display: none;
   grid-column: 2;
-  grid-row: 3;
+  grid-row: 2;
   min-height: 0;
   overflow: auto;
 }
 .main-content > .right-workbench {
   display: block;
   grid-column: 2;
-  grid-row: 2 / 4;
+  grid-row: 1 / 3;
   min-height: 0;
   max-height: 100%;
   overflow: auto;
@@ -1302,10 +1301,10 @@ button:disabled {
   display: block;
 }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) > .right-workbench {
-  grid-row: 2;
+  grid-row: 1;
 }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) {
-  grid-template-rows: auto minmax(130px, 0.28fr) minmax(280px, 1fr);
+  grid-template-rows: minmax(130px, 0.28fr) minmax(280px, 1fr);
 }
 .workbench-tabs {
   position: sticky;
@@ -1932,15 +1931,15 @@ button:disabled {
    the placeholder page below the tabs instead of splitting the sidebar into
    two cramped grid rows. */
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) {
-  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) > .right-workbench {
-  grid-row: 2 / 4;
+  grid-row: 1 / 3;
   overflow: hidden;
 }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) > .inspector {
   grid-column: 2;
-  grid-row: 2 / 4;
+  grid-row: 1 / 3;
   position: relative;
   z-index: 4;
   display: block;

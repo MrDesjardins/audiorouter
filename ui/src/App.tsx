@@ -3253,7 +3253,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             <SidebarResizer width={sidebarWidth} onWidth={changeSidebarWidth} />
             <section className="workspace-title">
               <div>
-                <p className="eyebrow">{sessionRunning ? "Running session" : "Stopped session"}</p>
                 <label className="session-name">
                   Session name
                   <input
