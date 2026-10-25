@@ -51,7 +51,9 @@ export function smartLayout(
   }
   const size = (id: string) => ({
     width: Math.max(DEFAULT_SIZE.width, measured[id]?.width ?? DEFAULT_SIZE.width),
-    height: Math.max(DEFAULT_SIZE.height, measured[id]?.height ?? DEFAULT_SIZE.height),
+    // The real height: centring a short card as if it were the default one
+    // left its connections a few pixels off level with taller neighbours.
+    height: measured[id]?.height || DEFAULT_SIZE.height,
   });
   const isInput = (id: string) =>
     parents.get(id)!.size === 0 && (INPUT_KINDS.has(kinds.get(id)!) || children.get(id)!.size > 0);

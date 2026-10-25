@@ -19,6 +19,29 @@ const graph = (nodes: Array<[string, NodeKind]>, edges: Array<[string, string]>)
 });
 
 describe("smart graph layout", () => {
+  it("centres a chain of cards on their real heights, including a card shorter than the default", () => {
+    const s = graph(
+      [
+        ["mic", "physicalInput"],
+        ["gain", "gain"],
+        ["out", "physicalOutput"],
+      ],
+      [
+        ["mic", "gain"],
+        ["gain", "out"],
+      ],
+    );
+    const sizes = {
+      mic: { width: 218, height: 205 },
+      gain: { width: 218, height: 171 },
+      out: { width: 218, height: 205 },
+    };
+    const layout = smartLayout(s, sizes);
+    const centre = (id: keyof typeof sizes) => layout[id].y + sizes[id].height / 2;
+    expect(centre("mic")).toBeCloseTo(centre("gain"), 0);
+    expect(centre("gain")).toBeCloseTo(centre("out"), 0);
+  });
+
   it("lays out a reverse-insertion fan-in/fan-out from connections without mutating graph", () => {
     const nodes = ["out2", "out1", "mix", "b", "a"].map((id) => ({ ...demoSession.nodes[0], id }));
     const edges = [
