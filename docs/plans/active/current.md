@@ -205,6 +205,18 @@ diagnostic-only workflow. Source caller and machine security settings are
 untouched. Final local nested probes pass 4/4; preserve original failures and
 require current-head full CI plus wrapped packaged gates after this push.
 
+Packaged hosted gate passed on clean source 512bc0e3: nightly run 40241297374,
+startup job 121313605668, passed all 11 fault/cancellation cases and normal
+WebView2 save/restart/reload, stopped/no-grant, native-bridge and cleanup checks.
+Actual parent High/admin 12288 became Medium/non-admin 8192; both app launches
+quit gracefully. Coverage and one-minute manual soak passed too. Exact hash,
+metrics, requirement mapping and downloaded reports are in the CI repair
+evidence. This final handoff update changes documentation only; source remains
+512bc0e3. Require the documentation head's current full PR/nightly checks,
+record their live outcomes on PR #73, then make it ready for human review.
+Next delivery task is owner review/merge of #73; next implementation milestone
+is Q4 bounded backend/failure scenarios. Hardware/release gates remain separate.
+
 Objective: close the remaining packaged-UI gate in the authorized
 [application-quality roadmap](application-quality.md). Test the exact release
 shell binary built for this SHA with its embedded UI; prove that the real
@@ -338,9 +350,9 @@ artifacts. No application source or device grants changed. Rollback removes
 the smoke/environment helper, qualifier/Windows helper, workflow wiring and
 corresponding policy tests together.
 
-Next Q3.2 task: finish the CI repair above, push the existing branch and review
-current hosted PR and nightly-quality runs. The owner explicitly authorized
-opening PR #73; it is draft while its checks are unresolved. The local fault
+Next Q3.2 task: review the documentation head's current PR/nightly checks,
+then hand PR #73 to the owner for review/merge. The owner explicitly authorized
+opening this PR; keep it draft until its current checks pass. The local fault
 and cancellation gates are complete; current hosted CI remains the completion
 gate. Earliest errors before
 initial CDP attachment are not individually retained; the initialization-error

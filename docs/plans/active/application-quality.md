@@ -1,7 +1,7 @@
 # Application quality and regression prevention
 
 Status: implementation authorized by the owner on 2026-10-21 ("Let's do it!").
-Progress at 2026-10-25 (main `11737991`):
+Progress at 2026-10-25 (main `11737991`, delivery PR #73):
 
 - Q1 is merged (PR #50): the change-to-check classifier, the shared
   checks, the required Quality gate, main ruleset 25451476, and the
@@ -37,7 +37,13 @@ Progress at 2026-10-25 (main `11737991`):
   tests, both strict Clippy runs and four launcher lifecycle probes pass; wrapped
   packaged qualification is blocked locally by an existing app and requires CI.
 
-Open: Q3.2; Q4 items 1–7 beyond
+Hosted Q3.2 evidence now passes on source 512bc0e3: all 11 qualification cases,
+normal packaged UI/native/save/restart/cleanup, standard-user token, coverage
+and manual synthetic soak (run 40241297374). Final documentation-head checks
+and owner PR review/merge remain the delivery action; exact results and limits
+are in the [CI repair evidence](evidence/2026-10-25-pr73-ci-repair.md#passing-packaged-evidence-on-512bc0e3).
+
+Open for delivery: Q3.2 PR review/merge; Q4 items 1–7 beyond
 the storage slice; Q5; Q6 on each release. Hardware and release evidence
 remain separate gates. Existing acceptance targets remain binding.
 
