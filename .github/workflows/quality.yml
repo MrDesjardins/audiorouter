@@ -304,6 +304,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features custom-protocol
 
+      - name: Ensure WebView2 runtime on the disposable runner
+        shell: pwsh
+        run: ./tools/quality/ensure-webview2.ps1 -Output (Join-Path $env:RUNNER_TEMP 'metrics/webview2-runtime.json') -InstallMissing
+
       - name: Launch as a fresh install and time the backend
         shell: pwsh
         run: |
@@ -365,6 +369,8 @@ jobs:
           path: |
             ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.json
             ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.log
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.jsonl
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.panic
             ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.png
             ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.html
             ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.zip
@@ -380,6 +386,8 @@ jobs:
             ${{ runner.temp }}/audiorouter-packaged-shell-qualification/qualification.json
             ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.json
             ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.log
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.jsonl
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.panic
             ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.png
             ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.html
             ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.zip

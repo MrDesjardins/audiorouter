@@ -10,7 +10,10 @@ Install locked UI and contract dependencies and the pinned Rust toolchain as
 described in the [quickstart](quickstart.md). From the repository root:
 
 ```powershell
-# Full development suite, then optimized acceptance suite; guard qualifies first.
+# Shared local/CI full suite against bundled fixtures; guard qualifies first.
+npm.cmd --prefix ui run e2e:ci
+
+# Development server suite, then the focused optimized acceptance suite.
 npm.cmd --prefix ui run e2e
 
 # Focus on the optimized application code and fixture adapters.
@@ -20,8 +23,18 @@ npm.cmd --prefix ui run e2e:production-canvas -- --workers=1
 npm.cmd --prefix ui run e2e:guard
 ```
 
-CI uses one worker. Both browser profiles use the existing disposable Rust
-backend or deterministic route adapter. The optimized build emits only
+CI uses one worker. The full bundled profile inherits every `.pw.ts` scenario,
+assertion timeout, diagnostic retry and `failOnFlakyTests` from the development
+profile. It builds `index.html`, `harness.html`, `route-harness.html` and
+`backend-harness.html` into `target/browser-acceptance-ui` before launching Edge.
+This removes dev ESM/HMR traffic from the long acceptance run. PR #73's original
+blank-page failure retained a `net::ERR_NO_BUFFER_SPACE` request failure for
+`/src/routeHarness.tsx`; the precise OS resource cause remains unproven. Tests
+are not reloaded or retried into success. `e2e:development` remains available
+for development-server integration checks.
+
+All profiles use the existing disposable Rust backend or deterministic route
+adapter. The focused optimized build emits only
 `route-harness.html` and `backend-harness.html` plus production chunks into
 `target/canvas-production-ui`. Its dedicated output is emptied each time so
 stale HTML/assets cannot make a missing build input appear to work. Ordinary
@@ -59,7 +72,8 @@ A missing module or failed browser launch cannot count as successful detection.
 
 Outputs are under `%TEMP%` locally and `RUNNER_TEMP` in CI:
 
-- `audiorouter-playwright-results`: development failure traces/screenshots.
+- `audiorouter-playwright-results`: full-suite failure traces/screenshots
+  (bundled in shared verification, development for `e2e:development`).
 - `audiorouter-production-playwright-results`: optimized failure artifacts.
 - `audiorouter-browser-guard-*`: positive/negative logs and qualification JSON.
 
@@ -129,3 +143,13 @@ reports/logs/screenshots/traces, excluding disposable browser profiles/databases
 This is packaged UI/backend evidence, not installer lifecycle, physical audio,
 Narrator/accessibility or endurance acceptance. Keep those gates explicit in
 the active plan.
+
+The startup job explicitly checks Microsoft's WebView2 runtime registration
+before either launch test. Edge Stable alone does not supply this dependency
+([Microsoft distribution guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)).
+If missing, the disposable GitHub runner installs the signed Microsoft Evergreen
+bootstrapper; the helper refuses automatic installation outside GitHub Actions.
+`metrics-startup/webview2-runtime.json` records detection before/after setup,
+interactive session information and the downloaded bootstrapper hash. Packaged
+artifacts include the bounded `shell.jsonl`, `backend.jsonl` and `shell.panic`
+files as well as the smoke reports; raw profiles and databases remain excluded.

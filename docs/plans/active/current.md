@@ -113,6 +113,44 @@ a prerelease, record evidence in `evidence/2026-10-24-release-0.0.22.md`.
 
 ## Quality Q3.2 - packaged WebView2 smoke - 2026-10-24
 
+PR #73 CI repair, owner request 2026-10-25: full manual CI at `c5778a49`
+passed, but PR run 40232863731 / job 121288172978 failed its flaky-test guard:
+the first dark compressor scenario timed out waiting for `rf__node-voice`;
+the retry passed (342 passed / 10 skipped / 1 flaky). Keep the original
+failure/trace and `failOnFlakyTests` policy. Retrieve its screenshot, document
+and network trace; reproduce and fix the owning startup/test layer, then run
+the focused scenario across themes and current PR CI. Also inspect the retained
+hosted packaged-qualification failure from run 40230361624 before attributing
+that separate failure. Requirements UI-11/17 and ENG-02/04/05. No changes to
+audio, driver settings, grants or acceptance budgets are authorized by this
+repair. Rollback removes only the focused repair and its regression; preserve
+both original CI results. Commit/push fixes to the existing PR branch and
+record current-head checks before marking the PR ready.
+
+Confirmed browser evidence: the failing screenshot is blank; the trace shows
+`/src/routeHarness.tsx` failed with `net::ERR_NO_BUFFER_SPACE` before React
+mounted. The exact OS resource exhaustion mechanism is unproven. Serve all four
+full-suite entries from an isolated bundled build in shared browser verification;
+retain development and focused optimized commands, all scenario discovery,
+assertions, timeouts and the flaky guard. Compare discovery and run the complete
+bundled suite, including the six dynamics/theme scenarios. Also explicitly detect
+and provision WebView2 only on disposable CI runners, retain before/after runtime
+evidence, and include actual JSONL/panic application logs in both artifact uploads.
+Missing runtime is a hypothesis for the separate nightly failure until hosted
+preflight and rerun evidence confirm it. No ordinary-user installation changes.
+The [PR #73 CI investigation](evidence/2026-10-25-pr73-ci-repair.md) retains the
+original runs, trace finding, coverage comparison and reproducible local checks.
+
+CI repair local validation: full bundled Edge suite 343 passed / 10 existing
+skips / zero failures or flaky retries (10.2 minutes, CI policy active); all
+six dynamics/theme scenarios passed and three-theme screenshots were reviewed.
+Discovery is identical at 353 scenarios. Format/lint/typecheck, 5 verification
+wiring tests, 743 UI unit tests, 65 policy/runner tests, docs (198 files / 1,094 links), YAML and
+PowerShell parsing pass. Existing WebView2 detection passed without installing
+on the owner PC; simulated missing registration fails closed outside Actions.
+The actual hosted prerequisite/install and packaged rerun remain unverified.
+`actionlint` is unavailable. Main remains `11737991` after fetching.
+
 Objective: close the remaining packaged-UI gate in the authorized
 [application-quality roadmap](application-quality.md). Test the exact release
 shell binary built for this SHA with its embedded UI; prove that the real
@@ -222,10 +260,6 @@ Initial startup-investigation checks: docs validation 196 files / 1,086 local li
 65/65 policy/runner tests; Node syntax and runner/environment Prettier clean;
 workflow YAML and its packaged-smoke PowerShell block parse successfully;
 `git diff --check` clean. `actionlint` remains unavailable locally.
-Initial startup-investigation checks: docs validation 196 files / 1,086 local links;
-65/65 policy/runner tests; Node syntax and runner/environment Prettier clean;
-workflow YAML and its packaged-smoke PowerShell block parse successfully;
-`git diff --check` clean. `actionlint` remains unavailable locally.
 
 Guard qualification completed locally on 2026-10-25: all 11 cases passed,
 including real Windows CTRL_BREAK before attachment, after readiness and after
@@ -241,11 +275,6 @@ links; 65/65 shared policy/runner tests; Node syntax; runner/environment/
 qualifier Prettier; workflow YAML; helper and both new workflow PowerShell
 blocks; ASCII-only PowerShell helper; and `git diff --check`. `actionlint` is
 unavailable locally. No Rust or UI source changed in this slice.
-Final guard-delivery checks passed: docs validation 197 files / 1,092 local
-links; 65/65 shared policy/runner tests; Node syntax; runner/environment/
-qualifier Prettier; workflow YAML; helper and both new workflow PowerShell
-blocks; ASCII-only PowerShell helper; and `git diff --check`. `actionlint` is
-unavailable locally. No Rust or UI source changed in this slice.
 
 Owner authorized finishing the checks, committing and pushing the reviewed
 branch on 2026-10-25. Delivery branch: `quality/packaged-webview-smoke` from
@@ -255,10 +284,11 @@ artifacts. No application source or device grants changed. Rollback removes
 the smoke/environment helper, qualifier/Windows helper, workflow wiring and
 corresponding policy tests together.
 
-Next Q3.2 task: review current hosted Windows CI after the branch is pushed;
-fix any hosted-runner failure and rerun affected checks. The local fault and
-cancellation gates are complete; current CI remains the completion gate.
-PR opening still requires explicit owner approval. Earliest errors before
+Next Q3.2 task: finish the CI repair above, push the existing branch and review
+current hosted PR and nightly-quality runs. The owner explicitly authorized
+opening PR #73; it is draft while its checks are unresolved. The local fault
+and cancellation gates are complete; current hosted CI remains the completion
+gate. Earliest errors before
 initial CDP attachment are not individually retained; the initialization-error
 qualification runs after attachment, and startup readiness/native responses
 remain required. Uncatchable runner termination belongs to its external

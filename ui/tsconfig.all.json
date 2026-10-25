@@ -10,7 +10,9 @@
     "e2e/**/*.tsx",
     "vite.config.ts",
     "vite.canvas-production.config.ts",
+    "vite.browser-acceptance.config.ts",
     "playwright.config.ts",
+    "playwright.ci.config.ts",
     "playwright.usability.config.ts",
     "playwright.production.config.ts"
   ]

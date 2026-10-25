@@ -24,6 +24,12 @@ Progress at 2026-10-25 (main `11737991`):
   now fails the job on any flaky test. PR #65 had let a retried pass count
   as green, contrary to the delivery rules. Proven with a probe that fails
   on its first attempt only: exit 0 without the option, exit 1 with it.
+- 2026-10-25, PR #73 CI repair: the full suite now builds all four browser
+  entries before running the same 353 discovered scenarios. The original trace
+  showed `ERR_NO_BUFFER_SPACE` loading the dev entry, before React mounted.
+  Local bundled run: 343 passed / 10 existing skips / zero flaky retries; UI
+  unit tests 743 passed. Current hosted PR and packaged qualification remain
+  open; see the [CI repair evidence](evidence/2026-10-25-pr73-ci-repair.md).
 
 Open: Q3.2; Q4 items 1–7 beyond
 the storage slice; Q5; Q6 on each release. Hardware and release evidence
@@ -180,9 +186,11 @@ NFR-08/14/15, ENG-02/05.
 1. Run a bounded production-build browser smoke in CI using the existing
    production harness. Include group/layout/history, clipboard, connections,
    session switching, recording setup and backend error recovery. Retain the
-   full existing development-harness Edge suite; optimize only after measuring.
-   Extend production build inputs/fixture bridges for scenarios that currently
-   require backend-harness.html; the existing production input is route-only.
+   full existing harness scenarios. Following PR #73's measured dev module-load
+   failure, shared CI builds all four entries and runs every scenario against
+   bundled assets; the development-server command remains available. Compare
+   discovery before changing profiles, retain all assertions and the flaky
+   failure policy, and require a complete first-pass local and hosted run.
 2. Add packaged WebView2 smoke on the exact shell artifact produced by the
    build: ready canvas, native bridge, session load/save/reload, stopped first
    launch, readable errors and recovery after backend restart. Verify bundled

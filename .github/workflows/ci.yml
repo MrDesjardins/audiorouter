@@ -280,8 +280,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           npm ci --prefix ui
 
-      # Builds the e2e_backend fixture, runs every development Playwright test,
-      # then the optimized acceptance smoke in installed Edge. README screenshot
+      # Builds the e2e_backend fixture and every browser entry, then runs the
+      # full Playwright discovery against bundled assets. README screenshot
       # generators stay off (they write into docs/).
       # playwright.config.ts runs one worker when CI is set.
       - name: Run Playwright tests

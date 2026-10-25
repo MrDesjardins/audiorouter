@@ -162,6 +162,11 @@ test('nightly packaged shell smoke uses the built release binary and retains fai
   assert.match(workflow, /name: Qualify packaged smoke guards[\s\S]*?qualify-packaged-shell-smoke\.mjs --shell src-tauri\/target\/release\/audiorouter-shell\.exe/);
   assert.match(workflow, /name: Upload packaged smoke qualification evidence\s+if: always\(\)/);
   assert.match(workflow, /audiorouter-packaged-shell-qualification\/\*\/\*\.zip/);
+  for (const extension of ['jsonl', 'panic']) {
+    assert.ok(workflow.includes(`audiorouter-packaged-shell-smoke/*.${extension}`));
+    assert.ok(workflow.includes(`audiorouter-packaged-shell-qualification/*/*.${extension}`));
+  }
+  assert.match(workflow, /ensure-webview2\.ps1.*-InstallMissing/);
 });
 
 test('packaged smoke isolates state and removes inherited permission and one-shot debugger probes', () => {
