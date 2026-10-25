@@ -3095,7 +3095,10 @@ export function SessionFlowCanvas({
         minWidth: 190,
         opacity: 1,
         width: layoutSize?.width,
-        height: layoutSize?.height,
+        // A saved height is a floor: content that grew after the size was
+        // chosen (a plugin's status row, a device line) extends the card
+        // instead of spilling out of it.
+        minHeight: layoutSize?.height,
         "--canvas-node-width": layoutSize ? `${layoutSize.width}px` : undefined,
         "--canvas-node-min-width": layoutSize ? `${layoutSize.minWidth}px` : undefined,
       } as CSSProperties,

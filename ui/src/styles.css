@@ -478,9 +478,11 @@ button:disabled {
 .session-flow-canvas .react-flow__node.has-layout-size {
   width: var(--canvas-node-width) !important;
   min-width: var(--canvas-node-min-width) !important;
+  display: flex;
+  flex-direction: column;
 }
 .session-flow-canvas .has-layout-size .flow-node-content {
-  height: 100%;
+  flex: 1 0 auto;
 }
 .session-flow-canvas .react-flow__node.visual-group-node {
   min-width: 180px !important;

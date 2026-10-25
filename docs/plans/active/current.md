@@ -1,5 +1,28 @@
 # Active plan — post-0.0.8 maintenance
 
+## Defect 2026-10-24: canvas card content spills out of a sized card (0.0.22, owner report)
+
+- **Reproduction.** Size cards with Selection layout (for example
+  Smallest height), then let their content grow: a VST card's status row
+  appears once the plugin runs, a device line is added. The card kept the
+  saved height, so the meter overlapped "2 ports · enabled" and the
+  Microphone meter well spilled past the card's edge (owner screenshot,
+  0.0.22).
+- **Cause.** A saved size set a fixed `height`. Its floor (`minHeight`) is
+  the content height measured once, when the card first appeared, so later
+  content had nowhere to go.
+- **Fix.** The saved height is now the card's `min-height`; the card grows to
+  fit its content and still keeps any larger chosen height
+  (`ui/src/SessionFlowCanvas.tsx`, `ui/src/styles.css`). Saved sizes need no
+  migration.
+- **Regression.** `ui/e2e/canvas-layout.pw.ts` "a saved height shorter than
+  the card's content never clips it" (three themes) failed on `main` (card
+  stayed 100 px) and passes with the fix.
+- **Checks (2026-10-24, Windows, Edge).** canvas-layout, -review, -session,
+  smart-layout, canvas-live-performance, device-binding, plugin-inspector,
+  audio-tools: 73 passed. `npm test` 722 passed; lint and format clean.
+- **Branch.** `fix/canvas-card-overflow`; no PR until the owner approves.
+
 ## Release 0.0.22 — 2026-10-24, owner request
 
 The owner merged #67 (Discord and OBS, `dfc17cea`) and asked for a new

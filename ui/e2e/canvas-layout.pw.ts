@@ -345,3 +345,37 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByLabel("Move contents with group")).not.toBeChecked();
   });
 }
+
+// A saved size records the card's content height when it was chosen; a
+// plugin status row or a device line can appear later (0.0.22 report).
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`a saved height shorter than the card's content never clips it in ${theme}`, async ({ page }, info) => {
+    await page.addInitScript((id) => {
+      localStorage.setItem(
+        `audiorouter.ui.layout.${id}.sizes`,
+        JSON.stringify({ mic: { width: 240, height: 100, minWidth: 218, minHeight: 100 } }),
+      );
+    }, demoSession.id);
+    await fixture(page, [], theme);
+    const card = page.getByTestId("rf__node-mic");
+    await expect(card).toHaveClass(/has-layout-size/);
+    const fit = await card.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const content = element.querySelector(".flow-node-content")!;
+      // Connectors sit on the edge by design; check the content in flow.
+      const last = [...content.children]
+        .filter((child) => (child as HTMLElement).offsetHeight > 0 && getComputedStyle(child).position === "static")
+        .at(-1)!;
+      return {
+        height: (element as HTMLElement).offsetHeight,
+        contentBottom: content.getBoundingClientRect().bottom,
+        lastBottom: last.getBoundingClientRect().bottom,
+        cardBottom: box.bottom,
+      };
+    });
+    expect(fit.height).toBeGreaterThan(100);
+    expect(fit.contentBottom).toBeLessThanOrEqual(fit.cardBottom + 0.5);
+    expect(fit.lastBottom).toBeLessThanOrEqual(fit.cardBottom + 0.5);
+    await page.screenshot({ path: info.outputPath(`saved-height-floor-${theme}.png`) });
+  });
+}
