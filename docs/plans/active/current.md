@@ -23,6 +23,27 @@
   audio-tools: 73 passed. `npm test` 722 passed; lint and format clean.
 - **Branch.** `fix/canvas-card-overflow`; no PR until the owner approves.
 
+## Session state row removed — 2026-10-24, owner request
+
+- **Request.** "Running session" / "Stopped session" above the canvas took a
+  grid row and a gap; the header's play state ("Audio stopped", left of Undo)
+  already shows it.
+- **Check.** The row's other children (session name, Duplicate, Delete,
+  Undo/Redo/Discard draft, Plan changes) were already `display: none` in the
+  focused workbench; their visible equivalents live in the right workbench
+  and the header. Nothing else uses grid row 1.
+- **Change.** The row is hidden and the first grid track removed; the canvas,
+  inspector and workbench rows were renumbered for both the default and the
+  Properties layouts (`ui/src/styles.css`); the label is gone from
+  `ui/src/App.tsx`. The hidden controls stay for now because jsdom tests
+  drive them; removing that dead markup and moving those tests to the
+  visible controls is a separate cleanup.
+- **Checks (2026-10-24, Windows, Edge).** Canvas and workbench now start
+  16 px below the header in dark, light and high contrast (screenshots
+  reviewed), Properties layout unchanged; banner-layout, sidebar-resize,
+  session-workflows, plugin-inspector, device-binding, canvas-layout,
+  dynamics-editor: 41 passed. `npm test` 722 passed; lint and format clean.
+
 ## Release 0.0.22 — 2026-10-24, owner request
 
 The owner merged #67 (Discord and OBS, `dfc17cea`) and asked for a new
