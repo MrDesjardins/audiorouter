@@ -71,10 +71,61 @@ fixtures remain explicitly opt-in; a skip is not a product pass.
 
 ## Separate packaged gate
 
-The [quality roadmap](../plans/active/application-quality.md) still requires an
-exact built-shell smoke with its matching sidecars, isolated database/WebView
-profile, native bridge, stopped first launch, save/reload and recovery evidence.
-The ordinary app uses the default pipe/single-instance guard, so do not launch
-that smoke while the owner's daily app is running. Closing or replacing the
-owner's process is not an incidental test action. Keep missing packaged,
-hardware/accessibility and release evidence explicit in the active plan.
+The [quality roadmap](../plans/active/application-quality.md) requires an exact
+release-shell smoke with an isolated database and WebView2 profile, native
+bridge, usable canvas, stopped first launch and save/reload evidence. Build the
+embedded UI and release shell, then run from the repository root:
+
+```powershell
+npm.cmd ci --prefix ui
+npm.cmd --prefix ui run build
+cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features custom-protocol
+$out = Join-Path $env:TEMP ('audiorouter-packaged-smoke-' + [guid]::NewGuid().ToString('N'))
+node tools/quality/packaged-shell-smoke.mjs --shell src-tauri/target/release/audiorouter-shell.exe --output $out
+```
+
+The runner checks the production default control pipe and refuses to start if
+it is occupied. Close AudioRouter yourself before running it; the runner never
+closes or replaces an existing instance. It enables a loopback DevTools port
+only in the child process, uses a disposable WebView2 profile/database, and
+cleans up only the child it started. Evidence and bounded logs remain in `$out`.
+Run native WebView2 acceptance from a normal interactive Windows process.
+The agent tool's restricted process sandbox prevented navigation on the local
+reference machine; rerunning outside that sandbox with a standard-user token
+worked. This does not require UAC elevation or changing Windows security settings.
+The runner removes inherited diagnostic markers and debugger waits. It verifies
+the native bridge through normal `system.describe` calls; the older create-only
+`AUDIOROUTER_SHELL_PROBE_FILE` probe disrupts repeated UI snapshot refreshes.
+See the [controlled investigation](../plans/active/evidence/2026-10-25-packaged-webview-smoke.md).
+
+Qualify the smoke's own failure/cancellation guards against the same binary:
+
+```powershell
+$out = Join-Path $env:TEMP ('audiorouter-packaged-qualification-' + [guid]::NewGuid().ToString('N'))
+node tools/quality/qualify-packaged-shell-smoke.mjs --shell src-tauri/target/release/audiorouter-shell.exe --output $out
+```
+
+The qualifier runs 11 sequential cases: a healthy baseline, missing binary,
+occupied control pipe, exited shell, invalid native response, blocked canvas
+readiness, an uncaught error during document initialization, refused graceful
+quit, and cancellation before attachment/after readiness/after restart. It
+requires each seeded fault to reach its owning failed check and retain evidence;
+an injection that never takes effect fails qualification. Page/bridge/readiness
+and refused-quit cases must retain a screenshot, HTML and trace.
+
+Cancellation uses a real Windows CTRL_BREAK event delivered to the runner's
+own hidden console. The app has a separate process group, so its cleanup must
+come from the runner's handler. The report must say `cancelled` and exit 130.
+The qualifier snapshots the owned shell/WebView descendants and verifies that
+the same PID/creation-time pairs have disappeared. The runner also handles
+SIGINT/SIGTERM and qualification-parent disconnection. Uncatchable OS termination
+cannot execute Node handlers; a process-tree supervisor remains responsible for
+that form of termination.
+
+Qualification control and fault options are confined to this tool's private
+named-pipe protocol. Ordinary smoke runs enable no fault injection. Nightly
+quality runs the qualifier before the ordinary smoke and uploads bounded case
+reports/logs/screenshots/traces, excluding disposable browser profiles/databases.
+This is packaged UI/backend evidence, not installer lifecycle, physical audio,
+Narrator/accessibility or endurance acceptance. Keep those gates explicit in
+the active plan.

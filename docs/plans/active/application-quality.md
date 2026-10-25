@@ -1,16 +1,23 @@
 # Application quality and regression prevention
 
 Status: implementation authorized by the owner on 2026-10-21 ("Let's do it!").
-Progress at 2026-10-23 (main `00044cc9`):
+Progress at 2026-10-25 (main `11737991`):
 
 - Q1 is merged (PR #50): the change-to-check classifier, the shared
   checks, the required Quality gate, main ruleset 25451476, and the
   declared-skip run 39713611409.
-- Q2's history and presentation-persistence slices are merged
-  (PR #52, and #53 through the stacked branch that #55 also used; both
-  heads are on main).
-- Q3's optimized production-browser smoke and readiness probe are merged.
-  The packaged WebView2 smoke (Q3.2) is still open.
+- Q2's history and presentation-persistence slices are merged. They include
+  bounded generated state/persistence cases and mutation checks for critical
+  lock, session, storage and redo guards (PRs #52/#53 and stacked follow-ups).
+- Q3.1's optimized production-browser smoke and readiness probe are merged.
+  The packaged WebView2 smoke (Q3.2) is still open and is the next task.
+- Q3.2's packaged runner passes locally on `11737991`: usable canvas,
+  normal native bridge, stopped/no-grant state, session save/restart/reload and
+  child cleanup. The earlier blank-page reports were caused by the restricted
+  launch environment and a one-shot probe that perturbed normal UI refresh;
+  see the [investigation evidence](evidence/2026-10-25-packaged-webview-smoke.md).
+  The [11-case local fault/cancellation qualification](evidence/2026-10-25-packaged-smoke-guard-qualification.md)
+  passes; current hosted Windows CI remains open.
 - One Q4 slice, the graph-commit storage-failure recovery test (PR #56), is
   merged.
 - 2026-10-23: Edge CI keeps one diagnostic retry, but `failOnFlakyTests`
@@ -18,7 +25,7 @@ Progress at 2026-10-23 (main `00044cc9`):
   as green, contrary to the delivery rules. Proven with a probe that fails
   on its first attempt only: exit 0 without the option, exit 1 with it.
 
-Open: Q2 sequence/property and mutation tests; Q3.2; Q4 items 1–7 beyond
+Open: Q3.2; Q4 items 1–7 beyond
 the storage slice; Q5; Q6 on each release. Hardware and release evidence
 remain separate gates. Existing acceptance targets remain binding.
 
@@ -324,17 +331,77 @@ Plan exit criteria: Q1 gates demonstrated; Q2 failure classes guarded; Q3
 production/packaged smoke enforced; Q4 applicable backend/audio evidence
 present; Q5 failures actionable; Q6 release/rollback evidence complete.
 
-## First actionable task
+## Next actionable task: Q3.2 hosted CI qualification
 
-Implement Q1's verification inventory and shared change-to-check entry point,
-plus classifier/aggregate-gate tests. Do not start by mass-refactoring App or
-SessionFlowCanvas. Prerequisites: repo CI/run
-and ruleset access is available or its limitation is recorded, baseline timing
-is collected, and the implementation plan is added to the active plan.
+Finish qualifying the implemented packaged-shell acceptance slice against the exact
+release shell binary built by CI, with no installer or live-audio claim. Use a
+disposable database, logs and WebView2 user-data directory; refuse to proceed
+if the default AudioRouter control pipe is already owned; launch without
+developer grants; prove the real shell-to-backend bridge and usable-canvas
+readiness; exercise one session save/reload; and terminate only the child
+process it started. Capture tested SHA, binary hash, OS/WebView2 version,
+timings, output and failure artifacts. Report cold/warm UI-ready timings against
+NFR-14's 8 s/3 s targets, but do not gate them until Q5 calibrates hosted-runner
+variance. Do not expose a remote-debug port on ordinary launches; enable it
+only for this child and bind it to loopback.
 
-## Validation of this planning change
+Requirements: UI-11/17, NFR-14/15, ENG-02/05, plus M08 evidence discipline.
+Prerequisites: Windows Edge/WebView2 and pinned Node/Rust are installed; the
+release shell with its embedded UI is built from the current SHA; the default
+pipe is free; and the smoke owns a unique temporary profile and database.
+This route does not use plugin sidecars. No physical audio device,
+driver/default-device change or installer operation is part of this slice.
 
-Repository files and prior recorded evidence were inspected. No product tests,
-CI runs, hardware experiments or application changes were performed for this
-planning task. `node tools/docs/validate.mjs` passed (180 Markdown files,
-986 local links); `git diff --check` passed.
+Ordered tasks:
+
+1. Inspect the existing shell/frontend probe, production readiness signal,
+   test harness and build output; record boundaries the harness cannot observe
+   without changing product behavior.
+2. Add a dedicated opt-in smoke runner/test that starts the built shell with
+   isolated paths on its production default pipe, refuses to run while that
+   pipe is occupied, and guarantees child cleanup on pass, failure or
+   interruption.
+3. Attach to that WebView2 instance over loopback CDP. Assert page load, real
+   backend bridge response, `canvas-readiness` for the expected session, no
+   uncaught page errors, stopped first launch and no implicit device grant.
+4. Exercise save, restart/reload and recovery using a disposable session;
+   assert durable state through the app/backend contract, not a screenshot
+   alone. Retain bounded logs, trace and screenshot on failure.
+5. Wire the smoke after the exact shell build in Windows CI, upload evidence
+   even on failure, and prove negative cases (missing shell, occupied default
+   pipe, bridge/readiness failure) produce attributable failures.
+6. Run local Windows checks, inspect the complete diff, update the operational
+   runbook and record CI limitations. Do not treat this browser smoke as
+   installer, accessibility, hardware-audio or endurance acceptance.
+
+Acceptance: a missing shell, occupied default instance, failed
+native bridge, unusable canvas, uncaught UI error, startup permission leak,
+failed save/reload or failed cleanup makes the check fail. A clean run records
+the exact executable hash and SHA, and leaves the owner's profile and running
+AudioRouter processes untouched.
+
+Rollback: remove only the smoke runner/spec, workflow wiring and runbook
+references; no product behavior, user data, session format or grant scope
+changes are intended. Preserve existing fresh-install and production-browser
+checks.
+
+## Validation of the Q3.2 plan update
+
+Local main was updated from `0bfaee77` to `11737991` while preserving the
+Q3.2 work. The [2026-10-25 investigation](evidence/2026-10-25-packaged-webview-smoke.md)
+records why the original restricted launches and create-only marker were not
+valid product-failure evidence, the harness corrections, and two passing
+packaged UI runs. Native describes now run through the ordinary Tauri API;
+the diagnostic marker is cleared from inherited child environments. A normal
+standard-user launch outside the tool process sandbox passed. The [local guard qualification](evidence/2026-10-25-packaged-smoke-guard-qualification.md)
+now passes all 11 cases, including real console-break cancellation at three
+lifecycle points and observed native/readiness/document/quit faults. Current
+hosted Windows CI remains required before Q3.2 is complete.
+
+## Original roadmap planning evidence (2026-10-21)
+
+At roadmap creation, repository files and prior evidence were inspected; no
+product tests, CI runs, hardware experiments or application changes were
+performed. Documentation validation passed (180 Markdown files, 986 local
+links) and `git diff --check` passed. Q3.2 implementation and current
+verification progress are recorded in the active plan.

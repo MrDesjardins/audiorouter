@@ -106,6 +106,24 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-25 — Qualify the actual fault and cancellation path.**
+  Evidence: [packaged smoke guard qualification](docs/plans/active/evidence/2026-10-25-packaged-smoke-guard-qualification.md).
+  Scope: Windows test-process lifecycle and seeded transport faults.
+  Consequence: read-only Tauri exports made attempted injections ineffective;
+  require a hit at the actual IPC boundary and the owning failed check.
+  Deliver console cancellation to a privately owned console, preserve the
+  runner's process handle/exit code, and verify captured descendants by both
+  PID and creation time before declaring cleanup qualified.
+
+- **2026-10-25 — Keep one-shot probes out of full packaged UI runs.**
+  Evidence: [packaged WebView2 investigation](docs/plans/active/evidence/2026-10-25-packaged-webview-smoke.md).
+  Scope: packaged-shell automation and native bridge qualification.
+  Consequence: the create-only `AUDIOROUTER_SHELL_PROBE_FILE` marker made later
+  `system.describe` refreshes fail; clear it and verify normal API responses
+  before/after restart. Restricted tool launches also stayed blank while the
+  same binary passed outside that sandbox with a standard-user token; compare
+  launch environments before attributing such a failure to embedded assets.
+
 - **2026-10-24 — A known warning count hides new warnings; keep it at zero and read PR annotations.**
   Evidence: [OBS and Discord plan, lint warnings repair](docs/plans/active/obs-discord.md#pr-warnings-and-app-strip-loading-2026-10-24-owner-request),
   PR #67 CI annotations. Scope: UI lint, CI annotations, any check that

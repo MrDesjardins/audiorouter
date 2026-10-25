@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checks, fullChecks } from './checks.mjs';
+import { packagedShellEnvironment } from './packaged-shell-environment.mjs';
 
 const fixtures = [
   ['docs', ['docs/spec/09-interface.md'], ['docs']],
@@ -150,6 +151,52 @@ test('nightly metrics use read-only permissions and artifacts instead of pushing
   assert.doesNotMatch(workflow, /contents: write|git push|git commit/);
   assert.match(workflow, /name: quality-history-update/);
   assert.match(workflow, /ref: \$\{\{ github.sha \}\}/);
+});
+
+test('nightly packaged shell smoke uses the built release binary and retains failure evidence', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /name: Packaged WebView2 smoke[\s\S]*?packaged-shell-smoke\.mjs --shell src-tauri\/target\/release\/audiorouter-shell\.exe/);
+  assert.match(workflow, /name: Upload packaged WebView2 smoke evidence\s+if: always\(\)/);
+  assert.match(workflow, /name: packaged-webview-smoke/);
+  assert.match(workflow, /audiorouter-packaged-shell-smoke\/\*\.zip/);
+  assert.match(workflow, /name: Qualify packaged smoke guards[\s\S]*?qualify-packaged-shell-smoke\.mjs --shell src-tauri\/target\/release\/audiorouter-shell\.exe/);
+  assert.match(workflow, /name: Upload packaged smoke qualification evidence\s+if: always\(\)/);
+  assert.match(workflow, /audiorouter-packaged-shell-qualification\/\*\/\*\.zip/);
+});
+
+test('packaged smoke isolates state and removes inherited permission and one-shot debugger probes', () => {
+  const inherited = {
+    Path: 'keep-windows-runtime-path',
+    TEMP: 'keep-temp',
+    audiorouter_allow_device_admin: '1',
+    AudioRouter_Control_Pipe: 'daily-pipe',
+    AUDIOROUTER_STARTUP_METRICS: 'daily-metrics',
+    AudioRouter_Shell_Probe_File: 'create-only-marker',
+    WEBVIEW2_WAIT_FOR_SCRIPT_DEBUGGER: '1',
+    WebView2_Pipe_For_Script_Debugger: 'debugger-pipe',
+    LocalAppData: 'daily-data',
+    AppData: 'daily-roaming',
+    audiorouter_database: 'daily-database',
+    webview2_user_data_folder: 'daily-browser-profile',
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: '--inherited-debug-flags',
+  };
+  const before = { ...inherited };
+  const paths = { database: 'smoke-database', localAppData: 'smoke-data', appData: 'smoke-roaming', webview: 'smoke-browser-profile' };
+  const env = packagedShellEnvironment(inherited, paths);
+  assert.deepEqual(inherited, before);
+  assert.equal(env.Path, inherited.Path);
+  assert.equal(env.TEMP, inherited.TEMP);
+  assert.equal(env.AUDIOROUTER_DATABASE, paths.database);
+  assert.equal(env.LOCALAPPDATA, paths.localAppData);
+  assert.equal(env.APPDATA, paths.appData);
+  assert.equal(env.WEBVIEW2_USER_DATA_FOLDER, paths.webview);
+  assert.match(env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, /--remote-debugging-address=127\.0\.0\.1/);
+  assert.match(env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, /--remote-allow-origins=http:\/\/localhost$/);
+  const forbidden = ['AUDIOROUTER_ALLOW_DEVICE_ADMIN', 'AUDIOROUTER_CONTROL_PIPE', 'AUDIOROUTER_STARTUP_METRICS', 'AUDIOROUTER_SHELL_PROBE_FILE', 'WEBVIEW2_WAIT_FOR_SCRIPT_DEBUGGER', 'WEBVIEW2_PIPE_FOR_SCRIPT_DEBUGGER'];
+  assert.deepEqual(Object.keys(env).filter(key => forbidden.includes(key.toUpperCase())), []);
+  for (const key of ['LOCALAPPDATA', 'APPDATA', 'AUDIOROUTER_DATABASE', 'WEBVIEW2_USER_DATA_FOLDER', 'WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS']) {
+    assert.deepEqual(Object.keys(env).filter(candidate => candidate.toUpperCase() === key), [key]);
+  }
 });
 
 test('strict shell Clippy covers every feature after building current embedded UI', () => {

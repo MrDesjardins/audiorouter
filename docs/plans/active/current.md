@@ -111,6 +111,159 @@ a prerelease, record evidence in `evidence/2026-10-24-release-0.0.22.md`.
   ([future work](../future/obs-discord-integration.md#follow-up-build-the-application-inventory-off-the-control-thread)).
   Watch the next coverage nightly for the drift-test change.
 
+## Quality Q3.2 - packaged WebView2 smoke - 2026-10-24
+
+Objective: close the remaining packaged-UI gate in the authorized
+[application-quality roadmap](application-quality.md). Test the exact release
+shell binary built for this SHA with its embedded UI; prove that the real
+native bridge reaches the backend, the canvas becomes usable, and session
+changes survive an app restart. Requirements UI-11/17, NFR-14/15 and
+ENG-02/05; this is not installer, accessibility, audio-device or endurance
+qualification.
+
+Prerequisites: Windows 11, pinned Rust 1.96.0 and Node 22.22.3, WebView2,
+locked UI dependencies, a clean release-shell build, and no running
+AudioRouter instance. The shell embeds the UI; this simple session route does
+not exercise plugin sidecars. Use disposable database/log/profile paths and no
+developer permission variables. Remote debugging is enabled only for the
+smoke child, on loopback with an ephemeral port. Do not change Windows
+defaults, drivers or the owner's profile.
+
+Decisions: extend the existing fresh-install measurement job after its shell
+build; add a dedicated runner which owns and cleans up only its spawned app.
+Reuse the production `canvas-readiness` probe and normal native
+`system.describe` API. The one-shot shell marker is unsuitable for a full UI
+run because repeated describes fail after the marker is created. Retain the existing fresh-install consent test. A passing
+packaged smoke does not replace installer or hardware gates.
+
+Ordered tasks:
+
+1. Build the release shell with `npm ci --prefix ui`, `npm --prefix ui run
+   build` and `cargo build --manifest-path src-tauri/Cargo.toml --release
+   --locked --features custom-protocol`.
+2. Add an opt-in runner that validates the shell path/hash, fails closed if a
+   prior app instance owns the desktop, launches with an isolated database,
+   logs and WebView2 profile, and records backend/UI readiness and first-run
+   permission state.
+3. Through the app UI, rename and save the disposable session; stop and
+   relaunch only the owned child; verify the saved session returns, audio is
+   stopped and device access remains denied until consent.
+4. Preserve bounded logs, screenshot, trace and JSON result under the runner's
+   output directory on failure. Upload the report on every CI outcome. Test
+   fail-closed and cleanup behavior, then run formatter, lint, relevant unit
+   checks, docs validation and the local packaged smoke.
+5. Inspect the full diff and record tested SHA, shell hash, OS/WebView2,
+   commands, outcomes and limitations. Leave PR creation for explicit approval.
+
+Validation matrix: Windows local run with the exact release shell and a
+disposable fresh-install database/profile; failure injection for missing
+binary, active instance and missing bridge/readiness; Node/UI format and lint;
+documentation links/fences; CI on the current branch SHA. No device or real
+audio activity is expected.
+
+Rollback: remove the dedicated smoke runner/test, its quality-workflow step,
+artifact upload and runbook references. No product behavior, persisted user
+data, session format, API or permission semantics change. Keep current
+fresh-install, browser and hardware checks intact.
+
+Initial environment check: repository clean on `main` at `0bfaee77`; the
+`Get-Process audiorouter-shell` query returned no named shell process, but
+`tasklist.exe` is denied in this environment. The smoke's default-pipe probe
+subsequently connected and failed closed before launching the child; do not
+infer that the pipe owner is absent or close it. An existing shell binary and
+UI Playwright dependency were rebuilt before use. Branch creation was denied
+because `.git` is read-only in this environment.
+
+Implementation started: added `tools/quality/packaged-shell-smoke.mjs`, wired
+it after the release-shell build in `quality.yml`, and added a policy regression
+for invocation/evidence retention. The runner uses isolated database/log and
+WebView2 paths, the default pipe, normal native API responses and
+`canvas-readiness`, verifies stopped/no-grant state, saves and reloads a
+session, and only terminates its own child. The smoke runner writes JSON and
+bounded diagnostics and fails closed when the default pipe is occupied.
+
+Initial validation on `0bfaee77` (Windows 11 Home, Node 22.22.3): UI and
+release-shell builds passed; docs/policy verification passed (195 Markdown
+files, 1,080 links; 64/64 tests); the missing-shell case retained its JSON
+report. The first packaged attempt failed closed at an occupied default pipe
+before launching a child. `actionlint` was unavailable.
+
+Main update: `origin/main` was already at `11737991` (`v0.0.23`); `git fetch`
+could not write `.git/FETCH_HEAD`, so the existing remote-tracking commit was
+used. With the Q3.2 edits stashed, local `main` fast-forwarded to that commit
+and the work was restored without conflicts. On `11737991`, `npm.cmd ci
+--prefix ui`, `npm.cmd --prefix ui run build` (typecheck included), and
+`cargo build --manifest-path src-tauri/Cargo.toml --release --locked
+--features custom-protocol` passed. The shell hash was
+`02d38c70a8ca845cc704f2d056f2c2a501200d4a1e07770916d076184182ce9e`.
+
+Investigation resolved 2026-10-25: the prior blank-window diagnosis was
+superseded by a controlled comparison. The same executable loads outside the
+tool's restricted process sandbox. Its standard-user token was confirmed
+(AdministratorToken=false, interactive session 1). The original smoke then
+failed because its create-only diagnostic marker made repeated
+`system.describe` requests fail. The runner now clears that inherited probe,
+uses normal native API responses, and selects the visible Session textbox.
+No application source change was needed. Full reproduction, original failures
+and requirement mapping: [packaged smoke evidence](evidence/2026-10-25-packaged-webview-smoke.md).
+
+The final runner passed locally on the same shell hash above: native API
+before/after restart, usable canvas, stopped state, denied device access,
+UI session rename/save and UI/backend reload, no uncaught UI errors, and child
+cleanup. Fresh-profile UI-ready was 794 ms; restart UI-ready was 758 ms on a
+warm machine. These are informational samples, not an OS-cold/timing gate.
+The final report is
+`%TEMP%/audiorouter-packaged-smoke-d5e59c40-7dde-4248-9a7f-a01f003879cf/result.json`.
+The extracted environment helper has a behavioral regression for mixed-case
+Windows variables, inherited grants/probes/debugger waits and preservation of
+the parent environment; policy/runner tests pass 65/65. Missing-executable
+qualification fails as expected and retains its JSON evidence.
+Initial startup-investigation checks: docs validation 196 files / 1,086 local links;
+65/65 policy/runner tests; Node syntax and runner/environment Prettier clean;
+workflow YAML and its packaged-smoke PowerShell block parse successfully;
+`git diff --check` clean. `actionlint` remains unavailable locally.
+Initial startup-investigation checks: docs validation 196 files / 1,086 local links;
+65/65 policy/runner tests; Node syntax and runner/environment Prettier clean;
+workflow YAML and its packaged-smoke PowerShell block parse successfully;
+`git diff --check` clean. `actionlint` remains unavailable locally.
+
+Guard qualification completed locally on 2026-10-25: all 11 cases passed,
+including real Windows CTRL_BREAK before attachment, after readiness and after
+restart. Native bridge/readiness/document errors, shell exit, missing binary,
+occupied pipe and refused graceful quit each produced the expected failed
+runner result. Fault-hit counters, screenshot/HTML/trace retention and the
+disappearance of captured PID/creation-time pairs were verified. The final
+ordinary smoke also passed with both launches quitting gracefully. Original
+failed experiments and raw paths are retained in the
+[guard qualification evidence](evidence/2026-10-25-packaged-smoke-guard-qualification.md).
+Final guard-delivery checks passed: docs validation 197 files / 1,092 local
+links; 65/65 shared policy/runner tests; Node syntax; runner/environment/
+qualifier Prettier; workflow YAML; helper and both new workflow PowerShell
+blocks; ASCII-only PowerShell helper; and `git diff --check`. `actionlint` is
+unavailable locally. No Rust or UI source changed in this slice.
+Final guard-delivery checks passed: docs validation 197 files / 1,092 local
+links; 65/65 shared policy/runner tests; Node syntax; runner/environment/
+qualifier Prettier; workflow YAML; helper and both new workflow PowerShell
+blocks; ASCII-only PowerShell helper; and `git diff --check`. `actionlint` is
+unavailable locally. No Rust or UI source changed in this slice.
+
+Owner authorized finishing the checks, committing and pushing the reviewed
+branch on 2026-10-25. Delivery branch: `quality/packaged-webview-smoke` from
+`11737991`; fetched main was unchanged. The nightly workflow now qualifies
+its smoke guards before the ordinary packaged run and retains bounded case
+artifacts. No application source or device grants changed. Rollback removes
+the smoke/environment helper, qualifier/Windows helper, workflow wiring and
+corresponding policy tests together.
+
+Next Q3.2 task: review current hosted Windows CI after the branch is pushed;
+fix any hosted-runner failure and rerun affected checks. The local fault and
+cancellation gates are complete; current CI remains the completion gate.
+PR opening still requires explicit owner approval. Earliest errors before
+initial CDP attachment are not individually retained; the initialization-error
+qualification runs after attachment, and startup readiness/native responses
+remain required. Uncatchable runner termination belongs to its external
+process-tree supervisor.
+
 ## Application inventory thread — 2026-10-24, owner request
 
 Objective: `apps.list` no longer enumerates on the backend's control thread
