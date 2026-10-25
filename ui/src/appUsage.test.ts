@@ -299,11 +299,19 @@ describe("Discord check", () => {
       edges: [...session.edges, edge("mix", "game-out")],
     } as unknown as Session;
     const quiet = discordCheck(outplayed, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])], devices);
-    expect(quiet.rows[1]).toMatchObject({ state: "check", deviceName: "CABLE Input (VB-Audio Virtual Cable)" });
+    // Nothing records the cable: a note, not a problem to fix.
+    expect(quiet.rows[1]).toMatchObject({ state: "info", deviceName: "CABLE Input (VB-Audio Virtual Cable)" });
     expect(quiet.rows[1].message).toBe(
-      `Discord plays here itself (its Output Device), and your "game-out" node also sends Discord here, so anything that records this cable gets Discord twice. Keep one: take Discord out of your "game-out" node, or set Discord's Output Device to another device.`,
+      'Discord plays here, and your "game-out" node also sends Discord here. You do not hear this cable, but a recording of it would have Discord twice.',
     );
-    expect(quiet.rows[1].message).not.toContain("you hear");
+    expect(quiet.state).not.toBe("check");
+    const recording = discordCheck(
+      outplayed,
+      [app("Discord.exe", [records("cable-a-out"), plays("cable-in")]), app("obs64.exe", [records("cable-out")])],
+      devices,
+    );
+    expect(recording.rows[1]).toMatchObject({ state: "check" });
+    expect(recording.rows[1].message).toContain("OBS records this cable, and gets Discord twice");
   });
 
   it("shows the top-bar chip from the session alone", () => {

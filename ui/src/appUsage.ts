@@ -583,11 +583,28 @@ export function discordCheck(
         // is visible (owner: the generic sentence was not clear).
         const nodes = session ? outputNodeNamesReaching(session, captureNodes, speaker) : [];
         const node = nodes.length > 0 ? `your "${nodes[0]}" node` : "your route";
-        return {
-          ...base,
-          state: "check",
-          message: `Discord plays here itself (its Output Device), and ${node} also sends Discord here, so anything that records this cable gets Discord twice. Keep one: take Discord out of ${node}, or set Discord's Output Device to another device.`,
-        };
+        // You do not hear this cable, so the copies only matter to a recorder.
+        // Judge it only when Windows shows one recording the other end; a
+        // loopback recorder of this side looks like a player (owner, 2026-10-24:
+        // "I am not hearing anything in double").
+        const recorders = [
+          ...new Set(
+            (deviceUsage(applications).get(speakerPartner.id) ?? [])
+              .filter((use) => use.active && use.direction === "capture" && use.appId !== "discord")
+              .map((use) => use.label),
+          ),
+        ];
+        return recorders.length > 0
+          ? {
+              ...base,
+              state: "check",
+              message: `${recorders.join(" and ")} records this cable, and gets Discord twice: Discord plays here itself (its Output Device), and ${node} also sends Discord here. Keep one: take Discord out of ${node}, or set Discord's Output Device to another device.`,
+            }
+          : {
+              ...base,
+              state: "info",
+              message: `Discord plays here, and ${node} also sends Discord here. You do not hear this cable, but a recording of it would have Discord twice.`,
+            };
       }
       return {
         ...base,
