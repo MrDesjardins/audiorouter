@@ -43,6 +43,14 @@ and manual synthetic soak (run 40241297374). Final documentation-head checks
 and owner PR review/merge remain the delivery action; exact results and limits
 are in the [CI repair evidence](evidence/2026-10-25-pr73-ci-repair.md#passing-packaged-evidence-on-512bc0e3).
 
+Later browser counterexample: fa15bcc5's bundled canvas chunk also failed with
+ERR_NO_BUFFER_SPACE before its drag scenario. The CI fixture now delivers exact
+compiled HTML/assets directly through Playwright, preserves actual HTTP API/Rust
+RPC traffic and fails on missing files. Offline-positive/missing-file-negative
+qualification and the full local 343-pass replay succeed; current-head CI remains
+required. The fa15bcc5 nightly passed its default 20-minute soak and all packaged
+gates. See the [transport evidence](evidence/2026-10-25-pr73-ci-repair.md#compiled-fixture-transport-counterexample-and-repair).
+
 Open for delivery: Q3.2 PR review/merge; Q4 items 1–7 beyond
 the storage slice; Q5; Q6 on each release. Hardware and release evidence
 remain separate gates. Existing acceptance targets remain binding.
@@ -200,7 +208,9 @@ NFR-08/14/15, ENG-02/05.
    session switching, recording setup and backend error recovery. Retain the
    full existing harness scenarios. Following PR #73's measured dev module-load
    failure, shared CI builds all four entries and runs every scenario against
-   bundled assets; the development-server command remains available. Compare
+   bundled assets delivered directly through the browser fixture; development and
+   focused-preview HTTP commands remain available. Qualify missing-asset detection
+   and offline delivery before the full suite. Compare
    discovery before changing profiles, retain all assertions and the flaky
    failure policy, and require a complete first-pass local and hosted run.
 2. Add packaged WebView2 smoke on the exact shell artifact produced by the

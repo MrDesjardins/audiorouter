@@ -139,6 +139,8 @@ test('CI invokes the shared full inventory and gates every classified job', () =
   const expected = fullChecks(classifyChanges([], { full: true }));
   assert.deepEqual([...selected].sort(), expected.sort());
   for (const id of selected) assert.ok(Object.hasOwn(checks, id));
+  assert.deepEqual(checks.browser[0].args, ['--prefix', 'ui', 'run', 'e2e:ci']);
+  assert.ok(workflow.includes('audiorouter-bundled-asset-guard-*'));
   assert.match(workflow, /quality-gate:\s+name: Quality gate\s+if: always\(\)\s+needs: \[changes, docs, site, policy, supply-chain, windows, browser, streamdeck\]/);
   assert.match(workflow, /NEEDS_RESULTS: \$\{\{ toJSON\(needs\) \}\}/);
   assert.match(workflow, /node tools\/quality\/gate\.mjs/);

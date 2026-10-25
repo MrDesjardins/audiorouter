@@ -1,14 +1,13 @@
 import { defineConfig } from "@playwright/test";
 import base from "./playwright.config";
+import path from "node:path";
+import type { BrowserOptions } from "./e2e/browser-test";
 
 // Same full scenario discovery, assertions and failure policy as development;
-// only the server changes to prebuilt assets without the dev module graph/HMR.
-export default defineConfig({
+// compiled fixture assets are delivered directly, without hosted loopback TCP.
+// The actual packaged embedded-asset path is exercised by its separate gate.
+export default defineConfig<BrowserOptions>({
   ...base,
-  webServer: {
-    command: "npx vite preview --configLoader runner --outDir ../target/browser-acceptance-ui --host 127.0.0.1 --port 4186 --strictPort",
-    url: "http://127.0.0.1:4186/harness.html",
-    reuseExistingServer: false,
-    timeout: 30_000,
-  },
+  use: { ...base.use, bundledAssets: path.resolve("../target/browser-acceptance-ui") },
+  webServer: undefined,
 });

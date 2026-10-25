@@ -217,6 +217,37 @@ record their live outcomes on PR #73, then make it ready for human review.
 Next delivery task is owner review/merge of #73; next implementation milestone
 is Q4 bounded backend/failure scenarios. Hardware/release gates remain separate.
 
+Final browser counterexample at fa15bcc5: run 40242614197 / job 121317676572
+failed the flaky guard (342 passed / 10 skipped / 1 flaky). The drag-handle
+scenario failed in beforeEach before the test body: the canvas chunk
+SessionFlowCanvas-x67S6i1T.js failed with ERR_NO_BUFFER_SPACE in 0.6 ms.
+The screenshot is blank dark; all other bundled assets loaded. Bundling alone
+did not eliminate the hosted loopback transport failure. Retain this evidence.
+The packaged native/11-case gates and coverage passed on this head independently.
+
+Repair only browser fixture delivery: fulfill the exact compiled HTML/assets
+from the dedicated build directory through Playwright context routing, avoiding
+unnecessary localhost TCP for fixture assets. Leave real HTTP API requests and
+backend RPC fixtures alone; keep full discovery, assertions, timeouts and flaky
+policy. Fail on missing assets and qualify this guard with an offline healthy
+canvas and an intentional missing-file response. Existing development/preview
+HTTP commands and the real packaged embedded-asset gate remain separate.
+Steps: add bounded build-path mapping/guard fixture; inherit it in both adapter
+fixtures; select it only in CI profile; add positive/negative real-Edge guard
+qualification; compare all 353 titles, run format/lint/typecheck, unit/policy
+checks and the complete local suite, then current hosted CI. Rollback restores
+the previous compiled preview transport without changing application behavior.
+
+Direct-delivery local validation passed: 343 Edge scenarios / 10 existing skips /
+zero flaky retries (9.1 minutes), exact 353-title discovery, both uncaught-error
+probes, offline healthy-canvas and seeded missing-asset guard probes, 743 UI unit
+tests, 5 wiring tests, 66 policy/runner tests, format/lint/typecheck, Node syntax,
+workflow YAML, docs (198 files / 1,097 links) and diff checks. Three-theme
+screenshots were inspected. The fa15bcc5 nightly completed its full 20-minute
+soak and all packaged/coverage gates; its only failing PR job was the retained
+TCP asset failure. Next: push this focused fixture repair, require current-head
+CI and record live outcomes on PR #73. Keep the flaky-test policy unchanged.
+
 Objective: close the remaining packaged-UI gate in the authorized
 [application-quality roadmap](application-quality.md). Test the exact release
 shell binary built for this SHA with its embedded UI; prove that the real

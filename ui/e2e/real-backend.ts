@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { once } from "node:events";
-import { expect, test as base } from "@playwright/test";
+import { expect, test as base } from "./browser-test";
 import type { Session } from "../../contracts/src/index";
 
 export const initialSession: Session = {

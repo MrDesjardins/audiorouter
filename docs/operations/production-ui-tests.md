@@ -27,11 +27,20 @@ CI uses one worker. The full bundled profile inherits every `.pw.ts` scenario,
 assertion timeout, diagnostic retry and `failOnFlakyTests` from the development
 profile. It builds `index.html`, `harness.html`, `route-harness.html` and
 `backend-harness.html` into `target/browser-acceptance-ui` before launching Edge.
-This removes dev ESM/HMR traffic from the long acceptance run. PR #73's original
-blank-page failure retained a `net::ERR_NO_BUFFER_SPACE` request failure for
-`/src/routeHarness.tsx`; the precise OS resource cause remains unproven. Tests
-are not reloaded or retried into success. `e2e:development` remains available
-for development-server integration checks.
+The CI profile delivers those exact compiled files through Playwright context
+routing, with no HTTP fixture server. The original dev-entry failure and a later
+compiled canvas-chunk failure both reported `net::ERR_NO_BUFFER_SPACE` before
+React mounted; bundling alone was insufficient. Direct fixture delivery removes
+that unnecessary hosted TCP dependency. Real HTTP API requests and the Rust RPC
+adapter keep their existing transports. Paths are confined to the build output;
+missing HTML/assets return 404 and fail an automatic guard even if UI assertions
+pass. No page reload, timeout increase or error allow-list is used.
+
+The asset guard is qualified before the full suite in two isolated Edge runs:
+a healthy compiled canvas with networking disabled must pass, and an intentional
+missing asset must fail at the guard's own assertion. Both logs/reports are
+retained. `e2e:development` and `e2e:production-canvas` keep HTTP fixture serving;
+the separate packaged gate exercises Tauri's real embedded-asset path.
 
 All profiles use the existing disposable Rust backend or deterministic route
 adapter. The focused optimized build emits only
@@ -75,7 +84,8 @@ Outputs are under `%TEMP%` locally and `RUNNER_TEMP` in CI:
 - `audiorouter-playwright-results`: full-suite failure traces/screenshots
   (bundled in shared verification, development for `e2e:development`).
 - `audiorouter-production-playwright-results`: optimized failure artifacts.
-- `audiorouter-browser-guard-*`: positive/negative logs and qualification JSON.
+- `audiorouter-browser-guard-*`: uncaught-error positive/negative qualification.
+- `audiorouter-bundled-asset-guard-*`: offline canvas and missing-asset qualification.
 
 CI retains guard evidence even on successful runs and both browser artifact
 directories after failure. Screenshots use test output paths. Keep the tested

@@ -20,6 +20,7 @@ it("CI compiles every full-suite adapter without narrowing discovery or weakenin
   expect(scripts["e2e:ci"]).toContain("npm run e2e:guard");
   expect(scripts["e2e:ci"]).toContain("--example e2e_backend --locked");
   expect(scripts["e2e:ci"]).toContain("vite build --config vite.browser-acceptance.config.ts");
+  expect(scripts["e2e:ci"]).toContain("node scripts/qualify-bundled-assets.mjs");
   expect(scripts["e2e:ci"]).toContain("playwright test --config=playwright.ci.config.ts");
   expect(browserBuild.build?.outDir).toBe("../target/browser-acceptance-ui");
   expect(browserBuild.build?.emptyOutDir).toBe(true);
@@ -34,7 +35,8 @@ it("CI compiles every full-suite adapter without narrowing discovery or weakenin
   expect(ci.retries).toBe(development.retries);
   expect(ci.failOnFlakyTests).toBe(development.failOnFlakyTests);
   expect(ci.expect).toEqual(development.expect);
-  expect(ci.webServer).toMatchObject({ command: expect.stringContaining("vite preview"), reuseExistingServer: false });
+  expect(ci.webServer).toBeUndefined();
+  expect(ci.use?.bundledAssets).toBe(path.resolve("../target/browser-acceptance-ui"));
 });
 it("every active scenario uses an uncaught-error-guarded fixture", () => {
   for (const file of readdirSync("e2e").filter((name) => name.endsWith(".pw.ts"))) {

@@ -14,7 +14,7 @@
     "test": "vitest run --configLoader runner --exclude \"e2e/**\"",
     "test:coverage": "vitest run --configLoader runner --exclude \"e2e/**\" --coverage",
     "e2e": "npm run e2e:guard && npm run e2e:development && npm run e2e:production-canvas",
-    "e2e:ci": "npm run e2e:guard && cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && vite build --config vite.browser-acceptance.config.ts --configLoader runner && playwright test --config=playwright.ci.config.ts",
+    "e2e:ci": "npm run e2e:guard && cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && vite build --config vite.browser-acceptance.config.ts --configLoader runner && node scripts/qualify-bundled-assets.mjs && playwright test --config=playwright.ci.config.ts",
     "e2e:guard": "node scripts/qualify-browser-guard.mjs",
     "e2e:development": "cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && playwright test --config=playwright.config.ts",
     "e2e:production-canvas": "cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && vite build --config vite.canvas-production.config.ts --configLoader runner && playwright test --config=playwright.production.config.ts"
