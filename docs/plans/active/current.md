@@ -3823,3 +3823,10 @@ Isolated CI diagnostic: debug/standard-user-launcher temporarily replaces the
 nightly workflow with only launcher probes. It is not product/nightly acceptance
 evidence. Capture nested PowerShell startup status and output under the actual
 High-to-Medium transition; copy only a verified repair back to the PR branch.
+
+Diagnostic run 40240495655 reproduced nested PowerShell failure 0xC0000142
+with empty stdout/stderr under the real High-to-Medium token. Test explicit
+same-user descriptors for the derived token/default DACL and new process/thread
+objects. This is a provisional ownership-boundary hypothesis; change no caller
+token, file/registry ACL, account or machine policy. Require unchanged nested
+probe assertions to pass on the hosted runner before copying the repair.
