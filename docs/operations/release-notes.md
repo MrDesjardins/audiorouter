@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+## 0.0.23 — 2026-10-24 (unsigned experimental preview)
+
+- **Device cards say which apps use them.** Each Physical Input and Output
+  card has one line under its meter: "Heard by Discord" when an app
+  records the cable this output plays into, "Sound from Discord" when an
+  app plays into the cable this input records, "Shared with …" or "Also
+  recorded by …" for the same device, or "No app using it". Hover for
+  the full sentence; Properties lists each app. A raw microphone in
+  Discord, or the 16-channel side of a cable, shows as a warning there.
+- **Set up for Discord.** From the Apps tab or the first-run guide: pick
+  your microphone and a cable, and AudioRouter adds one undoable voice
+  route (gate, compressor, limiter into the cable), then names the cable
+  Output to choose as Discord's microphone, with a Copy button. The
+  Discord card then checks it live.
+- **Discord playing into a cable is Ready.** Discord's speaker on a cable
+  (for example CABLE Input for a clip recorder) is no longer flagged as
+  "heard twice". The check warns only when something records that cable
+  and your route also sends Discord into it.
+- **An audio file that cannot play names its node.** Play now says which
+  Audio file node has no file or lost it, marks that card "Cannot play",
+  selects it and opens its Properties. Saving a session also keeps the
+  recorded take an Audio file node plays, so it no longer expires after
+  24 hours.
+- **Sized cards fit their content.** A card you sized with Selection
+  layout grows when its content does (a plugin's status row, the new
+  device line) instead of spilling out; your chosen height stays the
+  minimum.
+- **Arrange lines up cards of different heights** on their centres, so a
+  chain's connections run straight.
+- **More room for the canvas.** The "Running session" / "Stopped session"
+  line above the canvas is gone; the header already shows whether audio
+  runs.
+- **Apps checks never hold up other requests.** The backend now lists
+  running apps on its own thread.
+
+Windows 11 x64; app and installer unsigned. Experimental prerelease, not a
+fully M08-qualified consumer release. No database migration, driver
+installation or Windows default-device changes; sessions saved by 0.0.23
+still open in 0.0.22. Close AudioRouter before upgrading and keep 0.0.22
+plus configuration backups for rollback. Clean-machine install/upgrade,
+missing-WebView2, accessibility, hardware and driver-signing gates remain
+open.
+
 ## 0.0.22 — 2026-10-24 (unsigned experimental preview)
 
 - **New Apps tab: Discord and OBS.** The Apps tab in the right sidebar

@@ -1,5 +1,34 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.23 — 2026-10-24, owner request
+
+The owner tested the local merge of D1 (`feature/device-used-by`), D2
+(`feature/discord-setup`), `fix/audio-file-media`,
+`fix/canvas-card-overflow` and `fix/remove-session-state-row` (test exe
+`release-7`) and asked for "a PR and a new version to release". One PR,
+`feature/apps-devices-0.0.23`, carries that exact combination plus the
+0.0.23 bump (by package name: 13 manifests, contracts and UI packages, only
+`audiorouter-*` entries of the three Cargo and two npm lockfiles) and notes.
+Same app-only unsigned prerelease profile as 0.0.22; no storage migration
+(the audio-media change only clears `expires_at` on referenced takes), so
+0.0.22 stays the rollback.
+
+- Found while qualifying the combination: (1) the merge of D2 with
+  `fix/audio-file-media` had dropped a `}` in `styles.css`, nesting the
+  "Cannot play" styles inside a Discord setup rule (format check failed;
+  restored). (2) The 3 unexplained D1 Edge failures were `smart-layout`
+  Arrange: device cards (205 px with the D1 line) now exceed Arrange's
+  180 px default while Gain (171 px) was padded to it, so centring left
+  the chain 4 px off level. Arrange now uses measured heights
+  (`smartLayout.ts`, unit regression with 205/171/205 cards, which fails
+  on the old rule); the Edge test compares centres.
+- Tasks: (1) owner approves and merges the PR; (2) annotated tag `v0.0.23`
+  on main, `create-draft-release.ps1 -Tag v0.0.23 -AppOnly` in a clean
+  worktree (heavy build: ask first if the owner is using the app);
+  (3) `fresh_install_shell` on the packaged shell, `verify-artifacts.ps1`
+  on the downloaded draft, publish as a prerelease, evidence in
+  `evidence/2026-10-24-release-0.0.23.md`.
+
 ## Defect 2026-10-24: canvas card content spills out of a sized card (0.0.22, owner report)
 
 - **Reproduction.** Size cards with Selection layout (for example
