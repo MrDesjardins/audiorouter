@@ -299,11 +299,13 @@ describe("Discord check", () => {
       edges: [...session.edges, edge("mix", "game-out")],
     } as unknown as Session;
     const quiet = discordCheck(outplayed, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])], devices);
-    // Nothing records the cable: a note, not a problem to fix.
-    expect(quiet.rows[1]).toMatchObject({ state: "info", deviceName: "CABLE Input (VB-Audio Virtual Cable)" });
-    expect(quiet.rows[1].message).toBe(
-      'Discord plays here, and your "game-out" node also sends Discord here. You do not hear this cable, but a recording of it would have Discord twice.',
-    );
+    // Nothing records the cable: nothing to report (the owner hears and
+    // records Discord once with this setup).
+    expect(quiet.rows[1]).toMatchObject({
+      state: "ready",
+      deviceName: "CABLE Input (VB-Audio Virtual Cable)",
+      message: "Discord plays here.",
+    });
     expect(quiet.state).not.toBe("check");
     const recording = discordCheck(
       outplayed,
