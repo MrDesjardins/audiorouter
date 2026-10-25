@@ -151,6 +151,43 @@ on the owner PC; simulated missing registration fails closed outside Actions.
 The actual hosted prerequisite/install and packaged rerun remain unverified.
 `actionlint` is unavailable. Main remains `11737991` after fetching.
 
+Additional hosted failure at repair head cef17af6: quality run 40236831750 /
+coverage job 121300091637 panicked in the existing OBS preview-expiry test
+while constructing `Instant::now() - 301 seconds`. A newly booted Windows
+runner need not have that much representable monotonic history. Keep the
+original failure; replace test backdating with a private explicit-time apply
+helper and forward-only test instants. Cover just before, exactly at and after
+the unchanged 300-second SEC-15 expiry, plus rejected-operation queue behavior.
+No real OBS connection or permission change. Run all OBS tests, full control
+unit tests, both Rust format commands/checks and strict Clippy for both
+workspaces before committing; rerun current CI/quality. Rollback this small
+clock seam and boundary-test change together.
+
+Hosted packaged follow-up on cef17af6: preflight found WebView2 155 installed
+(no installation), interactive session 2; fresh-install backend passed. Logs
+now retained show UI-native sessions/devices/get requests, but every case needing
+CDP timed out before the port file. Microsoft documents that elevated hosts
+ignore WEBVIEW2_* overrides, including debug arguments and profile overrides.
+GitHub Windows jobs run with administrator privileges; this matches the failure.
+Add a tool-only launcher that restricts the inherited token and sets Medium
+integrity for the complete qualification/smoke process tree, records and verifies
+the actual child integrity/admin state before it runs, preserves exit codes and
+owned-process cleanup. No product debug switch or registry/policy/UAC change.
+Validate clean/nonzero launcher probes locally, then all 11 packaged guards and
+normal smoke; hosted parent-to-child token evidence remains required.
+
+Follow-up local checks passed: 25 OBS tests, 299 control unit tests (11
+existing ignored), both Rust format/check runs and strict all-feature Clippy
+for both workspaces; 65 policy/runner tests; four real Windows restricted-token
+launcher probes; Node syntax/format, PowerShell/ASCII, workflow YAML, docs
+(198 files / 1,094 links) and diff checks. Wrapped packaged requalification
+refused the occupied production control pipe and launched no shell; do not
+close the existing owner instance. Preserve its failed/blocked local report.
+The prior local 11-case pass predates the wrapper. Next: commit/push this
+follow-up and require High-to-Medium launcher evidence plus all 11 packaged
+guards and the normal smoke on the newly built hosted artifact. The repaired
+Edge job already passed 343 scenarios at cef17af6; rerun current-head PR CI.
+
 Objective: close the remaining packaged-UI gate in the authorized
 [application-quality roadmap](application-quality.md). Test the exact release
 shell binary built for this SHA with its embedded UI; prove that the real

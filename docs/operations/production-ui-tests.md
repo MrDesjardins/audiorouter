@@ -153,3 +153,14 @@ bootstrapper; the helper refuses automatic installation outside GitHub Actions.
 interactive session information and the downloaded bootstrapper hash. Packaged
 artifacts include the bounded `shell.jsonl`, `backend.jsonl` and `shell.panic`
 files as well as the smoke reports; raw profiles and databases remain excluded.
+
+GitHub's administrator job token is unsuitable for this environment-based smoke:
+WebView2 ignores `WEBVIEW2_*` overrides in elevated hosts, including the isolated
+profile and debugger flags ([Microsoft privilege guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/security)).
+The nightly job uses `standard-user-process.ps1` to launch verification with a
+restricted Medium token, verifies the actual suspended child token before it
+runs, and retains `launch-token.json`. It preserves identity/session, environment,
+streams, exit status and owned-tree timeout cleanup without changing machine
+settings. Four Windows launcher probes run before the release build and upload
+their evidence. The smoke itself refuses an elevated or Low token before starting
+the shell; direct local runs must use a normal standard-user session.

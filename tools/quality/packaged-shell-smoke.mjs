@@ -8,6 +8,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "../../ui/node_modules/@playwright/test/index.mjs";
 import { packagedShellEnvironment } from "./packaged-shell-environment.mjs";
+import { assertStandardUser } from "./standard-user.mjs";
 
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
@@ -628,6 +629,7 @@ async function main() {
     qualificationControl?.on("close", onDisconnect);
     const shell = await readFile(options.shell);
     shellHash = createHash("sha256").update(shell).digest("hex");
+    metrics.processIdentity = assertStandardUser();
     await assertNoExistingInstance();
     await mkdir(data, { recursive: true });
     await mkdir(appData, { recursive: true });

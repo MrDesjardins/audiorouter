@@ -1063,32 +1063,47 @@ fn connection_loss_preserves_confirmed_changes_for_restore_after_reconnect() {
 
 #[test]
 fn previews_expire_and_parallel_changes_are_refused_before_queueing() {
-    let mut integration = ObsIntegration::new(ObsPaths {
-        settings: None,
-        port: None,
-    });
-    {
-        let mut snapshot = integration.shared.snapshot();
-        snapshot.connection = Connection::Connected;
-        snapshot.source = Some(Source::Live);
-        snapshot.scene_collection = Some("Streaming".into());
-        let mut source = input("Mic/Aux", AudioKind::Input, Some(MIC), Some(false));
-        source.uuid = Some("uuid-mic".into());
-        snapshot.inputs.push(source);
+    let expiry = Duration::from_secs(OBS_PREVIEW_SECONDS);
+    for age in [
+        expiry - Duration::from_nanos(1),
+        expiry,
+        expiry + Duration::from_nanos(1),
+    ] {
+        let mut integration = ObsIntegration::new(ObsPaths {
+            settings: None,
+            port: None,
+        });
+        {
+            let mut snapshot = integration.shared.snapshot();
+            snapshot.connection = Connection::Connected;
+            snapshot.source = Some(Source::Live);
+            snapshot.scene_collection = Some("Streaming".into());
+            let mut source = input("Mic/Aux", AudioKind::Input, Some(MIC), Some(false));
+            source.uuid = Some("uuid-mic".into());
+            snapshot.inputs.push(source);
+        }
+        let changes = [json!({ "inputName": "Mic/Aux", "deviceId": CABLE_A_OUTPUT })];
+        let preview = integration.preview(&changes, None).unwrap();
+        let created = integration.preview.as_ref().unwrap().created;
+        let result = integration.apply_at(preview["previewId"].as_str().unwrap(), created + age);
+        if age > expiry {
+            assert!(result.unwrap_err().contains("expired"));
+            assert!(integration.shared.commands.lock().unwrap().is_empty());
+        } else {
+            assert_eq!(
+                result.unwrap(),
+                json!({ "state": "applying", "changes": 1 })
+            );
+            let mut commands = integration.shared.commands.lock().unwrap();
+            assert_eq!(commands.len(), 1);
+            assert!(matches!(commands.pop_front(), Some(Command::Apply(_))));
+        }
+        integration.shared.snapshot().change = ChangeState::Applying;
+        integration.shared.snapshot().restorable = true;
+        assert!(integration.preview(&changes, None).is_err());
+        assert!(integration.restore().is_err());
+        assert!(integration.shared.commands.lock().unwrap().is_empty());
     }
-    let changes = [json!({ "inputName": "Mic/Aux", "deviceId": CABLE_A_OUTPUT })];
-    let preview = integration.preview(&changes, None).unwrap();
-    integration.preview.as_mut().unwrap().created =
-        Instant::now() - Duration::from_secs(OBS_PREVIEW_SECONDS + 1);
-    assert!(integration
-        .apply(preview["previewId"].as_str().unwrap())
-        .unwrap_err()
-        .contains("expired"));
-    integration.shared.snapshot().change = ChangeState::Applying;
-    integration.shared.snapshot().restorable = true;
-    assert!(integration.preview(&changes, None).is_err());
-    assert!(integration.restore().is_err());
-    assert!(integration.shared.commands.lock().unwrap().is_empty());
 }
 
 #[test]

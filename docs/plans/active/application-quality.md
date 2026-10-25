@@ -30,6 +30,12 @@ Progress at 2026-10-25 (main `11737991`):
   Local bundled run: 343 passed / 10 existing skips / zero flaky retries; UI
   unit tests 743 passed. Current hosted PR and packaged qualification remain
   open; see the [CI repair evidence](evidence/2026-10-25-pr73-ci-repair.md).
+- Hosted follow-up: the repaired Edge job passed all 343 non-skipped scenarios.
+  Nightly exposed an OBS test Instant-underflow assumption and elevated
+  WebView2 ignoring profile/debugger overrides. The follow-up adds forward-clock
+  expiry boundaries and a verified standard-user tool launcher. Local OBS/control
+  tests, both strict Clippy runs and four launcher lifecycle probes pass; wrapped
+  packaged qualification is blocked locally by an existing app and requires CI.
 
 Open: Q3.2; Q4 items 1–7 beyond
 the storage slice; Q5; Q6 on each release. Hardware and release evidence

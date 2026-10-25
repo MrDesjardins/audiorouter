@@ -8,6 +8,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { assertStandardUser } from "./standard-user.mjs";
 
 const runnerFile = fileURLToPath(
   new URL("./packaged-shell-smoke.mjs", import.meta.url),
@@ -446,6 +447,8 @@ async function main() {
     throw new Error("Packaged smoke qualification requires Windows");
   const options = args(process.argv.slice(2));
   await stat(options.shell);
+  assertStandardUser();
+  await assertPipeFree();
   await mkdir(options.output, { recursive: true });
   const summaryFile = path.join(options.output, "qualification.json");
   try {

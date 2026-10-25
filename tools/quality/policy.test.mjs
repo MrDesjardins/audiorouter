@@ -155,11 +155,11 @@ test('nightly metrics use read-only permissions and artifacts instead of pushing
 
 test('nightly packaged shell smoke uses the built release binary and retains failure evidence', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
-  assert.match(workflow, /name: Packaged WebView2 smoke[\s\S]*?packaged-shell-smoke\.mjs --shell src-tauri\/target\/release\/audiorouter-shell\.exe/);
+  assert.match(workflow, /name: Packaged WebView2 smoke[\s\S]*?packaged-shell-smoke\.mjs', '--shell', 'src-tauri\/target\/release\/audiorouter-shell\.exe'/);
   assert.match(workflow, /name: Upload packaged WebView2 smoke evidence\s+if: always\(\)/);
   assert.match(workflow, /name: packaged-webview-smoke/);
   assert.match(workflow, /audiorouter-packaged-shell-smoke\/\*\.zip/);
-  assert.match(workflow, /name: Qualify packaged smoke guards[\s\S]*?qualify-packaged-shell-smoke\.mjs --shell src-tauri\/target\/release\/audiorouter-shell\.exe/);
+  assert.match(workflow, /name: Qualify packaged smoke guards[\s\S]*?qualify-packaged-shell-smoke\.mjs', '--shell', 'src-tauri\/target\/release\/audiorouter-shell\.exe'/);
   assert.match(workflow, /name: Upload packaged smoke qualification evidence\s+if: always\(\)/);
   assert.match(workflow, /audiorouter-packaged-shell-qualification\/\*\/\*\.zip/);
   for (const extension of ['jsonl', 'panic']) {
@@ -167,6 +167,10 @@ test('nightly packaged shell smoke uses the built release binary and retains fai
     assert.ok(workflow.includes(`audiorouter-packaged-shell-qualification/*/*.${extension}`));
   }
   assert.match(workflow, /ensure-webview2\.ps1.*-InstallMissing/);
+  assert.equal((workflow.match(/standard-user-process\.ps1 -Executable/g) ?? []).length, 2);
+  assert.match(workflow, /node --test tools\/quality\/standard-user\.test\.mjs/);
+  assert.match(workflow, /audiorouter-packaged-shell-qualification\/launch-token\.json/);
+  assert.match(workflow, /name: Upload standard-user launcher evidence\s+if: always\(\)/);
 });
 
 test('packaged smoke isolates state and removes inherited permission and one-shot debugger probes', () => {
