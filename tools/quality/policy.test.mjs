@@ -216,3 +216,13 @@ test('strict shell Clippy covers every feature after building current embedded U
   assert.ok(workflow.indexOf('name: Install UI dependencies') < workflow.indexOf('name: Strict Clippy'));
   assert.match(workflow, /name: Install UI dependencies\s+if: needs.changes.outputs.backend == 'true' \|\| needs.changes.outputs.ui == 'true' \|\| needs.changes.outputs.release == 'true'/);
 });
+
+test('artifact names are unique within each workflow job', () => {
+  for (const file of ['ci.yml', 'quality.yml']) {
+    const workflow = readFileSync(new URL('../../.github/workflows/' + file, import.meta.url), 'utf8');
+    for (const job of workflow.split(/^  (?=[a-z][\w-]*:)/m)) {
+      const names = [...job.matchAll(/uses: actions\/upload-artifact@[^\n]*\r?\n\s+with:\r?\n\s+name: ([^\r\n]+)/g)].map(match => match[1]);
+      assert.equal(new Set(names).size, names.length, file + ': duplicate artifact in job ' + job.split('\n')[0]);
+    }
+  }
+});

@@ -299,10 +299,6 @@ jobs:
         shell: pwsh
         run: node --test tools/quality/standard-user.test.mjs
 
-      - name: Qualify standard-user launcher
-        shell: pwsh
-        run: node --test tools/quality/standard-user.test.mjs
-
       - name: Build the UI and the release shell
         shell: pwsh
         run: |
@@ -374,17 +370,6 @@ jobs:
         with:
           name: metrics-startup
           path: ${{ runner.temp }}/metrics
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Upload standard-user launcher evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: standard-user-qualification
-          path: |
-            ${{ runner.temp }}/audiorouter-standard-user-qualification/*/*.json
-            ${{ runner.temp }}/audiorouter-standard-user-qualification/*/*.log
           if-no-files-found: ignore
           retention-days: 14
 

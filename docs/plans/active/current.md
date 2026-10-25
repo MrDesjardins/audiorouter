@@ -188,6 +188,12 @@ follow-up and require High-to-Medium launcher evidence plus all 11 packaged
 guards and the normal smoke on the newly built hosted artifact. The repaired
 Edge job already passed 343 scenarios at cef17af6; rerun current-head PR CI.
 
+At afdd47a5, hosted launcher probes passed before the shell build. Remove
+the accidentally duplicated launcher/upload steps before they cause an artifact
+name conflict. A new per-job artifact-name uniqueness regression fails before
+the correction and passes after it. This is workflow-only; retain the native
+run for evidence, then require CI on the corrected head.
+
 Objective: close the remaining packaged-UI gate in the authorized
 [application-quality roadmap](application-quality.md). Test the exact release
 shell binary built for this SHA with its embedded UI; prove that the real
