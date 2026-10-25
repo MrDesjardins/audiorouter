@@ -6,6 +6,7 @@ import {
   deviceUsage,
   discordCheck,
   knownAppOf,
+  nodeDeviceUsers,
   sessionInvolvesDiscord,
   sixteenChannelTwin,
   voiceCableOutputs,
@@ -290,6 +291,31 @@ describe("Discord check", () => {
     expect(check.rows[1].message).toContain("twice");
   });
 
+  it("names the node and the Discord setting that put Discord twice on a cable (owner report, 2026-10-24)", () => {
+    // Discord's speaker is CABLE Input, and the session also mixes the
+    // captured Discord into CABLE Input for a recorder.
+    const outplayed = {
+      ...session,
+      edges: [...session.edges, edge("mix", "game-out")],
+    } as unknown as Session;
+    const quiet = discordCheck(outplayed, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])], devices);
+    // Nothing records the cable: nothing to report (the owner hears and
+    // records Discord once with this setup).
+    expect(quiet.rows[1]).toMatchObject({
+      state: "ready",
+      deviceName: "CABLE Input (VB-Audio Virtual Cable)",
+      message: "Discord plays here.",
+    });
+    expect(quiet.state).not.toBe("check");
+    const recording = discordCheck(
+      outplayed,
+      [app("Discord.exe", [records("cable-a-out"), plays("cable-in")]), app("obs64.exe", [records("cable-out")])],
+      devices,
+    );
+    expect(recording.rows[1]).toMatchObject({ state: "check" });
+    expect(recording.rows[1].message).toContain("OBS records this cable, and gets Discord twice");
+  });
+
   it("shows the top-bar chip from the session alone", () => {
     expect(sessionInvolvesDiscord(session, devices)).toBe(true);
     const plain = {
@@ -362,5 +388,103 @@ describe("Discord check", () => {
     const noVoiceCable = discordCheck(null, [app("Discord.exe", [records("mic")])], devices);
     // Not a warning, but a way forward: the row offers the cable setup.
     expect(noVoiceCable.rows[0]).toMatchObject({ state: "info", action: "virtualCables" });
+  });
+});
+
+describe("device node users (D1 footers)", () => {
+  it("lists the app that records from the other end of a voice cable", () => {
+    const users = nodeDeviceUsers(session, devices, [
+      app("Discord.exe", [records("cable-a-out"), plays("headphones")]),
+      app("obs64.exe", [records("cable-a-out")]),
+      app("RainbowSix.exe", [plays("cable-in")]),
+    ]);
+    expect(users.get("voice-out")).toEqual({
+      summary: "Heard by Discord, OBS",
+      uses: [
+        {
+          label: "Discord",
+          appId: "discord",
+          role: "hears it on CABLE-A Output",
+          detail: "records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+          relation: "heard",
+        },
+        {
+          label: "OBS",
+          appId: "obs",
+          role: "hears it on CABLE-A Output",
+          detail: "records CABLE-A Output (VB-Audio Virtual Cable A), so it hears what this node sends",
+          relation: "heard",
+        },
+      ],
+      warning: null,
+    });
+    expect(users.get("headphones")?.summary).toBe("Shared with Discord");
+    expect(users.get("game-out")?.uses).toEqual([
+      {
+        label: "RainbowSix",
+        appId: null,
+        role: "plays here too, e.g. as its speaker",
+        detail:
+          "plays to CABLE Input (VB-Audio Virtual Cable) too (for example as its speaker), or records what plays there",
+        relation: "shared",
+      },
+    ]);
+    // Only device nodes get a line.
+    expect(users.has("chain")).toBe(false);
+  });
+
+  it("does not say Discord hears a game it only shares a cable with (owner report, 2026-10-24)", () => {
+    // Discord's speaker is CABLE Input, which the game output also plays into.
+    const users = nodeDeviceUsers(session, devices, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])]);
+    expect(users.get("game-out")?.summary).toBe("Shared with Discord");
+    expect(users.get("voice-out")?.summary).toBe("Heard by Discord");
+  });
+
+  it("counts only active sessions, so an app out of a call is not listed", () => {
+    const users = nodeDeviceUsers(session, devices, [app("Discord.exe", [records("cable-a-out", false)])]);
+    expect(users.get("voice-out")).toMatchObject({ summary: "No app using it", warning: null });
+  });
+
+  it("warns when an app records from the cable's 16ch twin instead", () => {
+    const users = nodeDeviceUsers(session, devices, [app("Discord.exe", [records("cable-a-out-16")])]);
+    expect(users.get("voice-out")).toMatchObject({
+      summary: "Discord is on CABLE-A Out 16ch",
+      warning:
+        "Discord records from CABLE-A Out 16ch (VB-Audio Virtual Cable A), not CABLE-A Output (VB-Audio Virtual Cable A)",
+    });
+  });
+
+  it("warns when Discord records the raw microphone instead of the voice cable", () => {
+    const users = nodeDeviceUsers(session, devices, [
+      app("Discord.exe", [records("mic")]),
+      app("Audacity.exe", [records("mic")]),
+    ]);
+    expect(users.get("mic")).toEqual({
+      // The footer names the problem; the full warning is in Properties.
+      summary: "Discord skips your processing",
+      uses: [
+        {
+          label: "Discord",
+          appId: "discord",
+          role: "records this device too",
+          detail: "records Microphone (PD200X Podcast Microphone) too",
+          relation: "shared",
+        },
+        {
+          label: "Audacity",
+          appId: null,
+          role: "records this device too",
+          detail: "records Microphone (PD200X Podcast Microphone) too",
+          relation: "shared",
+        },
+      ],
+      warning:
+        "Discord records this microphone without your processing; choose CABLE-A Output (VB-Audio Virtual Cable A) instead",
+    });
+  });
+
+  it("says when a node has no device yet", () => {
+    const unbound = { ...session, nodes: [node("speakers", "physicalOutput")] } as unknown as Session;
+    expect(nodeDeviceUsers(unbound, devices, []).get("speakers")?.summary).toBe("No device chosen");
   });
 });

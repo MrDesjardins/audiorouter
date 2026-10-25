@@ -31,7 +31,7 @@ export function AppStateBadge({ state }: { state: AppCheckState }) {
   );
 }
 
-function CopyName({ name }: { name: string }) {
+export function CopyName({ name }: { name: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -60,10 +60,20 @@ function CopyName({ name }: { name: string }) {
   );
 }
 
-function CheckRow({ row, onOpenVirtualCables }: { row: AppCheckRow; onOpenVirtualCables?: () => void }) {
+function CheckRow({
+  row,
+  onOpenVirtualCables,
+  onSetUp,
+}: {
+  row: AppCheckRow;
+  onOpenVirtualCables?: () => void;
+  onSetUp?: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const fix = row.state === "check" ? (row.expectedName ?? null) : null;
-  const openCables = row.action === "virtualCables" ? (onOpenVirtualCables ?? null) : null;
+  // "Set up for Discord" builds the missing route; without it, the cable tab helps.
+  const setUp = row.action === "virtualCables" ? (onSetUp ?? null) : null;
+  const openCables = row.action === "virtualCables" && !setUp ? (onOpenVirtualCables ?? null) : null;
   return (
     <li className={`app-check-row is-${row.state}`}>
       <span className="app-check-icon" aria-hidden="true">
@@ -79,7 +89,11 @@ function CheckRow({ row, onOpenVirtualCables }: { row: AppCheckRow; onOpenVirtua
         <small>{row.message}</small>
         {/* The link's line is kept on every row, so a row turning from
             ready to check does not grow (UI-17); only opening the steps does. */}
-        {openCables ? (
+        {setUp ? (
+          <button type="button" className="app-link-button" onClick={setUp}>
+            Set up for Discord
+          </button>
+        ) : openCables ? (
           <button type="button" className="app-link-button" onClick={openCables}>
             Set up a virtual cable
           </button>
@@ -108,7 +122,15 @@ function CheckRow({ row, onOpenVirtualCables }: { row: AppCheckRow; onOpenVirtua
   );
 }
 
-function DiscordCard({ check, onOpenVirtualCables }: { check: AppCheck; onOpenVirtualCables?: () => void }) {
+function DiscordCard({
+  check,
+  onOpenVirtualCables,
+  onSetUp,
+}: {
+  check: AppCheck;
+  onOpenVirtualCables?: () => void;
+  onSetUp?: () => void;
+}) {
   return (
     <section className="panel app-card" aria-labelledby="app-card-discord" data-app="discord">
       <header className="app-card-heading">
@@ -123,7 +145,7 @@ function DiscordCard({ check, onOpenVirtualCables }: { check: AppCheck; onOpenVi
       </p>
       <ul className="app-check-list">
         {check.rows.map((row) => (
-          <CheckRow key={row.id} row={row} onOpenVirtualCables={onOpenVirtualCables} />
+          <CheckRow key={row.id} row={row} onOpenVirtualCables={onOpenVirtualCables} onSetUp={onSetUp} />
         ))}
       </ul>
       <details className="app-recommended">
@@ -190,6 +212,8 @@ export function AppsPanel({
   connected,
   onRefresh,
   onOpenVirtualCables,
+  onSetUpDiscord,
+  discordSetup,
   obs,
 }: {
   discord: AppCheck;
@@ -200,6 +224,10 @@ export function AppsPanel({
   onRefresh: () => void;
   /** Opens the Virtual Cables tab, for a session that has no voice cable yet. */
   onOpenVirtualCables?: () => void;
+  /** Opens the "Set up for Discord" flow (D2). */
+  onSetUpDiscord?: () => void;
+  /** The open "Set up for Discord" flow, shown above the Discord card. */
+  discordSetup?: ReactNode;
   /** The OBS card, built by the caller from `obs.status`. */
   obs?: ReactNode;
 }) {
@@ -217,7 +245,8 @@ export function AppsPanel({
           Check now
         </button>
       </div>
-      <DiscordCard check={discord} onOpenVirtualCables={onOpenVirtualCables} />
+      {discordSetup}
+      <DiscordCard check={discord} onOpenVirtualCables={onOpenVirtualCables} onSetUp={onSetUpDiscord} />
       {obs}
       <OtherApps applications={applications} devices={devices} />
     </>

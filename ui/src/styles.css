@@ -478,9 +478,11 @@ button:disabled {
 .session-flow-canvas .react-flow__node.has-layout-size {
   width: var(--canvas-node-width) !important;
   min-width: var(--canvas-node-min-width) !important;
+  display: flex;
+  flex-direction: column;
 }
 .session-flow-canvas .has-layout-size .flow-node-content {
-  height: 100%;
+  flex: 1 0 auto;
 }
 .session-flow-canvas .react-flow__node.visual-group-node {
   min-width: 180px !important;
@@ -1239,17 +1241,16 @@ button:disabled {
 }
 .main-content {
   grid-template-columns: minmax(0, 1fr) minmax(290px, 350px);
-  grid-template-rows: max-content minmax(0, 1fr) minmax(0, 0.72fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0.72fr);
   gap: 0.65rem;
 }
 .main-content > * {
   display: none;
 }
+/* The header's play state already says whether the session runs; this row
+   took a grid row and a gap for one word, so it stays out of the layout. */
 .main-content > .workspace-title {
-  display: flex;
-  grid-column: 1 / -1;
-  grid-row: 1;
-  margin: 0;
+  display: none;
 }
 .workspace-title .session-name,
 .workspace-title .muted,
@@ -1259,19 +1260,19 @@ button:disabled {
 .main-content > #signal-flow-panel {
   display: flex;
   grid-column: 1;
-  grid-row: 2 / 4;
+  grid-row: 1 / 3;
 }
 .main-content > .inspector {
   display: none;
   grid-column: 2;
-  grid-row: 3;
+  grid-row: 2;
   min-height: 0;
   overflow: auto;
 }
 .main-content > .right-workbench {
   display: block;
   grid-column: 2;
-  grid-row: 2 / 4;
+  grid-row: 1 / 3;
   min-height: 0;
   max-height: 100%;
   overflow: auto;
@@ -1302,10 +1303,10 @@ button:disabled {
   display: block;
 }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) > .right-workbench {
-  grid-row: 2;
+  grid-row: 1;
 }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) {
-  grid-template-rows: auto minmax(130px, 0.28fr) minmax(280px, 1fr);
+  grid-template-rows: minmax(130px, 0.28fr) minmax(280px, 1fr);
 }
 .workbench-tabs {
   position: sticky;
@@ -1932,15 +1933,15 @@ button:disabled {
    the placeholder page below the tabs instead of splitting the sidebar into
    two cramped grid rows. */
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) {
-  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) > .right-workbench {
-  grid-row: 2 / 4;
+  grid-row: 1 / 3;
   overflow: hidden;
 }
 .main-content:has(.workbench-tabs button[aria-selected="true"]:nth-child(2)) > .inspector {
   grid-column: 2;
-  grid-row: 2 / 4;
+  grid-row: 1 / 3;
   position: relative;
   z-index: 4;
   display: block;
@@ -2450,6 +2451,85 @@ button.primary {
 .flow-node-content .node-port-count {
   color: var(--node-muted);
   font-size: 0.67rem;
+}
+/* D1 in Properties: three reserved rows, so polling never moves the panel. */
+.device-apps h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+}
+.device-apps-list {
+  display: grid;
+  grid-template-rows: repeat(3, 1.45rem);
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.device-apps-list li {
+  min-width: 0;
+  padding: 0.12rem 0.4rem;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.15rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-apps-list li.is-warning {
+  display: -webkit-box;
+  grid-row: span 2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  border-color: rgb(246 169 40 / 60%);
+  color: #ffd889;
+  background: rgb(246 169 40 / 12%);
+}
+.theme-light .device-apps-list li.is-warning {
+  color: #8a5a00;
+}
+.theme-high-contrast .device-apps-list li.is-warning {
+  border-color: #ffd400;
+  color: #fff;
+  background: #4d2e00;
+}
+/* D1: one fixed line on device nodes; a change never resizes the card. */
+.flow-node-content .node-used-by {
+  display: block;
+  min-width: 0;
+  /* The line never sizes the card: a long one ends in an ellipsis rather
+     than widening the card past its saved size and pushing its ports out. */
+  contain: inline-size;
+  height: 1.3rem;
+  /* The text lines up with the port lines below; the warning's box reaches
+     into the card's padding instead of indenting the text. */
+  margin-inline: calc(-0.35rem - 1px);
+  padding: 0.1rem 0.35rem;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--node-text);
+  font-size: 0.68rem;
+  line-height: 1.1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-node-content .node-used-by.is-empty {
+  color: var(--node-muted);
+}
+.flow-node-content .node-used-by.is-warning {
+  border-color: rgb(246 169 40 / 60%);
+  color: #ffd889;
+  background: rgb(246 169 40 / 12%);
+}
+.theme-light .flow-node-content .node-used-by.is-warning {
+  color: #8a5a00;
+}
+.theme-high-contrast .flow-node-content .node-used-by.is-warning {
+  border-color: #ffd400;
+  color: #fff;
+  background: #4d2e00;
 }
 .flow-port-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -7743,4 +7823,93 @@ input[type="color"] {
 }
 .theme-high-contrast .obs-sources tr.is-muted {
   opacity: 1;
+}
+
+/* "Set up for Discord" (D2): stacked captions above full-width fields. */
+.discord-setup-step {
+  flex: none;
+  font-size: 0.8rem;
+  color: var(--muted, #9aa6b8);
+}
+.discord-setup p {
+  margin: 0;
+}
+.discord-setup-field {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+.discord-setup-field select {
+  width: 100%;
+}
+.discord-setup-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+}
+/* Four reserved lines: the summary and an error swap in place (UI-17). */
+.discord-setup-review {
+  height: 5.2em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  font-size: 0.85rem;
+}
+.discord-setup-review.is-error {
+  color: #ffb4a8;
+}
+.theme-light .discord-setup-review.is-error {
+  color: #a3261a;
+}
+.theme-high-contrast .discord-setup-review.is-error {
+  color: #fff;
+  text-decoration: underline;
+}
+.discord-setup-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.85rem;
+}
+.discord-setup-list .app-copy-name {
+  display: grid;
+  width: fit-content;
+  margin-top: 0.3rem;
+}
+/* A node the last Play refused (nodeNotReady): a red outline and a tag over
+   the card's top edge; neither changes the card's size (UI-17). */
+.session-flow-canvas .react-flow__node.has-node-issue {
+  outline: 2px solid #ff6b6b;
+  outline-offset: 2px;
+}
+.node-issue-tag {
+  position: absolute;
+  top: -0.75rem;
+  left: 0.7rem;
+  z-index: 1;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid #ff6b6b;
+  border-radius: 999px;
+  color: #ffd6d6;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2rem;
+  white-space: nowrap;
+  background: #4a1414;
+}
+.theme-light .node-issue-tag {
+  color: #8f1212;
+  background: #ffe3e3;
+}
+.theme-light .session-flow-canvas .react-flow__node.has-node-issue {
+  outline-color: #c62828;
+}
+.theme-high-contrast .node-issue-tag {
+  border-color: #fff;
+  color: #fff;
+  background: #a00000;
+}
+.theme-high-contrast .session-flow-canvas .react-flow__node.has-node-issue {
+  outline-color: #fff;
 }

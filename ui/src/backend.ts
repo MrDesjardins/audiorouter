@@ -117,6 +117,13 @@ function sameCableTwin(device: { name: string; direction: string }) {
   return null;
 }
 
+/** The node a refused Play names (`nodeNotReady`), so the canvas can mark it. */
+export function notReadyNode(error: unknown): { nodeId: string; message: string } | null {
+  if (!(error instanceof AudioRouterRpcError) || error.data?.code !== "nodeNotReady") return null;
+  const nodeId = error.data.resourceIds[0];
+  return nodeId ? { nodeId, message: error.message } : null;
+}
+
 /** Formats structured backend failures without losing actionable audio guidance. */
 /** Readable text for a caught error; the message is shown with the error tone. */
 export function formatUiError(error: unknown, fallback: string): string {
@@ -167,6 +174,8 @@ function formatUiErrorText(error: unknown, fallback: string): string {
     return `Permission denied: this app is not granted the ${scope} permission needed for this action, so the backend refused it. Nothing was changed.`;
   }
   if (!(error instanceof AudioRouterRpcError) || !error.data) return error.message;
+  // Already names the node and what to do there.
+  if (error.data.code === "nodeNotReady") return error.message;
   const { code, hresult, remediation, retryable } = error.data;
   const hresultText =
     typeof hresult === "number" ? `, HRESULT 0x${(hresult >>> 0).toString(16).padStart(8, "0").toUpperCase()}` : "";

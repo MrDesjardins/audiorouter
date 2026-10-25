@@ -632,3 +632,68 @@ has been requested or granted for this branch.
     tests, UI typecheck, lint and Vitest, contracts typecheck and drift,
     Edge screenshots of the OBS card in three themes with offset sampling,
     then one attended Fix and Restore on a copied OBS profile.
+- Set up for Discord (D2, Discord slice), 2026-10-24 (owner: "Let's do 1
+  and 2"). Branch `feature/discord-setup`, from `main`, separate from
+  the D1 footers.
+  - Scope: the Discord goal only. OBS, "Record clips" and "Hear game and
+    Discord" goal cards stay open for the OBS stages; the flow is one card
+    in Apps rather than a modal, so they can join it as steps.
+  - `ui/src/discordRoute.ts`: `discordSetupOptions` (microphones,
+    whole cables, busy cables, preselection) and `appendDiscordRoute`
+    (one draft change; reuses free device nodes; refuses a fed cable or a
+    second voice route). `DiscordSetup.tsx`: step 1 form, step 2
+    Discord steps with Copy device name.
+  - Entry points: the Discord microphone row (replacing "Set up a virtual
+    cable" when there is no voice cable; the flow itself links to Virtual
+    Cables when none is installed) and the first-run guide.
+  - Route harness: same `__routeFixtureApplications` and
+    `__routeFixtureDevices` hunk as the D1 branch (identical, merges
+    cleanly).
+  - Checks: Vitest `discordRoute.test.ts` (6) and
+    `DiscordSetup.test.tsx` (4); Edge `discord-setup.pw.ts` (add, card
+    turns Check then Ready after Discord moves to the cable, one Undo
+    removes all four nodes, review line and Add button keep their place
+    when the summary changes, screenshots in three themes, reviewed).
+  - Also: UI typecheck, lint (0 warnings), Vitest 732/732, docs check.
+    After an Undo the flow returns to step 1; it is tied to the session it
+    was opened in. The full development Edge suite is not yet qualified
+    (first run lacked `e2e_backend.exe`; the re-run was stopped for low
+    memory before reaching this branch).
+- Device-node "Used by" footers (rest of D1), 2026-10-24 (owner: "Let's
+  do 1 and 2", the footers then "Set up for Discord"). Branch
+  `feature/device-used-by`.
+  - `nodeDeviceUsers` (`ui/src/appUsage.ts`): for each Physical Input and
+    Output node, the apps with an active session on its device. A node that
+    plays into a VB-Cable also lists the apps recording from the cable's
+    other end, which is how Discord hears it. Idle sessions do not count.
+    Two warnings: Discord or OBS on the cable's 16ch twin, and Discord or
+    OBS on the raw microphone while the session feeds a voice cable.
+  - Canvas: one fixed line on device nodes ("Used by Discord · OBS", the
+    warning's short form in amber with "!", "Checking apps…", "Apps not
+    checked" offline). Tooltip names each app's role.
+  - Properties: "Apps using this device", three reserved rows; a warning
+    wraps over two, and extra apps fold into "and N more".
+  - Polling: every 10 s while the canvas has a device node (was: only on
+    the Apps tab), which is cheap since the inventory thread (#71).
+  - Route harness: `__routeFixtureApplications` and
+    `__routeFixtureDevices` inject the app and device lists.
+  - Checks: 5 Vitest cases (cable partner, idle sessions, 16ch twin, raw
+    microphone, unbound node); Edge `device-used-by.pw.ts` (text, tooltip,
+    warning after a refocus, card height, Properties offset and the next
+    control's offset unchanged, screenshots in dark, light and high
+    contrast, reviewed).
+  - Full checks on the PC: UI lint (0 warnings), typecheck, Vitest
+    727/727, Edge `device-used-by.pw.ts`. The full development Edge
+    suite is not yet qualified: the first run (231 passed, 115 failed)
+    had no `e2e_backend.exe` in this worktree, so 112 real-backend tests
+    could not start, and 3 more need checking; a re-run with the backend
+    built was stopped at 38/348 when the PC ran low on memory. No PR until
+    the suite is clean and the owner approves one.
+  - Owner test, 2026-10-24: (1) the footer pushed the output port outside
+    a card with a saved size, and (2) its text was indented from the port
+    lines: the line no longer sizes the card (`contain: inline-size`) and
+    aligns its text with the port lines; Edge checks width, containment
+    and text alignment. (3) "Used by Discord" on Game Sound Out read as
+    "Discord hears the game"; Windows showed Discord's speaker on CABLE
+    Input, the same cable. The footer now names the relation: Heard by,
+    Sound from, Shared with, Also recorded by (Vitest regression).

@@ -122,6 +122,27 @@ fn validate_session_id(id: &EntityId) -> Result<(), StorageError> {
     Ok(())
 }
 
+/// Make the audio media a saved session references permanent. An imported
+/// recording take is stored with a 24-hour expiry; once a session that
+/// plays it is saved, letting it expire broke that session's Play with
+/// "media is missing" a day later (owner report, 2026-10-24).
+fn keep_session_audio_media(
+    transaction: &Transaction<'_>,
+    session: &Session,
+) -> Result<(), StorageError> {
+    for media_id in session
+        .nodes
+        .iter()
+        .filter_map(|node| node.parameters.get("mediaId")?.as_str())
+    {
+        transaction.execute(
+            "UPDATE audio_media SET expires_at = NULL WHERE id = ?1 AND expires_at IS NOT NULL",
+            params![media_id],
+        )?;
+    }
+    Ok(())
+}
+
 fn trim_session_history(
     transaction: &Transaction<'_>,
     session_id: &EntityId,
@@ -1950,6 +1971,7 @@ impl Storage {
              ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, document=excluded.document",
             params![session.id.as_str(), revision, &document],
         )?;
+        keep_session_audio_media(&transaction, session)?;
         transaction.commit()?;
         Ok(())
     }
@@ -4037,6 +4059,7 @@ impl Storage {
              ON CONFLICT(id) DO UPDATE SET revision=excluded.revision, document=excluded.document",
             params![session.id.as_str(), revision, &document],
         )?;
+        keep_session_audio_media(&transaction, session)?;
         if failure == Some(JournalFailureStage::AfterCurrent) {
             return Err(StorageError::InvalidSession(
                 "injected journal failure".into(),
@@ -7171,5 +7194,77 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM audio_media", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn saving_a_session_keeps_the_temporary_take_it_plays() {
+        let storage = Storage::open_memory().unwrap();
+        let in_an_hour = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+            + 3600;
+        for id in ["kept-take", "other-take"] {
+            storage
+                .store_audio_media(
+                    id,
+                    "Temporary voice take.wav",
+                    "wav",
+                    b"take",
+                    Some(in_an_hour),
+                )
+                .unwrap();
+        }
+        let mut saved = session();
+        saved.nodes.push(Node {
+            id: EntityId::new("audioFile-1"),
+            kind: NodeKind::AudioFile,
+            type_version: 1,
+            name: "Audio file 1".into(),
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(serde_json::json!({
+                "mediaId": "kept-take",
+                "fileName": "Temporary voice take.wav",
+                "loop": false
+            }))
+            .unwrap(),
+            ports: vec![Port {
+                name: "out".into(),
+                direction: PortDirection::Output,
+                channels: 2,
+            }],
+        });
+        storage.save_session(&saved).unwrap();
+        let expiry = |id: &str| -> Option<i64> {
+            storage
+                .connection
+                .query_row(
+                    "SELECT expires_at FROM audio_media WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(expiry("kept-take"), None);
+        // A take no saved session plays still expires.
+        assert_eq!(expiry("other-take"), Some(in_an_hour));
+
+        // The journaled save (graph commits) keeps it too.
+        storage
+            .store_audio_media(
+                "journal-take",
+                "Temporary voice take.wav",
+                "wav",
+                b"take",
+                Some(in_an_hour),
+            )
+            .unwrap();
+        saved.revision += 1;
+        saved.nodes.last_mut().unwrap().parameters["mediaId"] = "journal-take".into();
+        storage
+            .save_session_with_journal(&saved, "commit-1", "graph.commit", "{}", None)
+            .unwrap();
+        assert_eq!(expiry("journal-take"), None);
     }
 }

@@ -118,7 +118,7 @@ as a failed current-profile setup.
 - **UI-02 — Canvas.** Support add/search, drag, connect/disconnect, rename, duplicate, delete, multi-select, zoom/pan, fit, and tidy layout. Provide undo/redo for graph edits using backend revisions. Node deletion is immediately undoable without a confirmation dialog and works with the Delete key while the canvas is focused. A dragged preview is visually provisional until saved. Persist positions separately from audio state. Copying a canvas node copies its kind, name, flags, and configuration into an app-local clipboard; pasting creates a new node with no graph edges or side-chain node reference. The clipboard survives switching sessions in the same app window. Offer Copy on a node's context menu, Paste on the canvas context menu, and Ctrl+C/Ctrl+V when a node is selected; pasted nodes join the current draft and use ordinary plan/commit validation.
 - **UI-03 — Connections.** Label ports by role and channels; distinguish audio and sidechain ports. While idle, show blue sending/start handles on every node's output ports and hide orange receiving/input handles. During a sender-start drag, show only receiving handles until drop/cancel. Tools and Mixers use the same affordance as microphones and other sources. Create the same canonical output-to-input graph edge regardless of drag direction; keep keyboard connection available. Every output port may feed multiple independent downstream inputs regardless of source or tool kind; an ordinary destination input accepts one incoming edge. A Mixer input accepts multiple explicit source edges and its output may feed one or more destinations. When a second source is connected to an already-fed ordinary destination input, insert a draft Mixer before that destination and connect both the existing and new sources to it; preserve the existing route and make the topology change undoable. When a Physical Output is already fed directly by a source that also feeds the requested Mixer, route the output through that existing Mixer and remove the now-redundant direct edge so one signal is not heard twice. Mark the selected path without dimming unrelated active routes or making selection look like audio activity. Pause, remove, and insert controls have distinct icons and explanatory tooltips. Show invalid target reasons before drop where known, then display backend rejection if state changed. Insert-a-mixer and remove-and-reconnect are explicit previewable operations.
 - **UI-04 — State.** Distinguish running/stopped, enabled/bypassed/muted, missing/faulted, and recording/paused using text/icons as well as color. Application-capture sources additionally show process lifecycle: connected, app closed, reconnecting, ambiguous, unsupported, and not prepared. Animate flow only when relevant activity exists; a static connected line means configured connectivity. Silent-but-valid is different from disconnected. An open but silent process must not imply audio activity. Provide reduced-motion mode.
-- **UI-05 — Inspector.** Offer sliders plus precise text entry, unit labels, reset, presets, pre/post meters, and an effect of change summary. Rejected values remain an editable draft with a reason; do not display them as active. Expensive rebuild operations show progress and preserve last committed values on failure. Audio File settings include descriptive source state, a WAV/MP3 picker, and a loop toggle that remains editable while the session is running; loop changes use the live parameter-save path. Decoding is backend-owned and bounded. Temporary voice takes use an already-connected Recorder node on a running route and become expiring backend media after the temporary WAV and library row are removed; Sound Check is limited to 10 seconds (UI-24). The local shell may request `Record`; it does not gain capture-device or endpoint-administration authority. Voice recording controls may not capture through renderer/browser APIs.
+- **UI-05 — Inspector.** Offer sliders plus precise text entry, unit labels, reset, presets, pre/post meters, and an effect of change summary. Rejected values remain an editable draft with a reason; do not display them as active. Expensive rebuild operations show progress and preserve last committed values on failure. Audio File settings include descriptive source state, a WAV/MP3 picker, and a loop toggle that remains editable while the session is running; loop changes use the live parameter-save path. Decoding is backend-owned and bounded. Temporary voice takes use an already-connected Recorder node on a running route and become expiring backend media after the temporary WAV and library row are removed, kept for good once a saved session plays them. A Play the backend refuses for one node (`nodeNotReady`) marks that node on the canvas with an outline and a "Cannot play" tag over its edge, without resizing it, selects it and opens its Properties; the mark stays until that node changes or Play succeeds; Sound Check is limited to 10 seconds (UI-24). The local shell may request `Record`; it does not gain capture-device or endpoint-administration authority. Voice recording controls may not capture through renderer/browser APIs.
 - **UI-06 — Routing explanation.** Selecting an output shows “Receives audio from” with all source paths, processing, muted/bypassed sections, and latency estimates. `Voice Chat` must visibly exclude desktop/call-return in the reference template. Explanations come from `routes.inspect` and remain available headlessly.
 - **UI-07 — Live editing.** Parameter changes use bounded/coalesced requests during dragging and one final committed target. Topology edits use backend plan/commit; the UI presents one Save route action and requests a second confirmation only for warnings. Local UI optimism never overrides a backend conflict. When another client edits, merge nonconflicting presentation state and render the new authoritative graph. Show who changed what using client identity, not guessed person names.
 - **UI-08 — Safety and errors.** Feedback/duplicate warnings identify actual paths and remedies. Missing devices remain on the canvas. Offer rebind, retry, inspect, or stop according to backend capability. No hidden fallback to a new microphone. An emergency privacy mute affects physical capture contributions immediately through the backend; clearing it never starts stopped sessions or recorders.
@@ -175,7 +175,7 @@ while playing follows the same live-apply path as other parameter changes.
 - **UI-22 — Hidden devices.** Audio devices on this PC offers a "Show in pickers" switch for each active device. Hidden devices are left out of the Input Device and Output Device pickers on this PC only; the node's own saved device is always listed, and the picker shows a disabled line with the number of hidden devices and where to show them again. The preference is local (bounded to 256 endpoint IDs); unreadable or invalid storage hides nothing. Hiding never changes sessions, bindings, Windows or the backend.
 - **UI-23 — Application source picker and groups.** In Signal Flow, let the user add one running application or select an existing `.exe` while it is closed. Keep the current exact-instance selector for a running-app choice. A closed-app `.exe` choice stores its executable name and full path with an `allVerifiedInstances` selector, never a PID; capture remains silent until a verified process is available and the route is started. Let the user select multiple running applications and/or executable paths to create separate Application Capture nodes feeding one ordinary Mixer. The nodes and Mixer remain independently editable and use normal graph validation, save and undo. Do not start applications or change their Windows output. Explain that selecting a parent app and one of its helpers may duplicate its process-tree audio until CAP-10 overlap detection reports it.
 
-**UI-24 - Sound Check.** Audio File Properties may record a voice sample from an already-connected Recorder node while its route is running. Limit the sample to 10 seconds, with a user stop action, and import it only through the existing bounded temporary-WAV path; the resulting media expires after 24 hours and is not added to the recording library. Explain that the Audio File source must be planned and committed before playback. Play uses ordinary backend source transport through the committed downstream graph and its effects. Do not open or select a microphone, capture through browser APIs, or silently alter a running or saved route.
+**UI-24 - Sound Check.** Audio File Properties may record a voice sample from an already-connected Recorder node while its route is running. Limit the sample to 10 seconds, with a user stop action, and import it only through the existing bounded temporary-WAV path; the resulting media expires after 24 hours unless a saved session plays it (saving a session that references it makes it permanent), and is not added to the recording library. Explain that the Audio File source must be planned and committed before playback. Play uses ordinary backend source transport through the committed downstream graph and its effects. Do not open or select a microphone, capture through browser APIs, or silently alter a running or saved route.
 
 ## Defaults that reduce work
 
@@ -330,7 +330,10 @@ audio readiness and explains the exact endpoint and authorization steps.
     - The 16-channel twin of a cable the session plays to.
     - The cable that carries the voice, so the call would hear itself.
     - A device that AudioRouter already sends captured Discord to, so it
-      is heard twice.
+      is heard twice. When that device is a virtual cable the user does not
+      hear it, so it is a problem only when Windows shows an app recording
+      the cable's other end (named, with the Output node that also sends
+      Discord there); otherwise the speaker is Ready.
   - **Rules:**
     - Each problem names the device and the exact Discord menu step, with
       a Copy device name action.
@@ -345,9 +348,38 @@ audio readiness and explains the exact endpoint and authorization steps.
   - **Top-bar strip:** shows a fixed-width Discord chip with icon and word
     when the session captures Discord or sends the microphone to a virtual
     cable. Whether it shows depends only on the session (UI-17).
-  - **Refresh:** on window focus, every 10 s while the tab is open, and
-    never while hidden. The last good result is kept through a failure.
+  - **Refresh:** on window focus, every 10 s while the tab is open or the
+    canvas has a device node, and never while hidden. Each refresh reads
+    again shortly after, once the backend has rebuilt its inventory. The
+    last good result is kept through a failure.
   - **Writes:** AudioRouter never changes Discord or Windows settings.
+  - **Set up for Discord (D2):** offered by the microphone row when the
+    session sends no voice to a cable, and by the first-run guide.
+    - Step 1 offers active non-cable microphones (session's own, else the
+      Windows default for calls) and whole VB-Cables, never a 16ch twin; a
+      cable the session already uses is named as busy and not preselected.
+      An optional Gate, Compressor and Limiter chain is on by default.
+    - **Add route** adds microphone → chain → cable Input to the draft as
+      one undo step, reusing free nodes already bound to those devices. It
+      refuses a cable another source already plays into and a second voice
+      route to the same cable. The review and any refusal share four
+      reserved lines (UI-17).
+    - Step 2 names the cable Output to choose in Discord, with Copy device
+      name; the Discord card checks it live. No PC cable: the flow links to
+      Virtual Cables instead.
+  - **Device nodes:** each Physical Input and Output card keeps one footer
+    line naming the apps with an active session on its device or its
+    cable's other end, by relation: "Heard by" (records the other end of
+    the cable this node plays into), "Sound from" (plays into the cable
+    this input records), "Shared with" (also plays to, or loopback-records,
+    this output's device) and "Also recorded by" (also records this input's
+    device). Sharing never claims the app hears the node. The line never
+    sizes the card and its text aligns with the port lines. Properties
+    lists each app with its role in three reserved rows. A known app on the
+    cable's 16-channel twin, or on the raw microphone while the session
+    feeds a voice cable, is a warning: amber, marked "!", with its short
+    form on the card and the full sentence in Properties. Neither the card
+    nor the panel changes size when the apps change (UI-17).
   - **OBS Studio card (SEC-15):** shows "What OBS hears": each audio
     source, its device and what reaches it (Voice, Voice without effects,
     Discord, other session sources), with the problem in words.

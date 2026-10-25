@@ -112,6 +112,9 @@ export function appDevices(
 
 const VB_CABLE = /\((VB-Audio[^)]*)\)\s*$/i;
 
+/** Whether a Windows device name is a VB-Audio virtual cable endpoint. */
+export const isVirtualCableName = (name: string) => VB_CABLE.test(name);
+
 /**
  * The other side of a VB-Cable: "CABLE-A Input (VB-Audio Virtual Cable A)"
  * (playback) pairs with "CABLE-A Output (VB-Audio Virtual Cable A)"
@@ -145,6 +148,127 @@ export function sixteenChannelTwin(device: DeviceListItem, devices: readonly Dev
         /16ch/i.test(other.name) !== /16ch/i.test(device.name),
     ) ?? null
   );
+}
+
+/** "CABLE-A Output (VB-Audio Virtual Cable A)" as "CABLE-A Output". */
+const shortName = (name: string) => name.replace(VB_CABLE, "").trim();
+
+const names = (uses: readonly DeviceUse[]) => uses.map((use) => use.label).join(" and ");
+
+/** One app on a device node's device, or on the other end of its cable. */
+export interface NodeAppUse {
+  label: string;
+  appId: KnownAppId | null;
+  /** How the app relates to this node, short enough for one Properties row. */
+  role: string;
+  /** The same as a full sentence, for tooltips. */
+  detail: string;
+  /**
+   * "heard": records the other end of this node's cable, so it hears what
+   * the node sends. "source": plays into the cable this node records.
+   * "shared": uses the node's own device too.
+   */
+  relation: "heard" | "source" | "shared";
+}
+
+/** What a Physical Input or Output node's footer and Properties show. */
+export interface NodeDeviceUsers {
+  /**
+   * One line for the canvas footer, for example "Heard by Discord · OBS", or
+   * the warning's short form ("Discord is on CABLE-A Out 16ch").
+   */
+  summary: string;
+  /** Every app with its role, for the tooltip and Properties. */
+  uses: NodeAppUse[];
+  /** An app on a sibling device it should not use, or null. */
+  warning: string | null;
+}
+
+/**
+ * The apps using each device node's device right now (D1). A node that plays
+ * into a virtual cable also lists the apps recording from the cable's other
+ * end: that is how Discord hears what the node sends. Only active sessions
+ * count; idle ones linger on devices an app used before (see `appDevices`).
+ */
+export function nodeDeviceUsers(
+  session: Session,
+  devices: readonly DeviceListItem[],
+  applications: readonly ApplicationInfo[],
+): Map<string, NodeDeviceUsers> {
+  const usage = deviceUsage(applications);
+  const active = (deviceId: string, direction: "capture" | "render") =>
+    (usage.get(deviceId) ?? []).filter((use) => use.active && use.direction === direction);
+  const result = new Map<string, NodeDeviceUsers>();
+  const microphones = microphoneNodes(session, devices);
+  const voiceCables = voiceCableOutputs(session, devices);
+  for (const node of session.nodes) {
+    if (node.kind !== "physicalInput" && node.kind !== "physicalOutput") continue;
+    const endpointId = endpointOf(session, node.id);
+    const device = endpointId ? devices.find((item) => item.id === endpointId) : undefined;
+    if (!endpointId) {
+      result.set(node.id, { summary: "No device chosen", uses: [], warning: null });
+      continue;
+    }
+    const output = node.kind === "physicalOutput";
+    const deviceName = device?.name ?? "this device";
+    const uses: NodeAppUse[] = (output ? active(endpointId, "render") : active(endpointId, "capture")).map((use) => ({
+      label: use.label,
+      appId: use.appId,
+      // Windows reports a loopback recorder like a player (spec CAP), and a
+      // call app's speaker is a player: neither hears what this node sends.
+      role: output ? "plays here too, e.g. as its speaker" : "records this device too",
+      detail: output
+        ? `plays to ${deviceName} too (for example as its speaker), or records what plays there`
+        : `records ${deviceName} too`,
+      relation: "shared",
+    }));
+    const partner = device ? cablePartner(device, devices) : null;
+    let warning: string | null = null;
+    // The footer's short form of the warning: one line on a narrow card.
+    let alert: string | null = null;
+    if (partner) {
+      for (const use of output ? active(partner.id, "capture") : active(partner.id, "render"))
+        uses.push({
+          label: use.label,
+          appId: use.appId,
+          role: output ? `hears it on ${shortName(partner.name)}` : `plays into ${shortName(partner.name)}`,
+          detail: output
+            ? `records ${partner.name}, so it hears what this node sends`
+            : `plays into ${partner.name}, so this node receives its sound`,
+          relation: output ? "heard" : "source",
+        });
+      const twin = output ? sixteenChannelTwin(partner, devices) : null;
+      const astray = twin ? active(twin.id, "capture").filter((use) => use.appId !== null) : [];
+      if (twin && astray.length > 0) {
+        warning = `${names(astray)} ${astray.length === 1 ? "records" : "record"} from ${twin.name}, not ${partner.name}`;
+        alert = `${names(astray)} ${astray.length === 1 ? "is" : "are"} on ${shortName(twin.name)}`;
+      }
+    }
+    // Discord or OBS on the raw microphone skips the processing this session
+    // sends to its voice cable.
+    if (!output && microphones.includes(node.id) && voiceCables.length > 0) {
+      const raw = active(endpointId, "capture").filter((use) => use.appId !== null);
+      if (raw.length > 0) {
+        warning = `${names(raw)} ${raw.length === 1 ? "records" : "record"} this microphone without your processing; choose ${voiceCables.map((cable) => cable.name).join(" or ")} instead`;
+        alert = `${names(raw)} ${raw.length === 1 ? "skips" : "skip"} your processing`;
+      }
+    }
+    // Say how each app relates, not just "used by": Discord playing its call
+    // into the same cable as a game does not hear the game (owner report).
+    const labelsOf = (relation: NodeAppUse["relation"]) =>
+      [...new Set(uses.filter((use) => use.relation === relation).map((use) => use.label))].join(", ");
+    const parts = [
+      labelsOf("heard") && `Heard by ${labelsOf("heard")}`,
+      labelsOf("source") && `Sound from ${labelsOf("source")}`,
+      labelsOf("shared") && (output ? `Shared with ${labelsOf("shared")}` : `Also recorded by ${labelsOf("shared")}`),
+    ].filter(Boolean);
+    result.set(node.id, {
+      summary: alert ?? (parts.length > 0 ? parts.join(" · ") : "No app using it"),
+      uses,
+      warning,
+    });
+  }
+  return result;
 }
 
 const SOURCES_AND_SILENT_BYPASSES: readonly Node["kind"][] = [
@@ -204,6 +328,16 @@ export function endpointOf(session: Session, nodeId: string): string | null {
 }
 
 /** Playback devices a set of sources reaches through the session's enabled edges. */
+/** Names of the Output nodes a set of sources reaches that play to one device. */
+function outputNodeNamesReaching(session: Session, sourceIds: readonly string[], endpointId: string): string[] {
+  const reached = downstream(session, sourceIds);
+  return session.nodes
+    .filter(
+      (node) => node.kind === "physicalOutput" && reached.has(node.id) && endpointOf(session, node.id) === endpointId,
+    )
+    .map((node) => node.name);
+}
+
 export function outputsReachedFrom(session: Session, sourceIds: readonly string[]): string[] {
   const reached = downstream(session, sourceIds);
   return [
@@ -443,13 +577,42 @@ export function discordCheck(
         message: `This is the 16-channel side of ${busyTwin.name}, which AudioRouter plays to. Windows lets only one of them be used, so choose ${busyTwin.name}.`,
         expectedName: busyTwin.name,
       };
-    if (captureNodes.length > 0 && discordOutputs.includes(speaker))
+    if (captureNodes.length > 0 && discordOutputs.includes(speaker)) {
+      // On a cable, the doubled Discord is in what records its other end,
+      // not in your ears (owner report, 2026-10-24: Discord's speaker and the
+      // session's Outplayed mix share CABLE Input).
+      if (speakerPartner !== null) {
+        // Name the user's own node and Discord's own setting, so the cause
+        // is visible (owner: the generic sentence was not clear).
+        const nodes = session ? outputNodeNamesReaching(session, captureNodes, speaker) : [];
+        const node = nodes.length > 0 ? `your "${nodes[0]}" node` : "your route";
+        // You do not hear this cable, so copies could only matter to a
+        // recorder. Judge it only when Windows shows one recording the other
+        // end; a loopback recorder of this side looks like a player.
+        const recorders = [
+          ...new Set(
+            (deviceUsage(applications).get(speakerPartner.id) ?? [])
+              .filter((use) => use.active && use.direction === "capture" && use.appId !== "discord")
+              .map((use) => use.label),
+          ),
+        ];
+        return recorders.length > 0
+          ? {
+              ...base,
+              state: "check",
+              message: `${recorders.join(" and ")} records this cable, and gets Discord twice: Discord plays here itself (its Output Device), and ${node} also sends Discord here. Keep one: take Discord out of ${node}, or set Discord's Output Device to another device.`,
+            }
+          : // Nothing records it: the owner's clips of this cable had Discord
+            // once (2026-10-24), so a note about copies would only confuse.
+            { ...base, state: "ready", message: "Discord plays here." };
+      }
       return {
         ...base,
         state: "check",
         message:
           "AudioRouter already sends Discord here, and Discord also plays here itself, so you hear it twice. Choose a virtual cable as Discord's output.",
       };
+    }
     return {
       ...base,
       state: "ready",

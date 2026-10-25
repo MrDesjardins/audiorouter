@@ -194,6 +194,13 @@ pub enum ControlError {
         resource_ids: Vec<String>,
     },
     PluginScan(audiorouter_plugin_host::ScanError),
+    /// One node cannot play as configured (for example its audio file is
+    /// gone). Reported with `fieldPath` `nodes/<id>` and the node in
+    /// `resourceIds`, so clients can point at it on the canvas.
+    NodeNotReady {
+        node_id: String,
+        message: String,
+    },
     IdempotencyConflict,
     Store(audiorouter_domain::StoreError),
     Json(String),
@@ -444,6 +451,7 @@ fn control_error_message(error: &ControlError) -> String {
     let text = match error {
         ControlError::InvalidRequest(message) => message.clone(),
         ControlError::Audio { message, .. } => message.clone(),
+        ControlError::NodeNotReady { message, .. } => message.clone(),
         other => format!("{other:?}"),
     };
     text.chars().take(240).collect()
@@ -1103,9 +1111,11 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         ControlError::InvalidRequest(_) => "invalidRequest",
         ControlError::Audio { code, .. } => code,
         ControlError::PluginScan(error) => error.code(),
+        ControlError::NodeNotReady { .. } => "nodeNotReady",
     };
     let message = match &error {
         ControlError::Audio { message, .. } => message.clone(),
+        ControlError::NodeNotReady { message, .. } => message.clone(),
         _ => format!("{error:?}"),
     };
     let audio_details = match &error {
@@ -1125,6 +1135,10 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
         )),
         _ => None,
     };
+    let failed_node = match &error {
+        ControlError::NodeNotReady { node_id, .. } => Some(node_id.clone()),
+        _ => None,
+    };
     let mut response = JsonRpcResponse::failure(id, -32000, message);
     if let Some(error) = response.error.as_mut() {
         let mut data = application_error_data(code);
@@ -1134,6 +1148,10 @@ fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpc
             data["remediation"] = json!(remediation);
             data["operation"] = json!(operation);
             data["resourceIds"] = json!(resource_ids);
+        }
+        if let Some(node_id) = &failed_node {
+            data["fieldPath"] = json!(format!("nodes/{node_id}"));
+            data["resourceIds"] = json!([node_id]);
         }
         error.data = Some(data);
     }
@@ -1174,6 +1192,10 @@ fn application_error_data(code: &str) -> Value {
         "deadlineExceeded" | "io" => (
             true,
             "retry the bounded scan after checking directory availability",
+        ),
+        "nodeNotReady" => (
+            false,
+            "open the named node's Properties, fix it, then press Play again",
         ),
         "invalidRequest" | "invalidGraph" => {
             (false, "correct the request using the discovered schema")

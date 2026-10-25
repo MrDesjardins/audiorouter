@@ -825,6 +825,22 @@ Adjust a Gain or Volume before the Meter until you are in the zone. The guide is
 for voice; music and game audio are mixed to other levels. It changes nothing
 in the audio.
 
+### Setting up Discord in two steps
+
+On a new route, **Apps** › Discord › **Set up for Discord** (also in the
+first-run guide) builds the voice route for you:
+
+1. Choose your microphone and a virtual cable. AudioRouter preselects your
+   Windows microphone for calls and a cable this session does not use yet.
+   Leave **Clean up my voice** on to add a Gate, Compressor and Limiter
+   you can adjust later. **Add route** adds it to your draft; one **Undo**
+   removes it.
+2. **Save**, press **Play**, then in Discord set Input Device to the
+   cable's Output (for example *CABLE-A Output*). The Discord card turns
+   Ready once Discord records it in a call.
+
+No cable installed yet? The flow sends you to **Virtual Cables** first.
+
 ### Checking Discord's devices (Apps tab)
 
 Open **Apps** in the right sidebar to check that Discord uses the devices
@@ -854,6 +870,23 @@ Discord or Windows settings.
 - **Other apps using audio** lists which device each other app uses.
   "Plays to it or records it" is as precise as Windows can be, because an
   app recording a device's output looks the same as one playing to it.
+- **On the canvas:** each input and output card has a line saying how
+  apps relate to it:
+  - **Heard by Discord**: the card plays into a virtual cable and Discord
+    records the cable's other end, so Discord hears what the card sends.
+  - **Shared with Discord**: Discord plays to the same device, for
+    example as its speaker. It does not hear what the card sends.
+  - **Sound from Siege**: on an input card, the game plays into the cable
+    the card records.
+  - **Also recorded by Discord**: on an input card, Discord records the
+    same device.
+
+  Select the card to see each app's role under **Apps using this device**
+  in Properties.
+- An amber line marked **!** means an app is on the wrong device, for
+  example "Discord is on CABLE-A Out 16ch" or "Discord skips your
+  processing" (Discord records your microphone directly). Properties
+  gives the full sentence and the device to choose instead.
 
 ### Checking and fixing OBS Studio (Apps tab)
 

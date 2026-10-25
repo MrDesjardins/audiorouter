@@ -1,5 +1,88 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.23 — 2026-10-24, owner request
+
+The owner tested the local merge of D1 (`feature/device-used-by`), D2
+(`feature/discord-setup`), `fix/audio-file-media`,
+`fix/canvas-card-overflow` and `fix/remove-session-state-row` (test exe
+`release-7`) and asked for "a PR and a new version to release". One PR,
+`feature/apps-devices-0.0.23`, carries that exact combination plus the
+0.0.23 bump (by package name: 13 manifests, contracts and UI packages, only
+`audiorouter-*` entries of the three Cargo and two npm lockfiles) and notes.
+Same app-only unsigned prerelease profile as 0.0.22; no storage migration
+(the audio-media change only clears `expires_at` on referenced takes), so
+0.0.22 stays the rollback.
+
+- Found while qualifying the combination: (1) the merge of D2 with
+  `fix/audio-file-media` had dropped a `}` in `styles.css`, nesting the
+  "Cannot play" styles inside a Discord setup rule (format check failed;
+  restored). (2) The 3 unexplained D1 Edge failures were `smart-layout`
+  Arrange: device cards (205 px with the D1 line) now exceed Arrange's
+  180 px default while Gain (171 px) was padded to it, so centring left
+  the chain 4 px off level. Arrange now uses measured heights
+  (`smartLayout.ts`, unit regression with 205/171/205 cards, which fails
+  on the old rule); the Edge test compares centres.
+- Local checks on the combined branch (2026-10-24, Windows 11, Edge, e2e
+  backend rebuilt from this branch): full Edge suite 343 passed, 10
+  skipped, 0 failed (the first run, before the two fixes, had the 3 Arrange
+  failures); `npm test` 742 passed; UI typecheck, lint and format clean;
+  `cargo fmt --check` clean for both workspaces. Rust tests and both Clippy
+  runs for the backend change were run on `fix/audio-file-media`; CI runs
+  them on the combination. This qualifies the D1/D2 full-suite gate that
+  [the OBS and Discord plan](obs-discord.md) left open.
+- The five source branches are merged here; the owner deletes their remote
+  copies.
+- Tasks: (1) owner approves and merges the PR; (2) annotated tag `v0.0.23`
+  on main, `create-draft-release.ps1 -Tag v0.0.23 -AppOnly` in a clean
+  worktree (heavy build: ask first if the owner is using the app);
+  (3) `fresh_install_shell` on the packaged shell, `verify-artifacts.ps1`
+  on the downloaded draft, publish as a prerelease, evidence in
+  `evidence/2026-10-24-release-0.0.23.md`.
+
+## Defect 2026-10-24: canvas card content spills out of a sized card (0.0.22, owner report)
+
+- **Reproduction.** Size cards with Selection layout (for example
+  Smallest height), then let their content grow: a VST card's status row
+  appears once the plugin runs, a device line is added. The card kept the
+  saved height, so the meter overlapped "2 ports · enabled" and the
+  Microphone meter well spilled past the card's edge (owner screenshot,
+  0.0.22).
+- **Cause.** A saved size set a fixed `height`. Its floor (`minHeight`) is
+  the content height measured once, when the card first appeared, so later
+  content had nowhere to go.
+- **Fix.** The saved height is now the card's `min-height`; the card grows to
+  fit its content and still keeps any larger chosen height
+  (`ui/src/SessionFlowCanvas.tsx`, `ui/src/styles.css`). Saved sizes need no
+  migration.
+- **Regression.** `ui/e2e/canvas-layout.pw.ts` "a saved height shorter than
+  the card's content never clips it" (three themes) failed on `main` (card
+  stayed 100 px) and passes with the fix.
+- **Checks (2026-10-24, Windows, Edge).** canvas-layout, -review, -session,
+  smart-layout, canvas-live-performance, device-binding, plugin-inspector,
+  audio-tools: 73 passed. `npm test` 722 passed; lint and format clean.
+- **Branch.** `fix/canvas-card-overflow`; no PR until the owner approves.
+
+## Session state row removed — 2026-10-24, owner request
+
+- **Request.** "Running session" / "Stopped session" above the canvas took a
+  grid row and a gap; the header's play state ("Audio stopped", left of Undo)
+  already shows it.
+- **Check.** The row's other children (session name, Duplicate, Delete,
+  Undo/Redo/Discard draft, Plan changes) were already `display: none` in the
+  focused workbench; their visible equivalents live in the right workbench
+  and the header. Nothing else uses grid row 1.
+- **Change.** The row is hidden and the first grid track removed; the canvas,
+  inspector and workbench rows were renumbered for both the default and the
+  Properties layouts (`ui/src/styles.css`); the label is gone from
+  `ui/src/App.tsx`. The hidden controls stay for now because jsdom tests
+  drive them; removing that dead markup and moving those tests to the
+  visible controls is a separate cleanup.
+- **Checks (2026-10-24, Windows, Edge).** Canvas and workbench now start
+  16 px below the header in dark, light and high contrast (screenshots
+  reviewed), Properties layout unchanged; banner-layout, sidebar-resize,
+  session-workflows, plugin-inspector, device-binding, canvas-layout,
+  dynamics-editor: 41 passed. `npm test` 722 passed; lint and format clean.
+
 ## Release 0.0.22 — 2026-10-24, owner request
 
 The owner merged #67 (Discord and OBS, `dfc17cea`) and asked for a new
@@ -3465,6 +3548,33 @@ Still open (next action): the panic site itself is unknown. After the next
 occurrence, read the `shell.panic` record, fix the owning code and qualify a
 sleep/resume with a native route running. A restarted backend leaves routes
 stopped until Play.
+
+### Defect 2026-10-24: a saved Audio File broke a day later, and Play did not say which node
+
+- Reproduction (owner, 0.0.22 test build): session "PD200X Radio Voice",
+  Play: "audio source media is missing; select the file again", with no
+  mark on the canvas and no node named. A copy of the database showed
+  "Audio file 1" playing `audio-media-3`, a "Temporary voice take.wav"
+  import, which `audioMedia.importTemporaryRecording` stores with a
+  24-hour expiry and the next media insert prunes. Saving the session
+  never made it permanent. Affects every version with Sound Check (UI-24).
+- Fix (branch `fix/audio-file-media`): saving a session (plain and
+  journaled saves) clears the expiry of every media it references
+  (`keep_session_audio_media`). Media errors are a new
+  `ControlError::NodeNotReady` (`data.code` `nodeNotReady`, `fieldPath`
+  `nodes/<id>`, `resourceIds` the node) whose message names the node and
+  its file. The UI marks that node (outline and a "Cannot play" tag over
+  the card edge, no resize), selects it and opens Properties; the mark
+  stays until the node changes or Play succeeds.
+- Migration: none. Media already pruned cannot come back: the owner must
+  choose the file again once in that node.
+- Checks: storage `saving_a_session_keeps_the_temporary_take_it_plays`
+  (plain and journaled saves, unreferenced take still expires); control
+  `a_missing_audio_file_names_its_node_for_the_canvas`; Vitest
+  `backend.test.ts`; Edge `node-not-ready.pw.ts` (three themes,
+  card size unchanged, mark cleared by a working Play). Storage,
+  control and transport tests, both Clippy runs, fmt, UI lint and Vitest
+  pass. The full Edge suite is not run yet.
 
 ## Risks, evidence and rollback
 

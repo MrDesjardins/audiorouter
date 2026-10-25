@@ -22,6 +22,7 @@ import { VersionLine } from "./UpdateNotice";
 import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
 import {
   formatUiError,
+  notReadyNode,
   isRevisionConflict,
   SnapshotCache,
   type ApplicationRow,
@@ -154,8 +155,16 @@ import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from
 import { ConnectionForm } from "./ConnectionForm";
 import { SetupWorkbench } from "./SetupWorkbench";
 import { AppsPanel } from "./AppsPanel";
+import { DiscordSetup, type DiscordSetupChoice } from "./DiscordSetup";
+import { appendDiscordRoute, discordSetupOptions } from "./discordRoute";
 import { AppStatusStrip } from "./AppStatusStrip";
-import { discordCheck, pendingDiscordCheck, sessionInvolvesDiscord, voiceCableOutputs } from "./appUsage";
+import {
+  discordCheck,
+  nodeDeviceUsers,
+  pendingDiscordCheck,
+  sessionInvolvesDiscord,
+  voiceCableOutputs,
+} from "./appUsage";
 import { APP_USAGE_FOLLOW_UP_MS, useApplicationUsage } from "./useApplicationUsage";
 import { ObsCard, type ObsActions } from "./ObsCard";
 import { obsCheck } from "./obsUsage";
@@ -324,6 +333,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     );
   }, []);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("tools");
+  // "Set up for Discord" (D2), open for one session; each opening keys a
+  // fresh form, and `added` (Discord's microphone) is step 2.
+  const [discordSetup, setDiscordSetup] = useState<{
+    key: number;
+    sessionId: string;
+    added: import("@audiorouter/contracts").DeviceListItem | null;
+  } | null>(null);
   // The Apps tab and top-bar strip start after the first snapshot: the backend
   // serves one request at a time, and `apps.list` sent first held back the
   // start-up snapshot and so the first screen. The desktop backend now builds
@@ -336,7 +352,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     () => (appChecksReady ? () => backend.listApplications() : null),
     [backend, appChecksReady],
   );
-  const applicationUsage = useApplicationUsage(listApplicationUsage, { polling: workbenchTab === "apps" });
+  // Device nodes show which apps use their device (D1), so poll while the
+  // canvas has one; the backend builds the list off its control thread.
+  const draftHasDeviceNode = Boolean(
+    draft?.nodes.some((node) => node.kind === "physicalInput" || node.kind === "physicalOutput"),
+  );
+  const applicationUsage = useApplicationUsage(listApplicationUsage, {
+    polling: workbenchTab === "apps" || draftHasDeviceNode,
+  });
   // OBS Studio facts (DEC-22): cheap reads of the backend's OBS thread.
   const obsStatus = useObsStatus(appChecksReady ? backend : null, { active: workbenchTab === "apps" });
   const obsActions = useMemo<ObsActions | null>(() => {
@@ -357,6 +380,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         ? discordCheck(draft, applicationUsage.applications, devices, applicationUsage.stale)
         : pendingDiscordCheck(),
     [applicationUsage.loaded, applicationUsage.applications, applicationUsage.stale, draft, devices],
+  );
+  const deviceUsers = useMemo(
+    () => (draft && applicationUsage.loaded ? nodeDeviceUsers(draft, devices, applicationUsage.applications) : null),
+    [applicationUsage.loaded, applicationUsage.applications, draft, devices],
   );
   const obsAppCheck = useMemo(
     () => obsCheck(draft, obsStatus.status, applicationUsage.applications, devices, obsStatus.stale),
@@ -1693,6 +1720,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     recordUiDiagnostic("Released the stopped audio adapter of another session");
     return backend.refreshDiagnostics();
   };
+  // Nodes the last Play refused (`nodeNotReady`), with the node's parameters
+  // at that moment: the mark stays until the node is changed or Play works.
+  const [nodeIssues, setNodeIssues] = useState<{
+    sessionId: string;
+    issues: Record<string, { message: string; parameters: string }>;
+  } | null>(null);
+  const visibleNodeIssues: Record<string, string> = {};
+  if (nodeIssues?.sessionId === draft.id)
+    for (const [nodeId, issue] of Object.entries(nodeIssues.issues)) {
+      const node = draft.nodes.find((candidate) => candidate.id === nodeId);
+      if (node && JSON.stringify(node.parameters) === issue.parameters) visibleNodeIssues[nodeId] = issue.message;
+    }
   const startSession = async (): Promise<boolean> => {
     if (sessionBusy.current || !backend.connected) return false;
     if (graphBusy) {
@@ -2004,6 +2043,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           : `Audio session is running (generation ${result.generation}).`,
       );
       recordUiDiagnostic(`Native session started: generation ${result.generation}`);
+      setNodeIssues(null);
       return true;
     } catch (error) {
       setNativePumpStats(null);
@@ -2014,6 +2054,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       }
       const message = formatUiError(error, "Unable to start session.");
       setActionMessage(message);
+      const refused = notReadyNode(error);
+      const refusedNode = refused ? draftRef.current.nodes.find((node) => node.id === refused.nodeId) : undefined;
+      if (refused && refusedNode) {
+        setNodeIssues({
+          sessionId: draftRef.current.id,
+          issues: {
+            [refused.nodeId]: { message: refused.message, parameters: JSON.stringify(refusedNode.parameters) },
+          },
+        });
+        // Show which tool to fix: select it and open its Properties.
+        selectNodeProperties(refused.nodeId);
+      }
       recordUiDiagnostic("Session start failed; review the current error and backend activity.");
       return false;
     } finally {
@@ -2237,6 +2289,29 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add the pass-through route."));
+    }
+  };
+  const openDiscordSetup = () => {
+    setWorkbenchTab("apps");
+    setDiscordSetup((current) =>
+      current?.sessionId === draftRef.current.id
+        ? current
+        : { key: Date.now(), sessionId: draftRef.current.id, added: null },
+    );
+  };
+  /** Adds the Discord route as one undoable draft change; returns an error to show, or null. */
+  const addDiscordRoute = (choice: DiscordSetupChoice): string | null => {
+    if (!backend.connected) return "Connect to AudioRouter before changing the draft.";
+    try {
+      const result = appendDiscordRoute(draft, devices, choice);
+      recordDraftChange(result.session);
+      setDiscordSetup((current) => current && { ...current, added: result.discordMicrophone });
+      setActionMessage(
+        `Added your voice route to the draft. Save, then Play, and choose ${result.discordMicrophone.name} as Discord's microphone.`,
+      );
+      return null;
+    } catch (error) {
+      return formatUiError(error, "Unable to add the Discord route.");
     }
   };
   // A plugin dragged from the Plugins list onto the canvas lands where it is
@@ -2842,6 +2917,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // meter ticks reach the canvas only through its telemetry store.
   const flowCanvas = (
     <SessionFlowCanvas
+      nodeIssues={visibleNodeIssues}
       groups={groupState.groups}
       selectedGroupId={groupState.selectedGroupId}
       selectedGroupIds={groupState.selectedGroupIds}
@@ -2907,6 +2983,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       onOpenApplicationPicker={openApplicationPicker}
       onConnectionRejected={setActionMessage}
       canEdit={backend.connected}
+      deviceUsers={backend.connected ? deviceUsers : undefined}
     />
   );
   const connectionWorkbenchContent = (
@@ -2946,6 +3023,26 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         refreshObs();
       }}
       onOpenVirtualCables={() => setWorkbenchTab("virtualCables")}
+      onSetUpDiscord={openDiscordSetup}
+      discordSetup={
+        discordSetup?.sessionId === draft.id && (
+          <DiscordSetup
+            key={discordSetup.key}
+            options={discordSetupOptions(draft, devices)}
+            connected={backend.connected}
+            // After an Undo the route is gone, so the form comes back.
+            added={
+              discordSetup.added &&
+              voiceCableOutputs(draft, devices).some((device) => device.id === discordSetup.added?.id)
+                ? discordSetup.added
+                : null
+            }
+            onAdd={addDiscordRoute}
+            onClose={() => setDiscordSetup(null)}
+            onOpenVirtualCables={() => setWorkbenchTab("virtualCables")}
+          />
+        )
+      }
       obs={
         <ObsCard
           key={draft.id}
@@ -3048,6 +3145,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             connected={backend.connected}
             onRefresh={() => refreshDevices()}
             onOpenTools={() => setWorkbenchTab("tools")}
+            onSetUpDiscord={openDiscordSetup}
           />
         </>
       }
@@ -3253,7 +3351,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             <SidebarResizer width={sidebarWidth} onWidth={changeSidebarWidth} />
             <section className="workspace-title">
               <div>
-                <p className="eyebrow">{sessionRunning ? "Running session" : "Stopped session"}</p>
                 <label className="session-name">
                   Session name
                   <input
@@ -3398,6 +3495,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     applications={applications}
                     applicationsError={applicationsError}
                     refreshApplications={refreshApplications}
+                    deviceUsers={backend.connected ? deviceUsers : undefined}
                     rebindApplicationCapture={rebindApplicationCapture}
                     setRenderEndpointId={setRenderEndpointId}
                     captureEndpointId={captureEndpointId}

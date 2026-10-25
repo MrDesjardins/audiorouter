@@ -29,7 +29,7 @@ const position = (page: Page, id: string) =>
   page.getByTestId(`rf__node-${id}`).evaluate((element) => {
     const parts = (element as HTMLElement).style.transform.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
     if (!parts) throw Error("missing position");
-    return { x: Number(parts[1]), y: Number(parts[2]) };
+    return { x: Number(parts[1]), y: Number(parts[2]), height: (element as HTMLElement).offsetHeight };
   });
 
 for (const theme of ["dark", "light", "high-contrast"]) {
@@ -49,11 +49,13 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const mic = await position(page, "mic"),
       voice = await position(page, "voice"),
       out = await position(page, "headphones");
-    // Input left, tool in the middle, output right, on one line.
+    // Input left, tool in the middle, output right, centred on one line
+    // (device cards are taller than the Gain card).
+    const centre = (card: { y: number; height: number }) => card.y + card.height / 2;
     expect(mic.x).toBeLessThan(voice.x);
     expect(voice.x).toBeLessThan(out.x);
-    expect(mic.y).toBe(voice.y);
-    expect(voice.y).toBe(out.y);
+    expect(centre(mic)).toBeCloseTo(centre(voice), 0);
+    expect(centre(voice)).toBeCloseTo(centre(out), 0);
     await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(2);
     await page.screenshot({ path: testInfo.outputPath(`arranged-${theme}.png`) });
     await page.getByRole("button", { name: "Undo arrange", exact: true }).click();

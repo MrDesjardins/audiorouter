@@ -5,11 +5,14 @@ export function FirstRunGuide({
   connected,
   onRefresh,
   onOpenTools,
+  onSetUpDiscord,
 }: {
   devices: DeviceListItem[];
   connected: boolean;
   onRefresh: () => void;
   onOpenTools: () => void;
+  /** Opens the guided Discord route ("Set up for Discord"). */
+  onSetUpDiscord?: () => void;
 }) {
   const active = devices.filter((device) => device.state === "active");
   const captures = active.filter((device) => device.direction === "capture").length;
@@ -44,6 +47,11 @@ export function FirstRunGuide({
         <button type="button" onClick={onOpenTools} disabled={!connected}>
           Open Tools
         </button>
+        {onSetUpDiscord && (
+          <button type="button" className="secondary" onClick={onSetUpDiscord} disabled={!connected}>
+            Set up for Discord
+          </button>
+        )}
         <button type="button" className="secondary" onClick={onRefresh} disabled={!connected}>
           Refresh devices
         </button>
