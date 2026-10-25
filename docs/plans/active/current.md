@@ -194,6 +194,17 @@ name conflict. A new per-job artifact-name uniqueness regression fails before
 the correction and passes after it. This is workflow-only; retain the native
 run for evidence, then require CI on the corrected head.
 
+Nested startup follow-up: afdd47a5's actual token reports prove High/admin
+(12288) to Medium/non-admin (8192), and its Rust/UI coverage passed, but a
+PowerShell descendant failed initialization. Isolated diagnostic branch
+debug/standard-user-launcher reproduced 0xC0000142 in run 40240495655. Explicit
+same-user/System descriptors on the newly derived token/default DACL and owned
+process/thread objects fixed the unchanged nested probes in run 40240817830.
+Only that verified helper/regression is copied to this branch; never copy the
+diagnostic-only workflow. Source caller and machine security settings are
+untouched. Final local nested probes pass 4/4; preserve original failures and
+require current-head full CI plus wrapped packaged gates after this push.
+
 Objective: close the remaining packaged-UI gate in the authorized
 [application-quality roadmap](application-quality.md). Test the exact release
 shell binary built for this SHA with its embedded UI; prove that the real

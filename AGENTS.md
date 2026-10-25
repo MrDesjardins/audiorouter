@@ -106,6 +106,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-25 — Verify descendants after dropping a hosted runner token.**
+  Evidence: [nested-process repair](docs/plans/active/evidence/2026-10-25-pr73-ci-repair.md#nested-process-startup-repair).
+  Scope: Windows CI launchers and packaged WebView2 smoke. Consequence:
+  elevated WebView2 ignores user environment overrides; verify Medium/non-admin
+  execution, then launch a real nested tool too. A High creator's inherited
+  object descriptors let Node run while PowerShell died with 0xC0000142; give
+  only the newly owned token/process/thread objects same-user access.
+
 - **2026-10-25 — Qualify the actual fault and cancellation path.**
   Evidence: [packaged smoke guard qualification](docs/plans/active/evidence/2026-10-25-packaged-smoke-guard-qualification.md).
   Scope: Windows test-process lifecycle and seeded transport faults.

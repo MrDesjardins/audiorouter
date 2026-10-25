@@ -23,12 +23,13 @@ function probe(name, mode, exitCode = 0) {
   const report = path.join(output, "token.json");
   writeFileSync(
     fixture,
-    `import {spawn} from 'node:child_process';
+    `import {spawn,spawnSync} from 'node:child_process';
 import {writeFileSync} from 'node:fs';
 if (process.argv[2] === 'leaf') { setTimeout(() => {}, 10000); }
 else {
   const child = process.argv[2] === 'timeout' ? spawn(process.execPath, [import.meta.filename, 'leaf'], {stdio: 'ignore', windowsHide: true}) : null;
-  writeFileSync(process.argv[3], JSON.stringify({pid: process.pid, childPid: child?.pid, cwd: process.cwd(), sentinel: process.env.AUDIOROUTER_STANDARD_USER_PROBE}));
+  const nested = child ? null : spawnSync('powershell.exe', ['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',process.argv[5],'-InspectOnly'], {encoding:'utf8', timeout:10000,windowsHide:true});
+  writeFileSync(process.argv[3], JSON.stringify({nested: nested && {status:nested.status,signal:nested.signal,error:String(nested.error??''),stdout:nested.stdout,stderr:nested.stderr},pid: process.pid, childPid: child?.pid, cwd: process.cwd(), sentinel: process.env.AUDIOROUTER_STANDARD_USER_PROBE}));
   console.log('standard-user-stdout'); console.error('standard-user-stderr');
   if (child) setTimeout(() => {}, 10000); else process.exit(Number(process.argv[4]));
 }
@@ -37,7 +38,7 @@ else {
   const argumentsFile = path.join(output, "arguments.json");
   writeFileSync(
     argumentsFile,
-    JSON.stringify([fixture, mode, observed, String(exitCode)]),
+    JSON.stringify([fixture, mode, observed, String(exitCode), launcher]),
   );
   const result = spawnSync(
     "powershell.exe",
@@ -92,6 +93,10 @@ for (const code of [0, 7, 130]) {
         process.cwd().toLowerCase(),
       );
       assert.equal(observed.sentinel, "token-probe");
+      assert.equal(observed.nested.status, 0, JSON.stringify(observed.nested));
+      const nestedIdentity = JSON.parse(observed.nested.stdout);
+      assert.equal(nestedIdentity.parentIntegrityRid, 8192);
+      assert.equal(nestedIdentity.parentAdmin, false);
       assert.match(result.stdout, /standard-user-stdout/);
       assert.match(result.stderr, /standard-user-stderr/);
     },

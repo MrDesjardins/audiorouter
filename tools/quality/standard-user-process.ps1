@@ -15,6 +15,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Security.AccessControl;
 using System.Text;
 
 public static class StandardUserProcess {
@@ -24,6 +25,7 @@ public static class StandardUserProcess {
         public uint x, y, width, height, charsX, charsY, fill, flags;
         public ushort show, reservedSize; public IntPtr reservedPointer, input, output, error;
     }
+    [StructLayout(LayoutKind.Sequential)] struct SecurityAttributes { public int length; public IntPtr descriptor; [MarshalAs(UnmanagedType.Bool)] public bool inherit; }
     [StructLayout(LayoutKind.Sequential)] struct ProcessInfo { public IntPtr process, thread; public uint pid, tid; }
     [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
     [DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int id);
@@ -38,6 +40,8 @@ public static class StandardUserProcess {
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr token, int kind, IntPtr data, int size, out int required);
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool CreateRestrictedToken(IntPtr existing, uint flags, uint disableCount, IntPtr disable, uint deleteCount, IntPtr delete, uint restrictCount, IntPtr restrict, out IntPtr token);
     [DllImport("advapi32.dll", SetLastError = true)] static extern bool SetTokenInformation(IntPtr token, int kind, ref SidAttributes data, int size);
+    [DllImport("advapi32.dll", SetLastError = true, EntryPoint = "SetTokenInformation")] static extern bool SetDefaultDacl(IntPtr token, int kind, ref IntPtr data, int size);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool SetKernelObjectSecurity(IntPtr handle, uint information, byte[] descriptor);
     [DllImport("advapi32.dll", SetLastError = true)] static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);
     [DllImport("advapi32.dll", SetLastError = true)] static extern IntPtr GetSidSubAuthority(IntPtr sid, uint index);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool CreateProcessAsUser(IntPtr token, string application, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string directory, ref StartupInfo startup, out ProcessInfo process);
@@ -48,7 +52,7 @@ public static class StandardUserProcess {
         public uint pid;
         public int exitCode;
     }
-    static void Check(bool value, string action) { if (!value) throw new Win32Exception(Marshal.GetLastWin32Error(), action); }
+    static void Check(bool value, string action) { if (!value) { int code = Marshal.GetLastWin32Error(); throw new Win32Exception(code, action + " (" + code + "): " + new Win32Exception(code).Message); } }
     static int Integrity(IntPtr token) {
         int size;
         GetTokenInformation(token, 25, IntPtr.Zero, 0, out size); // TokenIntegrityLevel
@@ -87,9 +91,12 @@ public static class StandardUserProcess {
         if (result.parentIntegrityRid < 8192) throw new InvalidOperationException("A restricted/Low parent is not a standard desktop session");
         IntPtr current = IntPtr.Zero, restricted = IntPtr.Zero, actualChild = IntPtr.Zero;
         IntPtr input = IntPtr.Zero, output = IntPtr.Zero, error = IntPtr.Zero, sidBuffer = IntPtr.Zero;
+        IntPtr descriptorBuffer = IntPtr.Zero, attributesBuffer = IntPtr.Zero, aclBuffer = IntPtr.Zero;
         var process = new ProcessInfo(); bool finished = false, resumed = false;
         try {
-            Check(OpenProcessToken(GetCurrentProcess(), 0x8B, out current), "Open source token");
+            // Restricted handles retain source access rights. WRITE_DAC is used
+            // only on the new token, never to modify this source token.
+            Check(OpenProcessToken(GetCurrentProcess(), 0x4008B, out current), "Open source token");
             // DISABLE_MAX_PRIVILEGE | LUA_TOKEN removes administrative groups and
             // privileges. It never disables AppLocker or changes the caller token.
             Check(CreateRestrictedToken(current, 5, 0, IntPtr.Zero, 0, IntPtr.Zero, 0, IntPtr.Zero, out restricted), "Create limited token");
@@ -97,13 +104,27 @@ public static class StandardUserProcess {
             sidBuffer = Marshal.AllocHGlobal(bytes.Length); Marshal.Copy(bytes, 0, sidBuffer, bytes.Length);
             var label = new SidAttributes { Sid = sidBuffer, Attributes = 0x20 }; // SE_GROUP_INTEGRITY
             Check(SetTokenInformation(restricted, 25, ref label, Marshal.SizeOf(typeof(SidAttributes)) + bytes.Length), "Set Medium integrity");
+            // A High creator's default descriptors can name only Administrators.
+            // Grant this same user access to its own derived token and process/
+            // thread objects; never change the caller or any machine object.
+            string userSid;
+            using (var identity = new WindowsIdentity(current)) userSid = identity.User.Value;
+            var descriptor = new RawSecurityDescriptor("O:" + userSid + "D:(A;;GA;;;SY)(A;;GA;;;" + userSid + ")S:(ML;;NW;;;ME)");
+            var security = new byte[descriptor.BinaryLength]; descriptor.GetBinaryForm(security, 0);
+            Check(SetKernelObjectSecurity(restricted, 4, security), "Set derived token object DACL");
+            var acl = new byte[descriptor.DiscretionaryAcl.BinaryLength]; descriptor.DiscretionaryAcl.GetBinaryForm(acl, 0);
+            aclBuffer = Marshal.AllocHGlobal(acl.Length); Marshal.Copy(acl, 0, aclBuffer, acl.Length);
+            Check(SetDefaultDacl(restricted, 6, ref aclBuffer, IntPtr.Size), "Set derived token default DACL");
+            descriptorBuffer = Marshal.AllocHGlobal(security.Length); Marshal.Copy(security, 0, descriptorBuffer, security.Length);
+            var attributes = new SecurityAttributes { length = Marshal.SizeOf(typeof(SecurityAttributes)), descriptor = descriptorBuffer, inherit = false };
+            attributesBuffer = Marshal.AllocHGlobal(attributes.length); Marshal.StructureToPtr(attributes, attributesBuffer, false);
             if (Integrity(restricted) != 8192 || Admin(restricted)) throw new InvalidOperationException("Limited token still has administrative authority");
             input = InheritedStandardHandle(-10); output = InheritedStandardHandle(-11); error = InheritedStandardHandle(-12);
             var startup = new StartupInfo { cb = Marshal.SizeOf(typeof(StartupInfo)), desktop = "winsta0\\default", flags = 0x101, show = 0, input = input, output = output, error = error };
             // Same identity/session/environment and job supervision; no alternate
             // credentials. Suspended creation lets us check the actual token first.
             var command = new StringBuilder("\"" + executable + "\" " + arguments);
-            Check(CreateProcessAsUser(restricted, executable, command, IntPtr.Zero, IntPtr.Zero, true, 4, IntPtr.Zero, directory, ref startup, out process), "Create standard-user process");
+            Check(CreateProcessAsUser(restricted, executable, command, attributesBuffer, attributesBuffer, true, 4, IntPtr.Zero, directory, ref startup, out process), "Create standard-user process");
             result.pid = process.pid; result.restricted = true;
             Check(OpenProcessToken(process.process, 10, out actualChild), "Read limited child token");
             result.childIntegrityRid = Integrity(actualChild); result.childAdmin = Admin(actualChild);
@@ -124,7 +145,8 @@ public static class StandardUserProcess {
             }
             foreach (IntPtr handle in new[] { actualChild, process.thread, process.process, input, output, error, restricted, current })
                 if (handle != IntPtr.Zero) CloseHandle(handle);
-            if (sidBuffer != IntPtr.Zero) Marshal.FreeHGlobal(sidBuffer);
+            foreach (IntPtr buffer in new[] { sidBuffer, descriptorBuffer, attributesBuffer, aclBuffer })
+                if (buffer != IntPtr.Zero) Marshal.FreeHGlobal(buffer);
         }
     }
     static void KillTree(uint pid) {

@@ -19,7 +19,7 @@ export function assertStandardUser() {
   );
   if (probe.status !== 0)
     throw new Error(
-      `Cannot inspect verification token: ${probe.stderr ?? probe.error}`,
+      `Cannot inspect verification token: status=${probe.status}, signal=${probe.signal}, error=${probe.error?.message ?? "none"}; stdout=${(probe.stdout ?? "").slice(-4096)}; stderr=${(probe.stderr ?? "").slice(-4096)}`,
     );
   const identity = JSON.parse(probe.stdout);
   if (identity.parentIntegrityRid !== 8192 || identity.parentAdmin !== false)
