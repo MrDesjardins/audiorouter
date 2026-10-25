@@ -330,9 +330,10 @@ audio readiness and explains the exact endpoint and authorization steps.
     - The 16-channel twin of a cable the session plays to.
     - The cable that carries the voice, so the call would hear itself.
     - A device that AudioRouter already sends captured Discord to, so it
-      is heard twice. When that device is a virtual cable, the row says what
-      records its other end gets Discord twice (naming active recorders),
-      not that the user hears it twice.
+      is heard twice. When that device is a virtual cable the user does not
+      hear it, so the row is a note naming the Output node that also sends
+      Discord there; it becomes a problem only when Windows shows an app
+      recording the cable's other end, which it names.
   - **Rules:**
     - Each problem names the device and the exact Discord menu step, with
       a Copy device name action.

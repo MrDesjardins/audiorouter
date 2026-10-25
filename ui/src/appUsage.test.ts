@@ -291,7 +291,7 @@ describe("Discord check", () => {
     expect(check.rows[1].message).toContain("twice");
   });
 
-  it("says a recording gets Discord twice when the doubled device is a cable (owner report, 2026-10-24)", () => {
+  it("names the node and the Discord setting that put Discord twice on a cable (owner report, 2026-10-24)", () => {
     // Discord's speaker is CABLE Input, and the session also mixes the
     // captured Discord into CABLE Input for a recorder.
     const outplayed = {
@@ -299,17 +299,19 @@ describe("Discord check", () => {
       edges: [...session.edges, edge("mix", "game-out")],
     } as unknown as Session;
     const quiet = discordCheck(outplayed, [app("Discord.exe", [records("cable-a-out"), plays("cable-in")])], devices);
-    expect(quiet.rows[1]).toMatchObject({ state: "check", deviceName: "CABLE Input (VB-Audio Virtual Cable)" });
+    // Nothing records the cable: a note, not a problem to fix.
+    expect(quiet.rows[1]).toMatchObject({ state: "info", deviceName: "CABLE Input (VB-Audio Virtual Cable)" });
     expect(quiet.rows[1].message).toBe(
-      "AudioRouter also sends Discord to this cable, so anything recording CABLE Output (VB-Audio Virtual Cable) gets Discord twice. Choose an output for Discord that nothing records, or stop sending Discord here in AudioRouter.",
+      'Discord plays here, and your "game-out" node also sends Discord here. You do not hear this cable, but a recording of it would have Discord twice.',
     );
-    expect(quiet.rows[1].message).not.toContain("you hear");
+    expect(quiet.state).not.toBe("check");
     const recording = discordCheck(
       outplayed,
       [app("Discord.exe", [records("cable-a-out"), plays("cable-in")]), app("obs64.exe", [records("cable-out")])],
       devices,
     );
-    expect(recording.rows[1].message).toContain("so OBS gets Discord twice");
+    expect(recording.rows[1]).toMatchObject({ state: "check" });
+    expect(recording.rows[1].message).toContain("OBS records this cable, and gets Discord twice");
   });
 
   it("shows the top-bar chip from the session alone", () => {
