@@ -22,6 +22,16 @@ Same app-only unsigned prerelease profile as 0.0.22; no storage migration
   the chain 4 px off level. Arrange now uses measured heights
   (`smartLayout.ts`, unit regression with 205/171/205 cards, which fails
   on the old rule); the Edge test compares centres.
+- Local checks on the combined branch (2026-10-24, Windows 11, Edge, e2e
+  backend rebuilt from this branch): full Edge suite 343 passed, 10
+  skipped, 0 failed (the first run, before the two fixes, had the 3 Arrange
+  failures); `npm test` 742 passed; UI typecheck, lint and format clean;
+  `cargo fmt --check` clean for both workspaces. Rust tests and both Clippy
+  runs for the backend change were run on `fix/audio-file-media`; CI runs
+  them on the combination. This qualifies the D1/D2 full-suite gate that
+  [the OBS and Discord plan](obs-discord.md) left open.
+- The five source branches are merged here; the owner deletes their remote
+  copies.
 - Tasks: (1) owner approves and merges the PR; (2) annotated tag `v0.0.23`
   on main, `create-draft-release.ps1 -Tag v0.0.23 -AppOnly` in a clean
   worktree (heavy build: ask first if the owner is using the app);
