@@ -38,6 +38,19 @@ Same app-only unsigned prerelease profile as 0.0.22; no storage migration
   (3) `fresh_install_shell` on the packaged shell, `verify-artifacts.ps1`
   on the downloaded draft, publish as a prerelease, evidence in
   `evidence/2026-10-24-release-0.0.23.md`.
+- Released: [v0.0.23](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.23)
+  on `11737991`, published 2026-10-25 03:57 UTC as a prerelease
+  ([evidence](evidence/2026-10-24-release-0.0.23.md)). Keep 0.0.22 for
+  rollback. The first fresh-install run met the default pipe still held
+  just after the owner quit AudioRouter (two "Access is denied" restarts,
+  1.3 s); the rerun was clean (53 ms).
+- Next: the owner installs 0.0.23 and checks the device lines, Set up for
+  Discord and an Audio file node with a missing file. Open follow-ups:
+  remove the hidden workspace-title controls and move their jsdom tests to
+  the visible ones; mark a capture node pinned to an exited process
+  (offered, not yet requested); the Volume Mixer read-only proposal
+  (offered, not yet requested). The owner deletes the merged remote
+  branches.
 
 ## Defect 2026-10-24: canvas card content spills out of a sized card (0.0.22, owner report)
 
