@@ -3817,3 +3817,9 @@ Objective: accessible, locally hosted explanatory animation runtime for the per-
 Tasks: add isolated site/assets/guide-animation.js and an embed contract; inspect browser output and controls across representative visual families, keyboard and reduced motion; parent integrates guide pages and runs site checks. Validation is explanatory UI evidence, not actual DSP or latency evidence. Rollback: remove this runtime and guide script references only. Risks: illustrations must remain explicitly illustrative, never claim measured DSP behavior. Next: build and inspect runtime.
 
 Animation runtime evidence (2026-10-14, Windows host): JavaScript parsed with Node vm.Script; headless installed Edge via explicit executablePath exercised all 16 visual types, seek(4) yielded 4000 ms paused state, repeated parameter updates/destroy left no stale figure. Eight parameter families changed actual SVG path geometry (gain, compressor, gate, limiter, duck, EQ, delay, pitch); destroy left zero browser animations. Reduced-motion initially showed static state; deliberate Play/Pause and keyboard ArrowRight on seek worked. Zero browser page errors. At 390 px EQ controls remain in bounds. Reviewed compressor image; scratch browser images at ui/test-results/guide-animation/{compressor,eq-mobile}.png (not committed documentation evidence). Playwright channel discovery initially missed Edge; explicit Program Files (x86) path resolved it. Library source contains no standalone HyperFrames composition; no video render or HyperFrames composition check was performed.
+
+
+Isolated CI diagnostic: debug/standard-user-launcher temporarily replaces the
+nightly workflow with only launcher probes. It is not product/nightly acceptance
+evidence. Capture nested PowerShell startup status and output under the actual
+High-to-Medium transition; copy only a verified repair back to the PR branch.
