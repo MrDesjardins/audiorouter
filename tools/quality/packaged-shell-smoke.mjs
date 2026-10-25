@@ -791,6 +791,12 @@ async function main() {
     if (errors.length > 0)
       throw new Error(`Uncaught UI errors: ${errors.join(" | ")}`);
 
+    // The owned WebView dies with quit_app. Finalize while CDP is still alive;
+    // stopping after process exit races the transport's disconnect event.
+    await traceContext.tracing.stop({
+      path: path.join(options.output, "initial-trace.zip"),
+    });
+    traceStarted = false;
     await page.evaluate(() => {
       const core = window.__TAURI__?.core;
       void core?.invoke?.("quit_app")?.catch(() => undefined);
@@ -803,8 +809,6 @@ async function main() {
     if (quitCode !== 0)
       throw new Error(`Shell quit exited unsuccessfully (${quitCode})`);
     cleanupActions.push({ pid: child.pid, method: "graceful-quit" });
-    await traceContext.tracing.stop();
-    traceStarted = false;
     await browser.close().catch(() => undefined);
     browser = undefined;
     page = undefined;

@@ -339,6 +339,10 @@ async function runCase(name, options) {
     if (name === "baseline") {
       assert.equal(exitCode, 0);
       assert.equal(report.status, "passed");
+      assert.ok(
+        (await stat(path.join(output, "initial-trace.zip"))).size > 0,
+        "Initial trace must be finalized before closing its WebView",
+      );
       assert.deepEqual(observedStages, ["initial-ready", "restarted-ready"]);
       assert.equal(report.launchedChildren.length, 2);
       assert.ok(

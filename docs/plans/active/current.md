@@ -248,6 +248,16 @@ soak and all packaged/coverage gates; its only failing PR job was the retained
 TCP asset failure. Next: push this focused fixture repair, require current-head
 CI and record live outcomes on PR #73. Keep the flaky-test policy unchanged.
 
+Current-head nightly 40246053743 passed all 11 packaged guard cases, then
+ordinary smoke failed after its first successful save and exit 0: tracing.stop
+ran after the owned WebView closed. Repair the runner ordering by saving its
+initial trace before requesting quit; retain the archive and require it in the
+baseline qualification. Validate the actual Edge tracing lifecycle locally,
+then rerun full hosted CI/nightly because the owner's production pipe remains
+occupied. Requirements UI-11, NFR-14/15, ENG-04/05; no app behavior change.
+Rollback only the trace ordering/archive assertion together. Preserve this
+failure's report under target/ci-40246053743 and on the Actions run.
+
 Objective: close the remaining packaged-UI gate in the authorized
 [application-quality roadmap](application-quality.md). Test the exact release
 shell binary built for this SHA with its embedded UI; prove that the real
@@ -3871,3 +3881,9 @@ Objective: accessible, locally hosted explanatory animation runtime for the per-
 Tasks: add isolated site/assets/guide-animation.js and an embed contract; inspect browser output and controls across representative visual families, keyboard and reduced motion; parent integrates guide pages and runs site checks. Validation is explanatory UI evidence, not actual DSP or latency evidence. Rollback: remove this runtime and guide script references only. Risks: illustrations must remain explicitly illustrative, never claim measured DSP behavior. Next: build and inspect runtime.
 
 Animation runtime evidence (2026-10-14, Windows host): JavaScript parsed with Node vm.Script; headless installed Edge via explicit executablePath exercised all 16 visual types, seek(4) yielded 4000 ms paused state, repeated parameter updates/destroy left no stale figure. Eight parameter families changed actual SVG path geometry (gain, compressor, gate, limiter, duck, EQ, delay, pitch); destroy left zero browser animations. Reduced-motion initially showed static state; deliberate Play/Pause and keyboard ArrowRight on seek worked. Zero browser page errors. At 390 px EQ controls remain in bounds. Reviewed compressor image; scratch browser images at ui/test-results/guide-animation/{compressor,eq-mobile}.png (not committed documentation evidence). Playwright channel discovery initially missed Edge; explicit Program Files (x86) path resolved it. Library source contains no standalone HyperFrames composition; no video render or HyperFrames composition check was performed.
+
+Trace-order local validation: the owned Edge probe reproduces closed-target
+failure after close and saves its archive before close. Node syntax/Prettier,
+full typecheck, 66 policy/runner tests, documentation (198 files / 1,097 links)
+and diff checks pass. See the dated CI repair evidence for reports. Next:
+push this runner-only repair and require new-head PR CI/default nightly.

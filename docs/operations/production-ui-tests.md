@@ -174,3 +174,9 @@ streams, exit status and owned-tree timeout cleanup without changing machine
 settings. Four Windows launcher probes run before the release build and upload
 their evidence. The smoke itself refuses an elevated or Low token before starting
 the shell; direct local runs must use a normal standard-user session.
+
+The smoke finalizes `initial-trace.zip` before the first native quit, while
+its WebView connection is alive. The baseline qualification requires that
+archive; existing ZIP artifacts retain it even if restart subsequently fails.
+Finalizing after process exit races CDP disconnection and can fail an otherwise
+successful save/quit. Exit and restart assertions remain required.
