@@ -10,11 +10,46 @@ import { setTimeout as delay } from "node:timers/promises";
 const launcher = fileURLToPath(
   new URL("./standard-user-process.ps1", import.meta.url),
 );
+const packagedWindows = fileURLToPath(
+  new URL("./packaged-shell-windows.ps1", import.meta.url),
+);
 const root = path.join(
   process.env.RUNNER_TEMP ?? os.tmpdir(),
   "audiorouter-standard-user-qualification",
 );
 const windows = { skip: process.platform !== "win32", timeout: 60_000 };
+test(
+  "packaged startup process snapshot reports owned process health without command lines",
+  windows,
+  () => {
+    const snapshot = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        packagedWindows,
+        "-Operation",
+        "Snapshot",
+        "-RootPid",
+        String(process.pid),
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 15_000 },
+    );
+    assert.equal(snapshot.status, 0, snapshot.stderr);
+    const processes = JSON.parse(snapshot.stdout);
+    const own = processes.find((item) => item.pid === process.pid);
+    assert.ok(own, "Snapshot must include its exact owned root process");
+    assert.equal(typeof own.name, "string");
+    assert.equal(typeof own.threadCount, "number");
+    assert.ok(/^\d+$/.test(own.userCpu100ns));
+    assert.ok(/^\d+$/.test(own.kernelCpu100ns));
+    assert.ok(/^\d+$/.test(own.workingSetBytes));
+    assert.equal("commandLine" in own, false);
+  },
+);
 function probe(name, mode, exitCode = 0) {
   mkdirSync(root, { recursive: true });
   const output = mkdtempSync(path.join(root, `${name}-`));

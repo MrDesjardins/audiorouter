@@ -3895,3 +3895,13 @@ name. Correct that phase-specific assertion to require initial-trace.zip for
 refused quit only; other failures retain trace.zip. Keep screenshot/DOM and
 all cleanup/fault assertions. Validate against the downloaded native artifacts,
 then require the new-head full CI/nightly. No product changes.
+
+Final 86f31e19 checks: full PR CI passed, but nightly failed the baseline
+DevTools endpoint deadline after `shell.instanceCheck=ready`; all 10 later
+fault/cancel cases passed. Diagnosis did not have process state before owned
+cleanup. The new timeout report captures bounded descendant health and port-file
+state without commands, environment or dumps. Windows helper/launcher and policy
+tests pass 71/71 outside the restricted process sandbox; typecheck/docs/diff
+checks pass. Next: push diagnostics, inspect their new-head run; keep PR draft
+until browser CI and a complete nightly succeed. Preserve original 15-second
+startup limit and failed run.

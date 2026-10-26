@@ -672,13 +672,49 @@ async function main() {
       await stopOwnedChild(child, cleanupActions);
       qualification.injected = true;
     }
-    const debugEndpoint = await waitForFile(
-      devToolsActivePort,
-      child,
-      options.timeout,
-      errors,
-      abort.signal,
-    );
+    let debugEndpoint;
+    try {
+      debugEndpoint = await waitForFile(
+        devToolsActivePort,
+        child,
+        options.timeout,
+        errors,
+        abort.signal,
+      );
+    } catch (error) {
+      if (qualification?.case === "baseline") {
+        try {
+          const ownedProcesses = windows("Snapshot", [
+            "-RootPid",
+            String(child.pid),
+          ]);
+          let portFileBytes = 0;
+          try {
+            portFileBytes = (await stat(devToolsActivePort)).size;
+          } catch {
+            // Absence is useful evidence: WebView2 had not published its port.
+          }
+          await writeFile(
+            path.join(options.output, "startup-failure.json"),
+            JSON.stringify(
+              {
+                phase: "initial-devtools-endpoint",
+                elapsedMs: Date.now() - launchedAt,
+                portFileBytes,
+                ownedProcesses,
+              },
+              null,
+              2,
+            ),
+          );
+        } catch (diagnosticError) {
+          errors.push(
+            `Could not capture startup process evidence: ${diagnosticError.message}`,
+          );
+        }
+      }
+      throw error;
+    }
     metrics.webviewDebugReadyMs = Date.now() - launchedAt;
     devToolsTargets = await listDevToolsTargets(debugEndpoint.port);
     browser = await connectToWebView(debugEndpoint, options.timeout);

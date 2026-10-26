@@ -69,7 +69,7 @@ public static class PackagedSmokeConsole {
     exit 0
 }
 
-$processes = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, CreationDate)
+$processes = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, CreationDate, Name, ThreadCount, UserModeTime, KernelModeTime, WorkingSetSize)
 if ($Operation -eq 'Snapshot') {
     $wanted = [Collections.Generic.HashSet[uint32]]::new()
     $byPid = @{}
@@ -85,7 +85,7 @@ if ($Operation -eq 'Snapshot') {
         }
     } while ($added)
     $found = @($processes | Where-Object { $wanted.Contains([uint32]$_.ProcessId) } | ForEach-Object {
-        @{ pid = [int]$_.ProcessId; created = $_.CreationDate.ToUniversalTime().ToString('o') }
+        @{ pid = [int]$_.ProcessId; created = $_.CreationDate.ToUniversalTime().ToString('o'); name = $_.Name; parentPid = [int]$_.ParentProcessId; threadCount = [int]$_.ThreadCount; userCpu100ns = [string]$_.UserModeTime; kernelCpu100ns = [string]$_.KernelModeTime; workingSetBytes = [string]$_.WorkingSetSize }
     })
 }
 else {
