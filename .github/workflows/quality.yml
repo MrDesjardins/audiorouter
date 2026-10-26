@@ -272,7 +272,8 @@ jobs:
 
   # NFR-14, backend part: launch the release shell as a fresh install (the
   # fresh_install_shell test) and time its embedded backend's first answer.
-  # The time until the window's UI is ready is not measured yet.
+  # The packaged smoke also measures usable UI readiness with a fresh profile
+  # and after a restart. Timings remain informational until Q5 calibration.
   startup:
     name: Startup timing (fresh install)
     runs-on: windows-latest
@@ -294,6 +295,10 @@ jobs:
 
       # custom-protocol embeds ui/dist; without it the release shell loads
       # the development URL (AGENTS.md lesson 2026-09-26).
+      - name: Qualify standard-user launcher
+        shell: pwsh
+        run: node --test tools/quality/standard-user.test.mjs
+
       - name: Build the UI and the release shell
         shell: pwsh
         run: |
@@ -302,6 +307,10 @@ jobs:
           npm --prefix ui run build
           if ($LASTEXITCODE -ne 0) { exit 1 }
           cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features custom-protocol
+
+      - name: Ensure WebView2 runtime on the disposable runner
+        shell: pwsh
+        run: ./tools/quality/ensure-webview2.ps1 -Output (Join-Path $env:RUNNER_TEMP 'metrics/webview2-runtime.json') -InstallMissing
 
       - name: Launch as a fresh install and time the backend
         shell: pwsh
@@ -316,7 +325,43 @@ jobs:
           @('## Startup (NFR-14, backend part)', '',
             '| Measure | Target (NFR-14) | Measured |', '| --- | --- | --- |',
             "| Launch to first backend answer (fresh install, hosted runner) | UI ready ≤ 3 s warm / 8 s cold | $ms ms |",
-            '', 'Not measured yet: the time until the window''s UI is ready, and cold versus warm starts.', '') |
+            '', 'Packaged UI readiness is measured separately by the following smoke.', '') |
+            Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Qualify packaged smoke guards
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'audiorouter-packaged-shell-qualification'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $arguments = Join-Path $out 'launch-arguments.json'
+          @('tools/quality/qualify-packaged-shell-smoke.mjs', '--shell', 'src-tauri/target/release/audiorouter-shell.exe', '--output', $out) |
+            ConvertTo-Json | Set-Content -LiteralPath $arguments -Encoding UTF8
+          ./tools/quality/standard-user-process.ps1 -Executable (Get-Command node).Source -ArgumentsFile $arguments -Report (Join-Path $out 'launch-token.json')
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $result = Get-Content (Join-Path $out 'qualification.json') -Raw | ConvertFrom-Json
+          @('## Packaged smoke guard qualification', '',
+            "$($result.cases.Count) cases passed: normal operation, preflight/startup failures, native bridge/readiness/page errors, refused quit and real console-break cancellation.", '') |
+            Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Packaged WebView2 smoke
+        shell: pwsh
+        env:
+          TEMP: ${{ runner.temp }}
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'audiorouter-packaged-shell-smoke'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $arguments = Join-Path $out 'launch-arguments.json'
+          @('tools/quality/packaged-shell-smoke.mjs', '--shell', 'src-tauri/target/release/audiorouter-shell.exe', '--output', $out, '--timeout-ms', '60000') |
+            ConvertTo-Json | Set-Content -LiteralPath $arguments -Encoding UTF8
+          ./tools/quality/standard-user-process.ps1 -Executable (Get-Command node).Source -ArgumentsFile $arguments -Report (Join-Path $out 'launch-token.json')
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $result = Get-Content (Join-Path $out 'result.json') -Raw | ConvertFrom-Json
+          @('## Packaged UI smoke', '',
+            "Fresh-profile usable canvas: $($result.metrics.coldUiReadyMs) ms.",
+            "Usable canvas after restart: $($result.metrics.warmUiReadyMs) ms.",
+            'Native bridge, stopped/no-grant state and session save/reload passed.',
+            "Shell SHA-256: $($result.shellSha256)", '',
+            'Timings are informational pending Q5 runner calibration; fresh-profile launch is not an OS-cold measurement.', '') |
             Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Upload startup metrics
@@ -325,6 +370,51 @@ jobs:
         with:
           name: metrics-startup
           path: ${{ runner.temp }}/metrics
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload standard-user launcher evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: standard-user-qualification
+          path: |
+            ${{ runner.temp }}/audiorouter-standard-user-qualification/*/*.json
+            ${{ runner.temp }}/audiorouter-standard-user-qualification/*/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload packaged WebView2 smoke evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: packaged-webview-smoke
+          path: |
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.json
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.log
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.jsonl
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.panic
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.png
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.html
+            ${{ runner.temp }}/audiorouter-packaged-shell-smoke/*.zip
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload packaged smoke qualification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: packaged-smoke-qualification
+          path: |
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/qualification.json
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/launch-token.json
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.json
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.log
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.jsonl
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.panic
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.png
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.html
+            ${{ runner.temp }}/audiorouter-packaged-shell-qualification/*/*.zip
           if-no-files-found: ignore
           retention-days: 14
 

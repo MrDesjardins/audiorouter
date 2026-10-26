@@ -280,8 +280,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           npm ci --prefix ui
 
-      # Builds the e2e_backend fixture, runs every development Playwright test,
-      # then the optimized acceptance smoke in installed Edge. README screenshot
+      # Builds the e2e_backend fixture and every browser entry, then runs the
+      # full Playwright discovery against bundled assets. README screenshot
       # generators stay off (they write into docs/).
       # playwright.config.ts runs one worker when CI is set.
       - name: Run Playwright tests
@@ -306,7 +306,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: browser-guard-qualification
-          path: ${{ runner.temp }}/audiorouter-browser-guard-*
+          path: |
+            ${{ runner.temp }}/audiorouter-browser-guard-*
+            ${{ runner.temp }}/audiorouter-bundled-asset-guard-*
           if-no-files-found: ignore
           retention-days: 7
 

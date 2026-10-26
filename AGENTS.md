@@ -106,6 +106,32 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-25 — Verify descendants after dropping a hosted runner token.**
+  Evidence: [nested-process repair](docs/plans/active/evidence/2026-10-25-pr73-ci-repair.md#nested-process-startup-repair).
+  Scope: Windows CI launchers and packaged WebView2 smoke. Consequence:
+  elevated WebView2 ignores user environment overrides; verify Medium/non-admin
+  execution, then launch a real nested tool too. A High creator's inherited
+  object descriptors let Node run while PowerShell died with 0xC0000142; give
+  only the newly owned token/process/thread objects same-user access.
+
+- **2026-10-25 — Qualify the actual fault and cancellation path.**
+  Evidence: [packaged smoke guard qualification](docs/plans/active/evidence/2026-10-25-packaged-smoke-guard-qualification.md).
+  Scope: Windows test-process lifecycle and seeded transport faults.
+  Consequence: read-only Tauri exports made attempted injections ineffective;
+  require a hit at the actual IPC boundary and the owning failed check.
+  Deliver console cancellation to a privately owned console, preserve the
+  runner's process handle/exit code, and verify captured descendants by both
+  PID and creation time before declaring cleanup qualified.
+
+- **2026-10-25 — Keep one-shot probes out of full packaged UI runs.**
+  Evidence: [packaged WebView2 investigation](docs/plans/active/evidence/2026-10-25-packaged-webview-smoke.md).
+  Scope: packaged-shell automation and native bridge qualification.
+  Consequence: the create-only `AUDIOROUTER_SHELL_PROBE_FILE` marker made later
+  `system.describe` refreshes fail; clear it and verify normal API responses
+  before/after restart. Restricted tool launches also stayed blank while the
+  same binary passed outside that sandbox with a standard-user token; compare
+  launch environments before attributing such a failure to embedded assets.
+
 - **2026-10-24 — A known warning count hides new warnings; keep it at zero and read PR annotations.**
   Evidence: [OBS and Discord plan, lint warnings repair](docs/plans/active/obs-discord.md#pr-warnings-and-app-strip-loading-2026-10-24-owner-request),
   PR #67 CI annotations. Scope: UI lint, CI annotations, any check that

@@ -521,10 +521,17 @@ impl ObsIntegration {
     }
 
     pub(crate) fn apply(&mut self, preview_id: &str) -> Result<Value, String> {
+        self.apply_at(preview_id, Instant::now())
+    }
+
+    // Tests advance from creation instead of backdating an Instant, which can
+    // underflow on a newly booted Windows runner. Production uses the same clock.
+    fn apply_at(&mut self, preview_id: &str, now: Instant) -> Result<Value, String> {
         let Some(preview) = self.preview.take_if(|preview| preview.id == preview_id) else {
             return Err("unknown or already used previewId; preview the change again".into());
         };
-        if preview.created.elapsed() > Duration::from_secs(OBS_PREVIEW_SECONDS) {
+        if now.saturating_duration_since(preview.created) > Duration::from_secs(OBS_PREVIEW_SECONDS)
+        {
             return Err("the preview expired; preview the change again".into());
         }
         {

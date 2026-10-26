@@ -18,7 +18,7 @@ export const checks = {
   'ui-type': [npm('ui', 'run', 'typecheck:all')],
   'ui-tests': [npm('ui', 'test')],
   'ui-build': [npm('ui', 'run', 'build')],
-  browser: [{ ...npm('ui', 'run', 'e2e'), windows: true }],
+  browser: [{ ...npm('ui', 'run', 'e2e:ci'), windows: true }],
   'streamdeck-type': [npm('tools/streamdeck', 'run', 'typecheck')],
   'streamdeck-tests': [npm('tools/streamdeck', 'test')],
   'streamdeck-build': [npm('tools/streamdeck', 'run', 'build')],

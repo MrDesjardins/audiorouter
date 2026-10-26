@@ -111,6 +111,296 @@ a prerelease, record evidence in `evidence/2026-10-24-release-0.0.22.md`.
   ([future work](../future/obs-discord-integration.md#follow-up-build-the-application-inventory-off-the-control-thread)).
   Watch the next coverage nightly for the drift-test change.
 
+## Quality Q3.2 - packaged WebView2 smoke - 2026-10-24
+
+PR #73 CI repair, owner request 2026-10-25: full manual CI at `c5778a49`
+passed, but PR run 40232863731 / job 121288172978 failed its flaky-test guard:
+the first dark compressor scenario timed out waiting for `rf__node-voice`;
+the retry passed (342 passed / 10 skipped / 1 flaky). Keep the original
+failure/trace and `failOnFlakyTests` policy. Retrieve its screenshot, document
+and network trace; reproduce and fix the owning startup/test layer, then run
+the focused scenario across themes and current PR CI. Also inspect the retained
+hosted packaged-qualification failure from run 40230361624 before attributing
+that separate failure. Requirements UI-11/17 and ENG-02/04/05. No changes to
+audio, driver settings, grants or acceptance budgets are authorized by this
+repair. Rollback removes only the focused repair and its regression; preserve
+both original CI results. Commit/push fixes to the existing PR branch and
+record current-head checks before marking the PR ready.
+
+Confirmed browser evidence: the failing screenshot is blank; the trace shows
+`/src/routeHarness.tsx` failed with `net::ERR_NO_BUFFER_SPACE` before React
+mounted. The exact OS resource exhaustion mechanism is unproven. Serve all four
+full-suite entries from an isolated bundled build in shared browser verification;
+retain development and focused optimized commands, all scenario discovery,
+assertions, timeouts and the flaky guard. Compare discovery and run the complete
+bundled suite, including the six dynamics/theme scenarios. Also explicitly detect
+and provision WebView2 only on disposable CI runners, retain before/after runtime
+evidence, and include actual JSONL/panic application logs in both artifact uploads.
+Missing runtime is a hypothesis for the separate nightly failure until hosted
+preflight and rerun evidence confirm it. No ordinary-user installation changes.
+The [PR #73 CI investigation](evidence/2026-10-25-pr73-ci-repair.md) retains the
+original runs, trace finding, coverage comparison and reproducible local checks.
+
+CI repair local validation: full bundled Edge suite 343 passed / 10 existing
+skips / zero failures or flaky retries (10.2 minutes, CI policy active); all
+six dynamics/theme scenarios passed and three-theme screenshots were reviewed.
+Discovery is identical at 353 scenarios. Format/lint/typecheck, 5 verification
+wiring tests, 743 UI unit tests, 65 policy/runner tests, docs (198 files / 1,094 links), YAML and
+PowerShell parsing pass. Existing WebView2 detection passed without installing
+on the owner PC; simulated missing registration fails closed outside Actions.
+The actual hosted prerequisite/install and packaged rerun remain unverified.
+`actionlint` is unavailable. Main remains `11737991` after fetching.
+
+Additional hosted failure at repair head cef17af6: quality run 40236831750 /
+coverage job 121300091637 panicked in the existing OBS preview-expiry test
+while constructing `Instant::now() - 301 seconds`. A newly booted Windows
+runner need not have that much representable monotonic history. Keep the
+original failure; replace test backdating with a private explicit-time apply
+helper and forward-only test instants. Cover just before, exactly at and after
+the unchanged 300-second SEC-15 expiry, plus rejected-operation queue behavior.
+No real OBS connection or permission change. Run all OBS tests, full control
+unit tests, both Rust format commands/checks and strict Clippy for both
+workspaces before committing; rerun current CI/quality. Rollback this small
+clock seam and boundary-test change together.
+
+Hosted packaged follow-up on cef17af6: preflight found WebView2 155 installed
+(no installation), interactive session 2; fresh-install backend passed. Logs
+now retained show UI-native sessions/devices/get requests, but every case needing
+CDP timed out before the port file. Microsoft documents that elevated hosts
+ignore WEBVIEW2_* overrides, including debug arguments and profile overrides.
+GitHub Windows jobs run with administrator privileges; this matches the failure.
+Add a tool-only launcher that restricts the inherited token and sets Medium
+integrity for the complete qualification/smoke process tree, records and verifies
+the actual child integrity/admin state before it runs, preserves exit codes and
+owned-process cleanup. No product debug switch or registry/policy/UAC change.
+Validate clean/nonzero launcher probes locally, then all 11 packaged guards and
+normal smoke; hosted parent-to-child token evidence remains required.
+
+Follow-up local checks passed: 25 OBS tests, 299 control unit tests (11
+existing ignored), both Rust format/check runs and strict all-feature Clippy
+for both workspaces; 65 policy/runner tests; four real Windows restricted-token
+launcher probes; Node syntax/format, PowerShell/ASCII, workflow YAML, docs
+(198 files / 1,094 links) and diff checks. Wrapped packaged requalification
+refused the occupied production control pipe and launched no shell; do not
+close the existing owner instance. Preserve its failed/blocked local report.
+The prior local 11-case pass predates the wrapper. Next: commit/push this
+follow-up and require High-to-Medium launcher evidence plus all 11 packaged
+guards and the normal smoke on the newly built hosted artifact. The repaired
+Edge job already passed 343 scenarios at cef17af6; rerun current-head PR CI.
+
+At afdd47a5, hosted launcher probes passed before the shell build. Remove
+the accidentally duplicated launcher/upload steps before they cause an artifact
+name conflict. A new per-job artifact-name uniqueness regression fails before
+the correction and passes after it. This is workflow-only; retain the native
+run for evidence, then require CI on the corrected head.
+
+Nested startup follow-up: afdd47a5's actual token reports prove High/admin
+(12288) to Medium/non-admin (8192), and its Rust/UI coverage passed, but a
+PowerShell descendant failed initialization. Isolated diagnostic branch
+debug/standard-user-launcher reproduced 0xC0000142 in run 40240495655. Explicit
+same-user/System descriptors on the newly derived token/default DACL and owned
+process/thread objects fixed the unchanged nested probes in run 40240817830.
+Only that verified helper/regression is copied to this branch; never copy the
+diagnostic-only workflow. Source caller and machine security settings are
+untouched. Final local nested probes pass 4/4; preserve original failures and
+require current-head full CI plus wrapped packaged gates after this push.
+
+Packaged hosted gate passed on clean source 512bc0e3: nightly run 40241297374,
+startup job 121313605668, passed all 11 fault/cancellation cases and normal
+WebView2 save/restart/reload, stopped/no-grant, native-bridge and cleanup checks.
+Actual parent High/admin 12288 became Medium/non-admin 8192; both app launches
+quit gracefully. Coverage and one-minute manual soak passed too. Exact hash,
+metrics, requirement mapping and downloaded reports are in the CI repair
+evidence. This final handoff update changes documentation only; source remains
+512bc0e3. Require the documentation head's current full PR/nightly checks,
+record their live outcomes on PR #73, then make it ready for human review.
+Next delivery task is owner review/merge of #73; next implementation milestone
+is Q4 bounded backend/failure scenarios. Hardware/release gates remain separate.
+
+Final browser counterexample at fa15bcc5: run 40242614197 / job 121317676572
+failed the flaky guard (342 passed / 10 skipped / 1 flaky). The drag-handle
+scenario failed in beforeEach before the test body: the canvas chunk
+SessionFlowCanvas-x67S6i1T.js failed with ERR_NO_BUFFER_SPACE in 0.6 ms.
+The screenshot is blank dark; all other bundled assets loaded. Bundling alone
+did not eliminate the hosted loopback transport failure. Retain this evidence.
+The packaged native/11-case gates and coverage passed on this head independently.
+
+Repair only browser fixture delivery: fulfill the exact compiled HTML/assets
+from the dedicated build directory through Playwright context routing, avoiding
+unnecessary localhost TCP for fixture assets. Leave real HTTP API requests and
+backend RPC fixtures alone; keep full discovery, assertions, timeouts and flaky
+policy. Fail on missing assets and qualify this guard with an offline healthy
+canvas and an intentional missing-file response. Existing development/preview
+HTTP commands and the real packaged embedded-asset gate remain separate.
+Steps: add bounded build-path mapping/guard fixture; inherit it in both adapter
+fixtures; select it only in CI profile; add positive/negative real-Edge guard
+qualification; compare all 353 titles, run format/lint/typecheck, unit/policy
+checks and the complete local suite, then current hosted CI. Rollback restores
+the previous compiled preview transport without changing application behavior.
+
+Direct-delivery local validation passed: 343 Edge scenarios / 10 existing skips /
+zero flaky retries (9.1 minutes), exact 353-title discovery, both uncaught-error
+probes, offline healthy-canvas and seeded missing-asset guard probes, 743 UI unit
+tests, 5 wiring tests, 66 policy/runner tests, format/lint/typecheck, Node syntax,
+workflow YAML, docs (198 files / 1,097 links) and diff checks. Three-theme
+screenshots were inspected. The fa15bcc5 nightly completed its full 20-minute
+soak and all packaged/coverage gates; its only failing PR job was the retained
+TCP asset failure. Next: push this focused fixture repair, require current-head
+CI and record live outcomes on PR #73. Keep the flaky-test policy unchanged.
+
+Current-head nightly 40246053743 passed all 11 packaged guard cases, then
+ordinary smoke failed after its first successful save and exit 0: tracing.stop
+ran after the owned WebView closed. Repair the runner ordering by saving its
+initial trace before requesting quit; retain the archive and require it in the
+baseline qualification. Validate the actual Edge tracing lifecycle locally,
+then rerun full hosted CI/nightly because the owner's production pipe remains
+occupied. Requirements UI-11, NFR-14/15, ENG-04/05; no app behavior change.
+Rollback only the trace ordering/archive assertion together. Preserve this
+failure's report under target/ci-40246053743 and on the Actions run.
+
+Objective: close the remaining packaged-UI gate in the authorized
+[application-quality roadmap](application-quality.md). Test the exact release
+shell binary built for this SHA with its embedded UI; prove that the real
+native bridge reaches the backend, the canvas becomes usable, and session
+changes survive an app restart. Requirements UI-11/17, NFR-14/15 and
+ENG-02/05; this is not installer, accessibility, audio-device or endurance
+qualification.
+
+Prerequisites: Windows 11, pinned Rust 1.96.0 and Node 22.22.3, WebView2,
+locked UI dependencies, a clean release-shell build, and no running
+AudioRouter instance. The shell embeds the UI; this simple session route does
+not exercise plugin sidecars. Use disposable database/log/profile paths and no
+developer permission variables. Remote debugging is enabled only for the
+smoke child, on loopback with an ephemeral port. Do not change Windows
+defaults, drivers or the owner's profile.
+
+Decisions: extend the existing fresh-install measurement job after its shell
+build; add a dedicated runner which owns and cleans up only its spawned app.
+Reuse the production `canvas-readiness` probe and normal native
+`system.describe` API. The one-shot shell marker is unsuitable for a full UI
+run because repeated describes fail after the marker is created. Retain the existing fresh-install consent test. A passing
+packaged smoke does not replace installer or hardware gates.
+
+Ordered tasks:
+
+1. Build the release shell with `npm ci --prefix ui`, `npm --prefix ui run
+   build` and `cargo build --manifest-path src-tauri/Cargo.toml --release
+   --locked --features custom-protocol`.
+2. Add an opt-in runner that validates the shell path/hash, fails closed if a
+   prior app instance owns the desktop, launches with an isolated database,
+   logs and WebView2 profile, and records backend/UI readiness and first-run
+   permission state.
+3. Through the app UI, rename and save the disposable session; stop and
+   relaunch only the owned child; verify the saved session returns, audio is
+   stopped and device access remains denied until consent.
+4. Preserve bounded logs, screenshot, trace and JSON result under the runner's
+   output directory on failure. Upload the report on every CI outcome. Test
+   fail-closed and cleanup behavior, then run formatter, lint, relevant unit
+   checks, docs validation and the local packaged smoke.
+5. Inspect the full diff and record tested SHA, shell hash, OS/WebView2,
+   commands, outcomes and limitations. Leave PR creation for explicit approval.
+
+Validation matrix: Windows local run with the exact release shell and a
+disposable fresh-install database/profile; failure injection for missing
+binary, active instance and missing bridge/readiness; Node/UI format and lint;
+documentation links/fences; CI on the current branch SHA. No device or real
+audio activity is expected.
+
+Rollback: remove the dedicated smoke runner/test, its quality-workflow step,
+artifact upload and runbook references. No product behavior, persisted user
+data, session format, API or permission semantics change. Keep current
+fresh-install, browser and hardware checks intact.
+
+Initial environment check: repository clean on `main` at `0bfaee77`; the
+`Get-Process audiorouter-shell` query returned no named shell process, but
+`tasklist.exe` is denied in this environment. The smoke's default-pipe probe
+subsequently connected and failed closed before launching the child; do not
+infer that the pipe owner is absent or close it. An existing shell binary and
+UI Playwright dependency were rebuilt before use. Branch creation was denied
+because `.git` is read-only in this environment.
+
+Implementation started: added `tools/quality/packaged-shell-smoke.mjs`, wired
+it after the release-shell build in `quality.yml`, and added a policy regression
+for invocation/evidence retention. The runner uses isolated database/log and
+WebView2 paths, the default pipe, normal native API responses and
+`canvas-readiness`, verifies stopped/no-grant state, saves and reloads a
+session, and only terminates its own child. The smoke runner writes JSON and
+bounded diagnostics and fails closed when the default pipe is occupied.
+
+Initial validation on `0bfaee77` (Windows 11 Home, Node 22.22.3): UI and
+release-shell builds passed; docs/policy verification passed (195 Markdown
+files, 1,080 links; 64/64 tests); the missing-shell case retained its JSON
+report. The first packaged attempt failed closed at an occupied default pipe
+before launching a child. `actionlint` was unavailable.
+
+Main update: `origin/main` was already at `11737991` (`v0.0.23`); `git fetch`
+could not write `.git/FETCH_HEAD`, so the existing remote-tracking commit was
+used. With the Q3.2 edits stashed, local `main` fast-forwarded to that commit
+and the work was restored without conflicts. On `11737991`, `npm.cmd ci
+--prefix ui`, `npm.cmd --prefix ui run build` (typecheck included), and
+`cargo build --manifest-path src-tauri/Cargo.toml --release --locked
+--features custom-protocol` passed. The shell hash was
+`02d38c70a8ca845cc704f2d056f2c2a501200d4a1e07770916d076184182ce9e`.
+
+Investigation resolved 2026-10-25: the prior blank-window diagnosis was
+superseded by a controlled comparison. The same executable loads outside the
+tool's restricted process sandbox. Its standard-user token was confirmed
+(AdministratorToken=false, interactive session 1). The original smoke then
+failed because its create-only diagnostic marker made repeated
+`system.describe` requests fail. The runner now clears that inherited probe,
+uses normal native API responses, and selects the visible Session textbox.
+No application source change was needed. Full reproduction, original failures
+and requirement mapping: [packaged smoke evidence](evidence/2026-10-25-packaged-webview-smoke.md).
+
+The final runner passed locally on the same shell hash above: native API
+before/after restart, usable canvas, stopped state, denied device access,
+UI session rename/save and UI/backend reload, no uncaught UI errors, and child
+cleanup. Fresh-profile UI-ready was 794 ms; restart UI-ready was 758 ms on a
+warm machine. These are informational samples, not an OS-cold/timing gate.
+The final report is
+`%TEMP%/audiorouter-packaged-smoke-d5e59c40-7dde-4248-9a7f-a01f003879cf/result.json`.
+The extracted environment helper has a behavioral regression for mixed-case
+Windows variables, inherited grants/probes/debugger waits and preservation of
+the parent environment; policy/runner tests pass 65/65. Missing-executable
+qualification fails as expected and retains its JSON evidence.
+Initial startup-investigation checks: docs validation 196 files / 1,086 local links;
+65/65 policy/runner tests; Node syntax and runner/environment Prettier clean;
+workflow YAML and its packaged-smoke PowerShell block parse successfully;
+`git diff --check` clean. `actionlint` remains unavailable locally.
+
+Guard qualification completed locally on 2026-10-25: all 11 cases passed,
+including real Windows CTRL_BREAK before attachment, after readiness and after
+restart. Native bridge/readiness/document errors, shell exit, missing binary,
+occupied pipe and refused graceful quit each produced the expected failed
+runner result. Fault-hit counters, screenshot/HTML/trace retention and the
+disappearance of captured PID/creation-time pairs were verified. The final
+ordinary smoke also passed with both launches quitting gracefully. Original
+failed experiments and raw paths are retained in the
+[guard qualification evidence](evidence/2026-10-25-packaged-smoke-guard-qualification.md).
+Final guard-delivery checks passed: docs validation 197 files / 1,092 local
+links; 65/65 shared policy/runner tests; Node syntax; runner/environment/
+qualifier Prettier; workflow YAML; helper and both new workflow PowerShell
+blocks; ASCII-only PowerShell helper; and `git diff --check`. `actionlint` is
+unavailable locally. No Rust or UI source changed in this slice.
+
+Owner authorized finishing the checks, committing and pushing the reviewed
+branch on 2026-10-25. Delivery branch: `quality/packaged-webview-smoke` from
+`11737991`; fetched main was unchanged. The nightly workflow now qualifies
+its smoke guards before the ordinary packaged run and retains bounded case
+artifacts. No application source or device grants changed. Rollback removes
+the smoke/environment helper, qualifier/Windows helper, workflow wiring and
+corresponding policy tests together.
+
+Next Q3.2 task: review the documentation head's current PR/nightly checks,
+then hand PR #73 to the owner for review/merge. The owner explicitly authorized
+opening this PR; keep it draft until its current checks pass. The local fault
+and cancellation gates are complete; current hosted CI remains the completion
+gate. Earliest errors before
+initial CDP attachment are not individually retained; the initialization-error
+qualification runs after attachment, and startup readiness/native responses
+remain required. Uncatchable runner termination belongs to its external
+process-tree supervisor.
+
 ## Application inventory thread — 2026-10-24, owner request
 
 Objective: `apps.list` no longer enumerates on the backend's control thread
@@ -3591,3 +3881,32 @@ Objective: accessible, locally hosted explanatory animation runtime for the per-
 Tasks: add isolated site/assets/guide-animation.js and an embed contract; inspect browser output and controls across representative visual families, keyboard and reduced motion; parent integrates guide pages and runs site checks. Validation is explanatory UI evidence, not actual DSP or latency evidence. Rollback: remove this runtime and guide script references only. Risks: illustrations must remain explicitly illustrative, never claim measured DSP behavior. Next: build and inspect runtime.
 
 Animation runtime evidence (2026-10-14, Windows host): JavaScript parsed with Node vm.Script; headless installed Edge via explicit executablePath exercised all 16 visual types, seek(4) yielded 4000 ms paused state, repeated parameter updates/destroy left no stale figure. Eight parameter families changed actual SVG path geometry (gain, compressor, gate, limiter, duck, EQ, delay, pitch); destroy left zero browser animations. Reduced-motion initially showed static state; deliberate Play/Pause and keyboard ArrowRight on seek worked. Zero browser page errors. At 390 px EQ controls remain in bounds. Reviewed compressor image; scratch browser images at ui/test-results/guide-animation/{compressor,eq-mobile}.png (not committed documentation evidence). Playwright channel discovery initially missed Edge; explicit Program Files (x86) path resolved it. Library source contains no standalone HyperFrames composition; no video render or HyperFrames composition check was performed.
+
+Trace-order local validation: the owned Edge probe reproduces closed-target
+failure after close and saves its archive before close. Node syntax/Prettier,
+full typecheck, 66 policy/runner tests, documentation (198 files / 1,097 links)
+and diff checks pass. See the dated CI repair evidence for reports. Next:
+push this runner-only repair and require new-head PR CI/default nightly.
+
+Hosted cdfccd8a baseline now passes, including its archive, save/restart and
+two graceful exits. The refused-quit case reached its expected failure and
+owned-tree cleanup but qualification still requested the pre-repair trace.zip
+name. Correct that phase-specific assertion to require initial-trace.zip for
+refused quit only; other failures retain trace.zip. Keep screenshot/DOM and
+all cleanup/fault assertions. Validate against the downloaded native artifacts,
+then require the new-head full CI/nightly. No product changes.
+
+Final PR #73 head `dc5df6bf65253738a158af6f92eb206fa5fc8dca`: full Windows CI
+passed, including Edge (343 passed, 10 existing skips), strict Clippy,
+workspace/shell tests, and unsigned installer verification. New-head nightly
+passed its 20-minute engine soak, coverage, packaged startup timing, and all
+11/11 fault/cancellation qualification cases. The baseline smoke passed on
+Windows Server 2025 as a standard user (RID 8192, not admin), DevTools 462 ms,
+cold UI 1,308 ms, warm UI 1,350 ms, two graceful quits, and no UI errors; the
+working tree was clean and the native bridge had no grant before/after restart.
+Evidence and run links: [PR #73 CI repair record](evidence/2026-10-25-pr73-ci-repair.md).
+The earlier 86f31e19 timeout remains preserved; it did not recur, so its
+specific transient startup cause remains unknown. The bounded pre-cleanup
+process diagnostic and original 15-second gate remain. Next: mark PR #73 ready
+for review; do not merge. Code scanning reports 38 pre-existing main alerts,
+with zero open alerts on this PR head; see the alert review in the handoff.
