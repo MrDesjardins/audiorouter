@@ -180,3 +180,8 @@ its WebView connection is alive. The baseline qualification requires that
 archive; existing ZIP artifacts retain it even if restart subsequently fails.
 Finalizing after process exit races CDP disconnection and can fail an otherwise
 successful save/quit. Exit and restart assertions remain required.
+
+For a refused first quit, failure evidence uses the already finalized
+`initial-trace.zip` with its failure screenshot and DOM. Failures before trace
+finalization retain `trace.zip`; the qualifier requires the phase-specific
+nonempty archive and the same owned-tree cleanup evidence.

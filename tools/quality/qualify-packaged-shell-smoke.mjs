@@ -395,7 +395,10 @@ async function runCase(name, options) {
       if (
         ["bridge", "readiness", "page-error", "cleanup-fallback"].includes(name)
       ) {
-        for (const artifact of ["failure.png", "failure.html", "trace.zip"])
+        // Refused quit occurs after initial tracing has been finalized.
+        const trace =
+          name === "cleanup-fallback" ? "initial-trace.zip" : "trace.zip";
+        for (const artifact of ["failure.png", "failure.html", trace])
           assert.ok(
             (await stat(path.join(output, artifact))).size > 0,
             `${artifact} must be retained`,

@@ -3887,3 +3887,11 @@ failure after close and saves its archive before close. Node syntax/Prettier,
 full typecheck, 66 policy/runner tests, documentation (198 files / 1,097 links)
 and diff checks pass. See the dated CI repair evidence for reports. Next:
 push this runner-only repair and require new-head PR CI/default nightly.
+
+Hosted cdfccd8a baseline now passes, including its archive, save/restart and
+two graceful exits. The refused-quit case reached its expected failure and
+owned-tree cleanup but qualification still requested the pre-repair trace.zip
+name. Correct that phase-specific assertion to require initial-trace.zip for
+refused quit only; other failures retain trace.zip. Keep screenshot/DOM and
+all cleanup/fault assertions. Validate against the downloaded native artifacts,
+then require the new-head full CI/nightly. No product changes.
