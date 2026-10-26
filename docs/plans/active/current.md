@@ -1,5 +1,9 @@
 # Active plan — post-0.0.8 maintenance
 
+## Active task: Code-scanning remediation (2026-10-26)
+
+The owner requested fixes for GitHub CodeQL alerts after PR #73 merged. Current main is `8ecf9f91`; the initial alert count was 38; 37 remain open after alert #27 was dismissed as a confirmed test-only fixture. Follow the scoped requirements, decisions, validation matrix and rollback in [Code-scanning remediation](code-scanning-remediation.md). Next: finish the source-to-sink review, then fix verified production exposures and record accurate dispositions for test-only/rule-mismatch findings.
+
 ## Release 0.0.23 — 2026-10-24, owner request
 
 The owner tested the local merge of D1 (`feature/device-used-by`), D2
