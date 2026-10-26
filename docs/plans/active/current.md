@@ -3896,12 +3896,17 @@ refused quit only; other failures retain trace.zip. Keep screenshot/DOM and
 all cleanup/fault assertions. Validate against the downloaded native artifacts,
 then require the new-head full CI/nightly. No product changes.
 
-Final 86f31e19 checks: full PR CI passed, but nightly failed the baseline
-DevTools endpoint deadline after `shell.instanceCheck=ready`; all 10 later
-fault/cancel cases passed. Diagnosis did not have process state before owned
-cleanup. The new timeout report captures bounded descendant health and port-file
-state without commands, environment or dumps. Windows helper/launcher and policy
-tests pass 71/71 outside the restricted process sandbox; typecheck/docs/diff
-checks pass. Next: push diagnostics, inspect their new-head run; keep PR draft
-until browser CI and a complete nightly succeed. Preserve original 15-second
-startup limit and failed run.
+Final PR #73 head `dc5df6bf65253738a158af6f92eb206fa5fc8dca`: full Windows CI
+passed, including Edge (343 passed, 10 existing skips), strict Clippy,
+workspace/shell tests, and unsigned installer verification. New-head nightly
+passed its 20-minute engine soak, coverage, packaged startup timing, and all
+11/11 fault/cancellation qualification cases. The baseline smoke passed on
+Windows Server 2025 as a standard user (RID 8192, not admin), DevTools 462 ms,
+cold UI 1,308 ms, warm UI 1,350 ms, two graceful quits, and no UI errors; the
+working tree was clean and the native bridge had no grant before/after restart.
+Evidence and run links: [PR #73 CI repair record](evidence/2026-10-25-pr73-ci-repair.md).
+The earlier 86f31e19 timeout remains preserved; it did not recur, so its
+specific transient startup cause remains unknown. The bounded pre-cleanup
+process diagnostic and original 15-second gate remain. Next: mark PR #73 ready
+for review; do not merge. Code scanning reports 38 pre-existing main alerts,
+with zero open alerts on this PR head; see the alert review in the handoff.
