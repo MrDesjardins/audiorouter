@@ -333,6 +333,8 @@ pub struct ControlPlane {
     recovery_tracker: CrashRecoveryTracker,
     os_suspended_sessions: Vec<EntityId>,
     os_suspended_native_sessions: Vec<EntityId>,
+    #[cfg(windows)]
+    sleep_route_recovery: Option<safety::SleepRouteRecovery>,
     virtual_buses: VirtualBusRegistry,
     virtual_bus_routes: VirtualBusRouteRegistry,
     virtual_bus_route_revision: u64,
@@ -501,6 +503,8 @@ impl ControlPlane {
             recovery_tracker: CrashRecoveryTracker::default(),
             os_suspended_sessions: Vec::new(),
             os_suspended_native_sessions: Vec::new(),
+            #[cfg(windows)]
+            sleep_route_recovery: None,
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
             virtual_bus_route_revision: 0,
