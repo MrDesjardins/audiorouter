@@ -40,9 +40,17 @@ Analysis records identify the original findings on `11737991135112c7085f6b45a887
   identified in these flows.
 - `EntityId::new` accepts an arbitrary string. Although resource IDs are not
   authentication secrets and SEC-10 requires affected-resource audit context,
-  an ID may be user chosen. Therefore the 22 log alerts were not dismissed;
-  any proposed redaction must first distinguish durable replay data and API
-  output from actual default logs and preserve those contracts.
+  an ID may be user chosen. Follow-up source review found no production
+  diagnostic logger emitting raw session IDs: the flagged paths are test
+  fixtures/assertions, API/resource results, in-memory events, or the local
+  idempotency journal. These are not default diagnostic/support logs. The API
+  returns IDs to the requesting client by contract; the local database stores
+  them as required resource identity and replay state. No blanket redaction is
+  warranted because it would reduce debugging value or break those contracts.
+  Keep the 22 findings open until the new CodeQL run confirms the exact alert
+  locations and rule behavior; if any instance resolves to a real log sink,
+  preserve correlation with a stable session-scoped fingerprint and retain
+  the raw ID only in the required API/database paths.
 - `crates/control/src/obs.rs` follows OBS WebSocket v5's mandatory challenge
   response formula. SEC-15 states the password is memory-only, never logged or
   stored. Do not change the formula or misclassify it as password storage.
@@ -82,6 +90,7 @@ opening a PR still needs the owner's explicit approval under `AGENTS.md`.
 
 Inspect the complete diff, commit and push the focused branch, then request the
 owner's approval before opening a PR. Resolve with the owner whether arbitrary
-session IDs should be treated as sensitive in default diagnostic logs; keep
-the 22 alerts open until the actual sink and required data-retention contract
-are resolved.
+session IDs are not secrets, and no production diagnostic log sink was found.
+Keep the 22 alerts open pending new-head CodeQL evidence; do not redact API or
+database resource IDs. If a real diagnostic sink is identified, use a stable
+session-scoped fingerprint to retain log correlation.

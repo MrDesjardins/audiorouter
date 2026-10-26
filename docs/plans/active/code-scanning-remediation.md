@@ -34,10 +34,13 @@ date.
   dismiss them as “used in tests” rather than weakening the query globally.
 - Review every cleartext-logging result against its actual source, sink and
   data. `EntityId::new` accepts arbitrary strings up to later boundary checks,
-  so IDs can contain user-chosen data. Do not dismiss session-ID alerts merely
-  because IDs are normally opaque. Determine whether each sink is a log,
-  API response, in-memory event, or the local idempotency journal. Preserve
-  operation replay and event-filtering contracts.
+  so IDs can contain user-chosen data. Follow-up source review found the
+  session-ID flows are test fixtures/assertions, API/resource results,
+  in-memory events, or the local idempotency journal; no production diagnostic
+  logger emitting raw session IDs was found. Do not redact API/database IDs.
+  Keep the findings open pending exact new-head CodeQL locations; if a real
+  diagnostic sink is identified, use a stable session-scoped fingerprint to
+  preserve debugging correlation.
 - Replace the fixed browser-test label interpolation with a static expression
   selected from the closed `guide.kind` enum. Keep the markdown slug utility's
   HTML-free lookup-only purpose and the scheduler decoder's poisoned-extension
@@ -45,11 +48,12 @@ date.
 
 ## Ordered work
 
-1. Read each alert's source/sink evidence and inspect current code. Identify
-   which logger or persisted diagnostic path actually receives session ids.
-2. Fix any production log/diagnostic exposure without removing required
-   resource correlation or changing API response values. Add only focused
-   regression coverage for an actual behavior change.
+1. Review exact source/sink locations from the new-head CodeQL report and
+   compare with current code. Confirm whether any instance reaches a production
+   diagnostic logger.
+2. If a real diagnostic exposure exists, redact its raw ID while preserving
+   correlation. Add focused regression coverage only if runtime behavior
+   changes; do not alter required API or database resource identity.
 3. Apply the small browser expression hardening and address the C++ test
    warning only if a safe, intent-preserving code change makes it clearer.
 4. Dismiss verified test-only and rule-mismatch alerts individually with
@@ -81,10 +85,11 @@ security-setting changes are in scope.
 
 ## Evidence and next action
 
-The source-to-sink review and a disposition boundary are in
+The source-to-sink review and disposition are in
 `evidence/2026-10-26-code-scanning-remediation.md`. GitHub automatic review
 rejected one bulk dismissal attempt because it combined 22 session-ID findings
 without proving every identifier non-sensitive. Do not repeat that action by
-splitting it into smaller batches. Continue with source fixes and safe
-verification; if a disposition decision still requires owner judgment, stop
-before changing alert state and ask the owner.
+splitting it into smaller batches. The source review found no production
+diagnostic logger emitting raw session IDs; retain resource IDs in API and
+database flows for usability and replay. Confirm exact alert sites from the
+new-head report before any individual dismissals.
