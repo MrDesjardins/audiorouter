@@ -1,5 +1,18 @@
 # Active plan — post-0.0.8 maintenance
 
+## Active task: Dependabot major/minor only (2026-10-26)
+
+The owner asked to receive major and minor dependency updates, but no patch-only
+updates. On branch `deps/minor-major-no-patch`, update all three ecosystems in
+`.github/dependabot.yml` to ignore semver patch updates while retaining the
+existing grouping and manual/automatic merge boundaries. npm and GitHub Actions
+minor updates may still auto-merge after CI; Cargo minors and all majors stay
+manual. Validation: inspect the YAML and workflow diff, run the documentation
+link check and `git diff --check`; do not run application tests for this
+configuration-only change. Rollback: revert the isolated config/docs commit.
+Next: finish validation, commit and push the branch, then report the branch and
+exact policy.
+
 ## Release 0.0.23 — 2026-10-24, owner request
 
 The owner tested the local merge of D1 (`feature/device-used-by`), D2

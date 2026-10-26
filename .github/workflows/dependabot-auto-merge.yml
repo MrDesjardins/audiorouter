@@ -2,12 +2,12 @@ name: Dependabot auto-merge
 
 # Merges low-risk Dependabot pull requests once CI passes, so routine
 # updates need no click. Policy (see .github/dependabot.yml for the groups):
-#   - GitHub Actions and npm: minor and patch updates merge automatically;
-#     CI covers them with the UI unit and Edge suites.
-#   - Cargo: patch updates only. Minor crate updates can touch the audio
-#     path, which CI cannot qualify (hosted runners have no audio endpoints;
+#   - GitHub Actions and npm: minor updates merge automatically; patch-only
+#     updates are ignored in .github/dependabot.yml.
+#   - Cargo: no updates merge automatically. Minor crate updates can touch the
+#     audio path, which CI cannot qualify (hosted runners have no audio endpoints;
 #     AGENTS.md asks for the live sine-continuity check), so they stay manual.
-#   - Major updates never merge automatically.
+#   - Major updates stay manual in every ecosystem.
 #
 # Two steps, because Dependabot runs get no write token beyond what a job
 # asks for and GitHub's own auto-merge would need a required-checks rule
@@ -55,9 +55,8 @@ jobs:
           # update-type is the largest change in a grouped pull request.
           eligible=false
           case "$ECOSYSTEM:$UPDATE_TYPE" in
-            github_actions:version-update:semver-minor | github_actions:version-update:semver-patch) eligible=true ;;
-            npm_and_yarn:version-update:semver-minor | npm_and_yarn:version-update:semver-patch) eligible=true ;;
-            cargo:version-update:semver-patch) eligible=true ;;
+            github_actions:version-update:semver-minor) eligible=true ;;
+            npm_and_yarn:version-update:semver-minor) eligible=true ;;
           esac
           echo "$ECOSYSTEM $UPDATE_TYPE: eligible=$eligible" >> "$GITHUB_STEP_SUMMARY"
           if [ "$eligible" = true ]; then
