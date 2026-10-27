@@ -34,7 +34,9 @@ static int SelfTest() {
     ULONG next = 0x100, previous = 0x200;
     std::memcpy(bytes, &next, 4); std::memcpy(bytes + 4, &previous, 4);
     bytes[8] = 24; bytes[9] = 8; bytes[12] = 6; bytes[13] = 0; bytes[14] = 5;
-    std::memset(bytes + 24, 0xff, 16);
+    // Poison appended fixture bytes to prove the decoder ignores them; this is
+    // test data, not an attempt to erase sensitive material.
+    std::fill_n(bytes + 24, 16, static_cast<BYTE>(0xff));
     SwitchFields decoded{};
     unsigned checks = 0;
 #define CHECK(condition) do { if (!(condition)) { std::fprintf(stderr, "Failed line %d\n", __LINE__); return 1; } ++checks; } while (0)

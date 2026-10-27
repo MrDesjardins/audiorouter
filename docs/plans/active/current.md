@@ -13,6 +13,10 @@ configuration-only change. Rollback: revert the isolated config/docs commit.
 Next: finish validation, commit and push the branch, then report the branch and
 exact policy.
 
+## Active task: Code-scanning remediation (2026-10-26)
+
+The owner requested fixes for GitHub CodeQL alerts after PR #73 merged. Current main is `8ecf9f91`; the initial alert count was 38; 37 remain open after alert #27 was dismissed as a confirmed test-only fixture. Follow the scoped requirements, decisions, validation matrix and rollback in [Code-scanning remediation](code-scanning-remediation.md). Next: finish the source-to-sink review, then fix verified production exposures and record accurate dispositions for test-only/rule-mismatch findings.
+
 ## Sleep/resume voice recovery — 2026-10-26, owner request
 
 Objective: restore the previously running voice route after Windows sleep without Stop/Play. Requirements CAP-02/03/11/12/13, STATE-03/11, SEC-06 and NFR-10/11; evidence and proposed scenarios are in [the investigation](evidence/2026-10-26-sleep-resume-voice-loss.md). Base: freshly fetched origin/main 7b1364dc, isolated branch fix/sleep-resume. User will try the local build. Windows and real endpoints are available, but actual suspend/resume, signal, recorder and endurance qualification require an attended run.
