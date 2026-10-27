@@ -1,6 +1,6 @@
 //! Windows OS-session transition listener.
 //!
-//! The listener owns a message-only window on a dedicated thread. The window
+//! The listener owns a hidden top-level window on a dedicated thread. The window
 //! procedure does only bounded channel delivery; backend RPC, endpoint
 //! enumeration, and session lifecycle work stay on the receiver thread.
 
@@ -17,9 +17,9 @@ use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW,
     GetWindowLongPtrW, PostQuitMessage, PostThreadMessageW, RegisterClassW, SetWindowLongPtrW,
-    TranslateMessage, CREATESTRUCTW, GWLP_USERDATA, HWND_MESSAGE, MSG, PBT_APMRESUMEAUTOMATIC,
-    PBT_APMSUSPEND, WM_APP, WM_NCCREATE, WM_NCDESTROY, WM_POWERBROADCAST, WM_WTSSESSION_CHANGE,
-    WNDCLASSW, WTS_SESSION_LOCK, WTS_SESSION_LOGOFF,
+    TranslateMessage, CREATESTRUCTW, GWLP_USERDATA, MSG, PBT_APMRESUMEAUTOMATIC, PBT_APMSUSPEND,
+    WM_APP, WM_NCCREATE, WM_NCDESTROY, WM_POWERBROADCAST, WM_WTSSESSION_CHANGE, WNDCLASSW,
+    WTS_SESSION_LOCK, WTS_SESSION_LOGOFF,
 };
 
 const STOP_MESSAGE: u32 = WM_APP + 1;
@@ -128,7 +128,7 @@ fn run_message_loop(
     }
 }
 
-/// Create the message-only listener window on the calling thread.
+/// Create the hidden top-level listener window on the calling thread.
 ///
 /// The returned `context` is the boxed sender the window procedure reads
 /// through GWLP_USERDATA. The caller owns it and must free it with
@@ -162,7 +162,8 @@ unsafe fn create_message_window(
         0,
         0,
         0,
-        Some(HWND_MESSAGE),
+        // Power events are broadcast; message-only windows do not receive them.
+        None,
         None,
         Some(instance.into()),
         Some(sender.cast()),
