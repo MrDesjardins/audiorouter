@@ -97,9 +97,12 @@ for (const guide of manifest.guides.filter(
   const ready = await evaluate(
     `(async () => { for (let i = 0; i < 100; i++) { if (document.querySelector("[data-guide-demo]")?.dataset.signalReady === "true") return "ready"; await new Promise((r) => setTimeout(r, 100)); } return "not-ready"; })()`,
   );
-  const label = guide.kind === "recorder" ? "Record example" : "Play example";
+  const buttonExpression =
+    guide.kind === "recorder"
+      ? '[...document.querySelectorAll(".guide-animation button")].find((b) => b.textContent.trim() === "Record example")'
+      : '[...document.querySelectorAll(".guide-animation button")].find((b) => b.textContent.trim() === "Play example")';
   const node = await send("script.evaluate", {
-    expression: `[...document.querySelectorAll(".guide-animation button")].find((b) => b.textContent.trim() === ${JSON.stringify(label)})`,
+    expression: buttonExpression,
     target: { context },
     awaitPromise: false,
   });
