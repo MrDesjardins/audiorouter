@@ -13,9 +13,19 @@ configuration-only change. Rollback: revert the isolated config/docs commit.
 Next: finish validation, commit and push the branch, then report the branch and
 exact policy.
 
-## Active task: Code-scanning remediation (2026-10-26)
+## Active task: Code-scanning remediation (2026-10-27)
 
-The owner requested fixes for GitHub CodeQL alerts after PR #73 merged. Current main is `8ecf9f91`; the initial alert count was 38; 37 remain open after alert #27 was dismissed as a confirmed test-only fixture. Follow the scoped requirements, decisions, validation matrix and rollback in [Code-scanning remediation](code-scanning-remediation.md). Next: finish the source-to-sink review, then fix verified production exposures and record accurate dispositions for test-only/rule-mismatch findings.
+Objective: investigate remaining CodeQL alerts while preserving SEC-10/13/15
+and API identity contracts. PR #74 merged the two verified tooling fixes.
+Current main 26de4a4f has 35 open alerts; the current Rust and JavaScript
+SARIF source/sink review is recorded in [the evidence](evidence/2026-10-26-code-scanning-remediation.md#current-main-sarif-data-flow-review-2026-10-27).
+Requirements, validation and rollback: [remediation plan](code-scanning-remediation.md).
+The follow-up found raw user-chosen session IDs in shell.jsonl; the branch
+replaces them with process-scoped keyed references and removes legacy IDs
+from exported bundles. Focused and full shell tests and both Clippy runs pass;
+see the evidence for exact commands and remaining alert-review limitations.
+Next: inspect the final diff, commit and push the branch, and run new-head CI.
+Do not repeat the rejected bulk dismissal. Live audio testing is independent.
 
 ## Sleep/resume voice recovery — 2026-10-26, owner request
 

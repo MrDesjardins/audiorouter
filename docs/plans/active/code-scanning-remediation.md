@@ -34,10 +34,10 @@ date.
   dismiss them as “used in tests” rather than weakening the query globally.
 - Review every cleartext-logging result against its actual source, sink and
   data. `EntityId::new` accepts arbitrary strings up to later boundary checks,
-  so IDs can contain user-chosen data. Follow-up source review found the
-  session-ID flows are test fixtures/assertions, API/resource results,
-  in-memory events, or the local idempotency journal; no production diagnostic
-  logger emitting raw session IDs was found. Do not redact API/database IDs.
+  so IDs can contain user-chosen data. The 2026-10-27 follow-up found that shell.jsonl writes user-chosen
+  session IDs even though the reported CodeQL flows do not identify that sink.
+  Replace those log values with keyed process-scoped references and redact
+  legacy entries during support-bundle export. Do not redact API/database IDs.
   Keep the findings open pending exact new-head CodeQL locations; if a real
   diagnostic sink is identified, use a stable session-scoped fingerprint to
   preserve debugging correlation.
@@ -89,7 +89,6 @@ The source-to-sink review and disposition are in
 `evidence/2026-10-26-code-scanning-remediation.md`. GitHub automatic review
 rejected one bulk dismissal attempt because it combined 22 session-ID findings
 without proving every identifier non-sensitive. Do not repeat that action by
-splitting it into smaller batches. The source review found no production
-diagnostic logger emitting raw session IDs; retain resource IDs in API and
-database flows for usability and replay. Confirm exact alert sites from the
+splitting it into smaller batches. The current review found raw IDs in shell.jsonl; see the dated evidence.
+Retain resource IDs in API and database flows for usability and replay. Confirm exact alert sites from the
 new-head report before any individual dismissals.

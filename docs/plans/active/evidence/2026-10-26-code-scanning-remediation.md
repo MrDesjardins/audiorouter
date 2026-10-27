@@ -94,3 +94,115 @@ session IDs are not secrets, and no production diagnostic log sink was found.
 Keep the 22 alerts open pending new-head CodeQL evidence; do not redact API or
 database resource IDs. If a real diagnostic sink is identified, use a stable
 session-scoped fingerprint to retain log correlation.
+
+## Follow-up inventory — 2026-10-27
+
+After PRs #74 and #79 merged, GitHub's open-alert API returned 35 findings:
+22 `rust/cleartext-logging`, 11 `rust/hard-coded-cryptographic-value`, one
+`rust/weak-sensitive-data-hashing`, and one
+`js/incomplete-multi-character-sanitization`. The prior browser-expression and
+C++ self-test findings are absent from this open inventory. This is a snapshot,
+not a dismissal or a conclusion that all remaining findings are false positives.
+
+The 22 logging findings report nine locations in the M03 example, five in
+recording tests, one CLI test, one CLI entry point, four domain locations,
+one plugin location and one persistence location. Initial comparison shows
+that a reported line alone is insufficient to establish a sink: alert #9's
+message includes paths in persistence and storage while its primary location
+points into the domain file. Inspect the individual data-flow paths and the
+source revision before classifying each finding. No alert state was changed.
+
+Next: obtain and inspect the individual CodeQL data-flow paths, map each to
+its current source and sink, and record an evidence-backed disposition under
+SEC-10/13/15. Keep API and database identities intact and retain the earlier
+automatic-review restriction on bulk dismissal. Rollback: discard this
+follow-up evidence; no runtime behavior has changed.
+
+## Current-main SARIF data-flow review — 2026-10-27
+
+Downloaded the GitHub CodeQL Rust analysis `2033284868`, category
+`/language:rust`, for main commit `26de4a4f1af13577cd644f333f0a47b2b613afb9`.
+The SARIF contains 22 cleartext-logging result locations and four paths for
+most locations. It contains findings even when an alert has been dismissed;
+alert state must be taken from the alert API separately. Source lines below
+refer to this exact revision, not an earlier scan.
+
+- Alerts #4–9 terminate at six collection expressions:
+  `persistence.rs:530` (`operation_order`), `plugins.rs:594`
+  (`plugin_inventory_order`), and `domain/src/lib.rs:2620`, `:2892`,
+  `:3355`, `:710` (`events`, crash timestamps, committed-key order, buses).
+  Each result has four paths beginning at `load_active_session_id` or
+  `validate_session_id`; the trace propagates through a whole `ControlPlane`
+  receiver into fields of other objects. These reported sinks are in-memory
+  collections, not log-file writes. The collections still warrant their own
+  retention/privacy review; the SARIF path alone does not show a session ID
+  reaches any of those particular fields.
+- Alert #16 ends at `crates/cli/src/main.rs:22`, `println!("{output}")`.
+  The four SARIF paths converge through a generic dispatcher and claim to reach
+  `presets_command` (`cli/src/lib.rs:317–324`), which issues the fixed
+  `presets.list` request; the scanner merges return values from unrelated
+  dispatcher arms. CLI stdout is a caller-requested result and can be
+  redirected to a file; it is not the automatic diagnostic logger. Do not
+  infer that session IDs are secret-free, or that arbitrary CLI output is
+  never retained. Resource identities in requested API results are contractual.
+- Alert #10 is an assertion in `cli/src/lib.rs:4557`; #11–15 are assertions or
+  failure messages in `control/src/recording_tests.rs:282,399,403,409,494`.
+  Those test fixtures may print values when tests fail, but are not shipped
+  diagnostic logging paths. Alert #17–25 are the VM cable example at lines
+  83,178,182,190,209,234,248,260,262; that tool constructs an in-memory
+  session with fixed ID `vm-cable-route` and prints test responses or
+  diagnostics. Its user-supplied endpoint arguments remain distinct from the
+  flagged session-ID flows; this analysis does not certify all example output.
+- The current JavaScript analysis `2033263113` locates the sanitization alert
+  at `tools/docs/validate.mjs:18–19`: `slugify` creates a heading lookup key;
+  its result is used for `Set` membership in Markdown link validation, not
+  inserted into HTML. Its regex is not a general-purpose HTML sanitizer.
+- The Rust report flags `obs.rs:700`: SHA-256 participates in the fixed OBS
+  v5 challenge-response protocol, not a password storage scheme (SEC-15).
+  Other reported hard-coded credentials are within `obs_tests.rs` or the
+  `#[cfg(test)]` modules of the protocol and Windows audio network files.
+  Verify the current GitHub state per alert before proposing a disposition.
+
+This is a review of reported flows, not proof that every possible diagnostic
+path is safe. No alert was dismissed, and no bulk dismissal was retried after
+the earlier automatic-review rejection. Next: inspect the remaining fixture
+locations and any separate real diagnostics paths, then record individually
+supported decisions. The Rust and JavaScript SARIF reports can be retrieved
+read-only from the GitHub analysis IDs above.
+
+## Confirmed shell diagnostic exposure — 2026-10-27
+
+The earlier assertion that no production diagnostic logger emits raw session
+IDs was incorrect. `src-tauri/src/main.rs` writes request `sessionId` directly
+into `shell.jsonl` when it consists of permitted ASCII characters; user-chosen
+IDs can contain private information even when they meet that filter. Support
+bundles currently copy old shell-log lines after path-only redaction, so they
+can include those historical IDs. This is independent of the reported CodeQL
+logging paths. Scope: SEC-10; reproduction is a shell RPC with an ordinary
+user-chosen alphanumeric ID, and the affected versions include the current
+0.0.23 development build.
+
+Decision and ordered work: replace new raw shell-log IDs with process-scoped
+keyed fingerprints for correlation, preserving API identity and request IDs.
+Remove legacy `sessionId` from shell log records at support-bundle export;
+reject malformed shell log lines in the bundle rather than leaking their raw
+contents. Preserve old local logs untouched. Add focused tests for stable and
+distinct fingerprints, raw ID absence, and legacy/malformed bundle records;
+run shell tests, formatting and Clippy, documentation validation and inspect
+the diff. Hardware is not needed. Revert the narrow shell logging and bundle
+changes to roll back; old logs remain on disk. Next: implement and validate
+without interrupting the owner's running test build.
+
+Validation on Windows 2026-10-27: shell regression tests passed for the
+logged session reference, raw-ID absence, and legacy/malformed bundle lines;
+`cargo test --manifest-path src-tauri/Cargo.toml --locked --offline` passed
+85 tests with 4 ignored. Workspace and shell Clippy with all targets/features,
+`--locked --offline` and `-D warnings` passed. Both `cargo fmt --check`
+commands, `node tools/docs/validate.mjs` and `git diff --check` passed.
+Three earlier focused workspace test commands were cancelled during compilation
+to avoid competing with the owner's live audio test; they did not pass or fail.
+The later shell validation ran with one below-normal-priority build worker and
+did not open the owner's audio route. No CodeQL alert disposition was changed.
+Next: review the final diff, commit this isolated fix, and obtain a new-head CI
+scan. The existing raw local log files persist until rotation or user removal;
+export from the fixed build strips the legacy top-level field.
