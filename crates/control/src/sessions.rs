@@ -305,6 +305,8 @@ impl ControlPlane {
         candidate: Option<&Session>,
     ) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
+        #[cfg(windows)]
+        self.cancel_sleep_route_recovery(id);
         let saved_session = self.get_session(id)?.clone();
         let saved_revision = saved_session.revision;
         let session = if let Some(candidate) = candidate {
@@ -608,6 +610,8 @@ impl ControlPlane {
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
+        #[cfg(windows)]
+        self.cancel_sleep_route_recovery(id);
         // Plugins lose their settings when their workers stop; keep them.
         self.capture_playing_plugin_states(id);
         let recorder_node_ids = self

@@ -32,6 +32,12 @@ or endpoint state.
 
 ## 1. Prepare the toolchain
 
+After Windows sleep, a previously running saved multi-path session is
+reopened automatically when its exact devices return. If it remains stopped,
+check the selected devices and use Play to try again. Other native route
+types still require manual restart; an active recording is not resumed into
+its old file. Privacy mute remains in effect.
+
 Use a Windows 11 x64 machine with the repository's Rust toolchain and Visual
 Studio C++ tools. The native SDK/WDK dependency versions and the repository-
 local VST3 SDK checkout are documented in [SDK setup](sdk-setup.md).
@@ -50,19 +56,21 @@ or packaging it, run from the repository root:
 
 ```powershell
 npm.cmd run build --prefix ui
-cargo build --manifest-path src-tauri/Cargo.toml --target-dir src-tauri/target
-cargo build --manifest-path Cargo.toml -p audiorouter-plugin-host --bin audiorouter-plugin-worker --target-dir src-tauri/target
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\m06-vst3-worker\build.ps1 -Release -Output src-tauri\target\debug\audiorouter-vst3-worker.exe
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\stage-mcp-cli.ps1 -Profile debug -Build
+cargo build --manifest-path src-tauri/Cargo.toml --locked --release --features custom-protocol --target-dir src-tauri/target
+cargo build --manifest-path Cargo.toml -p audiorouter-plugin-host --bin audiorouter-plugin-worker --locked --release --target-dir src-tauri/target
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\m06-vst3-worker\build.ps1 -Release -Output src-tauri\target\release\audiorouter-vst3-worker.exe
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\stage-mcp-cli.ps1 -Profile release -Build
 ```
 
 The shell and matching plugin workers are written beside each other in
-`src-tauri\target\debug\` as `audiorouter-shell.exe`,
+`src-tauri\target\release\` as `audiorouter-shell.exe`,
 `audiorouter-plugin-worker.exe` (VST2) and `audiorouter-vst3-worker.exe`
 (VST3, built from `tools\m06-vst3-worker` with the SDK from step 1). Keep
 them together; building the shell alone leaves plugin nodes unable to start. The shell also explains the
 expected worker locations and repair steps if it is missing.
-MCP also requires the matching `audiorouter-cli.exe` beside the shell. The
+The `custom-protocol` feature is required even for a release Cargo build;
+without it the shell opens the development server URL instead of the embedded
+UI. MCP also requires the matching `audiorouter-cli.exe` beside the shell. The
 staging command builds the workspace CLI, copies it beside the shell, and
 checks that their SHA-256 hashes match. For a release shell use `-Profile
 release -Build`; no driver package is required for this local repair. Disconnect
