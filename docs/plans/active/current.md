@@ -3939,3 +3939,41 @@ specific transient startup cause remains unknown. The bounded pre-cleanup
 process diagnostic and original 15-second gate remain. Next: mark PR #73 ready
 for review; do not merge. Code scanning reports 38 pre-existing main alerts,
 with zero open alerts on this PR head; see the alert review in the handoff.
+
+## PR #81 — TypeScript dependency compatibility — 2026-10-27
+
+Objective: repair the grouped npm major update without weakening the compiler,
+lint, build, or Node runtime checks (ENG-02/04). PR #81 upgrades the API-facing
+`typescript` package to 7.0.2 even though TypeScript 7 lacks the JavaScript API
+used by typescript-eslint and the Stream Deck Rollup plugin. CI fails at UI
+`npm ci` and Stream Deck build. TypeScript 7.0.2 already runs as the explicit
+`typescript-7` typechecker in all three projects; TypeScript 6.0.3 is required
+for API consumers. Examine the Node typings update against CI's Node 22 runtime.
+
+Tasks: restore the supported compiler API dependency, retain useful compatible
+updates, regenerate lockfiles without peer-dependency bypasses, and prevent
+repeated incompatible API upgrades if appropriate. Validate clean npm installs,
+all three typechecks, UI lint/format/tests/build, contract drift, Stream Deck
+tests/build, documentation and diff; hosted Windows/Edge CI remains required.
+Rollback: revert the dependency/configuration changes; no audio hardware,
+driver or external credentials are required for the local tooling checks.
+
+PR #81 repair (Windows, Node 22.22.3): npm registry reports
+`typescript-eslint` 8.72.1 still requires TypeScript <6.1. Keep TypeScript
+6.0.3 as the API package in all three projects, keep TypeScript 7.0.2 as the
+explicit typechecker, and ignore only the incompatible 7.0.2 API-package
+proposal in Dependabot. Retain the requested UI `@types/node` 26.6.5 upgrade;
+CI runs Node 22.22.3, so the newer typings can expose APIs absent from Node 22
+and do not establish runtime compatibility for newly written Node code.
+`undici` requires Node >=22.19.0, compatible with the pin.
+
+Clean npm installs succeeded in all three projects. TypeScript 7 checks,
+UI lint and format, contracts drift (131 methods, 36 node kinds, 20
+processors, 22 event categories), and Stream Deck 26 tests and build passed.
+UI tests (743 passed) and production build also passed after minimizing the
+lockfile and repeating a clean install. Stream Deck Rollup reported two uninterpretable PURE
+annotations in third-party zod comments and one zod circular dependency; they
+remain in the third-party package, not introduced by this change. Vite reports
+the existing 608 kB application chunk warning; bundle splitting is outside
+this dependency repair. Hosted new-head CI and Edge remain required. Next:
+finish final-lock checks, inspect diff, push the fix to PR #81 and inspect CI.

@@ -44,6 +44,10 @@ updates:
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-patch"]
+      # The API-using tooling needs TypeScript 6 until the 7.0 API exists.
+      # The separate typescript-7 alias remains the typechecking compiler.
+      - dependency-name: typescript
+        versions: ["7.0.2"]
     groups:
       npm-minor:
         update-types: [minor]
