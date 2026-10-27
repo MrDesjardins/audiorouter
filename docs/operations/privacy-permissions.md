@@ -106,6 +106,11 @@ passes through a path filter (`C:\…`, `\\server\…`, `/home/…` become
 yourself. **Open logs folder** opens File Explorer on the folder instead, and
 **Copy folder path** copies its location.
 
+New shell log entries use a process-specific session reference instead of the
+session ID. The reference can correlate entries within one app run and changes
+after restart. Support bundles omit session IDs from older shell log entries;
+those older IDs can still exist in the local log files until they rotate.
+
 To trace one action across the logs, use its request ID. The window sends a
 short `requestId` (8 characters such as `K7Q2M9XD`) with every request; the
 tray makes one per action, the localhost HTTP adapter one per HTTP request

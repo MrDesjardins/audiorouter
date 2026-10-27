@@ -47,7 +47,13 @@ pub fn collect(
                 let tail = tail_lines(&text, BUNDLE_LOG_LINES, BUNDLE_LOG_BYTES);
                 let redacted = tail
                     .lines()
-                    .map(redact_user_paths)
+                    .map(|line| {
+                        if name == "shell.jsonl" {
+                            redact_shell_log_line(line)
+                        } else {
+                            redact_user_paths(line)
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join("\n");
                 let lines = tail.lines().count();
@@ -109,6 +115,19 @@ pub fn collect(
         ),
     );
     SupportBundle { entries }
+}
+
+// Older versions wrote raw user-chosen session IDs. Do not copy them into a
+// support archive, including when a partial or malformed line cannot be read.
+fn redact_shell_log_line(line: &str) -> String {
+    let Ok(mut value) = serde_json::from_str::<serde_json::Value>(line) else {
+        return "[unparseable shell log line omitted]".into();
+    };
+    let Some(object) = value.as_object_mut() else {
+        return "[unparseable shell log line omitted]".into();
+    };
+    object.remove("sessionId");
+    redact_user_paths(&serde_json::to_string(&value).unwrap_or_default())
 }
 
 fn read_bounded(path: &Path) -> Option<String> {
@@ -245,6 +264,28 @@ mod tests {
         ));
         std::fs::create_dir_all(&directory).unwrap();
         directory
+    }
+
+    #[test]
+    fn shell_bundle_removes_legacy_session_ids_and_omits_bad_lines() {
+        let directory = temp_directory("legacy-session");
+        std::fs::write(
+            directory.join("shell.jsonl"),
+            "{\"method\":\"session.start\",\"sessionId\":\"private-session\"}\n{\"sessionId\":\"broken-secret\"\n",
+        )
+        .unwrap();
+        let bundle = collect(&directory, &[], None, 1);
+        let shell = &bundle
+            .entries
+            .iter()
+            .find(|(name, _)| name == "logs/shell.jsonl")
+            .unwrap()
+            .1;
+        assert!(!shell.contains("private-session"));
+        assert!(!shell.contains("broken-secret"));
+        assert!(shell.contains("session.start"));
+        assert!(shell.contains("unparseable shell log line omitted"));
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

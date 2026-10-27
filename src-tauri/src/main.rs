@@ -289,7 +289,7 @@ fn write_shell_rpc_log_with(
         "buildId": option_env!("AUDIOROUTER_BUILD_ID").unwrap_or("development"),
         "requestId": audiorouter_protocol::diagnostics::valid_correlation_id(context.request_id),
         "method": request.method.chars().take(96).collect::<String>(),
-        "sessionId": request.params.as_ref().and_then(|params| params.get("sessionId")).and_then(serde_json::Value::as_str).filter(|id| id.len() <= 128 && id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))),
+        "sessionRef": request.params.as_ref().and_then(|params| params.get("sessionId")).and_then(serde_json::Value::as_str).and_then(session_log_reference),
         "outcome": outcome,
         "detail": detail,
     });
@@ -311,6 +311,31 @@ fn write_shell_rpc_log_with(
         let _ = file.write_all(b"\n");
         let _ = file.flush();
     }
+}
+
+// A secret generated once per process prevents guessing user-chosen IDs from
+// a bundle while allowing log records from the same run to be correlated.
+// Fail closed if the operating system cannot supply randomness.
+fn session_log_reference(id: &str) -> Option<String> {
+    use hmac::{Hmac, KeyInit, Mac};
+    use sha2::Sha256;
+    use std::fmt::Write;
+    static KEY: std::sync::OnceLock<Option<[u8; 32]>> = std::sync::OnceLock::new();
+    if id.is_empty() || id.len() > 128 {
+        return None;
+    }
+    let key = KEY.get_or_init(|| {
+        let mut key = [0_u8; 32];
+        getrandom::fill(&mut key).ok().map(|()| key)
+    });
+    let mut mac = <Hmac<Sha256> as KeyInit>::new_from_slice(key.as_ref()?).ok()?;
+    mac.update(id.as_bytes());
+    let tag = mac.finalize().into_bytes();
+    let mut result = String::with_capacity(32);
+    for byte in &tag[..16] {
+        write!(&mut result, "{byte:02x}").ok()?;
+    }
+    Some(result)
 }
 
 fn audio_router_tray_icon(muted: bool) -> Image<'static> {
@@ -2706,6 +2731,17 @@ mod tests {
     }
 
     #[test]
+    fn session_log_reference_is_stable_and_does_not_expose_user_ids() {
+        let first = session_log_reference("private-session").unwrap();
+        assert_eq!(first, session_log_reference("private-session").unwrap());
+        assert_ne!(first, session_log_reference("other-session").unwrap());
+        assert_eq!(first.len(), 32);
+        assert!(!first.contains("private"));
+        assert!(session_log_reference("").is_none());
+        assert!(session_log_reference(&"a".repeat(129)).is_none());
+    }
+
+    #[test]
     fn shell_rpc_log_carries_request_ids_and_verbose_reads_with_durations() {
         let directory = std::env::temp_dir().join(format!(
             "audiorouter-shell-correlation-{}-{}",
@@ -2855,6 +2891,12 @@ mod tests {
         assert_eq!(entry["detail"]["revision"], 7);
         assert_eq!(entry["detail"]["nodes"], 1);
         assert_eq!(entry["detail"]["edges"], 1);
+        assert_eq!(
+            entry["sessionRef"],
+            session_log_reference("test-session").unwrap()
+        );
+        assert!(entry.get("sessionId").is_none());
+        assert!(!log.contains("test-session"));
         assert!(!log.contains("private-node-name"));
         assert!(!log.contains("private-runtime-detail"));
         std::fs::remove_dir_all(directory).unwrap();
