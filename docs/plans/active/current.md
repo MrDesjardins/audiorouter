@@ -13,6 +13,18 @@ configuration-only change. Rollback: revert the isolated config/docs commit.
 Next: finish validation, commit and push the branch, then report the branch and
 exact policy.
 
+## Sleep/resume voice recovery — 2026-10-26, owner request
+
+Objective: restore the previously running voice route after Windows sleep without Stop/Play. Requirements CAP-02/03/11/12/13, STATE-03/11, SEC-06 and NFR-10/11; evidence and proposed scenarios are in [the investigation](evidence/2026-10-26-sleep-resume-voice-loss.md). Base: freshly fetched origin/main 7b1364dc, isolated branch fix/sleep-resume. User will try the local build. Windows and real endpoints are available, but actual suspend/resume, signal, recorder and endurance qualification require an attended run.
+
+Tasks: correct Windows power notification delivery; add bounded backend recovery for the affected multi-input route using exact bindings, preserving mute and user stop; record failures and cancel stale work; build a separate executable without replacing the running app. Keep recordings and changed/preview graphs safe. Verification: build the shell and inspect its artifact; focused automated checks only if authorized, plus an attended sleep/resume and microphone check by the owner. Rollback: revert this branch; retain the currently running application. Next: owner tries the isolated build; qualify notification delivery, actual audio and failure presentation.
+
+The first local shell mistakenly omitted `custom-protocol`, so it attempted to
+load the development server and the owner saw a browser error. A corrected
+build with the current UI embedded is in `target/sleep-resume-embedded/release`;
+the investigation records hashes, the failure and remaining visual/audio
+verification. The quickstart build command now includes the required feature.
+
 ## Release 0.0.23 — 2026-10-24, owner request
 
 The owner tested the local merge of D1 (`feature/device-used-by`), D2

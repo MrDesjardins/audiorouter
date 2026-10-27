@@ -273,6 +273,8 @@ impl ControlPlane {
             recovery_tracker: CrashRecoveryTracker::default(),
             os_suspended_sessions: Vec::new(),
             os_suspended_native_sessions: Vec::new(),
+            #[cfg(windows)]
+            sleep_route_recovery: None,
             virtual_buses,
             virtual_bus_routes,
             virtual_bus_route_revision,

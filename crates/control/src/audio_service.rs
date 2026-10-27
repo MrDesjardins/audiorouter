@@ -103,6 +103,8 @@ impl ControlPlane {
     }
 
     pub fn service_running_native_audio(&mut self, now: std::time::Instant) -> usize {
+        #[cfg(windows)]
+        self.service_sleep_route_recovery(now);
         self.audio_service.recorder_drain_micros = 0;
         let running = |plane: &Self, session: &Option<EntityId>| -> Option<(EntityId, u64)> {
             let session = session.as_ref()?;

@@ -2,7 +2,102 @@
 
 use super::*;
 
+#[cfg(windows)]
+pub(crate) struct SleepRouteRecovery {
+    session_id: EntityId,
+    revision: u64,
+    next_attempt: Option<Instant>,
+    attempts: u8,
+}
+
 impl ControlPlane {
+    #[cfg(windows)]
+    pub(crate) fn cancel_sleep_route_recovery(&mut self, id: &EntityId) {
+        if self
+            .sleep_route_recovery
+            .as_ref()
+            .is_some_and(|pending| &pending.session_id == id)
+        {
+            self.sleep_route_recovery = None;
+        }
+        self.os_suspended_native_sessions
+            .retain(|pending| pending != id);
+        self.os_suspended_sessions.retain(|pending| pending != id);
+    }
+
+    /// Recover the exact saved multi-path route, outside the Windows window
+    /// procedure and audio callback. Never resume a recording or a new graph.
+    #[cfg(windows)]
+    pub(crate) fn service_sleep_route_recovery(&mut self, now: Instant) {
+        let Some(mut recovery) = self.sleep_route_recovery.take() else {
+            return;
+        };
+        let Some(next_attempt) = recovery.next_attempt else {
+            self.sleep_route_recovery = Some(recovery);
+            return;
+        };
+        if now < next_attempt {
+            self.sleep_route_recovery = Some(recovery);
+            return;
+        }
+        let id = &recovery.session_id;
+        if self
+            .get_session(id)
+            .map_or(true, |session| session.revision != recovery.revision)
+            || self.session_is_recording(id)
+            || self
+                .runtimes
+                .get(id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+        {
+            return;
+        }
+        let result = (|| {
+            if self.native_multi_input_worker_session.as_ref() == Some(id) {
+                self.detach_native_multi_input_worker()?;
+            }
+            if self.native_output_fanout_session.as_ref() == Some(id) {
+                self.detach_native_output_fanout()?;
+            }
+            self.dispatch_native_paths_prepare(Some(json!({ "sessionId": id })))?;
+            self.session_start(id)?;
+            Ok::<(), ControlError>(())
+        })();
+        if let Err(error) = result {
+            // A partially started worker must be stopped before the next attempt.
+            if self
+                .runtimes
+                .get(id)
+                .is_some_and(|runtime| runtime.state() == RuntimeState::Running)
+            {
+                let _ = self.session_stop(id);
+            }
+            recovery.attempts = recovery.attempts.saturating_add(1);
+            self.last_audio_pump_error = Some(format!(
+                "sleep recovery: {}",
+                audio_pump_error_category(&error)
+            ));
+            if recovery.attempts < 20 {
+                recovery.next_attempt = Some(Instant::now() + std::time::Duration::from_secs(1));
+                self.sleep_route_recovery = Some(recovery);
+            } else {
+                self.events.append(
+                    recovery.revision,
+                    None,
+                    "runtime.recoveryFailed",
+                    Some(recovery.session_id),
+                );
+            }
+        } else {
+            self.events.append(
+                recovery.revision,
+                None,
+                "runtime.recovered",
+                Some(recovery.session_id),
+            );
+        }
+    }
+
     pub(crate) fn recovery_status(&mut self) -> Result<(usize, bool), ControlError> {
         let now = unix_epoch_seconds() as u64;
         if let Some(storage) = &self.storage {
@@ -231,7 +326,8 @@ impl ControlPlane {
     /// thread. Sign-out and sleep stop sessions and release their ownership;
     /// resume only reports the previously running portable sessions that a
     /// platform adapter must re-enumerate and revalidate before calling
-    /// `session_start`. Native and recording sessions are never resumed here.
+    /// `session_start`. On Windows the saved multi-path route is scheduled
+    /// for bounded recovery; recording sessions are never resumed here.
     pub fn handle_os_transition(
         &mut self,
         transition: OsTransition,
@@ -284,21 +380,60 @@ impl ControlPlane {
                         "OS transition requires explicit recorder finalization".into(),
                     ));
                 }
+                #[cfg(windows)]
+                let sleep_recovery = if transition == OsTransition::Sleep {
+                    if let Some(id) = self
+                        .native_multi_input_worker_session
+                        .as_ref()
+                        .filter(|id| {
+                            running_sessions.contains(id) && !self.session_is_recording(id)
+                        })
+                    {
+                        let id = id.clone();
+                        Some(SleepRouteRecovery {
+                            revision: self.get_session(&id)?.revision,
+                            session_id: id,
+                            next_attempt: None,
+                            attempts: 0,
+                        })
+                    } else {
+                        // A second suspend while waiting for the device must
+                        // pause, rather than discard, the earlier recovery.
+                        self.sleep_route_recovery.take().map(|mut pending| {
+                            pending.next_attempt = None;
+                            pending
+                        })
+                    }
+                } else {
+                    None
+                };
                 let resumable = decision
                     .session_ids
                     .iter()
                     .filter(|id| !native_sessions.contains(id))
                     .cloned()
                     .collect::<Vec<_>>();
+                let mut stop_error = None;
+                for session_id in &decision.session_ids {
+                    if let Err(error) = self.session_stop(session_id) {
+                        if stop_error.is_none() {
+                            stop_error = Some(error);
+                        }
+                    }
+                }
                 self.os_suspended_native_sessions = if transition == OsTransition::Sleep {
                     native_sessions.clone()
                 } else {
                     Vec::new()
                 };
-                for session_id in &decision.session_ids {
-                    self.session_stop(session_id)?;
+                #[cfg(windows)]
+                {
+                    self.sleep_route_recovery = sleep_recovery;
                 }
                 self.os_suspended_sessions = resumable;
+                if let Some(error) = stop_error {
+                    return Err(error);
+                }
                 Ok(json!({
                     "transition": if transition == OsTransition::Sleep { "sleep" } else { "signOut" },
                     "action": "stopAndRelease",
@@ -308,6 +443,12 @@ impl ControlPlane {
                 }))
             }
             OsTransition::Resume => {
+                #[cfg(windows)]
+                if let Some(recovery) = self.sleep_route_recovery.as_mut() {
+                    if recovery.next_attempt.is_none() {
+                        recovery.next_attempt = Some(Instant::now());
+                    }
+                }
                 let endpoint_inventory = if let Some(monitor) = self.endpoint_monitor.as_mut() {
                     let endpoint_changes =
                         monitor.refresh_changes().map_err(audio_control_error)?;
@@ -345,6 +486,10 @@ impl ControlPlane {
         let scoped_key = self.scoped_idempotency_key("system.quit", idempotency_key);
         if let Some(previous) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
             return Ok(previous);
+        }
+        #[cfg(windows)]
+        {
+            self.sleep_route_recovery = None;
         }
 
         let node_ids = self
