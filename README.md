@@ -54,6 +54,7 @@ recording, application capture and two-PC streaming.
 
 | Video | Watch |
 | --- | --- |
+| Full feature tour: tools, MCP and Stream Deck | [Watch on YouTube](https://youtu.be/_hasa_zfDL8) |
 | AudioRouter overview (2 minutes) | [Watch on YouTube](https://youtu.be/IHitHqpi87s) |
 | Your first route | [Watch on YouTube](https://youtu.be/3--AnDZZXzA) |
 | Streaming audio between two PCs | Coming soon |
