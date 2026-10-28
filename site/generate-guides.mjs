@@ -491,7 +491,7 @@ for (let i = 0; i < tools.length; i++) {
           "</a>",
       )
       .join("") +
-    '<a href="#examples">Worked examples</a><a href="#avoid">Common mistakes</a></aside><div class="guide-article"><section class="guide-section" id="understand"><div class="eyebrow">01 / Understand</div><h2>The idea, before the settings.</h2><p class="guide-concept">' +
+    '<a href="#examples">Worked examples</a><a href="#avoid">Common mistakes</a></aside><div class="guide-article"><section class="guide-section" id="understand"><div class="eyebrow">01 / Understand</div><h2>How it works.</h2><p class="guide-concept">' +
     esc(t.concept) +
     '</p><div class="guide-route" aria-label="Example signal path">' +
     tutorial.route
@@ -511,7 +511,7 @@ for (let i = 0; i < tools.length; i++) {
     esc(tutorial.check) +
     '</p></article></div><p class="guide-note">' +
     esc(notes) +
-    '</p></section><section class="guide-section" id="see-it"><div class="eyebrow">02 / Explore</div><h2>Make the behavior visible.</h2><p>' +
+    '</p></section><section class="guide-section" id="see-it"><div class="eyebrow">02 / Explore</div><h2>Try the example.</h2><p>' +
     esc(tutorial.listen) +
     "</p><div data-guide-demo></div>" +
     (t.kind === "parametricEq"
@@ -570,7 +570,7 @@ for (let i = 0; i < tools.length; i++) {
           : stillKinds.has(t.kind)
             ? "This diagram is conceptual and does not move. It is not a DSP measurement or control for your running AudioRouter session."
             : "This animated diagram is conceptual. It is not a DSP measurement or control for your running AudioRouter session.") +
-    '</p></section><section class="guide-section" id="configuration"><div class="eyebrow">03 / Configure</div><h2>Every control, with a reason.</h2>' +
+    '</p></section><section class="guide-section" id="configuration"><div class="eyebrow">03 / Configure</div><h2>Settings.</h2>' +
     (t.propertyFamily
       ? "<p>" +
         esc(
@@ -589,7 +589,7 @@ for (let i = 0; i < tools.length; i++) {
         "</p></div>") +
     "</section>" +
     extras +
-    '<section class="guide-section" id="examples"><div class="eyebrow">04 / Put it to work</div><h2>Start with a useful example.</h2><div class="guide-recipes">' +
+    '<section class="guide-section" id="examples"><div class="eyebrow">04 / Examples</div><h2>Example setups.</h2><div class="guide-recipes">' +
     t.recipes
       .map(
         (r, j) =>
@@ -602,7 +602,7 @@ for (let i = 0; i < tools.length; i++) {
           "</ol></article>",
       )
       .join("") +
-    '</div><p class="guide-note">These are starting points. Compare at a comfortable monitoring level and adjust for your own source.</p></section><section class="guide-section" id="avoid"><div class="eyebrow">05 / Get unstuck</div><h2>Small details that matter.</h2><ul class="guide-mistakes">' +
+    '</div><p class="guide-note">These are starting points. Compare at a comfortable monitoring level and adjust for your own source.</p></section><section class="guide-section" id="avoid"><div class="eyebrow">05 / Troubleshooting</div><h2>Common mistakes.</h2><ul class="guide-mistakes">' +
     t.commonMistakes.map((m) => "<li>" + esc(m) + "</li>").join("") +
     '</ul></section><nav class="guide-next" aria-label="More guides"><a href="' +
     slug(tools[(i + tools.length - 1) % tools.length].kind) +
@@ -656,7 +656,7 @@ await writeFile(
   doc(
     "Audio tool guides with live examples — AudioRouter",
     "Understand every AudioRouter tool through animated signal diagrams, configuration explanations and worked examples.",
-    '<main id="guide-main"><section class="guide-index-hero"><p class="eyebrow">The AudioRouter field guide</p><h1>Understand the sound.<br><em>Shape it with confidence.</em></h1><p>One focused guide for every tool. See the signal move, learn what each setting means, and follow an example you can try.</p><label class="guide-search">Find a tool or property<input type="search" id="guide-search" placeholder="Try threshold, noise, delay, cable…" autocomplete="off"></label><p id="guide-count" role="status">' +
+    '<main id="guide-main"><section class="guide-index-hero"><p class="eyebrow">AudioRouter tool guides</p><h1>AudioRouter tool guides</h1><p>One focused guide for every tool. See the signal move, learn what each setting means, and follow an example you can try.</p><label class="guide-search">Find a tool or property<input type="search" id="guide-search" placeholder="Try threshold, noise, delay, cable…" autocomplete="off"></label><p id="guide-count" role="status">' +
       tools.length +
       ' visual guides</p></section><section class="guide-index-grid" aria-label="Visual tool guides">' +
       cards +

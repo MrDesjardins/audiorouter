@@ -24,6 +24,10 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
 - Preserve microphone privacy: a failed processor on a protected voice path produces silence until deliberate recovery. Never silently replace a missing microphone with another input.
 - Do not add cloud inference, remote control, telemetry, subscriptions, platform ports, or application-specific hooks unless their scope is approved.
 
+## Static website writing
+
+Write website copy in a natural, human voice: use plain, specific language and speak directly to the reader. Prefer clear descriptions of what AudioRouter does over generic marketing slogans, inflated claims, or formulaic AI-sounding phrasing. Preserve technical accuracy and the existing privacy and permission details.
+
 ## UI conventions
 
 - **Form controls use the app style, never browser defaults.** Text inputs, selects, textareas, and file pickers inherit the app-wide field style in `ui/src/styles.css` (flat, 9 px radius, dark `color-scheme` so native dropdown lists are dark, themed `::file-selector-button`, light/high-contrast variants). Only buttons are bevelled. Do not restyle fields per panel or reintroduce gradients/inset shadows on them; new dialogs, panels, and inspectors must render correctly with no extra field CSS.

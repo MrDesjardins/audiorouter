@@ -1,5 +1,16 @@
 # Active plan — post-0.0.8 maintenance
 
+## Website copy and writing guidance — 2026-10-27
+
+Objective: carry the reviewed natural-language website edits, including MCP and
+API pages and generated tool guides, into a PR; preserve the technical and
+privacy claims. Scope: M05 documentation, UI-04/07. The owner explicitly
+authorized a PR. Steps: add the durable writing preference to AGENTS.md,
+review the complete website diff and guide generator consistency, run website
+and documentation checks, commit and open the PR. Include the prepared 0.0.24 release branch so the already-merged sleep/resume and MCP changes can be released. Rollback: revert this change. No
+hardware, driver, credentials or audio measurements are required for the copy
+checks; publishing and release qualification are separate. Checks: Windows, node tools/quality/verify.mjs --checks site passed (49 pages, 37 guides); tests/acceptance/docs.ps1 passed (201 files, 1101 links); git diff --check passed. Next: merge release preparation, validate and open the PR.
+
 ## Active task: Dependabot major/minor only (2026-10-26)
 
 The owner asked to receive major and minor dependency updates, but no patch-only
