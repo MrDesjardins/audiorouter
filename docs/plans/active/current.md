@@ -11,6 +11,10 @@ and documentation checks, commit and open the PR. Include the prepared 0.0.24 re
 hardware, driver, credentials or audio measurements are required for the copy
 checks; publishing and release qualification are separate. Checks: Windows, node tools/quality/verify.mjs --checks site passed (49 pages, 37 guides); tests/acceptance/docs.ps1 passed (201 files, 1101 links); git diff --check passed. Next: merge release preparation, validate and open the PR.
 
+## Release 0.0.24 — 2026-10-27, owner request
+
+Prepare the app-only unsigned prerelease after the owner confirmed the long-sleep test passed. Scope, evidence, checks and rollback: [release plan](release-0.0.24.md). Next: validate and review the release-preparation branch; follow the repository PR approval rule.
+
 ## Active task: Dependabot major/minor only (2026-10-26)
 
 The owner asked to receive major and minor dependency updates, but no patch-only

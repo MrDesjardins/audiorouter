@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.0.24 — 2026-10-27 (unsigned experimental preview)
+
+- **Voice after sleep.** A saved multi-input route can recover after Windows sleep when its original devices return, without Stop and Play. The owner confirmed voice worked after a long sleep using the 0.0.23 development build from main commit `26de4a4f`. Other native route types and sessions with an active recording are not automatically recovered by this change. If a route remains stopped, check its devices and use Play.
+- **More private diagnostics.** New shell logs use a process-specific session reference instead of the session ID. Support bundles remove session IDs from older shell log entries. Older local log files can still contain those IDs until rotation or removal.
+- **Maintenance.** Dependency and code-scanning tooling updates, including continued TypeScript 7 typechecking alongside the TypeScript 6 API needed by current lint and build tools.
+
+Windows 11 x64. This is an unsigned, experimental, app-only prerelease; Windows may show a trust warning. It does not include or install an AudioRouter virtual driver. Close AudioRouter before upgrading. No database or session format migration is intended; keep the 0.0.23 installer and configuration backups for rollback.
+
+The long-sleep result is one owner-reported hardware test, not the 100-cycle endurance gate. Missing-device, active-recording, other native route types, clean-machine install/upgrade, missing-WebView2, accessibility, hardware and driver-signing qualification remain open.
+
+
 ## 0.0.23 — 2026-10-24 (unsigned experimental preview)
 
 - **Device cards say which apps use them.** Each Physical Input and Output
