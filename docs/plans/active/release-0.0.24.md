@@ -51,3 +51,30 @@ The owner confirmed a long sleep recovered on the `26de4a4f` test build. The
 Clippy, Windows CI, Edge and CodeQL passed in PR #82. Packaged-shell startup,
 artifact checks, download checks and publication are pending. The owner is
 using the test shell; do not close it or occupy its production pipe.
+
+## Owner test candidate — 2026-10-27
+
+Prepared app-only candidate from source commit `e32c06993ee3789a701a82962784d8268ae1de2f`
+with the locked release script and verified it using `verify-artifacts.ps1`.
+The manifest records version 0.0.24, no release tag, `includesDriver: false`,
+and `publicationReady: false`. Candidate installer and manifest are in
+`target/release-0.0.24-candidate` in the repository's main checkout; this is a
+local test artifact, not the final tagged release. A separate executable folder
+`target/local-test-0.0.24-e32c0699` contains the shell, matching CLI, VST2 and
+VST3 workers, verified tunnel runtime and Stream Deck plugin. The CLI copy's
+SHA-256 matched the just-built CLI; its `schema --json` output parsed. The shell
+contains UI asset `index-C9kR5eod.js`. Stream Deck packaging/validation and its
+26 tests passed. No live MCP enrollment, tunnel connection, Stream Deck button,
+or packaged UI launch was attempted while the owner had an app running.
+
+The 0.0.24 candidate build's Stream Deck `npm ci` reported three development
+advisories: `deepmerge` 4.3.1 via Rollup node-resolve (low) and `fast-uri`
+3.1.8 via the Elgato CLI/Ajv (moderate). `npm audit --omit=dev` returned zero
+vulnerabilities. The pinned dev tools handle release-build inputs, not the
+shipped production dependency graph. Do not silently suppress these findings:
+review a compatible fixed dependency for a follow-up; the existing grouping
+policy prevents automatic patch proposals. Vite's chunk and zod Rollup
+warnings are recorded above. Hosted branch CI run 40609255113 is in progress.
+Next: owner tests the executable and MCP/Stream Deck; retain this branch without
+a PR while that test request is in effect. Then obtain explicit PR approval,
+merge, tag main, rebuild/verify final assets, and complete the release gates.
