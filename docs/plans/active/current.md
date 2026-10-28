@@ -1,5 +1,9 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.24 — 2026-10-27, owner request
+
+Prepare the app-only unsigned prerelease after the owner confirmed the long-sleep test passed. Scope, evidence, checks and rollback: [release plan](release-0.0.24.md). Next: validate and review the release-preparation branch; follow the repository PR approval rule.
+
 ## Active task: Dependabot major/minor only (2026-10-26)
 
 The owner asked to receive major and minor dependency updates, but no patch-only
