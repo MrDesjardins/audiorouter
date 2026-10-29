@@ -5712,7 +5712,7 @@ button.primary {
 }
 .main-content > .sidebar-resizer {
   display: block;
-  grid-row: 2 / -1;
+  grid-row: 1 / -1;
 }
 @media (max-width: 900px) {
   .main-content > .sidebar-resizer {
