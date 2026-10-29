@@ -17666,4 +17666,86 @@ mod tests {
         assert_eq!(block.channel(0).unwrap(), &[0.5, 0.25]);
         assert_eq!(block.channel(1).unwrap(), &[-0.5, -0.25]);
     }
+
+    #[test]
+    fn soundboard_compiles_into_graph_and_plays_a_triggered_slot() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node_id = EntityId::new("soundboard");
+        let session = Session {
+            id: EntityId::new("soundboard-session"),
+            name: "Soundboard".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: node_id.clone(),
+                kind: NodeKind::Soundboard,
+                type_version: 1,
+                name: "Soundboard".into(),
+                enabled: true,
+                bypass: false,
+                parameters: serde_json::json!({
+                    "slot1MediaId": "media-1",
+                    "slot1Mode": "once",
+                    "slot2MediaId": "missing",
+                    // A sound at another sample rate is skipped, leaving the slot empty.
+                    "slot3MediaId": "media-44k",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+                ports: vec![Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 2,
+                }],
+            }],
+            edges: vec![],
+        };
+        let sound = |rate: u32| {
+            Arc::new(DecodedAudio {
+                channels: 2,
+                sample_rate_hz: rate,
+                samples: vec![0.25; 2 * 4_800].into(),
+            })
+        };
+        let graph = compile_session_at_sample_rate_with_plugins_and_audio(
+            &session,
+            RuntimeGeneration::new(12),
+            48_000,
+            &HashMap::new(),
+            &HashMap::from([
+                ("media-1".to_owned(), sound(48_000)),
+                ("media-44k".to_owned(), sound(44_100)),
+            ]),
+        )
+        .unwrap();
+        let source = graph.soundboard_for_node(&node_id).unwrap();
+        assert!(source.slot_loaded(0));
+        assert!(
+            !source.slot_loaded(1),
+            "an unknown sound leaves the slot empty"
+        );
+        assert!(
+            !source.slot_loaded(2),
+            "a wrong-rate sound leaves the slot empty"
+        );
+
+        let mut silent = AudioBlock::new(2, 128).unwrap();
+        graph.process(&mut silent);
+        assert!(silent.channel(0).unwrap().iter().all(|value| *value == 0.0));
+
+        assert!(source.trigger(0));
+        let mut block = AudioBlock::new(2, 128).unwrap();
+        graph.process(&mut block);
+        let peak = block
+            .channel(0)
+            .unwrap()
+            .iter()
+            .fold(0.0_f32, |peak, value| peak.max(value.abs()));
+        assert!(
+            peak > 0.1,
+            "the triggered sound reaches the graph output: {peak}"
+        );
+        assert_eq!(source.playing_mask() & 1, 1);
+    }
 }
