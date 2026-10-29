@@ -7877,10 +7877,10 @@ input[type="color"] {
   width: fit-content;
   margin-top: 0.3rem;
 }
-/* A node the last Play refused (nodeNotReady): a red outline and a tag over
+/* A node the last Play refused (nodeNotReady, or a device not chosen): a red dashed outline and a tag over
    the card's top edge; neither changes the card's size (UI-17). */
 .session-flow-canvas .react-flow__node.has-node-issue {
-  outline: 2px solid #ff6b6b;
+  outline: 2px dashed #ff6b6b;
   outline-offset: 2px;
 }
 .node-issue-tag {

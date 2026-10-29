@@ -1738,6 +1738,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const node = draft.nodes.find((candidate) => candidate.id === nodeId);
       if (node && JSON.stringify(node.parameters) === issue.parameters) visibleNodeIssues[nodeId] = issue.message;
     }
+  // Mark the nodes that stopped Play before it reached the backend (a device
+  // not chosen yet); the mark clears when the node changes.
+  const flagNodes = (nodes: Node[], message: string) =>
+    setNodeIssues({
+      sessionId: draftRef.current.id,
+      issues: Object.fromEntries(
+        nodes.map((node) => [node.id, { message, parameters: JSON.stringify(node.parameters) }]),
+      ),
+    });
   const startSession = async (): Promise<boolean> => {
     if (sessionBusy.current || !backend.connected) return false;
     if (graphBusy) {
@@ -1776,6 +1785,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             (sameSessionDraft(draftRef.current, session) && unboundDeviceNodes(draftRef.current).length === 0)));
       if (multiPathRoute) {
         if (generatedOnly && unboundDeviceNodes(draftRef.current).length > 0) {
+          flagNodes(unboundDeviceNodes(draftRef.current), "Choose a device");
           setActionMessage(
             "No audio started. Select the speaker or headphone device in the Output Device node's Properties, then press Play.",
           );
@@ -1791,6 +1801,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         }
         const unbound = unboundDeviceNodes(session);
         if (unbound.length > 0) {
+          flagNodes(unbound, "Choose a device");
           setActionMessage(
             `No audio started. Choose the device for ${unbound.map((node) => node.name).join(", ")} in Properties, save, then press Play.`,
           );
@@ -1922,6 +1933,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         }
         const outputEndpointId = routeEndpointBinding(draftRef.current, session.id).renderEndpointId;
         if (!outputEndpointId) {
+          flagNodes(
+            draftRef.current.nodes.filter((node) => node.enabled && node.kind === "physicalOutput"),
+            "Choose a device",
+          );
           setActionMessage(
             "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play.",
           );
@@ -1962,6 +1977,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       ) {
         const binding = routeEndpointBinding(draftRef.current, session.id);
         if (!binding.renderEndpointId || !binding.captureEndpointId) {
+          flagNodes(
+            draftRef.current.nodes.filter(
+              (node) =>
+                node.enabled &&
+                typeof node.parameters.endpointId !== "string" &&
+                node.kind === (binding.renderEndpointId ? "physicalInput" : "physicalOutput"),
+            ),
+            "Choose a device",
+          );
           setActionMessage(
             !binding.renderEndpointId
               ? "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play."

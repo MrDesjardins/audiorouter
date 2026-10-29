@@ -2884,7 +2884,7 @@ export function SessionFlowCanvas({
             {/* Over the card's top edge, so marking it never resizes it (UI-17). */}
             {nodeIssues?.[node.id] && (
               <span className="node-issue-tag" role="alert" title={nodeIssues[node.id]}>
-                ! Cannot play
+                {nodeIssues[node.id].length <= 24 ? `! ${nodeIssues[node.id]}` : "! Cannot play"}
               </span>
             )}
             {node.ports
@@ -3083,7 +3083,7 @@ export function SessionFlowCanvas({
           </div>
         ),
       },
-      className: `${layoutSize ? "has-layout-size " : ""}${nodeIssues?.[node.id] ? "has-node-issue " : ""}${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : node.kind === "soundboard" ? " flow-node-soundboard" : ""}node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
+      className: `${layoutSize ? "has-layout-size " : ""}${nodeIssues?.[node.id] ? "has-node-issue " : ""}${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : node.kind === "soundboard" ? " flow-node-soundboard" : ""}`,
       // The drop preview is only a picture: no dragging, selecting or connecting.
       draggable: node.id !== DROP_PREVIEW_ID,
       selectable: node.id !== DROP_PREVIEW_ID,
