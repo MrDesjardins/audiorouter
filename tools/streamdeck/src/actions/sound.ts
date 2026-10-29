@@ -1,5 +1,4 @@
 import { action, type KeyDownEvent, type KeyUpEvent } from "@elgato/streamdeck";
-import { idempotencyKey } from "../api.js";
 import { fit, messageFace, soundFace } from "../faces.js";
 import type { SummaryNode } from "../store.js";
 import { LiveKeyAction, type Face, type KeyTitle } from "./live-key.js";
