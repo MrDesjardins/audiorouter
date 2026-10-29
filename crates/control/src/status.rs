@@ -343,10 +343,6 @@ impl ControlPlane {
                 if let Some(source) = worker.soundboard_for_node(&node.id) {
                     soundboards.push((node.id.clone(), source));
                 }
-            }            } else if node.kind == NodeKind::AudioFile {
-                if let Some(source) = worker.audio_file_source_for_node(&node.id) {
-                    audio_files.push((node.id.clone(), source));
-                }
             }
         }
         self.test_signal_sources
@@ -359,7 +355,7 @@ impl ControlPlane {
             self.soundboard_sources
                 .insert((session_id.clone(), node_id), source);
         }
-        for (node_id, source) in test_signals {        for (node_id, source) in test_signals {
+        for (node_id, source) in test_signals {
             self.test_signal_sources
                 .insert((session_id.clone(), node_id), source);
         }

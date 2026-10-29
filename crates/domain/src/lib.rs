@@ -389,7 +389,7 @@ fn valid_creation_time(value: &serde_json::Value) -> bool {
     })
 }
 
-pub fn node_registry() -> [NodeTypeSpec; 36] {
+pub fn node_registry() -> [NodeTypeSpec; 37] {
     NodeKind::ALL.map(|kind| NodeTypeSpec {
         kind,
         version: 1,
@@ -866,7 +866,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 131] = [
+pub const API_METHODS: [ApiMethodSpec; 136] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -4497,7 +4497,7 @@ mod tests {
     #[test]
     fn registry_reports_audio_and_processor_capabilities_explicitly() {
         let registry = node_registry();
-        assert_eq!(registry.len(), 36);
+        assert_eq!(registry.len(), 37);
         let voice = registry
             .iter()
             .find(|spec| spec.kind == NodeKind::FunVoiceChanger)
@@ -4566,7 +4566,7 @@ mod tests {
         assert!(!valid("slot5Set", json!([])));
         assert!(!valid(
             "slot5Set",
-            json!(["lib:a"; MAX_SOUNDBOARD_SET_SOUNDS + 1])
+            json!(vec!["lib:a"; MAX_SOUNDBOARD_SET_SOUNDS + 1])
         ));
         // Only slots 1 to 9 and known fields exist.
         assert!(!valid("slot0MediaId", json!("lib:a")));

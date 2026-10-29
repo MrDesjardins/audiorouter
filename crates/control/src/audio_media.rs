@@ -155,8 +155,6 @@ impl ControlPlane {
             media.insert(media_id.to_owned(), Arc::new(decoded));
         }
         self.load_soundboard_media(session, sample_rate_hz, &mut media)?;
-        Ok(media)            media.insert(media_id.to_owned(), Arc::new(decoded));
-        }
         Ok(media)
     }
 
@@ -208,8 +206,6 @@ impl ControlPlane {
             }
         }
         self.test_signal_sources
-            .retain(|(owner_session, _), _| owner_session != &session.id);
-        for node in session        self.test_signal_sources
             .retain(|(owner_session, _), _| owner_session != &session.id);
         for node in session
             .nodes

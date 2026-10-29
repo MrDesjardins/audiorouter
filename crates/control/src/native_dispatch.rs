@@ -700,7 +700,6 @@ impl ControlPlane {
                     NativeMultiInputSourceBinding::Physical(endpoint)
                 }
                 NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard => {
-                    NativeMultiInputSourceBinding::Generated                NodeKind::TestSignal | NodeKind::AudioFile => {
                     NativeMultiInputSourceBinding::Generated
                 }
                 NodeKind::NetworkReceive => NativeMultiInputSourceBinding::Network(node),
