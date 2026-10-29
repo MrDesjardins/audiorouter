@@ -17,7 +17,8 @@
       "../target/release/driver/audioroutervirtual.cat": "driver/audioroutervirtual.cat",
       "../target/release/driver/LICENSE-MS-PL.txt": "driver/LICENSE-MS-PL.txt",
       "../target/release/driver/package.json": "driver/package.json",
-      "../tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin": "com.mrdesjardins.audiorouter.streamDeckPlugin"
+      "../tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin": "com.mrdesjardins.audiorouter.streamDeckPlugin",
+      "../resources/sound-library": "sound-library"
     },
     "windows": {
       "nsis": {

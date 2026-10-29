@@ -130,11 +130,26 @@ before release.
     `resources/sound-library` next to the program; `tool_combinations.rs` and an
     engine route test for Soundboard are not written; no jsdom tests for the new UI.
 
+- 2026-10-29 first compile and static checks (host, `-j2`, VM idle; the pool run had
+  passed). The scripted patches had duplicated lines in `simple.rs`, `audio_media.rs`,
+  `native_dispatch.rs`, `native_paths.rs`, `status.rs` and `App.tsx`; every one was a
+  compile error and is fixed (commits 660b83dd and the UI fix after it). Also fixed: the
+  registry and API array lengths (37, 136), a `json!` repeat, an unused import, a missing
+  `soundboard` key in `draft.test.ts`.
+  Results: `cargo fmt` both workspaces clean; `cargo clippy --workspace --all-targets
+  --all-features -D warnings` clean; same for `src-tauri`; domain 78, engine lib 172,
+  control 299 and `tool_combinations` 4 tests pass; `ui` typecheck:all, lint and prettier
+  clean, vitest 743/743; `tools/streamdeck` typecheck clean, 27 tests pass;
+  `site/check-guides.mjs` passes. Not run: Playwright, any live audio, the installer.
+  `tool_combinations.rs` `TOOLS` lists processors only, so a source needs no entry.
+  The installer resource list now includes `sound-library` in both release configs; the
+  built installer has not been inspected.
+
 ## Next action
 
-When the owner's VM pool run has finished (watch for `stage-a-pool-*.zip` in the
-share): `cargo fmt`, `cargo check`/Clippy (workspace and `src-tauri`), engine and
-control tests, then `npm` typecheck, lint, format and vitest for `ui/` and
-`tools/streamdeck`. Fix what the first compile finds, then the known gaps above, then
-the three-theme screenshots and the continuity, fresh-install and attended Stream Deck
-qualification (task 10).
+Remaining, in order: library category expansion for `slotNSet`; drag and drop (SND-19);
+jsdom tests for the editor and canvas card; an engine route test through the compiler;
+inspect a built installer for `sound-library` (and `verify-artifacts.ps1` expectations);
+three-theme screenshots with layout-shift sampling; live continuity, fresh-install and
+attended Stream Deck qualification (task 10), which need the owner. The Stage A
+`hardening` session still needs the owner to run it in the VM.
