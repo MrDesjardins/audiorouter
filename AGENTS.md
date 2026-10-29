@@ -23,6 +23,7 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
 - Do not treat a virtual-device sample as a production driver. Do not require ordinary users to disable Secure Boot or Memory Integrity.
 - Preserve microphone privacy: a failed processor on a protected voice path produces silence until deliberate recovery. Never silently replace a missing microphone with another input.
 - Do not add cloud inference, remote control, telemetry, subscriptions, platform ports, or application-specific hooks unless their scope is approved.
+- **Every source and tool must work in every route layout (owner rule, 2026-10-29).** A new input or source tool must play on its own, in a fan-out, in a Mixer with any other source, and in connected Mixers; a new processing tool must pass every flag pattern in those layouts. Never write a hand-made list of "supported" kinds that a new kind can miss: classify kinds with an exhaustive `match` (no `_` arm) and cover them in `crates/engine/tests/source_combinations.rs` (sources) and `tool_combinations.rs` (processors). A new `NodeKind` is not finished until those suites pass with it; run them before reporting a tool ready.
 
 ## Static website writing
 
@@ -109,6 +110,17 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-29 — Cover sources, not only processors, in every Mixer layout (user rule).**
+  Evidence: [source combination suite](crates/engine/tests/source_combinations.rs),
+  [Soundboard plan](docs/plans/active/soundboard.md). Scope: new source tools
+  and the connected-Mixer compiler. Consequence: the Soundboard compiled
+  alone, yet pressing Play on a Mixer route said "an audio combination the
+  current engine cannot play", because `connected_mixers.rs` kept its own list
+  of source kinds and the 2026-10-02 suite only varied processors. Every
+  source pair and triple now compiles and runs; the new test fails
+  (`UnsupportedPath`) without the fix. Grep every `NodeKind::TestSignal` and
+  `AudioFile` list when adding a source, and prefer an exhaustive `match`.
 
 - **2026-10-25 — Verify descendants after dropping a hosted runner token.**
   Evidence: [nested-process repair](docs/plans/active/evidence/2026-10-25-pr73-ci-repair.md#nested-process-startup-repair).
