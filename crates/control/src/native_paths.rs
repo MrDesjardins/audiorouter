@@ -394,7 +394,8 @@ impl ControlPlane {
                 })?;
             match (node.kind, binding) {
                 (
-                    NodeKind::TestSignal | NodeKind::AudioFile,
+                    NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard,
+                    NativeMultiInputSourceBinding::Generated,                    NodeKind::TestSignal | NodeKind::AudioFile,
                     NativeMultiInputSourceBinding::Generated,
                 ) => {}
                 (NodeKind::NetworkReceive, NativeMultiInputSourceBinding::Network(_)) => {

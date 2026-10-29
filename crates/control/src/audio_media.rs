@@ -154,6 +154,9 @@ impl ControlPlane {
                 })?;
             media.insert(media_id.to_owned(), Arc::new(decoded));
         }
+        self.load_soundboard_media(session, sample_rate_hz, &mut media)?;
+        Ok(media)            media.insert(media_id.to_owned(), Arc::new(decoded));
+        }
         Ok(media)
     }
 
@@ -192,7 +195,21 @@ impl ControlPlane {
         })?;
         self.audio_file_sources
             .retain(|(owner_session, _), _| owner_session != &session.id);
+        self.soundboard_sources
+            .retain(|(owner_session, _), _| owner_session != &session.id);
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::Soundboard)
+        {
+            if let Some(source) = graph.soundboard_for_node(&node.id) {
+                self.soundboard_sources
+                    .insert((session.id.clone(), node.id.clone()), source);
+            }
+        }
         self.test_signal_sources
+            .retain(|(owner_session, _), _| owner_session != &session.id);
+        for node in session        self.test_signal_sources
             .retain(|(owner_session, _), _| owner_session != &session.id);
         for node in session
             .nodes

@@ -1284,6 +1284,56 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
         "meters.reset" => {
             json!({"type":"object", "properties":{"sessionId":{"type":"string"},"nodeId":{"type":"string"},"reset":{"type":"boolean"}},"required":["sessionId","nodeId","reset"],"additionalProperties":false})
         }
+        "soundLibrary.list" => json!({
+            "type": "object", "properties": {
+                "installed": { "type": "boolean" },
+                "categories": { "type": "array", "maxItems": 64, "items": { "type": "object", "properties": {
+                    "id": { "type": "string" }, "title": { "type": "string" }
+                }, "required": ["id", "title"], "additionalProperties": false } },
+                "sounds": { "type": "array", "maxItems": 1024, "items": { "type": "object", "properties": {
+                    "id": { "type": "string" }, "title": { "type": "string" },
+                    "category": { "type": "string" }, "tags": { "type": "array", "items": { "type": "string" } },
+                    "durationMs": { "type": "integer", "minimum": 0 },
+                    "license": { "type": ["string", "null"] }, "author": { "type": ["string", "null"] }
+                }, "required": ["id", "title", "category", "tags", "durationMs", "license", "author"], "additionalProperties": false } }
+            }, "required": ["installed", "categories", "sounds"], "additionalProperties": false
+        }),
+        "soundLibrary.read" => json!({
+            "type": "object", "properties": {
+                "id": { "type": "string" }, "format": { "enum": ["flac"] }, "dataBase64": { "type": "string" }
+            }, "required": ["id", "format", "dataBase64"], "additionalProperties": false
+        }),
+        "soundboard.trigger" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "slot": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::SOUNDBOARD_SLOTS },
+                "accepted": { "type": "boolean" }
+            }, "required": ["sessionId", "nodeId", "slot", "accepted"], "additionalProperties": false
+        }),
+        "soundboard.stop" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "stopped": { "type": "boolean" }
+            }, "required": ["sessionId", "nodeId", "stopped"], "additionalProperties": false
+        }),
+        "soundboard.status" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "slots": { "type": "array", "maxItems": audiorouter_domain::SOUNDBOARD_SLOTS, "items": {
+                    "type": "object", "properties": {
+                        "slot": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::SOUNDBOARD_SLOTS },
+                        "loaded": { "type": "boolean" },
+                        "playing": { "type": "boolean" },
+                        "progress": { "type": "number", "minimum": 0, "maximum": 1 }
+                    }, "required": ["slot", "loaded", "playing", "progress"], "additionalProperties": false
+                } },
+                "ignoredTriggers": { "type": "integer", "minimum": 0 },
+                "droppedCommands": { "type": "integer", "minimum": 0 }
+            }, "required": ["sessionId", "nodeId", "slots", "ignoredTriggers", "droppedCommands"], "additionalProperties": false
+        }),
         "audioSources.transport" => json!({
             "type": "object", "properties": {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },

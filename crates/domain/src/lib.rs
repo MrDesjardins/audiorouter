@@ -139,10 +139,12 @@ pub enum NodeKind {
     Duck,
     /// Playful voice effects with tweakable presets (DSP-20).
     FunVoiceChanger,
+    /// Plays up to nine short sounds on demand (SND-01); a source with no input.
+    Soundboard,
 }
 
 impl NodeKind {
-    pub const ALL: [Self; 36] = [
+    pub const ALL: [Self; 37] = [
         Self::PhysicalInput,
         Self::ApplicationCapture,
         Self::EndpointLoopback,
@@ -179,6 +181,7 @@ impl NodeKind {
         Self::NetworkReceive,
         Self::Duck,
         Self::FunVoiceChanger,
+        Self::Soundboard,
     ];
 
     pub fn type_name(self) -> &'static str {
@@ -219,6 +222,7 @@ impl NodeKind {
             Self::NetworkReceive => "network-receive",
             Self::Duck => "duck",
             Self::FunVoiceChanger => "fun-voice-changer",
+            Self::Soundboard => "soundboard",
         }
     }
 }
@@ -317,6 +321,59 @@ fn valid_bounded_string(value: &serde_json::Value, maximum: usize) -> bool {
         .is_some_and(|text| !text.is_empty() && text.len() <= maximum)
 }
 
+/// Number of sound slots on a Soundboard (SND-01).
+pub const SOUNDBOARD_SLOTS: usize = 9;
+/// Longest slot caption in bytes (SND-03).
+pub const MAX_SOUNDBOARD_CAPTION_BYTES: usize = 64;
+/// Most sounds a random-set slot may list (SND-17).
+pub const MAX_SOUNDBOARD_SET_SOUNDS: usize = 8;
+/// Prefix of a reference to a sound in the bundled library (SND-08).
+pub const SOUND_LIBRARY_PREFIX: &str = "lib:";
+
+/// Splits `slot<N><Field>` (N is 1 to 9) into the slot number and the field.
+pub fn soundboard_slot_parameter(name: &str) -> Option<(usize, &str)> {
+    let rest = name.strip_prefix("slot")?;
+    let digit = rest.chars().next()?.to_digit(10)? as usize;
+    (1..=SOUNDBOARD_SLOTS)
+        .contains(&digit)
+        .then(|| (digit, &rest[1..]))
+}
+
+fn valid_soundboard_parameter(name: &str, value: &serde_json::Value) -> bool {
+    let Some((_, field)) = soundboard_slot_parameter(name) else {
+        return false;
+    };
+    match field {
+        "MediaId" => valid_bounded_string(value, MAX_ENTITY_ID_BYTES),
+        "FileName" => value.as_str().is_some_and(|name| {
+            !name.is_empty() && name.len() <= 255 && !name.chars().any(char::is_control)
+        }),
+        // An empty caption means "use the file name".
+        "Caption" => value.as_str().is_some_and(|caption| {
+            caption.len() <= MAX_SOUNDBOARD_CAPTION_BYTES && !caption.chars().any(char::is_control)
+        }),
+        "GainDb" => value
+            .as_f64()
+            .is_some_and(|gain| gain.is_finite() && (-24.0..=6.0).contains(&gain)),
+        "Mode" => value
+            .as_str()
+            .is_some_and(|mode| matches!(mode, "once" | "loop" | "toggle" | "hold")),
+        // A library category id, or up to eight sound references.
+        "Set" => match value {
+            serde_json::Value::String(_) => valid_bounded_string(value, MAX_ENTITY_ID_BYTES),
+            serde_json::Value::Array(items) => {
+                !items.is_empty()
+                    && items.len() <= MAX_SOUNDBOARD_SET_SOUNDS
+                    && items
+                        .iter()
+                        .all(|item| valid_bounded_string(item, MAX_ENTITY_ID_BYTES))
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 fn valid_process_id(value: &serde_json::Value) -> bool {
     value
         .as_u64()
@@ -364,7 +421,7 @@ pub fn node_registry() -> [NodeTypeSpec; 36] {
             NodeKind::Pitch => CapabilityAvailability::Available,
             NodeKind::NetworkSend | NodeKind::NetworkReceive => CapabilityAvailability::Available,
             NodeKind::Recorder => CapabilityAvailability::Available,
-            NodeKind::AudioFile => CapabilityAvailability::Available,
+            NodeKind::AudioFile | NodeKind::Soundboard => CapabilityAvailability::Available,
             // M02 user-mode Windows adapters are implemented in the current
             // VB-Cable-first track. Endpoint/process presence and exact
             // identity are runtime binding checks, not capability absence.
@@ -389,7 +446,7 @@ pub fn node_registry() -> [NodeTypeSpec; 36] {
             | NodeKind::InputSwitch
             | NodeKind::OutputSwitch
             | NodeKind::Duck => "low",
-            NodeKind::AudioFile => "low",
+            NodeKind::AudioFile | NodeKind::Soundboard => "low",
             NodeKind::ParametricEq => "medium",
             NodeKind::Compressor => "medium",
             NodeKind::Gate => "medium",
@@ -979,6 +1036,31 @@ pub const API_METHODS: [ApiMethodSpec; 131] = [
         name: "audioSources.transport",
         permission: PermissionScope::SessionControl,
         side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "soundLibrary.list",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "soundLibrary.read",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "soundboard.trigger",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "soundboard.stop",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "soundboard.status",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
         name: "timeShift.transport",
@@ -2139,6 +2221,7 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::AudioFile, "fileName") => value.as_str().is_some_and(|name| {
                     !name.is_empty() && name.len() <= 255 && !name.chars().any(char::is_control)
                 }),
+                (NodeKind::Soundboard, name) => valid_soundboard_parameter(name, value),
                 (NodeKind::Plugin, "path") => value
                     .as_str()
                     .is_some_and(|path| !path.is_empty() && path.len() <= MAX_PLUGIN_PATH_BYTES),
@@ -4460,6 +4543,36 @@ mod tests {
             virtual_source.availability,
             CapabilityAvailability::Unavailable("requires M03 managed virtual driver")
         );
+    }
+
+    #[test]
+    fn soundboard_slot_parameters_are_bounded() {
+        use serde_json::json;
+        let valid = |name: &str, value: serde_json::Value| valid_soundboard_parameter(name, &value);
+        assert!(valid("slot1MediaId", json!("lib:fart-01")));
+        assert!(valid("slot9FileName", json!("Fart 01")));
+        assert!(valid("slot3Caption", json!("")));
+        assert!(!valid(
+            "slot3Caption",
+            json!("x".repeat(MAX_SOUNDBOARD_CAPTION_BYTES + 1))
+        ));
+        assert!(!valid("slot3Caption", json!("bad\u{7}")));
+        assert!(valid("slot2GainDb", json!(-24.0)));
+        assert!(!valid("slot2GainDb", json!(6.5)));
+        assert!(valid("slot4Mode", json!("toggle")));
+        assert!(!valid("slot4Mode", json!("repeat")));
+        assert!(valid("slot5Set", json!("bodily-humor")));
+        assert!(valid("slot5Set", json!(["lib:a", "lib:b"])));
+        assert!(!valid("slot5Set", json!([])));
+        assert!(!valid(
+            "slot5Set",
+            json!(["lib:a"; MAX_SOUNDBOARD_SET_SOUNDS + 1])
+        ));
+        // Only slots 1 to 9 and known fields exist.
+        assert!(!valid("slot0MediaId", json!("lib:a")));
+        assert!(!valid("slot10MediaId", json!("lib:a")));
+        assert!(!valid("slot1Volume", json!(1)));
+        assert!(!valid("mediaId", json!("lib:a")));
     }
 
     #[test]

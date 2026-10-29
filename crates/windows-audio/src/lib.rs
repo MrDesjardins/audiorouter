@@ -7616,6 +7616,14 @@ impl NativeMultiInputWorker {
         self.feeder.mixer().audio_file_source_for_node(node_id)
     }
 
+    /// Trigger handle for a Soundboard feeding a Mixer input.
+    pub fn soundboard_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<std::sync::Arc<audiorouter_engine::SoundboardSource>> {
+        self.feeder.mixer().soundboard_for_node(node_id)
+    }
+
     /// Whether an input currently carries the silent stand-in.
     pub fn capture_is_silent(&self, index: usize) -> bool {
         matches!(

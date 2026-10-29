@@ -71,6 +71,8 @@ mod recording;
 mod recording_library;
 mod safety;
 mod sessions;
+mod sound_library;
+mod soundboard;
 mod status;
 #[cfg(test)]
 mod test_support;
@@ -303,6 +305,9 @@ pub struct ControlPlane {
         HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::AudioFileSource>>,
     test_signal_sources:
         HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::TestSignalSource>>,
+    soundboard_sources:
+        HashMap<(EntityId, EntityId), std::sync::Arc<audiorouter_engine::SoundboardSource>>,
+
     enrollments: HashMap<String, (ClientRole, bool)>,
     events: EventLog,
     mutation_limiter: MutationRateLimiter,
@@ -484,6 +489,7 @@ impl ControlPlane {
             next_audio_media: 1,
             audio_file_sources: HashMap::new(),
             test_signal_sources: HashMap::new(),
+            soundboard_sources: HashMap::new(),
             enrollments: HashMap::new(),
             events: EventLog::new(1),
             mutation_limiter: MutationRateLimiter::default(),
@@ -684,6 +690,11 @@ impl ControlPlane {
                     "audioSources.transport" => {
                         self.dispatch_audio_source_transport(request.params)
                     }
+                    "soundLibrary.list" => self.dispatch_sound_library_list(),
+                    "soundLibrary.read" => self.dispatch_sound_library_read(request.params),
+                    "soundboard.trigger" => self.dispatch_soundboard_trigger(request.params),
+                    "soundboard.stop" => self.dispatch_soundboard_stop(request.params),
+                    "soundboard.status" => self.dispatch_soundboard_status(request.params),
                     "timeShift.transport" => self.dispatch_time_shift_transport(request.params),
                     "meters.reset" => self.dispatch_meter_reset(request.params),
                     "recorders.list" => self.dispatch_recorders_list(request.params),

@@ -329,6 +329,7 @@ impl ControlPlane {
         };
         let mut test_signals = Vec::new();
         let mut audio_files = Vec::new();
+        let mut soundboards = Vec::new();
         for node in &session.nodes {
             if node.kind == NodeKind::TestSignal {
                 if let Some(source) = worker.test_signal_source_for_node(&node.id) {
@@ -338,13 +339,27 @@ impl ControlPlane {
                 if let Some(source) = worker.audio_file_source_for_node(&node.id) {
                     audio_files.push((node.id.clone(), source));
                 }
+            } else if node.kind == NodeKind::Soundboard {
+                if let Some(source) = worker.soundboard_for_node(&node.id) {
+                    soundboards.push((node.id.clone(), source));
+                }
+            }            } else if node.kind == NodeKind::AudioFile {
+                if let Some(source) = worker.audio_file_source_for_node(&node.id) {
+                    audio_files.push((node.id.clone(), source));
+                }
             }
         }
         self.test_signal_sources
             .retain(|(owner, _), _| owner != session_id);
         self.audio_file_sources
             .retain(|(owner, _), _| owner != session_id);
-        for (node_id, source) in test_signals {
+        self.soundboard_sources
+            .retain(|(owner, _), _| owner != session_id);
+        for (node_id, source) in soundboards {
+            self.soundboard_sources
+                .insert((session_id.clone(), node_id), source);
+        }
+        for (node_id, source) in test_signals {        for (node_id, source) in test_signals {
             self.test_signal_sources
                 .insert((session_id.clone(), node_id), source);
         }

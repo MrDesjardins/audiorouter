@@ -254,6 +254,7 @@ impl ControlPlane {
             next_audio_media: 1,
             audio_file_sources: HashMap::new(),
             test_signal_sources: HashMap::new(),
+            soundboard_sources: HashMap::new(),
             enrollments: HashMap::new(),
             events: EventLog::new(backend_epoch),
             mutation_limiter: MutationRateLimiter::default(),

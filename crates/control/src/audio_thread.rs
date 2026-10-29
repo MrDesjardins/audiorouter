@@ -623,6 +623,13 @@ impl MultiInputWorkerHandle {
         self.with(|worker| worker.audio_file_source_for_node(node_id))
     }
 
+    pub(crate) fn soundboard_for_node(
+        &self,
+        node_id: &EntityId,
+    ) -> Option<Arc<audiorouter_engine::SoundboardSource>> {
+        self.with(|worker| worker.soundboard_for_node(node_id))
+    }
+
     pub(crate) fn capture_is_silent(&self, index: usize) -> bool {
         self.with(|worker| worker.capture_is_silent(index))
     }

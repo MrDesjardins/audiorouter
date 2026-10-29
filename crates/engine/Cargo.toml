@@ -15,7 +15,7 @@ audiorouter-domain = { path = "../domain" }
 audiorouter-dsp = { path = "../dsp" }
 crossbeam-queue = "0.3.12"
 serde_json = { workspace = true }
-symphonia = { version = "0.6.1", default-features = false, features = ["wav", "mp3", "pcm"] }
+symphonia = { version = "0.6.1", default-features = false, features = ["wav", "mp3", "pcm", "flac"] }
 
 [[bench]]
 name = "realtime"
