@@ -33,7 +33,7 @@ callback rules.
 - Compile-heavy work (Rust builds, test suites, Playwright) waits while the
   owner's virtual cable VM session is running, because host load causes false
   audio-loss failures in the VM. Documentation, scripts and sourcing can proceed.
-- A Freesound API key (free) is needed only if Freesound is used for sourcing;
+- A Freesound API key (free; see "Getting Freesound access" in the library plan) is needed only if Freesound is used for sourcing;
   Kenney, OpenGameArt, Wikimedia and generated sounds need nothing from the owner.
 - Windows evidence is required for audio continuity, installer contents and the
   fresh-install run. Stream Deck hardware is required for the attended key test.
@@ -79,6 +79,9 @@ before release.
 ## Progress
 
 - 2026-10-29: owner decisions recorded; plan promoted from `future/`. No code yet.
+- 2026-10-29: library target changed to up to about 100 (about 80 is fine) with many
+  variations of favorites (fart 10 to 12, claps, ta-da); Bodily humor category and
+  content rules added; Freesound access steps written.
 
 ## Next action
 

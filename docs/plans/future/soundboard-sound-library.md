@@ -78,23 +78,77 @@ Method:
 The agent can do steps 1, 2 (where the source allows a scripted download), 3, 4
 and 5. A Freesound API key is the one thing that needs the owner.
 
-## Target mix (about 100)
+### Getting Freesound access
 
-| Category | Kinds of sound | Target |
+The "Manage API permissions" page in a Freesound account only lists third-party
+apps the person has authorized; it is not where a key is made. A developer key is
+requested on Freesound's API credentials page (search the site for "Apply for an
+API key", normally under the API documentation): sign in, name the application
+("AudioRouter sound library sourcing"), describe it as a non-commercial-use-free
+tool that downloads CC0 sounds to review, and submit. The key (a "token") is shown
+on that page afterwards.
+
+- With only a token, the API can search and return each sound's license, author,
+  duration, tags and **preview** files (a compressed MP3/OGG version). Previews
+  are enough to audition and, for sounds under 5 seconds, acceptable as the
+  shipped file if the quality is good.
+- Downloading the **original** file needs a one-time OAuth2 sign-in as the owner.
+  Use it only for sounds the owner has chosen to keep.
+- Keep the token out of the repository and out of logs (the AGENTS secrets rule);
+  the sourcing script reads it from an environment variable.
+- The agent confirms Freesound's current terms of use and per-sound license on
+  the page of every sound before it is added.
+
+## Target mix (up to about 100, fewer is fine)
+
+Owner direction 2026-10-29: the library should have what people actually put on a
+soundboard, with **several variations of the favorites** (farts, claps, "ta-da"),
+because a board with one fart sounds dull and the variations are what make people
+keep coming back. A smaller library of good sounds beats a hundred weak ones;
+about 80 is an acceptable result.
+
+**Must-have kinds** (each with the number of variations to look for):
+
+| Kind | Variations | Notes |
 | --- | --- | --- |
-| Reactions and comedy | rimshot-style figure, sad horn figure, record scratch, boing, slide whistle, cartoon pop, crickets, "ta-da" fanfare | 12 |
-| Laughs and applause | applause, clapping, crowd cheer, groan, gasp, laugh (non-speech) | 10 |
-| Horns and alerts | air horn, buzzer, siren, doorbell, bell, alarm, notification chime | 12 |
-| Game and arcade | coin, power-up, level-up, game over, hit, jump | 12 |
-| Interface and clicks | clicks, toggles, confirmations, errors | 10 |
-| Impacts and hits | punch, thud, crash, glass, door slam | 10 |
-| Whooshes and transitions | whoosh, riser, swell, swipe | 8 |
-| Sci-fi and magic | laser, teleport, spell, robot, shimmer | 10 |
-| Animals and nature | dog, cat, bird, rooster, thunder, rain | 8 |
-| Stingers and music hits | short dramatic stinger, drum hit, cymbal, harp gliss | 8 |
+| Fart (bodily humor) | 10 to 12 | short, long, squeaky, wet, tiny, huge, rapid, echoing, polite, "whoopee cushion" |
+| Clapping | 3 to 4 | single clap, small group, slow clap, big crowd |
+| Applause and cheering | 3 to 4 | short, long, with whistles |
+| "Ta-da" fanfares | 3 to 4 | trumpet flourish, orchestral hit, magic reveal, party horn |
+| Rimshot and drum stings | 3 | drum rimshot, cymbal crash, "badum-tss" figure |
+| Sad horn / fail | 3 | descending horn figure, deflating, buzzer |
+| Air horn | 3 | single blast, triple, long |
+| Laugh track and chuckles | 3 | non-speech laughter, crowd laugh |
+| Crickets, "awkward" and tumbleweed | 2 | |
+| Record scratch, boing, slide whistle, cartoon pop | 1 to 2 each | |
+| Doorbell, bell, ding, notification chime | 4 | |
+| Gasp, groan, "oh no" (non-speech) | 3 | |
+| Explosion, punch, crash, glass, door slam | 6 | |
+| Whoosh, riser, swipe | 4 | |
+| Laser, power-up, coin, level-up, game over | 6 | |
+| Dog, cat, rooster, thunder, rain | 5 | |
+| Dramatic sting, drum hit, harp gliss | 4 | |
 
-Nothing in the table is fixed except the shape: a few categories of ten or so,
-every sound under five seconds. The exact list comes out of the sourcing work.
+Category list for the picker (counts come from the sourcing work, not fixed):
+
+| Category | Contains |
+| --- | --- |
+| Bodily humor | the fart variations and similar |
+| Reactions and comedy | rimshot, sad horn, record scratch, boing, crickets, gasp, groan |
+| Applause and laughs | claps, cheering, crowd, laughs |
+| Fanfares and stingers | ta-da, dramatic stings, drum hits |
+| Horns and alerts | air horn, buzzer, siren, bells, chimes |
+| Game and arcade | coin, power-up, level-up, game over |
+| Impacts | punch, thud, crash, explosion, glass |
+| Whooshes | whoosh, riser, swipe |
+| Sci-fi and magic | laser, teleport, spell, shimmer |
+| Animals and nature | dog, cat, rooster, thunder, rain |
+
+**Content rules.** No spoken words, no slurs, no sexual sounds, nothing that
+imitates a real person. Bodily humor is mild and clearly labelled by its category
+name, so a person who does not want it never has to browse it. Each variation gets
+a distinct, plain title ("Fart - tiny squeak", "Fart - long rumble") because the
+title becomes the caption by default and shows on the button.
 
 ## File preparation
 
