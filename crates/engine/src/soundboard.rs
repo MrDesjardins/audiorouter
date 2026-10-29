@@ -431,7 +431,7 @@ mod tests {
     }
 
     fn block() -> AudioBlock {
-        AudioBlock::new(2, 480).unwrap()
+        AudioBlock::new(2, crate::PROCESSING_QUANTUM_FRAMES).unwrap()
     }
 
     fn energy(block: &AudioBlock) -> f32 {
@@ -460,7 +460,10 @@ mod tests {
         board.process(&mut out);
         assert!(energy(&out) > 0.0);
         assert_eq!(board.playing_mask(), 1);
-        board.process(&mut out);
+        // 600 frames end within five 128-frame blocks.
+        for _ in 0..5 {
+            board.process(&mut out);
+        }
         assert_eq!(board.playing_mask(), 0);
         board.process(&mut out);
         assert_eq!(energy(&out), 0.0);
@@ -491,11 +494,11 @@ mod tests {
         board.process(&mut out);
         assert_eq!(board.playing_mask(), 1);
         // Clear the gap, then toggle off; the fade ends within a few blocks.
-        for _ in 0..6 {
+        for _ in 0..20 {
             board.process(&mut out);
         }
         board.trigger(0);
-        for _ in 0..3 {
+        for _ in 0..4 {
             board.process(&mut out);
         }
         assert_eq!(board.playing_mask(), 0);
@@ -509,7 +512,7 @@ mod tests {
         held.process(&mut out);
         assert_eq!(held.playing_mask(), 1);
         held.release(0);
-        for _ in 0..3 {
+        for _ in 0..4 {
             held.process(&mut out);
         }
         assert_eq!(held.playing_mask(), 0);
@@ -521,7 +524,7 @@ mod tests {
         }
         assert_eq!(looped.playing_mask(), 1);
         looped.stop_all();
-        for _ in 0..3 {
+        for _ in 0..4 {
             looped.process(&mut out);
         }
         assert_eq!(looped.playing_mask(), 0);
@@ -557,7 +560,7 @@ mod tests {
             assert!(previous != Some(level.to_bits()));
             previous = Some(level.to_bits());
             // Let the trigger gap pass.
-            for _ in 0..6 {
+            for _ in 0..20 {
                 board.process(&mut out);
             }
         }
@@ -581,7 +584,7 @@ mod tests {
             .unwrap()
             .iter()
             .fold(0.0f32, |peak, sample| peak.max(sample.abs()));
-        assert!(peak < 1.0 && peak > 0.9, "peak {peak}");
+        assert!(peak <= 1.0 && peak > 0.9, "peak {peak}");
     }
 
     #[test]

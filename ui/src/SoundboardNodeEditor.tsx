@@ -1,5 +1,5 @@
 // Properties editor of a Soundboard node: nine sound slots with add, change, delete and play.
-import { useContext, useState } from "react";
+import { useContext, useState, type ReactNode } from "react";
 import type { Node } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
 import { uploadAudioMedia } from "./audioUpload";
@@ -36,7 +36,7 @@ export function SoundPlayButton({
   mode: SoundboardMode;
   disabled?: boolean;
   className?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const controller = useContext(SoundboardContext);
   const hold = mode === "hold";
@@ -49,7 +49,13 @@ export function SoundPlayButton({
       onClick={hold ? undefined : () => controller.trigger(nodeId, slot)}
       onPointerDown={hold ? () => controller.trigger(nodeId, slot, "press") : undefined}
       onPointerUp={hold ? () => controller.trigger(nodeId, slot, "release") : undefined}
-      onPointerLeave={hold ? (event) => event.buttons > 0 && controller.trigger(nodeId, slot, "release") : undefined}
+      onPointerLeave={
+        hold
+          ? (event) => {
+              if (event.buttons > 0) controller.trigger(nodeId, slot, "release");
+            }
+          : undefined
+      }
     >
       {children}
     </button>
