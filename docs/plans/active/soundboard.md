@@ -1,0 +1,87 @@
+# Active plan: Soundboard tool and sound library (2026-10-29)
+
+Owner request, 2026-10-29: build a Soundboard tool (nine sounds, canvas buttons,
+Stream Deck trigger through the API) with a library of about a hundred free short
+sounds, a searchable picker, and the user's own sounds. "I want you to start."
+
+- Specification and behavior: [Soundboard tool](../future/soundboard-tool.md)
+  and [Soundboard sound library](../future/soundboard-sound-library.md). Those
+  documents stay the detailed source; this plan tracks execution.
+- Authorized: the tool, its API, UI, Stream Deck action, the bundled sound
+  library and picker, and website guide pages for the tool.
+- Not authorized: in-app global keyboard shortcuts (step 2 of the key-binding
+  section), a ready-made Stream Deck profile, a downloadable sound pack, streaming
+  of long files, attribution-licensed sounds. Each needs a separate decision.
+- No pull request is opened without the owner's approval (AGENTS.md).
+
+## Owner decisions (2026-10-29)
+
+1. Built-in sounds are CC0, public domain or original sounds made for AudioRouter
+   only. No attribution licenses in version one.
+2. The library is bundled in the installer. No download and no network access.
+3. User sounds: 120 seconds per slot and a total decoded budget for the board,
+   shown at upload. No streaming of longer files in version one.
+
+## Requirement IDs
+
+SND-01 to SND-14 (proposed in the Soundboard tool plan; added to `docs/spec/`
+in task 1). Touches UI-17, UI-20, UI-11, API/CLI/MCP parity and the audio
+callback rules.
+
+## Prerequisites and constraints
+
+- Compile-heavy work (Rust builds, test suites, Playwright) waits while the
+  owner's virtual cable VM session is running, because host load causes false
+  audio-loss failures in the VM. Documentation, scripts and sourcing can proceed.
+- A Freesound API key (free) is needed only if Freesound is used for sourcing;
+  Kenney, OpenGameArt, Wikimedia and generated sounds need nothing from the owner.
+- Windows evidence is required for audio continuity, installer contents and the
+  fresh-install run. Stream Deck hardware is required for the attended key test.
+
+## Ordered tasks
+
+1. Spec: add SND requirements, the tool catalog entry, API methods, the tool guide
+   requirement and a decision record. Update the future plans to point here.
+2. Sourcing and format spike (no Rust build): build the target list, collect and
+   record candidates, write the generator for original sounds, compare WAV, MP3
+   and FLAC for size and clean starts, choose normalization numbers by listening.
+3. Domain: `NodeKind::Soundboard`, slot parameters, validation, `API_METHODS`.
+4. Engine: prepared stage, voices, lock-free command queue, mixing and limiter;
+   add to the tool-combination suite.
+5. Control plane, API, CLI, MCP, HTTP; regenerate the website API catalog.
+6. Library: manifest, checks in CI, installer resource folder, notices file,
+   `soundLibrary.list` and preview read.
+7. UI: card buttons, Properties editor, picker; three-theme screenshots and
+   layout-shift sampling.
+8. Stream Deck action and its tests.
+9. Website: tool guide page and the Stream Deck page.
+10. Qualification: audio continuity, fresh-install run, installer check, attended
+    Stream Deck test, owner listening review.
+
+## Validation matrix
+
+See the validation tables in the two linked plans. Record each result here with
+command, environment, result and evidence path as it is run.
+
+## Risks
+
+See the linked plans. Additional execution risks: a long implementation spanning
+engine, UI, API and plugin must be kept in reviewable commits (one task each), and
+the library licensing record must be complete before any sound is committed.
+
+## Rollback
+
+Each task is a separate commit on `feature/soundboard`. Reverting the branch
+removes the tool, the API methods, the library and the pages. A saved session
+containing a Soundboard needs the placeholder decision from the Soundboard plan
+before release.
+
+## Progress
+
+- 2026-10-29: owner decisions recorded; plan promoted from `future/`. No code yet.
+
+## Next action
+
+Task 1 (spec) and task 2 (sourcing and format spike), both without Rust builds.
+Start the engine and domain work (tasks 3 and 4) when the owner's VM session has
+finished, or earlier if the owner says host builds are fine.

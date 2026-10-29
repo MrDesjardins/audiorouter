@@ -1,7 +1,9 @@
 # Soundboard tool
 
-Status: future plan, owner request 2026-10-29. Not authorized for implementation;
-promote it by the steps at the end of [the future-plans index](README.md).
+Status: promoted to active work on 2026-10-29 (owner: "I want you to start").
+Execution and decisions are tracked in the [active plan](../active/soundboard.md);
+this document stays the detailed specification. Key bindings step 2 (global
+shortcuts) and a ready-made Stream Deck profile are not authorized.
 
 ## Outcome
 

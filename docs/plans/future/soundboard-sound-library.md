@@ -5,7 +5,7 @@ include about a hundred free sounds the user can pick, next to their own sounds,
 with a picker that can sort by category and search. Built-in sounds are short
 (under 5 seconds). The user's own sounds may be longer.
 
-Not authorized for implementation until the Soundboard plan is promoted.
+Promoted to active work on 2026-10-29; see the [active plan](../active/soundboard.md).
 
 ## What "popular" can and cannot mean
 
@@ -220,10 +220,10 @@ and Settings shows a link to it.
   about 20 MB.
 - **Id churn breaks saved boards.** Covered by the stable-id rule and check.
 
-## Open decisions for the owner
+## Decisions (owner, 2026-10-29)
 
-1. Accept CC0, public-domain and original sounds only for version one (the plan's
-   recommendation), or allow attribution licenses too?
-2. Bundled in the installer (recommended) or an optional later download?
-3. Are the per-slot 120 seconds and total board budget acceptable, or should long
-   files stream from disk later?
+1. CC0, public-domain and original sounds only for version one.
+2. Bundled in the installer; no download.
+3. 120 seconds per slot and a total decoded budget for the board are accepted.
+
+Execution is tracked in the [active Soundboard plan](../active/soundboard.md).
