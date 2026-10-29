@@ -1,13 +1,15 @@
 // Turns the picked sourcing files into library-ready sounds and a provenance manifest.
 // Usage:
-//   node tools/soundboard/prepare-library.mjs <sourcing-folder> <picks.txt> <freesound-licenses.json> <output-folder>
+//   node tools/soundboard/prepare-library.mjs <sourcing-folder> <picks.txt>[,more.txt] <licenses.json>[,more.json] <output-folder>
 // For each pick: decode, mix to mono, trim leading and trailing silence, match the average
 // level (with a peak ceiling), fade the end, write 16-bit 44.1 kHz WAV, and record where
-// the sound came from. Sounds longer than 5 seconds after trimming are rejected, not cut.
+// the sound came from. Sounds longer than 5 seconds after trimming are rejected, not cut,
+// unless the picks line ends with "| excerpt=SECONDS": then the loudest window of that
+// length is kept, faded in and out (for example a few seconds of a long crowd applause).
 // Requires ffmpeg and ffprobe on the PATH.
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -29,10 +31,15 @@ const CATEGORIES = {
   impacts: "Impacts",
   whooshes: "Whooshes",
   "sci-fi-magic": "Sci-fi and magic",
+  "applause-laughs": "Applause and laughs",
 };
 
-const picks = readFileSync(picksFile, "utf8").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
-const licenses = new Map(JSON.parse(readFileSync(licensesFile, "utf8")).map((r) => [`${r.folder}/${r.file}`, r]));
+const picks = picksFile.split(",").flatMap((f) => readFileSync(f, "utf8").split(/\r?\n/)).map((s) => s.trim()).filter(Boolean)
+  .map((line) => {
+    const [path, option] = line.split("|").map((s) => s.trim());
+    return { path, excerpt: Number.parseFloat(option?.match(/excerpt=([\d.]+)/)?.[1]) || null };
+  });
+const licenses = new Map(licensesFile.split(",").flatMap((f) => JSON.parse(readFileSync(f, "utf8"))).map((r) => [`${r.folder}/${r.file}`, r]));
 const originals = new Map(JSON.parse(readFileSync(join(sourcing, "original", "originals.json"), "utf8")).map((o) => [`${o.id}.wav`, o]));
 const kenneyPacks = {
   "kenney_digital-audio": "digital-audio",
@@ -77,14 +84,17 @@ function describe(rel, counters) {
     return { category, title: humanize(stem), tags: [humanize(kind).toLowerCase()],
       source: { name: `Kenney ${kenneyPacks[pack]}`, author: "Kenney (Kenney Vleugels)", url: `https://kenney.nl/assets/${kenneyPacks[pack]}`, license: "CC0" } };
   }
-  // Freesound
-  const rec = licenses.get(`${parts[1]}/${file}`);
+  // Freesound: freesound/<group>/<file>, or a pack folder <group>/<file> at the top
+  const group = parts.length > 2 ? parts[1] : parts[0];
+  const rec = licenses.get(`${group}/${file}`);
   if (!rec || !/zero/.test(rec.license ?? "")) throw new Error(`${rel}: no CC0 license record`);
   const source = { name: "Freesound", author: rec.user, url: rec.url, license: "CC0", title: rec.title };
-  if (parts[1] === "fart") return { category: "bodily-humor", title: /short-fart|close/.test(stem) ? `Fart - ${/short/.test(stem) ? "short" : "close up"}` : `Fart ${number("fart")}`, tags: ["fart"], source };
-  if (parts[1] === "burp") return { category: "bodily-humor", title: `Burp ${number("burp")}`, tags: ["burp"], source };
-  if (parts[1] === "tada") return { category: "fanfares-stingers", title: `Ta-da ${number("tada")}`, tags: ["tada", "fanfare"], source };
-  if (parts[1] === "ohyeah") return { category: "reactions-comedy", title: "Oh yeah!", tags: ["voice", "cheer"], source, ownerException: "spoken phrase approved by the owner 2026-10-29" };
+  if (group === "clapping") return { category: "applause-laughs", title: `Applause - crowd ${number("clap")}`, tags: ["applause", "clapping", "crowd"], source };
+  if (group === "laughter") return { category: "applause-laughs", title: `Evil laugh ${number("laugh")}`, tags: ["laugh", "evil"], source };
+  if (group === "fart") return { category: "bodily-humor", title: /short-fart|close/.test(stem) ? `Fart - ${/short/.test(stem) ? "short" : "close up"}` : `Fart ${number("fart")}`, tags: ["fart"], source };
+  if (group === "burp") return { category: "bodily-humor", title: `Burp ${number("burp")}`, tags: ["burp"], source };
+  if (group === "tada") return { category: "fanfares-stingers", title: `Ta-da ${number("tada")}`, tags: ["tada", "fanfare"], source };
+  if (group === "ohyeah") return { category: "reactions-comedy", title: "Oh yeah!", tags: ["voice", "cheer"], source, ownerException: "spoken phrase approved by the owner 2026-10-29" };
   throw new Error(`${rel}: unknown group`);
 }
 
@@ -95,7 +105,23 @@ const rejected = [];
 const counters = {};
 const ids = new Set();
 
-for (const rel of picks.sort()) {
+/** Start (seconds) of the loudest window of the given length in an audio file. */
+function loudestWindowStart(file, windowSeconds) {
+  const run = spawnSync("ffmpeg", ["-v", "error", "-i", file, "-f", "s16le", "-ac", "1", "-ar", "44100", "-"], { maxBuffer: 1 << 28 });
+  const samples = new Int16Array(run.stdout.buffer, run.stdout.byteOffset, Math.floor(run.stdout.length / 2));
+  const window = Math.round(windowSeconds * 44100);
+  const step = 4410;
+  let best = 0;
+  let bestEnergy = -1;
+  for (let start = 0; start + window <= samples.length; start += step) {
+    let energy = 0;
+    for (let i = start; i < start + window; i += 11) energy += samples[i] * samples[i];
+    if (energy > bestEnergy) { bestEnergy = energy; best = start; }
+  }
+  return best / 44100;
+}
+
+for (const { path: rel, excerpt } of picks.sort((a, b) => a.path.localeCompare(b.path))) {
   const input = join(sourcing, rel);
   const info = describe(rel, counters);
   let id = slug(info.title);
@@ -105,7 +131,18 @@ for (const rel of picks.sort()) {
   ffmpeg(["-i", input, "-af",
     "aformat=channel_layouts=mono,silenceremove=start_periods=1:start_threshold=-55dB:start_silence=0.004,areverse,silenceremove=start_periods=1:start_threshold=-60dB:start_silence=0.01,areverse",
     "-ar", "44100", "-sample_fmt", "s16", trimmed]);
-  const seconds = durationSeconds(trimmed);
+  let seconds = durationSeconds(trimmed);
+  let fadeInSeconds = 0.001;
+  let fadeOutSeconds = 0.012;
+  if (excerpt && seconds > excerpt) {
+    const start = loudestWindowStart(trimmed, excerpt);
+    const cut = join(work, "excerpt.wav");
+    ffmpeg(["-ss", start.toFixed(3), "-t", String(excerpt), "-i", trimmed, "-ar", "44100", "-sample_fmt", "s16", cut]);
+    renameSync(cut, trimmed);
+    seconds = durationSeconds(trimmed);
+    fadeInSeconds = 0.03; // a window cut from a longer recording needs gentle edges
+    fadeOutSeconds = 0.4;
+  }
   if (!(seconds > 0.02)) { rejected.push({ rel, reason: "silent after trimming" }); continue; }
   if (seconds > MAX_SECONDS) { rejected.push({ rel, reason: `${seconds.toFixed(1)} s is longer than ${MAX_SECONDS} s` }); continue; }
   // Measure, then choose a gain that reaches the target average level without passing the peak ceiling.
@@ -113,9 +150,9 @@ for (const rel of picks.sort()) {
   const mean = Number.parseFloat(stats.match(/mean_volume: (-?[\d.]+) dB/)?.[1]);
   const peak = Number.parseFloat(stats.match(/max_volume: (-?[\d.]+) dB/)?.[1]);
   const gain = Math.max(-24, Math.min(TARGET_MEAN_DB - mean, PEAK_CEILING_DB - peak, MAX_BOOST_DB));
-  const fadeStart = Math.max(0, seconds - 0.012);
+  const fadeStart = Math.max(0, seconds - fadeOutSeconds);
   const output = join(outDir, `${id}.wav`);
-  ffmpeg(["-i", trimmed, "-af", `volume=${gain.toFixed(2)}dB,afade=t=in:d=0.001,afade=t=out:st=${fadeStart.toFixed(4)}:d=0.012`, "-ar", "44100", "-ac", "1", "-sample_fmt", "s16", output]);
+  ffmpeg(["-i", trimmed, "-af", `volume=${gain.toFixed(2)}dB,afade=t=in:d=${fadeInSeconds},afade=t=out:st=${fadeStart.toFixed(4)}:d=${fadeOutSeconds}`, "-ar", "44100", "-ac", "1", "-sample_fmt", "s16", output]);
   const check = ffmpeg(["-i", output, "-af", "volumedetect", "-f", "null", "-"]);
   ids.add(id);
   manifest.push({

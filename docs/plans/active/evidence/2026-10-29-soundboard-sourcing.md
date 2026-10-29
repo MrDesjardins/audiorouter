@@ -78,6 +78,25 @@ heavy 1") and need friendly names; there are no applause, clapping, laughter,
 gasp, groan or animal sounds yet; the format spike (WAV against FLAC or MP3) is
 still to do; the owner must listen to the prepared set at its final levels.
 
+## Applause, clapping and laughter (owner download, 2026-10-29)
+
+License evidence: the Freesound pack readme in each folder plus
+`check-freesound-license.mjs` on every sound page.
+
+- **Applause folder:** the same CC-BY 4.0 pack by one author as before; still excluded.
+- **Clapping folder (19):** 18 crowd claps from a choir concert (one author) are CC0
+  but 10 to 41 seconds long; one single-clap file is CC-BY-NC 3.0 and is excluded.
+- **Laughter folder (4):** 3 CC0, one CC-BY 4.0 (excluded). All three usable laughs
+  are evil or sinister laughs, not general laughter.
+- The crowd claps need an excerpt: `prepare-library.mjs` now supports
+  `| excerpt=SECONDS` on a picks line, which keeps the loudest window of that
+  length with a 30 ms fade in and a 0.4 s fade out. Five claps (4, 8, 12, 15, 18)
+  were taken as 4.5 s excerpts (`picks-2.txt`). Windows were chosen by loudness,
+  not by ear, so they need a listening check.
+- Library is now 105 sounds, 15 MB as WAV; Applause and laughs has 8.
+- Still missing: general (funny) laughter, a short single applause, gasp, groan,
+  dog and cat.
+
 ## Next steps
 
 1. Owner listens with `target/sourcing/audition.html` and ticks the sounds to keep.
