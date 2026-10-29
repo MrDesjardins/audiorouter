@@ -110,8 +110,31 @@ before release.
 - 2026-10-29 build start: Rust builds wait for the owner's VM session to finish
   (VM `AR-DriverTest` was still running); code is written first.
 
+- 2026-10-28 code written, NOT yet compiled or tested (the owner's VM pool run was
+  still in progress, so no cargo, tsc, vitest or Playwright ran on the host):
+  - Domain: `NodeKind::Soundboard` (37 kinds), slot parameters `slotNMediaId`,
+    `FileName`, `Caption`, `GainDb` (-24 to +6), `Mode` (once, loop, toggle, hold),
+    `Set` (a category id or up to 8 sound refs), bounded validation and a unit test;
+    API methods `soundboard.trigger`, `soundboard.stop`, `soundboard.status`,
+    `soundLibrary.list`, `soundLibrary.read`.
+  - Engine: `crates/engine/src/soundboard.rs` (16 voices, bounded command queue,
+    5 ms stop fade, 50 ms trigger gap, random sets that never repeat, soft limiter) with
+    unit tests; symphonia `flac` feature added (Cargo.lock will change on first build).
+  - Control: `soundboard.rs` (API), `sound_library.rs` (manifest, SHA-256 check,
+    base64 read, decoded-budget loading of `lib:` and user sounds).
+  - UI: canvas card, Properties editor, picker, live status store, API client,
+    Stream Deck Sound action and inspector, website guide, API catalog, Stream Deck page,
+    spec UI-25.
+  - Known gaps: a library category in `slotNSet` is accepted but not yet expanded (lists
+    work); drag and drop (SND-19) is not built; the installer does not yet copy
+    `resources/sound-library` next to the program; `tool_combinations.rs` and an
+    engine route test for Soundboard are not written; no jsdom tests for the new UI.
+
 ## Next action
 
-Task 1 (spec) and task 2 (sourcing and format spike), both without Rust builds.
-Start the engine and domain work (tasks 3 and 4) when the owner's VM session has
-finished, or earlier if the owner says host builds are fine.
+When the owner's VM pool run has finished (watch for `stage-a-pool-*.zip` in the
+share): `cargo fmt`, `cargo check`/Clippy (workspace and `src-tauri`), engine and
+control tests, then `npm` typecheck, lint, format and vitest for `ui/` and
+`tools/streamdeck`. Fix what the first compile finds, then the known gaps above, then
+the three-theme screenshots and the continuity, fresh-install and attended Stream Deck
+qualification (task 10).
