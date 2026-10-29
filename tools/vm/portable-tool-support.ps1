@@ -1,7 +1,7 @@
 <# Definitions only: inspect a PE file without loading or executing it. #>
 function Get-VmToolImports {
-    param([Parameter(Mandatory=$true)][string] $Path)
-    if ((Get-Item -LiteralPath $Path).Length -gt 16MB) { throw 'VM diagnostic PE exceeds 16 MB.' }
+    param([Parameter(Mandatory=$true)][string] $Path, [long] $MaxBytes = 16MB)
+    if ((Get-Item -LiteralPath $Path).Length -gt $MaxBytes) { throw "PE exceeds the allowed size of $MaxBytes bytes." }
     $bytes = [IO.File]::ReadAllBytes($Path)
     if ($bytes.Length -lt 256 -or $bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw 'Not a PE executable.' }
     $pe = [BitConverter]::ToUInt32($bytes,60)
@@ -50,8 +50,8 @@ function Get-VmToolImports {
 }
 
 function Assert-PortableVmTool {
-    param([Parameter(Mandatory=$true)][string] $Path)
-    $imports = @(Get-VmToolImports $Path)
+    param([Parameter(Mandatory=$true)][string] $Path, [long] $MaxBytes = 16MB)
+    $imports = @(Get-VmToolImports -Path $Path -MaxBytes $MaxBytes)
     if ($imports.Count -eq 0) { throw 'VM tool imports are missing.' }
     $runtime = @($imports | Where-Object { $_ -match '^(vcruntime|msvcp|msvcr|concrt)\d.*\.dll$' })
     if ($runtime.Count -gt 0) { throw "VM tool requires a Visual C++ redistributable: $($runtime -join ', '). Build with +crt-static." }
