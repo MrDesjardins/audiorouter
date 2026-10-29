@@ -17668,6 +17668,77 @@ mod tests {
     }
 
     #[test]
+    fn soundboard_routes_to_an_output_like_the_other_generated_sources() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node = |id: &str,
+                    kind: NodeKind,
+                    direction: PortDirection,
+                    parameters: serde_json::Value| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: parameters.as_object().unwrap().clone(),
+            ports: vec![Port {
+                name: "port".into(),
+                direction,
+                channels: 2,
+            }],
+        };
+        let audio = Arc::new(DecodedAudio {
+            channels: 2,
+            sample_rate_hz: 48_000,
+            samples: vec![0.25; 2 * 4_800].into(),
+        });
+        let media = HashMap::from([("media-1".to_owned(), audio)]);
+        for (kind, parameters) in [
+            (
+                NodeKind::AudioFile,
+                serde_json::json!({"mediaId":"media-1"}),
+            ),
+            (
+                NodeKind::Soundboard,
+                serde_json::json!({"slot1MediaId":"media-1"}),
+            ),
+        ] {
+            let session = Session {
+                id: EntityId::new("route"),
+                name: "route".into(),
+                schema_version: 1,
+                revision: 1,
+                nodes: vec![
+                    node("source", kind, PortDirection::Output, parameters),
+                    node(
+                        "output",
+                        NodeKind::PhysicalOutput,
+                        PortDirection::Input,
+                        serde_json::json!({}),
+                    ),
+                ],
+                edges: vec![Edge {
+                    id: EntityId::new("edge"),
+                    source_node: EntityId::new("source"),
+                    source_port: "port".into(),
+                    destination_node: EntityId::new("output"),
+                    destination_port: "port".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                }],
+            };
+            let result = compile_session_at_sample_rate_with_plugins_and_audio(
+                &session,
+                RuntimeGeneration::new(13),
+                48_000,
+                &HashMap::new(),
+                &media,
+            );
+            assert!(result.is_ok(), "{kind:?} to an output: {:?}", result.err());
+        }
+    }
+
+    #[test]
     fn soundboard_compiles_into_graph_and_plays_a_triggered_slot() {
         use audiorouter_domain::{EntityId, Node, NodeKind, Port, PortDirection, Session};
         let node_id = EntityId::new("soundboard");
