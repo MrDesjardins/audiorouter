@@ -31,6 +31,8 @@ import {
 } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
+import { SoundboardContext, useSoundboardController } from "./soundboardLive";
+import { isSoundboardParameter } from "./soundboard";
 import { useReportUnsaved } from "./unsavedReport";
 import { QuitButton } from "./QuitButton";
 import {
@@ -1249,7 +1251,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const targetNode = draftRef.current.nodes.find((candidate) => candidate.id === nodeId);
     if (!targetNode) return;
     const error =
-      targetNode.kind === "audioFile"
+      targetNode.kind === "soundboard"
+        ? !isSoundboardParameter(name) || (typeof value === "string" && value.length > 255)
+          ? "Invalid Soundboard setting"
+          : null
+        : targetNode.kind === "audioFile"
+        ? !(name === "mediaId"      targetNode.kind === "audioFile"
         ? !(name === "mediaId" && typeof value === "string" && value.length <= 128) &&
           !(name === "fileName" && typeof value === "string" && value.length <= 255) &&
           !(name === "loop" && typeof value === "boolean")
@@ -1812,7 +1819,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         // Test Signal and Audio File are generated inside the Mixer input;
         // endpoint loopback and virtual sources are not supported here yet.
         const unsupported = mixerSources.filter(
-          (node) => !["physicalInput", "applicationCapture", "testSignal", "audioFile"].includes(node.kind),
+          (node) => !["physicalInput", "applicationCapture", "testSignal", "audioFile", "soundboard"].includes(node.kind)!["physicalInput", "applicationCapture", "testSignal", "audioFile"].includes(node.kind),
         );
         const microphones = mixerSources.filter((node) => node.kind === "physicalInput");
         if (unsupported.length > 0) {
@@ -1867,7 +1874,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint)
             await backend.detachNativeEndpoint(session.id);
           const bindings = mixerSources.map((node): import("@audiorouter/contracts").NativeMultiInputSourceBinding =>
-            node.kind === "testSignal" || node.kind === "audioFile"
+            node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard"
+              ? { kind: "generated" }node.kind === "testSignal" || node.kind === "audioFile"
               ? { kind: "generated" }
               : node.kind === "physicalInput"
                 ? { kind: "physical", endpointId: endpoints.captureEndpointId ?? "" }
@@ -2122,6 +2130,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const startSessionRef = useRef(startSession);
   startSessionRef.current = startSession;
+  const soundboard = useSoundboardController({
+    backend,
+    session,
+    sessionRunning,
+    startSession,
+    report: recordUiDiagnostic,
+  });
   const stopSession = async (propagateFailure = false) => {
     if (sessionBusy.current || !backend.connected) return;
     sessionBusy.current = true;
@@ -3181,6 +3196,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   );
   return (
     <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}>
+      <SoundboardContext.Provider value={soundboard}>
+      <div className={`app-shell ${themeClassName}`} style={themeStyle}>
+        <header className="topbar">    <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}>
       <div className={`app-shell ${themeClassName}`} style={themeStyle}>
         <header className="topbar">
           <div>
@@ -3697,6 +3715,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           />
         )}
       </div>
+      </SoundboardContext.Provider>
+    </PluginParameterContext.Provider>
+  );
+}      </div>
     </PluginParameterContext.Provider>
   );
 }

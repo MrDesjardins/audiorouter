@@ -49,7 +49,8 @@ import {
   ProcessorParameterEditor,
 } from "./NodeEditors";
 import { AudioFileNodeEditor } from "./AudioFileNodeEditor";
-import { setVirtualBusDraftCable } from "./draft";
+import { SoundboardNodeEditor } from "./SoundboardNodeEditor";
+import { removeNodeDraftParameters, setVirtualBusDraftCable } from "./draft";
 import { useVirtualCableStatus } from "./virtualCableStatus";
 import type { NodeDeviceUsers } from "./appUsage";
 
@@ -536,6 +537,17 @@ export function PropertiesPanel({
             recorderStatuses={recorderStatuses}
             onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
             onTransport={(nodeId, action) => void transportAudioSource(nodeId, action)}
+          />
+        )}
+        {selectedNode.kind === "soundboard" && (
+          <SoundboardNodeEditor
+            node={selectedNode}
+            backend={backend}
+            disabled={!backend.connected}
+            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+            onRemove={(names) =>
+              recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)
+            }
           />
         )}
         {selectedNode.kind === "plugin" && (

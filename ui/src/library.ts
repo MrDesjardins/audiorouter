@@ -17,6 +17,7 @@ export type LibraryEntry = {
     | "physicalOutput"
     | "testSignal"
     | "audioFile"
+    | "soundboard"
     | "mixer"
     | "gain"
     | "volume"
@@ -85,6 +86,14 @@ export const libraryEntries: LibraryEntry[] = [
     flow: "input",
     kind: "audioFile",
     note: "Play a WAV or MP3 through the graph. Select media in the node properties.",
+  },
+  {
+    id: "soundboard",
+    label: "Soundboard",
+    category: "Source",
+    flow: "input",
+    kind: "soundboard",
+    note: "Up to nine sounds on buttons. Trigger them here, from the API or from a Stream Deck.",
   },
   {
     id: "endpoint-loopback",

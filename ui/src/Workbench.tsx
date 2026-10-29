@@ -26,6 +26,7 @@ const TOOL_ICONS: Record<string, ReactNode> = {
   "physical-input": "◉",
   "test-signal": "∿",
   "audio-file": "♫",
+  soundboard: "▦",
   "endpoint-loopback": "↶",
   "virtual-render-source": "⊞",
   "physical-output": "◎",

@@ -6,6 +6,7 @@ const INPUT_KINDS = new Set<NodeKind>([
   "physicalInput",
   "testSignal",
   "audioFile",
+  "soundboard",
   "applicationCapture",
   "endpointLoopback",
   "virtualRenderSource",
