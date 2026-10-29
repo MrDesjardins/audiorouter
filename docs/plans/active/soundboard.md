@@ -106,7 +106,7 @@ before release.
   MP3 2.7 MB with a 25 ms encoder start delay. Decision: FLAC, which needs the
   decoder's `flac` feature (to enable and verify in task 4). The picks, license
   evidence and tools are in `tools/soundboard/` (see its README); the raw sources are
-  backed up at `C:audiorouter-assetssound-sourcing`.
+  backed up at `C:\audiorouter-assets\sound-sourcing`.
 - 2026-10-29 build start: Rust builds wait for the owner's VM session to finish
   (VM `AR-DriverTest` was still running); code is written first.
 
