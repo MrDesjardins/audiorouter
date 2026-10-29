@@ -105,7 +105,9 @@ export function SoundboardNodeEditor({
     try {
       const media = await uploadAudioMedia(backend, file);
       if (media.durationMs > MAX_USER_SOUND_SECONDS * 1000) {
-        setMessage(`${file.name} is longer than ${MAX_USER_SOUND_SECONDS} seconds, so it cannot be used on a Soundboard.`);
+        setMessage(
+          `${file.name} is longer than ${MAX_USER_SOUND_SECONDS} seconds, so it cannot be used on a Soundboard.`,
+        );
         return;
       }
       assign(slot, media.mediaId, media.fileName, picking !== "new");

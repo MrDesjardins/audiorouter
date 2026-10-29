@@ -1578,7 +1578,10 @@ export function removeNodeDraftParameters(session: Session, nodeId: EntityId, na
     ...session,
     nodes: session.nodes.map((node) =>
       node.id === nodeId
-        ? { ...node, parameters: Object.fromEntries(Object.entries(node.parameters).filter(([name]) => !names.includes(name))) }
+        ? {
+            ...node,
+            parameters: Object.fromEntries(Object.entries(node.parameters).filter(([name]) => !names.includes(name))),
+          }
         : node,
     ),
   };

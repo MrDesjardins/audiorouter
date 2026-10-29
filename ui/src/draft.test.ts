@@ -74,6 +74,7 @@ describe("output fan-out across library tools", () => {
     physicalOutput: true,
     testSignal: true,
     audioFile: true,
+    soundboard: true,
     mixer: true,
     gain: true,
     volume: true,

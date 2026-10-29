@@ -29,7 +29,10 @@ export function SoundboardNodeControls({ node }: { node: Node }) {
             disabled={!node.enabled}
             className={`soundboard-button${playing ? " is-playing" : ""}`}
           >
-            <span className="soundboard-button-progress" style={{ transform: `scaleX(${playing ? (state?.progress ?? 0) : 0})` }} />
+            <span
+              className="soundboard-button-progress"
+              style={{ transform: `scaleX(${playing ? (state?.progress ?? 0) : 0})` }}
+            />
             <span className="soundboard-button-caption" title={`${slot.label} · ${slot.fileName}`}>
               {slot.label}
             </span>

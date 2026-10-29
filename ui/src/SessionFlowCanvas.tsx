@@ -1025,7 +1025,7 @@ function hasOnlyCaptureSources(session: Session, nodeId: string): boolean {
     visited.add(id);
     const node = session.nodes.find((item) => item.id === id);
     if (!node?.enabled) continue;
-    if (node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard") return false;if (node.kind === "testSignal" || node.kind === "audioFile") return false;
+    if (node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard") return false;
     if (["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource"].includes(node.kind))
       foundCapture = true;
     for (const edge of session.edges) if (edge.enabled && edge.destinationNode === id) pending.push(edge.sourceNode);
