@@ -23,8 +23,9 @@ chosen what joins the library.
 - **Ta-da (4):** CC0, 5 seconds or less.
 - **Applause (5, moved to `_excluded`):** license is CC-BY 4.0 (not allowed in
   version one by the owner's decision) and each is about 17 seconds long.
-- **"Oh yeah" (1, moved to `_excluded`):** CC0, but it is a spoken phrase, which the
-  content rules exclude.
+- **"Oh yeah" (1):** CC0 and a spoken phrase, which the content rules normally
+  exclude. The owner approved it as an exception on 2026-10-29, so it is a
+  candidate again.
 
 ## Gaps still to fill
 
