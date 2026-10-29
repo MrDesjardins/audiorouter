@@ -84,8 +84,9 @@ The "Manage API permissions" page in a Freesound account only lists third-party
 apps the person has authorized; it is not where a key is made. A developer key is
 requested on Freesound's API credentials page (search the site for "Apply for an
 API key", normally under the API documentation): sign in, name the application
-("AudioRouter sound library sourcing"), describe it as a non-commercial-use-free
-tool that downloads CC0 sounds to review, and submit. The key (a "token") is shown
+("AudioRouter sound library sourcing"), describe the real use truthfully (searching
+and downloading CC0 sounds to review for a free desktop app), answer the
+commercial-use question honestly, and submit. The key (a "token") is shown
 on that page afterwards.
 
 - With only a token, the API can search and return each sound's license, author,
