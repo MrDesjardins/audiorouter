@@ -249,14 +249,66 @@ store, test signing, Secure Boot or default devices.
   from OS build 10.0.26200) on the RC3 INF: **INF is VALID**, no errors or
   warnings.
 
+- **Task 3, static analysis (2026-10-28, host, throwaway worktree at
+  `d2560715`, MSBuild `RunCodeAnalysis` with `DriverRecommendedRules.ruleset`,
+  exit 0, 174 warnings, worktree and log deleted afterward).** No defect found
+  that affects the frozen driver; any fix would be a driver change and is
+  deferred to a future driver change:
+  - C26495 uninitialized members (about 77 unique: `minwavertstream.h` 51,
+    `minwavert.h` 14, `common.cpp` 9, `savedata.cpp` 3): inherited SysVAD code.
+  - C28252/C28253 annotation mismatch on the AudioRouter-added
+    `BridgeControlCreateClose` and `BridgeControlDeviceControl`
+    (`adapter.cpp` 691/715/1094): annotation only, no behavior.
+  - C6387 `adapter.cpp` 1698/1723 (`AddStreamResource` argument could be
+    NULL) and C28193 `common.cpp` 2745 (unexamined `ntStatus`): SysVAD upstream.
+  - C6101 `minwavertstream.cpp` 51: `WriteBridgeSample` leaves an out parameter
+    unwritten on an unsupported format; its call site (line 1795) is guarded
+    by `IsBridgePcmFormat`, so it is unreachable for validated formats.
+  - C28160 `newdelete.cpp` 45/62: placement `operator new` takes caller-supplied
+    `POOL_FLAGS`; the source never uses `POOL_FLAG_NON_PAGED_EXECUTE`.
+  - Still open: dynamic HVCI confirmation is possible only at Stage B or C
+    (VirtualBox NEM cannot run VBS/HVCI). The RC3 section scan (no writable
+    plus executable sections, DllCharacteristics 0x4160) and `infverif` are
+    above.
+- **Task 4, bundle r11 prepared (2026-10-28/29, host).** Source commit
+  `deaa407a` (branch `docs/virtual-cable-assurance`). Built with
+  `prepare-vm-share.ps1 -ReuseDriverShare C:\VMs\ar-share\rc-0.2.4-base`, then
+  `prepare-cable-latency-update.ps1`; both exited 0.
+  - Base `C:\VMs\ar-share\rc-0.2.4-r11-base`, bundle
+    `C:\VMs\ar-share\rc-0.2.4-r11`.
+  - `MANIFEST.txt` SHA-256
+    `a4bfd5241ed6f9f9db780c3b31ebeba28f9b4c863e8a5a9685051da8eb968379`.
+  - `driver\` SYS, CAT and INF hashes equal the RC3 values (`AF3B4E5E…`,
+    `C755E7AF…`, `E29D89DC…`) and `driver-next\` equals the 0.2.5 package
+    (`6184DC57…` SYS), compared against `rc-0.2.4-base` file by file: no driver
+    byte changed.
+  - New tooling: `run-cable-reconnect.ps1`, `run-cable-vbcompare.ps1`, the
+    `extras` session of `run-stage-a.ps1`, and the `--stall-at-s` /
+    `--tolerate-reconnect` options of `m03_cable_session`. Host checks:
+    clippy `-D warnings` exit 0, rustfmt clean, `--check` reconnect run exit 0,
+    grading tested on synthetic results. Not yet run in the guest.
+  - **Owner-run block (VM `AR-DriverTest`, user-run, reversible by the
+    checkpoint):** restore `02-test-signing-ready`; copy `rc-0.2.4-r11` to
+    `C:\ar`; in an elevated PowerShell run
+    `run-stage-a.ps1 -Session all` first (unchanged sessions), restore the
+    checkpoint, then `run-stage-a.ps1 -Session extras` (reconnect at 4000 and
+    6500 ms, A13 update/repair, bit-exact after update, reconnect on the updated
+    driver, VB-Cable comparison if VB-Cable is installed, no-bugcheck, remove).
+    Then the attended A12 steps in `virtual-cable-vm-guide.md`. Send the
+    `.zip` outputs and the printed hashes back.
+  - VM-only checks still to add by hand: Secure Boot plus Memory Integrity
+    feasibility and a Driver Verifier code-integrity run. Neither has been
+    attempted; no verifier flag has been verified, so none is claimed.
+
 ### Next action
 
-1. Agent: finish task 3 (static analysis on the frozen source; Driver Verifier
-   code-integrity and the Secure Boot plus Memory Integrity feasibility check
-   need the VM and go into the bundle below).
-2. Agent: prepare bundle r11 (RC3 driver byte for byte, current helper and app,
-   the `m03_bridge_tone` exit-gap fix) and the exact user-run block for task 4,
-   then wait for the owner to run it.
+1. Owner: run the r11 block above in the VM and send the outputs.
+2. Agent: grade the returns, record them here, and prepare the go/no-go summary
+   (task 5). The Microsoft written question (signing guide Part 4) is the
+   owner's to send before the certificate purchase.
+3. Agent: when the owner names the next working branch, bring
+   `docs/virtual-cable-assurance` in (cherry-pick or merge); remove the
+   `target` junction in `.worktrees/vc-assurance` first.
 
 ## Goal: complete the driver (set 2026-10-12, user request)
 
