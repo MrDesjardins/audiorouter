@@ -19,7 +19,7 @@ const groups = new Map();
 for (const f of files) {
   const rel = relative(root, f).replaceAll("\\", "/");
   const parts = rel.split("/");
-  const key = parts.length > 2 ? parts.slice(0, 2).join(" / ") : parts[0];
+  const key = parts.length > 2 ? parts.slice(0, 2).join(" / ") : parts.length === 2 ? parts[0] : "Files";
   if (!groups.has(key)) groups.set(key, []);
   groups.get(key).push(rel);
 }
