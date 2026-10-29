@@ -83,6 +83,22 @@ before release.
   variations of favorites (fart 10 to 12, claps, ta-da); Bodily humor category and
   content rules added; Freesound access steps written.
 
+- 2026-10-29 sourcing, first pass (no key, host-light):
+  - Wikimedia Commons API (CC0/public-domain, 6 s or less): mostly spoken-word
+    recordings; usable hits are a few doorbells and two roosters. Secondary source.
+  - OpenGameArt (CC0 sound-effect filter): almost nothing for fart, clap, applause
+    or air horn; some fanfare and laugh packs to inspect. Secondary source.
+  - kenney.nl returns 403 to scripted downloads; the packs need a manual download
+    by the owner (not circumvented). Freesound needs the owner's API key.
+  - `tools/soundboard/generate-original.mjs`: 33 original sounds (9 fart variations,
+    3 ta-da, 3 air horns, rimshot, sad horn, buzzer, doorbell, coin, etc.), seeded and
+    byte-identical across runs, all at most 3.3 s. Unreviewed by ear. Level check:
+    peak is matched at -3 dBFS but average level varies from about -4 to -19 dB, so
+    the library needs RMS or loudness matching as well as a peak ceiling.
+- 2026-10-29 gap review added to the Soundboard plan: v1 additions per-slot level,
+  play modes (loop, toggle, hold), random-variant slots, progress on the button,
+  drag and drop, recently used, trigger cooldown (SND-15 to SND-20; owner to confirm).
+
 ## Next action
 
 Task 1 (spec) and task 2 (sourcing and format spike), both without Rust builds.

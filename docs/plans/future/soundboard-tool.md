@@ -60,8 +60,8 @@ parity, the audio-callback rules in `AGENTS.md`, and the media upload limits.
 
 ## Behavior decisions
 
-1. **Playback style.** One-shot by default. A slot does not loop. Looping is out
-   of scope unless the owner asks, to keep the nine buttons predictable.
+1. **Playback style.** One-shot by default. Loop, toggle and hold are per-slot
+   modes (SND-16, from the gap review).
 2. **Retrigger.** Restart the sound. This is what people expect from a soundboard
    and avoids stacking the same clip into noise.
 3. **Overlap.** Different slots may overlap. Mixing is summed with a fixed
@@ -75,12 +75,55 @@ parity, the audio-callback rules in `AGENTS.md`, and the media upload limits.
 5. **When it works.** Only while the session is running. On a stopped session the
    buttons are disabled with a short reason, and the API returns a stable error
    (SND-09). Triggering never starts a session by itself.
-6. **Level.** No per-slot level in the first version. The tool sits in a graph,
-   so a Gain or Volume after it covers loudness. Reconsider if testing shows
-   mismatched file loudness is a real problem.
+6. **Level.** A per-slot level (SND-15), superseding the earlier idea of leaving
+   it to a Gain tool after the board. See the gap review above.
 7. **Fades.** None in the first version. The old backlog row mentioned fades;
    a short fixed fade at the end of Stop all (to avoid a click) is enough, and
    it is part of making Stop all safe, not a user setting.
+
+## Features other soundboards have (gap review, 2026-10-29)
+
+Reviewed against what established soundboards offer (desktop soundboard apps,
+voice-changer soundboards, Stream Deck soundboard plugins). Recommendation for
+each: **v1** (include now), **later** (record, do not build yet) or **skip**.
+The v1 additions go beyond what the owner listed, so they are proposals for the
+owner to confirm.
+
+| Feature | Why people expect it | Recommendation |
+| --- | --- | --- |
+| **Per-sound volume** | Sounds from different sources differ in loudness; the owner's own files will too | **v1.** A level slider per slot (-24 to +6 dB). This replaces the earlier decision to leave level to a Gain tool: one board with nine sounds needs nine levels, and a single Gain cannot do it. |
+| **Play mode per sound**: one-shot, loop, **hold to play** (plays while the key is down), toggle (press to start, press to stop) | Loops for beds and ambience, hold for horns and drum hits, toggle for long sounds | **v1** for one-shot (default), loop and toggle. **Hold** is also v1 for the Stream Deck, which reports key-down and key-up; the API gets `soundboard.trigger` and `soundboard.stop`, so hold is a trigger on down and a stop on up. |
+| **Random variant** | Soundboards with several fart or clap sounds pick one at random so it is never the same twice. The library has up to 12 farts; without this the owner needs 12 slots | **v1.** A slot can hold a set (a library category such as "Bodily humor" or up to eight chosen sounds) and plays one at random, never the same one twice in a row. Counts as one slot of the nine. |
+| **Stop all / panic** | Someone triggers the wrong sound on a call | **v1** (already SND-03). Also a Stream Deck "Stop all" action. |
+| **Pause and resume** | Long sounds | **Later.** Toggle covers most cases. |
+| **Progress on the button** | See how much is left in a long sound; know it is still playing | **v1.** A thin progress fill inside the fixed-height row; no size change (UI-17). Data from live telemetry. |
+| **Trim start and end** of a user file, with a waveform | Remove silence or a long intro from a clip | **Later.** Valuable for the user's longer sounds; needs a waveform view. The library sounds are pre-trimmed. |
+| **Fade in / fade out** per sound | Smooth long clips | **Later.** A short fixed fade already avoids clicks. |
+| **Hear it yourself** (monitoring) | People want to hear what they send, or to hear it without sending | **No new feature**: the graph already branches. Document the recipe (Soundboard into a Mixer for the virtual microphone and into a Physical Output for headphones). The picker preview never goes to the route. |
+| **Duck the music / mute the mic while a sound plays** | Common on streams | **No new feature**: the existing Duck tool lowers its input while its key input is loud. Document the recipe (use the Soundboard as the key). Verify it works in the multi-path suite. |
+| **Drag a file onto a button or the card** | Fast way to add sounds | **v1.** Drag-and-drop onto the card or a slot uses the same upload flow. |
+| **Colors or icons per button** | Find a button without reading | **Later.** The caption is enough for nine. |
+| **Favorites and recently used** in the picker | Library of ~100 | **v1** for recently used (cheap), favorites **later**. |
+| **Global keyboard shortcuts** | Trigger without the window | **Later**, as already planned (key bindings, step 2). |
+| **Press-to-record into a slot** (save the last few seconds) | Clip a moment | **Later.** Needs the privacy and storage design that the instant-replay backlog row already waits on. |
+| **Text to speech** | Quick spoken lines | **Skip.** Needs a voice engine or a cloud service; neither is approved. |
+| **Cooldown / anti-spam** | A held key re-triggers every few milliseconds | **v1** as a minimum gap of about 50 ms between triggers of the same slot, enforced in the backend. |
+| **Share a board** | Hand a friend a set | **No new feature**: copying the saved session carries library ids and, for the user's files, the media (see the data-model questions). |
+| **More than nine** | Large boards | **Skip** (owner decision): add another Soundboard. |
+
+Requirements added by the v1 items:
+
+| Proposed ID | Statement |
+| --- | --- |
+| SND-15 | Each slot has a level from -24 to +6 dB, default 0, applied before the mix. |
+| SND-16 | Each slot has a play mode: one-shot (default), loop, toggle or hold. |
+| SND-17 | A slot may be a random set (a library category or up to eight sounds) and never repeats the same sound twice in a row. |
+| SND-18 | A slot playing shows progress in its fixed-size row. |
+| SND-19 | Dropping a supported audio file onto the card or a slot fills that slot. |
+| SND-20 | Triggers of the same slot closer than the minimum gap are ignored and counted. |
+
+New parameters follow the same naming: `slotNGainDb`, `slotNMode`,
+`slotNSet` (a library category id or a list of sound references).
 
 ## Canvas card
 
