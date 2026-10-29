@@ -1,9 +1,11 @@
 # Active plan — AudioRouter virtual cable (DEC-18)
 
-Status 2026-10-11: driver 0.1.4.0 (r20) remains installed only in the test VM.
-VM continuity and latency results do not meet qualification; VCAB-24/25 remain
-open. Read the [general active plan](current.md) for the latest driver evidence
-and blocker state. Do not install the test-signed driver on the development PC.
+Status 2026-10-28: driver RC3 0.2.4 (source `d2560715`, no driver commit
+since) passed Stage A in the VM except the items bound to Stage C; the EV
+certificate is not bought. The pre-purchase assurance plan is
+[Pre-purchase assurance](#pre-purchase-assurance-plan-2026-10-28-user-request)
+below; the older status table follows it. VCAB-24/25 stay open until Stage C.
+Do not install the test-signed driver on the development PC.
 
 - WP-09b portable capture-analysis and reporting code is in place; the required
   endpoint measurement matrix has not been run.
@@ -18,6 +20,295 @@ and blocker state. Do not install the test-signed driver on the development PC.
 Older driver investigations below are preserved as execution history. Follow
 only tasks explicitly labelled as current in the active plan and resume from
 its next-action section.
+
+## Pre-purchase assurance plan (2026-10-28, user request)
+
+Objective: before buying the EV certificate (WP-13), be able to say that
+nothing still open can force a driver rebuild, and that every VM result is
+either a pass or an attributed VM deviation with a Stage C rule. Requirement
+IDs: VCAB-01–05, 10/11, 20–30, VDEV-01/03/04/07/11/12, SEC-08, NFR-02.
+Authority: planning only; no driver change, purchase or host install is
+authorized by this section.
+
+### What the record supports (read before deciding)
+
+The owner remembers "all VM tests were conclusive". The record says: every
+*automated* Stage A check passes or has an attributed VM cause, but **a VM
+cannot give complete assurance**, and several items are not passes:
+
+| Item | State | Why it is not a pass |
+| --- | --- | --- |
+| VCAB-24 sustained no-glitch, A5 zero counters | VM deviation | Losses coincide with guest-wide stalls (VirtualBox NEM); driver counts each; no corruption. Only bare metal can show zero. |
+| VCAB-25 latency vs VB-Cable | Indicative (p50 36.7–39.7 ms) | VB-Cable comparison in the same VM never run. |
+| A12 Discord/OBS see the cable | Not run | Needs apps and accounts in the guest. |
+| A15 30-min eight-route run | VM-correlated | r10: 125 s guest freeze expired every lease; 3 borderline events. |
+| A16 96 kHz | REVIEW | First removal on the product route (1,344 frames at a 15 ms stall); sweep and THD+N hurt by single jumps. |
+| Cable-route reconnect (3 reopens) | Not VM-qualified | Added 2026-10-16 after r10. |
+| A13 AudioRouter session rebind after update | Not shown | Names/format migrate; session bind untested. |
+| Stage B (Secure Boot + Memory Integrity, Microsoft signature) | Impossible before signing | Needs the signed package. |
+| HVCI compatibility, InfVerif on the final INF, RC3 PDB | Not recorded | See task 3. |
+
+The owner's only PC is the bare-metal machine, and it can load the driver only
+once signed. So the certificate is the price of the binding continuity and
+latency evidence. The plan therefore does not try to prove those in the VM; it
+makes sure **a Stage C miss cannot cost a second signing round unless it is a
+kernel-side defect**, and that the cost of a second round is low (below).
+
+### Stakes if a second round is needed
+
+Attestation submissions are free; the EV certificate must be valid at
+submission and lasts up to ~458 days ([signing guide](../../operations/virtual-cable-signing.md),
+[driver track](../future/M03-driver-signing.md)). A kernel fix found during
+Stage B/C within that window costs time (new RC, Stage A rerun, resubmit), not
+a second certificate. Confirm the expired-certificate and resubmission rules in
+the Part 4 written answer before buying.
+
+### Tasks (ordered)
+
+1. **Freeze check (agent, host, ~30 min).** Confirm `git log
+   d2560715..HEAD -- drivers/audiorouter-virtual` is empty and the RC3 SYS/CAT/INF
+   SHA-256 values above still match the share `C:\VMs\ar-share\rc-0.2.4-base`.
+   Rebuild 0.2.4 from `d2560715` and compare with the RC3 SYS (differences
+   limited to timestamp and debug identifiers) so a matching `.pdb` can be
+   kept. Cost of a mismatch: submit without symbols (signing guide Part 5).
+2. **Kernel-fixed versus user-tunable (agent, read-only, ~1 session).** For each
+   Stage C risk, state in this plan whether the remedy is kernel (rebuild and
+   re-sign) or user mode/registry (no new signature). First reading of
+   `bridgeio.h`: lease duration is chosen by the caller (`LeaseMs`, bounded by
+   a registry-configurable `MaxLeaseMs`), block frames by the caller (≤ 4096),
+   minimum period by registry. To confirm in source before relying on it:
+
+   | Stage C finding | Remedy layer (to confirm) |
+   | --- | --- |
+   | Lease expiry on long hitches | user mode (lease length, reconnect) |
+   | 96 kHz stall headroom | user mode if depth is caller-set; kernel if a fixed slot count limits it |
+   | Min/default period, latency | registry (`CONFIG_FROM_REGISTRY`) |
+   | Timer/DPC cost, packet validity, newest-packet read policy | kernel |
+   | Pool growth, DPC max (VCAB-27/28) | kernel |
+
+   Any "kernel" row that Stage C could plausibly trip, and that the VM cannot
+   exercise, is a **pre-purchase decision**: show margin from the existing
+   models/traces, or change it now and re-freeze (this restarts Stage A on the
+   new RC, so decide deliberately). Output: a table with source line references.
+3. **Cheap checks not yet recorded (agent, host, ~half a day).**
+   - `infverif /v /h /rulever 25h2` on the packaged RC3 INF (spec 17 §5 requires
+     zero errors); record warnings.
+   - HVCI readiness: ExAllocatePool2 is already used (non-executable pool);
+     additionally scan the SYS sections for writable+executable, and run Driver
+     Verifier standard plus the code-integrity checks in the VM. The host runs
+     Memory Integrity, so a failure would first hurt the daily PC.
+   - Static analysis the WHCP path needs anyway (Code Analysis / CodeQL for
+     drivers) on the frozen source; record findings, fix none without a decision.
+   - Check whether the VirtualBox guest can run Secure Boot plus Memory
+     Integrity at all (it needs nested virtualization under NEM). If it cannot,
+     **Stage B collapses into Stage C on the main PC**; record that, and make
+     the restore path (restore point, Safe Mode removal) the Stage B
+     prerequisite.
+4. **Final Stage A run, bundle r11 (user, ~4 h unattended).** One bundle with
+   the RC3 driver byte for byte, the current helper/app build and the
+   `m03_bridge_tone` exit-gap fix, from `02-test-signing-ready`
+   (`run-stage-a.ps1 -Session all`). Additions in this run:
+   - cable-route reconnect: kill the lease with a freeze or a lease expiry and
+     show three reopens then a plain message (host analogue exists; this is the
+     VM proof);
+   - A13 rebind: with a running AudioRouter session on Cable A/B, `update` then
+     show the session binds by bus after the new IDs;
+   - VB-Cable comparison in the same VM (install VB-Cable, same impulse test).
+     Only the **ratio** is meaningful; the absolute numbers are VM numbers;
+   - A12 attended (short): Discord and OBS in the guest select Cable B Output
+     and receive the tone. If accounts cannot be used in the guest, defer A12 to
+     Stage C and record it as such.
+   Pass criterion: same verdicts as r10 or better, no bugcheck, every FAIL
+   attributed to a measured guest-wide stall.
+5. **Decision gate (owner).** Review the tasks 1–4 record. Go if: task 2 shows
+   no unaddressed kernel-side Stage C risk, task 3 has no HVCI/InfVerif defect,
+   task 4 has no new FAIL. Then proceed with WP-13 (signing guide Parts 0–6).
+   Otherwise change the driver, freeze a new RC and repeat from Stage A.
+6. **Stage B and C with decision rules (after signing).** Run Stage B (or its
+   collapsed form, task 3) and Stage C as in the testing procedure. Rules set
+   now so a result is judged against a number, not a feeling:
+
+   | Stage C result | Action |
+   | --- | --- |
+   | Kernel-side defect (corruption, wrong-speed audio, bugcheck, pool growth, DPC max over budget, BattlEye refusal) | New RC, Stage A, resubmit (free within the certificate's validity) |
+   | Zero counters and zero glitches in 1 h on 8 cables under 80 % load | VCAB-24/30 pass; close the VM deviations |
+   | Glitches with counters rising but no kernel defect and a user-mode cause (lease, depth, reconnect) | Fix in the app/helper/registry; no new signature |
+   | Latency above VB-Cable by a small margin | Record numbers; owner decision (DEC-14 method) before release |
+   | Driver DPC or CPU over VCAB-27 | Kernel fix or recorded owner decision with numbers |
+
+### Validation matrix
+
+| Requirement | Task | Evidence (record in this section's Progress; split into an evidence file when it grows) |
+| --- | --- | --- |
+| Frozen RC (VCAB-05, DIST) | 1 | Hash comparison, rebuild diff, PDB result |
+| Rebuild-risk classification | 2 | Table with source references |
+| SEC-08, VDEV-09 prerequisites | 3 | infverif output, section scan, Verifier, analysis report |
+| VDEV-11 | 4 | A12 result or deferral note |
+| VCAB-25 (relative) | 4 | VB-Cable vs cable impulse ratio, same VM |
+| VCAB-24/25/27/28/30 binding | 6 | Stage C measurements against the rules above |
+
+### Risks
+
+- A VM attribution is an inference; only bare metal confirms it. Mitigated by
+  task 2 (remedy layer) and the stakes paragraph, not eliminated.
+- Task 3 may find an HVCI or analysis defect: that changes the driver and
+  restarts Stage A.
+- Microsoft's "testing purposes only" wording for attestation (signing guide
+  Part 0): the written answer (Part 4) should precede purchase, not only the
+  first public release. Recommended, since it costs nothing.
+- Collapsed Stage B puts the first Secure-Boot load on the daily PC; needs the
+  restore point and the Safe Mode removal path in hand.
+
+### Rollback
+
+Tasks 1–3 are read-only on the host. Task 4 is VM-only (restore the
+`02-test-signing-ready` checkpoint). Nothing here changes the host driver
+store, test signing, Secure Boot or default devices.
+
+### Progress (2026-10-28, host, read-only)
+
+- **Task 1, partly done.** `git log d2560715..origin/main --
+  drivers/audiorouter-virtual` is empty (driver frozen). The share
+  `C:\VMs\ar-share\rc-0.2.4-base\driver` SYS/CAT/INF SHA-256 values equal the
+  RC3 table above (`AF3B4E5E…`, `C755E7AF…`, `E29D89DC…`). Not done: the 0.2.4
+  rebuild and PDB comparison (WDK build; ask the owner first).
+- **Task 3, partly done.**
+  - Section scan of RC3 `audioroutervirtual.sys`: 9 sections, none both
+    writable and executable (`.text`, `fothk`, `PAGE`, `INIT` execute only;
+    `.data` writes only); DllCharacteristics `0x4160` = ASLR, high-entropy ASLR,
+    NX-compatible, Control Flow Guard. Pool allocations use `ExAllocatePool2`
+    (non-executable by default). This is static evidence, not an HVCI run.
+  - The packaged `infverif.log` reports "INF is VALID" with rules from OS build
+    10.0.28000. Rerun with the `25h2` rule version of spec 17 §5 on the final
+    package before submission.
+  - Not done: Driver Verifier code-integrity run (VM), Code Analysis/CodeQL, and
+    the Secure Boot plus Memory Integrity feasibility check in the VirtualBox
+    guest.
+- **Task 2, first result (source reading; confirm with a trace before relying
+  on it).**
+
+  | Stage C finding | Remedy layer | Basis |
+  | --- | --- | --- |
+  | Lease expiry on long hitches | user mode | `LeaseMs` is in the OPEN request, 1 ms to 60 s (`bridgeio.h` validation); the app's reconnect already exists |
+  | 96 kHz stall headroom (r10: 15 ms stall removed audio) | user mode up to a kernel ceiling, at a latency cost | Both directions have kernel-fixed depths. Render: `Capacity = min(4, 32768 / (frames × channels))` (`renderqueue.h`), so retained frames are `min(4 × quantum, 32768 / channels)`. Capture: two blocks (`captureBlocks[2] = { m_BridgeScratch, m_BridgePrefetch }`, `minwavertstream.cpp`), about 2 × quantum. Quantum is the caller's `FramesPerQuantum` (≤ 4096). Which side dropped in r10 is not established (the capture side's 2 × 480 frames is only 10 ms at 96 kHz, so it fits a 15 ms stall) |
+  | Minimum/default period, latency | registry | `bridgeio.h`: `CONFIG_FROM_REGISTRY` covers `CableCount`, period limits and `MaxLeaseMs` |
+  | Timer/DPC cost, packet validity, newest-packet read policy | kernel | Fixed in `minwavertstream.cpp`/`streamtiming.h`; a defect needs a new RC |
+  | Pool growth, DPC maximum (VCAB-27/28) | kernel | VM pool growth was flat (A8 ×2); DPC cost is unmeasured on real hardware |
+
+  Pre-purchase decision this exposes: the render queue (4 blocks, and a
+  32,768-sample ceiling) and the two-block capture queue, plus the Windows
+  packet size (1 or 2 notifications per buffer), are the kernel-fixed limits
+  that bound stall tolerance. Corrected headroom (2026-10-28, after review):
+  - 8 channels: render retention tops out at **4,096 frames** once the quantum
+    reaches 1,024 (about 43 ms at 96 kHz, 85 ms at 48 kHz); a larger quantum
+    then only adds latency.
+  - 2 channels: the ceiling is 16,384 frames, reached only at the maximum
+    4,096-frame quantum; at 480 frames it is 4 × 480 = 1,920 frames (20 ms at
+    96 kHz, 40 ms at 48 kHz).
+  - Capture is shallower: about 2 × quantum (10 ms at 96 kHz with 480-frame
+    blocks).
+  The stalls seen so far fit within these figures except at 96 kHz with small
+  quanta. Beyond them, more tolerance is a kernel change.
+
+- **Owner decision (2026-10-28, "Approved"; the agent read it as covering both
+  questions asked):** the 0.2.4 rebuild may run, and the queue depths are
+  accepted as is. **The cap acceptance was given against the agent's first,
+  incorrect "proportional headroom" wording; the corrected figures above must
+  be reconfirmed by the owner before it counts.** Raising the depths would
+  restart Stage A.
+- **Owner decision, reconfirmed (2026-10-28):** accept the corrected depths;
+  the frozen RC3 stays. Deeper queues are recorded as deferred future work in
+  [Virtual cable: deeper driver queues](../future/virtual-cable-queue-depth.md),
+  to be tackled when there is more time.
+- **Task 1 rebuild result (2026-10-28, host, WDK 10.0.28000.0, no diagnostics,
+  test-signed).** 0.2.4 rebuilt from `d2560715` in two throwaway worktrees
+  (removed afterward; the owner's tree was untouched):
+  - Build path `C:\code\audiorouter\.worktrees\rc3-rebuild` (23 characters
+    longer than the original): `.text`, `fothk`, `PAGE`, `INIT` and `.data`
+    identical to RC3. `.rdata` and `.pdata` differ because the longer PDB path
+    shifts the unwind data that follows it, not because the code changed.
+  - Build path `C:\code\rc3-rebuild` (same length as `C:\code\audiorouter`):
+    the SYS differs from RC3 in 6 header bytes (timestamp, checksum), 32
+    bytes of the debug directory (timestamps, PDB GUID, the path text) and
+    the signature. Every section, including `.rdata` and `.pdata`, matches
+    otherwise. Rebuilt SYS SHA-256 begins `19F0A27F…`; RC3 is `AF3B4E5E…`.
+  - **The RC3 binary is reproducible from source up to debug identity.** The
+    rebuilt PDB carries a different GUID (`e5202766-…` against RC3's
+    `56318f76-…`) and a different path, so as built it does not match the RC3
+    SYS. The output of the equal-path build was deleted and only a hash prefix
+    kept, so no PDB is currently held.
+  - Consequence for WP-13 (signing guide Part 5): submit the **original RC3
+    SYS, CAT and INF** (the bytes Stage A tested). Do not submit the rebuilt
+    SYS. Symbols are optional: (a) fallback, submit without symbols;
+    (b) untested option, repeat the equal-path build keeping its output and try
+    to force-match its PDB to the RC3 SYS (rewrite GUID and age, for example
+    with `chkmatch -m`; the debug-directory path text also differs). Verify
+    with `symchk` before relying on it. Not blocking for purchase. Keep each
+    package's PDB with its SYS from now on (already a guide rule).
+- **Task 3, `infverif` at the spec's rule version:** `/rulever 25h2` (rules
+  from OS build 10.0.26200) on the RC3 INF: **INF is VALID**, no errors or
+  warnings.
+
+- **Task 3, static analysis (2026-10-28, host, throwaway worktree at
+  `d2560715`, MSBuild `RunCodeAnalysis` with `DriverRecommendedRules.ruleset`,
+  exit 0, 174 warnings, worktree and log deleted afterward).** No defect found
+  that affects the frozen driver; any fix would be a driver change and is
+  deferred to a future driver change:
+  - C26495 uninitialized members (about 77 unique: `minwavertstream.h` 51,
+    `minwavert.h` 14, `common.cpp` 9, `savedata.cpp` 3): inherited SysVAD code.
+  - C28252/C28253 annotation mismatch on the AudioRouter-added
+    `BridgeControlCreateClose` and `BridgeControlDeviceControl`
+    (`adapter.cpp` 691/715/1094): annotation only, no behavior.
+  - C6387 `adapter.cpp` 1698/1723 (`AddStreamResource` argument could be
+    NULL) and C28193 `common.cpp` 2745 (unexamined `ntStatus`): SysVAD upstream.
+  - C6101 `minwavertstream.cpp` 51: `WriteBridgeSample` leaves an out parameter
+    unwritten on an unsupported format; its call site (line 1795) is guarded
+    by `IsBridgePcmFormat`, so it is unreachable for validated formats.
+  - C28160 `newdelete.cpp` 45/62: placement `operator new` takes caller-supplied
+    `POOL_FLAGS`; the source never uses `POOL_FLAG_NON_PAGED_EXECUTE`.
+  - Still open: dynamic HVCI confirmation is possible only at Stage B or C
+    (VirtualBox NEM cannot run VBS/HVCI). The RC3 section scan (no writable
+    plus executable sections, DllCharacteristics 0x4160) and `infverif` are
+    above.
+- **Task 4, bundle r11 prepared (2026-10-28/29, host).** Source commit
+  `deaa407a` (branch `docs/virtual-cable-assurance`). Built with
+  `prepare-vm-share.ps1 -ReuseDriverShare C:\VMs\ar-share\rc-0.2.4-base`, then
+  `prepare-cable-latency-update.ps1`; both exited 0.
+  - Base `C:\VMs\ar-share\rc-0.2.4-r11-base`, bundle
+    `C:\VMs\ar-share\rc-0.2.4-r11`.
+  - `MANIFEST.txt` SHA-256
+    `a4bfd5241ed6f9f9db780c3b31ebeba28f9b4c863e8a5a9685051da8eb968379`.
+  - `driver\` SYS, CAT and INF hashes equal the RC3 values (`AF3B4E5E…`,
+    `C755E7AF…`, `E29D89DC…`) and `driver-next\` equals the 0.2.5 package
+    (`6184DC57…` SYS), compared against `rc-0.2.4-base` file by file: no driver
+    byte changed.
+  - New tooling: `run-cable-reconnect.ps1`, `run-cable-vbcompare.ps1`, the
+    `extras` session of `run-stage-a.ps1`, and the `--stall-at-s` /
+    `--tolerate-reconnect` options of `m03_cable_session`. Host checks:
+    clippy `-D warnings` exit 0, rustfmt clean, `--check` reconnect run exit 0,
+    grading tested on synthetic results. Not yet run in the guest.
+  - **Owner-run block (VM `AR-DriverTest`, user-run, reversible by the
+    checkpoint):** restore `02-test-signing-ready`; copy `rc-0.2.4-r11` to
+    `C:\ar`; in an elevated PowerShell run
+    `run-stage-a.ps1 -Session all` first (unchanged sessions), restore the
+    checkpoint, then `run-stage-a.ps1 -Session extras` (reconnect at 4000 and
+    6500 ms, A13 update/repair, bit-exact after update, reconnect on the updated
+    driver, VB-Cable comparison if VB-Cable is installed, no-bugcheck, remove).
+    Then the attended A12 steps in `virtual-cable-vm-guide.md`. Send the
+    `.zip` outputs and the printed hashes back.
+  - VM-only checks still to add by hand: Secure Boot plus Memory Integrity
+    feasibility and a Driver Verifier code-integrity run. Neither has been
+    attempted; no verifier flag has been verified, so none is claimed.
+
+### Next action
+
+1. Owner: run the r11 block above in the VM and send the outputs.
+2. Agent: grade the returns, record them here, and prepare the go/no-go summary
+   (task 5). The Microsoft written question (signing guide Part 4) is the
+   owner's to send before the certificate purchase.
+3. Agent: when the owner names the next working branch, bring
+   `docs/virtual-cable-assurance` in (cherry-pick or merge); remove the
+   `target` junction in `.worktrees/vc-assurance` first.
 
 ## Goal: complete the driver (set 2026-10-12, user request)
 
@@ -3155,10 +3446,10 @@ the install → update → uninstall keep/remove sequence in the disposable VM.
   `docs/plans/active/evidence/<date>-virtual-cable-stage-a.md`.
 - **Gate:** all pass → ask the user for the go-ahead to buy the EV
   certificate (WP-13).
-- **Status:** preflight in progress; no Stage A checks run. The WP-09b
-  analyzer and runners exist, but the endpoint matrix is unmeasured. The plan
-  requires 8-channel cases currently deferred by decision, and VirtualBox
-  control was unavailable during the 2026-10-11 preflight.
+- **Status (2026-10-28):** superseded. Stage A ran on RC3 0.2.4 in sessions
+  r1–r10 (2026-10-12 to 14); results are in the RC freeze records above.
+  Open items and the final run are in
+  [Pre-purchase assurance](#pre-purchase-assurance-plan-2026-10-28-user-request).
 
 ### WP-12 preflight — Stage A gates (2026-10-11)
 

@@ -25,3 +25,10 @@ if(video&&!calm){let loaded=false;video.addEventListener("playing",()=>setupMedi
 const play=()=>{if(!loaded){loaded=true;video.src=video.dataset.src}video.play().catch(()=>{})};
 const watch=()=>{if(!("IntersectionObserver"in window))return play();new IntersectionObserver(es=>{for(const e of es)e.isIntersecting?play():loaded&&video.pause()},{rootMargin:"200px 0px"}).observe(setupMedia)};
 document.readyState==="complete"?watch():addEventListener("load",watch,{once:true})}}
+
+// Start the gate demo once it is visible; native controls remain available.
+const gateDemo=document.querySelector("[data-gate-demo]");
+if(gateDemo&&!matchMedia("(prefers-reduced-motion: reduce)").matches&&!navigator.connection?.saveData){
+  const start=()=>gateDemo.play().catch(()=>{});
+  if("IntersectionObserver" in window){const observer=new IntersectionObserver(entries=>{if(entries.some(entry=>entry.isIntersecting)){observer.disconnect();start()}},{threshold:0.25});observer.observe(gateDemo)}else start();
+}
