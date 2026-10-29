@@ -11,7 +11,10 @@ const walk = (dir) => readdirSync(dir).flatMap((name) => {
   const full = join(dir, name);
   return statSync(full).isDirectory() ? walk(full) : [full];
 });
-const files = walk(root).filter((f) => AUDIO.has(extname(f).toLowerCase()) && !/Preview\.ogg$/i.test(f)).sort();
+// A folder whose name starts with "_" (for example _excluded) is kept out of the page.
+const files = walk(root)
+  .filter((f) => AUDIO.has(extname(f).toLowerCase()) && !/Preview\.ogg$/i.test(f) && !relative(root, f).startsWith("_"))
+  .sort();
 const groups = new Map();
 for (const f of files) {
   const rel = relative(root, f).replaceAll("\\", "/");
