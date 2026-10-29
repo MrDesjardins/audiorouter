@@ -10,6 +10,7 @@
 //!
 //! Usage: m03_cable_session [--render-bus cable-a] [--capture-bus cable-b] [--seconds N] [--check]
 //!        [--channels 1-8] [--tone HZ --render-endpoint ID --capture-endpoint ID]
+//!        [--stall-at-s N --stall-ms M] [--tolerate-reconnect]
 //!
 //! `--channels` sets both cables' channel count (identity map); other than
 //! 2 it runs the multichannel route (direct mapping, WP-09 slice 5).
@@ -21,6 +22,13 @@
 //! each recording with the sine recurrence `x[n] = 2cos(w)x[n-1] - x[n-2]`
 //! (the method of `crates/transport/tests/live_audio_continuity.rs`),
 //! streaming, so a long run needs no recording buffer.
+//!
+//! `--stall-at-s N --stall-ms M` sleeps the service loop for M ms once, N
+//! seconds in, so no lease heartbeat is sent (a whole-system hitch longer
+//! than the 2 s lease). `--tolerate-reconnect` keeps running while the route
+//! is `reconnecting` (the backend's bounded reopen after a lost lease) and
+//! prints the sampled state timeline; the run fails if the route ends in any
+//! state other than `running`.
 //!
 //! `--check` runs every request except `session.start` (prepare,
 //! diagnostics, stop), so the request shapes are verified without a driver.
@@ -94,6 +102,9 @@ fn run() -> Result<(), String> {
     let mut tone_hz = None;
     let mut render_endpoint = None;
     let mut capture_endpoint = None;
+    let mut stall_at_s = None;
+    let mut stall_ms = 0_u64;
+    let mut tolerate_reconnect = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
@@ -124,6 +135,23 @@ fn run() -> Result<(), String> {
                         .ok_or("--tone must be 20..4000 Hz")?,
                 )
             }
+            "--stall-at-s" => {
+                stall_at_s = Some(
+                    value()?
+                        .parse::<u64>()
+                        .ok()
+                        .filter(|seconds| (1..=3_600).contains(seconds))
+                        .ok_or("--stall-at-s must be 1..3600")?,
+                )
+            }
+            "--stall-ms" => {
+                stall_ms = value()?
+                    .parse()
+                    .ok()
+                    .filter(|ms| (1..=60_000).contains(ms))
+                    .ok_or("--stall-ms must be 1..60000")?
+            }
+            "--tolerate-reconnect" => tolerate_reconnect = true,
             "--render-endpoint" => render_endpoint = Some(value()?),
             "--capture-endpoint" => capture_endpoint = Some(value()?),
             other => return Err(format!("unknown argument {other}")),
@@ -213,7 +241,24 @@ fn run() -> Result<(), String> {
     let mut max_pass_gap = Duration::ZERO;
     let mut last = start;
     let mut failed = None;
+    let mut stalled = false;
+    let mut last_poll = start;
+    let mut timeline: Vec<String> = Vec::new();
     while start.elapsed() < Duration::from_secs(seconds) {
+        if let Some(at) = stall_at_s {
+            if !stalled && start.elapsed() >= Duration::from_secs(at) {
+                stalled = true;
+                println!(
+                    "stall: service loop paused for {stall_ms} ms at {} ms",
+                    start.elapsed().as_millis()
+                );
+                std::thread::sleep(Duration::from_millis(stall_ms));
+                println!(
+                    "stall: service loop resumed at {} ms",
+                    start.elapsed().as_millis()
+                );
+            }
+        }
         let now = Instant::now();
         max_pass_gap = max_pass_gap.max(now - last);
         last = now;
@@ -237,15 +282,34 @@ fn run() -> Result<(), String> {
                 max_pass_gap.as_micros()
             );
             max_pass_gap = Duration::ZERO;
-            if diagnostics["cableRoute"]["state"] != "running" {
+            let state = &diagnostics["cableRoute"]["state"];
+            if state != "running" && !(tolerate_reconnect && state == "reconnecting") {
                 failed = Some(diagnostics["cableRoute"].to_string());
                 break;
             }
         }
+        if tolerate_reconnect && last_poll.elapsed() >= Duration::from_millis(100) {
+            last_poll = Instant::now();
+            let diagnostics = call(&mut plane, "system.diagnostics", json!({}))?;
+            let state = diagnostics["cableRoute"]["state"]
+                .as_str()
+                .unwrap_or("unknown")
+                .to_owned();
+            if timeline.last() != Some(&state) {
+                println!("state {} ms: {state}", start.elapsed().as_millis());
+                timeline.push(state);
+            }
+        }
         std::thread::sleep(Duration::from_millis(1));
+    }
+    if tolerate_reconnect {
+        println!("state timeline: {}", timeline.join(" -> "));
     }
     let diagnostics = call(&mut plane, "system.diagnostics", json!({}))?;
     println!("final cableRoute={}", diagnostics["cableRoute"]);
+    if tolerate_reconnect && failed.is_none() && diagnostics["cableRoute"]["state"] != "running" {
+        failed = Some(diagnostics["cableRoute"].to_string());
+    }
     #[cfg(windows)]
     if let Some(tone) = tone {
         let (result, reference) = tone.finish()?;

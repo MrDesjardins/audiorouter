@@ -36,10 +36,16 @@
                non-paged pool must stay flat (about 65 min)
     hardening  A10, A11: Driver Verifier on, A4-A7 again, 30-min IOCTL
                fuzz, Verifier off (about 50 min, two restarts)
+    extras     NOT part of 'all'; run it on its own, last (about 35 min, two
+               restarts): the product route's reconnect after a lease-
+               expiring stall, A13 update/repair and a route that binds again
+               after the new endpoint IDs, and the VB-Cable latency ratio
+               (needs VB-Cable installed first; skipped with a note if not).
+               A12 (Discord/OBS) stays an attended step.
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('audio', 'users', 'eight', 'quality', 'pool', 'hardening', 'all')][string] $Session = 'audio',
+    [ValidateSet('audio', 'users', 'eight', 'quality', 'pool', 'hardening', 'extras', 'all')][string] $Session = 'audio',
     [switch] $Resume,
     [ValidateRange(0, 1800)][int] $SettleSeconds = 300,
     [ValidateRange(60, 3600)][int] $FuzzSeconds = 1800,
@@ -342,6 +348,26 @@ function Grade-Kill([string] $Label, $Run) {
     $verdict = if ($result -and $result.Passed) { 'PASS' } else { 'FAIL' }
     $note = if ($result) { "$(@($result.Results).Count) repeats, error '$($result.Error)'" } else { "no result.json (exit $($Run.Code))" }
     Add-Result $Label $verdict $note
+}
+# Reconnect: the runner causes the stall itself, so a failure is a real FAIL.
+function Grade-Reconnect([string] $Label, $Run) {
+    $result = Get-RunResult $Run
+    if (-not $result) { Add-Result $Label 'FAIL' "no result.json (exit $($Run.Code))"; return }
+    $s = $result.Summary
+    $detail = "timeline '$($s.Timeline)'; Cable B silent $($s.LongestSilenceMs) ms; $($s.ArrivalsAfterSilence) arrivals after"
+    if ($result.Passed) { Add-Result $Label 'PASS' $detail } else { Add-Result $Label 'FAIL' "$($result.Error) ($detail)" }
+}
+# VCAB-25 comparison: only the ratio means anything in this VM, so it is INFO.
+function Grade-VbCompare([string] $Label, $Run) {
+    $result = Get-RunResult $Run
+    if (-not $result -and ([string]$Run.Text -match 'VB-Cable is not installed')) {
+        Add-Result $Label 'SKIP' 'VB-Cable is not installed in this guest; install it from vb-audio.com/Cable, restart, run -Session extras again'
+        return
+    }
+    if (-not $result) { Add-Result $Label 'FAIL' "no result.json (exit $($Run.Code))"; return }
+    if (-not $result.Passed) { Add-Result $Label 'FAIL' ([string]$result.Error); return }
+    $vb = $result.Summary.'vb-cable'; $ar = $result.Summary.audiorouter
+    Add-Result $Label 'INFO' ("VB-Cable p50 $($vb.MedianP50Ms) / p95 $($vb.MedianP95Ms) ms; AudioRouter p50 $($ar.MedianP50Ms) / p95 $($ar.MedianP95Ms) ms; ratio $($result.P50Ratio) (VM numbers, judged in Stage C)")
 }
 # VCAB-21: integer device formats must round-trip within 1 LSB. When Windows
 # keeps mixing in float32 the runner refuses ("negotiated float32"): the case
@@ -777,6 +803,56 @@ function Session-Hardening([string] $P) {
     Step-NoBugcheck $P
     Step-Remove $P
 }
+function Session-Extras([string] $P) {
+    Step-Setup $P
+    foreach ($stall in 4000, 6500) {
+        Step "${P}route reconnects after a ${stall} ms stall" {
+            Grade-Reconnect "${P}route reconnects after a ${stall} ms stall" (Invoke-Runner 'run-cable-reconnect.ps1' @('-StallMs', [string]$stall) 'reconnect-')
+        }
+    }
+    # A13: update to the next package (same source, new version), then repair.
+    Step "${P}A13 update" {
+        $run = Invoke-VmCheck 'update'
+        $helper = @($run.Checks | Where-Object { $_.check -like 'helper update*' }) | Select-Object -First 1
+        $verdict = if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }
+        Add-Result "${P}A13 update" $verdict "$($helper.detail)"
+        if ($run.Code -eq 0 -and $helper.detail -like 'exit 5*') {
+            Complete-AndRestart "${P}A13 update" 'Windows needs a restart to finish the driver update.'
+        }
+    }
+    Step "${P}A13 update-verify" {
+        $run = Invoke-VmCheck 'update-verify'
+        $verdict = if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }
+        Add-Result "${P}A13 update-verify" $verdict (($run.Checks | ForEach-Object { "$($_.check): $($_.passed)" }) -join '; ')
+    }
+    Step "${P}A13 repair" {
+        $run = Invoke-VmCheck 'repair'
+        $helper = @($run.Checks | Where-Object { $_.check -like 'helper repair*' }) | Select-Object -First 1
+        $verdict = if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }
+        Add-Result "${P}A13 repair" $verdict "$($helper.detail)"
+        if ($run.Code -eq 0 -and $helper.detail -like 'exit 5*') {
+            Complete-AndRestart "${P}A13 repair" 'Windows needs a restart to finish the driver repair.'
+        }
+    }
+    # The cables have new endpoint IDs now. A route that starts afterwards binds
+    # them by bus (filter reference), so audio must flow without any setting.
+    Step "${P}route binds again after the update (new endpoint IDs)" {
+        $label = "${P}route binds again after the update (new endpoint IDs)"
+        Set-CableFormat 2 48000
+        Grade-BitExact $label (Invoke-Runner 'run-cable-bitexact.ps1' @('-Channels', '2') 'bitexact-')
+    }
+    Step "${P}route reconnects after a 4000 ms stall (updated driver)" {
+        Grade-Reconnect "${P}route reconnects after a 4000 ms stall (updated driver)" (Invoke-Runner 'run-cable-reconnect.ps1' @('-StallMs', '4000') 'reconnect-')
+    }
+    Step "${P}VB-Cable latency comparison (VCAB-25)" {
+        Grade-VbCompare "${P}VB-Cable latency comparison (VCAB-25)" (Invoke-Runner 'run-cable-vbcompare.ps1' @() 'vbcompare-')
+    }
+    Step "${P}A12 Discord/OBS" {
+        Add-Result "${P}A12 Discord/OBS" 'INFO' 'attended, not automated: follow the A12 steps in docs/operations/virtual-cable-vm-guide.md after this run'
+    }
+    Step-NoBugcheck $P
+    Step-Remove $P
+}
 
 # --- run -----------------------------------------------------------------------
 $script:feeders = $null
@@ -790,6 +866,7 @@ try {
             'quality' { Session-Quality $prefix }
             'pool' { Session-Pool $prefix }
             'hardening' { Session-Hardening $prefix }
+            'extras' { Session-Extras $prefix }
         }
     }
 } finally {

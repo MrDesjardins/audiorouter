@@ -393,6 +393,33 @@ the step that was running, with its crash dumps. The run ends with a table
 If Driver Verifier makes the VM crash at every boot, restore the checkpoint
 and send the zip of the evidence collected so far.
 
+#### Session `extras` (final Stage A run before signing)
+
+`extras` is not part of `all`; run it last, on its own, from a freshly restored
+`02-test-signing-ready` checkpoint (about 35 minutes, two restarts):
+
+1. Optional but wanted: install VB-Cable in the guest (download from
+   vb-audio.com/Cable, run its setup as administrator, restart). Without it
+   the comparison step is skipped with a note. VB-Cable stays only in this
+   checkpoint run; restore `02-test-signing-ready` afterwards.
+2. `powershell -NoProfile -ExecutionPolicy Bypass -File .\run-stage-a.ps1 -Session extras`
+3. It checks that the product cable route reconnects by itself after a
+   control-loop stall longer than the 2 s lease (4 s and 6.5 s), the A13 update
+   and repair to the next package, that a route started after the update binds
+   the new endpoint IDs and carries audio, that the reconnect still works on the
+   updated driver, and the VB-Cable latency ratio (VM numbers; only the ratio
+   counts).
+
+A12 (Discord and OBS see the cable) is attended. After the run, from a freshly
+restored checkpoint with the driver installed (`vm-checks.ps1 -Step install`):
+sign in to Discord in the guest, open Settings > Voice and choose
+`AudioRouter Cable B Output` as the input device; start OBS, add an Audio Input
+Capture on the same device. In a second window run
+`.\tools\m03_bridge_tone.exe --seconds 60 --out C:\ar\a12-render.wav` and
+confirm Discord's input meter and OBS's meter move. Note any app that does not
+list the device. Then restore the checkpoint. If the guest cannot sign in to
+Discord, record A12 as deferred to Stage C.
+
 ### Copy-and-run commands for each session
 
 For every session below, run `Set-Location C:\ar` first in an Administrator
