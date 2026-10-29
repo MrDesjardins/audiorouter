@@ -1,5 +1,23 @@
 # Active plan — post-0.0.8 maintenance
 
+## Recovery, installer and inventory qualification — 2026-10-28
+
+Owner requested one branch and one PR covering offline recovery regressions,
+0.0.24 installer lifecycle qualification, and real Apps inventory polling.
+Requirements ENG-01/02/05, QUAL-01–06, UI-11/17, NFR-10/11, DIST-01–08.
+Prerequisites: Windows/Edge and isolated backend are available; install, upgrade,
+uninstall and data retention need a disposable Windows account/VM, not the
+owner's live profile. Live Apps measurement requires the running shell and
+Discord/OBS; never stop or alter the owner's app or devices. Current evidence:
+PR #71 shipped inventory threading, and direct isolated RPC measurements alone
+do not establish UI polling latency. Tasks: reproduce and fix any deterministic
+refresh/recovery defects; extend focused failure interleaving regressions; inspect
+VM availability and prepare/run exact 0.0.23-to-0.0.24 install/rollback and
+uninstall checks only in an isolated environment; measure real Apps polling if
+an isolated shell and declared apps are available; document blocked gates.
+Validate focused tests, UI format/lint, contract/docs checks and diff. Rollback:
+revert this branch; no live settings, audio or driver changes. A slow first inventory read dropped its follow-up; a new regression fails on main and passes with a coalesced pending read, including backend replacement/unmount/failure cases. A cloned test-ready VM (not clean-machine evidence) installed 0.0.23 and upgraded to 0.0.24 under a medium non-elevated token, retaining a marker. Both CLIs exited 0xC0000135; dumpbin shows VCRUNTIME140.dll import, absent from the VM. This is a release-blocking candidate defect, not a passed gate. Next: qualify a self-contained runtime fix and test the exact rebuilt candidate in the clone; preserve published 0.0.24 and do not overwrite artifacts.
+
 ## Website copy and writing guidance — 2026-10-27
 
 Objective: carry the reviewed natural-language website edits, including MCP and

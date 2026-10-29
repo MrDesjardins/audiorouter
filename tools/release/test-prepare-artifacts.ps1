@@ -42,6 +42,40 @@ try {
         if ($_.Exception.Message -notmatch 'too small') { throw }
     }
 
+    # A bounded PE import-table fixture proves the release import guard accepts
+    # OS DLLs and rejects a VC runtime dependency without executing a binary.
+    . (Join-Path $PSScriptRoot '../vm/portable-tool-support.ps1')
+    function New-ImportFixture([string]$Path, [string]$ImportName) {
+        $bytes = [byte[]]::new(1024)
+        $bytes[0] = 77; $bytes[1] = 90
+        [BitConverter]::GetBytes([int32]128).CopyTo($bytes, 60)
+        [BitConverter]::GetBytes([int32]17744).CopyTo($bytes, 128)
+        [BitConverter]::GetBytes([uint16]1).CopyTo($bytes, 134)
+        [BitConverter]::GetBytes([uint16]240).CopyTo($bytes, 148)
+        $optional = 152
+        [BitConverter]::GetBytes([uint16]523).CopyTo($bytes, $optional)
+        [BitConverter]::GetBytes([int32]16).CopyTo($bytes, $optional + 108)
+        [BitConverter]::GetBytes([int32]4096).CopyTo($bytes, $optional + 120)
+        [BitConverter]::GetBytes([int32]40).CopyTo($bytes, $optional + 124)
+        $section = $optional + 240
+        [BitConverter]::GetBytes([int32]4096).CopyTo($bytes, $section + 12)
+        [BitConverter]::GetBytes([int32]512).CopyTo($bytes, $section + 16)
+        [BitConverter]::GetBytes([int32]512).CopyTo($bytes, $section + 20)
+        [BitConverter]::GetBytes([int32]4160).CopyTo($bytes, 524)
+        [Text.Encoding]::ASCII.GetBytes($ImportName).CopyTo($bytes, 576)
+        [IO.File]::WriteAllBytes($Path, $bytes)
+    }
+    $portable = Join-Path $root 'portable-imports.exe'
+    New-ImportFixture $portable 'kernel32.dll'
+    $null = @(Assert-PortableVmTool $portable)
+    $dependent = Join-Path $root 'runtime-imports.exe'
+    New-ImportFixture $dependent 'VCRUNTIME140.dll'
+    try {
+        $null = @(Assert-PortableVmTool $dependent)
+        throw 'import guard accepted the VC runtime'
+    } catch {
+        if ($_.Exception.Message -notmatch 'requires a Visual C\+\+ redistributable') { throw }
+    }
     $missing = Join-Path $root 'missing\output'
     try {
         & $prepare -OutputDirectory $missing -DriverPackage $root | Out-Null
