@@ -1,5 +1,14 @@
 # Active plan — post-0.0.8 maintenance
 
+## Stream Deck build-dependency advisories — 2026-10-28
+
+Objective: resolve compatible development-only Stream Deck dependency advisories
+identified during the 0.0.24 build, without changing the installed app or audio
+setup. Scope: ENG-02/05 supply chain. Inspect upstream availability and actual
+usage, update a compatible lock entry, run clean install, audit, typecheck,
+unit tests and package validation, and record any remaining advisory and its
+exposure. Rollback: revert the lock entry and this record. Windows 11 / Node 22.22.3: updated fast-uri 3.1.8 to 3.1.9, eliminating its moderate and low advisories; npm ci, 26 tests, typecheck, build, package validation and packing passed. Production-only npm audit reports zero vulnerabilities. Full audit retains two low entries for deepmerge 4.3.1 and its parent node-resolve; 4.3.1 is the latest upstream version. The installed node-resolve calls deepmerge only on its own static defaults during the build, not on app or user data; revisit when upstream fixes it. Rollup still reports the two zod comment and circular-dependency warnings documented for 0.0.24. Initial package validation could not reach the network in the sandbox; rerun with network access passed. Next: commit the scoped update and seek separate PR approval.
+
 ## Website copy and writing guidance — 2026-10-27
 
 Objective: carry the reviewed natural-language website edits, including MCP and
