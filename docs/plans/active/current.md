@@ -1,5 +1,16 @@
 # Active plan — post-0.0.8 maintenance
 
+## Sidebar resize and homepage gate video — 2026-10-28
+
+Objective: make the right-panel separator draggable along the full canvas edge
+and replace the homepage Duck image with the supplied Voice Gate recording.
+Requirements UI-11/12/17, M05 website documentation. Windows and Edge are
+available; no audio hardware or driver changes are needed. Tasks: fix the grid
+span, test dragging at the top/middle/bottom and keyboard persistence across
+layouts/themes; optimize the supplied clip, add accessible playback and verify
+website layout at desktop/mobile. Run focused browser, UI lint/format and site
+checks. Rollback: revert the CSS/test and homepage/video changes. Windows/Edge: four focused resize scenarios passed, including top/middle/bottom dragging, keyboard persistence and Properties in all three themes; screenshots inspected. The Playwright process did not exit after reporting results and was stopped. UI lint, format check and typecheck passed; site and documentation checks passed. Edge desktop/390px video layout inspected; the optimized 229,066-byte clip retains audio (original 883,319 bytes). The owner also requested the homepage setup preview use ManyToolsProperties.mp4. Encoded its video-only muted loop at 1570x1056, 21.17 s, 1,759,817 bytes (source 5,744,649), with a 191,107-byte matching poster. Windows Edge confirmed desktop playback, a static poster under reduced motion at 390 px, and no horizontal overflow. Site checks and git diff --check passed. The owner requested autoplay for the Voice Gate video: it starts muted and loops when visible, retains playback controls, and stays paused for reduced motion or data saving. Windows Edge verified playback and reduced-motion behavior; site checks passed. Windows local test: npm --prefix ui run build and cargo build --release --locked --manifest-path src-tauri/Cargo.toml --features custom-protocol passed with CARGO_TARGET_DIR=target/sidebar-test. The shell is target/sidebar-test/release/audiorouter-shell.exe; matching 0.0.24 CLI and plugin workers were copied from the final release build and hash-checked. The shell was not launched. Next: owner tests the divider in the desktop shell.
+
 ## Website copy and writing guidance — 2026-10-27
 
 Objective: carry the reviewed natural-language website edits, including MCP and
