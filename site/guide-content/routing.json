@@ -545,6 +545,104 @@
       ]
     },
     {
+      "kind": "soundboard",
+      "title": "Soundboard",
+      "purpose": "Play short sounds on demand: nine buttons you press on screen, from a Stream Deck or through the local API.",
+      "concept": "A Soundboard is a source with no input. Each button holds one sound, either from the built-in library or one of your own files, and mixes into whatever you connect it to.",
+      "signalBehavior": "Pressing a button starts its sound at the next audio block. Pressing it again restarts it, with a short fade so it never clicks. Overlapping sounds are mixed and kept from clipping. A button can play once, loop, toggle on and off, or play only while held.",
+      "properties": [
+        {
+          "key": "slotMediaId",
+          "label": "Sound",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "meaning": "Choose a built-in sound or import your own WAV or MP3. A built-in sound is stored as a reference to the library, so saved sessions stay small.",
+          "increase": "",
+          "decrease": "",
+          "example": "Add a short ta-da from the Fanfares category to the first button.",
+          "caution": "Your own files may be up to 120 seconds; a board holds about 256 MB of decoded sound in total."
+        },
+        {
+          "key": "slotCaption",
+          "label": "Caption",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "meaning": "The name shown on the button. When empty, the sound's file name is used.",
+          "increase": "",
+          "decrease": "",
+          "example": "Call the third button Applause instead of Applause crowd 02.",
+          "caution": ""
+        },
+        {
+          "key": "slotGainDb",
+          "label": "Level",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "meaning": "Makes this one sound quieter or louder before it is mixed, from -24 dB to +6 dB.",
+          "increase": "The sound plays louder.",
+          "decrease": "The sound plays quieter.",
+          "example": "Lower a loud air horn by 6 dB so it does not drown your voice.",
+          "caution": "The sum of overlapping sounds is limited, but a very loud single sound can still be too loud for your listeners."
+        },
+        {
+          "key": "slotMode",
+          "label": "When pressed",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "meaning": "Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+          "increase": "",
+          "decrease": "",
+          "example": "Set a background cheer to Toggle and press it once to start and again to stop.",
+          "caution": ""
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Add a sound to the board",
+          "steps": [
+            "Add a Soundboard from the Source group and connect it to your output or a Mixer.",
+            "Open its properties and choose Add sound.",
+            "Search the library, press Preview to listen, then press Use.",
+            "Plan and commit, then press the button on the tool."
+          ]
+        },
+        {
+          "title": "Press a sound from a Stream Deck",
+          "steps": [
+            "Start the AudioRouter API and install the Stream Deck plugin.",
+            "Drag the Sound action to a key and choose the Soundboard and its sound number.",
+            "Press the key; AudioRouter starts the session first if it is stopped."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "The Soundboard is not connected to an output, so pressing a button is silent.",
+        "A sound set to Play while held stops as soon as the key is released.",
+        "Previews in the picker play on this computer only; they never go to your route."
+      ],
+      "suggestedVisual": {
+        "type": "transport",
+        "caption": "Show a column of buttons; pressing one lights it and fills a progress bar while its waveform plays."
+      },
+      "sources": [
+        "ui/src/SoundboardNodeEditor.tsx",
+        "ui/src/SoundboardNodeControls.tsx",
+        "docs/plans/active/soundboard.md"
+      ]
+    },
+    {
       "kind": "recorder",
       "title": "Recorder",
       "purpose": "Save the signal reaching one route branch to a file.",

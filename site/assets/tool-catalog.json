@@ -1,5 +1,5 @@
 {
-  "nodeKinds": 36,
+  "nodeKinds": 37,
   "tools": [
     {
       "name": "Physical input",
@@ -88,14 +88,6 @@
       "icon": "⇄",
       "kind": "inputSwitch",
       "guide": "tools/input-switch.html"
-    },
-    {
-      "name": "Output Switch",
-      "category": "Routing",
-      "description": "Send one signal to either headphones or an OBS virtual input; the other output stays silent.",
-      "icon": "⇢",
-      "kind": "outputSwitch",
-      "guide": "tools/output-switch.html"
     },
     {
       "name": "Gain",
@@ -298,5 +290,5 @@
       "guide": "tools/group.html"
     }
   ],
-  "guideCount": 37
+  "guideCount": 38
 }

@@ -226,6 +226,13 @@
       "audioRelevant": true
     },
     {
+      "kind": "soundboard",
+      "title": "Soundboard",
+      "path": "tools/soundboard.html",
+      "propertyCount": 4,
+      "audioRelevant": false
+    },
+    {
       "kind": "recorder",
       "title": "Recorder",
       "path": "tools/recorder.html",
