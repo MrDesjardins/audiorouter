@@ -11,6 +11,11 @@ into the route (for example into the virtual microphone, so people on a call hea
 it). The same trigger is available from the local API, so a Stream Deck key can
 fire one specific sound, and configuring that key must be easy.
 
+The tool ships with a **library of about a hundred free short sounds** (under 5
+seconds each) that the user can search and sort by category, and also takes the
+user's own sounds, which may be longer. The library has its own plan:
+[Soundboard sound library](soundboard-sound-library.md).
+
 Nine is a hard limit that keeps the tool a sensible height. A person who needs
 more adds another Soundboard.
 
@@ -45,6 +50,11 @@ parity, the audio-callback rules in `AGENTS.md`, and the media upload limits.
 | SND-07 | The backend owns the trigger: `soundboard.trigger` (slot) and `soundboard.stop` (one slot or all) in the versioned API, with CLI and MCP parity. |
 | SND-08 | Triggering needs `SessionControl` permission, not graph-write permission, so a Stream Deck key cannot change the graph. |
 | SND-09 | A trigger that cannot play (session not running, empty slot, tool bypassed) returns a clear error and is shown on the Stream Deck key. |
+| SND-10 | The app includes a library of about 100 built-in sounds, each at most 5 seconds, free to use, with recorded source and license. |
+| SND-11 | A slot can be filled from the library or from the user's own file, from one picker. |
+| SND-12 | The picker searches title, tags and category, filters and sorts by category, and previews a sound without sending it into the route. |
+| SND-13 | Users' own sounds may be longer than built-in ones, up to published per-slot and per-board limits; the limit is shown before upload, not at Play. |
+| SND-14 | Built-in sound ids are stable across releases, so saved boards keep pointing at the same sound. |
 
 ## Behavior decisions
 
@@ -92,10 +102,16 @@ parity, the audio-callback rules in `AGENTS.md`, and the media upload limits.
 
 For each assigned slot, one row, with the caption above a full-width field:
 
-- **File:** the file name, duration and format. This is the identification the
-  owner asked for. It is read-only; the file itself is changed with **Replace**.
+- **Sound:** what the slot plays. For a library sound, its title and category;
+  for the user's file, the file name, duration and format. This is the
+  identification the owner asked for. It is read-only; the sound is changed with
+  **Choose sound**, which opens the library picker (search, categories, preview,
+  and "Add my own file") described in
+  [the sound library plan](soundboard-sound-library.md). The caption default is
+  the library title or the file name.
 - **Caption:** text field. Placeholder shows the file name; empty means use it.
-- **Play** and **Replace** and **Remove** buttons.
+- **Play**, **Stop**, **Choose sound** and **Remove** buttons. Stop matters for
+  long user sounds.
 - An **Add sound** control for the next free slot, using the existing upload flow
   (`audioMedia.beginUpload`, `uploadChunk`, `finishUpload`; UI in
   `ui/src/audioUpload.ts` and `AudioFileNodeEditor.tsx`).
@@ -109,6 +125,12 @@ Parameters on the node, following the Audio File naming (`mediaId`, `fileName`):
 
 `slot1MediaId` to `slot9MediaId`, `slot1FileName` to `slot9FileName`,
 `slot1Caption` to `slot9Caption`.
+
+A `slotNMediaId` is either the id of a file the user imported (the existing media
+store) or a library reference `lib:<id>`. Library sounds are not copied into the
+media store, so a saved session stays small and portable; the backend accepts a
+`lib:` id only when it exists in the installed library. A built-in sound's
+`slotNFileName` holds its library title.
 
 Validation lives in `crates/domain/src/lib.rs` next to the Audio File rules
 (bounded string for the id, non-empty control-free file name up to 255 bytes,
@@ -134,9 +156,12 @@ and a retried network call with the same key must not play twice).
 - Triggers reach the audio thread through a lock-free command queue. The audio
   callback only reads the queue and advances voices; it allocates nothing, logs
   nothing and waits for nothing.
-- Per-file and total limits: decide a maximum length per file and a total decoded
-  size for nine files, with a clear message at upload. Open question: the current
-  Audio File limits need to be read and reused if they suit short sounds.
+- Limits: built-in sounds are at most 5 seconds. User sounds can be longer; the
+  existing upload cap is 64 MiB per file (`MAX_AUDIO_MEDIA_BYTES`), and the
+  decoder only supports WAV and MP3 today. Because every slot is decoded into
+  memory at prepare time, the proposal is 120 seconds per slot and a total decoded
+  budget for the board (for example 256 MB), shown at upload. Streaming longer
+  files from disk is out of scope; Audio File covers long playback.
 - Retriggering the same slot restarts the voice from frame 0 with the short
   fixed fade described above, to avoid a click.
 - Add Soundboard to `crates/engine/tests/tool_combinations.rs` `TOOLS`
@@ -211,8 +236,11 @@ used the Stream Deck path.
 5. UI: card buttons, Properties editor, three-theme screenshots, layout-shift
    sampling, jsdom and Edge tests.
 6. Stream Deck action, with unit tests and an attended test on the owner's deck.
-7. Website: tool guide page and the Stream Deck page.
-8. Optional: global shortcuts, then a ready-made profile.
+7. Sound library: sourcing and preparation, manifest and checks, then the
+   picker (see [the sound library plan](soundboard-sound-library.md)). The tool
+   can ship first with user sounds only if the library is not ready.
+8. Website: tool guide page and the Stream Deck page.
+9. Optional: global shortcuts, then a ready-made profile.
 
 ## Validation matrix
 
@@ -223,6 +251,7 @@ used the Stream Deck path.
 | Tool-combination suite with Soundboard | Windows CI |
 | Audio continuity: `live_backend_service_keeps_a_routed_tone_continuous` with the new worker, plus a clip played through the route captured and compared with the source | Windows, VB-Cable or the virtual cable |
 | Nine large files: memory and prepare time within the limits | Windows |
+| Library checks (licenses, duration, level, stable ids) and the picker | See the sound library plan |
 | Canvas and Properties in dark, light and high-contrast; no layout shift while playing | Edge/Playwright |
 | Fresh-install run: the tool works with default grants and no developer variables | Windows, built exe |
 | Stream Deck action: unit tests, then the real deck, including an error key | Attended, needs a Stream Deck |
@@ -234,6 +263,8 @@ used the Stream Deck path.
   bounded queue, drop or coalesce the oldest repeat of the same slot, and count
   drops in telemetry.
 - Nine files use more memory than expected. Bound it and say so at upload.
+- Installer size grows with the library, and a license on a bundled sound turns
+  out to be wrong. Both are covered in the sound library plan.
 - A Stream Deck key shows a stale caption. Re-read captions on the plugin's
   existing change refresh.
 - Global shortcuts conflict with other programs or games. Covered above.
@@ -247,8 +278,8 @@ before release.
 
 ## Prerequisites and unknowns to settle first
 
-- Read the Audio File upload limits and how media is stored, exported and
-  deleted, including whether a copied or pasted node shares a `mediaId` (removing
+- Read how media is stored, exported and deleted (the upload cap is already
+  known: 64 MiB per file), including whether a copied or pasted node shares a `mediaId` (removing
   a slot must not delete a file another node still uses).
 - Decide headroom versus limiter (measurement).
 - Decide shortcut scope (step 2 above).
