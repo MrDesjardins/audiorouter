@@ -1,5 +1,15 @@
 # Active plan — post-0.0.8 maintenance
 
+## UI development dependency advisory — 2026-10-28
+
+Objective: fix GHSA-mrhx-c7xc-m3w5 in the UI's development-only zod,
+introduced through eslint-plugin-react-hooks. Scope: ENG-02/05, supply-chain
+maintenance; no runtime or audio change. Update the lockfile within the existing
+allowed dependency range, confirm the dependency path and audit, run UI lint,
+format, typecheck, tests and build, and inspect the lockfile diff. No device,
+driver, shell or live user session is required. Rollback: revert the lockfile
+and plan update. Windows 11, Node 22.22.3: locked zod 4.6.5 to 4.6.7 under the existing eslint-plugin-react-hooks range; UI npm audit reports zero vulnerabilities. UI lint, format check, typecheck and production build passed; Vitest 81 files / 743 tests passed; documentation validation and diff check passed. Vite still reports the 608 kB chunk warning recorded in the 0.0.24 plan. Next: review and commit; request PR approval separately.
+
 ## Website copy and writing guidance — 2026-10-27
 
 Objective: carry the reviewed natural-language website edits, including MCP and
