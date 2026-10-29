@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="pi.css">
+  <script src="pi.js"></script>
+</head>
+<body>
+  <div id="connection-slot"></div>
+  <label>Soundboard tool (selected session)<select id="node"></select></label>
+  <label>Sound<select id="slot"></select></label>
+  <p class="hint">The key shows the sound's caption from AudioRouter. Add and change sounds in the Soundboard's properties; a slot set to "Play while held" plays only while this key is down. Pressing the key starts the session if it is stopped.</p>
+  <script>
+    const node = document.getElementById("node"), slot = document.getElementById("slot");
+    function fillSlots() {
+      fillSelect(slot, Array.from({ length: 9 }, (_, index) => ({ value: String(index + 1), label: `Sound ${index + 1}` })), String(PI.settings.slot ?? "1"));
+    }
+    const previous = PI.onSettings;
+    PI.onSettings = (settings) => { previous(settings); fillSlots(); };
+    PI.onOptions = (options) => {
+      const boards = options.nodes.filter((item) => item.type === "soundboard");
+      fillSelect(node, boards.map((item) => ({ value: item.id, label: item.name })), PI.settings.nodeId, PI.settings.nodeName ? `${PI.settings.nodeName} (not found)` : undefined);
+      fillSlots();
+    };
+    node.addEventListener("change", () => {
+      const chosen = (PI.options?.nodes ?? []).find((item) => item.id === node.value);
+      PI.saveSettings({ nodeId: node.value, nodeName: chosen?.name ?? "", slot: Number(PI.settings.slot) || 1 });PI.saveSettings({ nodeId: node.value, nodeName: chosen?.name ?? "" });
+    });
+    slot.addEventListener("change", () => PI.saveSettings({ slot: Number(slot.value) }));
+  </script>
+</body>
+</html>

@@ -208,3 +208,9 @@ export function formatElapsed(seconds: number): string {
   const hours = Math.floor(seconds / 3600), minutes = Math.floor((seconds % 3600) / 60), rest = seconds % 60;
   return `${hours > 0 ? `${hours}:` : ""}${String(minutes).padStart(hours > 0 ? 2 : 1, "0")}:${String(rest).padStart(2, "0")}`;
 }
+
+/** A Soundboard key: a speaker, the button's caption and its slot number. */
+export function soundFace({ label, slot, pending }: { label: string | null; slot: number; pending: boolean }): string {
+  const speaker = `<path d="M50 62h14l18-14v48L64 82H50z" fill="${INK}"/><path d="M92 58q10 14 0 28" fill="none" stroke="${COLD}" stroke-width="5" stroke-linecap="round"/><path d="M100 50q16 22 0 44" fill="none" stroke="${COLD}" stroke-width="5" stroke-linecap="round"/>`;
+  return frame((label ? text(fit(label, 12), 34, 20, INK, 700) : "") + `<g opacity="${pending ? 0.55 : 1}">${speaker}</g>` + text(`SOUND ${slot}`, 124, 16, COLD, 800), COLD);
+}

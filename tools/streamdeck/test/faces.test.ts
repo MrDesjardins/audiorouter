@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dataUrl, fit, levelColor, messageFace, meterFace, meterFraction, privacyFace, targetLabel, toggleFace } from "../src/faces.js";
+import { dataUrl, fit, levelColor, messageFace, meterFace, meterFraction, privacyFace, soundFace, targetLabel, toggleFace } from "../src/faces.js";
 
 describe("level colours and meter scale", () => {
   it("matches the canvas colours: cold, warm, hot, clip", () => {
@@ -47,5 +47,14 @@ describe("faces", () => {
     expect(privacyFace({ muted: true, mode: "toggle", pending: false })).toContain(">MUTED<");
     expect(privacyFace({ muted: false, mode: "unmute", pending: false })).toContain(">LIVE<");
     expect(privacyFace({ muted: false, mode: "unmute", pending: false })).toContain("UNMUTE MIC");
+  });
+});
+
+describe("sound face", () => {
+  it("shows the caption and the slot, and dims while a press is pending", () => {
+    const face = soundFace({ label: "Airhorn <1>", slot: 3, pending: false });
+    expect(face).toContain("Airhorn &lt;1&gt;");
+    expect(face).toContain("SOUND 3");
+    expect(soundFace({ label: null, slot: 9, pending: true })).toContain("opacity=\"0.55\"");
   });
 });
