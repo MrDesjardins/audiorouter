@@ -718,8 +718,19 @@ export function needsNativePaths(session: Session): boolean {
   return paths.some(
     (nodes) =>
       nodes.filter((node) => node.enabled && node.kind === "physicalOutput").length > 1 ||
-      nodes.filter((node) => node.enabled && node.kind === "physicalInput").length > 1,
+      nodes.filter((node) => node.enabled && node.kind === "physicalInput").length > 1 ||
+      mixesFileOrBoardWithAnotherSource(nodes),
   );
+}
+
+/**
+ * The single-endpoint chain mixes only a Test Signal with one input device. An
+ * Audio File or Soundboard sharing a Mixer with any other source plays on the
+ * multi-path worker, which accepts every source in every layout.
+ */
+function mixesFileOrBoardWithAnotherSource(nodes: Session["nodes"]): boolean {
+  const sources = nodes.filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
+  return sources.length > 1 && sources.some((node) => node.kind === "audioFile" || node.kind === "soundboard");
 }
 
 /**
