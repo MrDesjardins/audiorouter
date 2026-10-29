@@ -99,6 +99,17 @@ before release.
   play modes (loop, toggle, hold), random-variant slots, progress on the button,
   drag and drop, recently used, trigger cooldown (SND-15 to SND-20; owner to confirm).
 
+- 2026-10-29 sourcing closed for now (owner: add more later). The library is
+  committed: `resources/sound-library/` holds 105 sounds as mono 44.1 kHz FLAC with
+  `library.json` (source, author, URL, license, SHA-256 each) and `NOTICES.md` (7.8 MB;
+  hashes verified). Format spike result for 105 sounds: WAV 14.4 MB, FLAC 7.7 MB,
+  MP3 2.7 MB with a 25 ms encoder start delay. Decision: FLAC, which needs the
+  decoder's `flac` feature (to enable and verify in task 4). The picks, license
+  evidence and tools are in `tools/soundboard/` (see its README); the raw sources are
+  backed up at `C:audiorouter-assetssound-sourcing`.
+- 2026-10-29 build start: Rust builds wait for the owner's VM session to finish
+  (VM `AR-DriverTest` was still running); code is written first.
+
 ## Next action
 
 Task 1 (spec) and task 2 (sourcing and format spike), both without Rust builds.

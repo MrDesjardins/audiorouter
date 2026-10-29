@@ -1,0 +1,8 @@
+clapping/735564__pluralz__clapping-large-crowd-at-choir-concert-4.wav | excerpt=4.5
+clapping/735568__pluralz__clapping-large-crowd-at-choir-concert-8.wav | excerpt=4.5
+clapping/735572__pluralz__clapping-large-crowd-at-choir-concert-12.wav | excerpt=4.5
+clapping/735575__pluralz__clapping-large-crowd-at-choir-concert-15.wav | excerpt=4.5
+clapping/735578__pluralz__clapping-large-crowd-at-choir-concert-18.wav | excerpt=4.5
+laughter/471212__audroger__weird-laughter-3.wav
+laughter/558249__gerent__laughter-male-modulated-wet-evil-throaty-sinister_029-030-030-046-042-100-1.wav
+laughter/786076__amauri8bit__brooding-sinister-laughter.wav | excerpt=5

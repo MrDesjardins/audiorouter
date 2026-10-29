@@ -151,12 +151,12 @@ for (const { path: rel, excerpt } of picks.sort((a, b) => a.path.localeCompare(b
   const peak = Number.parseFloat(stats.match(/max_volume: (-?[\d.]+) dB/)?.[1]);
   const gain = Math.max(-24, Math.min(TARGET_MEAN_DB - mean, PEAK_CEILING_DB - peak, MAX_BOOST_DB));
   const fadeStart = Math.max(0, seconds - fadeOutSeconds);
-  const output = join(outDir, `${id}.wav`);
-  ffmpeg(["-i", trimmed, "-af", `volume=${gain.toFixed(2)}dB,afade=t=in:d=${fadeInSeconds},afade=t=out:st=${fadeStart.toFixed(4)}:d=${fadeOutSeconds}`, "-ar", "44100", "-ac", "1", "-sample_fmt", "s16", output]);
+  const output = join(outDir, `${id}.flac`);
+  ffmpeg(["-i", trimmed, "-af", `volume=${gain.toFixed(2)}dB,afade=t=in:d=${fadeInSeconds},afade=t=out:st=${fadeStart.toFixed(4)}:d=${fadeOutSeconds}`, "-ar", "44100", "-ac", "1", "-sample_fmt", "s16", "-c:a", "flac", "-compression_level", "8", output]);
   const check = ffmpeg(["-i", output, "-af", "volumedetect", "-f", "null", "-"]);
   ids.add(id);
   manifest.push({
-    id: `lib:${id}`, file: `${id}.wav`, title: info.title, category: info.category, tags: info.tags,
+    id: `lib:${id}`, file: `${id}.flac`, title: info.title, category: info.category, tags: info.tags,
     durationMs: Math.round(durationSeconds(output) * 1000),
     gainAppliedDb: Number(gain.toFixed(2)),
     meanDb: Number.parseFloat(check.match(/mean_volume: (-?[\d.]+) dB/)?.[1]),
@@ -170,3 +170,18 @@ writeFileSync(join(outDir, "library.json"), JSON.stringify({ categories: CATEGOR
 writeFileSync(join(outDir, "rejected.json"), JSON.stringify(rejected, null, 2) + "\n");
 console.log(`prepared ${manifest.length} sounds, rejected ${rejected.length}`);
 for (const r of rejected) console.log(`  rejected ${r.rel}: ${r.reason}`);
+
+// Third-party notices generated from the manifest, shipped next to the sounds.
+const bySource = new Map();
+for (const s of manifest) {
+  const key = `${s.source.name}|${s.source.author}|${s.source.license}`;
+  if (!bySource.has(key)) bySource.set(key, { source: s.source, titles: [] });
+  bySource.get(key).titles.push(`${s.title} (${s.source.url})`);
+}
+const notices = ["# Sound library notices", "",
+  "AudioRouter's built-in sounds are CC0 (public domain dedication) recordings or sounds made for AudioRouter.",
+  "No attribution is required; the sources are listed for transparency.", ""];
+for (const { source, titles } of [...bySource.values()].sort((a, b) => a.source.name.localeCompare(b.source.name))) {
+  notices.push(`## ${source.name} - ${source.author} - ${source.license}`, "", ...titles.map((t) => `- ${t}`), "");
+}
+writeFileSync(join(outDir, "NOTICES.md"), notices.join("\n"));
