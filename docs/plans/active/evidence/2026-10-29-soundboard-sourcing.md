@@ -46,6 +46,38 @@ game over, laser and whoosh.
   the engine decodes only WAV and MP3 today, so every shipped file is converted.
   ffmpeg is available on the owner's PC (WinGet) for this.
 
+## First library build (owner picks, 2026-10-29)
+
+The owner picked 96 sounds in the audition page and approved "Oh yeah" as an
+exception, 97 in all (`tools/soundboard/prepare-library.mjs`, picks kept in
+`target/sourcing/picks-1.txt`). All 97 were prepared: mono, 44.1 kHz, 16-bit WAV;
+silence trimmed at both ends; average level moved to about -20 dB with a peak
+ceiling of -1 dB; 12 ms end fade; each with a provenance record (source, author,
+page URL, license, original file name, SHA-256).
+
+| Category | Sounds |
+| --- | --- |
+| Bodily humor | 25 (13 fart, 10 burp plus generated) |
+| Impacts | 16 |
+| Interface and clicks | 15 |
+| Sci-fi and magic | 10 |
+| Reactions and comedy | 9 |
+| Fanfares and stingers | 8 |
+| Game and arcade | 8 |
+| Horns and alerts | 5 |
+| Whooshes | 1 |
+
+Results: average level now between -26.4 and -20 dB (it ranged from about -4 to
+-19 dB for the generated sounds before); the four quietest hit the peak ceiling
+before reaching the target (a fart, a heavy bell and two slime sounds). Longest
+5.0 s, shortest 0.18 s, 12 MB as WAV. Four 5.0 s Kenney "computer noise" files were
+admitted by allowing 0.05 s of rounding room on the 5-second rule.
+
+Open: titles are generated from file names (for example "Fart 03", "Impact bell
+heavy 1") and need friendly names; there are no applause, clapping, laughter,
+gasp, groan or animal sounds yet; the format spike (WAV against FLAC or MP3) is
+still to do; the owner must listen to the prepared set at its final levels.
+
 ## Next steps
 
 1. Owner listens with `target/sourcing/audition.html` and ticks the sounds to keep.
