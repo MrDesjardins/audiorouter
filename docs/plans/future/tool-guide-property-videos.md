@@ -163,7 +163,7 @@ This is a first sketch to sharpen in the spike, not a commitment.
 1. **Spike on Gate only** (about three clips). Prove offline render, UI replay,
    mux, sync, size and the Firefox check. Owner reviews the result before the
    rest is planned in detail.
-2. Spec and decision record: revise UI-20, and record the clip rules.
+2. Spec and decision record: add a clause to UI-20 (the diagrams stay), and record the clip rules.
 3. Build the pipeline: fixture generator, clip manifest format, recorder script
    under `tools/site/`, coverage check, page generator changes
    (`generate-guides.mjs` and the guide content format).
