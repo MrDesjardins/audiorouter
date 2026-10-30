@@ -145,6 +145,36 @@ before release.
   The installer resource list now includes `sound-library` in both release configs; the
   built installer has not been inspected.
 
+- 2026-10-29 owner attended test of the built exe and Stream Deck plugin found five
+  defects, each fixed with a regression test that fails without the fix:
+  1. A Mixer route containing a Soundboard was refused (`connected_mixers.rs` kept its
+     own source list): `source_combinations.rs` now compiles and runs every source kind
+     alone, in a fan-out, in every Mixer pair and in every connected-Mixer triple, and
+     classifies `NodeKind` with an exhaustive `match`.
+  2. Microphone + Soundboard in a Mixer went to the single-endpoint chain, which mixes
+     only a Test Signal with one input (`UnsupportedTopology`): `needsNativePaths` now
+     sends an Audio File or Soundboard that shares a route to the multi-path worker
+     (`draft.test.ts`).
+  3. A missing device gave a message but no mark: the nodes Play needs now get a red
+     dashed outline and a "Choose a device" tag.
+  4. The Stream Deck Sound key's `mode` was rejected as an unknown parameter by the
+     allowlist in `authorization.rs`; a test now walks every method's schema against the
+     allowlist (it also found `devices.list includeInactive` and `nativeBridges.prepare
+     leaseMs`), and a dispatcher test sends every documented Soundboard parameter.
+  5. Stream Deck: per-key behavior (slot setting, once, loop until pressed again, hold),
+     a key name, and slot names in the inspector; `sound-settings.ts` holds the logic
+     and `test/sound.test.ts` tests it. A slot's Loop now stops on the next press.
+  Process finding: the owner reported that these were handed over untested. AGENTS.md
+  now has a "Done means exercised" rule.
+  Pre-PR checks (host, 2026-10-29): `cargo fmt` both workspaces clean; Clippy
+  `-D warnings` clean for the workspace and `src-tauri`; `cargo test --workspace` and
+  `src-tauri` pass; UI format, lint, typecheck:all and 749 vitest tests pass; Stream
+  Deck typecheck and 33 tests pass; `site/check-guides.mjs` passes. Attended by the
+  owner: Play on Mixer routes, the Sound key (slot setting, mode choices after the fix
+  not yet re-confirmed by the owner). Not run: Playwright, the continuity harness, a
+  fresh-install run of the installer, the three-theme screenshots, listening review of
+  every library sound.
+
 ## Next action
 
 Remaining, in order: library category expansion for `slotNSet`; drag and drop (SND-19);
