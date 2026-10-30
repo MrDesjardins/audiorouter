@@ -573,3 +573,31 @@ fn read_only_notifications_produce_no_response() {
         .dispatch_message(RpcMessage::Single(notification))
         .is_empty());
 }
+
+/// Every parameter a method's published schema lists must pass the parameter
+/// allowlist. A new optional parameter added to the schema and the handler but
+/// not here was rejected as "unknown parameter" (Soundboard `mode`, 2026-10-29).
+#[test]
+fn every_schema_property_is_accepted_by_the_parameter_allowlist() {
+    let mut rejected = Vec::new();
+    for method in audiorouter_domain::API_METHODS {
+        let schema = crate::api_schema::method_input_schema(method.name);
+        let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
+            continue;
+        };
+        for property in properties.keys() {
+            let params = serde_json::json!({ property.as_str(): null });
+            if let Err(ControlError::InvalidRequest(message)) =
+                validate_method_params(method.name, Some(&params))
+            {
+                if message.starts_with("unknown parameter") {
+                    rejected.push(format!("{}.{property}", method.name));
+                }
+            }
+        }
+    }
+    assert!(
+        rejected.is_empty(),
+        "schema properties the allowlist rejects: {rejected:?}"
+    );
+}
