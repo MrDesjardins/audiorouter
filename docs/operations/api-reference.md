@@ -16,7 +16,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 123 methods, including backend-owned quit/finalize,
+The current catalog contains 136 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -67,6 +67,11 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `recordings.recycle` | `record` | preview is read-only; confirmed recycling requires an idempotency key |
 | `safety.setPrivacyMute` | `sessionControl` | mutating; requires an idempotency key |
 | `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
+| `soundLibrary.list` | `read` | read-only; bundled sound library manifest |
+| `soundLibrary.read` | `read` | read-only; one bundled sound as base64 for preview |
+| `soundboard.trigger` | `sessionControl` | mutating; plays a slot, no idempotency key because a repeat press plays again; optional per-press `mode` |
+| `soundboard.stop` | `sessionControl` | mutating; fades out one slot or all voices |
+| `soundboard.status` | `read` | read-only; live voices per slot |
 
 `recordings.recovery` accepts either a `recordingId` for one checkpoint or an
 optional `cursor`/`limit` for a bounded recovery listing. Listing returns
