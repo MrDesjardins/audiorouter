@@ -258,4 +258,5 @@ Round 2 (2026-10-30): stars 5 → 51 and installer downloads 4–9 → about 105
 release since the r/software post. The next step is a build-story post for
 r/vibecoding (or an alternative), then the r/Windows11 Sunday thread; see
 [the plan](marketing-vibecoding-2026-10-30.md). The weekly metrics run of
-2026-10-26 failed and needs repair.
+2026-10-26 failed because main rejects the bot's push; the workflow now keeps
+the history on a `metrics-data` branch (dispatch it once after merge).
