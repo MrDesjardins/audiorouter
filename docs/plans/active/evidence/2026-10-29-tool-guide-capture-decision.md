@@ -34,7 +34,7 @@ Properties panel, and briefly scroll to the changed Threshold/Hold/Range field
 before returning to the live visual. Edge reported all three capture tests as
 passing; the runner still hangs after reporting and is interrupted, and
 Firefox playback remains unverified. Artifacts are under the ignored
-`target/tool-guide-spike/` directory. See the [active execution plan](../current.md#owner-revision-after-gate-review--2026-10-29)
+`target/tool-guide-spike/` directory. See the [active execution plan](../current.md#owner-revision-after-gate-review-2026-10-29)
 for detailed measurements and current validation status.
 
 The wider all-tool inventory, clips, UI-20 contract update, accessibility,

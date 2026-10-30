@@ -34,6 +34,12 @@ the Loop control but ends before the source repeats.
 - Guide regeneration also runs `site/generate-social.mjs`; review caught that
   omitting this existing pipeline step removed canonical/social tags. The
   final generated pages preserve them.
+- CI documentation validation caught stale heading anchors from the earlier
+  spike. Fixed the three active-plan links and the UI-20 requirements link;
+  `node tools/quality/verify.mjs --checks docs` now passes. The check's other
+  annotation is GitHub's hosted `ubuntu-latest` image-migration notice, not a
+  source diagnostic; it stays as runner-environment information. CodeQL's
+  neutral check has no annotations.
 - Development capture setup emitted React Flow sizing/identity warnings while
   the canvas was moved offscreen. Earlier empty-session Group captures failed;
   the final Group capture uses a populated fixture and succeeds. These are

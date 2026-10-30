@@ -1,7 +1,7 @@
 # Tool guides built from the real property window
 
 Status: implementation authorized by the owner on 2026-10-29; execution is
-tracked in the [active plan](../active/current.md#owner-revision-after-gate-review--2026-10-29).
+tracked in the [active plan](../active/current.md#owner-revision-after-gate-review-2026-10-29).
 Keep the stable plan here as the feature contract.
 
 ## Outcome
@@ -183,7 +183,7 @@ This is a first sketch to sharpen in the spike, not a commitment.
    Properties-only framing, briefly show the changed value, then return to the
    live top visual. Firefox playback remains unverified.
 2. **UI-20 and scope decision (recorded).** The diagrams stay conceptual and
-   unchanged. [UI-20](../../spec/09-interface.md#ui-20--visual-tool-guides)
+   unchanged. [UI-20](../../spec/09-interface.md#requirements)
    now distinguishes labelled real-UI/production-DSP recordings and
    configuration-only recordings. See the
    [owner decision record](../active/evidence/2026-10-29-tool-guide-capture-decision.md).
