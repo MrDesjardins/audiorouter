@@ -253,3 +253,9 @@ Phase 1 Reddit post 1 (2026-10-21): the owner posted to r/software,
 Next: answer comments for the first 2–3 hours, then after a week compare
 GitHub traffic referrers and release downloads with the week before, and
 pick the next subreddit (one per week).
+
+Round 2 (2026-10-30): stars 5 → 51 and installer downloads 4–9 → about 105 per
+release since the r/software post. The next step is a build-story post for
+r/vibecoding (or an alternative), then the r/Windows11 Sunday thread; see
+[the plan](marketing-vibecoding-2026-10-30.md). The weekly metrics run of
+2026-10-26 failed and needs repair.
