@@ -56,5 +56,7 @@ describe("sound face", () => {
     expect(face).toContain("Airhorn &lt;1&gt;");
     expect(face).toContain("SOUND 3");
     expect(soundFace({ label: null, slot: 9, pending: true })).toContain("opacity=\"0.55\"");
+    expect(soundFace({ label: "Horn", slot: 2, pending: false, behavior: "loop" })).toContain("SOUND 2 · LOOP");
+    expect(soundFace({ label: "Horn", slot: 2, pending: false })).not.toContain("·");
   });
 });

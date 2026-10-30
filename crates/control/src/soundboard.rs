@@ -84,9 +84,22 @@ impl ControlPlane {
                 ))
             }
         };
+        let mode = match params.get("mode") {
+            None | Some(Value::Null) => None,
+            Some(value) => Some(
+                value
+                    .as_str()
+                    .and_then(audiorouter_engine::SlotMode::parse)
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "mode must be once, loop, toggle or hold".into(),
+                        )
+                    })?,
+            ),
+        };
         let (session_id, node_id, source) = self.running_soundboard(&params)?;
         let accepted = if press {
-            source.trigger(slot)
+            source.trigger_with(slot, mode)
         } else {
             source.release(slot)
         };

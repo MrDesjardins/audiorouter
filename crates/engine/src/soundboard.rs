@@ -57,7 +57,8 @@ pub struct SoundboardSlot {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Command {
-    Trigger(u8),
+    /// The slot, and a mode that replaces the slot's own for this press.
+    Trigger(u8, Option<SlotMode>),
     Release(u8),
     Stop(u8),
     StopAll,
@@ -69,6 +70,8 @@ struct Voice {
     slot: u8,
     sound: u8,
     looping: bool,
+    /// Started in `hold` mode: a release stops it.
+    hold: bool,
     cursor: usize,
     gain: f32,
     /// Frames of fade-out left, or 0 when the voice is not fading.
@@ -82,6 +85,7 @@ const IDLE_VOICE: Voice = Voice {
     slot: 0,
     sound: 0,
     looping: false,
+    hold: false,
     cursor: 0,
     gain: 0.0,
     fade_left: 0,
@@ -161,9 +165,15 @@ impl SoundboardSource {
     /// Start slot `slot` (0-based). False when the slot is empty or the
     /// queue is full.
     pub fn trigger(&self, slot: usize) -> bool {
+        self.trigger_with(slot, None)
+    }
+
+    /// Like `trigger`, with a mode that replaces the slot's own for this press
+    /// (a Stream Deck key chooses how it plays).
+    pub fn trigger_with(&self, slot: usize, mode: Option<SlotMode>) -> bool {
         slot < SOUNDBOARD_SLOT_COUNT
             && self.slot_loaded(slot)
-            && self.push(Command::Trigger(slot as u8))
+            && self.push(Command::Trigger(slot as u8, mode))
     }
 
     /// The trigger was let go; stops a `hold` slot.
@@ -213,15 +223,10 @@ impl SoundboardSource {
         let fade_frames = (u64::from(self.sample_rate_hz) * STOP_FADE_MS / 1000).max(1) as u32;
         while let Some(command) = self.commands.pop() {
             match command {
-                Command::Trigger(slot) => self.start(state, slot, gap_frames, fade_frames),
-                Command::Release(slot) => {
-                    if self.slots[usize::from(slot)]
-                        .as_ref()
-                        .is_some_and(|config| config.mode == SlotMode::Hold)
-                    {
-                        fade_slot(state, slot, fade_frames);
-                    }
+                Command::Trigger(slot, mode) => {
+                    self.start(state, slot, mode, gap_frames, fade_frames)
                 }
+                Command::Release(slot) => fade_held(state, slot, fade_frames),
                 Command::Stop(slot) => fade_slot(state, slot, fade_frames),
                 Command::StopAll => {
                     for slot in 0..SOUNDBOARD_SLOT_COUNT as u8 {
@@ -291,7 +296,14 @@ impl SoundboardSource {
         self.publish_status(state);
     }
 
-    fn start(&self, state: &mut SoundboardVoices, slot: u8, gap_frames: u64, fade_frames: u32) {
+    fn start(
+        &self,
+        state: &mut SoundboardVoices,
+        slot: u8,
+        mode: Option<SlotMode>,
+        gap_frames: u64,
+        fade_frames: u32,
+    ) {
         let index = usize::from(slot);
         let Some(config) = self.slots[index].as_ref() else {
             return;
@@ -307,7 +319,9 @@ impl SoundboardSource {
             .voices
             .iter()
             .any(|voice| voice.active && voice.slot == slot && voice.fade_total == 0);
-        if config.mode == SlotMode::Toggle && playing {
+        let mode = mode.unwrap_or(config.mode);
+        // Toggle and Loop both stop on the next press.
+        if matches!(mode, SlotMode::Toggle | SlotMode::Loop) && playing {
             fade_slot(state, slot, fade_frames);
             return;
         }
@@ -345,7 +359,8 @@ impl SoundboardSource {
             active: true,
             slot,
             sound,
-            looping: config.mode == SlotMode::Loop,
+            looping: mode == SlotMode::Loop,
+            hold: mode == SlotMode::Hold,
             cursor: 0,
             gain: 10f32.powf(config.gain_db / 20.0),
             fade_left: 0,
@@ -386,6 +401,18 @@ fn fade_slot(state: &mut SoundboardVoices, slot: u8, fade_frames: u32) {
         .voices
         .iter_mut()
         .filter(|voice| voice.active && voice.slot == slot && voice.fade_total == 0)
+    {
+        voice.fade_total = fade_frames;
+        voice.fade_left = fade_frames;
+    }
+}
+
+/// A release stops only the voices that were started in `hold` mode.
+fn fade_held(state: &mut SoundboardVoices, slot: u8, fade_frames: u32) {
+    for voice in state
+        .voices
+        .iter_mut()
+        .filter(|voice| voice.active && voice.slot == slot && voice.hold && voice.fade_total == 0)
     {
         voice.fade_total = fade_frames;
         voice.fade_left = fade_frames;
@@ -525,6 +552,42 @@ mod tests {
         assert_eq!(looped.playing_mask(), 1);
         looped.stop_all();
         for _ in 0..4 {
+            looped.process(&mut out);
+        }
+        assert_eq!(looped.playing_mask(), 0);
+    }
+
+    #[test]
+    fn a_press_can_choose_how_the_slot_plays() {
+        let mut out = block();
+        // A "play once" slot played as hold stops on release.
+        let held = board(vec![(vec![sound(480_000, 0.2)], SlotMode::Once)]);
+        held.trigger_with(0, Some(SlotMode::Hold));
+        held.process(&mut out);
+        assert_eq!(held.playing_mask(), 1);
+        held.release(0);
+        for _ in 0..4 {
+            held.process(&mut out);
+        }
+        assert_eq!(held.playing_mask(), 0);
+        // Without the override, the same slot ignores a release.
+        let plain = board(vec![(vec![sound(480_000, 0.2)], SlotMode::Once)]);
+        plain.trigger(0);
+        plain.process(&mut out);
+        plain.release(0);
+        for _ in 0..4 {
+            plain.process(&mut out);
+        }
+        assert_eq!(plain.playing_mask(), 1);
+        // Loop plays until the same key is pressed again.
+        let looped = board(vec![(vec![sound(100, 0.2)], SlotMode::Once)]);
+        looped.trigger_with(0, Some(SlotMode::Loop));
+        for _ in 0..30 {
+            looped.process(&mut out);
+        }
+        assert_eq!(looped.playing_mask(), 1);
+        looped.trigger_with(0, Some(SlotMode::Loop));
+        for _ in 0..30 {
             looped.process(&mut out);
         }
         assert_eq!(looped.playing_mask(), 0);

@@ -53,7 +53,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "meters.reset" => "Reset held sample peaks and clipping statistics of one prepared Meter without changing audio or the saved graph.",
         "soundLibrary.list" => "List the built-in sounds for the Soundboard picker: id, title, category, tags, duration and license.",
         "soundLibrary.read" => "Read one built-in sound as base64 FLAC, for previewing in the picker. The preview never goes to a route.",
-        "soundboard.trigger" => "Press (or release) one slot of a running Soundboard tool; the sound starts at the next audio block.",
+        "soundboard.trigger" => "Press (or release) one slot of a running Soundboard tool; the sound starts at the next audio block. An optional mode (once, loop, toggle, hold) replaces the slot's own for this press.",
         "soundboard.stop" => "Fade out one slot, or every slot when no slot is given, of a running Soundboard tool.",
         "soundboard.status" => "Which Soundboard slots are loaded and playing, with progress and ignored or dropped triggers.",
         "audioSources.transport" => "Play or stop one prepared Test Signal or audio-file source without stopping other graph routes; pause applies to audio files.",
@@ -378,7 +378,8 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "slot": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::SOUNDBOARD_SLOTS },
-                "action": { "enum": ["press", "release"] }
+                "action": { "enum": ["press", "release"] },
+                "mode": { "enum": ["once", "loop", "toggle", "hold"] }
             }),
             &["sessionId", "nodeId", "slot"],
         ),

@@ -1517,7 +1517,14 @@ export type MethodParams = {
   "audioMedia.delete": { mediaId: EntityId };
   "timeShift.transport": { sessionId: EntityId; nodeId: EntityId; action: "pause" | "resume" | "back" | "forward" | "live" | "status" };
   "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; action: "play" | "pause" | "stop" | "status" };
-  "soundboard.trigger": { sessionId: EntityId; nodeId: EntityId; slot: number; action?: "press" | "release" };
+  "soundboard.trigger": {
+    sessionId: EntityId;
+    nodeId: EntityId;
+    slot: number;
+    action?: "press" | "release";
+    /** Replaces the slot's own mode for this press. */
+    mode?: "once" | "loop" | "toggle" | "hold";
+  };
   "soundboard.stop": { sessionId: EntityId; nodeId: EntityId; slot?: number };
   "soundboard.status": { sessionId: EntityId; nodeId: EntityId };
   "soundLibrary.list": undefined;

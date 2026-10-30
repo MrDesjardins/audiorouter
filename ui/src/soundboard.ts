@@ -8,7 +8,7 @@ export const SOUNDBOARD_MODES = ["once", "loop", "toggle", "hold"] as const;
 export type SoundboardMode = (typeof SOUNDBOARD_MODES)[number];
 export const SOUNDBOARD_MODE_LABELS: Record<SoundboardMode, string> = {
   once: "Play once",
-  loop: "Loop",
+  loop: "Loop until pressed again",
   toggle: "Toggle on/off",
   hold: "Play while held",
 };
