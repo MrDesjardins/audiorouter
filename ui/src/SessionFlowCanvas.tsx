@@ -109,6 +109,7 @@ const DROP_PREVIEW_ID = "__drop-preview";
 const DROP_GRAB_OFFSET = { x: 90, y: 28 };
 import { nextPeakHold, type PeakHold } from "./dynamics";
 import { DuckGlyph } from "./DuckGlyph";
+import { SoundboardNodeControls } from "./SoundboardNodeControls";
 import type { NodeDeviceUsers } from "./appUsage";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
@@ -326,6 +327,7 @@ const NODE_FLOW_GROUPS: Record<NodeKind, LibraryFlowGroup> = {
   physicalInput: "input",
   testSignal: "input",
   audioFile: "input",
+  soundboard: "input",
   applicationCapture: "input",
   endpointLoopback: "input",
   virtualRenderSource: "input",
@@ -399,6 +401,7 @@ const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
   virtualCaptureSink: "Cable Output",
   testSignal: "Test Signal",
   audioFile: "Audio File",
+  soundboard: "Soundboard",
   parametricEq: "Advanced EQ",
   graphicEq: "Graphic EQ",
   delay: "Sync",
@@ -1022,7 +1025,7 @@ function hasOnlyCaptureSources(session: Session, nodeId: string): boolean {
     visited.add(id);
     const node = session.nodes.find((item) => item.id === id);
     if (!node?.enabled) continue;
-    if (node.kind === "testSignal" || node.kind === "audioFile") return false;
+    if (node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard") return false;
     if (["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource"].includes(node.kind))
       foundCapture = true;
     for (const edge of session.edges) if (edge.enabled && edge.destinationNode === id) pending.push(edge.sourceNode);
@@ -2262,6 +2265,7 @@ function NodeVisual({
         onStop={onAudioSourceTransport ? () => onAudioSourceTransport(node.id, "stop") : undefined}
       />
     );
+  if (node.kind === "soundboard") return <SoundboardNodeControls node={node} />;
   if (node.kind === "audioFile")
     return (
       <AudioFileNodeControls node={node} state={audioSourceStates?.[node.id]} onTransport={onAudioSourceTransport} />
@@ -2880,7 +2884,7 @@ export function SessionFlowCanvas({
             {/* Over the card's top edge, so marking it never resizes it (UI-17). */}
             {nodeIssues?.[node.id] && (
               <span className="node-issue-tag" role="alert" title={nodeIssues[node.id]}>
-                ! Cannot play
+                {nodeIssues[node.id].length <= 24 ? `! ${nodeIssues[node.id]}` : "! Cannot play"}
               </span>
             )}
             {node.ports
@@ -3079,7 +3083,7 @@ export function SessionFlowCanvas({
           </div>
         ),
       },
-      className: `${layoutSize ? "has-layout-size " : ""}${nodeIssues?.[node.id] ? "has-node-issue " : ""}${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : ""}`,
+      className: `${layoutSize ? "has-layout-size " : ""}${nodeIssues?.[node.id] ? "has-node-issue " : ""}${node.id === DROP_PREVIEW_ID ? "flow-drop-preview " : ""}flow-node-${nodeFlowGroup(node.kind)}${node.kind === "plugin" ? " flow-node-vst" : ""}${node.kind === "testSignal" ? " flow-node-test-signal" : node.kind === "audioFile" ? " flow-node-audio-file" : node.kind === "soundboard" ? " flow-node-soundboard" : ""}`,
       // The drop preview is only a picture: no dragging, selecting or connecting.
       draggable: node.id !== DROP_PREVIEW_ID,
       selectable: node.id !== DROP_PREVIEW_ID,

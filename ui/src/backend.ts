@@ -229,6 +229,17 @@ export interface UiBackend {
     nodeId: string,
     action: "play" | "pause" | "stop" | "status",
   ): Promise<MethodResult["audioSources.transport"]>;
+  /** Soundboard: press or release a slot, stop one or all, and read which slots play. */
+  soundboardTrigger?(
+    sessionId: string,
+    nodeId: string,
+    slot: number,
+    action?: "press" | "release",
+  ): Promise<MethodResult["soundboard.trigger"]>;
+  soundboardStop?(sessionId: string, nodeId: string, slot?: number): Promise<MethodResult["soundboard.stop"]>;
+  soundboardStatus?(sessionId: string, nodeId: string): Promise<MethodResult["soundboard.status"]>;
+  soundLibraryList?(): Promise<MethodResult["soundLibrary.list"]>;
+  soundLibraryRead?(id: string): Promise<MethodResult["soundLibrary.read"]>;
   transportTimeShift?(
     sessionId: string,
     nodeId: string,
@@ -847,6 +858,25 @@ export function createLiveBackend(
     },
     async importTemporaryRecording(recordingId) {
       return client.request("audioMedia.importTemporaryRecording", { recordingId });
+    },
+    async soundboardTrigger(currentSessionId, nodeId, slot, action = "press") {
+      return client.request("soundboard.trigger", { sessionId: currentSessionId, nodeId, slot, action });
+    },
+    async soundboardStop(currentSessionId, nodeId, slot) {
+      return client.request("soundboard.stop", {
+        sessionId: currentSessionId,
+        nodeId,
+        ...(slot === undefined ? {} : { slot }),
+      });
+    },
+    async soundboardStatus(currentSessionId, nodeId) {
+      return client.request("soundboard.status", { sessionId: currentSessionId, nodeId });
+    },
+    async soundLibraryList() {
+      return client.request("soundLibrary.list", undefined);
+    },
+    async soundLibraryRead(id) {
+      return client.request("soundLibrary.read", { id });
     },
     async transportTimeShift(currentSessionId, nodeId, action) {
       return client.request("timeShift.transport", { sessionId: currentSessionId, nodeId, action });

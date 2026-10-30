@@ -26,6 +26,7 @@ export type LibraryNodeKind = Extract<
   | "physicalOutput"
   | "testSignal"
   | "audioFile"
+  | "soundboard"
   | "mixer"
   | "gain"
   | "volume"
@@ -110,6 +111,11 @@ const libraryNodeDefinitions: Record<
   audioFile: {
     name: "Audio file",
     parameters: { mediaId: "", loop: false },
+    ports: [{ name: "out", direction: "output", channels: 2 }],
+  },
+  soundboard: {
+    name: "Soundboard",
+    parameters: {},
     ports: [{ name: "out", direction: "output", channels: 2 }],
   },
   // The address is added when the user enters it: an empty address is not
@@ -524,6 +530,7 @@ const ROUTE_SOURCE_KINDS = new Set([
   "applicationCapture",
   "endpointLoopback",
   "virtualRenderSource",
+  "soundboard",
   "testSignal",
   "audioFile",
   "networkReceive",
@@ -711,8 +718,19 @@ export function needsNativePaths(session: Session): boolean {
   return paths.some(
     (nodes) =>
       nodes.filter((node) => node.enabled && node.kind === "physicalOutput").length > 1 ||
-      nodes.filter((node) => node.enabled && node.kind === "physicalInput").length > 1,
+      nodes.filter((node) => node.enabled && node.kind === "physicalInput").length > 1 ||
+      mixesFileOrBoardWithAnotherSource(nodes),
   );
+}
+
+/**
+ * The single-endpoint chain mixes only a Test Signal with one input device. An
+ * Audio File or Soundboard sharing a Mixer with any other source plays on the
+ * multi-path worker, which accepts every source in every layout.
+ */
+function mixesFileOrBoardWithAnotherSource(nodes: Session["nodes"]): boolean {
+  const sources = nodes.filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
+  return sources.length > 1 && sources.some((node) => node.kind === "audioFile" || node.kind === "soundboard");
 }
 
 /**
@@ -728,7 +746,9 @@ export function generatedOnlyRoute(session: Session): boolean {
       const sources = paths[0].filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
       return (
         sources.length > 0 &&
-        sources.every((node) => node.kind === "testSignal" || node.kind === "audioFile") &&
+        sources.every(
+          (node) => node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard",
+        ) &&
         paths[0].some((node) => node.enabled && node.kind === "physicalOutput")
       );
     })()
@@ -1558,6 +1578,22 @@ export function setNodeDraftParameter(
     ...session,
     nodes: session.nodes.map((node, index) =>
       index === nodeIndex ? { ...node, parameters: { ...node.parameters, [parameter]: value } } : node,
+    ),
+  };
+}
+
+/** Removes named parameters from a node (for example when a Soundboard slot is cleared). */
+export function removeNodeDraftParameters(session: Session, nodeId: EntityId, names: readonly string[]): Session {
+  if (!session.nodes.some((node) => node.id === nodeId)) throw new Error(`Unknown node: ${nodeId}`);
+  return {
+    ...session,
+    nodes: session.nodes.map((node) =>
+      node.id === nodeId
+        ? {
+            ...node,
+            parameters: Object.fromEntries(Object.entries(node.parameters).filter(([name]) => !names.includes(name))),
+          }
+        : node,
     ),
   };
 }

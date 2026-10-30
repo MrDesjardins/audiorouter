@@ -23,6 +23,7 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
 - Do not treat a virtual-device sample as a production driver. Do not require ordinary users to disable Secure Boot or Memory Integrity.
 - Preserve microphone privacy: a failed processor on a protected voice path produces silence until deliberate recovery. Never silently replace a missing microphone with another input.
 - Do not add cloud inference, remote control, telemetry, subscriptions, platform ports, or application-specific hooks unless their scope is approved.
+- **Every source and tool must work in every route layout (owner rule, 2026-10-29).** A new input or source tool must play on its own, in a fan-out, in a Mixer with any other source, and in connected Mixers; a new processing tool must pass every flag pattern in those layouts. Never write a hand-made list of "supported" kinds that a new kind can miss: classify kinds with an exhaustive `match` (no `_` arm) and cover them in `crates/engine/tests/source_combinations.rs` (sources) and `tool_combinations.rs` (processors). A new `NodeKind` is not finished until those suites pass with it; run them before reporting a tool ready.
 
 ## Static website writing
 
@@ -73,6 +74,34 @@ Write website copy in a natural, human voice: use plain, specific language and s
 
 An active plan records: objective, requirement IDs, prerequisites, decisions, ordered tasks, validation matrix, evidence links, risks, rollback, and next action. Update it after meaningful decisions, failed experiments, implementation changes, and verification. Record reproducible outcomes, not private reasoning or every terminal keystroke.
 
+**"Done" means exercised, not written (owner rule, 2026-10-29).** Never tell the
+owner a feature is complete, or hand over an exe, before you have run it through the
+paths a user takes. The Soundboard reached the owner with five defects that a compile
+and the unit tests could not see: an unlisted source kind, a UI route choice, an
+unlisted request parameter, scripted patches that duplicated lines, and a stale
+embedded UI. Before calling a feature done:
+
+1. **Write the code with the Edit/Write tools, never a patch script,** and compile
+   and typecheck at once. Do not stack a batch of unchecked edits.
+2. **Test the real entry point, not the layer you wrote.** A new API parameter must
+   pass the dispatcher (`dispatch_*` through `ControlPlane::dispatch`), not only the
+   handler; a new route shape must pass the same function the UI uses to choose a
+   worker; a new key or button must be tested with the exact request it sends.
+3. **Grep every hand-kept list before finishing:** each existing kind or parameter
+   name next to the one you add (`NodeKind::AudioFile`, `"action"`, allowlists in
+   `authorization.rs`, schemas, UI kind sets). Prefer a generated check
+   (exhaustive `match`, a test that walks the schema) over a list.
+4. **Reproduce the owner's own data.** When a report arrives, read the saved route or
+   log first (`%LOCALAPPDATA%\AudioRouter\logs\backend.jsonl`, the session JSON in the
+   database copy) and reproduce it in a test before changing code. Guessing twice
+   cost two builds on the Soundboard.
+5. **Run the built program before handoff** when you can: launch the exe or load the
+   plugin, press the control, read the backend log for `outcome":"error"`, and check
+   the exe is newer than `ui/dist` (a rebuild can keep the old embedded UI). Say
+   plainly what you did not run.
+6. **Every defect gets a regression test** that fails without the fix, in the same
+   commit.
+
 For each meaningful change: update code and contracts together; add useful tests for behavior or regressions; run the relevant checks; inspect the diff; update user-facing documentation where behavior changed. Never report unrun checks as passing. Record command, environment, result, and evidence path. Keep secrets and private audio out of logs and source control.
 
 At a milestone gate, map every requirement to evidence, resolve or explicitly document deviations, and record remaining risks. Mark complete only when its required evidence exists. Do not silently waive a hardware, signing, security, or latency gate. Independent downstream prototypes may proceed with a documented blocked gate, but must not be represented as a releasable product.
@@ -109,6 +138,17 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-29 — Cover sources, not only processors, in every Mixer layout (user rule).**
+  Evidence: [source combination suite](crates/engine/tests/source_combinations.rs),
+  [Soundboard plan](docs/plans/active/soundboard.md). Scope: new source tools
+  and the connected-Mixer compiler. Consequence: the Soundboard compiled
+  alone, yet pressing Play on a Mixer route said "an audio combination the
+  current engine cannot play", because `connected_mixers.rs` kept its own list
+  of source kinds and the 2026-10-02 suite only varied processors. Every
+  source pair and triple now compiles and runs; the new test fails
+  (`UnsupportedPath`) without the fix. Grep every `NodeKind::TestSignal` and
+  `AudioFile` list when adding a source, and prefer an exhaustive `match`.
 
 - **2026-10-25 — Verify descendants after dropping a hosted runner token.**
   Evidence: [nested-process repair](docs/plans/active/evidence/2026-10-25-pr73-ci-repair.md#nested-process-startup-repair).

@@ -435,5 +435,19 @@
     "success": "Your voice comes out as the chosen character, at about the same loudness as your normal voice, 21 ms later.",
     "check": "If the effect sounds broken in Discord, turn Discord's noise suppression off for the cable input. If pitch correction warbles, lower the noise gate or add Denoise before the tool.",
     "listen": "A synthetic sung voice is regenerated with the chosen pitch and formant, then given the ring buzz. It teaches what each control changes, not the engine's exact sound."
+  },
+  "soundboard": {
+    "route": [
+      "Soundboard",
+      "Mixer or Output"
+    ],
+    "steps": [
+      "Add a Soundboard, connect it to your output (or a Mixer with your voice), then open its properties.",
+      "Choose Add sound, search the library, press Preview to listen and Use to put it on a button. Plan and commit.",
+      "Press the button on the tool, or its Play in the properties. Add Stop all to cut everything off."
+    ],
+    "success": "The sound starts as soon as you press, pressing again restarts it cleanly, and Stop all fades everything out.",
+    "check": "If nothing is heard, check that the Soundboard is connected to an output and that the session is running. Previews in the picker play on this computer only and never reach the route.",
+    "listen": "The lesson plays a short built-in ta-da so you can hear what a button press sounds like. No file is read from your computer."
   }
 }

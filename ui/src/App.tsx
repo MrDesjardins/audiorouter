@@ -31,6 +31,8 @@ import {
 } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
+import { SoundboardContext, useSoundboardController } from "./soundboardLive";
+import { isSoundboardParameter } from "./soundboard";
 import { useReportUnsaved } from "./unsavedReport";
 import { QuitButton } from "./QuitButton";
 import {
@@ -1249,25 +1251,29 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const targetNode = draftRef.current.nodes.find((candidate) => candidate.id === nodeId);
     if (!targetNode) return;
     const error =
-      targetNode.kind === "audioFile"
-        ? !(name === "mediaId" && typeof value === "string" && value.length <= 128) &&
-          !(name === "fileName" && typeof value === "string" && value.length <= 255) &&
-          !(name === "loop" && typeof value === "boolean")
-          ? "Invalid audio source setting"
+      targetNode.kind === "soundboard"
+        ? !isSoundboardParameter(name) || (typeof value === "string" && value.length > 255)
+          ? "Invalid Soundboard setting"
           : null
-        : targetNode.kind === "plugin"
-          ? (() => {
-              const id = Number(name.slice("pluginParameter:".length));
-              const descriptor = pluginParameters?.parameters.find((parameter) => parameter.parameterId === id);
-              return !descriptor ||
-                typeof value !== "number" ||
-                !Number.isFinite(value) ||
-                value < descriptor.minimum ||
-                value > descriptor.maximum
-                ? "Plugin parameter value is outside the worker-provided range"
-                : null;
-            })()
-          : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null);
+        : targetNode.kind === "audioFile"
+          ? !(name === "mediaId" && typeof value === "string" && value.length <= 128) &&
+            !(name === "fileName" && typeof value === "string" && value.length <= 255) &&
+            !(name === "loop" && typeof value === "boolean")
+            ? "Invalid audio source setting"
+            : null
+          : targetNode.kind === "plugin"
+            ? (() => {
+                const id = Number(name.slice("pluginParameter:".length));
+                const descriptor = pluginParameters?.parameters.find((parameter) => parameter.parameterId === id);
+                return !descriptor ||
+                  typeof value !== "number" ||
+                  !Number.isFinite(value) ||
+                  value < descriptor.minimum ||
+                  value > descriptor.maximum
+                  ? "Plugin parameter value is outside the worker-provided range"
+                  : null;
+              })()
+            : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null);
     if (error) {
       setActionMessage(`Draft rejected: ${error}.`);
       return;
@@ -1732,6 +1738,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const node = draft.nodes.find((candidate) => candidate.id === nodeId);
       if (node && JSON.stringify(node.parameters) === issue.parameters) visibleNodeIssues[nodeId] = issue.message;
     }
+  // Mark the nodes that stopped Play before it reached the backend (a device
+  // not chosen yet); the mark clears when the node changes.
+  const flagNodes = (nodes: Node[], message: string) =>
+    setNodeIssues({
+      sessionId: draftRef.current.id,
+      issues: Object.fromEntries(
+        nodes.map((node) => [node.id, { message, parameters: JSON.stringify(node.parameters) }]),
+      ),
+    });
   const startSession = async (): Promise<boolean> => {
     if (sessionBusy.current || !backend.connected) return false;
     if (graphBusy) {
@@ -1770,6 +1785,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             (sameSessionDraft(draftRef.current, session) && unboundDeviceNodes(draftRef.current).length === 0)));
       if (multiPathRoute) {
         if (generatedOnly && unboundDeviceNodes(draftRef.current).length > 0) {
+          flagNodes(unboundDeviceNodes(draftRef.current), "Choose a device");
           setActionMessage(
             "No audio started. Select the speaker or headphone device in the Output Device node's Properties, then press Play.",
           );
@@ -1785,6 +1801,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         }
         const unbound = unboundDeviceNodes(session);
         if (unbound.length > 0) {
+          flagNodes(unbound, "Choose a device");
           setActionMessage(
             `No audio started. Choose the device for ${unbound.map((node) => node.name).join(", ")} in Properties, save, then press Play.`,
           );
@@ -1812,7 +1829,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         // Test Signal and Audio File are generated inside the Mixer input;
         // endpoint loopback and virtual sources are not supported here yet.
         const unsupported = mixerSources.filter(
-          (node) => !["physicalInput", "applicationCapture", "testSignal", "audioFile"].includes(node.kind),
+          (node) =>
+            !["physicalInput", "applicationCapture", "testSignal", "audioFile", "soundboard"].includes(node.kind),
         );
         const microphones = mixerSources.filter((node) => node.kind === "physicalInput");
         if (unsupported.length > 0) {
@@ -1867,7 +1885,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           if (diagnostics.nativeSessionId === session.id && backend.detachNativeEndpoint)
             await backend.detachNativeEndpoint(session.id);
           const bindings = mixerSources.map((node): import("@audiorouter/contracts").NativeMultiInputSourceBinding =>
-            node.kind === "testSignal" || node.kind === "audioFile"
+            node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard"
               ? { kind: "generated" }
               : node.kind === "physicalInput"
                 ? { kind: "physical", endpointId: endpoints.captureEndpointId ?? "" }
@@ -1915,6 +1933,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         }
         const outputEndpointId = routeEndpointBinding(draftRef.current, session.id).renderEndpointId;
         if (!outputEndpointId) {
+          flagNodes(
+            draftRef.current.nodes.filter((node) => node.enabled && node.kind === "physicalOutput"),
+            "Choose a device",
+          );
           setActionMessage(
             "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play.",
           );
@@ -1955,6 +1977,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       ) {
         const binding = routeEndpointBinding(draftRef.current, session.id);
         if (!binding.renderEndpointId || !binding.captureEndpointId) {
+          flagNodes(
+            draftRef.current.nodes.filter(
+              (node) =>
+                node.enabled &&
+                typeof node.parameters.endpointId !== "string" &&
+                node.kind === (binding.renderEndpointId ? "physicalInput" : "physicalOutput"),
+            ),
+            "Choose a device",
+          );
           setActionMessage(
             !binding.renderEndpointId
               ? "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play."
@@ -2122,6 +2153,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const startSessionRef = useRef(startSession);
   startSessionRef.current = startSession;
+  const soundboard = useSoundboardController({
+    backend,
+    session,
+    sessionRunning,
+    startSession,
+    report: recordUiDiagnostic,
+  });
   const stopSession = async (propagateFailure = false) => {
     if (sessionBusy.current || !backend.connected) return;
     sessionBusy.current = true;
@@ -3181,229 +3219,398 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   );
   return (
     <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}>
-      <div className={`app-shell ${themeClassName}`} style={themeStyle}>
-        <header className="topbar">
-          <div>
-            <VersionLine update={availableUpdate} />
-            <h1>
+      <SoundboardContext.Provider value={soundboard}>
+        <div className={`app-shell ${themeClassName}`} style={themeStyle}>
+          <header className="topbar">
+            <div>
+              <VersionLine update={availableUpdate} />
+              <h1>
+                <button
+                  type="button"
+                  className="header-session-name"
+                  title="Open Session"
+                  onClick={() => setWorkbenchTab("session")}
+                >
+                  {draft.name || "Routing workspace"}
+                </button>
+              </h1>
+            </div>
+            <div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite">
+              <span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">
+                <span className="audio-state-dot" aria-hidden="true" />
+                {sessionActionBusy ? "Updating audio…" : sessionRunning ? "Audio running" : "Audio stopped"}
+              </span>
+              <span className="status-detail" title={statusSummary}>
+                {connectionLabel}
+              </span>
+              <AppStatusStrip checks={appStripChecks} onOpen={() => setWorkbenchTab("apps")} />
+              <span className="history-toolbar">
+                <button
+                  type="button"
+                  className="secondary"
+                  aria-label="Undo"
+                  title="Undo (Ctrl+Z)"
+                  onClick={undoDraft}
+                  disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.past.length === 0}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12" />
+                  </svg>
+                  Undo
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  aria-label="Redo"
+                  title="Redo (Ctrl+Y)"
+                  onClick={redoDraft}
+                  disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.future.length === 0}
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12" />
+                  </svg>
+                  Redo
+                </button>
+              </span>
               <button
                 type="button"
-                className="header-session-name"
-                title="Open Session"
-                onClick={() => setWorkbenchTab("session")}
+                className={routeChanged ? "primary" : "secondary"}
+                title={
+                  autoSavePending
+                    ? "Parameter changes save automatically after a short pause"
+                    : routeChanged
+                      ? "Save the marked changes to this session"
+                      : "All changes saved"
+                }
+                data-save-required={routeChanged && !autoSavePending && !graphBusy}
+                onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
+                disabled={
+                  !backend.connected ||
+                  graphBusy ||
+                  (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged)
+                }
               >
-                {draft.name || "Routing workspace"}
-              </button>
-            </h1>
-          </div>
-          <div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite">
-            <span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">
-              <span className="audio-state-dot" aria-hidden="true" />
-              {sessionActionBusy ? "Updating audio…" : sessionRunning ? "Audio running" : "Audio stopped"}
-            </span>
-            <span className="status-detail" title={statusSummary}>
-              {connectionLabel}
-            </span>
-            <AppStatusStrip checks={appStripChecks} onOpen={() => setWorkbenchTab("apps")} />
-            <span className="history-toolbar">
-              <button
-                type="button"
-                className="secondary"
-                aria-label="Undo"
-                title="Undo (Ctrl+Z)"
-                onClick={undoDraft}
-                disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.past.length === 0}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12" />
-                </svg>
-                Undo
+                {graphBusy ? "Saving…" : pendingGraphPlan ? "Confirm Save" : "Save"}
               </button>
               <button
                 type="button"
-                className="secondary"
-                aria-label="Redo"
-                title="Redo (Ctrl+Y)"
-                onClick={redoDraft}
-                disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.future.length === 0}
+                className={sessionRunning ? "secondary" : "primary"}
+                onClick={() => void (sessionRunning ? stopSession() : startSession())}
+                disabled={!backend.connected || sessionActionBusy}
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12" />
-                </svg>
-                Redo
+                {sessionRunning ? "Stop" : "Play"}
               </button>
-            </span>
-            <button
-              type="button"
-              className={routeChanged ? "primary" : "secondary"}
-              title={
-                autoSavePending
-                  ? "Parameter changes save automatically after a short pause"
-                  : routeChanged
-                    ? "Save the marked changes to this session"
-                    : "All changes saved"
-              }
-              data-save-required={routeChanged && !autoSavePending && !graphBusy}
-              onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
-              disabled={
-                !backend.connected ||
-                graphBusy ||
-                (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged)
-              }
-            >
-              {graphBusy ? "Saving…" : pendingGraphPlan ? "Confirm Save" : "Save"}
-            </button>
-            <button
-              type="button"
-              className={sessionRunning ? "secondary" : "primary"}
-              onClick={() => void (sessionRunning ? stopSession() : startSession())}
-              disabled={!backend.connected || sessionActionBusy}
-            >
-              {sessionRunning ? "Stop" : "Play"}
-            </button>
-            <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
-              Reconnect
-            </button>
-            <QuitButton onMessage={setActionMessage} />
-          </div>
-        </header>
-        <aside className="workspace-notifications" aria-label="Notifications">
-          {unfedRouteNodes(draft).length > 0 && (
-            <p className="panel-message is-warning inactive-route-warning" role="status">
-              Warning: no input reaches{" "}
-              {unfedRouteNodes(draft)
-                .map((node) => node.name)
-                .join(", ")}
-              . These nodes are ignored during playback; connected routes can still play.
-            </p>
+              <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
+                Reconnect
+              </button>
+              <QuitButton onMessage={setActionMessage} />
+            </div>
+          </header>
+          <aside className="workspace-notifications" aria-label="Notifications">
+            {unfedRouteNodes(draft).length > 0 && (
+              <p className="panel-message is-warning inactive-route-warning" role="status">
+                Warning: no input reaches{" "}
+                {unfedRouteNodes(draft)
+                  .map((node) => node.name)
+                  .join(", ")}
+                . These nodes are ignored during playback; connected routes can still play.
+              </p>
+            )}
+            {(() => {
+              const text = actionMessage
+                ? actionMessage
+                : !backend.connected
+                  ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.`
+                  : "";
+              const tone = !backend.connected ? "error" : actionMessage ? actionMessageTone(actionMessage) : "info";
+              return (
+                <div
+                  className={`global-action-message is-${tone}${text ? "" : " is-empty"}`}
+                  aria-hidden={!text}
+                  role={tone === "error" ? "alert" : "status"}
+                  aria-live={tone === "error" ? "assertive" : "polite"}
+                >
+                  <span className="global-action-message-icon" aria-hidden="true">
+                    {tone === "error" ? "!" : tone === "warning" ? "!" : tone === "success" ? "✓" : "i"}
+                  </span>
+                  <span className="global-action-message-text" title={text}>
+                    {text}
+                  </span>
+                  {backend.connected && actionMessage?.includes("Troubleshooting") && workbenchTab !== "advanced" && (
+                    <button type="button" className="secondary" onClick={() => setWorkbenchTab("advanced")}>
+                      Open Advanced
+                    </button>
+                  )}
+                  {backend.connected && actionMessage?.includes("Open Session") && workbenchTab !== "session" && (
+                    <button type="button" className="secondary" onClick={() => setWorkbenchTab("session")}>
+                      Open Session
+                    </button>
+                  )}
+                  {backend.connected && actionMessage && (
+                    <button
+                      type="button"
+                      className="secondary global-action-message-dismiss"
+                      aria-label="Dismiss message"
+                      title="Dismiss message"
+                      onClick={() => {
+                        setActionMessage(null);
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+          </aside>
+          {pendingGraphPlan && pendingWarnings.length > 0 && (
+            <section className="save-warning-review" aria-label="Save warnings">
+              <strong>Review before saving</strong>
+              {pendingWarnings.map((warning) => (
+                <label key={warning}>
+                  <input
+                    type="checkbox"
+                    checked={acknowledgedWarnings.has(warning)}
+                    onChange={(event) =>
+                      setAcknowledgedWarnings((current) => {
+                        const next = new Set(current);
+                        if (event.target.checked) next.add(warning);
+                        else next.delete(warning);
+                        return next;
+                      })
+                    }
+                  />
+                  {warning}
+                </label>
+              ))}
+            </section>
           )}
-          {(() => {
-            const text = actionMessage
-              ? actionMessage
-              : !backend.connected
-                ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.`
-                : "";
-            const tone = !backend.connected ? "error" : actionMessage ? actionMessageTone(actionMessage) : "info";
-            return (
-              <div
-                className={`global-action-message is-${tone}${text ? "" : " is-empty"}`}
-                aria-hidden={!text}
-                role={tone === "error" ? "alert" : "status"}
-                aria-live={tone === "error" ? "assertive" : "polite"}
-              >
-                <span className="global-action-message-icon" aria-hidden="true">
-                  {tone === "error" ? "!" : tone === "warning" ? "!" : tone === "success" ? "✓" : "i"}
-                </span>
-                <span className="global-action-message-text" title={text}>
-                  {text}
-                </span>
-                {backend.connected && actionMessage?.includes("Troubleshooting") && workbenchTab !== "advanced" && (
-                  <button type="button" className="secondary" onClick={() => setWorkbenchTab("advanced")}>
-                    Open Advanced
-                  </button>
-                )}
-                {backend.connected && actionMessage?.includes("Open Session") && workbenchTab !== "session" && (
-                  <button type="button" className="secondary" onClick={() => setWorkbenchTab("session")}>
-                    Open Session
-                  </button>
-                )}
-                {backend.connected && actionMessage && (
+          <div className="workspace-grid">
+            <main className="main-content" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
+              <SidebarResizer width={sidebarWidth} onWidth={changeSidebarWidth} />
+              <section className="workspace-title">
+                <div>
+                  <label className="session-name">
+                    Session name
+                    <input
+                      value={draft.name}
+                      maxLength={120}
+                      disabled={!backend.connected}
+                      onChange={(event) => changeSessionName(event.target.value)}
+                    />
+                  </label>
+                  <p className="muted">
+                    Revision {session.revision} -{" "}
+                    {backend.connected
+                      ? "draft changes require review, then an explicit commit"
+                      : "changes are presentation-only in this preview"}
+                  </p>
+                </div>
+                <div className="actions">
                   <button
                     type="button"
-                    className="secondary global-action-message-dismiss"
-                    aria-label="Dismiss message"
-                    title="Dismiss message"
-                    onClick={() => {
-                      setActionMessage(null);
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-        </aside>
-        {pendingGraphPlan && pendingWarnings.length > 0 && (
-          <section className="save-warning-review" aria-label="Save warnings">
-            <strong>Review before saving</strong>
-            {pendingWarnings.map((warning) => (
-              <label key={warning}>
-                <input
-                  type="checkbox"
-                  checked={acknowledgedWarnings.has(warning)}
-                  onChange={(event) =>
-                    setAcknowledgedWarnings((current) => {
-                      const next = new Set(current);
-                      if (event.target.checked) next.add(warning);
-                      else next.delete(warning);
-                      return next;
-                    })
-                  }
-                />
-                {warning}
-              </label>
-            ))}
-          </section>
-        )}
-        <div className="workspace-grid">
-          <main className="main-content" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
-            <SidebarResizer width={sidebarWidth} onWidth={changeSidebarWidth} />
-            <section className="workspace-title">
-              <div>
-                <label className="session-name">
-                  Session name
-                  <input
-                    value={draft.name}
-                    maxLength={120}
+                    className="secondary"
+                    onClick={() => void duplicateSession()}
                     disabled={!backend.connected}
-                    onChange={(event) => changeSessionName(event.target.value)}
-                  />
-                </label>
-                <p className="muted">
-                  Revision {session.revision} -{" "}
-                  {backend.connected
-                    ? "draft changes require review, then an explicit commit"
-                    : "changes are presentation-only in this preview"}
-                </p>
-              </div>
-              <div className="actions">
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void duplicateSession()}
-                  disabled={!backend.connected}
-                >
-                  Duplicate
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => void deleteSession()}
-                  disabled={!backend.connected}
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={undoDraft}
-                  disabled={!backend.connected || draftHistory.past.length === 0}
-                >
-                  Undo draft
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={redoDraft}
-                  disabled={!backend.connected || draftHistory.future.length === 0}
-                >
-                  Redo draft
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
+                  >
+                    Duplicate
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => void deleteSession()}
+                    disabled={!backend.connected}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={undoDraft}
+                    disabled={!backend.connected || draftHistory.past.length === 0}
+                  >
+                    Undo draft
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={redoDraft}
+                    disabled={!backend.connected || draftHistory.future.length === 0}
+                  >
+                    Redo draft
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setDraft(session);
+                      setDraftHistory({ past: [], future: [] });
+                      setPendingWarnings([]);
+                      setAcknowledgedWarnings(new Set());
+                      setPendingOperation(null);
+                      setPendingGraphPlan(null);
+                      setActionMessage("Draft discarded.");
+                    }}
+                    disabled={!backend.connected}
+                  >
+                    Discard draft
+                  </button>
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => void planChanges()}
+                    disabled={!backend.connected || graphBusy}
+                  >
+                    Plan changes
+                  </button>
+                </div>
+              </section>
+              <ErrorBoundary area="Signal flow" onError={recordUiDiagnostic}>
+                <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
+                  {(liveDiagnostics) => (
+                    <SignalFlowPanel
+                      flowCanvas={flowCanvas}
+                      backend={backend}
+                      connectionSource={connectionSource}
+                      setConnectionSource={setConnectionSource}
+                      outputPorts={outputPorts}
+                      encodePort={encodePort}
+                      connectionDestination={connectionDestination}
+                      setConnectionDestination={setConnectionDestination}
+                      inputPorts={inputPorts}
+                      addConnection={addConnection}
+                      openConnectionDialog={openConnectionDialog}
+                      connectionDialogOpen={connectionDialogOpen}
+                      connectionDialog={connectionDialog}
+                      closeConnectionDialog={closeConnectionDialog}
+                      connectionDialogSource={connectionDialogSource}
+                      pluginPickerOpen={pluginPickerOpen}
+                      pluginPickerDialog={pluginPickerDialog}
+                      pluginInsertEdgeId={pluginInsertEdgeId}
+                      closePluginPicker={closePluginPicker}
+                      draft={draft}
+                      selectedNode={selectedNode}
+                      setSelectedNodeId={setSelectedNodeId}
+                      setSelectedNodeIds={setSelectedNodeIds}
+                      unloadPluginNode={unloadPluginNode}
+                      liveDiagnostics={liveDiagnostics}
+                      addPluginToDraft={addPluginToDraft}
+                      applicationPickerOpen={applicationPickerOpen}
+                      applications={applications}
+                      applicationPickerSelection={applicationPickerSelection}
+                      applicationPickerDialog={applicationPickerDialog}
+                      closeApplicationPicker={closeApplicationPicker}
+                      refreshApplications={refreshApplications}
+                      applicationsError={applicationsError}
+                      setApplicationPickerSelection={setApplicationPickerSelection}
+                      addApplicationCaptureFromPicker={addApplicationCaptureFromPicker}
+                      addApplicationCapturePathFromPicker={addApplicationCapturePathFromPicker}
+                      addApplicationGroupFromPicker={addApplicationGroupFromPicker}
+                    />
+                  )}
+                </LiveTelemetry>
+              </ErrorBoundary>
+              <ErrorBoundary area="Properties" onError={recordUiDiagnostic}>
+                <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
+                  {(liveDiagnostics) => (
+                    <PropertiesPanel
+                      layoutItems={canvasLayoutSelection.sessionId === draft.id ? canvasLayoutSelection.items : []}
+                      onLayoutAction={(action) => canvasLayoutActions.current?.(action)}
+                      selectedGroup={selectedGroup}
+                      groupState={groupState}
+                      selectedNode={selectedNode}
+                      backend={backend}
+                      sessionRunning={sessionRunning}
+                      liveDiagnostics={liveDiagnostics}
+                      session={session}
+                      recordDraftChange={recordDraftChange}
+                      draft={draft}
+                      setActionMessage={setActionMessage}
+                      changeNodeParameterOn={changeNodeParameterOn}
+                      devices={devices}
+                      refreshDevices={refreshDevices}
+                      setCaptureEndpointId={setCaptureEndpointId}
+                      renderEndpointId={renderEndpointId}
+                      applications={applications}
+                      applicationsError={applicationsError}
+                      refreshApplications={refreshApplications}
+                      deviceUsers={backend.connected ? deviceUsers : undefined}
+                      rebindApplicationCapture={rebindApplicationCapture}
+                      setRenderEndpointId={setRenderEndpointId}
+                      captureEndpointId={captureEndpointId}
+                      recorderStatuses={recorderStatuses}
+                      recordingBusy={recordingBusy}
+                      lastRecordingPaths={lastRecordingPaths}
+                      recordingMessage={recordingMessage}
+                      toggleNodeRecording={toggleNodeRecording}
+                      audioSourceStates={audioSourceStates}
+                      currentSessionIdRef={currentSessionIdRef}
+                      transportAudioSource={transportAudioSource}
+                      unloadPluginNode={unloadPluginNode}
+                      changeNodeName={changeNodeName}
+                      sessionActionBusy={sessionActionBusy}
+                      graphBusy={graphBusy}
+                      changeNodeFlag={changeNodeFlag}
+                      processors={processors}
+                      snapshot={snapshot}
+                      changeNodeParameter={changeNodeParameter}
+                      resetNodeParameters={resetNodeParameters}
+                      duplicateSelectedNode={duplicateSelectedNode}
+                      removeSelectedNode={removeSelectedNode}
+                      togglePrivacyMute={togglePrivacyMute}
+                      privacyMuted={privacyMuted}
+                    />
+                  )}
+                </LiveTelemetry>
+              </ErrorBoundary>
+              <ErrorBoundary area="Side panel" onError={recordUiDiagnostic}>
+                <Workbench
+                  onAddGroup={() => {
+                    groupState.addGroup();
+                    setSelectedNodeIds([]);
+                    setWorkbenchTab("properties");
+                  }}
+                  tab={workbenchTab}
+                  onTab={(tab) => setWorkbenchTab(tab)}
+                  sessionFileContent={
+                    <SessionFilePanel
+                      backend={backend}
+                      session={session}
+                      unsaved={routeChanged}
+                      onImported={(imported) => {
+                        setCreatedSessions((current) => [
+                          ...current.filter((item) => item.id !== imported.id),
+                          imported,
+                        ]);
+                        void switchSession(imported.id);
+                      }}
+                    />
+                  }
+                  pluginsContent={
+                    <PluginToolsGroup
+                      backend={backend}
+                      connected={backend.connected}
+                      search={librarySearch}
+                      refreshKey={pluginPickerOpen}
+                      onAdd={addPluginToDraft}
+                      onOpenPicker={() => openPluginPicker()}
+                    />
+                  }
+                  tools={visibleLibraryEntries}
+                  connected={backend.connected}
+                  onAdd={addLibraryNode}
+                  onAddCable={(direction) =>
+                    addVirtualBusNode(defaultCable(getVirtualCableStatus(), direction), direction)
+                  }
+                  onApplicationPicker={openApplicationPicker}
+                  librarySearch={librarySearch}
+                  onLibrarySearch={(value) => setLibrarySearch(value.slice(0, 80))}
+                  onNewSession={() => void createSession()}
+                  onDuplicate={() => void duplicateSession()}
+                  onDelete={() => void deleteSession()}
+                  onUndo={undoDraft}
+                  onRedo={redoDraft}
+                  onDiscard={() => {
                     setDraft(session);
                     setDraftHistory({ past: [], future: [] });
                     setPendingWarnings([]);
@@ -3412,291 +3619,127 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     setPendingGraphPlan(null);
                     setActionMessage("Draft discarded.");
                   }}
-                  disabled={!backend.connected}
-                >
-                  Discard draft
-                </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => void planChanges()}
-                  disabled={!backend.connected || graphBusy}
-                >
-                  Plan changes
-                </button>
-              </div>
-            </section>
-            <ErrorBoundary area="Signal flow" onError={recordUiDiagnostic}>
-              <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
-                {(liveDiagnostics) => (
-                  <SignalFlowPanel
-                    flowCanvas={flowCanvas}
-                    backend={backend}
-                    connectionSource={connectionSource}
-                    setConnectionSource={setConnectionSource}
-                    outputPorts={outputPorts}
-                    encodePort={encodePort}
-                    connectionDestination={connectionDestination}
-                    setConnectionDestination={setConnectionDestination}
-                    inputPorts={inputPorts}
-                    addConnection={addConnection}
-                    openConnectionDialog={openConnectionDialog}
-                    connectionDialogOpen={connectionDialogOpen}
-                    connectionDialog={connectionDialog}
-                    closeConnectionDialog={closeConnectionDialog}
-                    connectionDialogSource={connectionDialogSource}
-                    pluginPickerOpen={pluginPickerOpen}
-                    pluginPickerDialog={pluginPickerDialog}
-                    pluginInsertEdgeId={pluginInsertEdgeId}
-                    closePluginPicker={closePluginPicker}
-                    draft={draft}
-                    selectedNode={selectedNode}
-                    setSelectedNodeId={setSelectedNodeId}
-                    setSelectedNodeIds={setSelectedNodeIds}
-                    unloadPluginNode={unloadPluginNode}
-                    liveDiagnostics={liveDiagnostics}
-                    addPluginToDraft={addPluginToDraft}
-                    applicationPickerOpen={applicationPickerOpen}
-                    applications={applications}
-                    applicationPickerSelection={applicationPickerSelection}
-                    applicationPickerDialog={applicationPickerDialog}
-                    closeApplicationPicker={closeApplicationPicker}
-                    refreshApplications={refreshApplications}
-                    applicationsError={applicationsError}
-                    setApplicationPickerSelection={setApplicationPickerSelection}
-                    addApplicationCaptureFromPicker={addApplicationCaptureFromPicker}
-                    addApplicationCapturePathFromPicker={addApplicationCapturePathFromPicker}
-                    addApplicationGroupFromPicker={addApplicationGroupFromPicker}
-                  />
-                )}
-              </LiveTelemetry>
-            </ErrorBoundary>
-            <ErrorBoundary area="Properties" onError={recordUiDiagnostic}>
-              <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
-                {(liveDiagnostics) => (
-                  <PropertiesPanel
-                    layoutItems={canvasLayoutSelection.sessionId === draft.id ? canvasLayoutSelection.items : []}
-                    onLayoutAction={(action) => canvasLayoutActions.current?.(action)}
-                    selectedGroup={selectedGroup}
-                    groupState={groupState}
-                    selectedNode={selectedNode}
-                    backend={backend}
-                    sessionRunning={sessionRunning}
-                    liveDiagnostics={liveDiagnostics}
-                    session={session}
-                    recordDraftChange={recordDraftChange}
-                    draft={draft}
-                    setActionMessage={setActionMessage}
-                    changeNodeParameterOn={changeNodeParameterOn}
-                    devices={devices}
-                    refreshDevices={refreshDevices}
-                    setCaptureEndpointId={setCaptureEndpointId}
-                    renderEndpointId={renderEndpointId}
-                    applications={applications}
-                    applicationsError={applicationsError}
-                    refreshApplications={refreshApplications}
-                    deviceUsers={backend.connected ? deviceUsers : undefined}
-                    rebindApplicationCapture={rebindApplicationCapture}
-                    setRenderEndpointId={setRenderEndpointId}
-                    captureEndpointId={captureEndpointId}
-                    recorderStatuses={recorderStatuses}
-                    recordingBusy={recordingBusy}
-                    lastRecordingPaths={lastRecordingPaths}
-                    recordingMessage={recordingMessage}
-                    toggleNodeRecording={toggleNodeRecording}
-                    audioSourceStates={audioSourceStates}
-                    currentSessionIdRef={currentSessionIdRef}
-                    transportAudioSource={transportAudioSource}
-                    unloadPluginNode={unloadPluginNode}
-                    changeNodeName={changeNodeName}
-                    sessionActionBusy={sessionActionBusy}
-                    graphBusy={graphBusy}
-                    changeNodeFlag={changeNodeFlag}
-                    processors={processors}
-                    snapshot={snapshot}
-                    changeNodeParameter={changeNodeParameter}
-                    resetNodeParameters={resetNodeParameters}
-                    duplicateSelectedNode={duplicateSelectedNode}
-                    removeSelectedNode={removeSelectedNode}
-                    togglePrivacyMute={togglePrivacyMute}
-                    privacyMuted={privacyMuted}
-                  />
-                )}
-              </LiveTelemetry>
-            </ErrorBoundary>
-            <ErrorBoundary area="Side panel" onError={recordUiDiagnostic}>
-              <Workbench
-                onAddGroup={() => {
-                  groupState.addGroup();
-                  setSelectedNodeIds([]);
-                  setWorkbenchTab("properties");
-                }}
-                tab={workbenchTab}
-                onTab={(tab) => setWorkbenchTab(tab)}
-                sessionFileContent={
-                  <SessionFilePanel
-                    backend={backend}
-                    session={session}
-                    unsaved={routeChanged}
-                    onImported={(imported) => {
-                      setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]);
-                      void switchSession(imported.id);
-                    }}
-                  />
-                }
-                pluginsContent={
-                  <PluginToolsGroup
-                    backend={backend}
-                    connected={backend.connected}
-                    search={librarySearch}
-                    refreshKey={pluginPickerOpen}
-                    onAdd={addPluginToDraft}
-                    onOpenPicker={() => openPluginPicker()}
-                  />
-                }
-                tools={visibleLibraryEntries}
-                connected={backend.connected}
-                onAdd={addLibraryNode}
-                onAddCable={(direction) =>
-                  addVirtualBusNode(defaultCable(getVirtualCableStatus(), direction), direction)
-                }
-                onApplicationPicker={openApplicationPicker}
-                librarySearch={librarySearch}
-                onLibrarySearch={(value) => setLibrarySearch(value.slice(0, 80))}
-                onNewSession={() => void createSession()}
-                onDuplicate={() => void duplicateSession()}
-                onDelete={() => void deleteSession()}
-                onUndo={undoDraft}
-                onRedo={redoDraft}
-                onDiscard={() => {
-                  setDraft(session);
-                  setDraftHistory({ past: [], future: [] });
-                  setPendingWarnings([]);
-                  setAcknowledgedWarnings(new Set());
-                  setPendingOperation(null);
-                  setPendingGraphPlan(null);
-                  setActionMessage("Draft discarded.");
-                }}
-                onPlan={() => void planChanges()}
-                onCommit={() => void commitAcknowledgedPlan()}
-                canCommit={acknowledgedWarnings.size === pendingWarnings.length && !graphBusy}
-                pendingPlan={Boolean(pendingGraphPlan)}
-                actionMessage={actionMessage}
-                apiBuilder={(baseUrl) => (
-                  <RequestBuilder
-                    sessions={availableSessions}
-                    activeSessionId={session.id}
-                    nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
-                    baseUrl={baseUrl}
-                    connected={backend.connected}
-                    onSend={backend.setNode ? (params) => backend.setNode!(params) : undefined}
-                  />
-                )}
-                sessions={availableSessions}
-                selectedSessionId={session.id}
-                onSelectSession={(id) => void switchSession(id)}
-                revision={session.revision}
-                sessionName={draft.name}
-                onNameChange={changeSessionName}
-                warnings={pendingWarnings}
-                acknowledgedWarnings={[...acknowledgedWarnings]}
-                onAcknowledgeWarning={(warning, checked) =>
-                  setAcknowledgedWarnings((current) => {
-                    const next = new Set(current);
-                    if (checked) next.add(warning);
-                    else next.delete(warning);
-                    return next;
-                  })
-                }
-                diagnostics={uiDiagnostics}
-                verboseLogging={verboseLogging}
-                backendActivity={backendActivity}
-                mcpActivity={mcpActivity}
-                mcpSetupInfo={mcpSetupInfo}
-                mcpTunnelStatus={mcpTunnelStatus}
-                onOpenMcpSetupPage={(page) =>
-                  window.__TAURI_INTERNALS__?.invoke
-                    ? window.__TAURI_INTERNALS__.invoke("mcp_open_setup_page", { page }).then(() => undefined)
-                    : Promise.reject(new Error("OpenAI setup pages can only be opened from the AudioRouter app."))
-                }
-                onMcpTunnelConfigure={(tunnelId, runtimeKey) => {
-                  const invoke = window.__TAURI_INTERNALS__?.invoke;
-                  return invoke
-                    ? invoke("mcp_tunnel_configure", { tunnelId, runtimeKey }).then(() => undefined)
-                    : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
-                }}
-                onMcpTunnelConnect={() => {
-                  const invoke = window.__TAURI_INTERNALS__?.invoke;
-                  if (!invoke)
-                    return Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
-                  const clientId = "audiorouter-chatgpt";
-                  return backend
-                    .listClients()
-                    .then((clients) => {
-                      const current = clients.find((client) => client.clientId === clientId);
-                      return !current || current.revoked
-                        ? backend.authorizeClient(clientId, "observer", uiIdempotencyKey(`authorize-${clientId}`))
-                        : undefined;
+                  onPlan={() => void planChanges()}
+                  onCommit={() => void commitAcknowledgedPlan()}
+                  canCommit={acknowledgedWarnings.size === pendingWarnings.length && !graphBusy}
+                  pendingPlan={Boolean(pendingGraphPlan)}
+                  actionMessage={actionMessage}
+                  apiBuilder={(baseUrl) => (
+                    <RequestBuilder
+                      sessions={availableSessions}
+                      activeSessionId={session.id}
+                      nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
+                      baseUrl={baseUrl}
+                      connected={backend.connected}
+                      onSend={backend.setNode ? (params) => backend.setNode!(params) : undefined}
+                    />
+                  )}
+                  sessions={availableSessions}
+                  selectedSessionId={session.id}
+                  onSelectSession={(id) => void switchSession(id)}
+                  revision={session.revision}
+                  sessionName={draft.name}
+                  onNameChange={changeSessionName}
+                  warnings={pendingWarnings}
+                  acknowledgedWarnings={[...acknowledgedWarnings]}
+                  onAcknowledgeWarning={(warning, checked) =>
+                    setAcknowledgedWarnings((current) => {
+                      const next = new Set(current);
+                      if (checked) next.add(warning);
+                      else next.delete(warning);
+                      return next;
                     })
-                    .then(() => invoke("mcp_tunnel_connect"))
-                    .then(() => undefined);
-                }}
-                onMcpTunnelDisconnect={() => {
-                  const invoke = window.__TAURI_INTERNALS__?.invoke;
-                  return invoke
-                    ? invoke("mcp_tunnel_disconnect").then(() => undefined)
-                    : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
-                }}
-                onExportCoworkPlugin={async () => {
-                  const invoke = window.__TAURI_INTERNALS__?.invoke;
-                  if (!invoke) throw new Error("Export the plugin from the AudioRouter desktop app.");
-                  const clientId = "audiorouter-cowork-local";
-                  const clients = await backend.listClients();
-                  const current = clients.find((client) => client.clientId === clientId);
-                  if (!current || current.revoked)
-                    await backend.authorizeClient(clientId, "observer", uiIdempotencyKey(`authorize-${clientId}`));
-                  const path = await invoke("mcp_export_cowork_plugin");
-                  if (typeof path !== "string") throw new Error("The app did not return the exported plugin path.");
-                  return path;
-                }}
-                onMcpTunnelForget={() => {
-                  const invoke = window.__TAURI_INTERNALS__?.invoke;
-                  return invoke
-                    ? invoke("mcp_tunnel_forget").then(() => undefined)
-                    : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
-                }}
-                clientsPanel={<ClientsPanel backend={backend} />}
-                statusContent={statusWorkbenchContent}
-                virtualCablesContent={cableWorkbenchContent}
-                appsContent={appsWorkbenchContent}
-                uiOptionsContent={uiOptionsWorkbenchContent}
-                timingContent={
-                  <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
-                    {(liveDiagnostics) => (
-                      <SignalTimingPanel
-                        session={session}
-                        telemetry={liveDiagnostics?.nodeTelemetry ?? []}
-                        running={sessionRunning}
-                      />
-                    )}
-                  </LiveTelemetry>
-                }
-                recordingContent={recordingWorkbenchContent}
-                advancedContent={advancedWorkbenchContent}
-              />
-            </ErrorBoundary>
-          </main>
+                  }
+                  diagnostics={uiDiagnostics}
+                  verboseLogging={verboseLogging}
+                  backendActivity={backendActivity}
+                  mcpActivity={mcpActivity}
+                  mcpSetupInfo={mcpSetupInfo}
+                  mcpTunnelStatus={mcpTunnelStatus}
+                  onOpenMcpSetupPage={(page) =>
+                    window.__TAURI_INTERNALS__?.invoke
+                      ? window.__TAURI_INTERNALS__.invoke("mcp_open_setup_page", { page }).then(() => undefined)
+                      : Promise.reject(new Error("OpenAI setup pages can only be opened from the AudioRouter app."))
+                  }
+                  onMcpTunnelConfigure={(tunnelId, runtimeKey) => {
+                    const invoke = window.__TAURI_INTERNALS__?.invoke;
+                    return invoke
+                      ? invoke("mcp_tunnel_configure", { tunnelId, runtimeKey }).then(() => undefined)
+                      : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                  }}
+                  onMcpTunnelConnect={() => {
+                    const invoke = window.__TAURI_INTERNALS__?.invoke;
+                    if (!invoke)
+                      return Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                    const clientId = "audiorouter-chatgpt";
+                    return backend
+                      .listClients()
+                      .then((clients) => {
+                        const current = clients.find((client) => client.clientId === clientId);
+                        return !current || current.revoked
+                          ? backend.authorizeClient(clientId, "observer", uiIdempotencyKey(`authorize-${clientId}`))
+                          : undefined;
+                      })
+                      .then(() => invoke("mcp_tunnel_connect"))
+                      .then(() => undefined);
+                  }}
+                  onMcpTunnelDisconnect={() => {
+                    const invoke = window.__TAURI_INTERNALS__?.invoke;
+                    return invoke
+                      ? invoke("mcp_tunnel_disconnect").then(() => undefined)
+                      : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                  }}
+                  onExportCoworkPlugin={async () => {
+                    const invoke = window.__TAURI_INTERNALS__?.invoke;
+                    if (!invoke) throw new Error("Export the plugin from the AudioRouter desktop app.");
+                    const clientId = "audiorouter-cowork-local";
+                    const clients = await backend.listClients();
+                    const current = clients.find((client) => client.clientId === clientId);
+                    if (!current || current.revoked)
+                      await backend.authorizeClient(clientId, "observer", uiIdempotencyKey(`authorize-${clientId}`));
+                    const path = await invoke("mcp_export_cowork_plugin");
+                    if (typeof path !== "string") throw new Error("The app did not return the exported plugin path.");
+                    return path;
+                  }}
+                  onMcpTunnelForget={() => {
+                    const invoke = window.__TAURI_INTERNALS__?.invoke;
+                    return invoke
+                      ? invoke("mcp_tunnel_forget").then(() => undefined)
+                      : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
+                  }}
+                  clientsPanel={<ClientsPanel backend={backend} />}
+                  statusContent={statusWorkbenchContent}
+                  virtualCablesContent={cableWorkbenchContent}
+                  appsContent={appsWorkbenchContent}
+                  uiOptionsContent={uiOptionsWorkbenchContent}
+                  timingContent={
+                    <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
+                      {(liveDiagnostics) => (
+                        <SignalTimingPanel
+                          session={session}
+                          telemetry={liveDiagnostics?.nodeTelemetry ?? []}
+                          running={sessionRunning}
+                        />
+                      )}
+                    </LiveTelemetry>
+                  }
+                  recordingContent={recordingWorkbenchContent}
+                  advancedContent={advancedWorkbenchContent}
+                />
+              </ErrorBoundary>
+            </main>
+          </div>
+          <LibraryDragOverlay />
+          {deviceConsent && (
+            <DeviceAccessDialog
+              busy={deviceConsent.busy}
+              error={deviceConsent.error}
+              onAllow={() => void allowDeviceAccessAndPlay()}
+              onCancel={() => setDeviceConsent(null)}
+            />
+          )}
         </div>
-        <LibraryDragOverlay />
-        {deviceConsent && (
-          <DeviceAccessDialog
-            busy={deviceConsent.busy}
-            error={deviceConsent.error}
-            onAllow={() => void allowDeviceAccessAndPlay()}
-            onCancel={() => setDeviceConsent(null)}
-          />
-        )}
-      </div>
+      </SoundboardContext.Provider>
     </PluginParameterContext.Provider>
   );
 }

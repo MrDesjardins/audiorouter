@@ -11,7 +11,8 @@
       "../target/release/tunnel-client-runtime-NOTICE.txt": "tunnel-client-runtime-NOTICE.txt",
       "../target/release/tunnel-client-runtime-licenses.txt": "tunnel-client-runtime-licenses.txt",
       "../target/release/tunnel-client-runtime.spdx.json": "tunnel-client-runtime.spdx.json",
-      "../tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin": "com.mrdesjardins.audiorouter.streamDeckPlugin"
+      "../tools/streamdeck/dist/com.mrdesjardins.audiorouter.streamDeckPlugin": "com.mrdesjardins.audiorouter.streamDeckPlugin",
+      "../resources/sound-library": "sound-library"
     },
     "windows": {
       "nsis": { "installMode": "currentUser" },

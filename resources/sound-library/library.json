@@ -1,0 +1,2316 @@
+{
+  "categories": {
+    "bodily-humor": "Bodily humor",
+    "reactions-comedy": "Reactions and comedy",
+    "fanfares-stingers": "Fanfares and stingers",
+    "horns-alerts": "Horns and alerts",
+    "game-arcade": "Game and arcade",
+    "interface": "Interface and clicks",
+    "impacts": "Impacts",
+    "whooshes": "Whooshes",
+    "sci-fi-magic": "Sci-fi and magic",
+    "applause-laughs": "Applause and laughs"
+  },
+  "sounds": [
+    {
+      "id": "lib:applause-crowd-01",
+      "file": "applause-crowd-01.flac",
+      "title": "Applause - crowd 01",
+      "category": "applause-laughs",
+      "tags": [
+        "applause",
+        "clapping",
+        "crowd"
+      ],
+      "durationMs": 4500,
+      "gainAppliedDb": -5.6,
+      "meanDb": -20.2,
+      "peakDb": -5.6,
+      "sha256": "9a607ebd18179fed10c200bcf68d439ad52757fd1524edfd97182e56f151bacb",
+      "source": {
+        "name": "Freesound",
+        "author": "pluralz",
+        "url": "https://freesound.org/people/pluralz/sounds/735564/",
+        "license": "CC0",
+        "title": "Clapping Large Crowd at Choir Concert 4 by pluralz",
+        "originalFile": "735564__pluralz__clapping-large-crowd-at-choir-concert-4.wav"
+      }
+    },
+    {
+      "id": "lib:applause-crowd-02",
+      "file": "applause-crowd-02.flac",
+      "title": "Applause - crowd 02",
+      "category": "applause-laughs",
+      "tags": [
+        "applause",
+        "clapping",
+        "crowd"
+      ],
+      "durationMs": 4500,
+      "gainAppliedDb": -9.2,
+      "meanDb": -20,
+      "peakDb": -9.2,
+      "sha256": "dfb78d5b32eeee6075290b14c6c0b7114ed2764ba642c0819279fcdae8c7a488",
+      "source": {
+        "name": "Freesound",
+        "author": "pluralz",
+        "url": "https://freesound.org/people/pluralz/sounds/735568/",
+        "license": "CC0",
+        "title": "Clapping Large Crowd at Choir Concert 8 by pluralz",
+        "originalFile": "735568__pluralz__clapping-large-crowd-at-choir-concert-8.wav"
+      }
+    },
+    {
+      "id": "lib:applause-crowd-03",
+      "file": "applause-crowd-03.flac",
+      "title": "Applause - crowd 03",
+      "category": "applause-laughs",
+      "tags": [
+        "applause",
+        "clapping",
+        "crowd"
+      ],
+      "durationMs": 4500,
+      "gainAppliedDb": -9.7,
+      "meanDb": -20,
+      "peakDb": -9.7,
+      "sha256": "b97782ca8cfad1c719405e2cad01877dc5543fd37da6954cd0f8ac0762b198bc",
+      "source": {
+        "name": "Freesound",
+        "author": "pluralz",
+        "url": "https://freesound.org/people/pluralz/sounds/735572/",
+        "license": "CC0",
+        "title": "Clapping Large Crowd at Choir Concert 12 by pluralz",
+        "originalFile": "735572__pluralz__clapping-large-crowd-at-choir-concert-12.wav"
+      }
+    },
+    {
+      "id": "lib:applause-crowd-04",
+      "file": "applause-crowd-04.flac",
+      "title": "Applause - crowd 04",
+      "category": "applause-laughs",
+      "tags": [
+        "applause",
+        "clapping",
+        "crowd"
+      ],
+      "durationMs": 4500,
+      "gainAppliedDb": -7.4,
+      "meanDb": -20.1,
+      "peakDb": -7.4,
+      "sha256": "d8621a13e7158edb1a2e2b697eba5a181b50eb39d9dfed3872988a74e8a7a2c2",
+      "source": {
+        "name": "Freesound",
+        "author": "pluralz",
+        "url": "https://freesound.org/people/pluralz/sounds/735575/",
+        "license": "CC0",
+        "title": "Clapping Large Crowd at Choir Concert 15 by pluralz",
+        "originalFile": "735575__pluralz__clapping-large-crowd-at-choir-concert-15.wav"
+      }
+    },
+    {
+      "id": "lib:applause-crowd-05",
+      "file": "applause-crowd-05.flac",
+      "title": "Applause - crowd 05",
+      "category": "applause-laughs",
+      "tags": [
+        "applause",
+        "clapping",
+        "crowd"
+      ],
+      "durationMs": 4500,
+      "gainAppliedDb": -4.1,
+      "meanDb": -20.2,
+      "peakDb": -4.1,
+      "sha256": "927720c8728df04ecb25e91e72357448e1e396367b0931fdd8a2c91c59776c7a",
+      "source": {
+        "name": "Freesound",
+        "author": "pluralz",
+        "url": "https://freesound.org/people/pluralz/sounds/735578/",
+        "license": "CC0",
+        "title": "Clapping Large Crowd at Choir Concert 18 by pluralz",
+        "originalFile": "735578__pluralz__clapping-large-crowd-at-choir-concert-18.wav"
+      }
+    },
+    {
+      "id": "lib:burp-01",
+      "file": "burp-01.flac",
+      "title": "Burp 01",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 2560,
+      "gainAppliedDb": 0.2,
+      "meanDb": -20.2,
+      "peakDb": -1,
+      "sha256": "fa316be49bb09b6a310ef842f1218cbe9ddb8eea69239cb3e7006ed92fea7c96",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399750/",
+        "license": "CC0",
+        "title": "Burp 12 by tehteho",
+        "originalFile": "399750__tehteho__burp-12.wav"
+      }
+    },
+    {
+      "id": "lib:burp-02",
+      "file": "burp-02.flac",
+      "title": "Burp 02",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 1486,
+      "gainAppliedDb": -0.3,
+      "meanDb": -20,
+      "peakDb": -2.1,
+      "sha256": "076ee2b0f726e37676d12c5c5117a1815acc7ca888b99a28655a9c5e8b774bec",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399751/",
+        "license": "CC0",
+        "title": "Burp 11 by tehteho",
+        "originalFile": "399751__tehteho__burp-11.wav"
+      }
+    },
+    {
+      "id": "lib:burp-03",
+      "file": "burp-03.flac",
+      "title": "Burp 03",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 1289,
+      "gainAppliedDb": -0.3,
+      "meanDb": -20,
+      "peakDb": -4.1,
+      "sha256": "6309983acf3e247f79c98dff5499185dc0d8a15c6576ae56b8373b6f37196f88",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399752/",
+        "license": "CC0",
+        "title": "Burp 10 by tehteho",
+        "originalFile": "399752__tehteho__burp-10.wav"
+      }
+    },
+    {
+      "id": "lib:burp-04",
+      "file": "burp-04.flac",
+      "title": "Burp 04",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 1310,
+      "gainAppliedDb": -3.9,
+      "meanDb": -20,
+      "peakDb": -4.8,
+      "sha256": "95aaa927275617705f15c9f8926bb9940b0cb28172b54922d7684d8d7fdeb1f3",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399753/",
+        "license": "CC0",
+        "title": "Burp 1 by tehteho",
+        "originalFile": "399753__tehteho__burp-1.wav"
+      }
+    },
+    {
+      "id": "lib:burp-05",
+      "file": "burp-05.flac",
+      "title": "Burp 05",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 1823,
+      "gainAppliedDb": 1.9,
+      "meanDb": -20,
+      "peakDb": -5.4,
+      "sha256": "b596e19bcb15baaa704eda49e3ff9a7e0a2c49a1d208ac7de567149a4f78515d",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399755/",
+        "license": "CC0",
+        "title": "Burp 15 by tehteho",
+        "originalFile": "399755__tehteho__burp-15.wav"
+      }
+    },
+    {
+      "id": "lib:burp-06",
+      "file": "burp-06.flac",
+      "title": "Burp 06",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 1014,
+      "gainAppliedDb": -1.2,
+      "meanDb": -20,
+      "peakDb": -5.6,
+      "sha256": "733c03b1a4e87b42c8f53e2947a2ca2ee941c36b9c71fdd61eb46929b3f392f2",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399761/",
+        "license": "CC0",
+        "title": "Burp 8 by tehteho",
+        "originalFile": "399761__tehteho__burp-8.wav"
+      }
+    },
+    {
+      "id": "lib:burp-07",
+      "file": "burp-07.flac",
+      "title": "Burp 07",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 1451,
+      "gainAppliedDb": 2.5,
+      "meanDb": -21.7,
+      "peakDb": -1,
+      "sha256": "7adcd9caf4d0c909b01d163d61fd10473abc90ef070eedc7ace479d151f09dc3",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399765/",
+        "license": "CC0",
+        "title": "Burp 7 by tehteho",
+        "originalFile": "399765__tehteho__burp-7.wav"
+      }
+    },
+    {
+      "id": "lib:burp-08",
+      "file": "burp-08.flac",
+      "title": "Burp 08",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 1591,
+      "gainAppliedDb": -1.6,
+      "meanDb": -20,
+      "peakDb": -1.8,
+      "sha256": "2ad70ea8fb8d2f5fc03e41643d8202acb39b98bedf93d78b7c91c48dc7967171",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399766/",
+        "license": "CC0",
+        "title": "Burp 4 by tehteho",
+        "originalFile": "399766__tehteho__burp-4.wav"
+      }
+    },
+    {
+      "id": "lib:burp-09",
+      "file": "burp-09.flac",
+      "title": "Burp 09",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 975,
+      "gainAppliedDb": -1.9,
+      "meanDb": -20,
+      "peakDb": -5.4,
+      "sha256": "26d045d80b0b9c17f7a7972406c1cad15750d697be6a9147c586400a9aef7f49",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399768/",
+        "license": "CC0",
+        "title": "Burp 9 by tehteho",
+        "originalFile": "399768__tehteho__burp-9.wav"
+      }
+    },
+    {
+      "id": "lib:burp-10",
+      "file": "burp-10.flac",
+      "title": "Burp 10",
+      "category": "bodily-humor",
+      "tags": [
+        "burp"
+      ],
+      "durationMs": 1149,
+      "gainAppliedDb": -3.6,
+      "meanDb": -20,
+      "peakDb": -3.6,
+      "sha256": "3dfe03e894d40550acf543ad97fc57e9bce05a83f0d093f34ef48f839f009edd",
+      "source": {
+        "name": "Freesound",
+        "author": "tehteho",
+        "url": "https://freesound.org/people/tehteho/sounds/399769/",
+        "license": "CC0",
+        "title": "Burp 3 by tehteho",
+        "originalFile": "399769__tehteho__burp-3.wav"
+      }
+    },
+    {
+      "id": "lib:fart-01",
+      "file": "fart-01.flac",
+      "title": "Fart 01",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 2357,
+      "gainAppliedDb": -5.3,
+      "meanDb": -20,
+      "peakDb": -5.3,
+      "sha256": "6e025ac493803ef0eee29b23f080eda65874f5abc6b27beed3a0154b264c7619",
+      "source": {
+        "name": "Freesound",
+        "author": "under7dude",
+        "url": "https://freesound.org/people/under7dude/sounds/163378/",
+        "license": "CC0",
+        "title": "Fart 1 by Under7dude",
+        "originalFile": "163378__under7dude__fart-1.wav"
+      }
+    },
+    {
+      "id": "lib:fart-02",
+      "file": "fart-02.flac",
+      "title": "Fart 02",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 1347,
+      "gainAppliedDb": -6.8,
+      "meanDb": -20,
+      "peakDb": -6.8,
+      "sha256": "ad629e35507886d13482d93ef3864999e414d3675e19597a30de2a2ed66c0c97",
+      "source": {
+        "name": "Freesound",
+        "author": "under7dude",
+        "url": "https://freesound.org/people/under7dude/sounds/163379/",
+        "license": "CC0",
+        "title": "Fart 5 by Under7dude",
+        "originalFile": "163379__under7dude__fart-5.wav"
+      }
+    },
+    {
+      "id": "lib:fart-03",
+      "file": "fart-03.flac",
+      "title": "Fart 03",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 1602,
+      "gainAppliedDb": -8,
+      "meanDb": -20,
+      "peakDb": -8,
+      "sha256": "339adcd8e7c164f0c2ed8b43b604ef6a076fa59c5480c92fdd90efaebaf371a9",
+      "source": {
+        "name": "Freesound",
+        "author": "under7dude",
+        "url": "https://freesound.org/people/under7dude/sounds/163380/",
+        "license": "CC0",
+        "title": "Fart 4 by Under7dude",
+        "originalFile": "163380__under7dude__fart-4.wav"
+      }
+    },
+    {
+      "id": "lib:fart-04",
+      "file": "fart-04.flac",
+      "title": "Fart 04",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 2554,
+      "gainAppliedDb": -11.8,
+      "meanDb": -20,
+      "peakDb": -11.8,
+      "sha256": "d04eef1d47103d340a6dbfff9c823bad1e8410466cf65f789032826a942b86f3",
+      "source": {
+        "name": "Freesound",
+        "author": "under7dude",
+        "url": "https://freesound.org/people/under7dude/sounds/163381/",
+        "license": "CC0",
+        "title": "Fart 3 by Under7dude",
+        "originalFile": "163381__under7dude__fart-3.wav"
+      }
+    },
+    {
+      "id": "lib:fart-05",
+      "file": "fart-05.flac",
+      "title": "Fart 05",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 310,
+      "gainAppliedDb": -9,
+      "meanDb": -20,
+      "peakDb": -9,
+      "sha256": "cf7edf90e038b902f8fc520993ee3dbadce698ed01a2a6ae330f48831d5308fd",
+      "source": {
+        "name": "Freesound",
+        "author": "under7dude",
+        "url": "https://freesound.org/people/under7dude/sounds/163382/",
+        "license": "CC0",
+        "title": "Fart 2 by Under7dude",
+        "originalFile": "163382__under7dude__fart-2.wav"
+      }
+    },
+    {
+      "id": "lib:fart-06",
+      "file": "fart-06.flac",
+      "title": "Fart 06",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 2357,
+      "gainAppliedDb": -8.7,
+      "meanDb": -20,
+      "peakDb": -8.7,
+      "sha256": "1628c36402b8458430acb79f6aa38156652156f857387a957f916f3e974d0510",
+      "source": {
+        "name": "Freesound",
+        "author": "under7dude",
+        "url": "https://freesound.org/people/under7dude/sounds/163385/",
+        "license": "CC0",
+        "title": "fart_7.wav by Under7dude",
+        "originalFile": "163385__under7dude__fart_7.wav"
+      }
+    },
+    {
+      "id": "lib:fart-07",
+      "file": "fart-07.flac",
+      "title": "Fart 07",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 639,
+      "gainAppliedDb": -16,
+      "meanDb": -20,
+      "peakDb": -16,
+      "sha256": "25db67c21eea71553b3b22a5adfc33132b8041c34da7aadabc8e2198c2b9a565",
+      "source": {
+        "name": "Freesound",
+        "author": "under7dude",
+        "url": "https://freesound.org/people/under7dude/sounds/163386/",
+        "license": "CC0",
+        "title": "Fart 6 by Under7dude",
+        "originalFile": "163386__under7dude__fart-6.wav"
+      }
+    },
+    {
+      "id": "lib:fart-short",
+      "file": "fart-short.flac",
+      "title": "Fart - short",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 183,
+      "gainAppliedDb": -6.6,
+      "meanDb": -20,
+      "peakDb": -7.1,
+      "sha256": "d9151986fc9f379dbc4771bd911882d6b5288ec24893bb1e4cd09d63268a9842",
+      "source": {
+        "name": "Freesound",
+        "author": "sadiquecat",
+        "url": "https://freesound.org/people/sadiquecat/sounds/787755/",
+        "license": "CC0",
+        "title": "Short fart by Sadiquecat",
+        "originalFile": "787755__sadiquecat__short-fart.m4a"
+      }
+    },
+    {
+      "id": "lib:fart-08",
+      "file": "fart-08.flac",
+      "title": "Fart 08",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 2741,
+      "gainAppliedDb": -0.8,
+      "meanDb": -20.2,
+      "peakDb": -1,
+      "sha256": "2166e1d40a29480b46c96fd8d75210db7dc6f9a3548922f211ad498a311d9ff4",
+      "source": {
+        "name": "Freesound",
+        "author": "bassimat",
+        "url": "https://freesound.org/people/bassimat/sounds/840751/",
+        "license": "CC0",
+        "title": "Fart #001 by bassimat",
+        "originalFile": "840751__bassimat__fart-001.wav"
+      }
+    },
+    {
+      "id": "lib:fart-09",
+      "file": "fart-09.flac",
+      "title": "Fart 09",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 2811,
+      "gainAppliedDb": -1,
+      "meanDb": -21.7,
+      "peakDb": -1,
+      "sha256": "8e9a7e5dc32e0af5465ef8c3395bfd32ff946a4412026f5920e851b57e86712b",
+      "source": {
+        "name": "Freesound",
+        "author": "bassimat",
+        "url": "https://freesound.org/people/bassimat/sounds/840752/",
+        "license": "CC0",
+        "title": "Fart #002 by bassimat",
+        "originalFile": "840752__bassimat__fart-002.wav"
+      }
+    },
+    {
+      "id": "lib:fart-10",
+      "file": "fart-10.flac",
+      "title": "Fart 10",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 1343,
+      "gainAppliedDb": -3.1,
+      "meanDb": -20,
+      "peakDb": -3.1,
+      "sha256": "f60e4d8091adf74317ff7831f3dab2e77707723ec5467890e3a57365b5e73e7b",
+      "source": {
+        "name": "Freesound",
+        "author": "bassimat",
+        "url": "https://freesound.org/people/bassimat/sounds/840753/",
+        "license": "CC0",
+        "title": "Fart #003 by bassimat",
+        "originalFile": "840753__bassimat__fart-003.wav"
+      }
+    },
+    {
+      "id": "lib:fart-11",
+      "file": "fart-11.flac",
+      "title": "Fart 11",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 1864,
+      "gainAppliedDb": -1,
+      "meanDb": -23.8,
+      "peakDb": -1,
+      "sha256": "28bdebfc5dc8a07761da2dce550e7d543d96ef8931a4c9b8b12dd0cb38418ce6",
+      "source": {
+        "name": "Freesound",
+        "author": "bassimat",
+        "url": "https://freesound.org/people/bassimat/sounds/840755/",
+        "license": "CC0",
+        "title": "Fart #005 by bassimat",
+        "originalFile": "840755__bassimat__fart-005.wav"
+      }
+    },
+    {
+      "id": "lib:fart-close-up",
+      "file": "fart-close-up.flac",
+      "title": "Fart - close up",
+      "category": "bodily-humor",
+      "tags": [
+        "fart"
+      ],
+      "durationMs": 237,
+      "gainAppliedDb": -7.1,
+      "meanDb": -20,
+      "peakDb": -7.1,
+      "sha256": "9fc289dff060f4da6ff796851113209e1fc17d61ff33def44eddc1ba08da1e4d",
+      "source": {
+        "name": "Freesound",
+        "author": "sadiquecat",
+        "url": "https://freesound.org/people/sadiquecat/sounds/874487/",
+        "license": "CC0",
+        "title": "Fart - Close recording by Sadiquecat",
+        "originalFile": "874487__sadiquecat__fart-close-recording.wav"
+      }
+    },
+    {
+      "id": "lib:oh-yeah",
+      "file": "oh-yeah.flac",
+      "title": "Oh yeah!",
+      "category": "reactions-comedy",
+      "tags": [
+        "voice",
+        "cheer"
+      ],
+      "durationMs": 1549,
+      "gainAppliedDb": -7.2,
+      "meanDb": -20,
+      "peakDb": -7.8,
+      "sha256": "4d4244df8e6377d78f4908202579c9d5246ae80dc2b50964ee53057d3453240e",
+      "source": {
+        "name": "Freesound",
+        "author": "pbrechler",
+        "url": "https://freesound.org/people/pbrechler/sounds/250097/",
+        "license": "CC0",
+        "title": "Oh yeah! by pbrechler",
+        "originalFile": "250097__pbrechler__oh-yeah.aiff"
+      },
+      "ownerException": "spoken phrase approved by the owner 2026-10-29"
+    },
+    {
+      "id": "lib:ta-da-01",
+      "file": "ta-da-01.flac",
+      "title": "Ta-da 01",
+      "category": "fanfares-stingers",
+      "tags": [
+        "tada",
+        "fanfare"
+      ],
+      "durationMs": 1690,
+      "gainAppliedDb": -0.2,
+      "meanDb": -20,
+      "peakDb": -3.8,
+      "sha256": "eacdaad89e7fabbbafcbed501aee6c85c6d68241006eb78ea3569399fc46b955",
+      "source": {
+        "name": "Freesound",
+        "author": "plasterbrain",
+        "url": "https://freesound.org/people/plasterbrain/sounds/397353/",
+        "license": "CC0",
+        "title": "Tada Fanfare G by plasterbrain",
+        "originalFile": "397353__plasterbrain__tada-fanfare-g.flac"
+      }
+    },
+    {
+      "id": "lib:ta-da-02",
+      "file": "ta-da-02.flac",
+      "title": "Ta-da 02",
+      "category": "fanfares-stingers",
+      "tags": [
+        "tada",
+        "fanfare"
+      ],
+      "durationMs": 1740,
+      "gainAppliedDb": 0.2,
+      "meanDb": -20,
+      "peakDb": -3.3,
+      "sha256": "45f1a58bd5bd93a2fd0e791e9d329bbb9cdaf28e69913689d5e40a14d52bf391",
+      "source": {
+        "name": "Freesound",
+        "author": "plasterbrain",
+        "url": "https://freesound.org/people/plasterbrain/sounds/397354/",
+        "license": "CC0",
+        "title": "Tada Fanfare F by plasterbrain",
+        "originalFile": "397354__plasterbrain__tada-fanfare-f.flac"
+      }
+    },
+    {
+      "id": "lib:ta-da-03",
+      "file": "ta-da-03.flac",
+      "title": "Ta-da 03",
+      "category": "fanfares-stingers",
+      "tags": [
+        "tada",
+        "fanfare"
+      ],
+      "durationMs": 1701,
+      "gainAppliedDb": 0.4,
+      "meanDb": -20,
+      "peakDb": -2.1,
+      "sha256": "bff9ab4734b7ff200434ff6de3e31a9de58b54332a33ca682ad0124fe15db303",
+      "source": {
+        "name": "Freesound",
+        "author": "plasterbrain",
+        "url": "https://freesound.org/people/plasterbrain/sounds/397355/",
+        "license": "CC0",
+        "title": "Tada Fanfare A by plasterbrain",
+        "originalFile": "397355__plasterbrain__tada-fanfare-a.flac"
+      }
+    },
+    {
+      "id": "lib:ta-da-04",
+      "file": "ta-da-04.flac",
+      "title": "Ta-da 04",
+      "category": "fanfares-stingers",
+      "tags": [
+        "tada",
+        "fanfare"
+      ],
+      "durationMs": 1920,
+      "gainAppliedDb": -2.6,
+      "meanDb": -20,
+      "peakDb": -5.7,
+      "sha256": "09d1554d7456192477e208f9086fd3e8ee0d5ebeae04963de78db934d396fc1b",
+      "source": {
+        "name": "Freesound",
+        "author": "yoshicakes77",
+        "url": "https://freesound.org/people/yoshicakes77/sounds/850021/",
+        "license": "CC0",
+        "title": "Tada! by Yoshicakes77",
+        "originalFile": "850021__yoshicakes77__tada.wav"
+      }
+    },
+    {
+      "id": "lib:pep-sound1",
+      "file": "pep-sound1.flac",
+      "title": "Pep Sound1",
+      "category": "game-arcade",
+      "tags": [
+        "pep sound"
+      ],
+      "durationMs": 339,
+      "gainAppliedDb": -9.1,
+      "meanDb": -20,
+      "peakDb": -10.1,
+      "sha256": "0d7a079116b5e20bb5ae3ae376235511265c1b62db0b24aaa41809d49fe7e053",
+      "source": {
+        "name": "Kenney digital-audio",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/digital-audio",
+        "license": "CC0",
+        "originalFile": "pepSound1.ogg"
+      }
+    },
+    {
+      "id": "lib:phase-jump1",
+      "file": "phase-jump1.flac",
+      "title": "Phase Jump1",
+      "category": "game-arcade",
+      "tags": [
+        "phase jump"
+      ],
+      "durationMs": 372,
+      "gainAppliedDb": -7.7,
+      "meanDb": -20,
+      "peakDb": -8.9,
+      "sha256": "52b38e2600c42d35860ff293fe07c218112cb3f68a48c6f5fd252f07442fad73",
+      "source": {
+        "name": "Kenney digital-audio",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/digital-audio",
+        "license": "CC0",
+        "originalFile": "phaseJump1.ogg"
+      }
+    },
+    {
+      "id": "lib:power-up1",
+      "file": "power-up1.flac",
+      "title": "Power Up1",
+      "category": "game-arcade",
+      "tags": [
+        "power up"
+      ],
+      "durationMs": 971,
+      "gainAppliedDb": -6.5,
+      "meanDb": -20,
+      "peakDb": -7.1,
+      "sha256": "793ef9aeb041f990ff0648dc3f5559b3f7008f668b4959bf34c33e99f903bb5a",
+      "source": {
+        "name": "Kenney digital-audio",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/digital-audio",
+        "license": "CC0",
+        "originalFile": "powerUp1.ogg"
+      }
+    },
+    {
+      "id": "lib:three-tone1",
+      "file": "three-tone1.flac",
+      "title": "Three Tone1",
+      "category": "game-arcade",
+      "tags": [
+        "three tone"
+      ],
+      "durationMs": 506,
+      "gainAppliedDb": -10.1,
+      "meanDb": -20,
+      "peakDb": -11.1,
+      "sha256": "a52858f6e946ea8c80ede8dcc7315f232c823279fb541312423899304f3b3ff5",
+      "source": {
+        "name": "Kenney digital-audio",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/digital-audio",
+        "license": "CC0",
+        "originalFile": "threeTone1.ogg"
+      }
+    },
+    {
+      "id": "lib:three-tone2",
+      "file": "three-tone2.flac",
+      "title": "Three Tone2",
+      "category": "game-arcade",
+      "tags": [
+        "three tone"
+      ],
+      "durationMs": 589,
+      "gainAppliedDb": -7.2,
+      "meanDb": -20,
+      "peakDb": -8.6,
+      "sha256": "80c2fe8be58a692cefbe39e09d1ba2d0ceadc292700869040c3830e3f5f8fc69",
+      "source": {
+        "name": "Kenney digital-audio",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/digital-audio",
+        "license": "CC0",
+        "originalFile": "threeTone2.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-bell-heavy-0",
+      "file": "impact-bell-heavy-0.flac",
+      "title": "Impact Bell heavy 0",
+      "category": "impacts",
+      "tags": [
+        "impact bell"
+      ],
+      "durationMs": 1480,
+      "gainAppliedDb": -1,
+      "meanDb": -24.5,
+      "peakDb": -1,
+      "sha256": "1b90dcb5d1961d0747887d4ed321b1c1f7b69bce108e5d0cbbb6d69c769ce7e2",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactBell_heavy_000.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-bell-heavy-1",
+      "file": "impact-bell-heavy-1.flac",
+      "title": "Impact Bell heavy 1",
+      "category": "impacts",
+      "tags": [
+        "impact bell"
+      ],
+      "durationMs": 1741,
+      "gainAppliedDb": -1,
+      "meanDb": -22.8,
+      "peakDb": -1,
+      "sha256": "4d38c22eb25eb6bbf08328e0192ca43e6cb577802bfe9ac511c6360204ba4f2d",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactBell_heavy_001.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-bell-heavy-2",
+      "file": "impact-bell-heavy-2.flac",
+      "title": "Impact Bell heavy 2",
+      "category": "impacts",
+      "tags": [
+        "impact bell"
+      ],
+      "durationMs": 697,
+      "gainAppliedDb": -1,
+      "meanDb": -22.2,
+      "peakDb": -1,
+      "sha256": "e7cf5699f478236e88d8f14156e36b62139675c3527facba3f715753b31d12cb",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactBell_heavy_002.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-bell-heavy-3",
+      "file": "impact-bell-heavy-3.flac",
+      "title": "Impact Bell heavy 3",
+      "category": "impacts",
+      "tags": [
+        "impact bell"
+      ],
+      "durationMs": 654,
+      "gainAppliedDb": -1,
+      "meanDb": -23,
+      "peakDb": -1,
+      "sha256": "3ae166de0babba39b722e46073bd27acb11bdb3cf760111fb1e3e1707a0ed5a3",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactBell_heavy_003.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-mining-0",
+      "file": "impact-mining-0.flac",
+      "title": "Impact Mining 0",
+      "category": "impacts",
+      "tags": [
+        "impact mining"
+      ],
+      "durationMs": 804,
+      "gainAppliedDb": -3,
+      "meanDb": -20,
+      "peakDb": -3,
+      "sha256": "5d1d28fc8de9eaa0a664b27572013460f10efea9b321410ec67f6fe9b48271a3",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactMining_000.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-plate-heavy-1",
+      "file": "impact-plate-heavy-1.flac",
+      "title": "Impact Plate heavy 1",
+      "category": "impacts",
+      "tags": [
+        "impact plate"
+      ],
+      "durationMs": 349,
+      "gainAppliedDb": -5.6,
+      "meanDb": -20.1,
+      "peakDb": -5.6,
+      "sha256": "86c847fb56d666fd3e5f07d39a46b81141aef463def3829f8c5cfadc72b3e473",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactPlate_heavy_001.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-punch-heavy-1",
+      "file": "impact-punch-heavy-1.flac",
+      "title": "Impact Punch heavy 1",
+      "category": "impacts",
+      "tags": [
+        "impact punch"
+      ],
+      "durationMs": 499,
+      "gainAppliedDb": -5.7,
+      "meanDb": -20,
+      "peakDb": -5.7,
+      "sha256": "8b8b47d46f451643de205e3cef69c316d80e9be6abe2f5cbca60744f5ad9e563",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactPunch_heavy_001.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-soft-heavy-3",
+      "file": "impact-soft-heavy-3.flac",
+      "title": "Impact Soft heavy 3",
+      "category": "impacts",
+      "tags": [
+        "impact soft"
+      ],
+      "durationMs": 541,
+      "gainAppliedDb": -6,
+      "meanDb": -20,
+      "peakDb": -6,
+      "sha256": "b9cfd49057f52d922f9f357835b735dcc2058a344dc037404191f91ad482e1af",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactSoft_heavy_003.ogg"
+      }
+    },
+    {
+      "id": "lib:impact-wood-medium-2",
+      "file": "impact-wood-medium-2.flac",
+      "title": "Impact Wood medium 2",
+      "category": "impacts",
+      "tags": [
+        "impact wood"
+      ],
+      "durationMs": 330,
+      "gainAppliedDb": -1,
+      "meanDb": -21.1,
+      "peakDb": -1,
+      "sha256": "177053abb4e7d0e20ac9664cd589e1acfd6c767659b627d50c8994d01c4ae275",
+      "source": {
+        "name": "Kenney impact-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/impact-sounds",
+        "license": "CC0",
+        "originalFile": "impactWood_medium_002.ogg"
+      }
+    },
+    {
+      "id": "lib:close-2",
+      "file": "close-2.flac",
+      "title": "Close 2",
+      "category": "interface",
+      "tags": [
+        "close"
+      ],
+      "durationMs": 314,
+      "gainAppliedDb": -3.6,
+      "meanDb": -20,
+      "peakDb": -5.4,
+      "sha256": "e4e7abfd85a06d65285c9da3a95afcc0566246234ba198e32f563cbb3afec169",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "close_002.ogg"
+      }
+    },
+    {
+      "id": "lib:close-3",
+      "file": "close-3.flac",
+      "title": "Close 3",
+      "category": "interface",
+      "tags": [
+        "close"
+      ],
+      "durationMs": 314,
+      "gainAppliedDb": -4.9,
+      "meanDb": -20.1,
+      "peakDb": -6,
+      "sha256": "ecf1f0db23eeb47c480e6a3795db52f30d3bbb88ade52848506f1f19d4ba8c4d",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "close_003.ogg"
+      }
+    },
+    {
+      "id": "lib:confirmation-1",
+      "file": "confirmation-1.flac",
+      "title": "Confirmation 1",
+      "category": "interface",
+      "tags": [
+        "confirmation"
+      ],
+      "durationMs": 290,
+      "gainAppliedDb": -8.7,
+      "meanDb": -20.1,
+      "peakDb": -9.7,
+      "sha256": "bdb8c1d6cfb61b5c152c82d93dc076ee8b1853cde42479c4e221c258f3ade36c",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "confirmation_001.ogg"
+      }
+    },
+    {
+      "id": "lib:confirmation-4",
+      "file": "confirmation-4.flac",
+      "title": "Confirmation 4",
+      "category": "interface",
+      "tags": [
+        "confirmation"
+      ],
+      "durationMs": 490,
+      "gainAppliedDb": -8.2,
+      "meanDb": -20,
+      "peakDb": -9.1,
+      "sha256": "5edccf775b61e3e89f04612a7d59cc92139c424ce3abfc1b31d4d0cef0c7cecb",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "confirmation_004.ogg"
+      }
+    },
+    {
+      "id": "lib:error-7",
+      "file": "error-7.flac",
+      "title": "Error 7",
+      "category": "interface",
+      "tags": [
+        "error"
+      ],
+      "durationMs": 192,
+      "gainAppliedDb": -6.9,
+      "meanDb": -20.2,
+      "peakDb": -8,
+      "sha256": "21f2d0e40e54c445e9828da0a3c8e06a51cadddb581d39054870606e69b86f74",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "error_007.ogg"
+      }
+    },
+    {
+      "id": "lib:glass-4",
+      "file": "glass-4.flac",
+      "title": "Glass 4",
+      "category": "interface",
+      "tags": [
+        "glass"
+      ],
+      "durationMs": 692,
+      "gainAppliedDb": -2,
+      "meanDb": -20.1,
+      "peakDb": -3.1,
+      "sha256": "f59adfda8f90c7f7010e80a66de1505c1f079dd7e6e4b65ece7d3996c37340fe",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "glass_004.ogg"
+      }
+    },
+    {
+      "id": "lib:question-1",
+      "file": "question-1.flac",
+      "title": "Question 1",
+      "category": "interface",
+      "tags": [
+        "question"
+      ],
+      "durationMs": 491,
+      "gainAppliedDb": -8.2,
+      "meanDb": -20,
+      "peakDb": -9.1,
+      "sha256": "e635eed3acb31402e301e9377acdbc789220306d54e167726296a1eb2efbcb88",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "question_001.ogg"
+      }
+    },
+    {
+      "id": "lib:question-2",
+      "file": "question-2.flac",
+      "title": "Question 2",
+      "category": "interface",
+      "tags": [
+        "question"
+      ],
+      "durationMs": 333,
+      "gainAppliedDb": -10,
+      "meanDb": -20,
+      "peakDb": -10.9,
+      "sha256": "f04bb77be58131c318aa6c80bf0074218aa6a791117a90877d68067f45ec0562",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "question_002.ogg"
+      }
+    },
+    {
+      "id": "lib:question-3",
+      "file": "question-3.flac",
+      "title": "Question 3",
+      "category": "interface",
+      "tags": [
+        "question"
+      ],
+      "durationMs": 330,
+      "gainAppliedDb": -10,
+      "meanDb": -20,
+      "peakDb": -10.9,
+      "sha256": "397e41b09bfaf1ff9195cf7b66cfd9997ebd2033b3d735d4495ece4293718e3b",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "question_003.ogg"
+      }
+    },
+    {
+      "id": "lib:question-4",
+      "file": "question-4.flac",
+      "title": "Question 4",
+      "category": "interface",
+      "tags": [
+        "question"
+      ],
+      "durationMs": 333,
+      "gainAppliedDb": -9.9,
+      "meanDb": -20,
+      "peakDb": -10.8,
+      "sha256": "559c31139f2c3448b2c6926e07cf79d6e28d785fd9ab78192f80a225c3ee2f82",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "question_004.ogg"
+      }
+    },
+    {
+      "id": "lib:scroll-1",
+      "file": "scroll-1.flac",
+      "title": "Scroll 1",
+      "category": "interface",
+      "tags": [
+        "scroll"
+      ],
+      "durationMs": 1000,
+      "gainAppliedDb": -0.1,
+      "meanDb": -21.5,
+      "peakDb": -1,
+      "sha256": "a89ab5a406e59f8be9afc4f5412e29c7246d142b925108c98d1fdd5ae7b109e4",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "scroll_001.ogg"
+      }
+    },
+    {
+      "id": "lib:scroll-2",
+      "file": "scroll-2.flac",
+      "title": "Scroll 2",
+      "category": "interface",
+      "tags": [
+        "scroll"
+      ],
+      "durationMs": 1000,
+      "gainAppliedDb": -0.1,
+      "meanDb": -22.2,
+      "peakDb": -1,
+      "sha256": "0732c59d95fe320c4c1a657aaf5b0714930a7bd862251febcd2d38bc7666b080",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "scroll_002.ogg"
+      }
+    },
+    {
+      "id": "lib:scroll-3",
+      "file": "scroll-3.flac",
+      "title": "Scroll 3",
+      "category": "interface",
+      "tags": [
+        "scroll"
+      ],
+      "durationMs": 1000,
+      "gainAppliedDb": -0.1,
+      "meanDb": -22.1,
+      "peakDb": -1,
+      "sha256": "5ca80b94adfd3e09d7117c9a1a2094b8a679350b12affcc04516c10647cd8449",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "scroll_003.ogg"
+      }
+    },
+    {
+      "id": "lib:scroll-4",
+      "file": "scroll-4.flac",
+      "title": "Scroll 4",
+      "category": "interface",
+      "tags": [
+        "scroll"
+      ],
+      "durationMs": 970,
+      "gainAppliedDb": -0.1,
+      "meanDb": -20.1,
+      "peakDb": -1,
+      "sha256": "52f72102a21b0f686c854a11536d444de83829ca028cdd4775e66d0136f2b114",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "scroll_004.ogg"
+      }
+    },
+    {
+      "id": "lib:scroll-5",
+      "file": "scroll-5.flac",
+      "title": "Scroll 5",
+      "category": "interface",
+      "tags": [
+        "scroll"
+      ],
+      "durationMs": 970,
+      "gainAppliedDb": -2.1,
+      "meanDb": -20.1,
+      "peakDb": -3,
+      "sha256": "e213da1131743b0d46f6fae86f73e25a6652c82f379a36d6637166b90c6c6b37",
+      "source": {
+        "name": "Kenney interface-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/interface-sounds",
+        "license": "CC0",
+        "originalFile": "scroll_005.ogg"
+      }
+    },
+    {
+      "id": "lib:computer-noise-0",
+      "file": "computer-noise-0.flac",
+      "title": "Computer Noise 0",
+      "category": "sci-fi-magic",
+      "tags": [
+        "computer noise"
+      ],
+      "durationMs": 5000,
+      "gainAppliedDb": -12.3,
+      "meanDb": -20,
+      "peakDb": -13.3,
+      "sha256": "283d0aa1e13bebdb99c016175452228f7a453c5dc07df97c73e32295dcf21bdc",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "computerNoise_000.ogg"
+      }
+    },
+    {
+      "id": "lib:computer-noise-1",
+      "file": "computer-noise-1.flac",
+      "title": "Computer Noise 1",
+      "category": "sci-fi-magic",
+      "tags": [
+        "computer noise"
+      ],
+      "durationMs": 5000,
+      "gainAppliedDb": -11.1,
+      "meanDb": -20,
+      "peakDb": -12.1,
+      "sha256": "3da47a8b21781b6a65df5d9d774c6d6cc976d0020694b75c86314ff123b125ae",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "computerNoise_001.ogg"
+      }
+    },
+    {
+      "id": "lib:computer-noise-2",
+      "file": "computer-noise-2.flac",
+      "title": "Computer Noise 2",
+      "category": "sci-fi-magic",
+      "tags": [
+        "computer noise"
+      ],
+      "durationMs": 5000,
+      "gainAppliedDb": -8.5,
+      "meanDb": -20,
+      "peakDb": -9.4,
+      "sha256": "4411e2436214305ab23e95a93afdbd3e94f2d621319409dcb6e9bdb09809a48b",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "computerNoise_002.ogg"
+      }
+    },
+    {
+      "id": "lib:computer-noise-3",
+      "file": "computer-noise-3.flac",
+      "title": "Computer Noise 3",
+      "category": "sci-fi-magic",
+      "tags": [
+        "computer noise"
+      ],
+      "durationMs": 5000,
+      "gainAppliedDb": -8.7,
+      "meanDb": -20,
+      "peakDb": -9.7,
+      "sha256": "b2f40fa770a4ea5bc229e573bddf36370ff5896b406428a58bda5e024f697f6a",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "computerNoise_003.ogg"
+      }
+    },
+    {
+      "id": "lib:explosion-crunch-0",
+      "file": "explosion-crunch-0.flac",
+      "title": "Explosion Crunch 0",
+      "category": "impacts",
+      "tags": [
+        "explosion crunch"
+      ],
+      "durationMs": 778,
+      "gainAppliedDb": -6.2,
+      "meanDb": -20,
+      "peakDb": -7.2,
+      "sha256": "9567bba688dbe85991f1640d7a8c37fd2074ed27ddf3142e58760bc8cf9d2184",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "explosionCrunch_000.ogg"
+      }
+    },
+    {
+      "id": "lib:explosion-crunch-1",
+      "file": "explosion-crunch-1.flac",
+      "title": "Explosion Crunch 1",
+      "category": "impacts",
+      "tags": [
+        "explosion crunch"
+      ],
+      "durationMs": 1357,
+      "gainAppliedDb": -8,
+      "meanDb": -20,
+      "peakDb": -9,
+      "sha256": "1351eafc4d0c7bc972055df5b8774b657ba1a042ce2ba0c827d32abfd4f61a2e",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "explosionCrunch_001.ogg"
+      }
+    },
+    {
+      "id": "lib:explosion-crunch-2",
+      "file": "explosion-crunch-2.flac",
+      "title": "Explosion Crunch 2",
+      "category": "impacts",
+      "tags": [
+        "explosion crunch"
+      ],
+      "durationMs": 1235,
+      "gainAppliedDb": -3.7,
+      "meanDb": -20,
+      "peakDb": -5.4,
+      "sha256": "27f21e15dd28d8d4baee8ab1778ef7ebd11d5bb845af795951bd74292f8783f6",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "explosionCrunch_002.ogg"
+      }
+    },
+    {
+      "id": "lib:explosion-crunch-3",
+      "file": "explosion-crunch-3.flac",
+      "title": "Explosion Crunch 3",
+      "category": "impacts",
+      "tags": [
+        "explosion crunch"
+      ],
+      "durationMs": 1553,
+      "gainAppliedDb": -6.1,
+      "meanDb": -20,
+      "peakDb": -7.1,
+      "sha256": "fe2b0abfedbad3283065718fa6c1b82286c47c528ad74c0992eb468d869610d6",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "explosionCrunch_003.ogg"
+      }
+    },
+    {
+      "id": "lib:explosion-crunch-4",
+      "file": "explosion-crunch-4.flac",
+      "title": "Explosion Crunch 4",
+      "category": "impacts",
+      "tags": [
+        "explosion crunch"
+      ],
+      "durationMs": 1980,
+      "gainAppliedDb": -5.3,
+      "meanDb": -20,
+      "peakDb": -6.3,
+      "sha256": "1cd762727694905514d1cbd1a729fdb55eadfebe3008502beafbc26fd2ef17ba",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "explosionCrunch_004.ogg"
+      }
+    },
+    {
+      "id": "lib:laser-large-0",
+      "file": "laser-large-0.flac",
+      "title": "Laser Large 0",
+      "category": "sci-fi-magic",
+      "tags": [
+        "laser large"
+      ],
+      "durationMs": 677,
+      "gainAppliedDb": -2.8,
+      "meanDb": -20,
+      "peakDb": -3.7,
+      "sha256": "3d3822347420127b54a81a657581d89518feffbe575290945ff39d83bf9efbec",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "laserLarge_000.ogg"
+      }
+    },
+    {
+      "id": "lib:laser-large-1",
+      "file": "laser-large-1.flac",
+      "title": "Laser Large 1",
+      "category": "sci-fi-magic",
+      "tags": [
+        "laser large"
+      ],
+      "durationMs": 721,
+      "gainAppliedDb": -3.4,
+      "meanDb": -20,
+      "peakDb": -4.3,
+      "sha256": "5d66cc96057942ee80dcf899d82938d19f755dd2ae745f575766ef1518496caf",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "laserLarge_001.ogg"
+      }
+    },
+    {
+      "id": "lib:laser-large-2",
+      "file": "laser-large-2.flac",
+      "title": "Laser Large 2",
+      "category": "sci-fi-magic",
+      "tags": [
+        "laser large"
+      ],
+      "durationMs": 744,
+      "gainAppliedDb": -3.5,
+      "meanDb": -20,
+      "peakDb": -4.3,
+      "sha256": "ae3ed9117d7e2b071e53d0dd7383cbdafb27630b41181accacac7b2690452018",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "laserLarge_002.ogg"
+      }
+    },
+    {
+      "id": "lib:laser-large-3",
+      "file": "laser-large-3.flac",
+      "title": "Laser Large 3",
+      "category": "sci-fi-magic",
+      "tags": [
+        "laser large"
+      ],
+      "durationMs": 716,
+      "gainAppliedDb": -2.1,
+      "meanDb": -20,
+      "peakDb": -3,
+      "sha256": "e40ff35141b2eef055b7d53297ca0236924c2213c794b73daaa36104bafcf1a2",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "laserLarge_003.ogg"
+      }
+    },
+    {
+      "id": "lib:laser-retro-4",
+      "file": "laser-retro-4.flac",
+      "title": "Laser Retro 4",
+      "category": "sci-fi-magic",
+      "tags": [
+        "laser retro"
+      ],
+      "durationMs": 262,
+      "gainAppliedDb": -8.8,
+      "meanDb": -20.1,
+      "peakDb": -9.7,
+      "sha256": "895bfb5fce5fc3985771acdc77e2170d49ee1e5da81a7a83fc59dc3ad61215e8",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "laserRetro_004.ogg"
+      }
+    },
+    {
+      "id": "lib:laser-small-0",
+      "file": "laser-small-0.flac",
+      "title": "Laser Small 0",
+      "category": "sci-fi-magic",
+      "tags": [
+        "laser small"
+      ],
+      "durationMs": 236,
+      "gainAppliedDb": -1.4,
+      "meanDb": -20.1,
+      "peakDb": -6,
+      "sha256": "38975b162d9bef91bef75eeedb2693145a0d86aa3f726cb4948484ae50d9ca74",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "laserSmall_000.ogg"
+      }
+    },
+    {
+      "id": "lib:low-frequency-explosion-0",
+      "file": "low-frequency-explosion-0.flac",
+      "title": "Low Frequency explosion 0",
+      "category": "impacts",
+      "tags": [
+        "low frequency"
+      ],
+      "durationMs": 2000,
+      "gainAppliedDb": -4.9,
+      "meanDb": -20,
+      "peakDb": -4.9,
+      "sha256": "dc9925ebbd10706650f17699e4bc8cb92395ea8b18f9b0e6bf4d727e5d20473a",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "lowFrequency_explosion_000.ogg"
+      }
+    },
+    {
+      "id": "lib:low-frequency-explosion-1",
+      "file": "low-frequency-explosion-1.flac",
+      "title": "Low Frequency explosion 1",
+      "category": "impacts",
+      "tags": [
+        "low frequency"
+      ],
+      "durationMs": 1000,
+      "gainAppliedDb": -7.2,
+      "meanDb": -20,
+      "peakDb": -7.2,
+      "sha256": "c2a87f2954273c01ef7d6d2e99314d2876859e66beaa8eb0242c99c14d029493",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "lowFrequency_explosion_001.ogg"
+      }
+    },
+    {
+      "id": "lib:slime-0",
+      "file": "slime-0.flac",
+      "title": "Slime 0",
+      "category": "reactions-comedy",
+      "tags": [
+        "slime"
+      ],
+      "durationMs": 499,
+      "gainAppliedDb": 0,
+      "meanDb": -26.4,
+      "peakDb": -1,
+      "sha256": "001ff6554bf7dc3ef60dfcebd78d77b18d1fb928c74587010525865ce1506585",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "slime_000.ogg"
+      }
+    },
+    {
+      "id": "lib:slime-1",
+      "file": "slime-1.flac",
+      "title": "Slime 1",
+      "category": "reactions-comedy",
+      "tags": [
+        "slime"
+      ],
+      "durationMs": 4710,
+      "gainAppliedDb": 0,
+      "meanDb": -23.7,
+      "peakDb": -1,
+      "sha256": "e544bac89685720194312ac40fb79b0840185a15ab55f2a3a07dc6d49a17cd0f",
+      "source": {
+        "name": "Kenney sci-fi-sounds",
+        "author": "Kenney (Kenney Vleugels)",
+        "url": "https://kenney.nl/assets/sci-fi-sounds",
+        "license": "CC0",
+        "originalFile": "slime_001.ogg"
+      }
+    },
+    {
+      "id": "lib:evil-laugh-01",
+      "file": "evil-laugh-01.flac",
+      "title": "Evil laugh 01",
+      "category": "applause-laughs",
+      "tags": [
+        "laugh",
+        "evil"
+      ],
+      "durationMs": 2402,
+      "gainAppliedDb": 5.2,
+      "meanDb": -22.8,
+      "peakDb": -1,
+      "sha256": "d638163b0d2793bf71613d378b22c04dc39f4ea4946487fec89fdf274938b831",
+      "source": {
+        "name": "Freesound",
+        "author": "audroger",
+        "url": "https://freesound.org/people/audroger/sounds/471212/",
+        "license": "CC0",
+        "title": "weird laughter 3.wav by AuDRoger",
+        "originalFile": "471212__audroger__weird-laughter-3.wav"
+      }
+    },
+    {
+      "id": "lib:evil-laugh-02",
+      "file": "evil-laugh-02.flac",
+      "title": "Evil laugh 02",
+      "category": "applause-laughs",
+      "tags": [
+        "laugh",
+        "evil"
+      ],
+      "durationMs": 4685,
+      "gainAppliedDb": -3.6,
+      "meanDb": -20,
+      "peakDb": -3.6,
+      "sha256": "58a45ce0bafc8eecb6c8cae580b64b92bccedac030a2fd894f63555639243db8",
+      "source": {
+        "name": "Freesound",
+        "author": "gerent",
+        "url": "https://freesound.org/people/gerent/sounds/558249/",
+        "license": "CC0",
+        "title": "laughter-male-modulated-wet-evil-throaty-sinister_029-030 030-046 042-100-1.wav by Gerent",
+        "originalFile": "558249__gerent__laughter-male-modulated-wet-evil-throaty-sinister_029-030-030-046-042-100-1.wav"
+      }
+    },
+    {
+      "id": "lib:evil-laugh-03",
+      "file": "evil-laugh-03.flac",
+      "title": "Evil laugh 03",
+      "category": "applause-laughs",
+      "tags": [
+        "laugh",
+        "evil"
+      ],
+      "durationMs": 4341,
+      "gainAppliedDb": 1.6,
+      "meanDb": -26.1,
+      "peakDb": -1,
+      "sha256": "478f22ca41dd57d924040572bf436e1c51beb2715560e0d27e406b34d1e7072f",
+      "source": {
+        "name": "Freesound",
+        "author": "amauri8bit",
+        "url": "https://freesound.org/people/amauri8bit/sounds/786076/",
+        "license": "CC0",
+        "title": "Brooding Sinister Laughter by amauri8BIT",
+        "originalFile": "786076__amauri8bit__brooding-sinister-laughter.wav"
+      }
+    },
+    {
+      "id": "lib:air-horn-single",
+      "file": "air-horn-single.flac",
+      "title": "Air horn - single",
+      "category": "horns-alerts",
+      "tags": [
+        "airhorn",
+        "horn",
+        "blast"
+      ],
+      "durationMs": 1200,
+      "gainAppliedDb": -8.5,
+      "meanDb": -20,
+      "peakDb": -11.5,
+      "sha256": "368631756c98ae07977cc7eb80d1c7bfd5fd484e9aba6fddb6a8072425414f93",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "air-horn-single.wav"
+      }
+    },
+    {
+      "id": "lib:boing",
+      "file": "boing.flac",
+      "title": "Boing",
+      "category": "reactions-comedy",
+      "tags": [
+        "boing",
+        "spring",
+        "cartoon"
+      ],
+      "durationMs": 900,
+      "gainAppliedDb": -6.1,
+      "meanDb": -20,
+      "peakDb": -9.1,
+      "sha256": "a5501ef2a740d90005bee7299d0c2b5f883f203133d2bdd0391e92b47c369e6a",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "boing.wav"
+      }
+    },
+    {
+      "id": "lib:buzzer-wrong-answer",
+      "file": "buzzer-wrong-answer.flac",
+      "title": "Buzzer - wrong answer",
+      "category": "horns-alerts",
+      "tags": [
+        "buzzer",
+        "wrong",
+        "nope"
+      ],
+      "durationMs": 800,
+      "gainAppliedDb": -13.6,
+      "meanDb": -20,
+      "peakDb": -16.6,
+      "sha256": "ac52bceb067b6e82e20fca4cebccf3d4baa8c750ca3fb9ed319df3a870c282f8",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "buzzer-wrong.wav"
+      }
+    },
+    {
+      "id": "lib:coin",
+      "file": "coin.flac",
+      "title": "Coin",
+      "category": "game-arcade",
+      "tags": [
+        "coin",
+        "pickup",
+        "arcade"
+      ],
+      "durationMs": 448,
+      "gainAppliedDb": -13.4,
+      "meanDb": -20,
+      "peakDb": -16.4,
+      "sha256": "6e6ce5388dc30e56d7cf6c7d0a1c19c329b6134a65c9ce57bf6cefbc71344b11",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "coin.wav"
+      }
+    },
+    {
+      "id": "lib:crickets",
+      "file": "crickets.flac",
+      "title": "Crickets",
+      "category": "reactions-comedy",
+      "tags": [
+        "crickets",
+        "awkward",
+        "silence"
+      ],
+      "durationMs": 2765,
+      "gainAppliedDb": -4.9,
+      "meanDb": -20,
+      "peakDb": -7.9,
+      "sha256": "c263655f1d06fbe7107c9940f0452ede50918d05162659b44c945d166c90891f",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "crickets.wav"
+      }
+    },
+    {
+      "id": "lib:doorbell-ding-dong",
+      "file": "doorbell-ding-dong.flac",
+      "title": "Doorbell - ding dong",
+      "category": "horns-alerts",
+      "tags": [
+        "doorbell",
+        "bell",
+        "ding"
+      ],
+      "durationMs": 1836,
+      "gainAppliedDb": -5,
+      "meanDb": -20,
+      "peakDb": -8,
+      "sha256": "d4badfa6519b8848a30057e0fdbaccf6eb6c52ea6dd787ad87f6b685d0bf7c99",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "doorbell-ding-dong.wav"
+      }
+    },
+    {
+      "id": "lib:dramatic-sting",
+      "file": "dramatic-sting.flac",
+      "title": "Dramatic sting",
+      "category": "fanfares-stingers",
+      "tags": [
+        "drama",
+        "sting",
+        "suspense"
+      ],
+      "durationMs": 1997,
+      "gainAppliedDb": -4.8,
+      "meanDb": -20,
+      "peakDb": -7.8,
+      "sha256": "ea68b7051e4f3f8dfe9b069c5e3e5e42314a84bc2491156439ba0ed756cc56d7",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "dramatic-sting.wav"
+      }
+    },
+    {
+      "id": "lib:fart-classic",
+      "file": "fart-classic.flac",
+      "title": "Fart - classic",
+      "category": "bodily-humor",
+      "tags": [
+        "fart",
+        "classic"
+      ],
+      "durationMs": 900,
+      "gainAppliedDb": -9.9,
+      "meanDb": -20,
+      "peakDb": -12.9,
+      "sha256": "d8fcd940a8c922185c4c90ae8f9daa3fdfca5d606a0e0f2c6ee6ae118a574bdd",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "fart-classic.wav"
+      }
+    },
+    {
+      "id": "lib:fart-polite",
+      "file": "fart-polite.flac",
+      "title": "Fart - polite",
+      "category": "bodily-humor",
+      "tags": [
+        "fart",
+        "short",
+        "quiet"
+      ],
+      "durationMs": 280,
+      "gainAppliedDb": -10,
+      "meanDb": -20,
+      "peakDb": -13,
+      "sha256": "1586ba8bcc8e85baee6fdaa7dff502cd1c5586e50923cc4e7601baddc478c0f6",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "fart-polite.wav"
+      }
+    },
+    {
+      "id": "lib:game-over",
+      "file": "game-over.flac",
+      "title": "Game over",
+      "category": "game-arcade",
+      "tags": [
+        "gameover",
+        "lose",
+        "arcade"
+      ],
+      "durationMs": 1707,
+      "gainAppliedDb": -15.6,
+      "meanDb": -20,
+      "peakDb": -18.6,
+      "sha256": "f07c63f7354ffd1abe01c614178d45185779db3958d154411901c5e5668e6a12",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "game-over.wav"
+      }
+    },
+    {
+      "id": "lib:notification-chime",
+      "file": "notification-chime.flac",
+      "title": "Notification chime",
+      "category": "horns-alerts",
+      "tags": [
+        "chime",
+        "notification",
+        "ding"
+      ],
+      "durationMs": 1146,
+      "gainAppliedDb": -4.7,
+      "meanDb": -20,
+      "peakDb": -7.7,
+      "sha256": "ce11958e0806992d599a7271282aec0668fd9505d44ee0d4a2d3fa4ec34e84dd",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "notification-chime.wav"
+      }
+    },
+    {
+      "id": "lib:power-up",
+      "file": "power-up.flac",
+      "title": "Power-up",
+      "category": "game-arcade",
+      "tags": [
+        "powerup",
+        "level",
+        "arcade"
+      ],
+      "durationMs": 579,
+      "gainAppliedDb": -12,
+      "meanDb": -20,
+      "peakDb": -15,
+      "sha256": "0bee879787ad37cf384ad99fb261fdbb696b3d5f16b251397c200c66f21a2de7",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "power-up.wav"
+      }
+    },
+    {
+      "id": "lib:sad-deflate",
+      "file": "sad-deflate.flac",
+      "title": "Sad deflate",
+      "category": "reactions-comedy",
+      "tags": [
+        "fail",
+        "deflate",
+        "sad"
+      ],
+      "durationMs": 1600,
+      "gainAppliedDb": -15.8,
+      "meanDb": -20,
+      "peakDb": -18.8,
+      "sha256": "ab520a79cdf02fec9ecba0d8794a54de7e7788290aa5888d35c6ad17a241dd3e",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "sad-deflate.wav"
+      }
+    },
+    {
+      "id": "lib:sad-horn-fail",
+      "file": "sad-horn-fail.flac",
+      "title": "Sad horn - fail",
+      "category": "reactions-comedy",
+      "tags": [
+        "fail",
+        "sad",
+        "horn"
+      ],
+      "durationMs": 3300,
+      "gainAppliedDb": -11.1,
+      "meanDb": -20,
+      "peakDb": -14.1,
+      "sha256": "b303182255a69a4eeea3f571f4baa48fb94a1d7cce929012d7f84416c4f484f4",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "sad-horn-fail.wav"
+      }
+    },
+    {
+      "id": "lib:siren-short",
+      "file": "siren-short.flac",
+      "title": "Siren - short",
+      "category": "horns-alerts",
+      "tags": [
+        "siren",
+        "alarm"
+      ],
+      "durationMs": 2400,
+      "gainAppliedDb": -16,
+      "meanDb": -20,
+      "peakDb": -19,
+      "sha256": "be59f0cc5e6ff82c8ac2933a56e6a050d9a78a65818121a5165eeffbe551f6b4",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "siren-short.wav"
+      }
+    },
+    {
+      "id": "lib:slide-whistle-down",
+      "file": "slide-whistle-down.flac",
+      "title": "Slide whistle - down",
+      "category": "reactions-comedy",
+      "tags": [
+        "whistle",
+        "slide",
+        "down"
+      ],
+      "durationMs": 1000,
+      "gainAppliedDb": -13.6,
+      "meanDb": -20,
+      "peakDb": -16.6,
+      "sha256": "e9e793e2f91ca8b3fb7d9f1446e218aaecda2f7c819f86b7d2a65d5121a9ee65",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "slide-whistle-down.wav"
+      }
+    },
+    {
+      "id": "lib:slide-whistle-up",
+      "file": "slide-whistle-up.flac",
+      "title": "Slide whistle - up",
+      "category": "reactions-comedy",
+      "tags": [
+        "whistle",
+        "slide",
+        "up"
+      ],
+      "durationMs": 1000,
+      "gainAppliedDb": -13.6,
+      "meanDb": -20,
+      "peakDb": -16.6,
+      "sha256": "ec771f4f8be5190a8b291cf36431f63fdc268688aa0c27f82ac041cf0c17ad33",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "slide-whistle-up.wav"
+      }
+    },
+    {
+      "id": "lib:ta-da-magic-sparkle",
+      "file": "ta-da-magic-sparkle.flac",
+      "title": "Ta-da - magic sparkle",
+      "category": "fanfares-stingers",
+      "tags": [
+        "tada",
+        "magic",
+        "sparkle"
+      ],
+      "durationMs": 1340,
+      "gainAppliedDb": -3.7,
+      "meanDb": -20,
+      "peakDb": -6.7,
+      "sha256": "87926c625110e324285649f97d04bb4e6475ba092dd5ea2cb874c73c858d92d5",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "ta-da-magic.wav"
+      }
+    },
+    {
+      "id": "lib:ta-da-quick",
+      "file": "ta-da-quick.flac",
+      "title": "Ta-da - quick",
+      "category": "fanfares-stingers",
+      "tags": [
+        "tada",
+        "short",
+        "reveal"
+      ],
+      "durationMs": 948,
+      "gainAppliedDb": -8.1,
+      "meanDb": -20,
+      "peakDb": -11.1,
+      "sha256": "4394792c67836824bc43256e1914b0ac616c7b55b003c88f2cd0b4dd63a7fc79",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "ta-da-quick.wav"
+      }
+    },
+    {
+      "id": "lib:ta-da-trumpet",
+      "file": "ta-da-trumpet.flac",
+      "title": "Ta-da - trumpet",
+      "category": "fanfares-stingers",
+      "tags": [
+        "tada",
+        "fanfare",
+        "reveal"
+      ],
+      "durationMs": 1607,
+      "gainAppliedDb": -6.8,
+      "meanDb": -20,
+      "peakDb": -9.8,
+      "sha256": "05078fa1fb399c24d5232851d578be5881f3570350c111aea42689104717bc95",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "ta-da-trumpet.wav"
+      }
+    },
+    {
+      "id": "lib:whoosh",
+      "file": "whoosh.flac",
+      "title": "Whoosh",
+      "category": "whooshes",
+      "tags": [
+        "whoosh",
+        "swoosh",
+        "transition"
+      ],
+      "durationMs": 1075,
+      "gainAppliedDb": -0.9,
+      "meanDb": -20,
+      "peakDb": -3.9,
+      "sha256": "c4cb56fecf2d8d0fb86dbdcf4f17711a6c01fa6245683de1e23eb169a0fbe2bc",
+      "source": {
+        "name": "Original",
+        "author": "AudioRouter",
+        "url": "tools/soundboard/generate-original.mjs",
+        "license": "original",
+        "originalFile": "whoosh.wav"
+      }
+    }
+  ]
+}

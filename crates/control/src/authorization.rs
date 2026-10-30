@@ -211,6 +211,11 @@ pub(crate) fn validate_method_params(
         "audioMedia.finishUpload" => &["uploadId"],
         "audioMedia.importTemporaryRecording" => &["recordingId"],
         "audioMedia.delete" => &["mediaId"],
+        "soundLibrary.list" => &[],
+        "soundLibrary.read" => &["id"],
+        "soundboard.trigger" => &["sessionId", "nodeId", "slot", "action", "mode"],
+        "soundboard.stop" => &["sessionId", "nodeId", "slot"],
+        "soundboard.status" => &["sessionId", "nodeId"],
         "audioSources.transport" => &["sessionId", "nodeId", "action"],
         "timeShift.transport" => &["sessionId", "nodeId", "action"],
         "recorders.list" => &[],
@@ -251,7 +256,7 @@ pub(crate) fn validate_method_params(
         "recovery.clearSafeMode" => &["idempotencyKey"],
         "recordings.removeEntry" => &["recordingId", "idempotencyKey"],
         "recordings.recycle" => &["recordingId", "confirm", "idempotencyKey"],
-        "devices.list" => &["cursor", "limit"],
+        "devices.list" => &["cursor", "limit", "includeInactive"],
         "nativeEndpoints.prepare" | "nativeEndpoints.rebind" => {
             &["sessionId", "captureEndpointId", "renderEndpointId"]
         }
@@ -292,6 +297,7 @@ pub(crate) fn validate_method_params(
             "devicePath",
             "renderMappingPath",
             "captureMappingPath",
+            "leaseMs",
         ],
         "nativeBridges.detach" => &["busId"],
         "nativeBridges.heartbeat" => &[],

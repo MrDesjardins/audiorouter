@@ -77,6 +77,7 @@ pub(super) fn compile(
                 | NodeKind::VirtualRenderSource
                 | NodeKind::TestSignal
                 | NodeKind::AudioFile
+                | NodeKind::Soundboard
                 | NodeKind::NetworkReceive
         ) {
             return Err(unsupported());
@@ -97,7 +98,10 @@ pub(super) fn compile(
             ready: AtomicBool::new(false),
         });
         let mut source_ref = OutputBranchSource::Input(index);
-        if matches!(source.kind, NodeKind::TestSignal | NodeKind::AudioFile) {
+        if matches!(
+            source.kind,
+            NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard
+        ) {
             let chain_index = graph.output_chains.len();
             graph.output_chains.push(OutputProcessorChain {
                 source: source_ref,
@@ -901,6 +905,37 @@ mod tests {
         assert!(signal.is_playing());
         let output = run(graph);
         assert!((output["monitor"] - output["game-output"] - 0.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn connected_mixers_accept_a_soundboard_source() {
+        let mut session = fixture();
+        let source = session
+            .nodes
+            .iter_mut()
+            .find(|node| node.id.as_str() == "discord")
+            .unwrap();
+        source.kind = NodeKind::Soundboard;
+        source.parameters = serde_json::json!({"slot1MediaId": "media-1"})
+            .as_object()
+            .unwrap()
+            .clone();
+        let audio = Arc::new(DecodedAudio {
+            channels: 2,
+            sample_rate_hz: 48_000,
+            samples: vec![0.25; 2 * 4_800].into(),
+        });
+        let set = compile_native_paths_with_plugins_and_audio(
+            &session,
+            RuntimeGeneration::new(5),
+            &Default::default(),
+            &std::collections::HashMap::from([("media-1".to_owned(), audio)]),
+        )
+        .unwrap();
+        let board = set.paths[0]
+            .soundboard_for_node(&EntityId::new("discord"))
+            .expect("the board is reachable for triggering");
+        assert!(board.slot_loaded(0));
     }
 
     #[test]

@@ -39,9 +39,11 @@ pub const MAX_RMS_WINDOW_SAMPLES: usize = INTERNAL_SAMPLE_RATE_HZ as usize * 10;
 
 mod audio_file_source;
 mod connected_mixers;
+mod soundboard;
 pub use audio_file_source::{
     decode_audio_bytes, decode_audio_file, AudioFileDecodeError, AudioFileSource, DecodedAudio,
 };
+pub use soundboard::{SlotMode, SoundboardSlot, SoundboardSource, SOUNDBOARD_SLOT_COUNT};
 
 const PCM16_QUANTUM_SAMPLES: usize = MAX_CHANNELS * PROCESSING_QUANTUM_FRAMES;
 pub const MAX_PCM16_PACKET_FRAMES: usize = 4_096;
@@ -2793,6 +2795,10 @@ pub enum ProcessingStage {
     AudioFile {
         source: Arc<AudioFileSource>,
     },
+    /// Up to nine on-demand sounds; triggers arrive through the shared handle.
+    Soundboard {
+        source: Arc<SoundboardSource>,
+    },
     TestSignal {
         source: Arc<TestSignalSource>,
     },
@@ -4376,6 +4382,19 @@ impl CompiledMixerFanoutGraph {
             .find_map(|graph| graph.audio_file_source_for_node(node_id))
     }
 
+    /// Trigger handle for a Soundboard feeding a Mixer input.
+    pub fn soundboard_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<SoundboardSource>> {
+        self.input_chains
+            .iter()
+            .flatten()
+            .map(|chain| &chain.graph)
+            .chain(self.output_chains.iter().map(|chain| &chain.graph))
+            .find_map(|graph| graph.soundboard_for_node(node_id))
+    }
+
     /// Fun Voice Changer processor of a node in any chain.
     pub fn voice_changer_for_node(
         &self,
@@ -4937,6 +4956,16 @@ impl RealtimeMixerFanout {
         self.paths
             .iter()
             .find_map(|path| path.graph.audio_file_source_for_node(node_id))
+    }
+
+    /// Trigger handle for a Soundboard feeding any path.
+    pub fn soundboard_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<SoundboardSource>> {
+        self.paths
+            .iter()
+            .find_map(|path| path.graph.soundboard_for_node(node_id))
     }
 
     pub fn input_ring(&self, index: usize) -> Option<&AudioBlockRing> {
@@ -6312,6 +6341,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     | NodeKind::NetworkReceive
                     | NodeKind::TestSignal
                     | NodeKind::AudioFile
+                    | NodeKind::Soundboard
                     | NodeKind::Mixer
             ) {
                 push_stage!(node_id, ProcessingStage::Mute { muted: true });
@@ -6353,6 +6383,14 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                     node_id,
                     ProcessingStage::AudioFile {
                         source: Arc::new(source)
+                    }
+                );
+            }
+            NodeKind::Soundboard => {
+                push_stage!(
+                    node_id,
+                    ProcessingStage::Soundboard {
+                        source: Arc::new(prepare_soundboard(node, sample_rate_hz, audio_media))
                     }
                 );
             }
@@ -7979,7 +8017,10 @@ fn compile_mixer_entry<'s>(
         // A Test Signal or Audio File produces its own audio: it runs as the
         // first stage of this input's chain, and the native input only paces
         // it with silent packets (its entry matrix is therefore all zeros).
-        let generator = matches!(source.kind, NodeKind::TestSignal | NodeKind::AudioFile);
+        let generator = matches!(
+            source.kind,
+            NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard
+        );
         if chain.is_empty() && !generator {
             input_chains.push(None);
             continue;
@@ -8065,7 +8106,10 @@ fn compile_direct_entry<'s>(
         return Err(GraphCompileError::UnsupportedTopology);
     }
     let source_channels = usize::from(source_port.channels);
-    let generator = matches!(source.kind, NodeKind::TestSignal | NodeKind::AudioFile);
+    let generator = matches!(
+        source.kind,
+        NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard
+    );
     let outgoing = session
         .edges
         .iter()
@@ -8671,6 +8715,56 @@ fn compile_processor_chain(
         plugins,
         audio_media,
     )
+}
+
+/// Builds the Soundboard for a node from its slot parameters. A slot whose
+/// sound is not in `audio_media` (or was decoded for another rate) stays
+/// empty instead of failing the route; status reports which slots loaded.
+fn prepare_soundboard(
+    node: &audiorouter_domain::Node,
+    sample_rate_hz: u32,
+    audio_media: &HashMap<String, Arc<DecodedAudio>>,
+) -> SoundboardSource {
+    let usable = |id: &str| {
+        audio_media
+            .get(id)
+            .filter(|audio| audio.sample_rate_hz == sample_rate_hz)
+            .cloned()
+    };
+    let slots = std::array::from_fn(|index| {
+        let slot = index + 1;
+        let text = |field: &str| {
+            node.parameters
+                .get(&format!("slot{slot}{field}"))
+                .and_then(|value| value.as_str())
+        };
+        let mut sounds = Vec::new();
+        match node.parameters.get(&format!("slot{slot}Set")) {
+            Some(serde_json::Value::Array(items)) => {
+                sounds.extend(
+                    items
+                        .iter()
+                        .filter_map(|item| item.as_str().and_then(usable)),
+                );
+            }
+            _ => sounds.extend(text("MediaId").and_then(usable)),
+        }
+        if sounds.is_empty() {
+            return None;
+        }
+        Some(SoundboardSlot {
+            sounds,
+            gain_db: node
+                .parameters
+                .get(&format!("slot{slot}GainDb"))
+                .and_then(|value| value.as_f64())
+                .unwrap_or(0.0) as f32,
+            mode: text("Mode")
+                .and_then(SlotMode::parse)
+                .unwrap_or(SlotMode::Once),
+        })
+    });
+    SoundboardSource::new(slots, sample_rate_hz)
 }
 
 /// Processor kinds that may sit in a linear chain before or after a Mixer.
@@ -9604,6 +9698,22 @@ impl RuntimeGraph {
             })
     }
 
+    /// Return the lock-free trigger handle for an authored Soundboard node.
+    pub fn soundboard_for_node(
+        &self,
+        node_id: &audiorouter_domain::EntityId,
+    ) -> Option<Arc<SoundboardSource>> {
+        self.stage_node_ids
+            .iter()
+            .enumerate()
+            .find_map(|(index, candidate)| {
+                (candidate == node_id).then(|| match self.stages.get(index) {
+                    Some(ProcessingStage::Soundboard { source }) => Some(Arc::clone(source)),
+                    _ => None,
+                })?
+            })
+    }
+
     /// Return the lock-free transport handle for an authored Test Signal.
     pub fn test_signal_source_for_node(
         &self,
@@ -10043,6 +10153,9 @@ impl RuntimeGraph {
                     }
                 }
                 ProcessingStage::AudioFile { source } => source.stop(),
+                ProcessingStage::Soundboard { source } => {
+                    source.stop_all();
+                }
                 ProcessingStage::TestSignal { source } => source.stop(),
                 ProcessingStage::MixTestSignal { source, .. } => source.stop(),
                 ProcessingStage::Gain { .. }
@@ -10214,6 +10327,7 @@ impl RuntimeGraph {
                     }
                 }
                 ProcessingStage::AudioFile { source } => source.process(block),
+                ProcessingStage::Soundboard { source } => source.process(block),
                 ProcessingStage::TestSignal { source } => source.process(block),
                 ProcessingStage::MixTestSignal {
                     source,
@@ -17551,5 +17665,158 @@ mod tests {
         graph.process(&mut block);
         assert_eq!(block.channel(0).unwrap(), &[0.5, 0.25]);
         assert_eq!(block.channel(1).unwrap(), &[-0.5, -0.25]);
+    }
+
+    #[test]
+    fn soundboard_routes_to_an_output_like_the_other_generated_sources() {
+        use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node = |id: &str,
+                    kind: NodeKind,
+                    direction: PortDirection,
+                    parameters: serde_json::Value| Node {
+            id: EntityId::new(id),
+            kind,
+            type_version: 1,
+            name: id.into(),
+            enabled: true,
+            bypass: false,
+            parameters: parameters.as_object().unwrap().clone(),
+            ports: vec![Port {
+                name: "port".into(),
+                direction,
+                channels: 2,
+            }],
+        };
+        let audio = Arc::new(DecodedAudio {
+            channels: 2,
+            sample_rate_hz: 48_000,
+            samples: vec![0.25; 2 * 4_800].into(),
+        });
+        let media = HashMap::from([("media-1".to_owned(), audio)]);
+        for (kind, parameters) in [
+            (
+                NodeKind::AudioFile,
+                serde_json::json!({"mediaId":"media-1"}),
+            ),
+            (
+                NodeKind::Soundboard,
+                serde_json::json!({"slot1MediaId":"media-1"}),
+            ),
+        ] {
+            let session = Session {
+                id: EntityId::new("route"),
+                name: "route".into(),
+                schema_version: 1,
+                revision: 1,
+                nodes: vec![
+                    node("source", kind, PortDirection::Output, parameters),
+                    node(
+                        "output",
+                        NodeKind::PhysicalOutput,
+                        PortDirection::Input,
+                        serde_json::json!({}),
+                    ),
+                ],
+                edges: vec![Edge {
+                    id: EntityId::new("edge"),
+                    source_node: EntityId::new("source"),
+                    source_port: "port".into(),
+                    destination_node: EntityId::new("output"),
+                    destination_port: "port".into(),
+                    matrix: vec![1.0, 0.0, 0.0, 1.0],
+                    enabled: true,
+                }],
+            };
+            let result = compile_session_at_sample_rate_with_plugins_and_audio(
+                &session,
+                RuntimeGeneration::new(13),
+                48_000,
+                &HashMap::new(),
+                &media,
+            );
+            assert!(result.is_ok(), "{kind:?} to an output: {:?}", result.err());
+        }
+    }
+
+    #[test]
+    fn soundboard_compiles_into_graph_and_plays_a_triggered_slot() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node_id = EntityId::new("soundboard");
+        let session = Session {
+            id: EntityId::new("soundboard-session"),
+            name: "Soundboard".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: node_id.clone(),
+                kind: NodeKind::Soundboard,
+                type_version: 1,
+                name: "Soundboard".into(),
+                enabled: true,
+                bypass: false,
+                parameters: serde_json::json!({
+                    "slot1MediaId": "media-1",
+                    "slot1Mode": "once",
+                    "slot2MediaId": "missing",
+                    // A sound at another sample rate is skipped, leaving the slot empty.
+                    "slot3MediaId": "media-44k",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+                ports: vec![Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 2,
+                }],
+            }],
+            edges: vec![],
+        };
+        let sound = |rate: u32| {
+            Arc::new(DecodedAudio {
+                channels: 2,
+                sample_rate_hz: rate,
+                samples: vec![0.25; 2 * 4_800].into(),
+            })
+        };
+        let graph = compile_session_at_sample_rate_with_plugins_and_audio(
+            &session,
+            RuntimeGeneration::new(12),
+            48_000,
+            &HashMap::new(),
+            &HashMap::from([
+                ("media-1".to_owned(), sound(48_000)),
+                ("media-44k".to_owned(), sound(44_100)),
+            ]),
+        )
+        .unwrap();
+        let source = graph.soundboard_for_node(&node_id).unwrap();
+        assert!(source.slot_loaded(0));
+        assert!(
+            !source.slot_loaded(1),
+            "an unknown sound leaves the slot empty"
+        );
+        assert!(
+            !source.slot_loaded(2),
+            "a wrong-rate sound leaves the slot empty"
+        );
+
+        let mut silent = AudioBlock::new(2, 128).unwrap();
+        graph.process(&mut silent);
+        assert!(silent.channel(0).unwrap().iter().all(|value| *value == 0.0));
+
+        assert!(source.trigger(0));
+        let mut block = AudioBlock::new(2, 128).unwrap();
+        graph.process(&mut block);
+        let peak = block
+            .channel(0)
+            .unwrap()
+            .iter()
+            .fold(0.0_f32, |peak, value| peak.max(value.abs()));
+        assert!(
+            peak > 0.1,
+            "the triggered sound reaches the graph output: {peak}"
+        );
+        assert_eq!(source.playing_mask() & 1, 1);
     }
 }

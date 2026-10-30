@@ -26,6 +26,7 @@ export type NodeKind =
   | "recorder"
   | "plugin"
   | "audioFile"
+  | "soundboard"
   | "volume"
   | "bassTreble"
   | "dehum"
@@ -1374,6 +1375,11 @@ export type ImplementedMethod =
   | "audioMedia.importTemporaryRecording"
   | "audioMedia.delete"
   | "audioSources.transport"
+  | "soundboard.trigger"
+  | "soundboard.stop"
+  | "soundboard.status"
+  | "soundLibrary.list"
+  | "soundLibrary.read"
   | "timeShift.transport"
   | "recorders.list"
   | "recorders.create"
@@ -1511,6 +1517,18 @@ export type MethodParams = {
   "audioMedia.delete": { mediaId: EntityId };
   "timeShift.transport": { sessionId: EntityId; nodeId: EntityId; action: "pause" | "resume" | "back" | "forward" | "live" | "status" };
   "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; action: "play" | "pause" | "stop" | "status" };
+  "soundboard.trigger": {
+    sessionId: EntityId;
+    nodeId: EntityId;
+    slot: number;
+    action?: "press" | "release";
+    /** Replaces the slot's own mode for this press. */
+    mode?: "once" | "loop" | "toggle" | "hold";
+  };
+  "soundboard.stop": { sessionId: EntityId; nodeId: EntityId; slot?: number };
+  "soundboard.status": { sessionId: EntityId; nodeId: EntityId };
+  "soundLibrary.list": undefined;
+  "soundLibrary.read": { id: string };
   "recorders.list": undefined;
   "recorders.create": {
     sessionId: EntityId;
@@ -1697,6 +1715,29 @@ export type MethodResult = {
   "audioMedia.delete": { deleted: boolean };
   "timeShift.transport": { sessionId: EntityId; nodeId: EntityId; state: "live" | "delayed" | "paused"; delaySeconds: number; bufferedSeconds: number; capacitySeconds: number };
   "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; state: "playing" | "paused" | "stopped"; loop: boolean };
+  "soundboard.trigger": { sessionId: EntityId; nodeId: EntityId; slot: number; accepted: boolean };
+  "soundboard.stop": { sessionId: EntityId; nodeId: EntityId; stopped: boolean };
+  "soundboard.status": {
+    sessionId: EntityId;
+    nodeId: EntityId;
+    slots: Array<{ slot: number; loaded: boolean; playing: boolean; progress: number }>;
+    ignoredTriggers: number;
+    droppedCommands: number;
+  };
+  "soundLibrary.list": {
+    installed: boolean;
+    categories: Array<{ id: string; title: string }>;
+    sounds: Array<{
+      id: string;
+      title: string;
+      category: string;
+      tags: string[];
+      durationMs: number;
+      license: string | null;
+      author: string | null;
+    }>;
+  };
+  "soundLibrary.read": { id: string; format: "flac"; dataBase64: string };
   "recorders.list": Array<{ sessionId: EntityId; nodeId?: EntityId | null; state: "idle" | "armed" | "recording" | "paused" | "stopping" | "completed" | "failed"; lastFrame: number | null }>;
   "recorders.create": RecorderCreateResult;
   "recorders.arm": RecorderLifecycleResult;

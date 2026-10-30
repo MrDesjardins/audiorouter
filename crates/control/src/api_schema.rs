@@ -51,6 +51,11 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "audioMedia.delete" => "Delete imported audio media that is not referenced by any session graph.",
         "timeShift.transport" => "Pause, resume, jump back or forward 10 s, or return to live on one running Time Shift node; status reads its buffer.",
         "meters.reset" => "Reset held sample peaks and clipping statistics of one prepared Meter without changing audio or the saved graph.",
+        "soundLibrary.list" => "List the built-in sounds for the Soundboard picker: id, title, category, tags, duration and license.",
+        "soundLibrary.read" => "Read one built-in sound as base64 FLAC, for previewing in the picker. The preview never goes to a route.",
+        "soundboard.trigger" => "Press (or release) one slot of a running Soundboard tool; the sound starts at the next audio block. An optional mode (once, loop, toggle, hold) replaces the slot's own for this press.",
+        "soundboard.stop" => "Fade out one slot, or every slot when no slot is given, of a running Soundboard tool.",
+        "soundboard.status" => "Which Soundboard slots are loaded and playing, with progress and ignored or dropped triggers.",
         "audioSources.transport" => "Play or stop one prepared Test Signal or audio-file source without stopping other graph routes; pause applies to audio files.",
         "recorders.list" => "List live in-memory recorder states and frame boundaries.",
                 "recorders.create" => "Create and attach an unarmed file recorder under the approved root. Omitted dither defaults to TPDF for integer output and is disabled for Float32 and MP3.",
@@ -362,6 +367,36 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 "action": { "enum": ["pause", "resume", "back", "forward", "live", "status"] }
             }),
             &["sessionId", "nodeId", "action"],
+        ),
+        "soundLibrary.list" => object_schema(json!({}), &[]),
+        "soundLibrary.read" => object_schema(
+            json!({ "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
+            &["id"],
+        ),
+        "soundboard.trigger" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "slot": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::SOUNDBOARD_SLOTS },
+                "action": { "enum": ["press", "release"] },
+                "mode": { "enum": ["once", "loop", "toggle", "hold"] }
+            }),
+            &["sessionId", "nodeId", "slot"],
+        ),
+        "soundboard.stop" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "slot": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::SOUNDBOARD_SLOTS }
+            }),
+            &["sessionId", "nodeId"],
+        ),
+        "soundboard.status" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &["sessionId", "nodeId"],
         ),
         "audioSources.transport" => object_schema(
             json!({

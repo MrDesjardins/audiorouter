@@ -5,6 +5,8 @@ import { PlayAction } from "./actions/play.js";
 import { PrivacyAction } from "./actions/privacy.js";
 import { RecordAction } from "./actions/record.js";
 import { SessionAction } from "./actions/session.js";
+import { SoundAction } from "./actions/sound.js";
+import { soundSlotChoices } from "./sound-settings.js";
 import { StepAction } from "./actions/step.js";
 import { ToggleAction } from "./actions/toggle.js";
 import { AudioRouterStore, toggleTargets } from "./store.js";
@@ -33,6 +35,7 @@ function panelOptions() {
       name: node.name,
       kind: store.kind(node.kind)?.name ?? node.kind,
       type: node.kind,
+      slots: node.kind === "soundboard" ? soundSlotChoices((field) => store.setting(node, field)) : [],
       targets: toggleTargets(store.kind(node.kind)),
       numbers: (store.kind(node.kind)?.parameters ?? [])
         .filter((spec) => spec.type === "number")
@@ -61,6 +64,7 @@ streamDeck.actions.registerAction(new MeterAction(store));
 streamDeck.actions.registerAction(new PrivacyAction(store));
 streamDeck.actions.registerAction(new PlayAction(store));
 streamDeck.actions.registerAction(new SessionAction(store));
+streamDeck.actions.registerAction(new SoundAction(store));
 streamDeck.actions.registerAction(new StepAction(store));
 streamDeck.actions.registerAction(new RecordAction(store));
 

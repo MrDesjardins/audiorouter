@@ -58,6 +58,7 @@ const SOURCE_KINDS: readonly NodeKind[] = [
   "applicationCapture",
   "endpointLoopback",
   "audioFile",
+  "soundboard",
   "testSignal",
   "networkReceive",
   "virtualRenderSource",

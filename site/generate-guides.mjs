@@ -54,6 +54,7 @@ const visualTypes = {
   plugin: "plugin",
   testSignal: "tone",
   audioFile: "media",
+  soundboard: "media",
   physicalInput: "channels",
   networkSend: "network",
   networkReceive: "network",
@@ -143,6 +144,7 @@ const timelineKinds = new Set([
   "duck",
   "delay",
   "audioFile",
+  "soundboard",
 ]);
 const stillKinds = new Set(["group", "physicalInput"]);
 const audioKinds = new Set([
@@ -211,6 +213,7 @@ const searchTitles = {
   virtualCaptureSink: "Send audio to an AudioRouter virtual cable",
   testSignal: "Test tone generator to check your audio routing",
   audioFile: "Play a WAV or MP3 file through your audio route",
+  soundboard: "Soundboard: play sounds on demand from buttons or a Stream Deck",
   recorder: "Record any audio route to WAV, FLAC or MP3",
   networkSend: "Send audio to another PC over your home network",
   networkReceive: "Receive audio from another PC (two-PC streaming)",

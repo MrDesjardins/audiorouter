@@ -276,6 +276,7 @@ const SOURCES_AND_SILENT_BYPASSES: readonly Node["kind"][] = [
   "applicationCapture",
   "endpointLoopback",
   "audioFile",
+  "soundboard",
   "testSignal",
   "networkReceive",
   "virtualRenderSource",

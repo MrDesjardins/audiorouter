@@ -1,5 +1,5 @@
 {
-  "backendMethods": 109,
+  "backendMethods": 121,
   "operations": [
     {
       "method": "POST",
@@ -231,6 +231,41 @@
       "operation": "audioSources.transport",
       "permission": "SessionControl",
       "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/soundLibrary/list",
+      "operation": "soundLibrary.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/soundLibrary/read",
+      "operation": "soundLibrary.read",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/soundboard/trigger",
+      "operation": "soundboard.trigger",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/soundboard/stop",
+      "operation": "soundboard.stop",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/soundboard/status",
+      "operation": "soundboard.status",
+      "permission": "Read",
+      "effect": "ReadOnly"
     },
     {
       "method": "POST",
@@ -574,6 +609,55 @@
       "operation": "applications.list",
       "permission": "Read",
       "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/obs/status",
+      "operation": "obs.status",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/obs/refresh",
+      "operation": "obs.refresh",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/obs/connect",
+      "operation": "obs.connect",
+      "permission": "IntegrationWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/obs/disconnect",
+      "operation": "obs.disconnect",
+      "permission": "IntegrationWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/obs/preview",
+      "operation": "obs.preview",
+      "permission": "IntegrationWrite",
+      "effect": "PlanOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/obs/apply",
+      "operation": "obs.apply",
+      "permission": "IntegrationWrite",
+      "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/obs/restore",
+      "operation": "obs.restore",
+      "permission": "IntegrationWrite",
+      "effect": "ExternalOperation"
     },
     {
       "method": "POST",

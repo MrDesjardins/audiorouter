@@ -32,6 +32,7 @@ const TOOL_GUIDES: Record<string, string> = {
   virtualCaptureSink: "virtual-capture-sink",
   testSignal: "test-signal",
   audioFile: "audio-file",
+  soundboard: "soundboard",
   recorder: "recorder",
   networkSend: "network-send",
   networkReceive: "network-receive",

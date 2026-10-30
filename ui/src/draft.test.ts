@@ -74,6 +74,7 @@ describe("output fan-out across library tools", () => {
     physicalOutput: true,
     testSignal: true,
     audioFile: true,
+    soundboard: true,
     mixer: true,
     gain: true,
     volume: true,
@@ -968,7 +969,7 @@ describe("independent paths", () => {
     bypass: false,
     parameters: {},
     ports: [
-      ...(["physicalInput", "testSignal", "audioFile"].includes(kind)
+      ...(["physicalInput", "testSignal", "audioFile", "soundboard"].includes(kind)
         ? []
         : [{ name: "in", direction: "input" as const, channels: 2 as const }]),
       { name: "out", direction: "output", channels: 2 as const },
@@ -1020,6 +1021,21 @@ describe("independent paths", () => {
       edges: [...single.edges, edge("e5", "voice", "monitor")],
     };
     expect(needsNativePaths(monitored)).toBe(true);
+  });
+
+  it("plays an Audio File or Soundboard that shares a Mixer on the multi-path worker", () => {
+    const route = (source: Session["nodes"][number]["kind"], other: Session["nodes"][number]["kind"]): Session => ({
+      ...twoPaths,
+      nodes: [node("a", source), node("b", other), node("mix", "mixer"), node("out", "physicalOutput")],
+      edges: [edge("e1", "a", "mix"), edge("e2", "b", "mix"), edge("e3", "mix", "out")],
+    });
+    for (const source of ["audioFile", "soundboard"] as const) {
+      for (const other of ["physicalInput", "testSignal", "audioFile", "soundboard"] as const) {
+        expect(needsNativePaths(route(source, other)), source + " + " + other).toBe(true);
+      }
+    }
+    // The single-endpoint chain still handles a microphone with a Test Signal.
+    expect(needsNativePaths(route("physicalInput", "testSignal"))).toBe(false);
   });
 
   it("uses the multi-path worker when a connection changes the channel width", () => {

@@ -25,6 +25,23 @@
   "CategoryIcon": "imgs/category",
   "Actions": [
     {
+      "UUID": "com.mrdesjardins.audiorouter.sound",
+      "Name": "Sound",
+      "Icon": "imgs/actions/sound",
+      "Tooltip": "Play one sound of a Soundboard tool, like pressing its button.",
+      "PropertyInspectorPath": "ui/sound.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "DisableAutomaticStates": true,
+      "SupportedInMultiActions": true,
+      "States": [
+        {
+          "Image": "imgs/actions/sound-key"
+        }
+      ]
+    },
+    {
       "UUID": "com.mrdesjardins.audiorouter.toggle",
       "Name": "Toggle",
       "Icon": "imgs/actions/toggle",

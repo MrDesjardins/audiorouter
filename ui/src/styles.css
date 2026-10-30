@@ -7877,10 +7877,10 @@ input[type="color"] {
   width: fit-content;
   margin-top: 0.3rem;
 }
-/* A node the last Play refused (nodeNotReady): a red outline and a tag over
+/* A node the last Play refused (nodeNotReady, or a device not chosen): a red dashed outline and a tag over
    the card's top edge; neither changes the card's size (UI-17). */
 .session-flow-canvas .react-flow__node.has-node-issue {
-  outline: 2px solid #ff6b6b;
+  outline: 2px dashed #ff6b6b;
   outline-offset: 2px;
 }
 .node-issue-tag {
@@ -7912,4 +7912,134 @@ input[type="color"] {
 }
 .theme-high-contrast .session-flow-canvas .react-flow__node.has-node-issue {
   outline-color: #fff;
+}
+
+/* Soundboard (SND-01 to SND-20). Rows have a fixed height and live state changes
+   colour and a transform only, so playing sounds never move the layout (UI-17). */
+.session-flow-canvas .react-flow__node.flow-node-soundboard:not(.has-layout-size) {
+  width: 208px !important;
+  min-width: 208px !important;
+}
+.soundboard-node {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.soundboard-button {
+  position: relative;
+  box-sizing: border-box;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  overflow: hidden;
+  text-align: left;
+  font-size: 11px;
+}
+.soundboard-button-caption {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soundboard-button-progress {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform: scaleX(0);
+  background: color-mix(in srgb, var(--accent, #65d1b5) 38%, transparent);
+  pointer-events: none;
+}
+.soundboard-button.is-playing {
+  border-color: var(--accent, #65d1b5);
+}
+.soundboard-add {
+  opacity: 0.8;
+}
+.soundboard-stop {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  font-size: 10px;
+}
+.soundboard-editor {
+  gap: 12px;
+}
+.soundboard-slot-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.soundboard-slot {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+.soundboard-slot-head {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: 8px;
+}
+.soundboard-slot-number {
+  font-weight: 600;
+}
+.soundboard-slot-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.soundboard-slot-state {
+  min-height: 1.2em;
+  text-align: right;
+  font-size: 11px;
+}
+.soundboard-slot-actions {
+  display: flex;
+  gap: 7px;
+}
+.soundboard-editor-status {
+  box-sizing: border-box;
+  height: 4.8rem;
+  overflow-y: auto;
+}
+.sound-picker {
+  width: min(38rem, 100%);
+}
+.sound-picker-list {
+  box-sizing: border-box;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  height: 18rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.sound-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3.6rem auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.sound-picker-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sound-picker-length {
+  text-align: right;
+  font-size: 11px;
+}
+.sound-picker-status {
+  box-sizing: border-box;
+  height: 2.6rem;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
 }

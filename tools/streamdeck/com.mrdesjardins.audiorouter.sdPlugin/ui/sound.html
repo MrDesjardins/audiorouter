@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="pi.css">
+  <script src="pi.js"></script>
+</head>
+<body>
+  <div id="connection-slot"></div>
+  <label>Soundboard tool (selected session)<select id="node"></select></label>
+  <label>Sound<select id="slot"></select></label>
+  <label>How it plays<select id="behavior"></select></label>
+  <label>Key name<input id="label" type="text" maxlength="40" placeholder="The sound's name from AudioRouter"></label>
+  <p class="hint">Add and change sounds in the Soundboard's properties. "Until pressed again" loops the sound until you press this key again; "While held" plays only while the key is down. Pressing the key starts the session if it is stopped.</p>
+  <script>
+    const node = document.getElementById("node"), slot = document.getElementById("slot");
+    const behavior = document.getElementById("behavior"), label = document.getElementById("label");
+    const BEHAVIORS = [
+      { value: "slot", label: "As set in AudioRouter" },
+      { value: "once", label: "Play once" },
+      { value: "loop", label: "Loop until pressed again" },
+      { value: "hold", label: "Play while held" },
+    ];
+    function fillSlots() {
+      const board = (PI.options?.nodes ?? []).find((item) => item.id === node.value);
+      const named = board?.slots ?? [];
+      fillSelect(slot, Array.from({ length: 9 }, (_, index) => {
+        const choice = named.find((item) => item.slot === index + 1);
+        return { value: String(index + 1), label: choice ? `${index + 1} · ${choice.label}` : `Sound ${index + 1}` };
+      }), String(PI.settings.slot ?? "1"));
+    }
+    function fillBehavior() {
+      fillSelect(behavior, BEHAVIORS, PI.settings.behavior ?? "slot");
+      if (document.activeElement !== label) label.value = PI.settings.label ?? "";
+    }
+    const previous = PI.onSettings;
+    PI.onSettings = (settings) => { previous(settings); fillSlots(); fillBehavior(); };
+    PI.onOptions = (options) => {
+      const boards = options.nodes.filter((item) => item.type === "soundboard");
+      fillSelect(node, boards.map((item) => ({ value: item.id, label: item.name })), PI.settings.nodeId, PI.settings.nodeName ? `${PI.settings.nodeName} (not found)` : undefined);
+      fillSlots();
+      fillBehavior();
+    };
+    node.addEventListener("change", () => {
+      const chosen = (PI.options?.nodes ?? []).find((item) => item.id === node.value);
+      PI.saveSettings({ nodeId: node.value, nodeName: chosen?.name ?? "", slot: Number(PI.settings.slot) || 1 });
+      fillSlots();
+    });
+    slot.addEventListener("change", () => PI.saveSettings({ slot: Number(slot.value) }));
+    behavior.addEventListener("change", () => PI.saveSettings({ behavior: behavior.value }));
+    label.addEventListener("input", () => PI.saveSettings({ label: label.value }));
+  </script>
+</body>
+</html>
