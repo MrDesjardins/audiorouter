@@ -3,9 +3,9 @@
 Status: proposed 2026-10-30 at the owner's request. Part of the
 [marketing plan](marketing.md), Phase 1. The owner posts from their own
 accounts; agents draft, prepare assets and make repository changes. Nothing in
-this file has been posted. Subreddit rules named below were **not** read from
-the subreddits (Reddit blocks automated reading); every rule is marked
-unverified until the owner reads the sidebar.
+this file has been posted. The r/vibecoding rules below were pasted by the
+owner on 2026-10-30 (verified). Rules for every other subreddit were **not**
+read (Reddit blocks automated reading) and stay marked unverified.
 
 ## Objective
 
@@ -70,14 +70,21 @@ What to expect, so it is not judged unfairly: this audience builds apps; few
 run a Windows audio router. Expect comments, stars and developer feedback, and
 few installs. Do not compare its downloads with r/software's.
 
-**Verify before posting (unverified, from third-party mirrors only, May 2026
-and earlier):** r/vibecoding may require a flair, may restrict self-promotion
-to a thread or a "showcase" flair, and may have account-age or karma limits.
-Open the sidebar and rules, and if they say "promo thread only", comment there
-instead. Do not post if the sub bans links; use a text post and put the repo
-in the first comment.
+**r/vibecoding rules (read by the owner 2026-10-30) and what each means here:**
 
-**Alternatives, in order, if r/vibecoding rules say no:**
+| Rule | What it says | Consequence for this post |
+| --- | --- | --- |
+| 1. No low effort posts | Keep AI use to a minimum; AI may help shape thoughts, but fully generated text is removed. "A place for humans who use AI to code" | **The draft below was written by an AI agent, so it must not be posted as written.** Treat it as a fact outline and write the post yourself, in your own sentences. This is the largest risk to the post |
+| 2. Vibe coding dev tools must be approved | Vibe-coding *startups and dev tools* must be approved through the Vibe Coding community on X before one introduction post | AudioRouter is an audio app built with AI, not a vibe-coding tool, so rule 3 applies, not rule 2. If a moderator says otherwise, do not argue or go around them; skip the sub and use an alternative |
+| 3. No shilling | Vibe-coded projects are welcome if the post teaches how it was built: **the tools you used, your process and workflow, code, design or build insights**. A bare link is removed. Format: "here's the project, here's how I made it" | The post is the build story with the project as the example, which is the plan's angle. Tools, process and at least one concrete insight are **required**, so the **[confirm]** lines cannot be left vague. Put the link after the story, not first |
+| 4. No vibe coding pessimism | Constructive critique only; gatekeeping, insults and fundamental pessimism about building software with little code review earn a permanent ban | Describe your own process and its guardrails without implying other people's way is wrong. Say "what worked for me", not "what stops vibe coding from failing". Title option 1 is the riskiest on this point; prefer 2 or 3 |
+| 5. No assholes | | Answer harsh comments once, politely, then stop |
+
+Flair, karma and account-age requirements were not in the pasted rules; the
+submit screen will show any flair that is required. The sub says it will add
+flairs for approved dev tools, which do not apply to this project.
+
+**Alternatives if a moderator removes it or the rules change:**
 
 | Option | Notes (all unverified) |
 | --- | --- |
@@ -101,9 +108,9 @@ in the first comment.
 
 | Step | Who | Done when |
 | --- | --- | --- |
-| 1. Read the r/vibecoding sidebar: promo rule, flair, thread, karma, link policy | Owner | The choice (post, promo thread, or alternative) is written in "Evidence" below |
+| 1. Read the r/vibecoding rules | Owner | Done 2026-10-30: project posts allowed under rule 3 with build details; no approval needed for an app (rule 2 is for dev tools) |
 | 2. Take the simple screenshot: one Application source → EQ → headphones, no other nodes, dark theme, 1600 px wide | Owner (an agent must not launch a second shell; see AGENTS lessons) | File saved as `docs/images/simple-route-app-eq-headphones.png` |
-| 3. Rewrite the draft below in your own voice; fill the **[confirm]** lines; read the repository README once as a stranger | Owner | The post contains nothing you would not say aloud |
+| 3. Write the post yourself from the outline below (rule 1: no generated text); fill every **[confirm]** line with your real tools, workflow and one failure; read the README once as a stranger | Owner | The post contains nothing you would not say aloud, and names the tools, the process and one concrete build insight (rule 3) |
 | 4. Post on a weekday morning in US Eastern time if possible; if posting this afternoon, stay at least 3 hours | Owner | Post URL recorded |
 | 5. First comment (details and honest limits) within 2 minutes | Owner | Posted |
 | 6. Answer every comment for 3 hours using the reply bank, in your own words | Owner | No unanswered question |
@@ -114,11 +121,16 @@ Optional, same day: the dev.to cross-post (steps in
 [marketing-phase1-posts.md](marketing-phase1-posts.md)), after the Reddit post,
 not before, so replies there are not neglected.
 
-## Draft post (review and rewrite in your own words)
+## Draft post: a fact outline, not text to paste
 
-The r/software feedback applies here too: prose that sounds generated will be
-noticed in exactly this community. Shorten, use your own examples, and cut any
-sentence you would not say to a friend.
+Rule 1 removes "fully generated AI slop", and this draft was generated by an
+agent. Use it for the facts and structure only. Close it, then write each
+section in your own sentences, with your own examples, and cut anything you
+would not say to a friend. You may use AI to tidy your own draft, lightly. The
+r/software feedback ("copy felt AI-generated") points the same way.
+
+Rule 3 requires the tools, the process and a build insight, so the post cannot
+lead with the project or end with just a link.
 
 **Title options** (pick one):
 
@@ -273,7 +285,8 @@ owner's approval.
 
 | Risk | Mitigation |
 | --- | --- |
-| Moderators remove a promotional post | Read rules first; use a promo thread if required; disclose authorship; never repost |
+| Removed under rule 1 (generated text) or rule 3 (no build details) | Write it yourself; name tools, process and one real insight; the link comes last. If removed, do not repost: ask the moderators politely or move on |
+| Moderators remove a promotional post | Disclose authorship; never repost; use a promo thread where one exists |
 | The build-story invites hostility about AI code | Say AI use first, show the verification (specs, tests, evidence), admit what is unqualified; don't argue |
 | Visitors install 0.0.24, hit a first-run problem and leave | The download page explains SmartScreen; stay in the thread; Discussions for help |
 | Stale claims (Soundboard, "signed", test counts) | Only claim what the release notes and repository show today |
