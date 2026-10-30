@@ -681,3 +681,15 @@
     font-size: 0.75rem;
   }
 }
+.guide-recording video {
+  display: block;
+  width: min(100%, 360px);
+  height: auto;
+  aspect-ratio: 9 / 16;
+  background: #101721;
+  border-radius: 12px;
+}
+
+#in-the-app {
+  scroll-margin-top: 90px;
+}

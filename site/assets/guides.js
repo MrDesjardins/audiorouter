@@ -50,6 +50,27 @@
         audio,
       );
     const rangeInputs = [...document.querySelectorAll("[data-demo-key]")];
+    const recordings = [...document.querySelectorAll(".guide-recording video")];
+    for (const video of recordings) {
+      video.addEventListener("play", () => {
+        demo.stop();
+        for (const other of recordings) if (other !== video) other.pause();
+      });
+    }
+    const recordingTransportObserver = new MutationObserver(() => {
+      if (
+        document.querySelector("[data-guide-demo]").dataset.audioState ===
+        "playing"
+      )
+        for (const video of recordings) video.pause();
+    });
+    recordingTransportObserver.observe(
+      document.querySelector("[data-guide-demo]"),
+      {
+        attributes: true,
+        attributeFilter: ["data-audio-state"],
+      },
+    );
     const updateRangeInputs = () => {
       rangeInputs.forEach((input) => {
         const key = input.dataset.demoKey;
@@ -102,6 +123,7 @@
     window.addEventListener(
       "pagehide",
       () => {
+        recordingTransportObserver.disconnect();
         playback?.destroy();
         demo.destroy();
         audio?.destroy();

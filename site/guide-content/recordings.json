@@ -1,0 +1,495 @@
+{
+  "gain": [
+    {
+      "title": "Gain in the app",
+      "video": "assets/tool-guides/gain-demo.mp4",
+      "poster": "assets/tool-guides/gain-demo.jpg",
+      "description": "Gain changes from 0 to -60 dB at 3.2 seconds. More negative values make it quieter. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "gainDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/gain-overview.mp4",
+      "poster": "assets/tool-guides/gain-overview.jpg",
+      "description": "A silent recording of the real Gain Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "volume": [
+    {
+      "title": "Volume in the app",
+      "video": "assets/tool-guides/volume-demo.mp4",
+      "poster": "assets/tool-guides/volume-demo.jpg",
+      "description": "Volume changes from 100 to 0 % at 3.2 seconds. 0% silences this output. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "percent"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/volume-overview.mp4",
+      "poster": "assets/tool-guides/volume-overview.jpg",
+      "description": "A silent recording of the real Volume Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "bassTreble": [
+    {
+      "title": "Bass in the app",
+      "video": "assets/tool-guides/bassTreble-demo.mp4",
+      "poster": "assets/tool-guides/bassTreble-demo.jpg",
+      "description": "Bass changes from 0 to -12 dB at 3.2 seconds. Cuts low frequencies. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "bassDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/bassTreble-overview.mp4",
+      "poster": "assets/tool-guides/bassTreble-overview.jpg",
+      "description": "A silent recording of the real Bass & Treble Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "graphicEq": [
+    {
+      "title": "31.5 Hz in the app",
+      "video": "assets/tool-guides/graphicEq-demo.mp4",
+      "poster": "assets/tool-guides/graphicEq-demo.jpg",
+      "description": "31.5 Hz changes from 0 to -18 dB at 3.2 seconds. Cut a little to reduce floor, handling or mechanical rumble. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "band0Db"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/graphicEq-overview.mp4",
+      "poster": "assets/tool-guides/graphicEq-overview.jpg",
+      "description": "A silent recording of the real Graphic EQ Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "parametricEq": [
+    {
+      "title": "Frequency · band 1 in the app",
+      "video": "assets/tool-guides/parametricEq-demo.mp4",
+      "poster": "assets/tool-guides/parametricEq-demo.jpg",
+      "description": "Frequency · band 1 changes from 1000 to 20 Hz at 3.2 seconds. Moves it toward lower-pitched content. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "band0FrequencyHz"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/parametricEq-overview.mp4",
+      "poster": "assets/tool-guides/parametricEq-overview.jpg",
+      "description": "A silent recording of the real Advanced EQ Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "compressor": [
+    {
+      "title": "Threshold in the app",
+      "video": "assets/tool-guides/compressor-demo.mp4",
+      "poster": "assets/tool-guides/compressor-demo.jpg",
+      "description": "Threshold changes from -18 to -60 dBFS at 3.2 seconds. Lower values compress more of the signal. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "thresholdDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/compressor-overview.mp4",
+      "poster": "assets/tool-guides/compressor-overview.jpg",
+      "description": "A silent recording of the real Compressor Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "gate": [
+    {
+      "title": "Threshold in the app",
+      "video": "assets/tool-guides/gate-demo.mp4",
+      "poster": "assets/tool-guides/gate-demo.jpg",
+      "description": "Threshold changes from -45 to -80 dBFS at 3.2 seconds. Opens for quieter sound and potentially room noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "thresholdDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/gate-overview.mp4",
+      "poster": "assets/tool-guides/gate-overview.jpg",
+      "description": "A silent recording of the real Gate / Expander Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "limiter": [
+    {
+      "title": "Ceiling in the app",
+      "video": "assets/tool-guides/limiter-demo.mp4",
+      "poster": "assets/tool-guides/limiter-demo.jpg",
+      "description": "Ceiling changes from -1 to -12 dBFS at 3.2 seconds. Leaves more headroom. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "ceilingDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/limiter-overview.mp4",
+      "poster": "assets/tool-guides/limiter-overview.jpg",
+      "description": "A silent recording of the real Limiter Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "delay": [
+    {
+      "title": "Delay in the app",
+      "video": "assets/tool-guides/delay-demo.mp4",
+      "poster": "assets/tool-guides/delay-demo.jpg",
+      "description": "Delay changes from 0 to 1000 ms at 3.2 seconds. Moves sound later. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "delayMs"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/delay-overview.mp4",
+      "poster": "assets/tool-guides/delay-overview.jpg",
+      "description": "A silent recording of the real Sync (delay) Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "pitch": [
+    {
+      "title": "Semitones in the app",
+      "video": "assets/tool-guides/pitch-demo.mp4",
+      "poster": "assets/tool-guides/pitch-demo.jpg",
+      "description": "Semitones changes from 0 to -12 semitones at 3.2 seconds. Lowers pitch. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "semitones"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/pitch-overview.mp4",
+      "poster": "assets/tool-guides/pitch-overview.jpg",
+      "description": "A silent recording of the real Pitch Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "dehum": [
+    {
+      "title": "Mains frequency in the app",
+      "video": "assets/tool-guides/dehum-demo.mp4",
+      "poster": "assets/tool-guides/dehum-demo.jpg",
+      "description": "Mains frequency changes from 60 to 45 Hz at 3.2 seconds. Moves the series lower. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "frequencyHz"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/dehum-overview.mp4",
+      "poster": "assets/tool-guides/dehum-overview.jpg",
+      "description": "A silent recording of the real Dehum Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "declick": [
+    {
+      "title": "Threshold in the app",
+      "video": "assets/tool-guides/declick-demo.mp4",
+      "poster": "assets/tool-guides/declick-demo.jpg",
+      "description": "Threshold changes from 50 to 0 % at 3.2 seconds. Detects more subtle clicks. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "thresholdPercent"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/declick-overview.mp4",
+      "poster": "assets/tool-guides/declick-overview.jpg",
+      "description": "A silent recording of the real Declick Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "denoise": [
+    {
+      "title": "Reduction in the app",
+      "video": "assets/tool-guides/denoise-demo.mp4",
+      "poster": "assets/tool-guides/denoise-demo.jpg",
+      "description": "Reduction changes from 70 to 0 % at 3.2 seconds. Retains more original sound. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "reductionPercent"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/denoise-overview.mp4",
+      "poster": "assets/tool-guides/denoise-overview.jpg",
+      "description": "A silent recording of the real Denoise Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "speechDenoise": [
+    {
+      "title": "Strength in the app",
+      "video": "assets/tool-guides/speechDenoise-demo.mp4",
+      "poster": "assets/tool-guides/speechDenoise-demo.jpg",
+      "description": "Strength changes from 70 to 0 % at 3.2 seconds. Retains more of the original signal. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "strengthPercent"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/speechDenoise-overview.mp4",
+      "poster": "assets/tool-guides/speechDenoise-overview.jpg",
+      "description": "A silent recording of the real Speech Denoise Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "spectralGate": [
+    {
+      "title": "Threshold above noise in the app",
+      "video": "assets/tool-guides/spectralGate-demo.mp4",
+      "poster": "assets/tool-guides/spectralGate-demo.jpg",
+      "description": "Threshold above noise changes from 3 to -20 dB at 3.2 seconds. Lets more frequency regions pass. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "thresholdDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/spectralGate-overview.mp4",
+      "poster": "assets/tool-guides/spectralGate-overview.jpg",
+      "description": "A silent recording of the real Spectral Gate Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "firFilter": [
+    {
+      "title": "Wet mix in the app",
+      "video": "assets/tool-guides/firFilter-demo.mp4",
+      "poster": "assets/tool-guides/firFilter-demo.jpg",
+      "description": "Wet mix changes from 100 to 0 % at 3.2 seconds. Includes more dry sound. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "wetPercent"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/firFilter-overview.mp4",
+      "poster": "assets/tool-guides/firFilter-overview.jpg",
+      "description": "A silent recording of the real FIR Filter Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "mute": [
+    {
+      "title": "Muted in the app",
+      "video": "assets/tool-guides/mute-demo.mp4",
+      "poster": "assets/tool-guides/mute-demo.jpg",
+      "description": "Muted changes from false to true at 3.2 seconds. Silences the branch passing through this node. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "muted"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/mute-overview.mp4",
+      "poster": "assets/tool-guides/mute-overview.jpg",
+      "description": "A silent recording of the real Mute Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "inputSwitch": [
+    {
+      "title": "Active input in the app",
+      "video": "assets/tool-guides/inputSwitch-demo.mp4",
+      "poster": "assets/tool-guides/inputSwitch-demo.jpg",
+      "description": "Active input changes from a to b at 3.2 seconds. Which explicitly wired port is heard. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "selected"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/inputSwitch-overview.mp4",
+      "poster": "assets/tool-guides/inputSwitch-overview.jpg",
+      "description": "A silent recording of the real Input Switch Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "outputSwitch": [
+    {
+      "title": "Active output in the app",
+      "video": "assets/tool-guides/outputSwitch-demo.mp4",
+      "poster": "assets/tool-guides/outputSwitch-demo.jpg",
+      "description": "Active output changes from a to b at 3.2 seconds. Which output port receives audio. The control appears briefly, then the view returns to the top visual while the synthetic audio continues. You hear output A: it becomes silent when the signal moves to B.",
+      "property": "selected"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/outputSwitch-overview.mp4",
+      "poster": "assets/tool-guides/outputSwitch-overview.jpg",
+      "description": "A silent recording of the real Output Switch Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "duck": [
+    {
+      "title": "Trigger level in the app",
+      "video": "assets/tool-guides/duck-demo.mp4",
+      "poster": "assets/tool-guides/duck-demo.jpg",
+      "description": "Trigger level changes from -35 to -80 dBFS at 3.2 seconds. Engages for quieter trigger sound, potentially room noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "thresholdDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/duck-overview.mp4",
+      "poster": "assets/tool-guides/duck-overview.jpg",
+      "description": "A silent recording of the real Duck Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "timeShift": [
+    {
+      "title": "Rewind buffer in the app",
+      "video": "assets/tool-guides/timeShift-demo.mp4",
+      "poster": "assets/tool-guides/timeShift-demo.jpg",
+      "description": "Rewind buffer changes from 60 to 10 s at 3.2 seconds. Keeps less history. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "bufferSeconds"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/timeShift-overview.mp4",
+      "poster": "assets/tool-guides/timeShift-overview.jpg",
+      "description": "A silent recording of the real Time Shift Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "mixer": [
+    {
+      "title": "Input volume in the app",
+      "video": "assets/tool-guides/mixer-demo.mp4",
+      "poster": "assets/tool-guides/mixer-demo.jpg",
+      "description": "Input volume changes from 1 to 0 at 3.2 seconds. Lowers it; 0% removes its contribution. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "inputVolume:input"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/mixer-overview.mp4",
+      "poster": "assets/tool-guides/mixer-overview.jpg",
+      "description": "A silent recording of the real Mixer Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "meter": [
+    {
+      "title": "Live level in the app",
+      "video": "assets/tool-guides/meter-demo.mp4",
+      "poster": "assets/tool-guides/meter-demo.jpg",
+      "description": "A synthetic signal passes through the real processor. Watch the live readings rise and fall with the sound.",
+      "property": null
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/meter-overview.mp4",
+      "poster": "assets/tool-guides/meter-overview.jpg",
+      "description": "A silent recording of the real Meter Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "funVoiceChanger": [
+    {
+      "title": "Noise gate in the app",
+      "video": "assets/tool-guides/funVoiceChanger-demo.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger-demo.jpg",
+      "description": "Noise gate changes from -90 to -20 dBFS at 3.2 seconds. Ignores more room and keyboard noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "gateDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/funVoiceChanger-overview.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger-overview.jpg",
+      "description": "A silent recording of the real Fun Voice Changer Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "physicalInput": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/physicalInput-overview.mp4",
+      "poster": "assets/tool-guides/physicalInput-overview.jpg",
+      "description": "A silent recording of the real Physical Input Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "physicalOutput": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/physicalOutput-overview.mp4",
+      "poster": "assets/tool-guides/physicalOutput-overview.jpg",
+      "description": "A silent recording of the real Physical Output Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "applicationCapture": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/applicationCapture-overview.mp4",
+      "poster": "assets/tool-guides/applicationCapture-overview.jpg",
+      "description": "A silent recording of the real Application Capture Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "endpointLoopback": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/endpointLoopback-overview.mp4",
+      "poster": "assets/tool-guides/endpointLoopback-overview.jpg",
+      "description": "A silent recording of the real Endpoint Loopback Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "virtualRenderSource": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/virtualRenderSource-overview.mp4",
+      "poster": "assets/tool-guides/virtualRenderSource-overview.jpg",
+      "description": "A silent recording of the real Virtual Render Source Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "virtualCaptureSink": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/virtualCaptureSink-overview.mp4",
+      "poster": "assets/tool-guides/virtualCaptureSink-overview.jpg",
+      "description": "A silent recording of the real Virtual Capture Sink Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "testSignal": [
+    {
+      "title": "Tone frequency in the app",
+      "video": "assets/tool-guides/testSignal-demo.mp4",
+      "poster": "assets/tool-guides/testSignal-demo.jpg",
+      "description": "Tone frequency changes from 440 to 880 Hz at 3.2 seconds. Makes the sine wave oscillate faster and sound higher. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "frequencyHz"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/testSignal-overview.mp4",
+      "poster": "assets/tool-guides/testSignal-overview.jpg",
+      "description": "A silent recording of the real Test Signal Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "audioFile": [
+    {
+      "title": "Loop in the app",
+      "video": "assets/tool-guides/audioFile-demo.mp4",
+      "poster": "assets/tool-guides/audioFile-demo.jpg",
+      "description": "Loop changes from false to true at 3.2 seconds. Repeat the imported audio when it reaches the end. The control appears briefly, then the view returns to the top visual while the synthetic audio continues. This short example shows the Loop setting; it ends before the full source repeats.",
+      "property": "loop"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/audioFile-overview.mp4",
+      "poster": "assets/tool-guides/audioFile-overview.jpg",
+      "description": "A silent recording of the real Audio File Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "soundboard": [
+    {
+      "title": "Level · button 1 in the app",
+      "video": "assets/tool-guides/soundboard-demo.mp4",
+      "poster": "assets/tool-guides/soundboard-demo.jpg",
+      "description": "Level · button 1 changes from 0 to -24 dB at 3.2 seconds. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "property": "slot1GainDb"
+    },
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/soundboard-overview.mp4",
+      "poster": "assets/tool-guides/soundboard-overview.jpg",
+      "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "recorder": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/recorder-overview.mp4",
+      "poster": "assets/tool-guides/recorder-overview.jpg",
+      "description": "A silent recording of the real Recorder Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "networkSend": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/networkSend-overview.mp4",
+      "poster": "assets/tool-guides/networkSend-overview.jpg",
+      "description": "A silent recording of the real Network Send Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "networkReceive": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/networkReceive-overview.mp4",
+      "poster": "assets/tool-guides/networkReceive-overview.jpg",
+      "description": "A silent recording of the real Network Receive Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "plugin": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/plugin-overview.mp4",
+      "poster": "assets/tool-guides/plugin-overview.jpg",
+      "description": "A silent recording of the real VST Plugin Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ],
+  "group": [
+    {
+      "title": "Browse Properties",
+      "video": "assets/tool-guides/group-overview.mp4",
+      "poster": "assets/tool-guides/group-overview.jpg",
+      "description": "A silent recording of the real Visual Group Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+    }
+  ]
+}

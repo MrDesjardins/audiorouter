@@ -121,6 +121,15 @@ recorded below.
 
 ### Owner revision after Gate review — 2026-10-29
 
+Latest execution (2026-10-30): [all-tool recording evidence](evidence/2026-10-30-all-tool-videos.md)
+and [38-tool review gallery](evidence/tool-guide-preview/all-tools/index.html).
+All 38 tools now have Properties-only portrait videos; 27 also have synthetic
+production-audio examples. All 65 final site videos pass Firefox playback;
+all audible examples have nonzero measured output. Generated guide pages now
+include the recordings. Full per-property coverage is still open (26 recorded,
+48 configuration exemptions, 177 pending), so this is not completion of the
+entire feature contract. PR #90 remains a draft pending that scope.
+
 Review update (2026-10-30): the owner authorized a PR. A reviewable local gallery
 is committed at [Gate preview](evidence/tool-guide-preview/index.html), including
 all three portrait MP4s and posters. These are framing previews: graph rebuilds

@@ -4,8 +4,12 @@
 //! It writes raw interleaved f32 input/output plus telemetry so the real
 //! Properties panel can replay the same offline processing timeline.
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
-use audiorouter_engine::{compile_session_at_sample_rate, AudioBlock, RuntimeGeneration};
+use audiorouter_engine::{
+    compile_session_at_sample_rate_with_plugins_and_audio, AudioBlock, DecodedAudio,
+    RuntimeGeneration,
+};
 use serde_json::{json, Map, Value};
+use std::{collections::HashMap, sync::Arc};
 use std::{env, fs, path::PathBuf};
 
 const RATE: u32 = 48_000;
@@ -13,6 +17,99 @@ const CHANNELS: usize = 2;
 const QUANTUM: usize = 128;
 const DURATION_SECONDS: usize = 8;
 const CHANGE_FRAME: usize = RATE as usize * 16 / 5;
+
+enum GuideRuntime {
+    Linear(audiorouter_engine::RuntimeGraph),
+    Native(NativeRender),
+}
+
+struct NativeRender {
+    prepared: Option<audiorouter_engine::CompiledPathSet>,
+    runtime: Option<audiorouter_engine::RealtimeMixerFanout>,
+    outputs: Vec<audiorouter_engine::AudioBlockRing>,
+}
+
+impl GuideRuntime {
+    fn spectrum(&self, id: &EntityId) -> Option<audiorouter_engine::SpectrumLevels> {
+        match self {
+            Self::Linear(graph) => graph.spectrum_levels_for_node(id),
+            Self::Native(native) => native.runtime.as_ref()?.spectrum_levels_for_node(id),
+        }
+    }
+    fn process(&mut self, block: &mut AudioBlock, start: usize) {
+        match self {
+            Self::Linear(graph) => {
+                graph.process(block);
+            }
+            Self::Native(native) => {
+                if native.runtime.is_none() {
+                    let paths = native.prepared.take().unwrap();
+                    let channels = vec![CHANNELS; paths.input_node_ids().len()];
+                    native.runtime = Some(
+                        audiorouter_engine::RealtimeMixerFanout::from_paths(
+                            paths, 4, &channels, QUANTUM,
+                        )
+                        .unwrap(),
+                    );
+                }
+                let runtime = native.runtime.as_mut().unwrap();
+                runtime.set_privacy_muted(false);
+                for index in 0..runtime.input_count() {
+                    let mut source = AudioBlock::new(CHANNELS, QUANTUM).unwrap();
+                    let frequency = if index == 0 { 110.0 } else { 880.0 };
+                    let samples: Vec<f32> = (0..QUANTUM)
+                        .flat_map(|frame| {
+                            let value = 0.08
+                                * ((start + frame) as f32 / RATE as f32
+                                    * std::f32::consts::TAU
+                                    * frequency)
+                                    .sin();
+                            [value, value]
+                        })
+                        .collect();
+                    source.copy_from_interleaved(&samples).unwrap();
+                    assert!(runtime
+                        .try_submit_input(index, runtime.generation(), &source)
+                        .unwrap());
+                }
+                let refs: Vec<_> = native.outputs.iter().collect();
+                assert_eq!(runtime.process_once(&refs).unwrap(), native.outputs.len());
+                for (index, ring) in native.outputs.iter().enumerate() {
+                    let output = ring.try_receive().unwrap();
+                    if index == 0 {
+                        let mut samples = vec![0.0; QUANTUM * CHANNELS];
+                        output.copy_to_interleaved(&mut samples).unwrap();
+                        block.copy_from_interleaved(&samples).unwrap();
+                    }
+                    ring.try_recycle(output).unwrap();
+                }
+            }
+        }
+    }
+
+    fn processor_telemetry_for_node(
+        &self,
+        id: &EntityId,
+    ) -> Option<audiorouter_engine::ProcessorTelemetry> {
+        match self {
+            Self::Linear(graph) => graph.processor_telemetry_for_node(id),
+            Self::Native(native) => native.runtime.as_ref()?.processor_telemetry_for_node(id),
+        }
+    }
+
+    fn replace(&mut self, mut next: Self) {
+        if let (Self::Native(current), Self::Native(candidate)) = (&mut *self, &mut next) {
+            current
+                .runtime
+                .as_mut()
+                .unwrap()
+                .replace_paths(candidate.prepared.take().unwrap())
+                .unwrap();
+        } else {
+            *self = next;
+        }
+    }
+}
 
 fn fixture(name: &str) -> Vec<f32> {
     let mut samples = Vec::with_capacity(RATE as usize * DURATION_SECONDS * CHANNELS);
@@ -35,8 +132,13 @@ fn fixture(name: &str) -> Vec<f32> {
         .iter()
         .any(|(start, end)| time >= *start && time < *end);
         let sample = match name {
-            "speech-bursts" => {
-                let noise = white * 0.00045;
+            "speech-bursts" | "noisy-speech" => {
+                let noise = white
+                    * if name == "noisy-speech" {
+                        0.008
+                    } else {
+                        0.00045
+                    };
                 if speaking {
                     let phase = time * std::f32::consts::TAU;
                     let syllable =
@@ -125,12 +227,8 @@ fn route_node(id: &str, kind: NodeKind, direction: PortDirection) -> Node {
     }
 }
 
-fn compile(
-    kind: NodeKind,
-    parameters: Map<String, Value>,
-    revision: u64,
-) -> audiorouter_engine::RuntimeGraph {
-    let processor = Node {
+fn compile(kind: NodeKind, parameters: Map<String, Value>, revision: u64) -> GuideRuntime {
+    let mut processor = Node {
         id: EntityId::new("tool"),
         kind,
         type_version: 1,
@@ -160,7 +258,19 @@ fn compile(
         matrix: vec![1.0, 0.0, 0.0, 1.0],
         enabled: true,
     };
-    let session = Session {
+    if kind == NodeKind::OutputSwitch {
+        processor.ports[1].name = "a".into();
+        processor.ports.push(Port {
+            name: "b".into(),
+            direction: PortDirection::Output,
+            channels: CHANNELS as u8,
+        });
+    }
+    let mut output_edge = edge("tool-to-output", "tool", "output");
+    if kind == NodeKind::OutputSwitch {
+        output_edge.source_port = "a".into();
+    }
+    let mut session = Session {
         id: EntityId::new("tool-guide-render"),
         name: format!("Synthetic {} guide fixture", kind.type_name()),
         schema_version: 1,
@@ -170,12 +280,98 @@ fn compile(
             processor,
             route_node("output", NodeKind::PhysicalOutput, PortDirection::Input),
         ],
-        edges: vec![
-            edge("input-to-tool", "input", "tool"),
-            edge("tool-to-output", "tool", "output"),
-        ],
+        edges: vec![edge("input-to-tool", "input", "tool"), output_edge],
     };
-    compile_session_at_sample_rate(&session, RuntimeGeneration::new(revision), RATE).unwrap()
+    let mut media = HashMap::new();
+    if kind == NodeKind::FirFilter {
+        media.insert(
+            "lib:guide-impulse".to_string(),
+            Arc::new(DecodedAudio {
+                channels: 1,
+                sample_rate_hz: RATE,
+                samples: vec![1.0 / 32.0; 32].into(),
+            }),
+        );
+    }
+    if kind == NodeKind::InputSwitch {
+        session.nodes[1].ports[0].name = "a".into();
+        session.nodes[1].ports.push(Port {
+            name: "b".into(),
+            direction: PortDirection::Input,
+            channels: CHANNELS as u8,
+        });
+        session.edges[0].destination_port = "a".into();
+        session.nodes.push(route_node(
+            "input-b",
+            NodeKind::PhysicalInput,
+            PortDirection::Output,
+        ));
+        let mut second = edge("input-b-to-tool", "input-b", "tool");
+        second.destination_port = "b".into();
+        session.edges.push(second);
+    }
+    if kind == NodeKind::OutputSwitch {
+        session.nodes.push(route_node(
+            "output-b",
+            NodeKind::PhysicalOutput,
+            PortDirection::Input,
+        ));
+        let mut second = edge("tool-to-output-b", "tool", "output-b");
+        second.source_port = "b".into();
+        session.edges.push(second);
+    }
+    if matches!(kind, NodeKind::InputSwitch | NodeKind::OutputSwitch) {
+        let paths = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
+            &session,
+            RuntimeGeneration::new(1),
+            &HashMap::new(),
+            &media,
+        )
+        .unwrap();
+        let outputs = paths
+            .output_node_ids()
+            .iter()
+            .map(|_| audiorouter_engine::AudioBlockRing::new(4, CHANNELS, QUANTUM).unwrap())
+            .collect();
+        return GuideRuntime::Native(NativeRender {
+            prepared: Some(paths),
+            runtime: None,
+            outputs,
+        });
+    }
+    if matches!(kind, NodeKind::AudioFile | NodeKind::Soundboard) {
+        session.nodes.remove(0);
+        session.edges.remove(0);
+        session.nodes[0]
+            .ports
+            .retain(|p| p.direction == PortDirection::Output);
+        media.insert(
+            "lib:guide-fixture".to_string(),
+            Arc::new(DecodedAudio {
+                channels: CHANNELS,
+                sample_rate_hz: RATE,
+                samples: fixture("level-bursts").into(),
+            }),
+        );
+    }
+    let graph = compile_session_at_sample_rate_with_plugins_and_audio(
+        &session,
+        RuntimeGeneration::new(revision),
+        RATE,
+        &HashMap::new(),
+        &media,
+    )
+    .unwrap();
+    if let Some(source) = graph.audio_file_source_for_node(&EntityId::new("tool")) {
+        source.play();
+    }
+    if let Some(source) = graph.test_signal_source_for_node(&EntityId::new("tool")) {
+        source.play();
+    }
+    if let Some(source) = graph.soundboard_for_node(&EntityId::new("tool")) {
+        source.trigger(0);
+    }
+    GuideRuntime::Linear(graph)
 }
 
 fn parse_parameters(text: &str) -> Value {
@@ -235,15 +431,37 @@ fn main() {
     let fixture_name = args.next().expect("fixture is required");
     let before_path = PathBuf::from(args.next().expect("before parameters file is required"));
     let after_path = PathBuf::from(args.next().expect("after parameters file is required"));
-    let before_value = parse_parameters(&fs::read_to_string(before_path).unwrap());
-    let after_value = parse_parameters(&fs::read_to_string(after_path).unwrap());
+    let mut before_value = parse_parameters(&fs::read_to_string(before_path).unwrap());
+    let mut after_value = parse_parameters(&fs::read_to_string(after_path).unwrap());
     let kind: NodeKind = serde_json::from_str(&format!("\"{kind_name}\""))
         .expect("kind must be a NodeKind serde name");
     fs::create_dir_all(&out).unwrap();
     let input = fixture(&fixture_name);
+    if matches!(kind, NodeKind::Denoise | NodeKind::SpectralGate) {
+        let mut learning = parameter_map(&before_value);
+        learning.insert("learning".into(), json!(true));
+        let mut learner = compile(kind, learning, 99);
+        let mut block = AudioBlock::new(CHANNELS, QUANTUM).unwrap();
+        for start in (0..RATE as usize / 2 - QUANTUM).step_by(QUANTUM) {
+            block
+                .copy_from_interleaved(&input[start * CHANNELS..(start + QUANTUM) * CHANNELS])
+                .unwrap();
+            learner.process(&mut block, start);
+        }
+        if let GuideRuntime::Linear(graph) = &learner {
+            let profile = graph
+                .noise_profile_for_node(&EntityId::new("tool"))
+                .expect("noise-only warmup must produce a profile");
+            for value in [&mut before_value, &mut after_value] {
+                value["noiseProfile"] = json!(profile);
+                value["learning"] = json!(false);
+            }
+        }
+    }
     write_f32(out.join("input.f32le"), &input);
     let mut output = vec![0.0_f32; input.len()];
     let mut telemetry = Vec::new();
+    let mut spectra = Vec::new();
     let mut meter_samples = Vec::new();
     let mut block = AudioBlock::new(CHANNELS, QUANTUM).unwrap();
     let frames = RATE as usize * DURATION_SECONDS;
@@ -252,7 +470,7 @@ fn main() {
     let mut next_telemetry_frame = 0;
     for start in (0..frames).step_by(QUANTUM) {
         if !changed && start >= CHANGE_FRAME {
-            graph = compile(kind, parameter_map(&after_value), 2);
+            graph.replace(compile(kind, parameter_map(&after_value), 2));
             changed = true;
         }
         let input_start = start * CHANNELS;
@@ -260,13 +478,16 @@ fn main() {
         block
             .copy_from_interleaved(&input[input_start..input_end])
             .unwrap();
-        graph.process(&mut block);
+        graph.process(&mut block, start);
         block
             .copy_to_interleaved(&mut output[input_start..input_end])
             .unwrap();
         meter_samples.push(meter_sample(&output[input_start..input_end], start));
         let end_frame = start + QUANTUM;
         if end_frame >= next_telemetry_frame {
+            if let Some(levels) = graph.spectrum(&EntityId::new("tool")) {
+                spectra.push(json!({ "atSeconds": end_frame as f64 / RATE as f64, "levelsDb": levels.to_vec(), "bandFrequenciesHz": audiorouter_engine::spectrum_band_frequencies_hz().to_vec() }));
+            }
             if let Some(value) = graph.processor_telemetry_for_node(&EntityId::new("tool")) {
                 telemetry.push(json!({
                     "atSeconds": end_frame as f64 / RATE as f64,
@@ -296,6 +517,7 @@ fn main() {
             "parametersBefore": before_value,
             "parametersAfter": after_value,
             "samples": telemetry,
+            "spectrumSamples": spectra,
             "meterSamples": meter_samples
         }))
         .unwrap(),

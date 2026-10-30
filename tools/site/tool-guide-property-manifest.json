@@ -33,8 +33,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "gain--gainDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Gain in the app",
+              "video": "assets/tool-guides/gain-demo.mp4",
+              "poster": "assets/tool-guides/gain-demo.jpg",
+              "description": "Gain changes from 0 to -60 dB at 3.2 seconds. More negative values make it quieter. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "gainDb"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -57,8 +65,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "volume--percent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Volume in the app",
+              "video": "assets/tool-guides/volume-demo.mp4",
+              "poster": "assets/tool-guides/volume-demo.jpg",
+              "description": "Volume changes from 100 to 0 % at 3.2 seconds. 0% silences this output. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "percent"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -81,8 +97,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "bassTreble--bassDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Bass in the app",
+              "video": "assets/tool-guides/bassTreble-demo.mp4",
+              "poster": "assets/tool-guides/bassTreble-demo.jpg",
+              "description": "Bass changes from 0 to -12 dB at 3.2 seconds. Cuts low frequencies. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "bassDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "trebleDb",
@@ -150,8 +174,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band0Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "31.5 Hz in the app",
+              "video": "assets/tool-guides/graphicEq-demo.mp4",
+              "poster": "assets/tool-guides/graphicEq-demo.jpg",
+              "description": "31.5 Hz changes from 0 to -18 dB at 3.2 seconds. Cut a little to reduce floor, handling or mechanical rumble. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "band0Db"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band1Db",
@@ -933,8 +965,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band0FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Frequency · band 1 in the app",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 changes from 1000 to 20 Hz at 3.2 seconds. Moves it toward lower-pitched content. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band1FrequencyHz",
@@ -1662,8 +1702,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "compressor--thresholdDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Threshold in the app",
+              "video": "assets/tool-guides/compressor-demo.mp4",
+              "poster": "assets/tool-guides/compressor-demo.jpg",
+              "description": "Threshold changes from -18 to -60 dBFS at 3.2 seconds. Lower values compress more of the signal. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "thresholdDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "ratio",
@@ -1761,8 +1809,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "gate--thresholdDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Threshold in the app",
+              "video": "assets/tool-guides/gate-demo.mp4",
+              "poster": "assets/tool-guides/gate-demo.jpg",
+              "description": "Threshold changes from -45 to -80 dBFS at 3.2 seconds. Opens for quieter sound and potentially room noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "thresholdDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "rangeDb",
@@ -1875,8 +1931,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "limiter--ceilingDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Ceiling in the app",
+              "video": "assets/tool-guides/limiter-demo.mp4",
+              "poster": "assets/tool-guides/limiter-demo.jpg",
+              "description": "Ceiling changes from -1 to -12 dBFS at 3.2 seconds. Leaves more headroom. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "ceilingDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "lookaheadMs",
@@ -1929,8 +1993,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "delay--delayMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Delay in the app",
+              "video": "assets/tool-guides/delay-demo.mp4",
+              "poster": "assets/tool-guides/delay-demo.jpg",
+              "description": "Delay changes from 0 to 1000 ms at 3.2 seconds. Moves sound later. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "delayMs"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -1953,8 +2025,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "pitch--semitones",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Semitones in the app",
+              "video": "assets/tool-guides/pitch-demo.mp4",
+              "poster": "assets/tool-guides/pitch-demo.jpg",
+              "description": "Semitones changes from 0 to -12 semitones at 3.2 seconds. Lowers pitch. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "semitones"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "cents",
@@ -1992,8 +2072,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "dehum--frequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Mains frequency in the app",
+              "video": "assets/tool-guides/dehum-demo.mp4",
+              "poster": "assets/tool-guides/dehum-demo.jpg",
+              "description": "Mains frequency changes from 60 to 45 Hz at 3.2 seconds. Moves the series lower. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "frequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "amountPercent",
@@ -2046,8 +2134,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "declick--thresholdPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Threshold in the app",
+              "video": "assets/tool-guides/declick-demo.mp4",
+              "poster": "assets/tool-guides/declick-demo.jpg",
+              "description": "Threshold changes from 50 to 0 % at 3.2 seconds. Detects more subtle clicks. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "thresholdPercent"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2070,8 +2166,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "denoise--reductionPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Reduction in the app",
+              "video": "assets/tool-guides/denoise-demo.mp4",
+              "poster": "assets/tool-guides/denoise-demo.jpg",
+              "description": "Reduction changes from 70 to 0 % at 3.2 seconds. Retains more original sound. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "reductionPercent"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "floorPercent",
@@ -2124,8 +2228,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "speechDenoise--strengthPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Strength in the app",
+              "video": "assets/tool-guides/speechDenoise-demo.mp4",
+              "poster": "assets/tool-guides/speechDenoise-demo.jpg",
+              "description": "Strength changes from 70 to 0 % at 3.2 seconds. Retains more of the original signal. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "strengthPercent"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2148,8 +2260,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "spectralGate--thresholdDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Threshold above noise in the app",
+              "video": "assets/tool-guides/spectralGate-demo.mp4",
+              "poster": "assets/tool-guides/spectralGate-demo.jpg",
+              "description": "Threshold above noise changes from 3 to -20 dB at 3.2 seconds. Lets more frequency regions pass. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "thresholdDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "reductionDb",
@@ -2200,10 +2320,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "firFilter--mediaId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/firFilter-overview.mp4",
+              "poster": "assets/tool-guides/firFilter-overview.jpg",
+              "description": "A silent recording of the real FIR Filter Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "wetPercent",
@@ -2217,8 +2344,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "firFilter--wetPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Wet mix in the app",
+              "video": "assets/tool-guides/firFilter-demo.mp4",
+              "poster": "assets/tool-guides/firFilter-demo.jpg",
+              "description": "Wet mix changes from 100 to 0 % at 3.2 seconds. Includes more dry sound. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "wetPercent"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "gainDb",
@@ -2256,8 +2391,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "mute--muted",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Muted in the app",
+              "video": "assets/tool-guides/mute-demo.mp4",
+              "poster": "assets/tool-guides/mute-demo.jpg",
+              "description": "Muted changes from false to true at 3.2 seconds. Silences the branch passing through this node. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "muted"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2283,8 +2426,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "inputSwitch--selected",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Active input in the app",
+              "video": "assets/tool-guides/inputSwitch-demo.mp4",
+              "poster": "assets/tool-guides/inputSwitch-demo.jpg",
+              "description": "Active input changes from a to b at 3.2 seconds. Which explicitly wired port is heard. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "selected"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "fade",
@@ -2328,8 +2479,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "outputSwitch--selected",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Active output in the app",
+              "video": "assets/tool-guides/outputSwitch-demo.mp4",
+              "poster": "assets/tool-guides/outputSwitch-demo.jpg",
+              "description": "Active output changes from a to b at 3.2 seconds. Which output port receives audio. The control appears briefly, then the view returns to the top visual while the synthetic audio continues. You hear output A: it becomes silent when the signal moves to B.",
+              "property": "selected"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2352,8 +2511,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "duck--thresholdDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Trigger level in the app",
+              "video": "assets/tool-guides/duck-demo.mp4",
+              "poster": "assets/tool-guides/duck-demo.jpg",
+              "description": "Trigger level changes from -35 to -80 dBFS at 3.2 seconds. Engages for quieter trigger sound, potentially room noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "thresholdDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "amountDb",
@@ -2529,8 +2696,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "timeShift--bufferSeconds",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Rewind buffer in the app",
+              "video": "assets/tool-guides/timeShift-demo.mp4",
+              "poster": "assets/tool-guides/timeShift-demo.jpg",
+              "description": "Rewind buffer changes from 60 to 10 s at 3.2 seconds. Keeps less history. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "bufferSeconds"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2553,8 +2728,16 @@
           "dynamic": true,
           "nonAudibleReason": null,
           "recordingId": "mixer--inputVolume-upstreamNodeId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Input volume in the app",
+              "video": "assets/tool-guides/mixer-demo.mp4",
+              "poster": "assets/tool-guides/mixer-demo.jpg",
+              "description": "Input volume changes from 1 to 0 at 3.2 seconds. Lowers it; 0% removes its contribution. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "inputVolume:input"
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2615,8 +2798,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--gateDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Noise gate in the app",
+              "video": "assets/tool-guides/funVoiceChanger-demo.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger-demo.jpg",
+              "description": "Noise gate changes from -90 to -20 dBFS at 3.2 seconds. Ignores more room and keyboard noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "gateDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "correctEnabled",
@@ -3171,10 +3362,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "physicalInput--endpointId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/physicalInput-overview.mp4",
+              "poster": "assets/tool-guides/physicalInput-overview.jpg",
+              "description": "A silent recording of the real Physical Input Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "channelMode",
@@ -3191,10 +3389,17 @@
             "right"
           ],
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "physicalInput--channelMode",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/physicalInput-overview.mp4",
+              "poster": "assets/tool-guides/physicalInput-overview.jpg",
+              "description": "A silent recording of the real Physical Input Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "spatialMode",
@@ -3210,10 +3415,17 @@
             "speakers"
           ],
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "physicalInput--spatialMode",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/physicalInput-overview.mp4",
+              "poster": "assets/tool-guides/physicalInput-overview.jpg",
+              "description": "A silent recording of the real Physical Input Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "spatialRoomPercent",
@@ -3225,10 +3437,17 @@
           "default": 0,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "physicalInput--spatialRoomPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/physicalInput-overview.mp4",
+              "poster": "assets/tool-guides/physicalInput-overview.jpg",
+              "description": "A silent recording of the real Physical Input Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -3249,10 +3468,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "physicalOutput--endpointId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/physicalOutput-overview.mp4",
+              "poster": "assets/tool-guides/physicalOutput-overview.jpg",
+              "description": "A silent recording of the real Physical Output Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -3273,10 +3499,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "applicationCapture--application",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/applicationCapture-overview.mp4",
+              "poster": "assets/tool-guides/applicationCapture-overview.jpg",
+              "description": "A silent recording of the real Application Capture Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -3305,10 +3538,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "virtualRenderSource--busId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/virtualRenderSource-overview.mp4",
+              "poster": "assets/tool-guides/virtualRenderSource-overview.jpg",
+              "description": "A silent recording of the real Virtual Render Source Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -3329,10 +3569,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "virtualCaptureSink--busId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/virtualCaptureSink-overview.mp4",
+              "poster": "assets/tool-guides/virtualCaptureSink-overview.jpg",
+              "description": "A silent recording of the real Virtual Capture Sink Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -3355,8 +3602,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "testSignal--frequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Tone frequency in the app",
+              "video": "assets/tool-guides/testSignal-demo.mp4",
+              "poster": "assets/tool-guides/testSignal-demo.jpg",
+              "description": "Tone frequency changes from 440 to 880 Hz at 3.2 seconds. Makes the sine wave oscillate faster and sound higher. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "frequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "levelDb",
@@ -3407,10 +3662,17 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "audioFile--mediaId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/audioFile-overview.mp4",
+              "poster": "assets/tool-guides/audioFile-overview.jpg",
+              "description": "A silent recording of the real Audio File Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "loop",
@@ -3424,8 +3686,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "audioFile--loop",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Loop in the app",
+              "video": "assets/tool-guides/audioFile-demo.mp4",
+              "poster": "assets/tool-guides/audioFile-demo.jpg",
+              "description": "Loop changes from false to true at 3.2 seconds. Repeat the imported audio when it reaches the end. The control appears briefly, then the view returns to the top visual while the synthetic audio continues. This short example shows the Loop setting; it ends before the full source repeats.",
+              "property": "loop"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "temporaryRecorder",
@@ -3437,10 +3707,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "audioFile--temporaryRecorder",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/audioFile-overview.mp4",
+              "poster": "assets/tool-guides/audioFile-overview.jpg",
+              "description": "A silent recording of the real Audio File Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -3452,7 +3729,7 @@
       "capture": "production-dsp",
       "properties": [
         {
-          "key": "slot0MediaId",
+          "key": "slot1MediaId",
           "label": "Sound · button 1",
           "type": "file",
           "unit": null,
@@ -3461,13 +3738,20 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot0MediaId",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot1MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot1MediaId",
+          "key": "slot2MediaId",
           "label": "Sound · button 2",
           "type": "file",
           "unit": null,
@@ -3476,13 +3760,20 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot1MediaId",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot2MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot2MediaId",
+          "key": "slot3MediaId",
           "label": "Sound · button 3",
           "type": "file",
           "unit": null,
@@ -3491,13 +3782,20 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot2MediaId",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot3MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot3MediaId",
+          "key": "slot4MediaId",
           "label": "Sound · button 4",
           "type": "file",
           "unit": null,
@@ -3506,13 +3804,20 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot3MediaId",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot4MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot4MediaId",
+          "key": "slot5MediaId",
           "label": "Sound · button 5",
           "type": "file",
           "unit": null,
@@ -3521,13 +3826,20 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot4MediaId",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot5MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot5MediaId",
+          "key": "slot6MediaId",
           "label": "Sound · button 6",
           "type": "file",
           "unit": null,
@@ -3536,13 +3848,20 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot5MediaId",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot6MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot6MediaId",
+          "key": "slot7MediaId",
           "label": "Sound · button 7",
           "type": "file",
           "unit": null,
@@ -3551,13 +3870,20 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot6MediaId",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot7MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot7MediaId",
+          "key": "slot8MediaId",
           "label": "Sound · button 8",
           "type": "file",
           "unit": null,
@@ -3566,13 +3892,20 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot7MediaId",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot8MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot8MediaId",
+          "key": "slot9MediaId",
           "label": "Sound · button 9",
           "type": "file",
           "unit": null,
@@ -3581,29 +3914,21 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot8MediaId",
-          "recordings": [],
-          "status": "pending"
-        },
-        {
-          "key": "slot0Caption",
-          "label": "Caption · button 1",
-          "type": "text",
-          "unit": null,
-          "minimum": null,
-          "maximum": null,
-          "default": "",
-          "options": null,
-          "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot0Caption",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot9MediaId",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "slot1Caption",
-          "label": "Caption · button 2",
+          "label": "Caption · button 1",
           "type": "text",
           "unit": null,
           "minimum": null,
@@ -3618,7 +3943,7 @@
         },
         {
           "key": "slot2Caption",
-          "label": "Caption · button 3",
+          "label": "Caption · button 2",
           "type": "text",
           "unit": null,
           "minimum": null,
@@ -3633,7 +3958,7 @@
         },
         {
           "key": "slot3Caption",
-          "label": "Caption · button 4",
+          "label": "Caption · button 3",
           "type": "text",
           "unit": null,
           "minimum": null,
@@ -3648,7 +3973,7 @@
         },
         {
           "key": "slot4Caption",
-          "label": "Caption · button 5",
+          "label": "Caption · button 4",
           "type": "text",
           "unit": null,
           "minimum": null,
@@ -3663,7 +3988,7 @@
         },
         {
           "key": "slot5Caption",
-          "label": "Caption · button 6",
+          "label": "Caption · button 5",
           "type": "text",
           "unit": null,
           "minimum": null,
@@ -3678,7 +4003,7 @@
         },
         {
           "key": "slot6Caption",
-          "label": "Caption · button 7",
+          "label": "Caption · button 6",
           "type": "text",
           "unit": null,
           "minimum": null,
@@ -3693,7 +4018,7 @@
         },
         {
           "key": "slot7Caption",
-          "label": "Caption · button 8",
+          "label": "Caption · button 7",
           "type": "text",
           "unit": null,
           "minimum": null,
@@ -3708,7 +4033,7 @@
         },
         {
           "key": "slot8Caption",
-          "label": "Caption · button 9",
+          "label": "Caption · button 8",
           "type": "text",
           "unit": null,
           "minimum": null,
@@ -3722,7 +4047,22 @@
           "status": "pending"
         },
         {
-          "key": "slot0GainDb",
+          "key": "slot9Caption",
+          "label": "Caption · button 9",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot9Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot1GainDb",
           "label": "Level · button 1",
           "type": "number",
           "unit": "dB",
@@ -3732,28 +4072,21 @@
           "options": null,
           "dynamic": false,
           "nonAudibleReason": null,
-          "recordingId": "soundboard--slot0GainDb",
-          "recordings": [],
-          "status": "pending"
-        },
-        {
-          "key": "slot1GainDb",
-          "label": "Level · button 2",
-          "type": "number",
-          "unit": "dB",
-          "minimum": -24,
-          "maximum": 6,
-          "default": 0,
-          "options": null,
-          "dynamic": false,
-          "nonAudibleReason": null,
           "recordingId": "soundboard--slot1GainDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Level · button 1 in the app",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 changes from 0 to -24 dB at 3.2 seconds. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot2GainDb",
-          "label": "Level · button 3",
+          "label": "Level · button 2",
           "type": "number",
           "unit": "dB",
           "minimum": -24,
@@ -3768,7 +4101,7 @@
         },
         {
           "key": "slot3GainDb",
-          "label": "Level · button 4",
+          "label": "Level · button 3",
           "type": "number",
           "unit": "dB",
           "minimum": -24,
@@ -3783,7 +4116,7 @@
         },
         {
           "key": "slot4GainDb",
-          "label": "Level · button 5",
+          "label": "Level · button 4",
           "type": "number",
           "unit": "dB",
           "minimum": -24,
@@ -3798,7 +4131,7 @@
         },
         {
           "key": "slot5GainDb",
-          "label": "Level · button 6",
+          "label": "Level · button 5",
           "type": "number",
           "unit": "dB",
           "minimum": -24,
@@ -3813,7 +4146,7 @@
         },
         {
           "key": "slot6GainDb",
-          "label": "Level · button 7",
+          "label": "Level · button 6",
           "type": "number",
           "unit": "dB",
           "minimum": -24,
@@ -3828,7 +4161,7 @@
         },
         {
           "key": "slot7GainDb",
-          "label": "Level · button 8",
+          "label": "Level · button 7",
           "type": "number",
           "unit": "dB",
           "minimum": -24,
@@ -3843,7 +4176,7 @@
         },
         {
           "key": "slot8GainDb",
-          "label": "Level · button 9",
+          "label": "Level · button 8",
           "type": "number",
           "unit": "dB",
           "minimum": -24,
@@ -3857,7 +4190,22 @@
           "status": "pending"
         },
         {
-          "key": "slot0Mode",
+          "key": "slot9GainDb",
+          "label": "Level · button 9",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot9GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot1Mode",
           "label": "When pressed · button 1",
           "type": "selection",
           "unit": null,
@@ -3866,13 +4214,20 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot0Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot1Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot1Mode",
+          "key": "slot2Mode",
           "label": "When pressed · button 2",
           "type": "selection",
           "unit": null,
@@ -3881,13 +4236,20 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot1Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot2Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot2Mode",
+          "key": "slot3Mode",
           "label": "When pressed · button 3",
           "type": "selection",
           "unit": null,
@@ -3896,13 +4258,20 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot2Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot3Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot3Mode",
+          "key": "slot4Mode",
           "label": "When pressed · button 4",
           "type": "selection",
           "unit": null,
@@ -3911,13 +4280,20 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot3Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot4Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot4Mode",
+          "key": "slot5Mode",
           "label": "When pressed · button 5",
           "type": "selection",
           "unit": null,
@@ -3926,13 +4302,20 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot4Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot5Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot5Mode",
+          "key": "slot6Mode",
           "label": "When pressed · button 6",
           "type": "selection",
           "unit": null,
@@ -3941,13 +4324,20 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot5Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot6Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot6Mode",
+          "key": "slot7Mode",
           "label": "When pressed · button 7",
           "type": "selection",
           "unit": null,
@@ -3956,13 +4346,20 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot6Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot7Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot7Mode",
+          "key": "slot8Mode",
           "label": "When pressed · button 8",
           "type": "selection",
           "unit": null,
@@ -3971,13 +4368,20 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot7Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot8Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
-          "key": "slot8Mode",
+          "key": "slot9Mode",
           "label": "When pressed · button 9",
           "type": "selection",
           "unit": null,
@@ -3986,10 +4390,17 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
-          "recordingId": "soundboard--slot8Mode",
-          "recordings": [],
-          "status": "pending"
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
+          "recordingId": "soundboard--slot9Mode",
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -4017,10 +4428,17 @@
             "mp3"
           ],
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "recorder--format",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/recorder-overview.mp4",
+              "poster": "assets/tool-guides/recorder-overview.jpg",
+              "description": "A silent recording of the real Recorder Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "autoRecord",
@@ -4032,10 +4450,17 @@
           "default": false,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "recorder--autoRecord",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/recorder-overview.mp4",
+              "poster": "assets/tool-guides/recorder-overview.jpg",
+              "description": "A silent recording of the real Recorder Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "splitMinutes",
@@ -4047,10 +4472,17 @@
           "default": 0,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "recorder--splitMinutes",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/recorder-overview.mp4",
+              "poster": "assets/tool-guides/recorder-overview.jpg",
+              "description": "A silent recording of the real Recorder Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "recordingRoot",
@@ -4062,10 +4494,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "recorder--recordingRoot",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/recorder-overview.mp4",
+              "poster": "assets/tool-guides/recorder-overview.jpg",
+              "description": "A silent recording of the real Recorder Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -4086,10 +4525,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "networkSend--host",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/networkSend-overview.mp4",
+              "poster": "assets/tool-guides/networkSend-overview.jpg",
+              "description": "A silent recording of the real Network Send Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "port",
@@ -4101,10 +4547,17 @@
           "default": 47800,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "networkSend--port",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/networkSend-overview.mp4",
+              "poster": "assets/tool-guides/networkSend-overview.jpg",
+              "description": "A silent recording of the real Network Send Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "pairingKey",
@@ -4116,10 +4569,17 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "networkSend--pairingKey",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/networkSend-overview.mp4",
+              "poster": "assets/tool-guides/networkSend-overview.jpg",
+              "description": "A silent recording of the real Network Send Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -4140,10 +4600,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "networkReceive--sender",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/networkReceive-overview.mp4",
+              "poster": "assets/tool-guides/networkReceive-overview.jpg",
+              "description": "A silent recording of the real Network Receive Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "port",
@@ -4155,10 +4622,17 @@
           "default": 47800,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "networkReceive--port",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/networkReceive-overview.mp4",
+              "poster": "assets/tool-guides/networkReceive-overview.jpg",
+              "description": "A silent recording of the real Network Receive Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "bufferMs",
@@ -4170,10 +4644,17 @@
           "default": 40,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "networkReceive--bufferMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/networkReceive-overview.mp4",
+              "poster": "assets/tool-guides/networkReceive-overview.jpg",
+              "description": "A silent recording of the real Network Receive Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "pairingKey",
@@ -4185,10 +4666,17 @@
           "default": "",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "networkReceive--pairingKey",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/networkReceive-overview.mp4",
+              "poster": "assets/tool-guides/networkReceive-overview.jpg",
+              "description": "A silent recording of the real Network Receive Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -4209,10 +4697,17 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "plugin--path",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/plugin-overview.mp4",
+              "poster": "assets/tool-guides/plugin-overview.jpg",
+              "description": "A silent recording of the real VST Plugin Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "pluginParameter:<parameterId>",
@@ -4224,10 +4719,17 @@
           "default": null,
           "options": null,
           "dynamic": true,
-          "nonAudibleReason": "Ranges and effect meaning belong to the exact installed plugin; do not invent a plugin fixture.",
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "plugin--pluginParameter-parameterId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/plugin-overview.mp4",
+              "poster": "assets/tool-guides/plugin-overview.jpg",
+              "description": "A silent recording of the real VST Plugin Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -4248,10 +4750,17 @@
           "default": "Group",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "group--name",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent recording of the real Visual Group Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "color",
@@ -4263,10 +4772,17 @@
           "default": "#5599dd",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "group--color",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent recording of the real Visual Group Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "opacity",
@@ -4278,10 +4794,17 @@
           "default": 5,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "group--opacity",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent recording of the real Visual Group Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "fontSize",
@@ -4293,10 +4816,17 @@
           "default": 18,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "group--fontSize",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent recording of the real Visual Group Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "locked",
@@ -4308,10 +4838,17 @@
           "default": false,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "group--locked",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent recording of the real Visual Group Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "moveContents",
@@ -4323,10 +4860,17 @@
           "default": true,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.",
           "recordingId": "group--moveContents",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Browse Properties",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent recording of the real Visual Group Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     }

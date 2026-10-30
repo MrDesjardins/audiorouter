@@ -23,6 +23,28 @@ if (new Set(tools.map((t) => t.kind)).size !== tools.length)
 const tutorials = JSON.parse(
   await readFile(resolve(site, "guide-content/tutorials.json"), "utf8"),
 );
+const recordings = JSON.parse(
+  await readFile(resolve(site, "guide-content/recordings.json"), "utf8"),
+);
+const recordingSection = (kind) =>
+  '<section class="guide-section" id="in-the-app"><h2>In the app.</h2>' +
+  (recordings[kind] ?? [])
+    .map(
+      (clip) =>
+        '<article class="guide-recording"><h3>' +
+        esc(clip.title) +
+        '</h3><video controls preload="none" playsinline width="720" height="1280" poster="../' +
+        esc(clip.poster) +
+        '" aria-label="' +
+        esc(clip.title) +
+        '"><source src="../' +
+        esc(clip.video) +
+        '" type="video/mp4"></video><p>' +
+        esc(clip.description) +
+        "</p></article>",
+    )
+    .join("") +
+  "</section>";
 for (const tool of tools)
   if (!tutorials[tool.kind]) throw Error("Missing tutorial: " + tool.kind);
 const visualTypes = {
@@ -494,7 +516,7 @@ for (let i = 0; i < tools.length; i++) {
           "</a>",
       )
       .join("") +
-    '<a href="#examples">Worked examples</a><a href="#avoid">Common mistakes</a></aside><div class="guide-article"><section class="guide-section" id="understand"><div class="eyebrow">01 / Understand</div><h2>How it works.</h2><p class="guide-concept">' +
+    '<a href="#in-the-app">In the app</a><a href="#examples">Worked examples</a><a href="#avoid">Common mistakes</a></aside><div class="guide-article"><section class="guide-section" id="understand"><div class="eyebrow">01 / Understand</div><h2>How it works.</h2><p class="guide-concept">' +
     esc(t.concept) +
     '</p><div class="guide-route" aria-label="Example signal path">' +
     tutorial.route
@@ -527,7 +549,7 @@ for (let i = 0; i < tools.length; i++) {
             ? '<div class="guide-band-selects"><label>Selected input<select data-demo-option="selected" aria-label="Illustration selected input"><option value="a">Input A</option><option value="b">Input B</option></select></label><label>Fade<select data-demo-option="fade" aria-label="Illustration switch fade"><option value="normal">Normal · 0.5 s</option><option value="slow">Slow · 2 s</option></select></label></div>'
             : t.kind === "outputSwitch"
               ? '<label class="guide-demo-select">Selected destination<select data-demo-option="selected" aria-label="Illustration selected output"><option value="a">A · Headphones</option><option value="b">B · OBS cable</option></select></label>'
-            : "") +
+              : "") +
     "" +
     (controls.length
       ? '<div class="guide-demo-controls" aria-label="Illustration controls">' +
@@ -592,6 +614,7 @@ for (let i = 0; i < tools.length; i++) {
         "</p></div>") +
     "</section>" +
     extras +
+    recordingSection(t.kind) +
     '<section class="guide-section" id="examples"><div class="eyebrow">04 / Examples</div><h2>Example setups.</h2><div class="guide-recipes">' +
     t.recipes
       .map(
