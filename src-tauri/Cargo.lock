@@ -87,7 +87,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audiorouter-control"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-driver-helper",
@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-domain"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "serde",
  "serde_json",
@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-driver-helper"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "audiorouter-windows-audio",
  "serde",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-dsp"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "bytemuck",
  "microfft",
@@ -135,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-engine"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "arc-swap",
  "audiorouter-domain",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-plugin-host"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "audiorouter-engine",
  "crossbeam-queue",
@@ -159,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-protocol"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "hmac",
  "serde",
@@ -169,7 +169,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-recording"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "crossbeam-queue",
  "flac-io",
@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-shell"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
@@ -203,7 +203,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-storage"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-recording",
@@ -216,7 +216,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-transport"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "audiorouter-control",
  "audiorouter-domain",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "audiorouter-windows-audio"
-version = "0.0.24"
+version = "0.0.25"
 dependencies = [
  "audiorouter-domain",
  "audiorouter-dsp",

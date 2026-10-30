@@ -1,5 +1,9 @@
 # Active plan — post-0.0.8 maintenance
 
+## Release 0.0.25 — 2026-10-30, owner request
+
+Prepare the app-only unsigned prerelease containing everything on main, including the Soundboard and the static-runtime installer fix. Scope, tasks, gates and rollback: [release plan](release-0.0.25.md). Next: finish local checks and request PR approval.
+
 ## Recovery, installer and inventory qualification — 2026-10-28
 
 Owner requested one branch and one PR covering offline recovery regressions,
