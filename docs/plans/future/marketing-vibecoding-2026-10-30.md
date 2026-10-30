@@ -300,7 +300,7 @@ gh api repos/MrDesjardins/audiorouter/releases --jq '.[0:3][]|[.tag_name,([.asse
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-10-30 (before) | baseline | | | 51 | 23 / 15 on 10-29 | v0.0.24: 105 | |
 | 2026-10-30 | r/vibecoding rules read by the owner (rules 1 and 3 shape the post) | | | | | | |
-| | post | | | | | | |
+| 2026-10-30 | r/vibecoding post (build story; question about signing a kernel driver cheaply) | [post](https://www.reddit.com/r/vibecoding/comments/1xjv4i5/how_i_built_audiorouter_free_open_source_windows/) | | 51 at posting | | v0.0.24: 105 at last check | |
 | +48 h | | | | | | | |
 
 ## Success measures
