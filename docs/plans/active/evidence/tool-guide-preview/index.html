@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gate Properties recording preview</title>
+<style>
+body{margin:0;background:#121820;color:#eef3f8;font:18px/1.6 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:32px}h1{line-height:1.2}p{max-width:75ch}.clips{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px}article{min-width:0}video{width:100%;aspect-ratio:9/16;background:#090d12;border-radius:12px}a{color:#93cbff}
+</style>
+<main><h1>Gate: the real Properties panel</h1>
+<p>Three local preview recordings show only Properties in a portrait frame. Each briefly reveals the changed control, then returns to the live response graph and meters. Press Play to hear the synthetic fixture processed by the production Gate.</p>
+<p>These are framing previews. The offline renderer rebuilds its graph at the parameter change, resetting processor history; these clips do not yet qualify continuous live automation. The all-tool rollout and Firefox playback validation remain unfinished.</p>
+<div class="clips">
+<article><h2>Threshold</h2><video controls preload="none" poster="threshold-poster.jpg" aria-label="Gate threshold recording"><source src="threshold.mp4" type="video/mp4"></video><p>Threshold rises from −80 to −52 dBFS. Watch the input cross the threshold and the Gate attenuate the quiet gaps.</p></article>
+<article><h2>Hold</h2><video controls preload="none" poster="hold-poster.jpg" aria-label="Gate hold recording"><source src="hold.mp4" type="video/mp4"></video><p>Hold increases from 100 to 600 ms. The Gate stays open longer after a burst falls below the threshold.</p></article>
+<article><h2>Range</h2><video controls preload="none" poster="range-poster.jpg" aria-label="Gate range recording"><source src="range.mp4" type="video/mp4"></video><p>Range increases from 12 to 60 dB. Closed sections become quieter while the live graph shows deeper attenuation.</p></article>
+</div></main></html>

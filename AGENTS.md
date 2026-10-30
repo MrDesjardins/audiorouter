@@ -139,6 +139,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-10-29 — Record real tool behavior in a portrait Properties-only frame.**
+  Evidence: [tool-guide capture decision](docs/plans/active/evidence/2026-10-29-tool-guide-capture-decision.md)
+  and the rejected first Gate crop. Scope: AudioRouter guide screen captures.
+  Consequence: a 960×540 workspace crop included the canvas, clipped the tool,
+  and hid the Gate's live response display. Keep the Properties panel alone in
+  a 9:16 frame, show its top live visual while audio plays, expose a lower
+  control briefly at change, then return to the top.
+
 - **2026-10-29 — Cover sources, not only processors, in every Mixer layout (user rule).**
   Evidence: [source combination suite](crates/engine/tests/source_combinations.rs),
   [Soundboard plan](docs/plans/active/soundboard.md). Scope: new source tools
