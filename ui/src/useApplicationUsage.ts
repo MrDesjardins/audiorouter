@@ -50,10 +50,15 @@ export function useApplicationUsage(
   const fingerprint = useRef<string | null>(null);
   const generation = useRef(0);
   const inFlight = useRef(false);
+  const pending = useRef(false);
   const followUp = useRef<number | undefined>(undefined);
 
   const read = useCallback(() => {
-    if (!listApplications || inFlight.current) return;
+    if (!listApplications) return;
+    if (inFlight.current) {
+      pending.current = true;
+      return;
+    }
     inFlight.current = true;
     const current = ++generation.current;
     listApplications()
@@ -75,7 +80,13 @@ export function useApplicationUsage(
         setState((previous) => (previous.stale ? previous : { ...previous, loaded: true, stale: true }));
       })
       .finally(() => {
-        if (current === generation.current) inFlight.current = false;
+        if (current === generation.current) {
+          inFlight.current = false;
+          if (pending.current) {
+            pending.current = false;
+            read();
+          }
+        }
       });
   }, [listApplications]);
 
@@ -91,6 +102,7 @@ export function useApplicationUsage(
     // A new backend: forget the old answer and anything still in flight.
     generation.current += 1;
     inFlight.current = false;
+    pending.current = false;
     fingerprint.current = null;
     refresh();
     const onFocus = () => refresh();
@@ -102,6 +114,8 @@ export function useApplicationUsage(
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
+      generation.current += 1;
+      pending.current = false;
     };
   }, [refresh]);
 

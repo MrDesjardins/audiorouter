@@ -220,6 +220,94 @@ describe("useApplicationUsage", () => {
     expect(result.current.applications).toEqual([siege, discord]);
   });
 
+  it("reads the refreshed inventory after a slow first request finishes", async () => {
+    vi.useFakeTimers();
+    const discord = { ...siege, processId: 9, executable: "Discord.exe" };
+    let completeFirst!: (items: ApplicationInfo[]) => void;
+    const first = new Promise<ApplicationInfo[]>((resolve) => {
+      completeFirst = resolve;
+    });
+    const list = vi.fn().mockReturnValueOnce(first).mockResolvedValue([siege, discord]);
+    const { result } = renderHook(() => useApplicationUsage(list, { polling: false }));
+    await act(async () => {
+      vi.advanceTimersByTime(APP_USAGE_FOLLOW_UP_MS);
+    });
+    expect(list).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      completeFirst([siege]);
+    });
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(result.current.applications).toEqual([siege, discord]);
+  });
+
+  it("coalesces overlapping refreshes and does not revive a replaced backend", async () => {
+    vi.useFakeTimers();
+    let finishOld!: (items: ApplicationInfo[]) => void;
+    const old = vi.fn(
+      () =>
+        new Promise<ApplicationInfo[]>((resolve) => {
+          finishOld = resolve;
+        }),
+    );
+    const updated = { ...siege, processId: 11 };
+    const next = vi.fn().mockResolvedValue([updated]);
+    const { result, rerender } = renderHook(({ list }) => useApplicationUsage(list, { polling: false }), {
+      initialProps: { list: old },
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new Event("focus"));
+      vi.advanceTimersByTime(APP_USAGE_FOLLOW_UP_MS);
+    });
+    expect(old).toHaveBeenCalledTimes(1);
+    rerender({ list: next });
+    await act(async () => {});
+    expect(result.current.applications).toEqual([updated]);
+    await act(async () => {
+      finishOld([siege]);
+    });
+    expect(old).toHaveBeenCalledTimes(1);
+    expect(result.current.applications).toEqual([updated]);
+  });
+
+  it("retries a queued read after an in-flight failure", async () => {
+    vi.useFakeTimers();
+    let rejectFirst!: (error: Error) => void;
+    const first = new Promise<ApplicationInfo[]>((_, reject) => {
+      rejectFirst = reject;
+    });
+    const list = vi.fn().mockReturnValueOnce(first).mockResolvedValue([siege]);
+    const { result } = renderHook(() => useApplicationUsage(list, { polling: false }));
+    await act(async () => {
+      vi.advanceTimersByTime(APP_USAGE_FOLLOW_UP_MS);
+    });
+    await act(async () => {
+      rejectFirst(new Error("disconnected"));
+    });
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(result.current).toMatchObject({ loaded: true, stale: false, applications: [siege] });
+  });
+
+  it("does not start queued requests after unmount", async () => {
+    vi.useFakeTimers();
+    let finish!: (items: ApplicationInfo[]) => void;
+    const list = vi.fn(
+      () =>
+        new Promise<ApplicationInfo[]>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { unmount } = renderHook(() => useApplicationUsage(list, { polling: false }));
+    await act(async () => {
+      vi.advanceTimersByTime(APP_USAGE_FOLLOW_UP_MS);
+    });
+    unmount();
+    await act(async () => {
+      finish([siege]);
+    });
+    expect(list).toHaveBeenCalledTimes(1);
+  });
+
   it("does nothing without a connected backend", async () => {
     const { result } = renderHook(() => useApplicationUsage(null, { polling: true }));
     await act(async () => {});

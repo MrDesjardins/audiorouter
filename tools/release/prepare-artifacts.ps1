@@ -36,6 +36,7 @@ while (-not [string]::IsNullOrWhiteSpace($parentPath)) {
 }
 
 . (Join-Path $PSScriptRoot "pe-validation.ps1")
+. (Join-Path $workspace "tools/vm/portable-tool-support.ps1")
 
 function Assert-NoReparsePath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -56,6 +57,7 @@ function Assert-NoReparsePath {
 Push-Location $workspace
 $bundleRoot = Join-Path $workspace "src-tauri/target/release/bundle/nsis"
 $cleanupNsis = $false
+$previousRustFlags = $env:RUSTFLAGS
 try {
     if (-not $AppOnly) {
     if (-not (Test-Path -LiteralPath $driverInput -PathType Container)) {
@@ -100,6 +102,10 @@ try {
     if ($dirty) {
         throw "release inputs must come from a clean Git working tree"
     }
+    # Published binaries must run on a PC without the VC++ redistributable.
+    # Reject encoded flags that would override this setting in Cargo.
+    if ($env:CARGO_ENCODED_RUSTFLAGS) { throw "CARGO_ENCODED_RUSTFLAGS must be unset for release builds." }
+    $env:RUSTFLAGS = "-C target-feature=+crt-static"
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace "tools/release/stage-openai-tunnel-runtime.ps1") -Workspace $workspace -DestinationDirectory (Join-Path $workspace "target/release")
     if ($LASTEXITCODE -ne 0) {
         throw "verified OpenAI tunnel runtime staging failed"
@@ -158,6 +164,13 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "unsigned per-user NSIS bundle build failed with exit code $LASTEXITCODE"
     }
+    # Inspect the actual binaries consumed by NSIS, including the shell Tauri rebuilt.
+    foreach ($binary in @(
+        (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe"),
+        (Join-Path $workspace "target/release/audiorouter-cli.exe"),
+        (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe"),
+        (Join-Path $workspace "target/release/audiorouter-vst3-worker.exe")
+    )) { $null = @(Assert-PortableVmTool -Path $binary -MaxBytes 64MB) }
     $uiLock = Join-Path $workspace "ui/package-lock.json"
     if (-not (Test-Path -LiteralPath $uiLock -PathType Leaf)) {
         throw "UI lockfile is missing: $uiLock"
@@ -329,6 +342,7 @@ try {
     $manifest | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output "release-manifest.json") -Encoding utf8
 }
 finally {
+    $env:RUSTFLAGS = $previousRustFlags
     if ($cleanupNsis -and (Test-Path -LiteralPath $bundleRoot)) {
         $bundleItem = Get-Item -LiteralPath $bundleRoot -Force
         if (-not $bundleItem.PSIsContainer -or (($bundleItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
