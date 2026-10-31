@@ -173,7 +173,7 @@
               "title": "Treble frequency",
               "video": "assets/tool-guides/bassTreble--trebleFrequencyHz.mp4",
               "poster": "assets/tool-guides/bassTreble--trebleFrequencyHz.jpg",
-              "description": "Treble frequency moves from 1500 Hz to 5000 Hz about three seconds in, while steady pink noise plays through the Bass & Treble. Keeps the adjustment in higher frequencies.",
+              "description": "Treble frequency moves from 1,500 Hz to 5,000 Hz about three seconds in, while steady pink noise plays through the Bass & Treble. Keeps the adjustment in higher frequencies.",
               "property": "trebleFrequencyHz",
               "silent": false
             }
@@ -373,7 +373,7 @@
               "title": "Band enabled · band 1",
               "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
               "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
-              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Whether this numbered filter contributes to the curve.",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
               "property": "band0Enabled",
               "silent": false
             }
@@ -1015,7 +1015,7 @@
               "title": "Frequency · band 1",
               "video": "assets/tool-guides/parametricEq-demo.mp4",
               "poster": "assets/tool-guides/parametricEq-demo.jpg",
-              "description": "Frequency · band 1 moves from 1000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
               "property": "band0FrequencyHz"
             }
           ],
@@ -1793,7 +1793,7 @@
               "title": "Ratio",
               "video": "assets/tool-guides/compressor--ratio.mp4",
               "poster": "assets/tool-guides/compressor--ratio.jpg",
-              "description": "Ratio moves from 3 to 8 about three seconds in, while a short, buzzy test voice plays through the Compressor. Applies stronger level reduction.",
+              "description": "Ratio moves from 3:1 to 8:1 about three seconds in, while a short, buzzy test voice plays through the Compressor. Applies stronger level reduction.",
               "property": "ratio",
               "silent": false
             }
@@ -2017,7 +2017,7 @@
               "title": "Ratio",
               "video": "assets/tool-guides/gate--ratio.mp4",
               "poster": "assets/tool-guides/gate--ratio.jpg",
-              "description": "Ratio moves from 4 to 1 about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Approaches unchanged dynamics at 1:1.",
+              "description": "Ratio moves from 4:1 to 1:1 about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Approaches unchanged dynamics at 1:1.",
               "property": "ratio",
               "silent": false
             }
@@ -2178,7 +2178,7 @@
               "title": "Delay",
               "video": "assets/tool-guides/delay-demo.mp4",
               "poster": "assets/tool-guides/delay-demo.jpg",
-              "description": "Delay moves from 0 ms to 1000 ms about three seconds in, while a simple drum loop plays through the Sync (delay). Moves sound later.",
+              "description": "Delay moves from 0 ms to 1,000 ms about three seconds in, while a simple drum loop plays through the Sync (delay). Moves sound later.",
               "property": "delayMs"
             }
           ],
@@ -2210,7 +2210,7 @@
               "title": "Semitones",
               "video": "assets/tool-guides/pitch-demo.mp4",
               "poster": "assets/tool-guides/pitch-demo.jpg",
-              "description": "Semitones moves from 0 semitones to −12 semitones about three seconds in, while a tone that steps up from 220 Hz to 1,760 Hz plays through the Pitch. Lowers pitch.",
+              "description": "Semitones moves from 0 to −12 about three seconds in, while a tone that steps up from 220 Hz to 1,760 Hz plays through the Pitch. Lowers pitch.",
               "property": "semitones"
             }
           ],
@@ -2425,7 +2425,7 @@
               "title": "Learn noise",
               "video": "assets/tool-guides/denoise--learning.mp4",
               "poster": "assets/tool-guides/denoise--learning.jpg",
-              "description": "Learn noise is turned on about three seconds in, while quiet background hiss plays through the Denoise. Runtime learning controlled by Learn and Keep profile actions.",
+              "description": "Learn noise is turned on about three seconds in, while quiet background hiss plays through the Denoise. Start learning only while the unwanted background is present.",
               "property": "learning",
               "silent": false
             }
@@ -2537,7 +2537,7 @@
               "title": "Learn noise",
               "video": "assets/tool-guides/spectralGate--learning.mp4",
               "poster": "assets/tool-guides/spectralGate--learning.jpg",
-              "description": "Learn noise is turned on about three seconds in, while quiet background hiss plays through the Spectral Gate. Runtime learning controlled by Learn and Keep profile actions.",
+              "description": "Learn noise is turned on about three seconds in, while quiet background hiss plays through the Spectral Gate. Start learning only while the unwanted background is present.",
               "property": "learning",
               "silent": false
             }
@@ -2648,7 +2648,7 @@
               "title": "Muted",
               "video": "assets/tool-guides/mute-demo.mp4",
               "poster": "assets/tool-guides/mute-demo.jpg",
-              "description": "Muted is turned on about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Mute. Silences the branch passing through this node.",
+              "description": "Muted is turned on about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Mute. On sends silence from this tool.",
               "property": "muted"
             }
           ],
@@ -2683,7 +2683,7 @@
               "title": "Active input",
               "video": "assets/tool-guides/inputSwitch-demo.mp4",
               "poster": "assets/tool-guides/inputSwitch-demo.jpg",
-              "description": "Active input switches from A to B about three seconds in, while a two-tone chord of 110 Hz and 880 Hz plays through the Input Switch. Which explicitly wired port is heard.",
+              "description": "Active input switches from A to B about three seconds in, while input A carries a low 110 Hz tone and input B a high 880 Hz tone. Which explicitly wired port is heard.",
               "property": "selected"
             }
           ],
@@ -2709,7 +2709,7 @@
               "title": "Switch speed",
               "video": "assets/tool-guides/inputSwitch--fade.mp4",
               "poster": "assets/tool-guides/inputSwitch--fade.jpg",
-              "description": "Switch speed switches from Normal to Slow about three seconds in, while a two-tone chord of 110 Hz and 880 Hz plays through the Input Switch. Length of the equal-power input transition.",
+              "description": "Switch speed switches from Normal to Slow about three seconds in, while input A carries a low 110 Hz tone and input B a high 880 Hz tone. Length of the equal-power input transition.",
               "property": "fade",
               "silent": false
             }
@@ -2745,7 +2745,7 @@
               "title": "Active output",
               "video": "assets/tool-guides/outputSwitch-demo.mp4",
               "poster": "assets/tool-guides/outputSwitch-demo.jpg",
-              "description": "Active output switches from A to B about three seconds in, while a two-tone chord of 110 Hz and 880 Hz plays through the Output Switch. Which output port receives audio. You're listening to output A, so the sound stops when the switch moves to B.",
+              "description": "Active output switches from A to B about three seconds in, while a low 110 Hz tone plays through the Output Switch. Which output port receives audio. You're listening to output A, so the sound stops when the switch moves to B.",
               "property": "selected"
             }
           ],
@@ -3180,7 +3180,7 @@
               "title": "Pitch correction",
               "video": "assets/tool-guides/funVoiceChanger--correctEnabled.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--correctEnabled.jpg",
-              "description": "Pitch correction is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Pulls the voice to the nearest note of the scale.",
+              "description": "Pitch correction is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. The voice keeps its own pitch.",
               "property": "correctEnabled",
               "silent": false
             }
@@ -3321,7 +3321,7 @@
               "title": "Pitch and formant",
               "video": "assets/tool-guides/funVoiceChanger--shiftEnabled.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--shiftEnabled.jpg",
-              "description": "Pitch and formant is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Turns the pitch and formant shift on.",
+              "description": "Pitch and formant is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. The voice keeps its pitch and size.",
               "property": "shiftEnabled",
               "silent": false
             }
@@ -3417,7 +3417,7 @@
               "title": "Ring modulator",
               "video": "assets/tool-guides/funVoiceChanger--ringEnabled.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--ringEnabled.jpg",
-              "description": "Ring modulator is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Multiplies the voice by a tone.",
+              "description": "Ring modulator is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. No ring modulation.",
               "property": "ringEnabled",
               "silent": false
             }
@@ -3489,7 +3489,7 @@
               "title": "Bit crusher",
               "video": "assets/tool-guides/funVoiceChanger--crushEnabled.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--crushEnabled.jpg",
-              "description": "Bit crusher is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Lowers audio quality on purpose.",
+              "description": "Bit crusher is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Clean sound.",
               "property": "crushEnabled",
               "silent": false
             }
@@ -3561,7 +3561,7 @@
               "title": "Saturation",
               "video": "assets/tool-guides/funVoiceChanger--driveEnabled.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--driveEnabled.jpg",
-              "description": "Saturation is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Distorts the voice.",
+              "description": "Saturation is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. No distortion.",
               "property": "driveEnabled",
               "silent": false
             }
@@ -3633,7 +3633,7 @@
               "title": "Tone",
               "video": "assets/tool-guides/funVoiceChanger--toneEnabled.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--toneEnabled.jpg",
-              "description": "Tone is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Turns the tone filters on.",
+              "description": "Tone is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Full range.",
               "property": "toneEnabled",
               "silent": false
             }
@@ -3681,7 +3681,7 @@
               "title": "High cut",
               "video": "assets/tool-guides/funVoiceChanger--highCutHz.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--highCutHz.jpg",
-              "description": "High cut moves from 20000 Hz to 3000 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Duller, more muffled sound.",
+              "description": "High cut moves from 20,000 Hz to 3,000 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Duller, more muffled sound.",
               "property": "highCutHz",
               "silent": false
             }
@@ -3705,7 +3705,7 @@
               "title": "Peak frequency",
               "video": "assets/tool-guides/funVoiceChanger--peakHz.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--peakHz.jpg",
-              "description": "Peak frequency moves from 1000 Hz to 2500 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Brighter, thinner character.",
+              "description": "Peak frequency moves from 1,000 Hz to 2,500 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Brighter, thinner character.",
               "property": "peakHz",
               "silent": false
             }
@@ -3753,7 +3753,7 @@
               "title": "Modulation",
               "video": "assets/tool-guides/funVoiceChanger--modEnabled.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--modEnabled.jpg",
-              "description": "Modulation is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Turns chorus or flanger on.",
+              "description": "Modulation is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. No modulation.",
               "property": "modEnabled",
               "silent": false
             }
@@ -3876,7 +3876,7 @@
               "title": "Space",
               "video": "assets/tool-guides/funVoiceChanger--spaceEnabled.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--spaceEnabled.jpg",
-              "description": "Space is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Adds a room or cave echo.",
+              "description": "Space is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Dry voice.",
               "property": "spaceEnabled",
               "silent": false
             }
@@ -3924,7 +3924,7 @@
               "title": "Echo length",
               "video": "assets/tool-guides/funVoiceChanger--spaceDecayMs.mp4",
               "poster": "assets/tool-guides/funVoiceChanger--spaceDecayMs.jpg",
-              "description": "Echo length moves from 1000 ms to 3000 ms about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Longer echo.",
+              "description": "Echo length moves from 1,000 ms to 3,000 ms about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Longer echo.",
               "property": "spaceDecayMs",
               "silent": false
             }
@@ -4314,7 +4314,7 @@
               "title": "Duration",
               "video": "assets/tool-guides/testSignal--durationMs.mp4",
               "poster": "assets/tool-guides/testSignal--durationMs.jpg",
-              "description": "Duration moves from 8000 ms to 2000 ms about three seconds in, while the Test Signal plays its test tone. Produces a shorter burst.",
+              "description": "Duration moves from 8,000 ms to 2,000 ms about three seconds in, while the Test Signal plays its test tone. Produces a shorter burst.",
               "property": "durationMs",
               "silent": false
             }

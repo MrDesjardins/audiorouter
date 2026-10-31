@@ -72,11 +72,21 @@ const noteNames = {
   as: "A♯",
   b: "B",
 };
+// The switch renders ignore the fixture: input A carries 110 Hz and input B
+// 880 Hz (tool_guide_property_render.rs), and Output Switch has one input.
+const switchSounds = {
+  inputSwitch: "while input A carries a low 110 Hz tone and input B a high 880 Hz tone",
+  outputSwitch: "while a low 110 Hz tone plays through the Output Switch",
+};
 const formatValue = (value, property) => {
   if (typeof value === "number") {
-    const number = String(value).replace("-", "−");
+    const number = value
+      .toLocaleString("en-US", { maximumFractionDigits: 3 })
+      .replace("-", "−");
     const unit = property?.unit;
-    if (!unit || unit === "normalized") return number;
+    if (property?.key === "ratio") return `${number}:1`;
+    if (!unit || unit === "normalized" || unit === property.label?.toLowerCase())
+      return number;
     return unit === "%" ? `${number}%` : `${number} ${unit}`;
   }
   if (property?.key === "key") return noteNames[value] ?? value;
@@ -118,17 +128,25 @@ const describeChange = ({
     change = `${label} is set to ${typeof after === "string" && /\s/.test(after) ? `“${after}”` : formatValue(after, property)}`;
   else
     change = `${label} switches from ${formatValue(before, property)} to ${formatValue(after, property)}`;
+  // Guide rows describe booleans as "On: …" / "Off: …"; keep the side shown.
+  const toggled =
+    typeof after === "boolean" &&
+    (after ? original?.increase : original?.decrease)?.replace(
+      /^(On|Off): (.)/,
+      (_, _state, first) => first.toUpperCase(),
+    );
   const explanation =
     typeof before === "number" && typeof after === "number"
       ? after < before
         ? original?.decrease
         : original?.increase
-      : original?.meaning;
+      : toggled || original?.meaning;
   if (silent)
     return `${change} about three seconds in. The change has no sound of its own, so this clip is silent.${explanation ? " " + explanation : ""}`;
   const playing = selfPlaying[tool.kind]
     ? `while the ${tool.title} plays ${selfPlaying[tool.kind]}`
-    : `while ${testSounds[fixture] ?? "a test sound"} plays through the ${tool.title}`;
+    : (switchSounds[tool.kind] ??
+      `while ${testSounds[fixture] ?? "a test sound"} plays through the ${tool.title}`);
   return `${change} about three seconds in, ${playing}.${explanation ? " " + explanation : ""}`;
 };
 const needsYourSetup = {
