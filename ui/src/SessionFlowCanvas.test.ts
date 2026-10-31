@@ -164,6 +164,33 @@ const applicationCaptureSession: Session = {
 };
 
 describe("Test Signal playback path", () => {
+  it("animates Soundboard to Mixer from its own meter while microphone activity cannot light an idle board", () => {
+    const session: Session = {
+      ...testSignalSession,
+      nodes: testSignalSession.nodes.map((node) =>
+        node.id === "signal" ? { ...node, kind: "soundboard" } : node.id === "gain" ? { ...node, kind: "mixer" } : node,
+      ),
+    };
+    const diagnostics = (boardRms: number) =>
+      ({
+        audio: { state: "available", reason: "" },
+        privacyMute: { muted: false },
+        nodeTelemetry: [
+          { nodeId: "signal", meter: { peakDb: boardRms + 3, rmsDb: boardRms } },
+          { nodeId: "gain", meter: { peakDb: -12, rmsDb: -18 } },
+          { nodeId: "output", meter: { peakDb: -12, rmsDb: -18 } },
+        ],
+      }) as Parameters<typeof edgeSignalForConnection>[2];
+    expect(edgeSignalForConnection(session.edges[0], session, diagnostics(-120), true, true).state).toBe("silent");
+    expect(edgeSignalForConnection(session.edges[1], session, diagnostics(-120), true, true).state).toBe("active");
+    expect(edgeSignalForConnection(session.edges[0], session, diagnostics(-24), true, true)).toMatchObject({
+      active: true,
+      state: "active",
+      levelDb: -24,
+    });
+    expect(edgeSignalForConnection(session.edges[0], session, diagnostics(-120), true, true).state).toBe("silent");
+  });
+
   it("shows measured Test Signal and file playback even when capture privacy mute is latched", () => {
     const diagnostics = {
       audio: { state: "available", reason: "" },

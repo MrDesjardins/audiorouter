@@ -936,6 +936,48 @@ mod tests {
             .soundboard_for_node(&EntityId::new("discord"))
             .expect("the board is reachable for triggering");
         assert!(board.slot_loaded(0));
+        assert!(board.trigger(0));
+        let graph = &set.paths[0];
+        let inputs = graph
+            .input_node_ids()
+            .iter()
+            .map(|id| {
+                AudioBlock::new(
+                    if id.as_str() == "mic" { 1 } else { 2 },
+                    PROCESSING_QUANTUM_FRAMES,
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        let mut mixed = AudioBlock::new(graph.mixer_channels(), PROCESSING_QUANTUM_FRAMES).unwrap();
+        let mut outputs = graph
+            .output_node_ids()
+            .iter()
+            .map(|_| AudioBlock::new(2, PROCESSING_QUANTUM_FRAMES).unwrap())
+            .collect::<Vec<_>>();
+        graph
+            .process(
+                &inputs,
+                &mut mixed,
+                &mut outputs.iter_mut().collect::<Vec<_>>(),
+            )
+            .unwrap();
+        assert!(
+            outputs.iter().any(|block| block
+                .channel(0)
+                .unwrap()
+                .iter()
+                .any(|sample| sample.abs() > 0.01)),
+            "a triggered Soundboard must reach an authored output"
+        );
+        assert!(
+            graph
+                .meter_snapshot_for_node(&EntityId::new("discord"))
+                .unwrap()
+                .peak_abs
+                > 0.01,
+            "the Soundboard meter must show rendered audio, not silent pacing packets"
+        );
     }
 
     #[test]

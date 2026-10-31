@@ -4064,6 +4064,13 @@ impl CompiledMixerFanoutGraph {
                 self.with_output_source(chain.source, mixed, |source| {
                     block.map_from(source, &chain.entry_matrix)?;
                     chain.graph.process(block);
+                    // Generator inputs are paced by silent native packets. Their
+                    // source meter must report the rendered sound, not that clock.
+                    for (index, id) in self.input_node_ids.iter().enumerate() {
+                        if chain.graph.renders_soundboard_node(id) {
+                            self.input_meters[index].observe(block);
+                        }
+                    }
                     if let Some(gate) = &chain.gate {
                         self.apply_switch_gate(gate, block);
                     }
@@ -4178,7 +4185,17 @@ impl CompiledMixerFanoutGraph {
             _ => (1.0, 1.0),
         };
         for (index, (source, chain)) in sources.iter().zip(&self.input_chains).enumerate() {
-            self.input_meters[index].observe(source);
+            let id = &self.input_node_ids[index];
+            let rendered_soundboard = chain
+                .as_ref()
+                .is_some_and(|chain| chain.graph.renders_soundboard_node(id))
+                || self
+                    .output_chains
+                    .iter()
+                    .any(|chain| chain.graph.renders_soundboard_node(id));
+            if !rendered_soundboard {
+                self.input_meters[index].observe(source);
+            }
             let (start_gain, end_gain) = gains(index);
             match chain {
                 None => {
@@ -4197,6 +4214,9 @@ impl CompiledMixerFanoutGraph {
                             .map_from(source, &chain.entry_matrix)
                             .map_err(MixerError::Block)?;
                         chain.graph.process(block);
+                        if chain.graph.renders_soundboard_node(id) {
+                            self.input_meters[index].observe(block);
+                        }
                         self.capture_input_branches(index, block);
                         self.mixer.mix_input_ramped(
                             mixer_scratch,
@@ -9696,6 +9716,13 @@ impl RuntimeGraph {
                     _ => None,
                 })?
             })
+    }
+
+    fn renders_soundboard_node(&self, node_id: &audiorouter_domain::EntityId) -> bool {
+        self.stage_node_ids
+            .iter()
+            .zip(&self.stages)
+            .any(|(id, stage)| id == node_id && matches!(stage, ProcessingStage::Soundboard { .. }))
     }
 
     /// Return the lock-free trigger handle for an authored Soundboard node.

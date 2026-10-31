@@ -190,6 +190,17 @@ fn compile(session: &Session) -> Result<CompiledPathSet, String> {
 /// Compile and process a few quanta; every output must stay finite.
 fn compile_and_run(session: &Session, label: &str) {
     let set = compile(session).unwrap_or_else(|error| panic!("{label}: {error}"));
+    for path in set.paths() {
+        for node in session
+            .nodes
+            .iter()
+            .filter(|node| node.kind == NodeKind::Soundboard)
+        {
+            if let Some(board) = path.soundboard_for_node(&node.id) {
+                assert!(board.trigger(0), "{label}: Soundboard trigger rejected");
+            }
+        }
+    }
     for quantum in 0..4 {
         for path in set.paths() {
             let inputs = path
@@ -218,6 +229,34 @@ fn compile_and_run(session: &Session, label: &str) {
                             .iter()
                             .all(|sample| sample.is_finite()),
                         "{label}: non-finite output"
+                    );
+                }
+            }
+            for node in session
+                .nodes
+                .iter()
+                .filter(|node| node.kind == NodeKind::Soundboard)
+            {
+                if path.soundboard_for_node(&node.id).is_some() {
+                    let meter = path
+                        .meter_snapshot_for_node(&node.id)
+                        .expect("Soundboard source meter");
+                    assert!(
+                        meter.peak_abs > 0.01,
+                        "{label}: Soundboard meter measured silence at quantum {quantum}"
+                    );
+                    assert_eq!(
+                        meter.observed_frames,
+                        ((quantum + 1) * FRAMES) as u64,
+                        "{label}: meter must count rendered frames once"
+                    );
+                    assert!(
+                        outputs.iter().any(|block| block
+                            .channel(0)
+                            .unwrap()
+                            .iter()
+                            .any(|sample| sample.abs() > 0.01)),
+                        "{label}: triggered Soundboard did not reach an output"
                     );
                 }
             }
