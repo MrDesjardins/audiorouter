@@ -17,7 +17,25 @@ payload, record hashes and exercise the built shell before handoff. No PR,
 installation or release publication. Preserve the owner's running app and data.
 Validation records go here and in the Soundboard plan. Rollback: keep the
 previous test build and revert only these follow-up changes; no migration.
-Next: installer resource regression while the Soundboard thread finishes.
+Integration progress: EQ branches merged at `87e83a1f`, preserving both plan
+sections. Windows checks pass: control/engine locked tests (control 301 passed,
+11 ignored; engine lib 177 passed, 1 ignored; source combinations 5; tool
+combinations 4; deterministic audio 33); workspace and shell all-target,
+all-feature Clippy with warnings denied; both Rust formatting checks; installer
+resource/hook and artifact-verifier tests; family tests 9; guide media/catalog,
+guide links and documentation; shared policy/docs/site verification. Logs and
+report: `target/review-followup-*.log` and
+`target/review-followup-verification.json`. An initial verifier invocation used
+the wrong path (`tools/verify.mjs`); the corrected `tools/quality/verify.mjs`
+invocation passed. Isolated omission probes under
+`target/installer-library-guard-probe` rejected a missing library in each profile.
+The artifact verifier checks outer artifact integrity; it does not inspect NSIS
+contents. Actual built payload inspection remains required.
+
+Next: the existing Soundboard thread finishes UI/drop/picker and guide work,
+then notifies this thread to integrate its completed branch, revalidate the
+combined tree and build/test the isolated candidate. No new build, installer
+inspection, live audio or attended hardware test has been run in this resumption.
 
 ## Advanced EQ bands 2–16 guide clips — 2026-10-31
 
