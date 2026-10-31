@@ -2,6 +2,15 @@
 
 ## Combined review follow-ups and manual-test build — 2026-10-31
 
+Owner requested a fresh full local test build of the combined checkout
+(`385532c7`). Build-only scope: DIST-01/06; preserve the uncommitted plan
+updates and existing test packages. Rebuild static-runtime CLI/plugin worker,
+pack Stream Deck, run Tauri's production UI/typecheck and NSIS build, stage
+a new dated folder, check payload and hashes, then attempt disposable native
+shell validation. No installation, PR or publication. Rollback: use the previous
+test package. Hardware and installer-execution qualification remain separate.
+Build logs: `target/manual-full-*.log`. Next: finish the running build.
+
 Resume the authorized control-source, Soundboard and tool-guide follow-ups.
 Requirements: GRAPH-12/15, UI-17/20/25, SND-12/13/14/17/19 and DIST-01/06.
 The control-source fix is committed at `647646a7`; combined EQ guides are at
@@ -32,10 +41,24 @@ invocation passed. Isolated omission probes under
 The artifact verifier checks outer artifact integrity; it does not inspect NSIS
 contents. Actual built payload inspection remains required.
 
-Next: the existing Soundboard thread finishes UI/drop/picker and guide work,
-then notifies this thread to integrate its completed branch, revalidate the
-combined tree and build/test the isolated candidate. No new build, installer
-inspection, live audio or attended hardware test has been run in this resumption.
+Soundboard branch `7276ab5e` is now merged. It includes category expansion,
+file drops, set-only slot presentation, picker/editor regressions and completed
+guide coverage. Revalidate the merged sources, then build the optimized shell
+and companions with a refreshed embedded UI. Stage a separate local-test folder,
+bundle an app-only installer, inspect its sound-library payload and run a
+disposable-profile native bridge/editor smoke. Keep version 0.0.25: this is a
+manual-test snapshot, with no release/tag/PR or installation. Explorer file drop,
+live continuity, fresh-machine installation and attended Stream Deck remain
+unqualified until exercised. Rollback is the previous local build.
+
+Combined build and native editor check passed. Evidence, artifact paths, hashes,
+exact commands and remaining manual tests:
+[manual-test snapshot](evidence/2026-10-31-combined-manual-build.md).
+The extracted installer contains all 105 hash-verified sounds. Native HTML5 drop
+and library discovery passed; normal playback is blocked by the occupied default
+pipe and was not bypassed. The separate full/static-runtime build above is
+independent and remains owned by its build thread. Next: owner manual testing,
+then explicit PR/release decisions; no PR or release has been opened here.
 
 ## Advanced EQ bands 2–16 guide clips — 2026-10-31
 
