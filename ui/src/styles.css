@@ -7974,8 +7974,8 @@ input[type="color"] {
 }
 .soundboard-slot {
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  gap: 4px;
+  padding: 7px 9px;
   border: 1px solid var(--panel-border);
   border-radius: 10px;
 }
@@ -8001,6 +8001,10 @@ input[type="color"] {
 .soundboard-slot-actions {
   display: flex;
   gap: 7px;
+}
+.soundboard-slot input[type="range"] {
+  height: 0.45rem;
+  margin: 0;
 }
 .soundboard-editor-status {
   box-sizing: border-box;

@@ -27,12 +27,26 @@ export function soundSlot(settings: SoundSettings): number | null {
   return Number.isInteger(slot) && slot >= 1 && slot <= 9 ? slot : null;
 }
 
-/** What the button shows in AudioRouter: its caption, else the file name. */
-export function slotCaption(read: (name: string) => unknown, slot: number): string {
+/** What the Soundboard calls the button: its caption, else the file name; null when it has neither. */
+export function slotName(read: (name: string) => unknown, slot: number): string | null {
   const caption = read(`slot${slot}Caption`);
   if (typeof caption === "string" && caption.trim()) return caption.trim();
   const file = read(`slot${slot}FileName`);
-  return typeof file === "string" && file.trim() ? file.replace(/\.[A-Za-z0-9]{1,5}$/, "") : `Sound ${slot}`;
+  return typeof file === "string" && file.trim() ? file.replace(/\.[A-Za-z0-9]{1,5}$/, "") : null;
+}
+
+/** What the button shows in AudioRouter: its caption, else the file name, else "Sound n". */
+export function slotCaption(read: (name: string) => unknown, slot: number): string {
+  return slotName(read, slot) ?? `Sound ${slot}`;
+}
+
+/**
+ * The name of a Sound key, in priority order: the title typed in Stream Deck,
+ * the key's own label, the Soundboard's caption or file name. `null` when none
+ * exists, and the face then falls back to "SOUND n".
+ */
+export function keyName(title: string, settings: SoundSettings, read: (name: string) => unknown, slot: number): string | null {
+  return title.trim() || settings.label?.trim() || slotName(read, slot);
 }
 
 /** The nine slots of a Soundboard, for the settings panel. */

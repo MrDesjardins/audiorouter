@@ -51,12 +51,16 @@ describe("faces", () => {
 });
 
 describe("sound face", () => {
-  it("shows the caption and the slot, and dims while a press is pending", () => {
-    const face = soundFace({ label: "Airhorn <1>", slot: 3, pending: false });
+  it("shows a name without the numbered fallback, and preserves behavior and pending state", () => {
+    const face = soundFace({ label: "Airhorn <1>", named: true, slot: 3, pending: false });
     expect(face).toContain("Airhorn &lt;1&gt;");
-    expect(face).toContain("SOUND 3");
-    expect(soundFace({ label: null, slot: 9, pending: true })).toContain("opacity=\"0.55\"");
-    expect(soundFace({ label: "Horn", slot: 2, pending: false, behavior: "loop" })).toContain("SOUND 2 · LOOP");
-    expect(soundFace({ label: "Horn", slot: 2, pending: false })).not.toContain("·");
+    expect(face).not.toContain("SOUND 3");
+    expect(soundFace({ label: null, named: false, slot: 9, pending: true })).toContain("opacity=\"0.55\"");
+    for (const behavior of ["once", "loop", "hold"] as const) {
+      expect(soundFace({ label: "Horn", named: true, slot: 2, pending: false, behavior })).toContain(`>${behavior.toUpperCase()}<`);
+      expect(soundFace({ label: null, named: false, slot: 2, pending: false, behavior })).toContain(`SOUND 2 · ${behavior.toUpperCase()}`);
+    }
+    expect(soundFace({ label: null, named: true, slot: 2, pending: false })).not.toContain("<text");
+    expect(soundFace({ label: null, named: false, slot: 2, pending: false })).toContain(">SOUND 2<");
   });
 });

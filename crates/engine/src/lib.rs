@@ -3160,7 +3160,11 @@ pub struct CompiledMixerFanoutGraph {
     /// Direct destinations of a final pre-Mixer tool reuse that input's
     /// processed quantum, before Mixer gain or other sources are added.
     input_output_branches: Vec<InputOutputBranch>,
+    /// Native input levels; a generator input reads its chain instead
+    /// (`input_meter_sources`), so its entry stays unobserved and unlinked.
     input_meters: Vec<BlockMeter>,
+    /// Where each input's source level comes from, decided at compile time.
+    input_meter_sources: Vec<InputMeterSource>,
     output_meters: Vec<BlockMeter>,
     /// The authored Mixer (or Input Switch) and the level of its mixed
     /// output, observed once per quantum before the shared chain.
@@ -3173,6 +3177,17 @@ struct InputOutputBranch {
     channels: usize,
     block: RealtimeDsp<AudioBlock>,
     ready: AtomicBool,
+}
+
+/// The meter that reports a Mixer input's own source level.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InputMeterSource {
+    /// The native input block (device, application or network audio).
+    Native,
+    /// A generator rendered as stage 0 of this input's `input_chains` entry.
+    InputChain,
+    /// A generator rendered by this `output_chains` entry (connected Mixers).
+    OutputChain(usize),
 }
 
 #[derive(Clone, Copy)]
@@ -4178,7 +4193,11 @@ impl CompiledMixerFanoutGraph {
             _ => (1.0, 1.0),
         };
         for (index, (source, chain)) in sources.iter().zip(&self.input_chains).enumerate() {
-            self.input_meters[index].observe(source);
+            // A generator's native input is only silent pacing; its chain's
+            // generator stage meters the rendered sound.
+            if self.input_meter_sources[index] == InputMeterSource::Native {
+                self.input_meters[index].observe(source);
+            }
             let (start_gain, end_gain) = gains(index);
             match chain {
                 None => {
@@ -4249,7 +4268,9 @@ impl CompiledMixerFanoutGraph {
     }
 
     /// Publish source, output and Mixer levels for Duck triggers; tool chains
-    /// link their own stage meters when compiled.
+    /// link their own stage meters when compiled. A generator's chain already
+    /// publishes its generator stage, so its silent input meter is not linked
+    /// (two meters on one level would alternate sound and silence).
     fn link_node_levels(&self, session_id: &str) {
         for convergence in self
             .output_chains
@@ -4264,6 +4285,9 @@ impl CompiledMixerFanoutGraph {
             .input_node_ids
             .iter()
             .zip(&self.input_meters)
+            .zip(&self.input_meter_sources)
+            .filter(|(_, source)| **source == InputMeterSource::Native)
+            .map(|(input, _)| input)
             .chain(self.output_node_ids.iter().zip(&self.output_meters))
             .chain(
                 self.mixer_node_id
@@ -4292,7 +4316,20 @@ impl CompiledMixerFanoutGraph {
         node_id: &audiorouter_domain::EntityId,
     ) -> Option<BlockMeterSnapshot> {
         if let Some(index) = self.input_node_ids.iter().position(|id| id == node_id) {
-            return Some(self.input_meters[index].snapshot());
+            // A generator's level is its own stage (stage 0 of its chain),
+            // read before any tool after it, not the silent pacing input.
+            let chain = match self.input_meter_sources[index] {
+                InputMeterSource::Native => None,
+                InputMeterSource::InputChain => {
+                    self.input_chains[index].as_ref().map(|chain| &chain.graph)
+                }
+                InputMeterSource::OutputChain(chain) => {
+                    self.output_chains.get(chain).map(|chain| &chain.graph)
+                }
+            };
+            return chain
+                .and_then(|graph| graph.meter_snapshot_for_node(node_id))
+                .or_else(|| Some(self.input_meters[index].snapshot()));
         }
         if let Some(index) = self.output_node_ids.iter().position(|id| id == node_id) {
             return Some(self.output_meters[index].snapshot());
@@ -7859,6 +7896,21 @@ fn compile_path_graph(
         input_meters: (0..input_node_ids.len())
             .map(|_| BlockMeter::default())
             .collect(),
+        // Both entry compilers render a generator as stage 0 of its chain.
+        input_meter_sources: input_node_ids
+            .iter()
+            .map(|id| {
+                if session
+                    .nodes
+                    .iter()
+                    .any(|node| &node.id == id && renders_own_audio(node.kind))
+                {
+                    InputMeterSource::InputChain
+                } else {
+                    InputMeterSource::Native
+                }
+            })
+            .collect(),
         mixer_node_id: mixer_id,
         mixer_meter: BlockMeter::default(),
         output_meters: (0..output_node_ids.len())
@@ -8014,13 +8066,11 @@ fn compile_mixer_entry<'s>(
             audiorouter_domain::mixer_input_volume(mixer, &upstream.id)
         };
         matrices.push(scaled_matrix(&edge.matrix, input_volume));
-        // A Test Signal or Audio File produces its own audio: it runs as the
-        // first stage of this input's chain, and the native input only paces
-        // it with silent packets (its entry matrix is therefore all zeros).
-        let generator = matches!(
-            source.kind,
-            NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard
-        );
+        // A generator (Test Signal, Audio File, Soundboard) produces its own
+        // audio: it runs as the first stage of this input's chain, and the
+        // native input only paces it with silent packets (its entry matrix is
+        // therefore all zeros).
+        let generator = renders_own_audio(source.kind);
         if chain.is_empty() && !generator {
             input_chains.push(None);
             continue;
@@ -8106,10 +8156,7 @@ fn compile_direct_entry<'s>(
         return Err(GraphCompileError::UnsupportedTopology);
     }
     let source_channels = usize::from(source_port.channels);
-    let generator = matches!(
-        source.kind,
-        NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard
-    );
+    let generator = renders_own_audio(source.kind);
     let outgoing = session
         .edges
         .iter()
@@ -8765,6 +8812,52 @@ fn prepare_soundboard(
         })
     });
     SoundboardSource::new(slots, sample_rate_hz)
+}
+
+/// Whether a source renders its own audio in the engine. Such a source runs
+/// as stage 0 of its input chain, its native input only paces it with silent
+/// packets, and its level is that stage's meter. Exhaustive on purpose (no
+/// `_` arm): every compiler and meter that treats generators alike uses it,
+/// so a new kind must decide here.
+pub(crate) fn renders_own_audio(kind: audiorouter_domain::NodeKind) -> bool {
+    use audiorouter_domain::NodeKind;
+    match kind {
+        NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard => true,
+        NodeKind::PhysicalInput
+        | NodeKind::ApplicationCapture
+        | NodeKind::EndpointLoopback
+        | NodeKind::PhysicalOutput
+        | NodeKind::VirtualRenderSource
+        | NodeKind::VirtualCaptureSink
+        | NodeKind::NetworkSend
+        | NodeKind::NetworkReceive
+        | NodeKind::Mixer
+        | NodeKind::Gain
+        | NodeKind::Mute
+        | NodeKind::Meter
+        | NodeKind::ParametricEq
+        | NodeKind::Compressor
+        | NodeKind::Gate
+        | NodeKind::Limiter
+        | NodeKind::Delay
+        | NodeKind::GraphicEq
+        | NodeKind::Pitch
+        | NodeKind::Recorder
+        | NodeKind::Plugin
+        | NodeKind::Volume
+        | NodeKind::BassTreble
+        | NodeKind::Dehum
+        | NodeKind::Declick
+        | NodeKind::InputSwitch
+        | NodeKind::OutputSwitch
+        | NodeKind::Denoise
+        | NodeKind::SpeechDenoise
+        | NodeKind::FirFilter
+        | NodeKind::SpectralGate
+        | NodeKind::TimeShift
+        | NodeKind::Duck
+        | NodeKind::FunVoiceChanger => false,
+    }
 }
 
 /// Processor kinds that may sit in a linear chain before or after a Mixer.

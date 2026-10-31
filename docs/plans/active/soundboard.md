@@ -177,8 +177,208 @@ before release.
 
 ## Next action
 
+### 2026-10-30: Soundboard / Mixer 4 investigation
+
+Owner reports both Play controls produce no Cable-A audio. Requirements GRAPH-12,
+GRAPH-15 and UI-25/SND trigger parity. Working tree was initially clean. Read the
+live database through read-only SQLite and retained a private session copy in
+ignored `target/soundboard-owner-session.json`; revision 156 wires Soundboard 1
+and the processed mic into Mixer 4, then Cable-A. No saved route was changed.
+Windows live RPC accepted slot 1 and 3 triggers; slot 3 reported playing/progress,
+Mixer 4 and Cable-A reported identical peaks (-24.41 dBFS on the first sample),
+while Soundboard 1 incorrectly reported -120 dBFS. This establishes app-side
+delivery, not receipt or audibility in Discord/Siege or the cable capture device.
+
+Cause of the confirmed meter defect: generated inputs use silent pacing packets,
+and the input meter observed those rather than the rendered Soundboard block.
+Fix both connected output-cache and ordinary input-chain paths to observe the
+rendered board. Regression extends the connected-Mixer test to trigger and
+assert nonzero output and source meter. A separate opt-in private-session test
+loads the three actual bundled FLACs and renders 100 quanta to Cable-A; it passed
+on Windows with the saved revision before the meter fix, proving the wiring
+already delivers the sound. Existing combination tests previously asserted only
+finite outputs, so did not establish audible generator output.
+
+Validation: focused engine trigger/render/meter test passes on Windows. Next:
+run source/tool combinations, saved-route regression and format/Clippy; inspect
+diff. Remaining investigation: Windows cable capture/receiving app audibility.
+No replacement executable is handed over yet. Rollback: revert only these meter
+and regression changes; no migration, device change or driver work.
+
+Local validation completed on Windows: focused trigger/render/meter test (1),
+source combinations (4), tool combinations (4, including allocation check),
+opt-in saved-route test (1) all pass. `cargo clippy -p audiorouter-engine
+--all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff --check`
+pass. Live RPC slot 3 showed playing/progress and matching Mixer 4/Cable-A
+levels while the Soundboard meter stayed silent, confirming the meter defect
+in the running 0.0.25 executable. User asked which receiving app is being used;
+await that clarification before attributing downstream silence. An unrelated
+concurrent edit appeared in `ui/src/styles.css`; preserved unchanged by this task.
+
+Owner clarification: microphone audio works; Soundboard -> Mixer 4 has no flow
+animation while Mixer 4 -> Cable-A animates. Confirmed UI data path:
+`edgeMeterDb` in `ui/src/SessionFlowCanvas.tsx` prefers the source node's RMS;
+`edgeSignalForConnection` marks values at or below -60 dB silent. The erroneous
+-120 dB Soundboard source meter therefore suppresses exactly the reported edge
+animation. The backend meter correction supplies this same UI data path; no UI
+animation change is needed. Visual confirmation in a rebuilt shell remains open.
+
+Owner requests rebuild and complete regression coverage. Extend source combinations
+to press Soundboard Play and require nonzero output and source meter in single,
+fan-out, every source pair and every connected-Mixer triple. Add UI edge-state
+coverage for idle board/live Mixer, active board/live Mixer and return to idle.
+Run focused regression with meter fix removed to qualify failure, restore fix,
+then workspace/shell checks, UI checks and fresh embedded-UI release build.
+Stage a separate local folder with matching sidecars/library; preserve the running
+app and unrelated stylesheet edits. Rollback is the existing local-test executable.
+
+Rebuild/regression results (2026-10-30, Windows, Rust 1.96.0, Node 22.22.3):
+
+- Qualified the regression by temporarily removing rendered-meter observations:
+  source-combination tests failed in single, pair and connected-Mixer layouts
+  with `Soundboard meter measured silence`. Restored the fix and all pass.
+  Added exact observed-frame counts, which caught double counting in the first
+  correction; pacing packets are now excluded from this meter. No allocations,
+  locks or Arc clones were added to the processing path.
+- `cargo test --workspace --locked` passed (explicit hardware/private fixtures
+  remain ignored). After the final frame-count correction, engine lib tests
+  passed 176/1 ignored, source combinations 4/4, tool combinations 4/4 and
+  the explicit saved revision 156 FLAC playback/meter test 1/1 passed.
+- Shell tests passed 85/4 ignored. Workspace and shell Clippy with all targets,
+  all features and `-D warnings` passed. Both rustfmt check commands and
+  `git diff --check` passed.
+- UI full suite passed 758 tests/83 files, including both actual Play controls
+  through their controller (already running and start-before-trigger), and the
+  source-specific edge animation state. Typecheck:all, lint and format:check pass.
+- Edge `soundboard-flow.pw.ts`: 3/3 pass, dark/light/high-contrast, idle -> active
+  -> idle source meter with an independently active Mixer/output, unchanged card
+  bounds. Inspected all screenshots in
+  `target/soundboard-flow-evidence/`. This uses simulated telemetry, while the
+  engine regressions render actual PCM. Initial harness attempts hit a shared
+  port, a type annotation error and a decoration-matching selector; corrected
+  them, used private port 4197, and reran successfully. No shared server stopped.
+- `npm.cmd run build` refreshed `ui/dist`. The optimized custom-protocol shell
+  linked successfully, but Cargo's final copy to `src-tauri/target/release/`
+  was blocked by the owner's running executable. Copied the freshly linked
+  `release/deps/audiorouter_shell.exe` to the isolated staging folder and verified
+  identical SHA-256. Its 23:36:36 timestamp is newer than the final engine source
+  (23:33:56) and embedded UI (23:33:26). CLI/plugin worker were rebuilt in release;
+  unchanged native VST3/tunnel runtimes and the current sound library are staged.
+- Build: `target/local-test-soundboard-meter-20261030/audiorouter-shell.exe`,
+  version 0.0.24 (current checkout version, not a new release). Checksums are in
+  that folder's `checksums.json`. Shell SHA-256:
+  `EEA1CE9403BB689318FB4A36095EFEDCD11D9F04AE2D9E035F3F691407CBCECE`.
+- Ran that exact staged shell at Medium/non-admin integrity against a private
+  real backend, disposable database and WebView2 profile. Soundboard canvas and
+  Play button loaded through the embedded assets/native bridge, zero observed
+  page errors. Evidence: `target/soundboard-shell-smoke-1793428692889/result.json`
+  and `rebuilt-shell.png`; token report `target/soundboard-smoke-token.json`.
+  Initial probe looked for DevToolsActivePort one directory too high; corrected
+  it to WebView2's EBWebView directory and reran. Owned test processes cleaned up.
+  No devices opened, user session changed, or running owner app stopped.
+- Tooling notices: Vite warns about a 621 kB application chunk; splitting it is
+  outside this meter correction. Edge development harness emitted React Flow's
+  attribution notice, and inherited NO_COLOR/FORCE_COLOR produced a runner
+  notice; no attribution or colour configuration was changed. Node SQLite used
+  only for read-only diagnosis/disposable smoke setup reports experimental API.
+
+The staged build was handed to the owner for the saved-route check. No installer,
+release or full browser suite is claimed. Remaining broader Soundboard feature
+qualifications follow below.
+
+Owner acceptance (2026-10-30): "Working, please commit in the appropriate branch
+and open a PR." The owner confirmed the rebuilt fix and explicitly authorized
+opening its PR. Branch `fix/soundboard-source-meter` starts at current main
+(`b33fa54b`), including the already merged 0.0.25 release. Revalidate on that base,
+commit only the engine/meter tests, UI regressions and this plan; exclude the
+concurrent `ui/src/styles.css` edit. Next action: hosted Windows CI and human
+review after opening the approved PR. No release or installer is authorized by
+this acceptance.
+
+Pre-PR revalidation on the updated 0.0.25 base passed: full workspace and shell
+tests, both all-target/all-feature Clippy runs with warnings denied, both Rust
+format/check runs, UI format/lint/typecheck and all 758 tests. Documentation
+acceptance passed (213 Markdown files, 1,141 links), and the complete staged diff
+was inspected. Reproducible logs are in `target/soundboard-pr-*.log`; the earlier
+three-theme Edge, private-session audio and rebuilt-shell evidence remains above.
+
+### 2026-10-30: consolidate remaining Soundboard work into PR 94
+
+Owner explicitly requests all Soundboard work reported by the "Prepare Changes
+for Branch and PR" thread in PR 94. Read that thread's messages and activity:
+it audited this same shared working tree and made no changes. Eight of its nine
+reported paths are already committed in `51a2344d`; the sole excluded path is
+`ui/src/styles.css`, whose pending diff changes only Soundboard Properties row
+spacing/padding and range height/margin. This request authorizes including that
+previously excluded stylesheet change in the same branch/PR.
+
+Retain the existing styling diff and extend the three-theme Edge regression to
+open Properties, operate the level slider with Home/ArrowRight, and check that
+all slot fields/buttons stay within the row. Dark, light and high-contrast pass
+(3/3); inspected `soundboard-properties-*.png` beside the flow screenshots in
+`target/soundboard-flow-evidence/`. UI format, lint and typecheck pass. Rollback:
+revert this Properties styling/test follow-up without reverting the metering fix.
+Production UI build and format:check also pass; documentation acceptance passes
+213 Markdown files/1,141 links. The recorded 621 kB Vite bundle notice remains.
+Commit this follow-up on `fix/soundboard-source-meter` and push to PR 94; its
+combined nine-path diff accounts for every path in the other thread's audit.
+Next action: hosted Windows CI and human review of the updated PR.
+
+### 2026-10-31: review of `51a2344d` — generator meters, pre-tool level, private IDs
+
+A code review of `51a2344d` found three defects. Requirements GRAPH-12, GRAPH-15,
+UI-25 and the owner rule "every source works in every layout" (2026-10-29).
+
+1. **(High) The meter fix covered Soundboard only.** `renders_soundboard_node`
+   matched `ProcessingStage::Soundboard`, while all three compilers treat Test
+   Signal, Audio File and Soundboard alike as generators. Reproduced by widening
+   the `source_combinations` meter assertions to every generator kind (starting
+   each through its real transport handle: Test Signal / Audio File `play`,
+   Soundboard `trigger`): Test Signal failed `meter measured silence` in single,
+   pair and connected-Mixer layouts; with Test Signal excluded, Audio File failed
+   the same way. A Duck keyed on a generator saw two publishers on one level:
+   the new in-crate test `a_generator_publishes_its_duck_level_once_per_quantum`
+   counted 8 publications for 4 quanta without the fix (connected layout).
+2. **(Medium) The meter read after the whole input chain.** New layout test
+   `every_generator_meters_its_own_sound_before_the_next_tool` (generator → Mute
+   in single, Mixer and connected-Mixer routes) failed for Soundboard → Mute →
+   Mixer with source meter 0 before the fix.
+3. **(Low)** `soundboard_saved_route.rs` hard-coded the owner's node IDs. It now
+   documents the session source (`AUDIOROUTER_COMPILE_SESSION_JSON`, private copy
+   in ignored `target/soundboard-owner-session.json`) and reads the IDs from
+   `AUDIOROUTER_SOUNDBOARD_NODE_ID` / `AUDIOROUTER_SOUNDBOARD_OUTPUT_NODE_ID`,
+   defaulting to `soundboard-1` / `voice-to-cable-a`.
+
+Fix (engine only): one exhaustive classifier `renders_own_audio(NodeKind)` (no `_`
+arm) replaces the three hand-kept `matches!` lists (Mixer entry, direct entry,
+connected Mixers). `CompiledMixerFanoutGraph` records per input, at compile time,
+an `InputMeterSource` (`Native`, `InputChain`, `OutputChain(i)`). For a generator,
+`meter_snapshot_for_node` reads the chain's own `RuntimeGraph` meter (Test Signal's
+`source.meter`, otherwise the generator stage's `stage_meters` entry, observed
+before the next stage), and the silent input meter is neither observed nor linked
+to the Duck level (the chain already publishes its generator stage). The
+per-quantum `renders_soundboard_node` scans and the three post-chain `observe`
+calls are removed; the callback now does one enum compare per input. No allocation
+or lock was added. `MixTestSignal` belongs to the capture+signal linear graph and
+is unaffected.
+
+Validation (2026-10-31, Windows, Rust 1.96.0; owner allowed the builds while the
+app ran): `cargo test -p audiorouter-engine` all pass (lib 177 + 1 ignored,
+source combinations 5/5, tool combinations 4/4, deterministic audio 33, others);
+the opt-in owner replay passed with the private session copy; workspace and
+`src-tauri` Clippy `--all-targets --all-features -D warnings` clean; both rustfmt
+checks clean. `cargo test -p audiorouter-control -p audiorouter-transport` passes
+(control 301 + 11 ignored, transport 33), covering the dispatcher that serves node
+telemetry. Follow-up for the owner, outside this change: the control plane's
+source binding (`native_dispatch.rs` ~702, which has a `_ => continue` arm) and
+the `native_paths.rs` ~397 check still name the three generator kinds by hand.
+Not run: `cargo test --workspace`, the UI suites (no UI change), the
+continuity harness, a rebuilt shell or a live check of the canvas animation for
+Audio File / Test Signal. Rollback: revert this commit; the 51a2344d Soundboard
+behaviour returns. Next action: owner review of the branch; no PR without approval.
+
 Remaining, in order: library category expansion for `slotNSet`; drag and drop (SND-19);
-jsdom tests for the editor and canvas card; an engine route test through the compiler;
+remaining editor/picker interactions beyond the now-covered Play controls;
 inspect a built installer for `sound-library` (and `verify-artifacts.ps1` expectations);
 three-theme screenshots with layout-shift sampling; live continuity, fresh-install and
 attended Stream Deck qualification (task 10), which need the owner. The Stage A

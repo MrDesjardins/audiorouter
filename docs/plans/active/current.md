@@ -1,5 +1,33 @@
 # Active plan — post-0.0.8 maintenance
 
+## Stream Deck sound title priority — 2026-10-31
+
+Owner reports custom text leaves the numbered Sound label visible. Scope:
+UI-25/SND-14 Stream Deck presentation only. Existing uncommitted edits in
+`sound.ts`, `sound-settings.ts` and `faces.ts` already address priority; preserve
+and verify them. Priority: native Stream Deck title, per-key name, Soundboard
+caption/file name, then Sound n. Never draw the numbered fallback alongside a
+chosen name, including when Stream Deck draws its own title. Tasks: regression
+coverage through action title/settings events, face fallback/behavior coverage,
+typecheck, tests and plugin build; inspect diff. Windows/Node available;
+attended hardware validation requires Stream Deck and is separate from mocks.
+Rollback: revert only this title change; no session or device changes.
+Validation (Windows, Node 22.22.3): `npm.cmd --prefix tools/streamdeck ci`,
+`run build` (includes typecheck), `test` (34 tests / 7 files) and
+`git diff --check` pass. The initial stale node_modules lacked typescript-7;
+clean install restored the locked dependencies. Vitest did not lower the SDK
+action decorator; the test config now uses the same TypeScript API as the
+production build for action modules. The new event-handler regression exercises
+title shown/hidden/cleared, per-key label, caption/file fallback and live board
+refresh. Restoring the unconditional SOUND line makes it fail; restored fix
+passes. Face tests retain once/loop/hold and pending presentation. Rollup reports
+two third-party zod PURE-comment annotations and a zod circular dependency;
+these are dependency build diagnostics, left unchanged in this presentation fix.
+No hardware or installed-plugin test or visual screenshot review was run.
+Next: attended Stream Deck check of custom title, cleared title and unnamed slot;
+committed and pushed on `fix/soundboard-source-meter` at owner request; no
+installation or PR.
+
 ## Tool-guide clip copy and order review fixes — 2026-10-31
 
 Code review of `a3354170` found two defects in

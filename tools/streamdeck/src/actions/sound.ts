@@ -1,7 +1,7 @@
 import { action, type KeyDownEvent, type KeyUpEvent } from "@elgato/streamdeck";
 import { fit, messageFace, soundFace } from "../faces.js";
 import type { SummaryNode } from "../store.js";
-import { releasesOnKeyUp, slotCaption, soundBehavior, soundSlot, triggerParams, type SoundSettings } from "../sound-settings.js";
+import { keyName, releasesOnKeyUp, soundBehavior, soundSlot, triggerParams, type SoundSettings } from "../sound-settings.js";
 import { LiveKeyAction, type Face, type KeyTitle } from "./live-key.js";
 
 /** Play one sound of a Soundboard tool, like pressing its button. */
@@ -14,9 +14,10 @@ export class SoundAction extends LiveKeyAction<SoundSettings> {
     if (slot === null) return messageFace(fit(node.name), "choose a sound");
     const mediaId = this.store.setting(node, `slot${slot}MediaId`);
     if (typeof mediaId !== "string" || mediaId === "") return messageFace(fit(node.name), `slot ${slot} is empty`);
-    const name = settings.label?.trim() || slotCaption((field) => this.store.setting(node, field), slot);
+    const name = keyName(title.text, settings, (field) => this.store.setting(node, field), slot);
     return soundFace({
-      label: this.label(title, name),
+      label: name === null ? null : this.label(title, name),
+      named: name !== null,
       slot,
       pending: this.pending.has(actionId),
       behavior: soundBehavior(settings),

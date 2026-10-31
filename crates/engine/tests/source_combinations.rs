@@ -12,8 +12,8 @@ use std::sync::Arc;
 
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
 use audiorouter_engine::{
-    compile_native_paths_with_plugins_and_audio, AudioBlock, CompiledPathSet, DecodedAudio,
-    RuntimeGeneration,
+    compile_native_paths_with_plugins_and_audio, AudioBlock, CompiledMixerFanoutGraph,
+    CompiledPathSet, DecodedAudio, RuntimeGeneration,
 };
 use serde_json::json;
 
@@ -187,28 +187,115 @@ fn compile(session: &Session) -> Result<CompiledPathSet, String> {
     .map_err(|error| format!("{error:?}"))
 }
 
-/// Compile and process a few quanta; every output must stay finite.
+/// Whether a source renders its own sound in the engine (so the device-free
+/// harness can hear it) rather than reading a native input. Exhaustive on
+/// purpose: a new source must decide here.
+fn renders_own_audio(kind: NodeKind) -> bool {
+    match kind {
+        NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard => true,
+        NodeKind::PhysicalInput
+        | NodeKind::ApplicationCapture
+        | NodeKind::EndpointLoopback
+        | NodeKind::VirtualRenderSource
+        | NodeKind::NetworkReceive => false,
+        NodeKind::PhysicalOutput
+        | NodeKind::VirtualCaptureSink
+        | NodeKind::NetworkSend
+        | NodeKind::Mixer
+        | NodeKind::Gain
+        | NodeKind::Mute
+        | NodeKind::Meter
+        | NodeKind::ParametricEq
+        | NodeKind::Compressor
+        | NodeKind::Gate
+        | NodeKind::Limiter
+        | NodeKind::Delay
+        | NodeKind::GraphicEq
+        | NodeKind::Pitch
+        | NodeKind::Volume
+        | NodeKind::BassTreble
+        | NodeKind::Dehum
+        | NodeKind::Declick
+        | NodeKind::Denoise
+        | NodeKind::SpeechDenoise
+        | NodeKind::FirFilter
+        | NodeKind::SpectralGate
+        | NodeKind::TimeShift
+        | NodeKind::Duck
+        | NodeKind::FunVoiceChanger
+        | NodeKind::Recorder
+        | NodeKind::Plugin
+        | NodeKind::InputSwitch
+        | NodeKind::OutputSwitch => false,
+    }
+}
+
+/// Press Play (or trigger slot 1) on every generator the path holds, through
+/// the same transport handles the control plane uses.
+fn start_generators(set: &CompiledPathSet, session: &Session, label: &str) {
+    for path in set.paths() {
+        for node in &session.nodes {
+            match node.kind {
+                NodeKind::TestSignal => {
+                    if let Some(source) = path.test_signal_source_for_node(&node.id) {
+                        source.play();
+                    }
+                }
+                NodeKind::AudioFile => {
+                    if let Some(source) = path.audio_file_source_for_node(&node.id) {
+                        source.play();
+                    }
+                }
+                NodeKind::Soundboard => {
+                    if let Some(board) = path.soundboard_for_node(&node.id) {
+                        assert!(board.trigger(0), "{label}: Soundboard trigger rejected");
+                    }
+                }
+                // Guarded by the exhaustive classifier: a new generator kind
+                // fails here until it gets a start arm above.
+                _ => assert!(!renders_own_audio(node.kind), "{label}: {:?}", node.kind),
+            }
+        }
+    }
+}
+
+/// Process one silent-input quantum through `path`.
+fn process_quantum(path: &CompiledMixerFanoutGraph, label: &str) -> Vec<AudioBlock> {
+    let inputs = path
+        .input_node_ids()
+        .iter()
+        .map(|_| AudioBlock::new(2, FRAMES).unwrap())
+        .collect::<Vec<_>>();
+    let mut scratch = AudioBlock::new(path.mixer_channels(), FRAMES).unwrap();
+    let mut outputs = path
+        .output_node_ids()
+        .iter()
+        .map(|_| AudioBlock::new(2, FRAMES).unwrap())
+        .collect::<Vec<_>>();
+    path.process(
+        &inputs,
+        &mut scratch,
+        &mut outputs.iter_mut().collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|error| panic!("{label}: {error:?}"));
+    outputs
+}
+
+fn peak(outputs: &[AudioBlock]) -> f32 {
+    outputs
+        .iter()
+        .flat_map(|block| block.channel(0).unwrap().iter())
+        .fold(0.0, |peak, sample| peak.max(sample.abs()))
+}
+
+/// Compile and process a few quanta; every output must stay finite, and a
+/// started generator must reach an output and its own source meter.
 fn compile_and_run(session: &Session, label: &str) {
     let set = compile(session).unwrap_or_else(|error| panic!("{label}: {error}"));
+    start_generators(&set, session, label);
     for quantum in 0..4 {
         for path in set.paths() {
-            let inputs = path
-                .input_node_ids()
-                .iter()
-                .map(|_| AudioBlock::new(2, FRAMES).unwrap())
-                .collect::<Vec<_>>();
-            let mut scratch = AudioBlock::new(path.mixer_channels(), FRAMES).unwrap();
-            let mut outputs = path
-                .output_node_ids()
-                .iter()
-                .map(|_| AudioBlock::new(2, FRAMES).unwrap())
-                .collect::<Vec<_>>();
-            path.process(
-                &inputs,
-                &mut scratch,
-                &mut outputs.iter_mut().collect::<Vec<_>>(),
-            )
-            .unwrap_or_else(|error| panic!("{label}: quantum {quantum}: {error:?}"));
+            let outputs = process_quantum(path, &format!("{label}: quantum {quantum}"));
             for block in &outputs {
                 for channel in 0..2 {
                     assert!(
@@ -221,7 +308,64 @@ fn compile_and_run(session: &Session, label: &str) {
                     );
                 }
             }
+            for node in session
+                .nodes
+                .iter()
+                .filter(|node| renders_own_audio(node.kind))
+            {
+                if !path.input_node_ids().contains(&node.id) {
+                    continue;
+                }
+                let kind = node.kind;
+                let meter = path
+                    .meter_snapshot_for_node(&node.id)
+                    .unwrap_or_else(|| panic!("{label}: no {kind:?} source meter"));
+                assert!(
+                    meter.peak_abs > 0.01,
+                    "{label}: {kind:?} meter measured silence at quantum {quantum}"
+                );
+                assert_eq!(
+                    meter.observed_frames,
+                    ((quantum + 1) * FRAMES) as u64,
+                    "{label}: {kind:?} meter must count rendered frames once"
+                );
+                assert!(
+                    peak(&outputs) > 0.01,
+                    "{label}: started {kind:?} did not reach an output"
+                );
+            }
         }
+    }
+}
+
+/// Run `quanta` quanta of a session whose generator `a` feeds a full Mute;
+/// the source meter must show the generator, the outputs must stay silent.
+fn assert_meter_is_taken_before_the_tool(session: &Session, label: &str) {
+    let set = compile(session).unwrap_or_else(|error| panic!("{label}: {error}"));
+    start_generators(&set, session, label);
+    let id = EntityId::new("a");
+    let path = set
+        .paths()
+        .iter()
+        .find(|path| path.input_node_ids().contains(&id))
+        .unwrap_or_else(|| panic!("{label}: no path for the generator"));
+    for quantum in 0..4 {
+        let outputs = process_quantum(path, label);
+        assert!(
+            peak(&outputs) < 1e-6,
+            "{label}: the Mute after the generator must silence the output"
+        );
+        let meter = path.meter_snapshot_for_node(&id).unwrap();
+        assert!(
+            meter.peak_abs > 0.05,
+            "{label}: the source meter showed the Mute's output ({}), not the source",
+            meter.peak_abs
+        );
+        assert_eq!(
+            meter.observed_frames,
+            ((quantum + 1) * FRAMES) as u64,
+            "{label}: meter must count rendered frames once"
+        );
     }
 }
 
@@ -317,5 +461,80 @@ fn every_triple_of_sources_meets_in_connected_mixers() {
                 );
             }
         }
+    }
+}
+
+/// A generator's source meter (canvas animation, Duck key) is its own sound,
+/// read before the tools after it: Generator -> Mute must still show level
+/// on the generator while the route is silent (2026-10-31 review).
+#[test]
+fn every_generator_meters_its_own_sound_before_the_next_tool() {
+    let mute = || {
+        plain(
+            "mute-1",
+            NodeKind::Mute,
+            vec![
+                port("in", PortDirection::Input),
+                port("out", PortDirection::Output),
+            ],
+        )
+    };
+    for kind in sources()
+        .into_iter()
+        .filter(|kind| renders_own_audio(*kind))
+    {
+        let label = format!("single {kind:?} -> Mute");
+        assert_meter_is_taken_before_the_tool(
+            &session(
+                &label,
+                vec![source_node("a", kind), mute(), output("out-1")],
+                vec![edge("a", "mute-1"), edge("mute-1", "out-1")],
+            ),
+            &label,
+        );
+        let label = format!("mixer {kind:?} -> Mute + PhysicalInput");
+        assert_meter_is_taken_before_the_tool(
+            &session(
+                &label,
+                vec![
+                    source_node("a", kind),
+                    source_node("b", NodeKind::PhysicalInput),
+                    mute(),
+                    mixer("mix-1"),
+                    output("out-1"),
+                ],
+                vec![
+                    edge("a", "mute-1"),
+                    edge("mute-1", "mix-1"),
+                    edge("b", "mix-1"),
+                    edge("mix-1", "out-1"),
+                ],
+            ),
+            &label,
+        );
+        let label = format!("connected mixers {kind:?} -> Mute");
+        assert_meter_is_taken_before_the_tool(
+            &session(
+                &label,
+                vec![
+                    source_node("a", kind),
+                    source_node("b", NodeKind::PhysicalInput),
+                    source_node("c", NodeKind::PhysicalInput),
+                    mute(),
+                    mixer("mix-1"),
+                    mixer("mix-2"),
+                    output("out-1"),
+                ],
+                vec![
+                    edge("a", "mute-1"),
+                    edge("mute-1", "mix-1"),
+                    edge("b", "mix-1"),
+                    edge("mix-1", "mix-2"),
+                    edge("c", "mix-2"),
+                    edge("mix-2", "out-1"),
+                ],
+            ),
+            &label,
+        );
     }
 }
