@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { exampleNumber, exampleOption } from "./tool-guide-guards.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const inventory = JSON.parse(
   readFileSync(
@@ -124,9 +125,6 @@ for (const tool of inventory.tools) {
     const current = before[property.key] ?? property.default;
     if (property.type === "boolean") after[property.key] = !current;
     else if (property.type === "number") {
-      const min = property.minimum,
-        max = property.maximum;
-      let next = current === min ? max : min;
       const values = {
         ratio: 8,
         attackMs: 100,
@@ -170,19 +168,19 @@ for (const tool of inventory.tools) {
         levelDb: -30,
         durationMs: 2000,
       };
-      if (property.key in values) next = values[property.key];
-      next = Math.min(max, Math.max(min, next));
-      if (next === current) next = current === min ? max : min;
-      after[property.key] = next;
+      after[property.key] = exampleNumber(
+        property,
+        current,
+        values[property.key],
+        id,
+      );
     } else if (property.key === "preset")
       after = { ...presets.find((p) => p.id === "robot").parameters };
     else if (property.key === "slot1Caption")
       after[property.key] = "Bright tone";
     else if (property.key === "slot1Mode") after[property.key] = "toggle";
     else if (property.options?.length)
-      after[property.key] = property.options.find(
-        (option) => option !== current,
-      );
+      after[property.key] = exampleOption(property, current, id);
     else throw new Error(`No safe example choice for ${id}`);
     if (property.key === "band0Type") after.band0Type = "lowPass";
     if (property.key === 'fade') after.selected = 'b';

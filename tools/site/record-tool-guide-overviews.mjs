@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import ts from "../../ui/node_modules/typescript/lib/typescript.js";
+import { nodeTypeFor, selectedKinds } from "./tool-guide-guards.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const manifest = JSON.parse(
   readFileSync(
@@ -14,9 +15,18 @@ const manifest = JSON.parse(
   ),
 );
 const properties = process.env.GUIDE_PROPERTIES === "1";
-const publicCatalog = JSON.parse(readFileSync(resolve(root, 'tools/site/tool-guide-catalog.json'), 'utf8'));
+const publicCatalog = JSON.parse(
+  readFileSync(resolve(root, "tools/site/tool-guide-catalog.json"), "utf8"),
+);
+const kinds = selectedKinds(
+  process.env.GUIDE_KIND,
+  manifest.tools.map((tool) => tool.kind),
+);
 const config = process.env.GUIDE_CONFIG;
-if (config && (!process.env.GUIDE_KIND || properties)) throw new Error('Select exactly one tool for a configuration capture');
+if (config && (kinds?.length !== 1 || properties))
+  throw new Error(
+    "Select exactly one tool (GUIDE_KIND=<kind>, without GUIDE_PROPERTIES) for a configuration capture",
+  );
 const demo = !config && (properties || process.env.GUIDE_DEMO === "1");
 const parameterLabels = await import(
   "data:text/javascript;base64," +
@@ -48,7 +58,6 @@ const out = resolve(
       : "target/tool-guide-overviews",
 );
 mkdirSync(out, { recursive: true });
-const browser = await chromium.launch({ channel: "msedge", headless: true });
 const report = properties
   ? renders
       .filter((r) => existsSync(resolve(out, r.id, "overview.mp4")))
@@ -74,13 +83,25 @@ const targets = properties
       tool,
       render: renders.find((r) => r.kind === tool.kind),
     }));
-for (const { tool, render } of targets.filter(
-  ({ tool, render }) =>
-    (!process.env.GUIDE_KIND ||
-      process.env.GUIDE_KIND.split(",").includes(tool.kind)) &&
-    (!process.env.GUIDE_PROPERTY ||
-      render.parameter === process.env.GUIDE_PROPERTY),
-)) {
+for (const { tool, render } of targets)
+  if (!tool) throw new Error(`Render ${render.id} names unknown tool ${render.kind}`);
+const selected = targets.filter(({ tool, render }) => {
+  if (kinds && !kinds.includes(tool.kind)) return false;
+  if (!process.env.GUIDE_PROPERTY) return true;
+  if (!render)
+    throw new Error(
+      `GUIDE_PROPERTY is set but ${tool.kind} has no render in render-report.json`,
+    );
+  return render.parameter === process.env.GUIDE_PROPERTY;
+});
+if (!selected.length && (kinds || process.env.GUIDE_PROPERTY))
+  throw new Error("GUIDE_KIND and GUIDE_PROPERTY match no recording target");
+// Resolve every schema before starting a browser, so a bad kind stops early.
+const nodeTypes = new Map(
+  selected.map(({ tool }) => [tool.kind, nodeTypeFor(tool.kind, publicCatalog)]),
+);
+const browser = await chromium.launch({ channel: "msedge", headless: true });
+for (const { tool, render } of selected) {
   const clipId = config ? `${tool.kind}--${config}` : properties ? render.id : tool.kind;
   const previousIndex = report.findIndex((r) =>
     properties ? r.id === clipId : r.kind === tool.kind,
@@ -93,8 +114,7 @@ for (const { tool, render } of targets.filter(
   )
     continue;
   const audible = demo && render.audible !== false;
-  const wireType = tool.kind.replace(/[A-Z]/g, letter => '-' + letter.toLowerCase()) + '@1';
-  const parameterSchema = publicCatalog.nodeTypes.find(node => node.type === wireType)?.parameters ?? [];
+  const { version, parameters: parameterSchema } = nodeTypes.get(tool.kind);
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 1,
@@ -240,7 +260,7 @@ for (const { tool, render } of targets.filter(
       }
     }
     await page.addInitScript(
-      ({ session, tool, telemetry, voicePresets, audible, parameterSchema }) => {
+      ({ session, tool, telemetry, voicePresets, audible, parameterSchema, version }) => {
         localStorage.setItem("audiorouter.ui.theme", "dark");
         Object.assign(window, {
           __routeFixtureSession: session,
@@ -249,7 +269,7 @@ for (const { tool, render } of targets.filter(
           __routeFixtureProcessors: [
             {
               id: tool.kind,
-              version: 1,
+              version,
               category: "native",
               availability: { status: "available" },
               latencySamples: 0,
@@ -312,7 +332,7 @@ for (const { tool, render } of targets.filter(
           }, 50);
         }
       },
-      { session, tool, telemetry, voicePresets, audible, parameterSchema },
+      { session, tool, telemetry, voicePresets, audible, parameterSchema, version },
     );
     await page.goto("http://127.0.0.1:4186/route-harness.html");
     if (tool.kind !== "group")

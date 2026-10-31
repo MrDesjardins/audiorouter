@@ -45,6 +45,14 @@ the Loop control but ends before the source repeats.
   the final Group capture uses a populated fixture and succeeds. These are
   capture-layout experiments, not changes to product canvas styling. Do not
   interpret the recording checks as a zero-console-warning app qualification.
+- Review follow-up (2026-10-31): the capture scripts now stop with an error
+  instead of recording an empty Properties panel or writing a `NaN`/missing
+  example value. A tool kind missing from `tool-guide-catalog.json`, an
+  unknown or multi-kind `GUIDE_KIND` for a configuration capture, a
+  `GUIDE_PROPERTY` filter without a render, and an example property with no
+  safe changed value all fail. The node type version comes from the catalog.
+  The shared checks are in `tools/site/tool-guide-guards.mjs`, covered by
+  `node --test tools/site/tool-guide-guards.test.mjs` (6 pass; not yet run by CI).
 
 Windows results:
 
