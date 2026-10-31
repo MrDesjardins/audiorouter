@@ -18,7 +18,14 @@ Rebuild on Windows with Edge, ffmpeg and the pinned Rust toolchain installed:
 3. Run `node tools/site/record-tool-guide-overviews.mjs`, then set the PowerShell
    environment variable `$env:GUIDE_DEMO='1'` and run the recorder again for the
    audio examples. Clear it afterward. `GUIDE_KIND` optionally selects a tool.
-4. Run `node tools/site/build-tool-guide-review.mjs` and
+   Controls that repeat (Advanced EQ bands 2–16) share one clip, declared in
+   `tools/site/tool-guide-families.json`. Render it with
+   `node tools/site/render-tool-guide-families.mjs`, then record it with
+   `GUIDE_PROPERTIES=1 GUIDE_KIND=<kind> GUIDE_PROPERTY=<clip property>`.
+   Do not use `render-tool-guide-properties.mjs` for it.
+4. Run `node tools/site/build-tool-guide-property-manifest.mjs`, then
+   `node tools/site/build-tool-guide-review.mjs` (`GUIDE_REUSE_ENCODED=1`, also spelled `GUIDE_ENCODE_MISSING=1`,
+   encodes only clips that are not published yet) and
    `node site/generate-guides.mjs`, followed by `node site/generate-social.mjs`,
    to export optimized clips and pages while preserving social metadata.
 5. Run `node tools/site/check-tool-guide-videos.mjs` and

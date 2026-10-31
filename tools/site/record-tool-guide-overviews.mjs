@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import ts from "../../ui/node_modules/typescript/lib/typescript.js";
 import { nodeTypeFor, selectedKinds } from "./tool-guide-guards.mjs";
+import { familyActions } from "./tool-guide-family-actions.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const manifest = JSON.parse(
   readFileSync(
@@ -386,7 +387,18 @@ for (const { tool, render } of selected) {
         for (const element of elements) element.open = true;
       });
     let control;
-    if (demo && render.parameter) {
+    // A family's shared clip drives the panel through tool-guide-family-actions.
+    const family = demo && render.family ? familyActions[tool.kind] : null;
+    if (demo && render.family && !family)
+      throw new Error(`No family recording steps for ${tool.kind}`);
+    const familyParameters = family
+      ? {
+          before: JSON.parse(readFileSync(resolve(renderDirectory, "before.json"), "utf8")),
+          after: JSON.parse(readFileSync(resolve(renderDirectory, "after.json"), "utf8")),
+        }
+      : null;
+    let familyActionSeconds = null;
+    if (demo && render.parameter && !family) {
       const property = tool.properties.find(
         (p) => p.key === render.parameter,
       ) ?? { type: "number", label: "Volume for Synthetic input" };
@@ -491,6 +503,18 @@ for (const { tool, render } of selected) {
     for (let frame = 0; frame < 120; frame++) {
       const time = frame / 15;
       if (demo) {
+        if (family && frame === 48) {
+          eventAtSeconds = (performance.now() - start) / 1000;
+          if (Math.abs(eventAtSeconds - 3.2) > 1 / 15)
+            throw new Error(`Family action missed its video frame: ${eventAtSeconds}`);
+          await family.act({ page, inspector, ...familyParameters });
+          familyActionSeconds = (performance.now() - start) / 1000 - eventAtSeconds;
+          // The panel must settle within a few frames of the audible change.
+          if (familyActionSeconds > 0.4)
+            throw new Error(`Family action took ${familyActionSeconds} seconds`);
+        }
+        if (family && frame === 52) await family.reveal({ page, inspector });
+        if (family && frame === 40) await family.focus({ page, inspector });
         if (frame === 40 && control) await control.scrollIntoViewIfNeeded();
         if (frame === 48 && control) {
           const after = JSON.parse(
@@ -530,7 +554,7 @@ for (const { tool, render } of selected) {
               `Parameter action missed its video frame: ${eventAtSeconds}`,
             );
         }
-        if (frame === 60) await inspector.evaluate((e) => (e.scrollTop = 0));
+        if (frame === (family ? 76 : 60)) await inspector.evaluate((e) => (e.scrollTop = 0));
       } else if (tool.kind === "applicationCapture") {
         if (frame === 22) {
           await page.getByRole("button", { name: /Choose an application source/ }).click();
@@ -561,6 +585,7 @@ for (const { tool, render } of selected) {
     }
     await cdp.send("Page.stopScreencast");
     await cdp.detach();
+    if (family) await family.verify({ page, inspector, ...familyParameters });
     if (pageErrors.length)
       throw new Error(`Uncaught Properties error: ${pageErrors.join("; ")}`);
     if (
@@ -639,6 +664,7 @@ for (const { tool, render } of selected) {
           parameter: render?.parameter ?? null,
           sourceHash,
           eventAtSeconds,
+          ...(family ? { family: true, familyActionSeconds } : {}),
           frameRate: 15,
           frames: 120,
           pageErrors,

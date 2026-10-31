@@ -1,7 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadFamilies, representativeKey } from "./tool-guide-families.mjs";
 
+const families = loadFamilies();
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const processing = JSON.parse(
   readFileSync(resolve(root, "site/guide-content/processing.json"), "utf8"),
@@ -142,6 +144,11 @@ const tools = guideTools.map((tool) => ({
       nonAudibleReason:
         property.nonAudibleReason ?? prior?.nonAudibleReason ?? null,
       recordingId: `${tool.kind}--${property.key.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "")}`,
+      // Repeated controls (EQ bands 2-16) point at the row whose clips
+      // represent them; see tool-guide-families.mjs.
+      ...(representativeKey(families[tool.kind], property.key)
+        ? { representativeKey: representativeKey(families[tool.kind], property.key) }
+        : {}),
       recordings,
       status: recordings.length ? "recorded" : (prior?.status ?? "pending"),
     };

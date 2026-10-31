@@ -201,8 +201,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band0Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "31.5 Hz",
+              "video": "assets/tool-guides/graphicEq--band0Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band0Db.jpg",
+              "description": "31.5 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost only if your source has clean sub-bass and your speakers can reproduce it.",
+              "property": "band0Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band1Db",
@@ -216,8 +225,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band1Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "63 Hz",
+              "video": "assets/tool-guides/graphicEq--band1Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band1Db.jpg",
+              "description": "63 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a small amount when a clean source sounds too thin at the bottom.",
+              "property": "band1Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band2Db",
@@ -231,8 +249,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band2Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "125 Hz",
+              "video": "assets/tool-guides/graphicEq--band2Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band2Db.jpg",
+              "description": "125 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a little if a close-miked voice or instrument feels too lean.",
+              "property": "band2Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band3Db",
@@ -246,8 +273,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band3Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "250 Hz",
+              "video": "assets/tool-guides/graphicEq--band3Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band3Db.jpg",
+              "description": "250 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost gently when a source lacks body and sounds small.",
+              "property": "band3Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band4Db",
@@ -261,8 +297,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band4Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "500 Hz",
+              "video": "assets/tool-guides/graphicEq--band4Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band4Db.jpg",
+              "description": "500 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost modestly if it has lost body after other cuts.",
+              "property": "band4Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band5Db",
@@ -299,8 +344,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band6Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "2 kHz",
+              "video": "assets/tool-guides/graphicEq--band6Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band6Db.jpg",
+              "description": "2 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost gently when a voice is clear but its articulation is buried.",
+              "property": "band6Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band7Db",
@@ -314,8 +368,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band7Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "4 kHz",
+              "video": "assets/tool-guides/graphicEq--band7Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band7Db.jpg",
+              "description": "4 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a little when speech lacks presence against background sound.",
+              "property": "band7Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band8Db",
@@ -329,8 +392,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band8Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "8 kHz",
+              "video": "assets/tool-guides/graphicEq--band8Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band8Db.jpg",
+              "description": "8 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost subtly if a clean source sounds dull and needs a little sparkle.",
+              "property": "band8Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band9Db",
@@ -344,8 +416,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band9Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "16 kHz",
+              "video": "assets/tool-guides/graphicEq--band9Db.mp4",
+              "poster": "assets/tool-guides/graphicEq--band9Db.jpg",
+              "description": "16 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. A tiny boost can add air to a clean, full-band source.",
+              "property": "band9Db",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -392,8 +473,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band1Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band2Enabled",
@@ -407,8 +506,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band2Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band3Enabled",
@@ -422,8 +539,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band3Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band4Enabled",
@@ -437,8 +572,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band4Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band5Enabled",
@@ -452,8 +605,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band5Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band6Enabled",
@@ -467,8 +638,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band6Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band7Enabled",
@@ -482,8 +671,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band7Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band8Enabled",
@@ -497,8 +704,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band8Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band9Enabled",
@@ -512,8 +737,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band9Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band10Enabled",
@@ -527,8 +770,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band10Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band11Enabled",
@@ -542,8 +803,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band11Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band12Enabled",
@@ -557,8 +836,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band12Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band13Enabled",
@@ -572,8 +869,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band13Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band14Enabled",
@@ -587,8 +902,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band14Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band15Enabled",
@@ -602,8 +935,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band15Enabled",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Enabled",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band0Type",
@@ -659,8 +1010,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band1Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band2Type",
@@ -683,8 +1052,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band2Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band3Type",
@@ -707,8 +1094,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band3Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band4Type",
@@ -731,8 +1136,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band4Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band5Type",
@@ -755,8 +1178,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band5Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band6Type",
@@ -779,8 +1220,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band6Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band7Type",
@@ -803,8 +1262,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band7Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band8Type",
@@ -827,8 +1304,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band8Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band9Type",
@@ -851,8 +1346,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band9Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band10Type",
@@ -875,8 +1388,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band10Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band11Type",
@@ -899,8 +1430,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band11Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band12Type",
@@ -923,8 +1472,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band12Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band13Type",
@@ -947,8 +1514,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band13Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band14Type",
@@ -971,8 +1556,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band14Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band15Type",
@@ -995,8 +1598,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band15Type",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Type",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band0FrequencyHz",
@@ -1033,8 +1654,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band1FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band2FrequencyHz",
@@ -1048,8 +1686,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band2FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band3FrequencyHz",
@@ -1063,8 +1718,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band3FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band4FrequencyHz",
@@ -1078,8 +1750,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band4FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band5FrequencyHz",
@@ -1093,8 +1782,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band5FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band6FrequencyHz",
@@ -1108,8 +1814,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band6FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band7FrequencyHz",
@@ -1123,8 +1846,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band7FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band8FrequencyHz",
@@ -1138,8 +1878,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band8FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band9FrequencyHz",
@@ -1153,8 +1910,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band9FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band10FrequencyHz",
@@ -1168,8 +1942,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band10FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band11FrequencyHz",
@@ -1183,8 +1974,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band11FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band12FrequencyHz",
@@ -1198,8 +2006,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band12FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band13FrequencyHz",
@@ -1213,8 +2038,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band13FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band14FrequencyHz",
@@ -1228,8 +2070,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band14FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band15FrequencyHz",
@@ -1243,8 +2102,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band15FrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band0Q",
@@ -1282,8 +2158,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band1Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band2Q",
@@ -1297,8 +2191,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band2Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band3Q",
@@ -1312,8 +2224,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band3Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band4Q",
@@ -1327,8 +2257,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band4Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band5Q",
@@ -1342,8 +2290,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band5Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band6Q",
@@ -1357,8 +2323,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band6Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band7Q",
@@ -1372,8 +2356,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band7Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band8Q",
@@ -1387,8 +2389,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band8Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band9Q",
@@ -1402,8 +2422,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band9Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band10Q",
@@ -1417,8 +2455,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band10Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band11Q",
@@ -1432,8 +2488,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band11Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band12Q",
@@ -1447,8 +2521,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band12Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band13Q",
@@ -1462,8 +2554,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band13Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band14Q",
@@ -1477,8 +2587,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band14Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band15Q",
@@ -1492,8 +2620,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band15Q",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0Q",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band0GainDb",
@@ -1531,8 +2677,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band1GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band2GainDb",
@@ -1546,8 +2710,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band2GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band3GainDb",
@@ -1561,8 +2743,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band3GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band4GainDb",
@@ -1576,8 +2776,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band4GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band5GainDb",
@@ -1591,8 +2809,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band5GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band6GainDb",
@@ -1606,8 +2842,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band6GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band7GainDb",
@@ -1621,8 +2875,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band7GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band8GainDb",
@@ -1636,8 +2908,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band8GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band9GainDb",
@@ -1651,8 +2941,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band9GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band10GainDb",
@@ -1666,8 +2974,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band10GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band11GainDb",
@@ -1681,8 +3007,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band11GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band12GainDb",
@@ -1696,8 +3040,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band12GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band13GainDb",
@@ -1711,8 +3073,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band13GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band14GainDb",
@@ -1726,8 +3106,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band14GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band15GainDb",
@@ -1741,8 +3139,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band15GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "band0GainDb",
+          "recordings": [
+            {
+              "title": "Other bands",
+              "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+              "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+              "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+              "property": "otherBands",
+              "silent": false
+            },
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },

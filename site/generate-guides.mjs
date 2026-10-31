@@ -604,7 +604,8 @@ for (let i = 0; i < tools.length; i++) {
     (t.propertyFamily
       ? "<p>" +
         esc(
-          "Each band has these controls. Add up to 16 bands (displayed as 1–16), select a band, then adjust its shape, frequency, Q and gain where applicable.",
+          "Each band has these controls. Add up to 16 bands (displayed as 1–16), select a band, then adjust its shape, frequency, Q and gain where applicable." +
+            (t.propertyFamily.recordingNote ? " " + t.propertyFamily.recordingNote : ""),
         ) +
         "</p>"
       : "") +
