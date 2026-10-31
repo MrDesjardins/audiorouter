@@ -253,3 +253,19 @@ Phase 1 Reddit post 1 (2026-10-21): the owner posted to r/software,
 Next: answer comments for the first 2–3 hours, then after a week compare
 GitHub traffic referrers and release downloads with the week before, and
 pick the next subreddit (one per week).
+
+Round 2 (2026-10-30): stars 5 → 51 and installer downloads 4–9 → about 105 per
+release since the r/software post. The next step is a build-story post for
+r/vibecoding (or an alternative), then the r/Windows11 Sunday thread; see
+[the plan](marketing-vibecoding-2026-10-30.md). The weekly metrics run of
+2026-10-26 failed because main rejects the bot's push; the workflow now keeps
+the history on a `metrics-data` branch (dispatch it once after merge).
+
+Phase 1 Reddit post 2 (2026-10-30): the owner posted a build-story to
+r/vibecoding,
+<https://www.reddit.com/r/vibecoding/comments/1xjv4i5/how_i_built_audiorouter_free_open_source_windows/>
+(plan and results table in [marketing-vibecoding-2026-10-30.md](marketing-vibecoding-2026-10-30.md)).
+It also asks the community whether a cheaper way exists to sign the virtual
+cable driver for public use. Next: answer comments for 3 hours, record 48-hour
+numbers, turn the signing answers into a note in the driver-signing plan, then
+the r/Windows11 Sunday thread on 2026-11-01.

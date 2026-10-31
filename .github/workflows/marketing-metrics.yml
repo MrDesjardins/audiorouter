@@ -4,6 +4,12 @@ name: Marketing metrics (weekly)
 # referrers) for 14 days only, so record the public project numbers once a
 # week in docs/marketing-metrics.csv. See docs/plans/future/marketing.md.
 #
+# main requires a pull request and the "Quality gate" check, so the run of
+# 2026-10-26 could not push its row (GH013). The history now lives on the
+# unprotected `metrics-data` branch, seeded from main's CSV the first time.
+# The ProtectBranch ruleset covers only the default branch; do not give the
+# workflow a bypass.
+#
 # The traffic API is not available to GITHUB_TOKEN. METRICS_TOKEN is a
 # fine-grained personal access token limited to this repository with
 # "Administration: Read-only" (traffic) and "Metadata: Read-only".
@@ -38,6 +44,21 @@ jobs:
           node-version: 22.22.3
           package-manager-cache: false
 
+      - name: Start from the recorded history
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The branch holds only the CSV, in its own worktree under data/.
+          if git ls-remote --exit-code --heads origin metrics-data >/dev/null; then
+            git fetch --depth=1 origin metrics-data
+            git worktree add -B metrics-data data FETCH_HEAD
+            cp data/docs/marketing-metrics.csv docs/marketing-metrics.csv
+          else
+            # First run: seed from main's CSV (already in docs/).
+            git worktree add --detach data
+            git -C data switch --orphan metrics-data
+          fi
+
       - name: Append this week's row
         shell: bash
         env:
@@ -54,9 +75,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p data/docs
+          cp docs/marketing-metrics.csv data/docs/marketing-metrics.csv
+          cd data
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -- docs/marketing-metrics.csv
           git commit -m "docs: record weekly marketing metrics"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git push origin metrics-data
