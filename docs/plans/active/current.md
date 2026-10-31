@@ -136,10 +136,21 @@ parameter test now using a real stopped session (an unknown session now says
 UI 777 passed, lint, typecheck and format clean; contract drift and docs
 validation pass. `site/generate-catalogs.mjs` produced no catalog change (it
 also strips the injected social meta from guide pages, so those rewrites were
-discarded). Not run: a built shell with a real Claude/ChatGPT client, and
-three-theme screenshots of the API tab request builder (now offering device
-and Soundboard slot keys) and the MCP tab text change. Next: owner review;
-optional attended check with a real MCP client against the built app.
+discarded).
+
+Follow-up hardening: the coverage test also sends every property at once and
+fails if the backend answers "unknown parameter" to anything a default tool
+sends (checked to fire with a temporary unlisted `fadeMs`).
+`new_task_tools_work_through_mcp_by_name` covers presets, status, cable
+status, duplicate then delete, and the Audio file, Time Shift and Meter
+controls by name on a stopped session (each reaches its own "not playing"
+refusal). `mcp_stdio.rs` calls `get_status` and `list_sounds` through the real
+binary and checks an Observer's `trigger_sound` is denied. Edge (Playwright,
+dev harness): `request builder offers Soundboard slot settings` in dark,
+light and high-contrast (3 passed) and the existing MCP tab three-theme test
+(passed); screenshots inspected, in `target/parity-screens/`. The headless
+runbook role text was updated too. Not run: a built shell with a real Claude
+or ChatGPT client. Next: owner review; PR only after owner approval.
 
 ## Release 0.0.26 — 2026-10-31, owner request
 

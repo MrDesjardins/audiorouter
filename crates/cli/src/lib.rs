@@ -3437,7 +3437,13 @@ mod tests {
             let name = name.as_str().unwrap();
             base[name] = placeholder(&properties[name]);
         }
-        let mut variants = vec![base.clone()];
+        // Every property at once, so an optional field the backend does not
+        // accept is caught too.
+        let mut full = base.clone();
+        for (name, property) in &properties {
+            full[name.as_str()] = placeholder(property);
+        }
+        let mut variants = vec![base.clone(), full];
         for (name, property) in &properties {
             for value in property["enum"].as_array().into_iter().flatten() {
                 let mut variant = base.clone();
@@ -3485,7 +3491,14 @@ mod tests {
         for tool in mcp_listed_tools(false).as_array().unwrap() {
             let name = tool["name"].as_str().unwrap();
             for arguments in mcp_probe_arguments(&tool["inputSchema"]) {
-                call(&mut plane, name, arguments);
+                // A tool that sends a parameter the backend allowlist does
+                // not know is reached but never works (the Soundboard's
+                // "unlisted request parameter" defect).
+                let response = call(&mut plane, name, arguments.clone());
+                assert!(
+                    !response.to_string().contains("unknown parameter"),
+                    "{name} {arguments}: the backend refuses a parameter it sends: {response}"
+                );
             }
         }
         for resource in mcp_resources().as_array().unwrap() {
@@ -3625,6 +3638,87 @@ mod tests {
         assert!(playing, "the pressed slot plays");
         let stopped = tool(&mut plane, "stop_sounds", json!({ "node": "Party Board" }));
         assert_eq!(stopped["nodeId"], "board", "{stopped}");
+    }
+
+    /// The other new task tools through the real MCP entry point: reads and
+    /// session copies succeed, and runtime controls on a stopped session
+    /// reach their own "not playing" refusal (the name and the open session
+    /// were resolved), never "is required".
+    #[test]
+    fn new_task_tools_work_through_mcp_by_name() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        plane.insert_session(session).unwrap();
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let call = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            let response = mcp_tool_call(
+                plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": name, "arguments": arguments } }),
+            );
+            (
+                response["result"]["isError"] == true,
+                response["result"]["structuredContent"].clone(),
+            )
+        };
+        for name in ["list_presets", "get_status", "get_virtual_cable_status"] {
+            let (error, payload) = call(&mut plane, name, json!({}));
+            assert!(!error, "{name}: {payload}");
+        }
+        let (error, copied) = call(
+            &mut plane,
+            "duplicate_session",
+            json!({ "sessionId": "session-fixture", "name": "Fixture copy" }),
+        );
+        assert!(!error, "{copied}");
+        let copy_id = copied["result"]["sessionId"]
+            .as_str()
+            .or_else(|| copied["result"]["session"]["id"].as_str())
+            .expect("the copy's ID")
+            .to_owned();
+        assert_ne!(copy_id, "session-fixture");
+        let (error, deleted) = call(
+            &mut plane,
+            "delete_session",
+            json!({ "sessionId": copy_id }),
+        );
+        assert!(!error, "{deleted}");
+
+        for (kind, name) in [
+            ("audioFile", "Intro"),
+            ("timeShift", "Replay"),
+            ("meter", "Level"),
+        ] {
+            let (error, added) = call(
+                &mut plane,
+                "add_tool",
+                json!({ "kind": kind, "name": name }),
+            );
+            assert!(!error, "{kind}: {added}");
+        }
+        for (tool, arguments) in [
+            (
+                "control_audio_file",
+                json!({ "node": "intro", "action": "status" }),
+            ),
+            (
+                "control_time_shift",
+                json!({ "node": "Replay", "action": "status" }),
+            ),
+            ("reset_meter", json!({ "node": "Level" })),
+        ] {
+            let (_, payload) = call(&mut plane, tool, arguments);
+            let text = payload.to_string();
+            assert!(
+                text.contains("start the prepared session") || text.contains("while its route is playing") || text.contains("press Play"),
+                "{tool} resolves the open session and the name, then refuses because nothing plays: {text}"
+            );
+        }
     }
 
     #[test]
