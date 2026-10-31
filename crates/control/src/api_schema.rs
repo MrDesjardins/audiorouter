@@ -248,6 +248,19 @@ pub(crate) fn audio_thread_output_schema() -> Value {
     })
 }
 
+/// `sessionId` of a node-targeted runtime call; the backend defaults it to
+/// the active session (`resolve_node_target`).
+fn target_session() -> Value {
+    json!({ "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES,
+        "description": "Optional; defaults to the active session." })
+}
+
+/// `nodeId` of a node-targeted runtime call: an ID or the exact node name.
+fn target_node() -> Value {
+    json!({ "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES,
+        "description": "Node ID, or the node's exact name (case-insensitive)." })
+}
+
 pub(crate) fn object_schema(properties: Value, required: &[&str]) -> Value {
     let required = required
         .iter()
@@ -362,11 +375,11 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         ),
         "timeShift.transport" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "sessionId": target_session(),
+                "nodeId": target_node(),
                 "action": { "enum": ["pause", "resume", "back", "forward", "live", "status"] }
             }),
-            &["sessionId", "nodeId", "action"],
+            &["nodeId", "action"],
         ),
         "soundLibrary.list" => object_schema(json!({}), &[]),
         "soundLibrary.read" => object_schema(
@@ -375,40 +388,40 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         ),
         "soundboard.trigger" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "sessionId": target_session(),
+                "nodeId": target_node(),
                 "slot": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::SOUNDBOARD_SLOTS },
                 "action": { "enum": ["press", "release"] },
                 "mode": { "enum": ["once", "loop", "toggle", "hold"] }
             }),
-            &["sessionId", "nodeId", "slot"],
+            &["nodeId", "slot"],
         ),
         "soundboard.stop" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "sessionId": target_session(),
+                "nodeId": target_node(),
                 "slot": { "type": "integer", "minimum": 1, "maximum": audiorouter_domain::SOUNDBOARD_SLOTS }
             }),
-            &["sessionId", "nodeId"],
+            &["nodeId"],
         ),
         "soundboard.status" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+                "sessionId": target_session(),
+                "nodeId": target_node()
             }),
-            &["sessionId", "nodeId"],
+            &["nodeId"],
         ),
         "audioSources.transport" => object_schema(
             json!({
-                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "sessionId": target_session(),
+                "nodeId": target_node(),
                 "action": { "enum": ["play", "pause", "stop", "status"] }
             }),
-            &["sessionId", "nodeId", "action"],
+            &["nodeId", "action"],
         ),
         "meters.reset" => object_schema(
-            json!({"sessionId": {"type":"string", "minLength":1}, "nodeId":{"type":"string", "minLength":1}}),
-            &["sessionId", "nodeId"],
+            json!({ "sessionId": target_session(), "nodeId": target_node() }),
+            &["nodeId"],
         ),
         "recorders.list" => object_schema(json!({}), &[]),
         "recorders.create" => object_schema(

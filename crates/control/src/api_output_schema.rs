@@ -2148,22 +2148,42 @@ pub(crate) fn node_type_item_schema() -> Value {
             "parameters": {
                 "type": "array",
                 "maxItems": audiorouter_domain::MAX_PARAMETERS_PER_NODE,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": { "type": "string", "minLength": 1 },
-                        "type": { "enum": ["boolean", "number"] },
-                        "unit": { "type": "string", "minLength": 1 },
-                        "minimum": { "type": "number" },
-                        "maximum": { "type": "number" },
-                        "default": {}
-                    },
-                    "required": ["name", "type", "default"],
-                    "additionalProperties": false
-                }
+                "items": parameter_descriptor_schema()
             }
         },
         "required": ["type", "availability", "realtimeCostClass", "latencySamples", "parameters"],
+        "additionalProperties": false
+    })
+}
+
+/// One parameter of a node type or processor. A `namePattern` entry
+/// describes a family (`inputVolume:<upstreamNodeId>`, `slot<N>Mode`), not
+/// a literal key; `default` is absent where the backend saves nothing.
+pub(crate) fn parameter_descriptor_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "type": { "enum": ["boolean", "number", "string"] },
+            "unit": { "type": "string", "minLength": 1 },
+            "step": { "type": "number", "exclusiveMinimum": 0 },
+            "minimum": { "type": "number" },
+            "maximum": { "type": "number" },
+            "enum": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+            "maxLength": { "type": "integer", "minimum": 1 },
+            "maxItems": { "type": "integer", "minimum": 1 },
+            "reference": { "const": "node" },
+            "namePattern": { "type": "string", "minLength": 1 },
+            "slots": {
+                "type": "object",
+                "properties": { "minimum": { "type": "integer" }, "maximum": { "type": "integer" } },
+                "required": ["minimum", "maximum"],
+                "additionalProperties": false
+            },
+            "description": { "type": "string", "minLength": 1 },
+            "default": {}
+        },
+        "required": ["name", "type"],
         "additionalProperties": false
     })
 }
@@ -2216,19 +2236,7 @@ pub(crate) fn processor_item_schema() -> Value {
             "parameters": {
                 "type": "array",
                 "maxItems": audiorouter_domain::MAX_PARAMETERS_PER_NODE,
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": { "type": "string", "minLength": 1 },
-                        "type": { "enum": ["boolean", "number", "string"] },
-                        "unit": { "type": "string", "minLength": 1 },
-                        "minimum": { "type": "number" },
-                        "maximum": { "type": "number" },
-                        "default": {}
-                    },
-                    "required": ["name", "type"],
-                    "additionalProperties": false
-                }
+                "items": parameter_descriptor_schema()
             }
         },
         "required": ["id", "version", "category", "availability", "latencySamples", "parameters"],

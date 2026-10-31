@@ -1,6 +1,6 @@
 //! Offline M01 CLI command surface.
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 use audiorouter_control::{ClientGrant, ControlPlane};
 use audiorouter_domain::{inspect_routes, validate_session, EntityId, PermissionScope};
@@ -2393,6 +2393,19 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "get_startup",
     "get_operation",
     "cancel_operation",
+    "list_sounds",
+    "trigger_sound",
+    "stop_sounds",
+    "get_soundboard_status",
+    "control_audio_file",
+    "control_time_shift",
+    "reset_meter",
+    "undo_last_change",
+    "duplicate_session",
+    "delete_session",
+    "list_presets",
+    "get_status",
+    "get_virtual_cable_status",
 ];
 
 fn is_default_mcp_tool(name: &str) -> bool {
@@ -2654,16 +2667,32 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "plan_virtual_device_change"
             | "pump_native_render_source"
             | "pump_native_multi_inputs"
+            | "list_sounds"
+            | "get_soundboard_status"
+            | "list_presets"
+            | "get_status"
+            | "get_virtual_cable_status"
     );
     let destructive = matches!(
         name,
-        "remove_recording_entry"
+        "delete_session"
+            | "remove_recording_entry"
             | "recycle_recording"
             | "apply_virtual_device"
             | "apply_virtual_device_change"
             | "remove_virtual_device"
     );
-    let idempotent = !matches!(name, "reveal_recording" | "call_api");
+    // A repeated press plays again, a repeated jump moves again, and a
+    // repeated undo (with a fresh generated key) undoes one more change.
+    let idempotent = !matches!(
+        name,
+        "reveal_recording"
+            | "call_api"
+            | "trigger_sound"
+            | "control_time_shift"
+            | "undo_last_change"
+            | "duplicate_session"
+    );
     json!({
         "readOnlyHint": read_only,
         "destructiveHint": destructive,
@@ -2685,10 +2714,23 @@ fn mcp_tools() -> Value {
         { "name": "disconnect_nodes", "description": "Remove the connection between two nodes, by name. Saved and live.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "from": { "type": "string", "minLength": 1, "description": "Source node name or ID." }, "to": { "type": "string", "minLength": 1, "description": "Destination node name or ID." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["from", "to"], "additionalProperties": false } },
         { "name": "change_settings", "description": "Change a node by name: settings (parameters, e.g. {\"thresholdDb\": -40}), enabled, bypass or name. Values are validated; applied live and saved.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Node name or ID." }, "parameters": { "type": "object" }, "enabled": { "type": "boolean" }, "bypass": { "type": "boolean" }, "name": { "type": "string", "minLength": 1, "description": "New display name." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "toggle_setting", "description": "Flip one thing on a node: enabled, bypass, an on/off setting (e.g. muted) or a two-choice setting (e.g. selected on an Input Switch).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Node name or ID." }, "target": { "type": "string", "minLength": 1, "description": "enabled, bypass or a setting name." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["node", "target"], "additionalProperties": false } },
-        { "name": "play", "description": "Start audio for the session, preparing every device chosen on its nodes (like the Play button).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
-        { "name": "toggle_play", "description": "Stop audio if it is playing, otherwise play it.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
+        { "name": "play", "description": "Start audio for the session, preparing every device chosen on its nodes (like the Play button). Opening audio devices needs device administration, which assistant (MCP) clients do not receive: if this is refused, ask the user to press Play in AudioRouter. control_session action=stop stops audio.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
+        { "name": "toggle_play", "description": "Stop audio if it is playing, otherwise play it. Needs the same device permission as play; to only stop, use control_session action=stop.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
         { "name": "toggle_mic_mute", "description": "Mute the microphone if it is live, unmute it if it is muted (privacy mute).", "inputSchema": { "type": "object", "properties": { "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
         { "name": "get_levels", "description": "Read the live level of every playing node (peak/RMS dBFS, clipping, and how much a Gate, Compressor or Duck is reducing).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." } }, "required": [], "additionalProperties": false } },
+        { "name": "list_sounds", "description": "List the built-in sound library for Soundboard slots: id (lib:...), title, category, tags and duration. Put an id in a Soundboard slot with change_settings {slot1MediaId: \"lib:...\"}, or a category id in slot1Set for a random sound of that category.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
+        { "name": "trigger_sound", "description": "Press one slot (1-9) of a Soundboard while audio plays, like its button or a Stream Deck key. action=release ends a hold-mode press; mode overrides the slot's own mode (once, loop, toggle, hold) for this press.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Soundboard node name or ID." }, "slot": { "type": "integer", "minimum": 1, "maximum": 9 }, "action": { "type": "string", "enum": ["press", "release"] }, "mode": { "type": "string", "enum": ["once", "loop", "toggle", "hold"] } }, "required": ["node", "slot"], "additionalProperties": false } },
+        { "name": "stop_sounds", "description": "Fade out one Soundboard slot, or every slot when slot is omitted.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Soundboard node name or ID." }, "slot": { "type": "integer", "minimum": 1, "maximum": 9 } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "get_soundboard_status", "description": "Read which Soundboard slots have a sound and which are playing, while audio plays.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Soundboard node name or ID." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "control_audio_file", "description": "Play, pause or stop one Audio file (or Test signal) source while the route plays, without stopping the rest; status reads its position.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Audio file or Test signal node name or ID." }, "action": { "type": "string", "enum": ["play", "pause", "stop", "status"] } }, "required": ["node", "action"], "additionalProperties": false } },
+        { "name": "control_time_shift", "description": "Pause, resume, jump back or forward 10 s, or return to live on a Time Shift node while audio plays; status reads its buffer.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Time Shift node name or ID." }, "action": { "type": "string", "enum": ["pause", "resume", "back", "forward", "live", "status"] } }, "required": ["node", "action"], "additionalProperties": false } },
+        { "name": "reset_meter", "description": "Clear the held peak and clipping count of a Meter node while audio plays.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Meter node name or ID." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "undo_last_change", "description": "Undo the most recent saved change to the session (a tool added, removed, connected or changed), like Undo in the window. Applied live and saved.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
+        { "name": "duplicate_session", "description": "Copy a saved session under a new name; the copy is not opened.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to copy (from list_sessions)." }, "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Optional name of the copy." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "delete_session", "description": "Permanently delete a saved session. Ask the user to confirm the exact session first.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to delete (from list_sessions)." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "list_presets", "description": "List the built-in processing presets with what each one does.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
+        { "name": "get_status", "description": "Read whether the backend and audio are available and which sessions are running.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
+        { "name": "get_virtual_cable_status", "description": "Read whether the AudioRouter virtual cable driver is installed, its version and cables (installing it is done in the window).", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "plan_startup", "description": "Preview a sign-in startup policy without applying OS registration; requires startup-write scope.", "inputSchema": { "type": "object", "properties": { "enabled": { "type": "boolean" } }, "required": ["enabled"], "additionalProperties": false } },
@@ -2828,6 +2870,42 @@ fn mcp_tool_call(
         "apply_virtual_device_change" => ("virtualDevices.apply", Some(arguments)),
         "list_applications" => ("apps.list", None),
         "list_processors" => ("processors.list", None),
+        "list_sounds" => ("soundLibrary.list", None),
+        "list_presets" => ("presets.list", None),
+        "get_status" => ("status.get", None),
+        "get_virtual_cable_status" => ("virtualCable.status", None),
+        "trigger_sound" => ("soundboard.trigger", Some(mcp_node_params(arguments))),
+        "stop_sounds" => ("soundboard.stop", Some(mcp_node_params(arguments))),
+        "get_soundboard_status" => ("soundboard.status", Some(mcp_node_params(arguments))),
+        "control_audio_file" => ("audioSources.transport", Some(mcp_node_params(arguments))),
+        "control_time_shift" => ("timeShift.transport", Some(mcp_node_params(arguments))),
+        "reset_meter" => ("meters.reset", Some(mcp_node_params(arguments))),
+        "duplicate_session" => {
+            let source = arguments["sessionId"].as_str().unwrap_or_default();
+            let copy_id = format!(
+                "session-{}",
+                mcp_generated_key("copy").trim_start_matches("mcp-copy-")
+            );
+            let mut params = json!({
+                "sourceSessionId": source,
+                "sessionId": copy_id,
+                "idempotencyKey": mcp_key_or_generated(&arguments, name),
+            });
+            if let Some(copy_name) = arguments["name"].as_str() {
+                params["name"] = json!(copy_name);
+            }
+            ("sessions.duplicate", Some(params))
+        }
+        "delete_session" => (
+            "sessions.delete",
+            Some(json!({
+                "sessionId": arguments["sessionId"],
+                "idempotencyKey": mcp_key_or_generated(&arguments, name),
+            })),
+        ),
+        "undo_last_change" => {
+            return mcp_undo_last_change(plane, client_id, grant, pipe_name, id, &arguments);
+        }
         "get_session" => ("sessions.get", Some(arguments)),
         "export_session" => ("sessions.export", Some(arguments)),
         "plan_session_import" => ("sessions.importPlan", Some(arguments)),
@@ -3056,6 +3134,8 @@ fn mcp_api_value(
     method: &str,
     params: Option<Value>,
 ) -> Result<Value, String> {
+    #[cfg(test)]
+    tests::MCP_BACKEND_CALLS.with(|calls| calls.borrow_mut().push(method.to_owned()));
     let request = audiorouter_protocol::JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: request_id,
@@ -3104,6 +3184,91 @@ fn mcp_simple_tool(name: &str) -> Option<(&'static str, bool)> {
     })
 }
 
+/// Arguments of a tool aimed at one node: the assistant names the node as
+/// `node` (like the other plain-language tools); the backend method takes
+/// `nodeId` and resolves a name or an ID itself.
+fn mcp_node_params(arguments: Value) -> Value {
+    let mut params = if arguments.is_object() {
+        arguments
+    } else {
+        json!({})
+    };
+    if let Some(node) = params.as_object_mut().and_then(|map| map.remove("node")) {
+        params["nodeId"] = node;
+    }
+    params
+}
+
+/// The caller's idempotency key, or a generated one.
+fn mcp_key_or_generated(arguments: &Value, tool: &str) -> String {
+    arguments["idempotencyKey"]
+        .as_str()
+        .filter(|key| !key.is_empty())
+        .map_or_else(|| mcp_generated_key(tool), str::to_owned)
+}
+
+/// Undo as the window does: read the session's revision, ask the backend
+/// for the inverse plan of its last change, then commit that plan.
+fn mcp_undo_last_change(
+    plane: &mut ControlPlane,
+    client_id: &str,
+    grant: &audiorouter_control::ClientGrant,
+    pipe_name: Option<&str>,
+    id: Option<Value>,
+    arguments: &Value,
+) -> Value {
+    let mut step = |method: &str, params: Value| -> Result<Value, Value> {
+        let payload = mcp_api_value(
+            plane,
+            client_id,
+            grant,
+            pipe_name,
+            id.clone(),
+            method,
+            Some(params),
+        )
+        .map_err(|error| mcp_error(id.clone(), -32003, &error))?;
+        if payload.get("error").is_some() {
+            return Err(mcp_tool_result(id.clone(), payload));
+        }
+        Ok(payload)
+    };
+    let mut run = || -> Result<Value, Value> {
+        let session_id = match arguments["sessionId"].as_str().filter(|id| !id.is_empty()) {
+            Some(session_id) => session_id.to_owned(),
+            None => step("sessions.active.get", json!({}))?["result"]["sessionId"]
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| mcp_tool_error(id.clone(), "no session is open; pass sessionId"))?,
+        };
+        let session = step("sessions.get", json!({ "sessionId": session_id }))?;
+        let revision = session["result"]["revision"]
+            .as_u64()
+            .or_else(|| session["result"]["session"]["revision"].as_u64())
+            .ok_or_else(|| mcp_tool_error(id.clone(), "the session revision is unavailable"))?;
+        let plan = step(
+            "graph.undoPlan",
+            json!({ "sessionId": session_id, "baseRevision": revision }),
+        )?;
+        let plan_id = plan["result"]["planId"]
+            .as_str()
+            .ok_or_else(|| mcp_tool_error(id.clone(), "the backend returned no undo plan"))?
+            .to_owned();
+        step(
+            "graph.commit",
+            json!({
+                "planId": plan_id,
+                "baseRevision": revision,
+                "idempotencyKey": mcp_key_or_generated(arguments, "undo_last_change"),
+            }),
+        )
+    };
+    match run() {
+        Ok(committed) => mcp_tool_result(id.clone(), committed),
+        Err(response) => response,
+    }
+}
+
 /// A unique idempotency key for an assistant call that did not supply one.
 fn mcp_generated_key(tool: &str) -> String {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -3116,7 +3281,7 @@ fn mcp_generated_key(tool: &str) -> String {
     )
 }
 
-const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately; play / toggle_play start and stop audio.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
+const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
 
 fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": message }] } })
@@ -3125,6 +3290,342 @@ fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    thread_local! {
+        /// Backend methods `mcp_api_value` was asked to call on this thread.
+        pub(super) static MCP_BACKEND_CALLS: std::cell::RefCell<Vec<String>> =
+            const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    /// Public API methods an assistant cannot reach through a default MCP
+    /// tool or resource, each with the reason. Everything else in
+    /// `API_METHODS` must be reached; see
+    /// `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded`.
+    const MCP_EXCLUDED_METHODS: &[(&str, &str)] = &[
+        // Aliases of methods a default tool already calls.
+        ("applications.list", ALIAS),
+        ("session.start", ALIAS),
+        ("session.stop", ALIAS),
+        ("nodes.types", "superseded for assistants by list_tool_kinds (nodes.catalog) and the audiorouter://nodes resource"),
+        // Window-only consent, folders and integrations (refused to MCP and
+        // HTTP grants; see DESKTOP_ONLY_METHODS and devices.setAccess).
+        ("devices.setAccess", WINDOW_ONLY),
+        ("recordings.setRoot", WINDOW_ONLY),
+        ("obs.connect", WINDOW_ONLY),
+        ("obs.disconnect", WINDOW_ONLY),
+        ("obs.preview", WINDOW_ONLY),
+        ("obs.apply", WINDOW_ONLY),
+        ("obs.restore", WINDOW_ONLY),
+        ("obs.refresh", WINDOW_ONLY),
+        ("obs.status", WINDOW_ONLY),
+        ("plugins.openEditor", "opens a plugin's own window on the desktop; only the person at the PC can use it"),
+        ("plugins.closeEditor", "closes the plugin window opened in the desktop app"),
+        // Client identity and grants: an assistant must never change its own
+        // authority (AUTO-10).
+        ("clients.list", AUTHORITY),
+        ("clients.authorize", AUTHORITY),
+        ("clients.revoke", AUTHORITY),
+        ("system.quit", "quitting AudioRouter is the owner's decision from the tray or window"),
+        // Bulk media and files: no audio content goes through an assistant
+        // (AUTO-08), and file paths are chosen in the window.
+        ("audioMedia.beginUpload", MEDIA),
+        ("audioMedia.uploadChunk", MEDIA),
+        ("audioMedia.finishUpload", MEDIA),
+        ("audioMedia.importTemporaryRecording", MEDIA),
+        ("audioMedia.delete", MEDIA),
+        ("soundLibrary.read", "returns a sound's audio as base64 for the picker preview; an assistant uses list_sounds ids"),
+        ("sessions.exportFile", FILES),
+        ("sessions.importFile", FILES),
+        ("events.subscribe", "a replayed event stream for UI clients; assistants read get_session_summary and get_levels"),
+        ("system.handshake", "protocol negotiation done by the MCP server itself, not a user action"),
+        // Diagnostics settings and folders read by the window.
+        ("diagnostics.getVerbose", DIAGNOSTICS),
+        ("diagnostics.setVerbose", DIAGNOSTICS),
+        ("devices.getAccess", "the play tool's refusal already explains missing device consent"),
+        ("recordings.getRoot", "start_recording reports a missing recording folder; choosing one is window-only"),
+        ("processors.response", "EQ curve drawing for the Properties panel; settings go through change_settings"),
+        ("graph.history", "undo_last_change covers what an assistant needs; history browsing is expert (call_api)"),
+        // Plugins: scanning loads code from folders the user chooses and needs
+        // the plugin-scan scope; plugin internals are opaque state.
+        ("plugins.scan", PLUGINS),
+        ("plugins.inspect", PLUGINS),
+        ("plugins.inventory", PLUGINS),
+        ("plugins.retry", PLUGINS),
+        ("plugins.parameters", PLUGINS),
+        ("plugins.saveState", PLUGINS),
+        // Low-level steps the task tools wrap; listed with --advanced-tools.
+        ("graph.plan", EXPERT),
+        ("recorders.create", EXPERT),
+        ("recorders.arm", EXPERT),
+        ("recorders.start", EXPERT),
+        ("recorders.pause", EXPERT),
+        ("recorders.resume", EXPERT),
+        ("recorders.split", EXPERT),
+        ("recorders.stop", EXPERT),
+        ("recordings.preview", EXPERT),
+        ("recordings.recovery", EXPERT),
+        ("recordings.reveal", EXPERT),
+        ("recordings.recycle", EXPERT),
+        ("recordings.removeEntry", EXPERT),
+        ("recovery.clearSafeMode", EXPERT),
+        ("startup.plan", EXPERT),
+        ("startup.apply", EXPERT),
+        ("system.osTransition", EXPERT),
+        // Native device steps behind play; they need device administration,
+        // which MCP grants never receive.
+        ("nativePaths.prepare", NATIVE),
+        ("nativeApplications.prepare", NATIVE),
+        ("nativeEndpoints.prepare", NATIVE),
+        ("nativeEndpoints.pump", NATIVE),
+        ("nativeEndpoints.rebind", NATIVE),
+        ("nativeEndpoints.detach", NATIVE),
+        ("nativeDuplex.pump", NATIVE),
+        ("nativeDuplex.detach", NATIVE),
+        ("nativeOutputs.prepare", NATIVE),
+        ("nativeMultiInputs.prepare", NATIVE),
+        ("nativeMultiInputs.pump", NATIVE),
+        ("nativeMultiInputs.bindBranches", NATIVE),
+        ("nativeBridges.prepare", NATIVE),
+        ("nativeBridges.detach", NATIVE),
+        ("nativeBridges.heartbeat", NATIVE),
+        ("nativeRenderSources.pump", NATIVE),
+        // Virtual device lifecycle: driver administration, done in the window.
+        ("virtualDevices.list", VIRTUAL),
+        ("virtualDevices.plan", VIRTUAL),
+        ("virtualDevices.apply", VIRTUAL),
+        ("virtualDevices.provision", VIRTUAL),
+        ("virtualDevices.remove", VIRTUAL),
+        ("virtualRoutes.list", VIRTUAL),
+        ("virtualRoutes.replace", VIRTUAL),
+    ];
+    const ALIAS: &str = "older alias of a method a default tool already calls";
+    const WINDOW_ONLY: &str =
+        "desktop-window only by design (user consent or an outside app); refused to MCP and HTTP";
+    const AUTHORITY: &str = "manages client identities and grants; an assistant must not change its own authority (AUTO-10)";
+    const MEDIA: &str =
+        "moves audio file content; no audio goes through an assistant (AUTO-08), files are chosen in the window";
+    const FILES: &str = "reads or writes a .audiorouter file at a path chosen in the window";
+    const DIAGNOSTICS: &str = "support logging switch used from the window's Diagnostics tab";
+    const PLUGINS: &str =
+        "plugin scanning and opaque plugin state need the plugin-scan scope and folders the user chooses";
+    const EXPERT: &str =
+        "low-level step behind a task tool; listed only with --advanced-tools (expert or scripted use)";
+    const NATIVE: &str =
+        "native device step behind play; needs device administration, never granted to MCP clients";
+    const VIRTUAL: &str =
+        "virtual device and cross-session bus administration; expert tools with --advanced-tools";
+
+    /// Arguments for one call of a tool: its required fields with valid
+    /// placeholders, then one variant per value of each enum field.
+    fn mcp_probe_arguments(schema: &Value) -> Vec<Value> {
+        let placeholder = |property: &Value| match property["type"].as_str() {
+            Some("integer" | "number") => property.get("minimum").cloned().unwrap_or(json!(1)),
+            Some("boolean") => json!(false),
+            Some("object") => json!({}),
+            Some("array") => json!([]),
+            _ => property["enum"]
+                .get(0)
+                .cloned()
+                .unwrap_or_else(|| json!("probe")),
+        };
+        let properties = schema["properties"]
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
+        let mut base = json!({});
+        for name in schema["required"].as_array().into_iter().flatten() {
+            let name = name.as_str().unwrap();
+            base[name] = placeholder(&properties[name]);
+        }
+        let mut variants = vec![base.clone()];
+        for (name, property) in &properties {
+            for value in property["enum"].as_array().into_iter().flatten() {
+                let mut variant = base.clone();
+                variant[name.as_str()] = value.clone();
+                variants.push(variant);
+            }
+        }
+        variants
+    }
+
+    /// Owner rule 2026-10-31: the REST API and MCP must not drift from the
+    /// backend. This runs every default MCP tool (every enum variant) and
+    /// reads every resource against an in-memory backend, records the
+    /// backend methods they call, and requires each `API_METHODS` entry to
+    /// be reached or listed in `MCP_EXCLUDED_METHODS` with a reason. A new
+    /// API method fails here until it gets a default tool or an exclusion.
+    #[test]
+    fn every_api_method_is_reached_by_a_default_mcp_tool_or_excluded() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        plane.insert_session(session).unwrap();
+        use audiorouter_domain::PermissionScope;
+        let grant = audiorouter_control::ClientGrant::with_scopes([
+            PermissionScope::Read,
+            PermissionScope::GraphWrite,
+            PermissionScope::SessionControl,
+        ]);
+        let call = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            mcp_tool_call(
+                plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": name, "arguments": arguments } }),
+            )
+        };
+        MCP_BACKEND_CALLS.with(|calls| calls.borrow_mut().clear());
+        // A change to undo, so undo_last_change goes through to its commit.
+        let added = call(&mut plane, "add_tool", json!({ "kind": "gain" }));
+        assert_eq!(added["result"]["isError"], false, "{added}");
+        let undone = call(&mut plane, "undo_last_change", json!({}));
+        assert_eq!(undone["result"]["isError"], false, "{undone}");
+        for tool in mcp_listed_tools(false).as_array().unwrap() {
+            let name = tool["name"].as_str().unwrap();
+            for arguments in mcp_probe_arguments(&tool["inputSchema"]) {
+                call(&mut plane, name, arguments);
+            }
+        }
+        for resource in mcp_resources().as_array().unwrap() {
+            mcp_resource_read(
+                &mut plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "uri": resource["uri"] } }),
+            );
+        }
+        let reached = MCP_BACKEND_CALLS.with(|calls| {
+            calls
+                .borrow()
+                .iter()
+                .cloned()
+                .collect::<std::collections::BTreeSet<_>>()
+        });
+        let methods = audiorouter_domain::API_METHODS
+            .iter()
+            .map(|spec| spec.name)
+            .collect::<std::collections::BTreeSet<_>>();
+        let missing = methods
+            .iter()
+            .filter(|method| !reached.contains(**method))
+            .filter(|method| !MCP_EXCLUDED_METHODS.iter().any(|(name, _)| name == *method))
+            .collect::<Vec<_>>();
+        assert!(
+            missing.is_empty(),
+            "API methods with no default MCP tool and no recorded exclusion: {missing:?}. \
+             Add a plain-language MCP tool (DEFAULT_MCP_TOOLS) or list the method in \
+             MCP_EXCLUDED_METHODS with the reason an assistant must not or cannot use it."
+        );
+        for (method, reason) in MCP_EXCLUDED_METHODS {
+            assert!(methods.contains(method), "{method} is not an API method");
+            assert!(
+                !reached.contains(*method),
+                "{method} is reached by a default tool; remove its exclusion"
+            );
+            assert!(reason.len() > 10, "{method} needs a reason");
+        }
+        for method in &reached {
+            assert!(
+                methods.contains(method.as_str()),
+                "an MCP tool calls {method}, which is not a public API method"
+            );
+        }
+    }
+
+    /// The Soundboard tools through the real MCP entry point, by node name
+    /// and without a session ID, on a route that is actually running (it
+    /// ends in Network Send, so no audio device is needed). Before these
+    /// tools a default MCP client could not press a Soundboard at all.
+    #[cfg(windows)]
+    #[test]
+    fn soundboard_tools_play_and_stop_a_running_board_by_name() {
+        let port = std::net::UdpSocket::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let session: audiorouter_domain::Session = serde_json::from_value(json!({
+            "id": "board-session", "name": "Board", "schemaVersion": 1, "revision": 0,
+            "nodes": [
+                { "id": "board", "kind": "soundboard", "typeVersion": 1, "name": "Party Board",
+                  "enabled": true, "bypass": false, "parameters": { "slot1Set": "horns-alerts" },
+                  "ports": [{ "name": "out", "direction": "output", "channels": 2 }] },
+                { "id": "net", "kind": "networkSend", "typeVersion": 1, "name": "Network send",
+                  "enabled": true, "bypass": false, "parameters": { "host": "127.0.0.1", "port": port },
+                  "ports": [{ "name": "in", "direction": "input", "channels": 2 }] }
+            ],
+            "edges": [{ "id": "board-net", "sourceNode": "board", "sourcePort": "out",
+                "destinationNode": "net", "destinationPort": "in",
+                "matrix": [1.0, 0.0, 0.0, 1.0], "enabled": true }]
+        }))
+        .unwrap();
+        let mut plane = ControlPlane::default();
+        plane.insert_session(session).unwrap();
+        // Play needs device administration, which MCP never has: start the
+        // route as the window does, then hand over to the assistant.
+        for (method, params) in [
+            (
+                "sessions.active.set",
+                json!({ "sessionId": "board-session", "idempotencyKey": "open" }),
+            ),
+            (
+                "nativePaths.prepare",
+                json!({ "sessionId": "board-session" }),
+            ),
+            (
+                "session.start",
+                json!({ "sessionId": "board-session", "idempotencyKey": "start" }),
+            ),
+        ] {
+            let response = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            });
+            assert!(response.error.is_none(), "{method}: {:?}", response.error);
+        }
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let tool = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            let response = mcp_tool_call(
+                plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": name, "arguments": arguments } }),
+            );
+            assert_eq!(response["result"]["isError"], false, "{name}: {response}");
+            response["result"]["structuredContent"]["result"].clone()
+        };
+        let sounds = tool(&mut plane, "list_sounds", json!({}));
+        assert!(sounds.to_string().contains("lib:"), "{sounds}");
+        let pressed = tool(
+            &mut plane,
+            "trigger_sound",
+            json!({ "node": "Party Board", "slot": 1 }),
+        );
+        assert_eq!(pressed["accepted"], true, "{pressed}");
+        assert_eq!(pressed["nodeId"], "board");
+        let until = std::time::Instant::now() + std::time::Duration::from_millis(300);
+        let mut playing = false;
+        while std::time::Instant::now() < until && !playing {
+            plane.service_running_native_audio(std::time::Instant::now());
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            let status = tool(
+                &mut plane,
+                "get_soundboard_status",
+                json!({ "node": "party board" }),
+            );
+            playing = status["slots"][0]["playing"] == true;
+        }
+        assert!(playing, "the pressed slot plays");
+        let stopped = tool(&mut plane, "stop_sounds", json!({ "node": "Party Board" }));
+        assert_eq!(stopped["nodeId"], "board", "{stopped}");
+    }
 
     #[test]
     fn mcp_activity_records_tool_identity_and_safe_argument_names_only() {
@@ -5022,7 +5523,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 76);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 89);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

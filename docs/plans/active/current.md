@@ -1,5 +1,146 @@
 # Active plan — 0.0.26 release and maintenance
 
+## REST and MCP parity after the Soundboard — 2026-10-31, owner request
+
+Objective: make every public feature reachable by an LLM through the default
+MCP tools and keep REST/MCP from drifting. Branch `feature/api-mcp-parity`
+(from main `5d73cc59`). Requirements: AUTO-06/07/08/10/13/15/16, SND-07,
+HTTP-04. No PR until the owner approves one.
+
+Audit (static, 2026-10-31): REST is complete by construction: `POST
+/api/v1/a/b` reaches any `API_METHODS` entry except `DESKTOP_ONLY_METHODS`,
+and OpenAPI is generated from `system.describe`
+(`openapi_covers_every_method_and_docs_are_offline`). MCP is not: the default
+tools had no Soundboard trigger/stop/status or sound library list (SND-07
+parity unmet); `call_api` is advanced-only and the app never passes
+`--advanced-tools`; `node_parameter_schema` ended in `_ => json!([])`, so
+`list_tool_kinds` showed no settings for 11 kinds (device nodes, application
+capture, Meter, Audio File, Network Send/Receive, Soundboard); Audio File and
+Time Shift transport, meter reset, undo, presets, status and session
+duplicate/delete had no default tool; the MCP guides said Editor, which lacks
+`SessionControl`. `sessions.play` needs device administration, which MCP grants
+never receive (deliberate, `authorization.rs`); unchanged, now documented.
+
+Decisions: the backend resolves the active session and node names (ID first,
+then exact name) for the node-targeted runtime methods (`soundboard.*`,
+`audioSources.transport`, `timeShift.transport`, `meters.reset`); `sessionId`
+becomes optional there, IDs keep working (Stream Deck unchanged). Undo is a
+composite MCP tool over `sessions.get` → `graph.undoPlan` → `graph.commit`.
+Plugin internals, uploads, native plumbing, client management and desktop-only
+calls stay out of the default tools, each with a recorded reason.
+
+Tasks:
+1. Default MCP tools: `list_sounds`, `trigger_sound`, `stop_sounds`,
+   `get_soundboard_status`.
+2. Default MCP tools: `control_audio_file`, `control_time_shift`,
+   `reset_meter`, `undo_last_change`, `duplicate_session`, `delete_session`,
+   `list_presets`, `get_status`, `get_virtual_cable_status`.
+3. Parameter schemas for every kind through an exhaustive `match`, checked
+   against the domain parameter validator (parallel T3 thread).
+4. A Soundboard recipe using only default tools.
+5. A generated test: every `API_METHODS` entry is reached by a default MCP
+   tool or listed in one exclusion table with a reason.
+6. Fix the Editor/Operator wording in the MCP guides and spec; add the
+   AGENTS.md parity rule; refresh the API reference and site catalog.
+
+Validation: control and CLI tests (dispatcher-level for the new resolution),
+MCP stdio test with the new tools, Clippy/fmt for workspace and shell, docs
+check. Rollback: revert the branch; no data migration (schemas only relax).
+
+Step 3 result: `node_parameter_schema` (`crates/control/src/catalog.rs`) is an
+exhaustive match with no `_` arm. It describes device IDs, application
+identity, loopback role, bus, Audio File, network and Soundboard settings, with
+`description` text for where a value comes from and for the cross-field rules
+(exactly one of `endpointId`/`defaultRole`; `processId`/`creationTime100ns`
+only with `selectedInstance`). Meter (the validator accepts no setting) and
+Plugin (settings are per plugin through `plugins.parameters`) stay empty. The
+new entries have no `default`, because `nodes.add` saves every default and
+these kinds are still added with no parameters. The unset value is written in
+`description`. Soundboard slots are `namePattern` families (`slot<N>MediaId`
+… `slot<N>Set`, `slots` 1–9). `default_parameters` skips any `namePattern`
+entry. `creationTime100ns` is listed as opaque (from `apps.list`) because MCP
+needs it for `selectedInstance`. AudioFile `mediaId` is listed as the opaque
+ID from `audioMedia.finishUpload`. `noiseProfile` stays undocumented
+(internal). Defect found and fixed: the Dehum `harmonics` and Time Shift
+`bufferSeconds` defaults were floats (`4.0`, `60.0`) that the integer validator
+rejects, so `nodes.add` of a Dehum failed; they are now integers.
+`parameter_descriptor_schema` (`api_output_schema.rs`) now publishes every
+descriptor field, and `default` is no longer required. UI: the
+`ParameterDescriptor` type in contracts is shared by node types and processors.
+`processorParameterError` accepts free text (it checks the enum and
+`maxLength`). Before, a free-text setting was always rejected, which would have
+blocked the device picker's `endpointId` and already blocked Duck `keyNodeId`
+(unit evidence only). The generic Properties editor skips `namePattern`
+entries and the device/source kinds (`Record<NodeKind, boolean>`). The
+Properties panel should look unchanged. The API tab's request builder does
+change visibly: it now offers device settings (`endpointId`, `channelMode`, …)
+and expands `<N>` families into `slot1MediaId` … `slot9Set` (54 keys for a
+Soundboard). No three-theme screenshot was taken. MCP `list_tool_kinds` passes
+`nodes.catalog` through verbatim, so `description` and `namePattern` reach the
+assistant. Still open: `applicationCapture`, `endpointLoopback` and the two
+virtual kinds have no `node_template`, so they appear only in
+`nodes.types`/`audiorouter://nodes`, not in `list_tool_kinds`. `nodes.toggle`
+on a boolean with no default (Audio File `loop` when unset) still says
+"cannot be toggled". Tests: `catalog::tests::{every_kind_with_settings_describes_them,
+every_described_parameter_is_accepted_and_its_bounds_are_enforced,
+parameter_descriptors_match_their_published_schema,
+soundboard_slots_are_described_as_families}`,
+`simple::tests::{adding_device_and_source_nodes_saves_no_parameters` (a
+guard: it also passes before the change),
+`every_addable_kind_commits_with_its_catalog_defaults}` (failed on Dehum
+before the fix), `ui/src/NodeEditors.test.tsx` (fails without the guards),
+`processorCatalog.test.ts` (free text), `requestBuilder.test.ts` (slot family).
+Commands, 2026-10-31, Windows:
+- `cargo test -p audiorouter-control --locked --no-fail-fast`: lib 309 pass,
+  1 fail; doc tests pass (the crate has no `tests/` directory). The failure is
+  `authorization::tests::soundboard_calls_pass_the_dispatcher_with_every_documented_parameter`
+  ("session not found"), caused by the concurrent `resolve_node_target` work,
+  not by the schema change.
+- `cargo test -p audiorouter-cli --locked --no-fail-fast`: 42 + 5
+  (`mcp_stdio`) pass.
+- `cargo fmt --all -- --check`: clean.
+- `cargo clippy -p audiorouter-control --all-targets --all-features -- -D warnings`:
+  one error, `needless_borrow` at `simple.rs` `resolve_node_target`
+  (`&session`), which is also concurrent work. With
+  `-A clippy::needless_borrow`, every target (tests, examples) is clean. No
+  needless borrows were found in this step's diff.
+- `npm --prefix ui test`: 777 pass. `typecheck`, `typecheck:all`, contracts
+  `typecheck`, `format:check`, `lint`, `node tools/contracts/check-drift.mjs`
+  and `node tools/docs/validate.mjs` all pass.
+- Not run: the `src-tauri` tests (`openapi_covers_every_method_and_docs_are_offline`
+  does not read parameter descriptors). Nothing needs regenerating:
+  `site/generate-catalogs.mjs` (`api-methods.json`) reads only method names and
+  permissions, and `api-reference.md` is hand-kept and checked by method name.
+
+Steps 1, 2, 4, 5, 6 result (2026-10-31, Windows 11 Home, pinned 1.96.0):
+13 default MCP tools added (89 tools, 51 default); `resolve_node_target`
+(`simple.rs`) resolves the active session and node names for the six
+node-targeted runtime methods in the dispatcher; their input schemas and TS
+contracts make `sessionId` optional. `undo_last_change` composes
+`sessions.active.get` → `sessions.get` → `graph.undoPlan` → `graph.commit`.
+`play`/`toggle_play` descriptions and recipe 6 say MCP cannot open devices;
+recipe 7 covers the Soundboard. `nodes.toggle` treats an unset on/off setting
+without a default as off (Audio file `loop`). Guides, the MCP tab text, spec
+AUTO-15/18 and AGENTS.md (rule plus lesson) updated. Tests:
+`every_api_method_is_reached_by_a_default_mcp_tool_or_excluded` (runs all
+default tools and resources; 82 exclusions with reasons),
+`soundboard_tools_play_and_stop_a_running_board_by_name` (through
+`mcp_tool_call` on a running Network Send route),
+`soundboard_calls_resolve_the_active_session_and_a_node_name` (through
+`ControlPlane::dispatch`), the extended toggle test, and the authorization
+parameter test now using a real stopped session (an unknown session now says
+"session not found" instead of "start the prepared session"). Results: both
+`cargo fmt --check` clean; workspace and shell Clippy `-D warnings` clean;
+`cargo test --workspace --locked --no-fail-fast` 1229 passed, 0 failed
+(`target/parity-workspace-tests.log`); shell `http_api` tests 10 passed;
+UI 777 passed, lint, typecheck and format clean; contract drift and docs
+validation pass. `site/generate-catalogs.mjs` produced no catalog change (it
+also strips the injected social meta from guide pages, so those rewrites were
+discarded). Not run: a built shell with a real Claude/ChatGPT client, and
+three-theme screenshots of the API tab request builder (now offering device
+and Soundboard slot keys) and the MCP tab text change. Next: owner review;
+optional attended check with a real MCP client against the built app.
+
 ## Release 0.0.26 — 2026-10-31, owner request
 
 Published the unsigned app-only experimental

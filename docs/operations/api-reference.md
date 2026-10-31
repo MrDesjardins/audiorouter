@@ -41,8 +41,8 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `audioMedia.finishUpload` | `graphWrite` | mutating; validates, decodes, and stores opaque media |
 | `audioMedia.importTemporaryRecording` | `record` | mutating; imports only a completed `audio-file-take-*` WAV, removes its temporary file/library row, and expires the graph media after 24 hours |
 | `audioMedia.delete` | `graphWrite` | mutating; deletes media only when no session references it |
-| `audioSources.transport` | `sessionControl` | mutating; plays/stops a prepared Test Signal or plays/pauses/stops a prepared Audio File in a running session; `status` reads source state |
-| `timeShift.transport` | `sessionControl` | mutating; pauses, resumes, jumps back/forward 10 s, or returns to live on a running Time Shift node; `status` reads its delay and buffer |
+| `audioSources.transport` | `sessionControl` | mutating; plays/stops a prepared Test Signal or plays/pauses/stops a prepared Audio File in a running session; `status` reads source state; `sessionId` optional (active session), `nodeId` an ID or exact name |
+| `timeShift.transport` | `sessionControl` | mutating; pauses, resumes, jumps back/forward 10 s, or returns to live on a running Time Shift node; `status` reads its delay and buffer; `sessionId` optional, `nodeId` an ID or exact name |
 | `recorders.list` | `record` | read-only |
 | `recorders.create` | `record` | mutating; requires an idempotency key |
 | `recorders.arm` | `record` | mutating; requires an idempotency key |
@@ -69,9 +69,9 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
 | `soundLibrary.list` | `read` | read-only; bundled sound library manifest |
 | `soundLibrary.read` | `read` | read-only; one bundled sound as base64 for preview |
-| `soundboard.trigger` | `sessionControl` | mutating; plays a slot, no idempotency key because a repeat press plays again; optional per-press `mode` |
-| `soundboard.stop` | `sessionControl` | mutating; fades out one slot or all voices |
-| `soundboard.status` | `read` | read-only; live voices per slot |
+| `soundboard.trigger` | `sessionControl` | mutating; plays a slot, no idempotency key because a repeat press plays again; optional per-press `mode`; `sessionId` optional (active session), `nodeId` an ID or exact name |
+| `soundboard.stop` | `sessionControl` | mutating; fades out one slot or all voices; same addressing as `soundboard.trigger` |
+| `soundboard.status` | `read` | read-only; live voices per slot; same addressing as `soundboard.trigger` |
 
 `recordings.recovery` accepts either a `recordingId` for one checkpoint or an
 optional `cursor`/`limit` for a bounded recovery listing. Listing returns
@@ -162,7 +162,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `sessions.active.set` | `sessionControl` | mutating; requires an idempotency key; selects an existing editing session without starting audio |
 | `sessions.create` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.duplicate` | `graphWrite` | mutating; requires an idempotency key |
-| `meters.reset` | `sessionControl` | runtime statistics only; sessionId/nodeId select a prepared Meter; clears held peaks and clipping counters without changing sound or saving |
+| `meters.reset` | `sessionControl` | runtime statistics only; `nodeId` (ID or exact name) selects a prepared Meter, `sessionId` defaults to the active session; clears held peaks and clipping counters without changing sound or saving |
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.play` | `deviceAdministration` | external operation; prepares the devices saved on the nodes and starts, like Play; sessionId defaults to the active session |
 | `sessions.togglePlay` | `deviceAdministration` | external operation; stops if playing, otherwise plays |
@@ -409,9 +409,13 @@ The UI requests this diagnostic snapshot every 50 ms while a session is
 running. Diagnostics are not replayed or retained as meter events;
 the UI keeps the last successful snapshot if a refresh fails.
 
-The MCP stdio adapter exposes focused read/write tools for graph, virtual-route,
-native-output, and project-driver bridge operations in addition to `call_api`;
-it uses the enrolled client identity and cannot bypass the backend permission
+The MCP stdio adapter lists plain-language task tools by default (sessions,
+tools and connections, settings, Soundboard, Audio file and Time Shift
+transport, meters, undo, recording, status) and, with `--advanced-tools`,
+focused graph, virtual-route, native-output and project-driver bridge tools
+plus `call_api`. Every public method is reached by a default tool or resource
+or is excluded with a recorded reason (`MCP_EXCLUDED_METHODS`, spec AUTO-18).
+It uses the enrolled client identity and cannot bypass the backend permission
 checks. Native bridge preparation still requires the exact broker path and
 mapping inputs, and remains stopped until a qualifying managed driver exists.
 See the [headless runbook](headless-runbook.md) for launch and recovery

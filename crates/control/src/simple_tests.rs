@@ -142,6 +142,77 @@ fn catalog_describes_addable_tools_in_plain_words() {
     assert_eq!(switch["inputs"], json!(["a", "b"]));
 }
 
+/// Describing device and source settings must not change what `nodes.add`
+/// saves: these kinds are added with no parameters, and a Soundboard
+/// family (`slot<N>Mode`) never becomes a literal key.
+#[test]
+fn adding_device_and_source_nodes_saves_no_parameters() {
+    let mut plane = plane();
+    for (index, kind) in [
+        "physicalInput",
+        "physicalOutput",
+        "meter",
+        "audioFile",
+        "networkSend",
+        "networkReceive",
+        "soundboard",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let added = call(
+            &mut plane,
+            "nodes.add",
+            json!({ "kind": kind, "idempotencyKey": format!("device-{index}") }),
+        )
+        .unwrap();
+        let id = added["nodeId"].as_str().unwrap().to_owned();
+        let saved = session(&plane);
+        let node = saved
+            .nodes
+            .iter()
+            .find(|node| node.id.as_str() == id)
+            .unwrap();
+        assert!(node.parameters.is_empty(), "{kind}: {:?}", node.parameters);
+    }
+    let catalog = call(&mut plane, "nodes.catalog", json!({})).unwrap();
+    let soundboard = catalog
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["kind"] == "soundboard")
+        .unwrap();
+    assert!(soundboard["parameters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|parameter| parameter["namePattern"] == "slot<N>MediaId"));
+    let summary = call(&mut plane, "sessions.summary", json!({})).unwrap();
+    for node in summary["nodes"].as_array().unwrap() {
+        if node["kind"] == "soundboard" || node["kind"] == "physicalInput" {
+            assert_eq!(node["settings"], json!({}), "{node}");
+        }
+    }
+}
+
+/// Every kind `nodes.add` offers commits with the defaults it saves.
+#[test]
+fn every_addable_kind_commits_with_its_catalog_defaults() {
+    let mut plane = plane();
+    for (index, kind) in NodeKind::ALL.into_iter().enumerate() {
+        if node_template(kind).is_none() {
+            continue;
+        }
+        let kind = kind_name(kind);
+        call(
+            &mut plane,
+            "nodes.add",
+            json!({ "kind": kind, "idempotencyKey": format!("every-{index}") }),
+        )
+        .unwrap_or_else(|error| panic!("{kind}: {error}"));
+    }
+}
+
 #[test]
 fn summary_reads_like_the_canvas() {
     let summary = call(&mut plane(), "sessions.summary", json!({})).unwrap();
@@ -369,6 +440,23 @@ fn toggles_flip_flags_on_off_settings_and_two_way_choices() {
             &mut plane,
             "nodes.toggle",
             json!({ "node": "Mic mute", "target": "muted", "idempotencyKey": "t4" })
+        )
+        .unwrap()["value"],
+        true
+    );
+    // An unset on/off setting with no default (Audio file loop) is off, so
+    // the first toggle turns it on. Before, it "cannot be toggled".
+    call(
+        &mut plane,
+        "nodes.add",
+        json!({ "kind": "audioFile", "name": "Intro", "idempotencyKey": "f" }),
+    )
+    .unwrap();
+    assert_eq!(
+        call(
+            &mut plane,
+            "nodes.toggle",
+            json!({ "node": "Intro", "target": "loop", "idempotencyKey": "t6" })
         )
         .unwrap()["value"],
         true

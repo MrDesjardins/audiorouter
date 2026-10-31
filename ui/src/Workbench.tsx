@@ -690,8 +690,9 @@ export function Workbench({
             </div>
             <p>
               ChatGPT uses the separate <code>audiorouter-chatgpt</code> client with read-only access. To let it create
-              or edit sessions, grant Editor under Client permissions. Audio stays on this PC; only MCP requests and
-              results cross the encrypted tunnel.
+              or edit sessions, grant Editor under Client permissions; grant Operator to also let it press Soundboard
+              sounds and control audio that is playing. You still press Play here. Audio stays on this PC; only MCP
+              requests and results cross the encrypted tunnel.
             </p>
             {mcpTunnelStatus && !mcpTunnelStatus.runtimeAvailable && (
               <p className="mcp-tunnel-error" role="status">

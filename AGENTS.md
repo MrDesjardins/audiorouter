@@ -24,6 +24,13 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
 - Preserve microphone privacy: a failed processor on a protected voice path produces silence until deliberate recovery. Never silently replace a missing microphone with another input.
 - Do not add cloud inference, remote control, telemetry, subscriptions, platform ports, or application-specific hooks unless their scope is approved.
 - **Every source and tool must work in every route layout (owner rule, 2026-10-29).** A new input or source tool must play on its own, in a fan-out, in a Mixer with any other source, and in connected Mixers; a new processing tool must pass every flag pattern in those layouts. Never write a hand-made list of "supported" kinds that a new kind can miss: classify kinds with an exhaustive `match` (no `_` arm) and cover them in `crates/engine/tests/source_combinations.rs` (sources) and `tool_combinations.rs` (processors). A new `NodeKind` is not finished until those suites pass with it; run them before reporting a tool ready.
+- **Keep the REST API and MCP current with every change (owner rule, 2026-10-31, spec AUTO-18).** A feature is not finished until a script (REST) and an LLM (default MCP tools, no `--advanced-tools`) can use it. In the same change:
+  - add each new method to `API_METHODS` with its input/output schema, authorization parameters and `contracts/src/index.ts` entry; REST and OpenAPI then follow automatically. Run `npm --prefix contracts run check:drift`;
+  - give it a plain-language default MCP tool (`mcp_tools`, `DEFAULT_MCP_TOOLS`, annotations), or add it to `MCP_EXCLUDED_METHODS` in `crates/cli/src/lib.rs` with the reason an assistant must not or cannot use it. `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded` fails otherwise;
+  - describe every setting of a new or changed `NodeKind` in `node_parameter_schema` (exhaustive match), so `list_tool_kinds` tells an assistant how to configure it;
+  - follow the task-method rules for node-targeted calls: optional `sessionId`, `nodeId` as an ID or exact name, resolved in the backend, never in an adapter;
+  - add or update a `get_recipes` entry when the steps are not obvious from the tool descriptions, and keep the MCP guides' role advice (Observer, Editor, Operator) true;
+  - exercise the new tool through `mcp_tool_call`, and the method through `ControlPlane::dispatch`, then regenerate `docs/operations/api-reference.md` and the site catalogs.
 
 ## Static website writing
 
@@ -140,6 +147,18 @@ Do not modify user authorization, relax acceptance criteria, or turn external co
 Report the result, affected requirement IDs/files, checks performed and limitations, unresolved blockers, and the exact next milestone/task. Keep the active plan sufficient for a new agent to resume without chat history. Never invent commit hashes, test results, driver capabilities, or installed dependencies.
 
 ## Validated lessons
+
+- **2026-10-31 — A generic REST mapping hides an incomplete MCP; test reachability, not a list.**
+  Evidence: [active plan, REST and MCP parity](docs/plans/active/current.md#rest-and-mcp-parity-after-the-soundboard-2026-10-31-owner-request),
+  `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded`. Scope:
+  any new API method, tool kind or MCP tool. Consequence: the Soundboard
+  shipped with working REST (Stream Deck) because `POST /api/v1/a/b` maps to
+  any method, while the default MCP tools could not press it, list library
+  sounds or even see its settings (`node_parameter_schema` ended in `_ =>
+  json!([])` for 11 kinds), and `call_api` is advanced-only. The guides also
+  said Editor where running-audio control needs Operator. The test now runs
+  every default tool against an in-memory backend and requires each API
+  method to be reached or excluded with a reason.
 
 - **2026-10-29 — Record real tool behavior in a portrait Properties-only frame.**
   Evidence: [tool-guide capture decision](docs/plans/active/evidence/2026-10-29-tool-guide-capture-decision.md)

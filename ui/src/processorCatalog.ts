@@ -30,11 +30,13 @@ export function processorParameterError(
     }
   } else if (parameter.type === "boolean" && typeof value !== "boolean") {
     return `${name} must be boolean`;
-  } else if (
-    parameter.type === "string" &&
-    (!parameter.enum || typeof value !== "string" || !parameter.enum.includes(value))
-  ) {
-    return `${name} must be one of the advertised values`;
+  } else if (parameter.type === "string") {
+    if (typeof value !== "string") return `${name} must be text`;
+    // Free text (a device ID, an address, a node reference) has no choices;
+    // the backend validates its content.
+    if (parameter.enum && !parameter.enum.includes(value)) return `${name} must be one of the advertised values`;
+    if (parameter.maxLength !== undefined && value.length > parameter.maxLength)
+      return `${name} must be at most ${parameter.maxLength} characters`;
   }
   return null;
 }

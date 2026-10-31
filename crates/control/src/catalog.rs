@@ -176,7 +176,7 @@ impl ControlPlane {
             audiorouter_domain::NodeKind::Dehum => json!([
                 { "name": "frequencyHz", "type": "number", "unit": "Hz", "minimum": 45.0, "maximum": 65.0, "default": 60.0 },
                 { "name": "amountPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 50.0 },
-                { "name": "harmonics", "type": "number", "step": 1.0, "minimum": 1.0, "maximum": 8.0, "default": 4.0 }
+                { "name": "harmonics", "type": "number", "step": 1.0, "minimum": 1.0, "maximum": 8.0, "default": 4 }
             ]),
             audiorouter_domain::NodeKind::Denoise => json!([
                 { "name": "reductionPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 70.0 },
@@ -184,7 +184,7 @@ impl ControlPlane {
                 { "name": "learning", "type": "boolean", "default": false }
             ]),
             audiorouter_domain::NodeKind::TimeShift => json!([
-                { "name": "bufferSeconds", "type": "number", "step": 1.0, "unit": "s", "minimum": 10.0, "maximum": 120.0, "default": 60.0 }
+                { "name": "bufferSeconds", "type": "number", "step": 1.0, "unit": "s", "minimum": 10.0, "maximum": 120.0, "default": 60 }
             ]),
             audiorouter_domain::NodeKind::FirFilter => json!([
                 { "name": "wetPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "default": 100.0 },
@@ -240,8 +240,112 @@ impl ControlPlane {
                 "maximum": 100.0,
                 "default": 100.0
             }]),
-            _ => json!([]),
+            // Device and source kinds carry no `default`: `nodes.add` saves
+            // every default, and these nodes are added with no parameters.
+            // The backend's value for an unset setting is in `description`.
+            audiorouter_domain::NodeKind::PhysicalInput => json!([
+                Self::endpoint_id_parameter(),
+                { "name": "channelMode", "type": "string", "enum": ["stereo", "mono", "left", "right"], "description": "How a stereo device is sent: both channels, both mixed to mono, or the left or right input only. stereo when unset." },
+                { "name": "spatialMode", "type": "string", "enum": ["off", "headphones", "speakers"], "description": "Render a 5.1/7.1 capture device to two ears for headphones or two speakers. off when unset." },
+                { "name": "spatialRoomPercent", "type": "number", "unit": "%", "minimum": 0.0, "maximum": 100.0, "description": "Room blend around the virtual speakers. 0 when unset." }
+            ]),
+            audiorouter_domain::NodeKind::PhysicalOutput => {
+                json!([Self::endpoint_id_parameter()])
+            }
+            audiorouter_domain::NodeKind::ApplicationCapture => json!([
+                { "name": "executable", "type": "string", "maxLength": audiorouter_domain::MAX_APPLICATION_EXECUTABLE_BYTES, "description": "Required. Executable name of the application, from apps.list (for example Discord.exe)." },
+                { "name": "executablePath", "type": "string", "maxLength": audiorouter_domain::MAX_APPLICATION_PATH_BYTES, "description": "Full executable path, from apps.list." },
+                { "name": "processPolicy", "type": "string", "enum": ["selectedInstance", "allVerifiedInstances"], "description": "Required. selectedInstance captures one process and then needs processId and creationTime100ns; allVerifiedInstances captures every verified instance and must not have them." },
+                { "name": "processId", "type": "number", "step": 1.0, "minimum": 1.0, "maximum": f64::from(u32::MAX), "description": "Process ID from apps.list; only with processPolicy selectedInstance." },
+                { "name": "creationTime100ns", "type": "string", "description": "Opaque process start time from apps.list (a decimal string); only with processPolicy selectedInstance." }
+            ]),
+            audiorouter_domain::NodeKind::EndpointLoopback => json!([
+                { "name": "endpointId", "type": "string", "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Render device ID from devices.list whose output is captured. Give exactly one of endpointId and defaultRole." },
+                { "name": "defaultRole", "type": "string", "enum": ["console", "multimedia", "communications"], "description": "Follow the Windows default output of this role instead of a fixed device. Give exactly one of endpointId and defaultRole." }
+            ]),
+            audiorouter_domain::NodeKind::VirtualRenderSource
+            | audiorouter_domain::NodeKind::VirtualCaptureSink => json!([
+                { "name": "busId", "type": "string", "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Required. ID of the virtual bus (see virtualDevices.list)." }
+            ]),
+            // A Meter only measures; the validator accepts no setting.
+            audiorouter_domain::NodeKind::Meter => json!([]),
+            audiorouter_domain::NodeKind::AudioFile => json!([
+                { "name": "mediaId", "type": "string", "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Opaque media ID returned by audioMedia.finishUpload." },
+                { "name": "fileName", "type": "string", "maxLength": 255, "description": "File name shown for the media." },
+                { "name": "loop", "type": "boolean", "description": "Repeat the file. false when unset." }
+            ]),
+            audiorouter_domain::NodeKind::NetworkSend => json!([
+                { "name": "host", "type": "string", "description": "IPv4 or IPv6 address of the receiving computer (names are not resolved)." },
+                Self::network_port_parameter(),
+                Self::network_pairing_key_parameter()
+            ]),
+            audiorouter_domain::NodeKind::NetworkReceive => json!([
+                { "name": "sender", "type": "string", "description": "IPv4 or IPv6 address of the sending computer (names are not resolved)." },
+                Self::network_port_parameter(),
+                Self::network_pairing_key_parameter(),
+                { "name": "bufferMs", "type": "number", "unit": "ms", "minimum": audiorouter_domain::MIN_NETWORK_BUFFER_MS, "maximum": audiorouter_domain::MAX_NETWORK_BUFFER_MS, "description": format!("Jitter buffer. {} ms when unset.", audiorouter_domain::DEFAULT_NETWORK_BUFFER_MS) }
+            ]),
+            audiorouter_domain::NodeKind::Soundboard => Self::soundboard_parameters(),
         }
+    }
+
+    /// The exact Windows endpoint a device node binds to (CAP-02).
+    fn endpoint_id_parameter() -> Value {
+        json!({ "name": "endpointId", "type": "string", "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Device ID from devices.list." })
+    }
+
+    fn network_port_parameter() -> Value {
+        json!({ "name": "port", "type": "number", "step": 1.0, "minimum": 1.0, "maximum": f64::from(u16::MAX), "description": "UDP port; the same on both computers." })
+    }
+
+    fn network_pairing_key_parameter() -> Value {
+        json!({
+            "name": "pairingKey", "type": "string", "maxLength": audiorouter_domain::MAX_NETWORK_PAIRING_KEY_CHARS,
+            "description": format!(
+                "Shared key typed identically on both computers: blank (not paired) or {}-{} printable ASCII characters without leading or trailing spaces.",
+                audiorouter_domain::MIN_NETWORK_PAIRING_KEY_CHARS,
+                audiorouter_domain::MAX_NETWORK_PAIRING_KEY_CHARS
+            )
+        })
+    }
+
+    /// Soundboard slot settings (SND-01): one family per field, `slot<N>`
+    /// with N from 1 to `SOUNDBOARD_SLOTS`. Families carry no `default` so
+    /// `nodes.add` never saves a literal `slot<N>...` key.
+    pub(crate) fn soundboard_parameters() -> Value {
+        let slots = audiorouter_domain::SOUNDBOARD_SLOTS;
+        let family = |field: &str, mut entry: Value| {
+            entry["name"] = json!(format!("slot<N>{field}"));
+            entry["namePattern"] = json!(format!("slot<N>{field}"));
+            entry["slots"] = json!({ "minimum": 1, "maximum": slots });
+            entry
+        };
+        json!([
+            family(
+                "MediaId",
+                json!({ "type": "string", "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": format!("Sound of slot N (1 to {slots}): a sound from soundLibrary.list ({}<id>) or an uploaded media ID.", audiorouter_domain::SOUND_LIBRARY_PREFIX) })
+            ),
+            family(
+                "FileName",
+                json!({ "type": "string", "maxLength": 255, "description": "File name shown for the slot's sound." })
+            ),
+            family(
+                "Caption",
+                json!({ "type": "string", "maxLength": audiorouter_domain::MAX_SOUNDBOARD_CAPTION_BYTES, "description": "Button caption; empty uses the file name." })
+            ),
+            family(
+                "GainDb",
+                json!({ "type": "number", "unit": "dB", "minimum": -24.0, "maximum": 6.0, "description": "Level of the slot's sound. 0 dB when unset." })
+            ),
+            family(
+                "Mode",
+                json!({ "type": "string", "enum": ["once", "loop", "toggle", "hold"], "description": "once plays to the end, loop repeats, toggle starts and stops, hold plays while held. once when unset." })
+            ),
+            family(
+                "Set",
+                json!({ "type": "string", "maxItems": audiorouter_domain::MAX_SOUNDBOARD_SET_SOUNDS, "description": format!("Random pick on each press: a category ID from soundLibrary.list, or an array of up to {} sound references ({}<id> or media IDs).", audiorouter_domain::MAX_SOUNDBOARD_SET_SOUNDS, audiorouter_domain::SOUND_LIBRARY_PREFIX) })
+            )
+        ])
     }
 
     /// Fun Voice Changer schema from the domain table (DSP-20), so discovery,

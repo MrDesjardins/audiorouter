@@ -608,6 +608,31 @@ fn every_schema_property_is_accepted_by_the_parameter_allowlist() {
 #[test]
 fn soundboard_calls_pass_the_dispatcher_with_every_documented_parameter() {
     let mut plane = ControlPlane::default();
+    // A saved, stopped Soundboard: the backend resolves the session and node
+    // first (`resolve_node_target`), then refuses because nothing plays.
+    plane
+        .insert_session(Session {
+            id: EntityId::new("s"),
+            name: "Board".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![Node {
+                id: EntityId::new("n"),
+                kind: NodeKind::Soundboard,
+                type_version: 1,
+                name: "Board".into(),
+                enabled: true,
+                bypass: false,
+                parameters: Default::default(),
+                ports: vec![Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 2,
+                }],
+            }],
+            edges: vec![],
+        })
+        .unwrap();
     let mut call = |method: &str, params: Value| {
         plane
             .dispatch(JsonRpcRequest {

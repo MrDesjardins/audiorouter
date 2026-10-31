@@ -61,6 +61,16 @@ export function builderTargets(
         targets.push({ kind: "parameter", key: `${prefix}${id}`, label: `Input volume: ${nameOf(id)}`, spec });
       continue;
     }
+    // A numbered family such as a Soundboard's `slot<N>Mode` gives one key per slot.
+    if (spec.namePattern?.includes("<N>")) {
+      for (let slot = spec.slots?.minimum ?? 1; slot <= (spec.slots?.maximum ?? 0); slot += 1) {
+        const key = spec.namePattern.replace("<N>", String(slot));
+        targets.push({ kind: "parameter", key, label: spec.unit ? `${key} (${spec.unit})` : key, spec });
+      }
+      continue;
+    }
+    // Any other family is never a literal key.
+    if (spec.namePattern) continue;
     if (spec.reference === "node") {
       const choices = session.nodes
         .filter((other) => other.id !== node.id)
