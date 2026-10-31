@@ -19,25 +19,6 @@ Validation records go here and in the Soundboard plan. Rollback: keep the
 previous test build and revert only these follow-up changes; no migration.
 Next: installer resource regression while the Soundboard thread finishes.
 
-## Combined review follow-ups and manual-test build — 2026-10-31
-
-Resume the authorized control-source, Soundboard and tool-guide follow-ups.
-Requirements: GRAPH-12/15, UI-17/20/25, SND-12/13/14/17/19 and DIST-01/06.
-The control-source fix is committed at `647646a7`; combined EQ guides are at
-`048d1444`. The existing Soundboard thread is independently continuing its
-branch; do not duplicate its edits. Windows and the pinned build tools are
-available. Hardware continuity and attended Stream Deck remain separate gates.
-
-Tasks: verify both installer profiles retain the bundled library; add a static
-resource regression; integrate the completed Soundboard and guide branches;
-run relevant Rust/UI/site checks on the combined tree; build a fresh isolated
-manual-test package with matching UI and companions, inspect its actual library
-payload, record hashes and exercise the built shell before handoff. No PR,
-installation or release publication. Preserve the owner's running app and data.
-Validation records go here and in the Soundboard plan. Rollback: keep the
-previous test build and revert only these follow-up changes; no migration.
-Next: installer resource regression while the Soundboard thread finishes.
-
 ## Stream Deck sound title priority — 2026-10-31
 
 Owner reports custom text leaves the numbered Sound label visible. Scope:
