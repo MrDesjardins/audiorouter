@@ -673,6 +673,11 @@ impl ControlPlane {
                     .any(|edge| edge.enabled && edge.source_node == node.id)
         }) {
             let binding = match node.kind {
+                // The engine decides which sources render their own audio, so
+                // a new generator kind is bound here without a second list.
+                kind if audiorouter_engine::renders_own_audio(kind) => {
+                    NativeMultiInputSourceBinding::Generated
+                }
                 NodeKind::PhysicalInput => {
                     // Surround to headphones may loopback-capture a 5.1/7.1
                     // playback device, such as a virtual cable set to 7.1.
@@ -698,9 +703,6 @@ impl ControlPlane {
                         mono_nodes.push(node.id.clone());
                     }
                     NativeMultiInputSourceBinding::Physical(endpoint)
-                }
-                NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard => {
-                    NativeMultiInputSourceBinding::Generated
                 }
                 NodeKind::NetworkReceive => NativeMultiInputSourceBinding::Network(node),
                 NodeKind::ApplicationCapture => {
@@ -740,7 +742,40 @@ impl ControlPlane {
                         node.name
                     )));
                 }
-                _ => continue,
+                // Exhaustive on purpose (no `_` arm): a new kind must say here
+                // whether it is a source. The generators were bound above.
+                NodeKind::TestSignal
+                | NodeKind::AudioFile
+                | NodeKind::Soundboard
+                | NodeKind::PhysicalOutput
+                | NodeKind::VirtualCaptureSink
+                | NodeKind::NetworkSend
+                | NodeKind::Mixer
+                | NodeKind::Gain
+                | NodeKind::Mute
+                | NodeKind::Meter
+                | NodeKind::ParametricEq
+                | NodeKind::Compressor
+                | NodeKind::Gate
+                | NodeKind::Limiter
+                | NodeKind::Delay
+                | NodeKind::GraphicEq
+                | NodeKind::Pitch
+                | NodeKind::Recorder
+                | NodeKind::Plugin
+                | NodeKind::Volume
+                | NodeKind::BassTreble
+                | NodeKind::Dehum
+                | NodeKind::Declick
+                | NodeKind::InputSwitch
+                | NodeKind::OutputSwitch
+                | NodeKind::Denoise
+                | NodeKind::SpeechDenoise
+                | NodeKind::FirFilter
+                | NodeKind::SpectralGate
+                | NodeKind::TimeShift
+                | NodeKind::Duck
+                | NodeKind::FunVoiceChanger => continue,
             };
             bindings.insert(node.id.clone(), binding);
         }

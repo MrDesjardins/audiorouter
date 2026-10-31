@@ -5,20 +5,23 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const debugPort = Number(process.env.GUIDE_FIREFOX_PORT ?? 9337);
+if (!Number.isInteger(debugPort) || debugPort < 1024 || debugPort > 65535)
+  throw new Error("GUIDE_FIREFOX_PORT must be a port from 1024 to 65535");
 const profile = mkdtempSync(join(tmpdir(), "audiorouter-video-firefox-"));
 const ff = spawn("C:/Program Files/Mozilla Firefox/firefox.exe", [
   "--headless",
   "--no-remote",
   "--profile",
   profile,
-  "--remote-debugging-port=9337",
+  `--remote-debugging-port=${debugPort}`,
 ]);
 let ws;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 for (let retry = 0; retry < 40 && !ws; retry++) {
   await wait(250);
   try {
-    const socket = new WebSocket("ws://127.0.0.1:9337/session");
+    const socket = new WebSocket(`ws://127.0.0.1:${debugPort}/session`);
     await new Promise((res, rej) => {
       socket.onopen = res;
       socket.onerror = rej;
@@ -52,12 +55,16 @@ const send = (method, params) =>
     }, 15000).unref();
   });
 const selected = process.env.GUIDE_KIND?.split(",");
+const recordings = JSON.parse(
+  readFileSync(resolve(root, "site/guide-content/recordings.json"), "utf8"),
+);
 const resultPath = resolve(root, "target/tool-guide-firefox-results.json");
-const results = selected
-  ? JSON.parse(readFileSync(resultPath, "utf8")).filter(
-      (row) => !selected.includes(row.kind),
-    )
-  : [];
+const results =
+  selected && existsSync(resultPath)
+    ? JSON.parse(readFileSync(resultPath, "utf8")).filter(
+        (row) => !selected.includes(row.kind),
+      )
+    : [];
 try {
   await send("session.new", { capabilities: {} });
   const { context } = await send("browsingContext.create", { type: "tab" });
@@ -79,8 +86,15 @@ try {
   for (const tool of tools.filter(
     (tool) => !selected || selected.includes(tool.kind),
   )) {
-    for (const type of ["overviews", "demos"]) {
-      const path = `site/assets/tool-guides/${tool.kind}-${type === "overviews" ? "overview" : "demo"}.mp4`;
+    // Every published clip: the overview, the demo and each per-property clip.
+    for (const clip of recordings[tool.kind] ?? []) {
+      const path = `site/${clip.video}`;
+      const type = clip.video.endsWith("-overview.mp4")
+        ? "overviews"
+        : clip.video.endsWith("-demo.mp4")
+          ? "demos"
+          : "properties";
+      const audible = type !== "overviews" && clip.silent !== true;
       if (!existsSync(resolve(root, path))) continue;
       try {
         await send("browsingContext.navigate", {
@@ -120,19 +134,26 @@ try {
           state.error ||
           state.paused ||
           state.time < 0.5 ||
-          (type === "demos" && state.peak < 0.00001)
+          (audible && state.peak < 0.00001)
         )
           throw new Error(JSON.stringify(state));
-        results.push({ kind: tool.kind, type, passed: true, ...state });
-        console.log(`${tool.kind} ${type}: PASS`);
+        results.push({
+          kind: tool.kind,
+          type,
+          video: clip.video,
+          passed: true,
+          ...state,
+        });
+        console.log(`${clip.video}: PASS`);
       } catch (error) {
         results.push({
           kind: tool.kind,
           type,
+          video: clip.video,
           passed: false,
           error: String(error),
         });
-        console.error(`${tool.kind} ${type}: ${error}`);
+        console.error(`${clip.video}: ${error}`);
       }
     }
   }

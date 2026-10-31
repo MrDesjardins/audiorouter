@@ -32,7 +32,7 @@ import {
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
 import { SoundboardContext, useSoundboardController } from "./soundboardLive";
-import { isSoundboardParameter } from "./soundboard";
+import { assignSoundboardSlotDraft, isSoundboardParameter } from "./soundboard";
 import { useReportUnsaved } from "./unsavedReport";
 import { QuitButton } from "./QuitButton";
 import {
@@ -2159,6 +2159,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     sessionRunning,
     startSession,
     report: recordUiDiagnostic,
+    // One draft change from the latest draft, so an import that finishes after other
+    // edits never undoes them.
+    assign: (nodeId, slot, sound, keepCaption) => {
+      try {
+        recordDraftChange(
+          assignSoundboardSlotDraft(draftRef.current, nodeId, slot, sound, keepCaption),
+          `${nodeId}:slot${slot}`,
+        );
+      } catch (error) {
+        setActionMessage(formatUiError(error, "The sound could not be put on the button."));
+      }
+    },
+    announce: setActionMessage,
   });
   const stopSession = async (propagateFailure = false) => {
     if (sessionBusy.current || !backend.connected) return;

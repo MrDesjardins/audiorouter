@@ -1,5 +1,104 @@
 # Active plan — post-0.0.8 maintenance
 
+## Combined review follow-ups and manual-test build — 2026-10-31
+
+Owner requested a fresh full local test build of the combined checkout
+(`385532c7`). Build-only scope: DIST-01/06; preserve the uncommitted plan
+updates and existing test packages. Rebuild static-runtime CLI/plugin worker,
+pack Stream Deck, run Tauri's production UI/typecheck and NSIS build, stage
+a new dated folder, check payload and hashes, then attempt disposable native
+shell validation. No installation, PR or publication. Rollback: use the previous
+test package. Hardware and installer-execution qualification remain separate.
+Result: full unsigned static-runtime package at
+`C:\code\audiorouter\target\local-test-static-20261031-1118`, including
+`AudioRouter_0.0.25_x64-setup.exe` and directly runnable shell/companions.
+Windows production UI/typecheck, static CLI/plugin/VST3 worker and shell builds,
+NSIS bundle, extracted binary comparisons, 105 library hashes and all four
+portable-runtime import checks passed. The first unrestricted-job shell build
+lost two rustc processes without diagnostics; explicit UI build and shell
+`cargo build --release --locked -j 2 --features custom-protocol --manifest-path
+src-tauri/Cargo.toml` passed. Stream Deck build/typecheck passed but validation
+fetch was network-blocked; reused the parent's validated package from the same
+source. Native editor/library/category-only slot and HTML5 drop/upload smoke
+passed as Medium/non-admin, zero observed page errors; playback intentionally
+unrun because the default pipe is occupied and the private CLI lacks device-admin
+scope. The restricted-token launcher failed with error 87; authorized execution
+outside that token passed. No installation or owner-instance changes.
+Build logs: `target/manual-full-*.log`; checksums in package `SHA256SUMS.txt`;
+native result/screenshots: `target/combined-shell-smoke-1793471339922/`;
+identity: `target/manual-full-smoke-token.json`.
+Installer SHA-256: `ca2d2fac24327baa45b6a7860a73befc3f3f527f12bc2c78e02ec6ec5508307e`.
+Next: owner tests normal Play/Stop, real Explorer drop and attended Stream Deck
+using this package; installer execution and hardware continuity remain open.
+
+Resume the authorized control-source, Soundboard and tool-guide follow-ups.
+Requirements: GRAPH-12/15, UI-17/20/25, SND-12/13/14/17/19 and DIST-01/06.
+The control-source fix is committed at `647646a7`; combined EQ guides are at
+`048d1444`. The existing Soundboard thread is independently continuing its
+branch; do not duplicate its edits. Windows and the pinned build tools are
+available. Hardware continuity and attended Stream Deck remain separate gates.
+
+Tasks: verify both installer profiles retain the bundled library; add a static
+resource regression; integrate the completed Soundboard and guide branches;
+run relevant Rust/UI/site checks on the combined tree; build a fresh isolated
+manual-test package with matching UI and companions, inspect its actual library
+payload, record hashes and exercise the built shell before handoff. No PR,
+installation or release publication. Preserve the owner's running app and data.
+Validation records go here and in the Soundboard plan. Rollback: keep the
+previous test build and revert only these follow-up changes; no migration.
+Integration progress: EQ branches merged at `87e83a1f`, preserving both plan
+sections. Windows checks pass: control/engine locked tests (control 301 passed,
+11 ignored; engine lib 177 passed, 1 ignored; source combinations 5; tool
+combinations 4; deterministic audio 33); workspace and shell all-target,
+all-feature Clippy with warnings denied; both Rust formatting checks; installer
+resource/hook and artifact-verifier tests; family tests 9; guide media/catalog,
+guide links and documentation; shared policy/docs/site verification. Logs and
+report: `target/review-followup-*.log` and
+`target/review-followup-verification.json`. An initial verifier invocation used
+the wrong path (`tools/verify.mjs`); the corrected `tools/quality/verify.mjs`
+invocation passed. Isolated omission probes under
+`target/installer-library-guard-probe` rejected a missing library in each profile.
+The artifact verifier checks outer artifact integrity; it does not inspect NSIS
+contents. Actual built payload inspection remains required.
+
+Soundboard branch `7276ab5e` is now merged. It includes category expansion,
+file drops, set-only slot presentation, picker/editor regressions and completed
+guide coverage. Revalidate the merged sources, then build the optimized shell
+and companions with a refreshed embedded UI. Stage a separate local-test folder,
+bundle an app-only installer, inspect its sound-library payload and run a
+disposable-profile native bridge/editor smoke. Keep version 0.0.25: this is a
+manual-test snapshot, with no release/tag/PR or installation. Explorer file drop,
+live continuity, fresh-machine installation and attended Stream Deck remain
+unqualified until exercised. Rollback is the previous local build.
+
+Combined build and native editor check passed. Evidence, artifact paths, hashes,
+exact commands and remaining manual tests:
+[manual-test snapshot](evidence/2026-10-31-combined-manual-build.md).
+The extracted installer contains all 105 hash-verified sounds. Native HTML5 drop
+and library discovery passed; normal playback is blocked by the occupied default
+pipe and was not bypassed. The separate full/static-runtime build above is
+independent and remains owned by its build thread. Next: owner manual testing,
+then explicit PR/release decisions; no PR or release has been opened here.
+
+## Advanced EQ bands 2–16 guide clips — 2026-10-31
+
+Objective: finish the 75 pending Advanced EQ rows (`band1*`–`band15*`) without
+75 near-identical videos. Requirements: UI-20, UI-17, DSP-03. Branch
+`docs/guide-parametric-eq-bands`; no PR until the owner has tested a build.
+Decision: bands 2–16 share band 1's schema, ranges, defaults, engine path and
+editor controls (only the legacy-parameter fallback is band 1's), so one new
+audible clip, "Other bands", plus each band 1 field clip covers them. A generic
+family mechanism (`tool-guide-families.*`, coverage check, unit tests) lets
+Soundboard buttons 2–9 reuse it. Result on this branch alone: 173 recorded, 25
+pending (Graphic EQ 9, Soundboard 16), 53 exempted. After merging the Graphic EQ
+branch (`docs/guide-graphic-eq-bands`, see its section below): 182 recorded, 16
+pending (Soundboard buttons 2–9), 53 exempted. The generated manifest,
+`recordings.json` and pages were regenerated, not hand-merged; both
+`GUIDE_REUSE_ENCODED=1` and `GUIDE_ENCODE_MISSING=1` select "encode only new
+clips". Details, checks and limits:
+[Advanced EQ bands record](evidence/2026-10-31-parametric-eq-bands.md).
+Rollback: revert the commit and regenerate. Next: Soundboard buttons 2–9.
+
 ## Stream Deck sound title priority — 2026-10-31
 
 Owner reports custom text leaves the numbered Sound label visible. Scope:
@@ -82,6 +181,20 @@ This approval does not waive those rows or continuous-transition qualification.
 No release, deployment or hardware evidence is claimed. Next task: finish those
 remaining property families and extend playback verification to the new clips.
 Rollback: revert this documentation/capture change and regenerate the guide pages.
+
+## Graphic EQ band recordings — 2026-10-31
+
+Owner request on `docs/guide-graphic-eq-bands` (from `origin/main`): record
+the nine Graphic EQ bands that lacked a clip (every band but 1 kHz). Requirements
+UI-20, UI-17, DSP-03. Done: nine portrait Properties clips at +12 dB on pink
+noise, Firefox playback of all 11 Graphic EQ clips, updated manifest (107
+recorded, 53 exempted, 91 pending). Details, checks and limits:
+[evidence](evidence/2026-10-30-all-tool-videos.md#graphic-eq-bands-2026-10-31).
+The Firefox checker now plays per-property clips too, so the other tools'
+per-property clips have not been through a Firefox run yet. No pull request is open; the owner tests
+a build first. Next: Advanced EQ points 2–16 (another thread) and Soundboard
+buttons 2–9, then the continuous-transition qualification. Rollback: revert the
+commit and regenerate.
 
 ## Tool-guide real-property-window video spike — 2026-10-29
 

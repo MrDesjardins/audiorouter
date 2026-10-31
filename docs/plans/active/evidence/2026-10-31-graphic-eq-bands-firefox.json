@@ -1,0 +1,123 @@
+[
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band0Db.mp4",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0.04621030390262604,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band1Db.mp4",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0.047597356140613556,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band2Db.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05216306820511818,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band3Db.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05216306820511818,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band4Db.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05244777351617813,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "demos",
+    "video": "assets/tool-guides/graphicEq-demo.mp4",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.05216306820511818,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band6Db.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05244777351617813,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band7Db.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05216306820511818,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band8Db.mp4",
+    "passed": true,
+    "time": 1.429333,
+    "paused": false,
+    "peak": 0.05216306820511818,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "properties",
+    "video": "assets/tool-guides/graphicEq--band9Db.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05216306820511818,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "overviews",
+    "video": "assets/tool-guides/graphicEq-overview.mp4",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  }
+]

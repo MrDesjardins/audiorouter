@@ -27,12 +27,29 @@ export function soundSlot(settings: SoundSettings): number | null {
   return Number.isInteger(slot) && slot >= 1 && slot <= 9 ? slot : null;
 }
 
-/** What the Soundboard calls the button: its caption, else the file name; null when it has neither. */
+/** A slot's random set (a library category or a list of sounds), or null. */
+function slotSet(read: (name: string) => unknown, slot: number): string | string[] | null {
+  const set = read(`slot${slot}Set`);
+  if (typeof set === "string" && set !== "") return set;
+  if (Array.isArray(set)) {
+    const items = set.filter((item): item is string => typeof item === "string" && item !== "");
+    return items.length > 0 ? items : null;
+  }
+  return null;
+}
+
+/**
+ * What the Soundboard calls the button: its caption, else the file name, else its random
+ * set ("Random: <category>"), as the app's card does; null when it has none of them.
+ */
 export function slotName(read: (name: string) => unknown, slot: number): string | null {
   const caption = read(`slot${slot}Caption`);
   if (typeof caption === "string" && caption.trim()) return caption.trim();
   const file = read(`slot${slot}FileName`);
-  return typeof file === "string" && file.trim() ? file.replace(/\.[A-Za-z0-9]{1,5}$/, "") : null;
+  if (typeof file === "string" && file.trim()) return file.replace(/\.[A-Za-z0-9]{1,5}$/, "");
+  const set = slotSet(read, slot);
+  if (set === null) return null;
+  return typeof set === "string" ? `Random: ${set}` : `Random: ${set.length} sounds`;
 }
 
 /** What the button shows in AudioRouter: its caption, else the file name, else "Sound n". */
@@ -54,7 +71,8 @@ export function soundSlotChoices(read: (name: string) => unknown): { slot: numbe
   return Array.from({ length: 9 }, (_, index) => {
     const slot = index + 1;
     const media = read(`slot${slot}MediaId`);
-    const filled = typeof media === "string" && media !== "";
+    // A slot with only a random set plays too (SND-17).
+    const filled = (typeof media === "string" && media !== "") || slotSet(read, slot) !== null;
     return { slot, filled, label: filled ? slotCaption(read, slot) : "(empty)" };
   });
 }

@@ -1,5 +1,6 @@
 // Soundboard slot helpers shared by the canvas card, the Properties editor and the picker.
-import type { Node } from "@audiorouter/contracts";
+import type { Node, Session } from "@audiorouter/contracts";
+import { removeNodeDraftParameters, setNodeDraftParameter } from "./draft";
 
 export const SOUNDBOARD_SLOTS = 9;
 /** Longest caption the backend accepts (bytes); kept in characters here, which is stricter for ASCII only. */
@@ -25,7 +26,23 @@ export type SoundboardSlot = {
   caption: string;
   gainDb: number;
   mode: SoundboardMode;
+  /**
+   * A random set (SND-17): a library category id, or a list of sounds. Set through the
+   * API; it plays instead of `mediaId`, so assigning a sound clears it.
+   */
+  set: string | readonly string[] | null;
 };
+
+/** A slot's set, or null when it has none (contracts type parameters as scalars; the backend also sends lists). */
+function slotSet(node: Node, slot: number): string | readonly string[] | null {
+  const value: unknown = node.parameters[slotParameter(slot, "Set")];
+  if (typeof value === "string" && value !== "") return value;
+  if (Array.isArray(value)) {
+    const items = value.filter((item): item is string => typeof item === "string" && item !== "");
+    return items.length > 0 ? items : null;
+  }
+  return null;
+}
 
 const SLOT_PARAMETER = /^slot[1-9](MediaId|FileName|Caption|GainDb|Mode|Set)$/;
 
@@ -42,8 +59,10 @@ export function slotParameter(slot: number, field: "MediaId" | "FileName" | "Cap
 export function soundboardSlots(node: Node): SoundboardSlot[] {
   const slots: SoundboardSlot[] = [];
   for (let slot = 1; slot <= SOUNDBOARD_SLOTS; slot += 1) {
-    const mediaId = node.parameters[slotParameter(slot, "MediaId")];
-    if (typeof mediaId !== "string" || mediaId === "") continue;
+    const media = node.parameters[slotParameter(slot, "MediaId")];
+    const mediaId = typeof media === "string" ? media : "";
+    const set = slotSet(node, slot);
+    if (mediaId === "" && set === null) continue;
     const fileName = node.parameters[slotParameter(slot, "FileName")];
     const caption = node.parameters[slotParameter(slot, "Caption")];
     const gain = node.parameters[slotParameter(slot, "GainDb")];
@@ -54,9 +73,13 @@ export function soundboardSlots(node: Node): SoundboardSlot[] {
       mediaId,
       fileName: name,
       caption: typeof caption === "string" ? caption : "",
-      label: typeof caption === "string" && caption !== "" ? caption : stripExtension(name) || `Sound ${slot}`,
+      label:
+        typeof caption === "string" && caption !== ""
+          ? caption
+          : stripExtension(name) || (set === null ? `Sound ${slot}` : setLabel(set)),
       gainDb: typeof gain === "number" ? gain : 0,
       mode: SOUNDBOARD_MODES.find((candidate) => candidate === mode) ?? "once",
+      set,
     });
   }
   return slots;
@@ -67,6 +90,37 @@ export function firstFreeSlot(node: Node): number | null {
   const used = new Set(soundboardSlots(node).map((item) => item.slot));
   for (let slot = 1; slot <= SOUNDBOARD_SLOTS; slot += 1) if (!used.has(slot)) return slot;
   return null;
+}
+
+/** What a random set is called when its slot has no caption or file name. */
+export function setLabel(set: string | readonly string[]): string {
+  return typeof set === "string" ? `Random: ${set}` : `Random: ${set.length} sounds`;
+}
+
+/**
+ * Puts one sound on a slot as a single draft change. The slot's random set is removed,
+ * because a set plays instead of the sound; the caption is cleared unless `keepCaption`
+ * (Change and a drop on a filled slot keep it, Add does not).
+ */
+export function assignSoundboardSlotDraft(
+  session: Session,
+  nodeId: string,
+  slot: number,
+  sound: { mediaId: string; fileName: string },
+  keepCaption: boolean,
+): Session {
+  const removed = [slotParameter(slot, "Set"), ...(keepCaption ? [] : [slotParameter(slot, "Caption")])];
+  return setNodeDraftParameter(
+    setNodeDraftParameter(
+      removeNodeDraftParameters(session, nodeId, removed),
+      nodeId,
+      slotParameter(slot, "MediaId"),
+      sound.mediaId,
+    ),
+    nodeId,
+    slotParameter(slot, "FileName"),
+    sound.fileName,
+  );
 }
 
 function stripExtension(name: string): string {

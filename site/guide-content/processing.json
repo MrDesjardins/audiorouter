@@ -573,6 +573,7 @@
         "indexMinimum": 0,
         "indexMaximum": 15,
         "displayLabels": "1–16",
+        "recordingNote": "The recordings below change band 1 field by field. Bands 2–16 work the same way as band 1, and the Other bands clip shows how to add another one.",
         "note": "Legacy frequencyHz/q/gainDb values remain in saved contracts; the current editor edits per-band values. No user-exposed slope field exists in AdvancedEqEditor.tsx."
       },
       "filterTypes": [

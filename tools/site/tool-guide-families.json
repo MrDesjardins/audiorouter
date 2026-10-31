@@ -1,0 +1,36 @@
+{
+  "soundboard": {
+    "memberPattern": "^slot(?<index>[1-9])(?<field>Caption|GainDb|Mode)$",
+    "keyTemplate": "slot{index}{field}",
+    "representativeIndex": 1,
+    "clip": {
+      "id": "soundboard--other-buttons",
+      "property": "otherButtons",
+      "title": "Other buttons",
+      "audible": false,
+      "before": { "slot2MediaId": "lib:guide-fixture", "slot2FileName": "Prepared synthetic tone", "slot2Caption": "Second sound", "slot2GainDb": 0, "slot2Mode": "once" },
+      "after": { "slot2Caption": "Applause", "slot2GainDb": -12, "slot2Mode": "loop" },
+      "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button."
+    }
+  },
+  "parametricEq": {
+    "memberPattern": "^band(?<index>\\d+)(?<field>[A-Za-z]+)$",
+    "keyTemplate": "band{index}{field}",
+    "representativeIndex": 0,
+    "clip": {
+      "id": "parametricEq--other-bands",
+      "property": "otherBands",
+      "title": "Other bands",
+      "fixture": "pink-noise",
+      "before": { "band0Enabled": true, "band0GainDb": 9 },
+      "after": {
+        "band1Enabled": true,
+        "band1Type": "peaking",
+        "band1FrequencyHz": 5000,
+        "band1GainDb": -9,
+        "band1Q": 1
+      },
+      "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q."
+    }
+  }
+}

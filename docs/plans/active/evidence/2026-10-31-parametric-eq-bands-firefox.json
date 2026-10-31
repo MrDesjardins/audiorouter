@@ -1,0 +1,79 @@
+[
+  {
+    "kind": "parametricEq",
+    "type": "properties",
+    "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05911265313625336,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "parametricEq",
+    "type": "properties",
+    "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05795424431562424,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "parametricEq",
+    "type": "demos",
+    "video": "assets/tool-guides/parametricEq-demo.mp4",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.05795424431562424,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "parametricEq",
+    "type": "properties",
+    "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0.05538312345743179,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "parametricEq",
+    "type": "properties",
+    "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05795424431562424,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "parametricEq",
+    "type": "properties",
+    "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.056755565106868744,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "parametricEq",
+    "type": "overviews",
+    "video": "assets/tool-guides/parametricEq-overview.mp4",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  }
+]

@@ -4,11 +4,34 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MethodResult } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
 import { audioUploadProblem } from "./audioUpload";
+import { MAX_USER_SOUND_SECONDS } from "./soundImport";
 
 type Library = MethodResult["soundLibrary.list"];
 type LibrarySound = Library["sounds"][number];
 
-export const MAX_USER_SOUND_SECONDS = 120;
+/**
+ * The sounds the picker lists (SND-12): in `category` when one is chosen, matching the
+ * search in the title, a tag or the category name, sorted by category and then title.
+ */
+export function pickerSounds(library: Library | null, query: string, category: string): LibrarySound[] {
+  const needle = query.trim().toLowerCase();
+  const titles = new Map((library?.categories ?? []).map((item) => [item.id, item.title]));
+  const categoryTitle = (id: string) => titles.get(id) ?? id;
+  return (library?.sounds ?? [])
+    .filter(
+      (sound) =>
+        (category === "" || sound.category === category) &&
+        (needle === "" ||
+          sound.title.toLowerCase().includes(needle) ||
+          sound.tags.some((tag) => tag.toLowerCase().includes(needle)) ||
+          categoryTitle(sound.category).toLowerCase().includes(needle)),
+    )
+    .sort(
+      (left, right) =>
+        categoryTitle(left.category).localeCompare(categoryTitle(right.category)) ||
+        left.title.localeCompare(right.title),
+    );
+}
 
 function seconds(durationMs: number): string {
   return `${(durationMs / 1000).toFixed(1)} s`;
@@ -87,16 +110,7 @@ export function SoundLibraryPicker({
     },
     [],
   );
-  const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return (library?.sounds ?? []).filter(
-      (sound) =>
-        (category === "" || sound.category === category) &&
-        (needle === "" ||
-          sound.title.toLowerCase().includes(needle) ||
-          sound.tags.some((tag) => tag.toLowerCase().includes(needle))),
-    );
-  }, [library, query, category]);
+  const shown = useMemo(() => pickerSounds(library, query, category), [library, query, category]);
   const categoryTitle = (id: string) => library?.categories.find((item) => item.id === id)?.title ?? id;
   const preview = (sound: LibrarySound) => {
     setPreviewing(sound.id);
