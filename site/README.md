@@ -2,6 +2,36 @@
 
 Static GitHub Pages site for [audiorouter.org](https://audiorouter.org).
 
+## Properties recordings
+
+All 38 tool pages include portrait recordings under **In the app**. There are
+38 silent configuration overviews and 27 synthetic-audio examples. The source
+metadata is `guide-content/recordings.json`; videos/posters are in
+`assets/tool-guides/`. The exhaustive property inventory is tracked separately
+in `tools/site/tool-guide-property-manifest.json` and is not yet complete.
+
+Rebuild on Windows with Edge, ffmpeg and the pinned Rust toolchain installed:
+
+1. From the repository root, run `node tools/site/render-tool-guide-fixtures.mjs`.
+2. In another terminal start the UI harness with
+   `npm.cmd --prefix ui run dev -- --host 127.0.0.1 --port 4186 --strictPort`.
+3. Run `node tools/site/record-tool-guide-overviews.mjs`, then set the PowerShell
+   environment variable `$env:GUIDE_DEMO='1'` and run the recorder again for the
+   audio examples. Clear it afterward. `GUIDE_KIND` optionally selects a tool.
+4. Run `node tools/site/build-tool-guide-review.mjs` and
+   `node site/generate-guides.mjs`, followed by `node site/generate-social.mjs`,
+   to export optimized clips and pages while preserving social metadata.
+5. Run `node tools/site/check-tool-guide-videos.mjs` and
+   `node site/check-guides.mjs`. For Firefox and the phone-layout checks, serve
+   the repository at `http://127.0.0.1:4187`, then run
+   `node tools/site/check-tool-guide-video-firefox.mjs` and
+   `node tools/site/review-tool-guide-layout.mjs`.
+
+The gallery and limitations are recorded in
+`docs/plans/active/evidence/2026-10-30-all-tool-videos.md`. Keep device/network/
+plugin configuration overviews silent, and qualify every audible change with
+the production renderer. Site deployment remains the normal human merge step.
+
 ## Publish
 
 The `pages.yml` workflow deploys the contents of this folder to GitHub Pages

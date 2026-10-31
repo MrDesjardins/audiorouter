@@ -1,0 +1,5567 @@
+{
+  "schemaVersion": 1,
+  "framing": {
+    "aspectRatio": "9:16",
+    "frame": "selected Properties panel only",
+    "playback": "keep the top live visual/status area visible; briefly show a changed lower control, then return to the top"
+  },
+  "source": [
+    "crates/domain/src/lib.rs NodeKind::ALL",
+    "site/guide-content/processing.json",
+    "site/guide-content/routing.json"
+  ],
+  "nodeKindCount": 37,
+  "guideKindCount": 38,
+  "propertyCount": 251,
+  "tools": [
+    {
+      "kind": "gain",
+      "title": "Gain",
+      "sourceFile": "processing.json",
+      "fixture": "level-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "gainDb",
+          "label": "Gain",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -60,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "gain--gainDb",
+          "recordings": [
+            {
+              "title": "Gain",
+              "video": "assets/tool-guides/gain-demo.mp4",
+              "poster": "assets/tool-guides/gain-demo.jpg",
+              "description": "Gain moves from 0 dB to −60 dB about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Gain. More negative values make it quieter.",
+              "property": "gainDb"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "volume",
+      "title": "Volume",
+      "sourceFile": "processing.json",
+      "fixture": "level-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "percent",
+          "label": "Volume",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 200,
+          "default": 100,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "volume--percent",
+          "recordings": [
+            {
+              "title": "Volume",
+              "video": "assets/tool-guides/volume-demo.mp4",
+              "poster": "assets/tool-guides/volume-demo.jpg",
+              "description": "Volume moves from 100% to 0% about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Volume. 0% silences this output.",
+              "property": "percent"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "bassTreble",
+      "title": "Bass & Treble",
+      "sourceFile": "processing.json",
+      "fixture": "pink-noise",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "bassDb",
+          "label": "Bass",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "bassTreble--bassDb",
+          "recordings": [
+            {
+              "title": "Bass",
+              "video": "assets/tool-guides/bassTreble-demo.mp4",
+              "poster": "assets/tool-guides/bassTreble-demo.jpg",
+              "description": "Bass moves from 0 dB to −12 dB about three seconds in, while steady pink noise plays through the Bass & Treble. Cuts low frequencies.",
+              "property": "bassDb"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "trebleDb",
+          "label": "Treble",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "bassTreble--trebleDb",
+          "recordings": [
+            {
+              "title": "Treble",
+              "video": "assets/tool-guides/bassTreble--trebleDb.mp4",
+              "poster": "assets/tool-guides/bassTreble--trebleDb.jpg",
+              "description": "Treble moves from 0 dB to −12 dB about three seconds in, while steady pink noise plays through the Bass & Treble. Reduces brightness.",
+              "property": "trebleDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "bassFrequencyHz",
+          "label": "Bass frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 80,
+          "maximum": 1000,
+          "default": 500,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "bassTreble--bassFrequencyHz",
+          "recordings": [
+            {
+              "title": "Bass frequency",
+              "video": "assets/tool-guides/bassTreble--bassFrequencyHz.mp4",
+              "poster": "assets/tool-guides/bassTreble--bassFrequencyHz.jpg",
+              "description": "Bass frequency moves from 500 Hz to 160 Hz about three seconds in, while steady pink noise plays through the Bass & Treble. Keeps the adjustment lower in the spectrum.",
+              "property": "bassFrequencyHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "trebleFrequencyHz",
+          "label": "Treble frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 800,
+          "maximum": 12000,
+          "default": 1500,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "bassTreble--trebleFrequencyHz",
+          "recordings": [
+            {
+              "title": "Treble frequency",
+              "video": "assets/tool-guides/bassTreble--trebleFrequencyHz.mp4",
+              "poster": "assets/tool-guides/bassTreble--trebleFrequencyHz.jpg",
+              "description": "Treble frequency moves from 1,500 Hz to 5,000 Hz about three seconds in, while steady pink noise plays through the Bass & Treble. Keeps the adjustment in higher frequencies.",
+              "property": "trebleFrequencyHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "graphicEq",
+      "title": "Graphic EQ",
+      "sourceFile": "processing.json",
+      "fixture": "pink-noise",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "band0Db",
+          "label": "31.5 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band0Db",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band1Db",
+          "label": "63 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band1Db",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band2Db",
+          "label": "125 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band2Db",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band3Db",
+          "label": "250 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band3Db",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band4Db",
+          "label": "500 Hz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band4Db",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band5Db",
+          "label": "1 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band5Db",
+          "recordings": [
+            {
+              "title": "1 kHz",
+              "video": "assets/tool-guides/graphicEq-demo.mp4",
+              "poster": "assets/tool-guides/graphicEq-demo.jpg",
+              "description": "1 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a little if the midrange feels distant after level matching.",
+              "property": "band5Db"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "band6Db",
+          "label": "2 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band6Db",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band7Db",
+          "label": "4 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band7Db",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band8Db",
+          "label": "8 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band8Db",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band9Db",
+          "label": "16 kHz",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -18,
+          "maximum": 18,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "graphicEq--band9Db",
+          "recordings": [],
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "parametricEq",
+      "title": "Advanced EQ",
+      "sourceFile": "processing.json",
+      "fixture": "pink-noise",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "band0Enabled",
+          "label": "Band enabled · band 1",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band0Enabled",
+          "recordings": [
+            {
+              "title": "Band enabled · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Off removes its processing contribution.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "band1Enabled",
+          "label": "Band enabled · band 2",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band1Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band2Enabled",
+          "label": "Band enabled · band 3",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band2Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band3Enabled",
+          "label": "Band enabled · band 4",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band3Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band4Enabled",
+          "label": "Band enabled · band 5",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band4Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band5Enabled",
+          "label": "Band enabled · band 6",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band5Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band6Enabled",
+          "label": "Band enabled · band 7",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band6Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band7Enabled",
+          "label": "Band enabled · band 8",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band7Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band8Enabled",
+          "label": "Band enabled · band 9",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band8Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band9Enabled",
+          "label": "Band enabled · band 10",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band9Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band10Enabled",
+          "label": "Band enabled · band 11",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band10Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band11Enabled",
+          "label": "Band enabled · band 12",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band11Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band12Enabled",
+          "label": "Band enabled · band 13",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band12Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band13Enabled",
+          "label": "Band enabled · band 14",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band13Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band14Enabled",
+          "label": "Band enabled · band 15",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band14Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band15Enabled",
+          "label": "Band enabled · band 16",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band15Enabled",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band0Type",
+          "label": "Filter type · band 1",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band0Type",
+          "recordings": [
+            {
+              "title": "Filter type · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "band1Type",
+          "label": "Filter type · band 2",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band1Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band2Type",
+          "label": "Filter type · band 3",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band2Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band3Type",
+          "label": "Filter type · band 4",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band3Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band4Type",
+          "label": "Filter type · band 5",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band4Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band5Type",
+          "label": "Filter type · band 6",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band5Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band6Type",
+          "label": "Filter type · band 7",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band6Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band7Type",
+          "label": "Filter type · band 8",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band7Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band8Type",
+          "label": "Filter type · band 9",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band8Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band9Type",
+          "label": "Filter type · band 10",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band9Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band10Type",
+          "label": "Filter type · band 11",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band10Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band11Type",
+          "label": "Filter type · band 12",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band11Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band12Type",
+          "label": "Filter type · band 13",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band12Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band13Type",
+          "label": "Filter type · band 14",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band13Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band14Type",
+          "label": "Filter type · band 15",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band14Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band15Type",
+          "label": "Filter type · band 16",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "peaking",
+          "options": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band15Type",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band0FrequencyHz",
+          "label": "Frequency · band 1",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band0FrequencyHz",
+          "recordings": [
+            {
+              "title": "Frequency · band 1",
+              "video": "assets/tool-guides/parametricEq-demo.mp4",
+              "poster": "assets/tool-guides/parametricEq-demo.jpg",
+              "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+              "property": "band0FrequencyHz"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "band1FrequencyHz",
+          "label": "Frequency · band 2",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band1FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band2FrequencyHz",
+          "label": "Frequency · band 3",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band2FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band3FrequencyHz",
+          "label": "Frequency · band 4",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band3FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band4FrequencyHz",
+          "label": "Frequency · band 5",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band4FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band5FrequencyHz",
+          "label": "Frequency · band 6",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band5FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band6FrequencyHz",
+          "label": "Frequency · band 7",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band6FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band7FrequencyHz",
+          "label": "Frequency · band 8",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band7FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band8FrequencyHz",
+          "label": "Frequency · band 9",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band8FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band9FrequencyHz",
+          "label": "Frequency · band 10",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band9FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band10FrequencyHz",
+          "label": "Frequency · band 11",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band10FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band11FrequencyHz",
+          "label": "Frequency · band 12",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band11FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band12FrequencyHz",
+          "label": "Frequency · band 13",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band12FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band13FrequencyHz",
+          "label": "Frequency · band 14",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band13FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band14FrequencyHz",
+          "label": "Frequency · band 15",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band14FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band15FrequencyHz",
+          "label": "Frequency · band 16",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band15FrequencyHz",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band0Q",
+          "label": "Q · band 1",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band0Q",
+          "recordings": [
+            {
+              "title": "Q · band 1",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "band1Q",
+          "label": "Q · band 2",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band1Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band2Q",
+          "label": "Q · band 3",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band2Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band3Q",
+          "label": "Q · band 4",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band3Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band4Q",
+          "label": "Q · band 5",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band4Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band5Q",
+          "label": "Q · band 6",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band5Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band6Q",
+          "label": "Q · band 7",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band6Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band7Q",
+          "label": "Q · band 8",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band7Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band8Q",
+          "label": "Q · band 9",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band8Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band9Q",
+          "label": "Q · band 10",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band9Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band10Q",
+          "label": "Q · band 11",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band10Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band11Q",
+          "label": "Q · band 12",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band11Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band12Q",
+          "label": "Q · band 13",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band12Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band13Q",
+          "label": "Q · band 14",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band13Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band14Q",
+          "label": "Q · band 15",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band14Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band15Q",
+          "label": "Q · band 16",
+          "type": "number",
+          "unit": null,
+          "minimum": 0.1,
+          "maximum": 20,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band15Q",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band0GainDb",
+          "label": "Gain · band 1",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band0GainDb",
+          "recordings": [
+            {
+              "title": "Gain · band 1",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "band1GainDb",
+          "label": "Gain · band 2",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band1GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band2GainDb",
+          "label": "Gain · band 3",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band2GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band3GainDb",
+          "label": "Gain · band 4",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band3GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band4GainDb",
+          "label": "Gain · band 5",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band4GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band5GainDb",
+          "label": "Gain · band 6",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band5GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band6GainDb",
+          "label": "Gain · band 7",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band6GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band7GainDb",
+          "label": "Gain · band 8",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band7GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band8GainDb",
+          "label": "Gain · band 9",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band8GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band9GainDb",
+          "label": "Gain · band 10",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band9GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band10GainDb",
+          "label": "Gain · band 11",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band10GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band11GainDb",
+          "label": "Gain · band 12",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band11GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band12GainDb",
+          "label": "Gain · band 13",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band12GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band13GainDb",
+          "label": "Gain · band 14",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band13GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band14GainDb",
+          "label": "Gain · band 15",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band14GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "band15GainDb",
+          "label": "Gain · band 16",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "parametricEq--band15GainDb",
+          "recordings": [],
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "kind": "compressor",
+      "title": "Compressor",
+      "sourceFile": "processing.json",
+      "fixture": "speech-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "thresholdDb",
+          "label": "Threshold",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -60,
+          "maximum": 0,
+          "default": -18,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "compressor--thresholdDb",
+          "recordings": [
+            {
+              "title": "Threshold",
+              "video": "assets/tool-guides/compressor-demo.mp4",
+              "poster": "assets/tool-guides/compressor-demo.jpg",
+              "description": "Threshold moves from −18 dBFS to −60 dBFS about three seconds in, while a short, buzzy test voice plays through the Compressor. Lower values compress more of the signal.",
+              "property": "thresholdDb"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "ratio",
+          "label": "Ratio",
+          "type": "number",
+          "unit": null,
+          "minimum": 1,
+          "maximum": 20,
+          "default": 3,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "compressor--ratio",
+          "recordings": [
+            {
+              "title": "Ratio",
+              "video": "assets/tool-guides/compressor--ratio.mp4",
+              "poster": "assets/tool-guides/compressor--ratio.jpg",
+              "description": "Ratio moves from 3:1 to 8:1 about three seconds in, while a short, buzzy test voice plays through the Compressor. Applies stronger level reduction.",
+              "property": "ratio",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "attackMs",
+          "label": "Attack",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0.1,
+          "maximum": 200,
+          "default": 10,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "compressor--attackMs",
+          "recordings": [
+            {
+              "title": "Attack",
+              "video": "assets/tool-guides/compressor--attackMs.mp4",
+              "poster": "assets/tool-guides/compressor--attackMs.jpg",
+              "description": "Attack moves from 10 ms to 100 ms about three seconds in, while a short, buzzy test voice plays through the Compressor. Makes engagement slower.",
+              "property": "attackMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "releaseMs",
+          "label": "Release",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 10,
+          "maximum": 2000,
+          "default": 150,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "compressor--releaseMs",
+          "recordings": [
+            {
+              "title": "Release",
+              "video": "assets/tool-guides/compressor--releaseMs.mp4",
+              "poster": "assets/tool-guides/compressor--releaseMs.jpg",
+              "description": "Release moves from 150 ms to 600 ms about three seconds in, while a short, buzzy test voice plays through the Compressor. Makes recovery slower.",
+              "property": "releaseMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "kneeDb",
+          "label": "Knee",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 24,
+          "default": 6,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "compressor--kneeDb",
+          "recordings": [
+            {
+              "title": "Knee",
+              "video": "assets/tool-guides/compressor--kneeDb.mp4",
+              "poster": "assets/tool-guides/compressor--kneeDb.jpg",
+              "description": "Knee moves from 6 dB to 18 dB about three seconds in, while a short, buzzy test voice plays through the Compressor. Makes compression begin more gradually around the boundary.",
+              "property": "kneeDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "makeupDb",
+          "label": "Makeup gain",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 24,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "compressor--makeupDb",
+          "recordings": [
+            {
+              "title": "Makeup gain",
+              "video": "assets/tool-guides/compressor--makeupDb.mp4",
+              "poster": "assets/tool-guides/compressor--makeupDb.jpg",
+              "description": "Makeup gain moves from 0 dB to 24 dB about three seconds in, while a short, buzzy test voice plays through the Compressor. Makes the compressed output louder.",
+              "property": "makeupDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "gate",
+      "title": "Gate / Expander",
+      "sourceFile": "processing.json",
+      "fixture": "speech-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "thresholdDb",
+          "label": "Threshold",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -80,
+          "maximum": 0,
+          "default": -45,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "gate--thresholdDb",
+          "recordings": [
+            {
+              "title": "Threshold",
+              "video": "assets/tool-guides/gate-demo.mp4",
+              "poster": "assets/tool-guides/gate-demo.jpg",
+              "description": "Threshold moves from −45 dBFS to −80 dBFS about three seconds in, while a short, buzzy test voice plays through the Gate / Expander. Opens for quieter sound and potentially room noise.",
+              "property": "thresholdDb"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "rangeDb",
+          "label": "Range",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 80,
+          "default": 60,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "gate--rangeDb",
+          "recordings": [
+            {
+              "title": "Range",
+              "video": "assets/tool-guides/gate--rangeDb.mp4",
+              "poster": "assets/tool-guides/gate--rangeDb.jpg",
+              "description": "Range moves from 60 dB to 12 dB about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Preserves more background; 0 dB disables attenuation.",
+              "property": "rangeDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "attackMs",
+          "label": "Attack",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0.1,
+          "maximum": 100,
+          "default": 5,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "gate--attackMs",
+          "recordings": [
+            {
+              "title": "Attack",
+              "video": "assets/tool-guides/gate--attackMs.mp4",
+              "poster": "assets/tool-guides/gate--attackMs.jpg",
+              "description": "Attack moves from 5 ms to 100 ms about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Makes engagement slower.",
+              "property": "attackMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "hysteresisDb",
+          "label": "Hysteresis",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 12,
+          "default": 3,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "gate--hysteresisDb",
+          "recordings": [
+            {
+              "title": "Hysteresis",
+              "video": "assets/tool-guides/gate--hysteresisDb.mp4",
+              "poster": "assets/tool-guides/gate--hysteresisDb.jpg",
+              "description": "Hysteresis moves from 3 dB to 9 dB about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Keeps it open through larger level dips.",
+              "property": "hysteresisDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "ratio",
+          "label": "Ratio",
+          "type": "number",
+          "unit": null,
+          "minimum": 1,
+          "maximum": 20,
+          "default": 4,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "gate--ratio",
+          "recordings": [
+            {
+              "title": "Ratio",
+              "video": "assets/tool-guides/gate--ratio.mp4",
+              "poster": "assets/tool-guides/gate--ratio.jpg",
+              "description": "Ratio moves from 4:1 to 1:1 about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Approaches unchanged dynamics at 1:1.",
+              "property": "ratio",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "holdMs",
+          "label": "Hold",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 50,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "gate--holdMs",
+          "recordings": [
+            {
+              "title": "Hold",
+              "video": "assets/tool-guides/gate--holdMs.mp4",
+              "poster": "assets/tool-guides/gate--holdMs.jpg",
+              "description": "Hold moves from 50 ms to 600 ms about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Bridges longer gaps.",
+              "property": "holdMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "releaseMs",
+          "label": "Release",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 10,
+          "maximum": 2000,
+          "default": 150,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "gate--releaseMs",
+          "recordings": [
+            {
+              "title": "Release",
+              "video": "assets/tool-guides/gate--releaseMs.mp4",
+              "poster": "assets/tool-guides/gate--releaseMs.jpg",
+              "description": "Release moves from 150 ms to 600 ms about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Makes recovery slower.",
+              "property": "releaseMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "limiter",
+      "title": "Limiter",
+      "sourceFile": "processing.json",
+      "fixture": "speech-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "ceilingDb",
+          "label": "Ceiling",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -12,
+          "maximum": 0,
+          "default": -1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "limiter--ceilingDb",
+          "recordings": [
+            {
+              "title": "Ceiling",
+              "video": "assets/tool-guides/limiter-demo.mp4",
+              "poster": "assets/tool-guides/limiter-demo.jpg",
+              "description": "Ceiling moves from −1 dBFS to −12 dBFS about three seconds in, while a short, buzzy test voice plays through the Limiter. Leaves more headroom.",
+              "property": "ceilingDb"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "lookaheadMs",
+          "label": "Look-ahead",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 5,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "limiter--lookaheadMs",
+          "recordings": [
+            {
+              "title": "Look-ahead",
+              "video": "assets/tool-guides/limiter--lookaheadMs.mp4",
+              "poster": "assets/tool-guides/limiter--lookaheadMs.jpg",
+              "description": "Look-ahead moves from 5 ms to 10 ms about three seconds in, while a simple drum loop plays through the Limiter. Adds more look-ahead and delay.",
+              "property": "lookaheadMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "releaseMs",
+          "label": "Release",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 10,
+          "maximum": 1000,
+          "default": 100,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "limiter--releaseMs",
+          "recordings": [
+            {
+              "title": "Release",
+              "video": "assets/tool-guides/limiter--releaseMs.mp4",
+              "poster": "assets/tool-guides/limiter--releaseMs.jpg",
+              "description": "Release moves from 100 ms to 600 ms about three seconds in, while a simple drum loop plays through the Limiter. Makes recovery slower.",
+              "property": "releaseMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "delay",
+      "title": "Sync (delay)",
+      "sourceFile": "processing.json",
+      "fixture": "drum-loop",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "delayMs",
+          "label": "Delay",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 1000,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "delay--delayMs",
+          "recordings": [
+            {
+              "title": "Delay",
+              "video": "assets/tool-guides/delay-demo.mp4",
+              "poster": "assets/tool-guides/delay-demo.jpg",
+              "description": "Delay moves from 0 ms to 1,000 ms about three seconds in, while a simple drum loop plays through the Sync (delay). Moves sound later.",
+              "property": "delayMs"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "pitch",
+      "title": "Pitch",
+      "sourceFile": "processing.json",
+      "fixture": "tone-steps",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "semitones",
+          "label": "Semitones",
+          "type": "number",
+          "unit": "semitones",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "pitch--semitones",
+          "recordings": [
+            {
+              "title": "Semitones",
+              "video": "assets/tool-guides/pitch-demo.mp4",
+              "poster": "assets/tool-guides/pitch-demo.jpg",
+              "description": "Semitones moves from 0 to −12 about three seconds in, while a tone that steps up from 220 Hz to 1,760 Hz plays through the Pitch. Lowers pitch.",
+              "property": "semitones"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "cents",
+          "label": "Fine tune",
+          "type": "number",
+          "unit": "cents",
+          "minimum": -100,
+          "maximum": 100,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "pitch--cents",
+          "recordings": [
+            {
+              "title": "Fine tune",
+              "video": "assets/tool-guides/pitch--cents.mp4",
+              "poster": "assets/tool-guides/pitch--cents.jpg",
+              "description": "Fine tune moves from 0 cents to 70 cents about three seconds in, while a tone that steps up from 220 Hz to 1,760 Hz plays through the Pitch. Raises pitch slightly.",
+              "property": "cents",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "dehum",
+      "title": "Dehum",
+      "sourceFile": "processing.json",
+      "fixture": "mains-hum",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "frequencyHz",
+          "label": "Mains frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 45,
+          "maximum": 65,
+          "default": 60,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "dehum--frequencyHz",
+          "recordings": [
+            {
+              "title": "Mains frequency",
+              "video": "assets/tool-guides/dehum-demo.mp4",
+              "poster": "assets/tool-guides/dehum-demo.jpg",
+              "description": "Mains frequency moves from 60 Hz to 45 Hz about three seconds in, while a test voice over 50 Hz mains hum plays through the Dehum. Moves the series lower.",
+              "property": "frequencyHz"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "amountPercent",
+          "label": "Amount",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "dehum--amountPercent",
+          "recordings": [
+            {
+              "title": "Amount",
+              "video": "assets/tool-guides/dehum--amountPercent.mp4",
+              "poster": "assets/tool-guides/dehum--amountPercent.jpg",
+              "description": "Amount moves from 50% to 0% about three seconds in, while a test voice over 50 Hz mains hum plays through the Dehum. Approaches exact unity at 0%.",
+              "property": "amountPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "harmonics",
+          "label": "Harmonics",
+          "type": "number",
+          "unit": null,
+          "minimum": 1,
+          "maximum": 8,
+          "default": 4,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "dehum--harmonics",
+          "recordings": [
+            {
+              "title": "Harmonics",
+              "video": "assets/tool-guides/dehum--harmonics.mp4",
+              "poster": "assets/tool-guides/dehum--harmonics.jpg",
+              "description": "Harmonics moves from 4 to 1 about three seconds in, while a test voice over 50 Hz hum and its overtones plays through the Dehum. Limits treatment to fewer hum components.",
+              "property": "harmonics",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "declick",
+      "title": "Declick",
+      "sourceFile": "processing.json",
+      "fixture": "click-train",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "thresholdPercent",
+          "label": "Threshold",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "declick--thresholdPercent",
+          "recordings": [
+            {
+              "title": "Threshold",
+              "video": "assets/tool-guides/declick-demo.mp4",
+              "poster": "assets/tool-guides/declick-demo.jpg",
+              "description": "Threshold moves from 50% to 0% about three seconds in, while quiet hiss with sharp clicks plays through the Declick. Detects more subtle clicks.",
+              "property": "thresholdPercent"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "denoise",
+      "title": "Denoise",
+      "sourceFile": "processing.json",
+      "fixture": "speech-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "reductionPercent",
+          "label": "Reduction",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 70,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "denoise--reductionPercent",
+          "recordings": [
+            {
+              "title": "Reduction",
+              "video": "assets/tool-guides/denoise-demo.mp4",
+              "poster": "assets/tool-guides/denoise-demo.jpg",
+              "description": "Reduction moves from 70% to 0% about three seconds in, while a buzzy test voice over background hiss plays through the Denoise. Retains more original sound.",
+              "property": "reductionPercent"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "floorPercent",
+          "label": "Noise left in",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 10,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "denoise--floorPercent",
+          "recordings": [
+            {
+              "title": "Noise left in",
+              "video": "assets/tool-guides/denoise--floorPercent.mp4",
+              "poster": "assets/tool-guides/denoise--floorPercent.jpg",
+              "description": "Noise left in moves from 10% to 60% about three seconds in, while a buzzy test voice over background hiss plays through the Denoise. Retains more background and may sound more natural.",
+              "property": "floorPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "learning",
+          "label": "Learn noise",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "denoise--learning",
+          "recordings": [
+            {
+              "title": "Learn noise",
+              "video": "assets/tool-guides/denoise--learning.mp4",
+              "poster": "assets/tool-guides/denoise--learning.jpg",
+              "description": "Learn noise is turned on about three seconds in, while quiet background hiss plays through the Denoise. Start learning only while the unwanted background is present.",
+              "property": "learning",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "speechDenoise",
+      "title": "Speech Denoise",
+      "sourceFile": "processing.json",
+      "fixture": "speech-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "strengthPercent",
+          "label": "Strength",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 70,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "speechDenoise--strengthPercent",
+          "recordings": [
+            {
+              "title": "Strength",
+              "video": "assets/tool-guides/speechDenoise-demo.mp4",
+              "poster": "assets/tool-guides/speechDenoise-demo.jpg",
+              "description": "Strength moves from 70% to 0% about three seconds in, while a buzzy test voice over background hiss plays through the Speech Denoise. Retains more of the original signal.",
+              "property": "strengthPercent"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "spectralGate",
+      "title": "Spectral Gate",
+      "sourceFile": "processing.json",
+      "fixture": "speech-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "thresholdDb",
+          "label": "Threshold above noise",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -20,
+          "maximum": 20,
+          "default": 3,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "spectralGate--thresholdDb",
+          "recordings": [
+            {
+              "title": "Threshold above noise",
+              "video": "assets/tool-guides/spectralGate-demo.mp4",
+              "poster": "assets/tool-guides/spectralGate-demo.jpg",
+              "description": "Threshold above noise moves from 3 dB to −20 dB about three seconds in, while a buzzy test voice over background hiss plays through the Spectral Gate. Lets more frequency regions pass.",
+              "property": "thresholdDb"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "reductionDb",
+          "label": "Reduction",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 80,
+          "default": 40,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "spectralGate--reductionDb",
+          "recordings": [
+            {
+              "title": "Reduction",
+              "video": "assets/tool-guides/spectralGate--reductionDb.mp4",
+              "poster": "assets/tool-guides/spectralGate--reductionDb.jpg",
+              "description": "Reduction moves from 40 dB to 10 dB about three seconds in, while a buzzy test voice over background hiss plays through the Spectral Gate. Keeps more sound in blocked regions.",
+              "property": "reductionDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "learning",
+          "label": "Learn noise",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "spectralGate--learning",
+          "recordings": [
+            {
+              "title": "Learn noise",
+              "video": "assets/tool-guides/spectralGate--learning.mp4",
+              "poster": "assets/tool-guides/spectralGate--learning.jpg",
+              "description": "Learn noise is turned on about three seconds in, while quiet background hiss plays through the Spectral Gate. Start learning only while the unwanted background is present.",
+              "property": "learning",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "firFilter",
+      "title": "FIR Filter",
+      "sourceFile": "processing.json",
+      "fixture": "pink-noise",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "mediaId",
+          "label": "Choose WAV or MP3",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Choose WAV or MP3 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "firFilter--mediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/firFilter-overview.mp4",
+              "poster": "assets/tool-guides/firFilter-overview.jpg",
+              "description": "A silent tour of the FIR Filter Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "wetPercent",
+          "label": "Wet mix",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "firFilter--wetPercent",
+          "recordings": [
+            {
+              "title": "Wet mix",
+              "video": "assets/tool-guides/firFilter-demo.mp4",
+              "poster": "assets/tool-guides/firFilter-demo.jpg",
+              "description": "Wet mix moves from 100% to 0% about three seconds in, while steady pink noise plays through the FIR Filter. Includes more dry sound.",
+              "property": "wetPercent"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "gainDb",
+          "label": "Output gain",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 12,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "firFilter--gainDb",
+          "recordings": [
+            {
+              "title": "Output gain",
+              "video": "assets/tool-guides/firFilter--gainDb.mp4",
+              "poster": "assets/tool-guides/firFilter--gainDb.jpg",
+              "description": "Output gain moves from 0 dB to −12 dB about three seconds in, while steady pink noise plays through the FIR Filter. More negative values make it quieter.",
+              "property": "gainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "mute",
+      "title": "Mute",
+      "sourceFile": "processing.json",
+      "fixture": "level-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "muted",
+          "label": "Muted",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "mute--muted",
+          "recordings": [
+            {
+              "title": "Muted",
+              "video": "assets/tool-guides/mute-demo.mp4",
+              "poster": "assets/tool-guides/mute-demo.jpg",
+              "description": "Muted is turned on about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Mute. On sends silence from this tool.",
+              "property": "muted"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "inputSwitch",
+      "title": "Input Switch",
+      "sourceFile": "processing.json",
+      "fixture": "two-tones",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "selected",
+          "label": "Active input",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "a",
+          "options": [
+            "a",
+            "b"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "inputSwitch--selected",
+          "recordings": [
+            {
+              "title": "Active input",
+              "video": "assets/tool-guides/inputSwitch-demo.mp4",
+              "poster": "assets/tool-guides/inputSwitch-demo.jpg",
+              "description": "Active input switches from A to B about three seconds in, while input A carries a low 110 Hz tone and input B a high 880 Hz tone. Which explicitly wired port is heard.",
+              "property": "selected"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "fade",
+          "label": "Switch speed",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "normal",
+          "options": [
+            "normal",
+            "slow"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "inputSwitch--fade",
+          "recordings": [
+            {
+              "title": "Switch speed",
+              "video": "assets/tool-guides/inputSwitch--fade.mp4",
+              "poster": "assets/tool-guides/inputSwitch--fade.jpg",
+              "description": "Switch speed switches from Normal to Slow about three seconds in, while input A carries a low 110 Hz tone and input B a high 880 Hz tone. Length of the equal-power input transition.",
+              "property": "fade",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "outputSwitch",
+      "title": "Output Switch",
+      "sourceFile": "processing.json",
+      "fixture": "two-tones",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "selected",
+          "label": "Active output",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "a",
+          "options": [
+            "a",
+            "b"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "outputSwitch--selected",
+          "recordings": [
+            {
+              "title": "Active output",
+              "video": "assets/tool-guides/outputSwitch-demo.mp4",
+              "poster": "assets/tool-guides/outputSwitch-demo.jpg",
+              "description": "Active output switches from A to B about three seconds in, while a low 110 Hz tone plays through the Output Switch. Which output port receives audio. You're listening to output A, so the sound stops when the switch moves to B.",
+              "property": "selected"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "duck",
+      "title": "Duck",
+      "sourceFile": "processing.json",
+      "fixture": "speech-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "thresholdDb",
+          "label": "Trigger level",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -80,
+          "maximum": 0,
+          "default": -35,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "duck--thresholdDb",
+          "recordings": [
+            {
+              "title": "Trigger level",
+              "video": "assets/tool-guides/duck-demo.mp4",
+              "poster": "assets/tool-guides/duck-demo.jpg",
+              "description": "Trigger level moves from −35 dBFS to −80 dBFS about three seconds in, while a short, buzzy test voice plays through the Duck. Engages for quieter trigger sound, potentially room noise.",
+              "property": "thresholdDb"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "amountDb",
+          "label": "Amount",
+          "type": "number",
+          "unit": "dB",
+          "minimum": 0,
+          "maximum": 40,
+          "default": 6,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "duck--amountDb",
+          "recordings": [
+            {
+              "title": "Amount",
+              "video": "assets/tool-guides/duck--amountDb.mp4",
+              "poster": "assets/tool-guides/duck--amountDb.jpg",
+              "description": "Amount moves from 6 dB to 0 dB about three seconds in, while a short, buzzy test voice plays through the Duck. Keeps it closer to normal level; 0 dB makes no reduction.",
+              "property": "amountDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "attackMs",
+          "label": "Attack",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 20,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "duck--attackMs",
+          "recordings": [
+            {
+              "title": "Attack",
+              "video": "assets/tool-guides/duck--attackMs.mp4",
+              "poster": "assets/tool-guides/duck--attackMs.jpg",
+              "description": "Attack moves from 20 ms to 100 ms about three seconds in, while a short, buzzy test voice plays through the Duck. Makes engagement slower.",
+              "property": "attackMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "holdMs",
+          "label": "Hold",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 2000,
+          "default": 300,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "duck--holdMs",
+          "recordings": [
+            {
+              "title": "Hold",
+              "video": "assets/tool-guides/duck--holdMs.mp4",
+              "poster": "assets/tool-guides/duck--holdMs.jpg",
+              "description": "Hold moves from 300 ms to 600 ms about three seconds in, while a short, buzzy test voice plays through the Duck. Bridges longer gaps.",
+              "property": "holdMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "releaseMs",
+          "label": "Release",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 20,
+          "maximum": 5000,
+          "default": 500,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "duck--releaseMs",
+          "recordings": [
+            {
+              "title": "Release",
+              "video": "assets/tool-guides/duck--releaseMs.mp4",
+              "poster": "assets/tool-guides/duck--releaseMs.jpg",
+              "description": "Release moves from 500 ms to 600 ms about three seconds in, while a short, buzzy test voice plays through the Duck. Makes recovery slower.",
+              "property": "releaseMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "trigger",
+          "label": "Trigger",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "level",
+          "options": [
+            "level",
+            "siegeRound"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio.",
+          "recordingId": "duck--trigger",
+          "recordings": [
+            {
+              "title": "Siege round trigger",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "keyNodeId",
+          "label": "Triggered by",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "A silent look at the Triggered by setting: pick another node in the same session, such as your processed voice, whose level lowers this sound. Hearing it work needs that second source playing, so this clip has no audio.",
+          "recordingId": "duck--keyNodeId",
+          "recordings": [
+            {
+              "title": "Triggered by another node",
+              "video": "assets/tool-guides/duck--level.mp4",
+              "poster": "assets/tool-guides/duck--level.jpg",
+              "silent": true,
+              "description": "A silent look at the Triggered by setting: pick another node in the same session, such as your processed voice, whose level lowers this sound. Hearing it work needs that second source playing, so this clip has no audio."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "duckMenu",
+          "label": "Menu and matchmaking",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": true,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio.",
+          "recordingId": "duck--duckMenu",
+          "recordings": [
+            {
+              "title": "Siege round trigger",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "duckPrep",
+          "label": "Planning, operator selection and preparation",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": true,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio.",
+          "recordingId": "duck--duckPrep",
+          "recordings": [
+            {
+              "title": "Siege round trigger",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "duckAction",
+          "label": "In a round, playing",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio.",
+          "recordingId": "duck--duckAction",
+          "recordings": [
+            {
+              "title": "Siege round trigger",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "duckBetweenRounds",
+          "label": "Between rounds and results",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": true,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio.",
+          "recordingId": "duck--duckBetweenRounds",
+          "recordings": [
+            {
+              "title": "Siege round trigger",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "timeShift",
+      "title": "Time Shift",
+      "sourceFile": "processing.json",
+      "fixture": "drum-loop",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "bufferSeconds",
+          "label": "Rewind buffer",
+          "type": "number",
+          "unit": "s",
+          "minimum": 10,
+          "maximum": 120,
+          "default": 60,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "timeShift--bufferSeconds",
+          "recordings": [
+            {
+              "title": "Rewind buffer",
+              "video": "assets/tool-guides/timeShift-demo.mp4",
+              "poster": "assets/tool-guides/timeShift-demo.jpg",
+              "description": "Rewind buffer moves from 60 s to 10 s about three seconds in, while a simple drum loop plays through the Time Shift. Keeps less history.",
+              "property": "bufferSeconds"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "mixer",
+      "title": "Mixer",
+      "sourceFile": "processing.json",
+      "fixture": "two-tones",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "inputVolume:<upstreamNodeId>",
+          "label": "Input level · each connected source",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "options": null,
+          "dynamic": true,
+          "nonAudibleReason": null,
+          "recordingId": "mixer--inputVolume-upstreamNodeId",
+          "recordings": [
+            {
+              "title": "Input volume",
+              "video": "assets/tool-guides/mixer-demo.mp4",
+              "poster": "assets/tool-guides/mixer-demo.jpg",
+              "description": "Input volume moves from 100% to 0% about three seconds in, while a two-tone chord of 110 Hz and 880 Hz plays through the Mixer. Lowers it; 0% removes its contribution.",
+              "property": "inputVolume:input"
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "meter",
+      "title": "Meter",
+      "sourceFile": "processing.json",
+      "fixture": "level-bursts",
+      "capture": "production-dsp",
+      "properties": []
+    },
+    {
+      "kind": "funVoiceChanger",
+      "title": "Fun Voice Changer",
+      "sourceFile": "processing.json",
+      "fixture": "speech-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "preset",
+          "label": "Preset",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "custom",
+          "options": [
+            "pitchCorrectSubtle",
+            "pitchCorrectHard",
+            "deep",
+            "chipmunk",
+            "monster",
+            "child",
+            "robot",
+            "alien",
+            "radio",
+            "megaphone",
+            "telephone",
+            "whisper",
+            "cave",
+            "custom"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--preset",
+          "recordings": [
+            {
+              "title": "Preset",
+              "video": "assets/tool-guides/funVoiceChanger--preset.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--preset.jpg",
+              "description": "Preset switches from Custom to Robot about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. The starting voice. Choosing one writes all of its settings at once.",
+              "property": "preset",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "gateDb",
+          "label": "Noise gate",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -90,
+          "maximum": -20,
+          "default": -90,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--gateDb",
+          "recordings": [
+            {
+              "title": "Noise gate",
+              "video": "assets/tool-guides/funVoiceChanger-demo.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger-demo.jpg",
+              "description": "Noise gate moves from −90 dBFS to −20 dBFS about three seconds in, while a short, buzzy test voice plays through the Fun Voice Changer. Ignores more room and keyboard noise.",
+              "property": "gateDb"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "correctEnabled",
+          "label": "Pitch correction",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--correctEnabled",
+          "recordings": [
+            {
+              "title": "Pitch correction",
+              "video": "assets/tool-guides/funVoiceChanger--correctEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--correctEnabled.jpg",
+              "description": "Pitch correction is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. The voice keeps its own pitch.",
+              "property": "correctEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "key",
+          "label": "Key",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "c",
+          "options": [
+            "c",
+            "cs",
+            "d",
+            "ds",
+            "e",
+            "f",
+            "fs",
+            "g",
+            "gs",
+            "a",
+            "as",
+            "b"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--key",
+          "recordings": [
+            {
+              "title": "Key",
+              "video": "assets/tool-guides/funVoiceChanger--key.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--key.jpg",
+              "description": "Key switches from C to C♯ about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. The key of the correction scale.",
+              "property": "key",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "scale",
+          "label": "Scale",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "chromatic",
+          "options": [
+            "chromatic",
+            "major",
+            "minor",
+            "majorPentatonic",
+            "minorPentatonic",
+            "blues",
+            "monotone"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--scale",
+          "recordings": [
+            {
+              "title": "Scale",
+              "video": "assets/tool-guides/funVoiceChanger--scale.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--scale.jpg",
+              "description": "Scale switches from Major to Chromatic about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Which notes correction may use.",
+              "property": "scale",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "retuneMs",
+          "label": "Retune speed",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 0,
+          "maximum": 400,
+          "default": 50,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--retuneMs",
+          "recordings": [
+            {
+              "title": "Retune speed",
+              "video": "assets/tool-guides/funVoiceChanger--retuneMs.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--retuneMs.jpg",
+              "description": "Retune speed moves from 50 ms to 150 ms about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Slower, more natural correction.",
+              "property": "retuneMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "humanizePercent",
+          "label": "Humanize",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--humanizePercent",
+          "recordings": [
+            {
+              "title": "Humanize",
+              "video": "assets/tool-guides/funVoiceChanger--humanizePercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--humanizePercent.jpg",
+              "description": "Humanize moves from 0% to 80% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Long notes keep more natural vibrato.",
+              "property": "humanizePercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "shiftEnabled",
+          "label": "Pitch and formant",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--shiftEnabled",
+          "recordings": [
+            {
+              "title": "Pitch and formant",
+              "video": "assets/tool-guides/funVoiceChanger--shiftEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--shiftEnabled.jpg",
+              "description": "Pitch and formant is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. The voice keeps its pitch and size.",
+              "property": "shiftEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "pitchSemitones",
+          "label": "Pitch",
+          "type": "number",
+          "unit": "st",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--pitchSemitones",
+          "recordings": [
+            {
+              "title": "Pitch",
+              "video": "assets/tool-guides/funVoiceChanger--pitchSemitones.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--pitchSemitones.jpg",
+              "description": "Pitch moves from 7 st to −7 st about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Lower voice; −12 is one octave down.",
+              "property": "pitchSemitones",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "pitchCents",
+          "label": "Fine pitch",
+          "type": "number",
+          "unit": "cents",
+          "minimum": -100,
+          "maximum": 100,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--pitchCents",
+          "recordings": [
+            {
+              "title": "Fine pitch",
+              "video": "assets/tool-guides/funVoiceChanger--pitchCents.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--pitchCents.jpg",
+              "description": "Fine pitch moves from 0 cents to 70 cents about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Slightly higher.",
+              "property": "pitchCents",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "formantSemitones",
+          "label": "Formant",
+          "type": "number",
+          "unit": "st",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--formantSemitones",
+          "recordings": [
+            {
+              "title": "Formant",
+              "video": "assets/tool-guides/funVoiceChanger--formantSemitones.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--formantSemitones.jpg",
+              "description": "Formant moves from 3 st to −4 st about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Bigger, darker voice.",
+              "property": "formantSemitones",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "ringEnabled",
+          "label": "Ring modulator",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--ringEnabled",
+          "recordings": [
+            {
+              "title": "Ring modulator",
+              "video": "assets/tool-guides/funVoiceChanger--ringEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--ringEnabled.jpg",
+              "description": "Ring modulator is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. No ring modulation.",
+              "property": "ringEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "ringHz",
+          "label": "Ring frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 2000,
+          "default": 50,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--ringHz",
+          "recordings": [
+            {
+              "title": "Ring frequency",
+              "video": "assets/tool-guides/funVoiceChanger--ringHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--ringHz.jpg",
+              "description": "Ring frequency moves from 70 Hz to 160 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Bell-like, alien sound.",
+              "property": "ringHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "ringDepthPercent",
+          "label": "Ring depth",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--ringDepthPercent",
+          "recordings": [
+            {
+              "title": "Ring depth",
+              "video": "assets/tool-guides/funVoiceChanger--ringDepthPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--ringDepthPercent.jpg",
+              "description": "Ring depth moves from 70% to 20% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More of the normal voice.",
+              "property": "ringDepthPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "crushEnabled",
+          "label": "Bit crusher",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--crushEnabled",
+          "recordings": [
+            {
+              "title": "Bit crusher",
+              "video": "assets/tool-guides/funVoiceChanger--crushEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--crushEnabled.jpg",
+              "description": "Bit crusher is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Clean sound.",
+              "property": "crushEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "crushBits",
+          "label": "Bits",
+          "type": "number",
+          "unit": null,
+          "minimum": 4,
+          "maximum": 16,
+          "default": 16,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--crushBits",
+          "recordings": [
+            {
+              "title": "Bits",
+              "video": "assets/tool-guides/funVoiceChanger--crushBits.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--crushBits.jpg",
+              "description": "Bits moves from 6 to 12 about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Cleaner; 16 is clean.",
+              "property": "crushBits",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "crushDownsample",
+          "label": "Downsample",
+          "type": "number",
+          "unit": null,
+          "minimum": 1,
+          "maximum": 12,
+          "default": 1,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--crushDownsample",
+          "recordings": [
+            {
+              "title": "Downsample",
+              "video": "assets/tool-guides/funVoiceChanger--crushDownsample.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--crushDownsample.jpg",
+              "description": "Downsample moves from 4 to 12 about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Lo-fi, muffled and aliased.",
+              "property": "crushDownsample",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "driveEnabled",
+          "label": "Saturation",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--driveEnabled",
+          "recordings": [
+            {
+              "title": "Saturation",
+              "video": "assets/tool-guides/funVoiceChanger--driveEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--driveEnabled.jpg",
+              "description": "Saturation is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. No distortion.",
+              "property": "driveEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "drivePercent",
+          "label": "Drive",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--drivePercent",
+          "recordings": [
+            {
+              "title": "Drive",
+              "video": "assets/tool-guides/funVoiceChanger--drivePercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--drivePercent.jpg",
+              "description": "Drive moves from 45% to 80% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More distortion.",
+              "property": "drivePercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "whisperPercent",
+          "label": "Whisper",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--whisperPercent",
+          "recordings": [
+            {
+              "title": "Whisper",
+              "video": "assets/tool-guides/funVoiceChanger--whisperPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--whisperPercent.jpg",
+              "description": "Whisper moves from 0% to 85% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More breathy whisper.",
+              "property": "whisperPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "toneEnabled",
+          "label": "Tone",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--toneEnabled",
+          "recordings": [
+            {
+              "title": "Tone",
+              "video": "assets/tool-guides/funVoiceChanger--toneEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--toneEnabled.jpg",
+              "description": "Tone is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Full range.",
+              "property": "toneEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "lowCutHz",
+          "label": "Low cut",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 2000,
+          "default": 20,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--lowCutHz",
+          "recordings": [
+            {
+              "title": "Low cut",
+              "video": "assets/tool-guides/funVoiceChanger--lowCutHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--lowCutHz.jpg",
+              "description": "Low cut moves from 20 Hz to 350 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Thinner sound.",
+              "property": "lowCutHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "highCutHz",
+          "label": "High cut",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 1000,
+          "maximum": 20000,
+          "default": 20000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--highCutHz",
+          "recordings": [
+            {
+              "title": "High cut",
+              "video": "assets/tool-guides/funVoiceChanger--highCutHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--highCutHz.jpg",
+              "description": "High cut moves from 20,000 Hz to 3,000 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Duller, more muffled sound.",
+              "property": "highCutHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "peakHz",
+          "label": "Peak frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 200,
+          "maximum": 8000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--peakHz",
+          "recordings": [
+            {
+              "title": "Peak frequency",
+              "video": "assets/tool-guides/funVoiceChanger--peakHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--peakHz.jpg",
+              "description": "Peak frequency moves from 1,000 Hz to 2,500 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Brighter, thinner character.",
+              "property": "peakHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "peakDb",
+          "label": "Peak",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -12,
+          "maximum": 12,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--peakDb",
+          "recordings": [
+            {
+              "title": "Peak",
+              "video": "assets/tool-guides/funVoiceChanger--peakDb.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--peakDb.jpg",
+              "description": "Peak moves from 9 dB to −12 dB about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Cuts that frequency.",
+              "property": "peakDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "modEnabled",
+          "label": "Modulation",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--modEnabled",
+          "recordings": [
+            {
+              "title": "Modulation",
+              "video": "assets/tool-guides/funVoiceChanger--modEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modEnabled.jpg",
+              "description": "Modulation is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. No modulation.",
+              "property": "modEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "modType",
+          "label": "Modulation type",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "chorus",
+          "options": [
+            "chorus",
+            "flanger"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--modType",
+          "recordings": [
+            {
+              "title": "Modulation type",
+              "video": "assets/tool-guides/funVoiceChanger--modType.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modType.jpg",
+              "description": "Modulation type switches from Chorus to Flanger about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Chorus doubles the voice; flanger sweeps it.",
+              "property": "modType",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "modRateHz",
+          "label": "Rate",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 0.05,
+          "maximum": 5,
+          "default": 0.5,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--modRateHz",
+          "recordings": [
+            {
+              "title": "Rate",
+              "video": "assets/tool-guides/funVoiceChanger--modRateHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modRateHz.jpg",
+              "description": "Rate moves from 0.5 Hz to 5 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Faster wobble.",
+              "property": "modRateHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "modDepthPercent",
+          "label": "Depth",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--modDepthPercent",
+          "recordings": [
+            {
+              "title": "Depth",
+              "video": "assets/tool-guides/funVoiceChanger--modDepthPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modDepthPercent.jpg",
+              "description": "Depth moves from 60% to 15% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Subtler effect.",
+              "property": "modDepthPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "modFeedbackPercent",
+          "label": "Feedback",
+          "type": "number",
+          "unit": "%",
+          "minimum": -90,
+          "maximum": 90,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--modFeedbackPercent",
+          "recordings": [
+            {
+              "title": "Feedback",
+              "video": "assets/tool-guides/funVoiceChanger--modFeedbackPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modFeedbackPercent.jpg",
+              "description": "Feedback moves from 0% to 70% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Ringing, metallic sweeps.",
+              "property": "modFeedbackPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "spaceEnabled",
+          "label": "Space",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--spaceEnabled",
+          "recordings": [
+            {
+              "title": "Space",
+              "video": "assets/tool-guides/funVoiceChanger--spaceEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--spaceEnabled.jpg",
+              "description": "Space is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Dry voice.",
+              "property": "spaceEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "spaceSizePercent",
+          "label": "Room size",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 50,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--spaceSizePercent",
+          "recordings": [
+            {
+              "title": "Room size",
+              "video": "assets/tool-guides/funVoiceChanger--spaceSizePercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--spaceSizePercent.jpg",
+              "description": "Room size moves from 50% to 85% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Bigger, more distant space.",
+              "property": "spaceSizePercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "spaceDecayMs",
+          "label": "Echo length",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 200,
+          "maximum": 4000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--spaceDecayMs",
+          "recordings": [
+            {
+              "title": "Echo length",
+              "video": "assets/tool-guides/funVoiceChanger--spaceDecayMs.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--spaceDecayMs.jpg",
+              "description": "Echo length moves from 1,000 ms to 3,000 ms about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Longer echo.",
+              "property": "spaceDecayMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "spaceLevelPercent",
+          "label": "Echo level",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 30,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--spaceLevelPercent",
+          "recordings": [
+            {
+              "title": "Echo level",
+              "video": "assets/tool-guides/funVoiceChanger--spaceLevelPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--spaceLevelPercent.jpg",
+              "description": "Echo level moves from 40% to 75% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More echo.",
+              "property": "spaceLevelPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "mixPercent",
+          "label": "Mix",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 100,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--mixPercent",
+          "recordings": [
+            {
+              "title": "Mix",
+              "video": "assets/tool-guides/funVoiceChanger--mixPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--mixPercent.jpg",
+              "description": "Mix moves from 100% to 30% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More of your normal voice; 0 % is unchanged.",
+              "property": "mixPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "outputDb",
+          "label": "Output",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 12,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "funVoiceChanger--outputDb",
+          "recordings": [
+            {
+              "title": "Output",
+              "video": "assets/tool-guides/funVoiceChanger--outputDb.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--outputDb.jpg",
+              "description": "Output moves from 0 dB to −12 dB about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Quieter.",
+              "property": "outputDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "physicalInput",
+      "title": "Physical Input",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "endpointId",
+          "label": "Audio device",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Audio device works with your own audio device, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "physicalInput--endpointId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/physicalInput-overview.mp4",
+              "poster": "assets/tool-guides/physicalInput-overview.jpg",
+              "description": "A silent tour of the Physical Input Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "channelMode",
+          "label": "Channels",
+          "type": "enum",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "stereo",
+          "options": [
+            "stereo",
+            "mono",
+            "left",
+            "right"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": "Channels works with your own audio device, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "physicalInput--channelMode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/physicalInput-overview.mp4",
+              "poster": "assets/tool-guides/physicalInput-overview.jpg",
+              "description": "A silent tour of the Physical Input Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "spatialMode",
+          "label": "Spatial audio",
+          "type": "enum",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "off",
+          "options": [
+            "off",
+            "headphones",
+            "speakers"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": "Spatial audio works with your own audio device, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "physicalInput--spatialMode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/physicalInput-overview.mp4",
+              "poster": "assets/tool-guides/physicalInput-overview.jpg",
+              "description": "A silent tour of the Physical Input Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "spatialRoomPercent",
+          "label": "Room",
+          "type": "number",
+          "unit": "%",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Room works with your own audio device, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "physicalInput--spatialRoomPercent",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/physicalInput-overview.mp4",
+              "poster": "assets/tool-guides/physicalInput-overview.jpg",
+              "description": "A silent tour of the Physical Input Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "physicalOutput",
+      "title": "Physical Output",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "endpointId",
+          "label": "Audio device",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Audio device works with your own audio device, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "physicalOutput--endpointId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/physicalOutput-overview.mp4",
+              "poster": "assets/tool-guides/physicalOutput-overview.jpg",
+              "description": "A silent tour of the Physical Output Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "applicationCapture",
+      "title": "Application Capture",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "application",
+          "label": "Application to capture",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Application to capture works with an app running on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "applicationCapture--application",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/applicationCapture-overview.mp4",
+              "poster": "assets/tool-guides/applicationCapture-overview.jpg",
+              "description": "A silent tour of the Application Capture Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "endpointLoopback",
+      "title": "Endpoint Loopback",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": []
+    },
+    {
+      "kind": "virtualRenderSource",
+      "title": "Virtual Render Source",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "busId",
+          "label": "Cable",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Cable works with a virtual cable on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "virtualRenderSource--busId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/virtualRenderSource-overview.mp4",
+              "poster": "assets/tool-guides/virtualRenderSource-overview.jpg",
+              "description": "A silent tour of the Virtual Render Source Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "virtualCaptureSink",
+      "title": "Virtual Capture Sink",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "busId",
+          "label": "Cable",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Cable works with a virtual cable on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "virtualCaptureSink--busId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/virtualCaptureSink-overview.mp4",
+              "poster": "assets/tool-guides/virtualCaptureSink-overview.jpg",
+              "description": "A silent tour of the Virtual Capture Sink Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "testSignal",
+      "title": "Test Signal",
+      "sourceFile": "routing.json",
+      "fixture": "tone-steps",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "frequencyHz",
+          "label": "Tone frequency",
+          "type": "number",
+          "unit": "Hz",
+          "minimum": 20,
+          "maximum": 20000,
+          "default": 440,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "testSignal--frequencyHz",
+          "recordings": [
+            {
+              "title": "Tone frequency",
+              "video": "assets/tool-guides/testSignal-demo.mp4",
+              "poster": "assets/tool-guides/testSignal-demo.jpg",
+              "description": "Tone frequency moves from 440 Hz to 880 Hz about three seconds in, while the Test Signal plays its test tone. Makes the sine wave oscillate faster and sound higher.",
+              "property": "frequencyHz"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "levelDb",
+          "label": "Level",
+          "type": "number",
+          "unit": "dBFS",
+          "minimum": -60,
+          "maximum": 0,
+          "default": -18,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "testSignal--levelDb",
+          "recordings": [
+            {
+              "title": "Level",
+              "video": "assets/tool-guides/testSignal--levelDb.mp4",
+              "poster": "assets/tool-guides/testSignal--levelDb.jpg",
+              "description": "Level moves from −18 dBFS to −30 dBFS about three seconds in, while the Test Signal plays its test tone. Reduces tone amplitude.",
+              "property": "levelDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "durationMs",
+          "label": "Duration",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 1,
+          "maximum": 600000,
+          "default": 1000,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "testSignal--durationMs",
+          "recordings": [
+            {
+              "title": "Duration",
+              "video": "assets/tool-guides/testSignal--durationMs.mp4",
+              "poster": "assets/tool-guides/testSignal--durationMs.jpg",
+              "description": "Duration moves from 8,000 ms to 2,000 ms about three seconds in, while the Test Signal plays its test tone. Produces a shorter burst.",
+              "property": "durationMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
+        }
+      ]
+    },
+    {
+      "kind": "audioFile",
+      "title": "Audio File",
+      "sourceFile": "routing.json",
+      "fixture": "level-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "mediaId",
+          "label": "Choose WAV or MP3",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Choose WAV or MP3 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "audioFile--mediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/audioFile-overview.mp4",
+              "poster": "assets/tool-guides/audioFile-overview.jpg",
+              "description": "A silent tour of the Audio File Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "loop",
+          "label": "Loop",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "audioFile--loop",
+          "recordings": [
+            {
+              "title": "Loop",
+              "video": "assets/tool-guides/audioFile-demo.mp4",
+              "poster": "assets/tool-guides/audioFile-demo.jpg",
+              "description": "Loop is turned on about three seconds in, while the Audio File plays a prepared tone file. Repeat the imported audio when it reaches the end. The clip is shorter than the file, so you won't hear it start over.",
+              "property": "loop"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "temporaryRecorder",
+          "label": "Already-routed Recorder node",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Already-routed Recorder node depends on other nodes in your own route, so no separate clip plays it. The silent Properties tour shows where to find it.",
+          "recordingId": "audioFile--temporaryRecorder",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/audioFile-overview.mp4",
+              "poster": "assets/tool-guides/audioFile-overview.jpg",
+              "description": "A silent tour of the Audio File Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "soundboard",
+      "title": "Soundboard",
+      "sourceFile": "routing.json",
+      "fixture": "level-bursts",
+      "capture": "production-dsp",
+      "properties": [
+        {
+          "key": "slot1MediaId",
+          "label": "Sound · button 1",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 1 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot1MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot2MediaId",
+          "label": "Sound · button 2",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 2 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot2MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot3MediaId",
+          "label": "Sound · button 3",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 3 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot3MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot4MediaId",
+          "label": "Sound · button 4",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 4 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot4MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot5MediaId",
+          "label": "Sound · button 5",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 5 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot5MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot6MediaId",
+          "label": "Sound · button 6",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 6 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot6MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot7MediaId",
+          "label": "Sound · button 7",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 7 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot7MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot8MediaId",
+          "label": "Sound · button 8",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 8 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot8MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot9MediaId",
+          "label": "Sound · button 9",
+          "type": "file",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sound · button 9 plays a WAV or MP3 file you choose, so there is no fixed sound to record. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot9MediaId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot1Caption",
+          "label": "Caption · button 1",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot1Caption",
+          "recordings": [
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "slot2Caption",
+          "label": "Caption · button 2",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot2Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot3Caption",
+          "label": "Caption · button 3",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot3Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot4Caption",
+          "label": "Caption · button 4",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot4Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot5Caption",
+          "label": "Caption · button 5",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot5Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot6Caption",
+          "label": "Caption · button 6",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot6Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot7Caption",
+          "label": "Caption · button 7",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot7Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot8Caption",
+          "label": "Caption · button 8",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot8Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot9Caption",
+          "label": "Caption · button 9",
+          "type": "text",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot9Caption",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot1GainDb",
+          "label": "Level · button 1",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot1GainDb",
+          "recordings": [
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "slot2GainDb",
+          "label": "Level · button 2",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot2GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot3GainDb",
+          "label": "Level · button 3",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot3GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot4GainDb",
+          "label": "Level · button 4",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot4GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot5GainDb",
+          "label": "Level · button 5",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot5GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot6GainDb",
+          "label": "Level · button 6",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot6GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot7GainDb",
+          "label": "Level · button 7",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot7GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot8GainDb",
+          "label": "Level · button 8",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot8GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot9GainDb",
+          "label": "Level · button 9",
+          "type": "number",
+          "unit": "dB",
+          "minimum": -24,
+          "maximum": 6,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot9GainDb",
+          "recordings": [],
+          "status": "pending"
+        },
+        {
+          "key": "slot1Mode",
+          "label": "When pressed · button 1",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "soundboard--slot1Mode",
+          "recordings": [
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
+        },
+        {
+          "key": "slot2Mode",
+          "label": "When pressed · button 2",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "When pressed · button 2 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot2Mode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot3Mode",
+          "label": "When pressed · button 3",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "When pressed · button 3 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot3Mode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot4Mode",
+          "label": "When pressed · button 4",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "When pressed · button 4 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot4Mode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot5Mode",
+          "label": "When pressed · button 5",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "When pressed · button 5 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot5Mode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot6Mode",
+          "label": "When pressed · button 6",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "When pressed · button 6 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot6Mode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot7Mode",
+          "label": "When pressed · button 7",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "When pressed · button 7 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot7Mode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot8Mode",
+          "label": "When pressed · button 8",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "When pressed · button 8 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot8Mode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "slot9Mode",
+          "label": "When pressed · button 9",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "once",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "When pressed · button 9 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "recordingId": "soundboard--slot9Mode",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/soundboard-overview.mp4",
+              "poster": "assets/tool-guides/soundboard-overview.jpg",
+              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "recorder",
+      "title": "Recorder",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "format",
+          "label": "File format",
+          "type": "enum",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "wavPcm24",
+          "options": [
+            "wavPcm24",
+            "wavPcm16",
+            "wavFloat32",
+            "flac24",
+            "flac16",
+            "mp3"
+          ],
+          "dynamic": false,
+          "nonAudibleReason": "File format works with the files the Recorder saves on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "recorder--format",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/recorder-overview.mp4",
+              "poster": "assets/tool-guides/recorder-overview.jpg",
+              "description": "A silent tour of the Recorder Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "autoRecord",
+          "label": "Record automatically when Play starts",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Record automatically when Play starts works with the files the Recorder saves on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "recorder--autoRecord",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/recorder-overview.mp4",
+              "poster": "assets/tool-guides/recorder-overview.jpg",
+              "description": "A silent tour of the Recorder Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "splitMinutes",
+          "label": "New file every",
+          "type": "number",
+          "unit": "min",
+          "minimum": 0,
+          "maximum": 240,
+          "default": 0,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "New file every works with the files the Recorder saves on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "recorder--splitMinutes",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/recorder-overview.mp4",
+              "poster": "assets/tool-guides/recorder-overview.jpg",
+              "description": "A silent tour of the Recorder Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "recordingRoot",
+          "label": "Recording folder",
+          "type": "folder",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Recording folder works with the files the Recorder saves on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "recorder--recordingRoot",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/recorder-overview.mp4",
+              "poster": "assets/tool-guides/recorder-overview.jpg",
+              "description": "A silent tour of the Recorder Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "networkSend",
+      "title": "Network Send",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "host",
+          "label": "Receiving computer’s IP address",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Receiving computer’s IP address works with another computer on your network, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "networkSend--host",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/networkSend-overview.mp4",
+              "poster": "assets/tool-guides/networkSend-overview.jpg",
+              "description": "A silent tour of the Network Send Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "port",
+          "label": "UDP port",
+          "type": "number",
+          "unit": null,
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 47800,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "UDP port works with another computer on your network, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "networkSend--port",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/networkSend-overview.mp4",
+              "poster": "assets/tool-guides/networkSend-overview.jpg",
+              "description": "A silent tour of the Network Send Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "pairingKey",
+          "label": "Pairing key",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Pairing key works with another computer on your network, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "networkSend--pairingKey",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/networkSend-overview.mp4",
+              "poster": "assets/tool-guides/networkSend-overview.jpg",
+              "description": "A silent tour of the Network Send Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "networkReceive",
+      "title": "Network Receive",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "sender",
+          "label": "Sending computer’s IP address",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Sending computer’s IP address works with another computer on your network, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "networkReceive--sender",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/networkReceive-overview.mp4",
+              "poster": "assets/tool-guides/networkReceive-overview.jpg",
+              "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "port",
+          "label": "UDP port",
+          "type": "number",
+          "unit": null,
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 47800,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "UDP port works with another computer on your network, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "networkReceive--port",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/networkReceive-overview.mp4",
+              "poster": "assets/tool-guides/networkReceive-overview.jpg",
+              "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "bufferMs",
+          "label": "Receive buffer",
+          "type": "number",
+          "unit": "ms",
+          "minimum": 10,
+          "maximum": 500,
+          "default": 40,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Receive buffer works with another computer on your network, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "networkReceive--bufferMs",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/networkReceive-overview.mp4",
+              "poster": "assets/tool-guides/networkReceive-overview.jpg",
+              "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "pairingKey",
+          "label": "Pairing key",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Pairing key works with another computer on your network, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "networkReceive--pairingKey",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/networkReceive-overview.mp4",
+              "poster": "assets/tool-guides/networkReceive-overview.jpg",
+              "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "plugin",
+      "title": "VST Plugin",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "path",
+          "label": "Scanned plugin",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Scanned plugin works with a plugin installed on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "plugin--path",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/plugin-overview.mp4",
+              "poster": "assets/tool-guides/plugin-overview.jpg",
+              "description": "A silent tour of the VST Plugin Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "pluginParameter:<parameterId>",
+          "label": "Plugin-provided parameter title",
+          "type": "number",
+          "unit": "normalized",
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": true,
+          "nonAudibleReason": "Plugin-provided parameter title works with a plugin installed on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "plugin--pluginParameter-parameterId",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/plugin-overview.mp4",
+              "poster": "assets/tool-guides/plugin-overview.jpg",
+              "description": "A silent tour of the VST Plugin Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "group",
+      "title": "Visual Group",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "name",
+          "label": "Name",
+          "type": "string",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "Group",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Name only changes how the group looks on the canvas, so there is nothing to hear. The silent Properties tour shows where to find it.",
+          "recordingId": "group--name",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent tour of the Visual Group Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "color",
+          "label": "Background color",
+          "type": "color",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "#5599dd",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Background color only changes how the group looks on the canvas, so there is nothing to hear. The silent Properties tour shows where to find it.",
+          "recordingId": "group--color",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent tour of the Visual Group Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "opacity",
+          "label": "Opacity",
+          "type": "number",
+          "unit": "%",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 5,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Opacity only changes how the group looks on the canvas, so there is nothing to hear. The silent Properties tour shows where to find it.",
+          "recordingId": "group--opacity",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent tour of the Visual Group Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "fontSize",
+          "label": "Font size",
+          "type": "number",
+          "unit": "px",
+          "minimum": 12,
+          "maximum": 48,
+          "default": 18,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Font size only changes how the group looks on the canvas, so there is nothing to hear. The silent Properties tour shows where to find it.",
+          "recordingId": "group--fontSize",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent tour of the Visual Group Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "locked",
+          "label": "Lock position and size",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Lock position and size only changes how the group looks on the canvas, so there is nothing to hear. The silent Properties tour shows where to find it.",
+          "recordingId": "group--locked",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent tour of the Visual Group Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "moveContents",
+          "label": "Move contents with group",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": true,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Move contents with group only changes how the group looks on the canvas, so there is nothing to hear. The silent Properties tour shows where to find it.",
+          "recordingId": "group--moveContents",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/group-overview.mp4",
+              "poster": "assets/tool-guides/group-overview.jpg",
+              "description": "A silent tour of the Visual Group Properties panel. It scrolls through every setting, then returns to the top."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    }
+  ]
+}

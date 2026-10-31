@@ -180,7 +180,7 @@
       "kind": "applicationCapture",
       "title": "Application Capture",
       "purpose": "Capture one chosen application process tree.",
-      "concept": "The picker selects an application identity rather than an interchangeable process number. Normal application playback continues.",
+      "concept": "Click Choose an application source to open the picker, then select a running application. AudioRouter remembers the application's identity, not just its current PID. When the app closes, capture waits; when it starts again with a new PID, AudioRouter finds the matching application again. If more than one matching instance is running, choose the one you want. Normal application playback continues.",
       "signalBehavior": "Produces the selected app audio; a closed app produces silence while retaining its node.",
       "properties": [
         {

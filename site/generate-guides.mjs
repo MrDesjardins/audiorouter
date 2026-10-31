@@ -1,6 +1,8 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 const site = dirname(fileURLToPath(import.meta.url));
 const esc = (value) =>
   String(value ?? "").replace(
@@ -23,6 +25,31 @@ if (new Set(tools.map((t) => t.kind)).size !== tools.length)
 const tutorials = JSON.parse(
   await readFile(resolve(site, "guide-content/tutorials.json"), "utf8"),
 );
+const recordings = JSON.parse(
+  await readFile(resolve(site, "guide-content/recordings.json"), "utf8"),
+);
+const mediaVersion = (path) => esc(path) + "?v=" + createHash("sha256").update(readFileSync(resolve(site, path))).digest("hex").slice(0, 12);
+const recordingSection = (kind) =>
+  '<section class="guide-section" id="in-the-app"><h2>In the app.</h2><p>' +
+  ((recordings[kind] ?? []).some((clip) => clip.property && !clip.silent)
+    ? "These are screen recordings of the real Properties panel. Where a clip has sound, it’s a prepared test signal run through AudioRouter’s own audio engine, not a recording of anyone’s microphone or audio device."
+    : "These are screen recordings of the real Properties panel. They have no sound.") +
+  "</p>" +
+  (recordings[kind] ?? [])
+    .map(
+      (clip) =>
+        '<article class="guide-recording"><div class="guide-recording-copy"><h3>' +
+        esc(clip.title) +
+        '</h3><p>' + esc(clip.description) + '</p></div><video controls preload="none" playsinline width="720" height="1280" poster="../' +
+        mediaVersion(clip.poster) +
+        '" aria-label="' +
+        esc(clip.title) +
+        '"><source src="../' +
+        mediaVersion(clip.video) +
+        '" type="video/mp4"></video></article>',
+    )
+    .join("") +
+  "</section>";
 for (const tool of tools)
   if (!tutorials[tool.kind]) throw Error("Missing tutorial: " + tool.kind);
 const visualTypes = {
@@ -231,7 +258,7 @@ const doc = (title, description, body, scripts = "") =>
   esc(title) +
   '</title><meta name="description" content="' +
   esc(description) +
-  '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css"><script defer src="../assets/site.js"></script>' +
+  '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css?v=heading-links-3"><script defer src="../assets/site.js"></script>' +
   scripts +
   '</head><body class="guide-body">' +
   header +
@@ -494,7 +521,7 @@ for (let i = 0; i < tools.length; i++) {
           "</a>",
       )
       .join("") +
-    '<a href="#examples">Worked examples</a><a href="#avoid">Common mistakes</a></aside><div class="guide-article"><section class="guide-section" id="understand"><div class="eyebrow">01 / Understand</div><h2>How it works.</h2><p class="guide-concept">' +
+    '<a href="#in-the-app">In the app</a><a href="#examples">Worked examples</a><a href="#avoid">Common mistakes</a></aside><div class="guide-article"><section class="guide-section" id="understand"><div class="eyebrow">01 / Understand</div><h2>How it works.</h2><p class="guide-concept">' +
     esc(t.concept) +
     '</p><div class="guide-route" aria-label="Example signal path">' +
     tutorial.route
@@ -527,7 +554,7 @@ for (let i = 0; i < tools.length; i++) {
             ? '<div class="guide-band-selects"><label>Selected input<select data-demo-option="selected" aria-label="Illustration selected input"><option value="a">Input A</option><option value="b">Input B</option></select></label><label>Fade<select data-demo-option="fade" aria-label="Illustration switch fade"><option value="normal">Normal · 0.5 s</option><option value="slow">Slow · 2 s</option></select></label></div>'
             : t.kind === "outputSwitch"
               ? '<label class="guide-demo-select">Selected destination<select data-demo-option="selected" aria-label="Illustration selected output"><option value="a">A · Headphones</option><option value="b">B · OBS cable</option></select></label>'
-            : "") +
+              : "") +
     "" +
     (controls.length
       ? '<div class="guide-demo-controls" aria-label="Illustration controls">' +
@@ -592,6 +619,7 @@ for (let i = 0; i < tools.length; i++) {
         "</p></div>") +
     "</section>" +
     extras +
+    recordingSection(t.kind) +
     '<section class="guide-section" id="examples"><div class="eyebrow">04 / Examples</div><h2>Example setups.</h2><div class="guide-recipes">' +
     t.recipes
       .map(
@@ -624,7 +652,7 @@ for (let i = 0; i < tools.length; i++) {
       pageTitle(t),
       t.purpose,
       body,
-      '<script defer src="../assets/guide-animation.js"></script><script defer src="../assets/guide-signal.js"></script><script defer src="../assets/guide-audio.js"></script><script defer src="../assets/guide-playback.js"></script><script defer src="../assets/guides.js"></script>',
+      '<script defer src="../assets/guide-animation.js"></script><script defer src="../assets/guide-signal.js"></script><script defer src="../assets/guide-audio.js"></script><script defer src="../assets/guide-playback.js"></script><script defer src="../assets/guides.js?v=heading-links-4"></script>',
     ),
   );
 }
@@ -664,7 +692,7 @@ await writeFile(
       ' visual guides</p></section><section class="guide-index-grid" aria-label="Visual tool guides">' +
       cards +
       '</section><p class="guide-no-results" hidden>No guide matches. Try a tool name or a property such as threshold.</p></main>',
-    '<script defer src="../assets/guides.js"></script>',
+    '<script defer src="../assets/guides.js?v=heading-links-4"></script>',
   ),
 );
 await writeFile(

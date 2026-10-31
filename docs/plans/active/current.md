@@ -1,5 +1,274 @@
 # Active plan — post-0.0.8 maintenance
 
+## Tool-guide clip copy and order review fixes — 2026-10-31
+
+Code review of `a3354170` found two defects in
+`tools/site/build-tool-guide-review.mjs` (UI-20, website voice rule):
+every property clip repeated a stilted "synthetic production-engine example"
+disclaimer, and `unshift` listed property clips in reverse panel order.
+The generator now describes each clip from its render telemetry (from/to
+values, the test sound, the guide's own increase/decrease text) and states the
+"prepared test signal, not your microphone or device" fact once per page in the
+"In the app." intro. Clips follow Properties-panel order with the per-tool demo
+at its own property; the review gallery still leads with that demo. Exemption
+reasons are written per tool/type. A stale manifest claim (graphic EQ band 1
+"recorded" by a demo that now changes 1 kHz) is reset to pending: 98 recorded,
+100 pending, 53 exempted.
+
+Regenerated with `GUIDE_METADATA_ONLY=1` (no re-encode; media unchanged), then
+`site/generate-guides.mjs` and `site/generate-social.mjs`. Passing on Windows:
+`check-tool-guide-videos`, `check-tool-guide-catalog`, `site/check-guides`,
+`generate-social --check --check-changed`, `tools/docs/validate.mjs`, Firefox
+real-click playback (`check-tool-guide-video-firefox`) and the phone layout
+review, plus Edge screenshots of Compressor and Soundboard (the site has one
+dark theme; light emulation renders the same, forced-colors stood in for high
+contrast). A follow-up commit uses the guide's on/off text for toggles and
+names the switch renders' real 110/880 Hz inputs. Note: `GUIDE_METADATA_ONLY`
+still re-extracts posters and copies evidence overviews into `site/assets`;
+newer `target/` overviews for Physical Input and Application Capture were
+restored by hand and will change on the next full run. `check-tool-guide-property-coverage` still fails on the 100
+pending rows, as before. Rollback: revert this commit and rerun the generator.
+
+## Owner documentation review and push — 2026-10-30
+
+Main synchronization: merged `origin/main` at `b33fa54b`; resolved the sole
+conflict here by preserving both the tool-guide record and the 0.0.25 release
+plan. Guide links, catalog consistency, documentation validation (215 Markdown
+files / 1154 local links) and staged whitespace checks pass on Windows.
+
+Owner approved the current documentation presentation and requested pushing all
+worktree changes to `feature/tool-guide-property-videos`. Requirements: UI-20,
+UI-17, CAP-02 and DSP-03. Added 72 property recordings and two Duck configuration
+walkthroughs; the media checker passes 139 referenced clips. Physical Input now
+shows device selection, channels and spatial controls. Application Capture shows
+the picker opening and Add running app, and explains identity matching after PID
+changes. Portrait recordings use adjacent text on desktop and stack on phones.
+Section heading links copy the anchored page URL and update the address bar;
+an Edge click check verified the URL and clipboard. Content hashes version media
+URLs. AGENTS.md requires updating these recordings when tools change.
+
+Windows checks: both Rust formatting checks, guide links, media format/size/duration
+and authoritative catalog checks pass. Exhaustive property coverage remains open:
+99 repeated EQ/Soundboard rows have no individual recording or approved grouping.
+This approval does not waive those rows or continuous-transition qualification.
+No release, deployment or hardware evidence is claimed. Next task: finish those
+remaining property families and extend playback verification to the new clips.
+Rollback: revert this documentation/capture change and regenerate the guide pages.
+
+## Tool-guide real-property-window video spike — 2026-10-29
+
+Owner authorized the future plan on a new branch from the latest fetched
+`origin/main` (`b044ec7a`). Branch: `feature/tool-guide-property-videos`;
+worktree: `.worktrees/tool-guide-property-videos`. Preserve the existing
+checkout and its unrelated user changes. Scope for this first execution slice
+is the Gate-only spike and its reviewable evidence; the owner reviews it before
+the all-tool pipeline or rollout proceeds.
+
+Requirements: UI-20 and UI-17, with DSP-03 as the accuracy boundary; M05
+website documentation only. Existing conceptual diagrams and synthetic
+previews stay. Any clip must be clearly labelled as real application UI and
+real production processing, and must not imply hardware or live-microphone
+qualification. No site publication, app behavior, API, session, driver,
+dependency, or release changes.
+
+Prerequisites: pinned Rust 1.96.0, Node 22.22.3, Windows Edge and Firefox,
+ffmpeg/ffprobe, existing guide and UI harness, and a clean fetched-main
+worktree. These tools are present in the current Windows environment. No audio
+device or external credential is required; use only a deterministic synthetic
+fixture and isolated local artifacts.
+
+Decisions: follow the plan's first gate exactly: about three Gate clips, then
+stop for owner review. First establish whether the production engine exposes a
+reusable offline graph render with parameter changes and telemetry. Reuse
+production processors; no browser DSP substitute. Generate picture and sound
+from one deterministic timeline and keep all spike assets outside public site
+paths until the review gate passes. Capture the real React Properties window
+in the existing browser harness; document that the browser harness omits the
+native title bar. Never publish or edit UI-20 in this spike.
+
+Ordered tasks:
+
+1. Inspect engine render/telemetry APIs and current Gate parameter semantics;
+   record whether an offline production render can be reused as-is.
+2. Generate a seeded, license-free speech-like fixture and render Gate output
+   through the production engine at stable and changed Gate settings. Record
+   input/output samples and telemetry at the same timeline points.
+3. Capture the actual Gate Properties UI in Edge against that telemetry and
+   parameter timeline, then mux audio/video with ffmpeg into up to three
+   5–10-second review clips and posters.
+4. Verify fixture determinism, production-render behavior, picture/audio event
+   alignment within one frame, clip dimensions/duration/size, keyboard-visible
+   controls and no autoplay. Run the existing Firefox guide-audio sweep and
+   confirm a real click plays audible output from each muxed clip.
+5. Inspect all spike artifacts and the complete diff; record command,
+   environment, results and limitations here, then stop for owner review.
+
+Validation matrix: Rust engine test/render on Windows; deterministic fixture
+hash comparison (portable); media stream, duration, dimensions and size via
+ffprobe (Windows); event alignment via frame/audio inspection; Edge UI capture
+and keyboard checks; Firefox real-click playback sweep with audible output;
+documentation and diff checks. Unit tests/mocks alone do not qualify actual
+engine output or browser playback.
+
+Rollback: remove only spike-specific fixture/render/capture scripts, clips,
+posters and evidence. Existing generated guide pages, animations, synthetic
+audio, homepage media and other worktree changes remain untouched.
+
+Risks: the engine may lack a public offline path or automation/telemetry
+surface, requiring a narrowly scoped test-only example that reuses production
+processors. Browser capture and offline-render clocks may drift; fail the gate
+if the event check exceeds one frame. Firefox may reject or fail to play the
+chosen media profile; record the exact result rather than infer support.
+
+### Gate spike results — 2026-10-29
+
+Requirement evidence: UI-20 and UI-17 remain unchanged; the generated picture
+is the real React Properties UI and the audio comes from the production Gate
+processor. DSP-03's boundary is preserved: this is a synthetic offline render,
+not a live microphone or hardware qualification. M05 site output was not
+changed.
+
+Implementation and evidence:
+
+- The engine crate has no ready-made file render/automation API, so the
+  spike-only `crates/engine/examples/tool_guide_gate_render.rs` compiles a
+  connected Physical Input → Gate → Physical Output graph with production
+  processors, feeds the deterministic synthetic fixture through
+  `RuntimeGraph::process`, and records processor telemetry at 20 Hz. It
+  regenerates byte-identical input (SHA-256
+  `DB59D744EBCFC55F7F48D2DD9C63ADCD9B12185703AF3644C9C3EEC7224A8A6A`).
+- `ui/e2e/tool-guide-gate-spike.pw.ts` drives the real Gate precise-value
+  controls in Edge, verifies keyboard increment/decrement, replays matching
+  engine telemetry and captures 30 fps frames. The corrected version hides
+  the canvas/chrome, captures a portrait inspector, shows the changed threshold
+  briefly, then returns to the live graph. All three tests reported pass.
+  Event times were threshold 3202.8 ms / 3200 ms, hold 2989.2 ms / 3000 ms,
+  and range 3187.3 ms / 3200 ms; each is within one frame. The Playwright
+  process did not exit after reporting success and was interrupted, so its
+  shell exit was 1 despite three passing test reports.
+- Muxed review files are ignored build artifacts in
+  `target/tool-guide-spike/{threshold,hold,range}.mp4`, with matching `*-poster.jpg`
+  files. The original 960×540 canvas crop was rejected by the owner. Its
+  replacement is 8 seconds, 720×1280 H.264 plus stereo 48 kHz AAC, with sizes
+  431,431 / 427,154 / 411,177 bytes respectively. The production output
+  shows threshold noise reduction (~49 dB), the 600 ms hold remaining open
+  through the post-speech interval, and the range change reaching the Gate's
+  60 dB attenuation setting.
+- Windows Rust formatting/check and UI format, lint, and typecheck pass. The
+  React Flow attribution and `NO_COLOR`/`FORCE_COLOR` warnings appeared during
+  the browser run and are recorded for review; no product attribution setting
+  was changed in this spike.
+- Firefox 158.0.1 playback is unverified. The repository's existing
+  `tools/site/firefox-guide-audio.mjs` sweep failed on all 29 audio-relevant
+  guides with WebDriver BiDi `invalid argument` before it could measure audio.
+  The clip-specific Firefox real-click/audible-output gate therefore remains
+  open; do not claim Firefox compatibility.
+
+All source changes are limited to the example renderer, its Edge capture test,
+and this execution record. The MP4s and raw fixture/render files are under
+ignored `target/`; no generated pages, site assets, UI-20 text or decision
+record were changed. The native app title bar is absent because capture uses
+the existing browser harness.
+
+The original next action was owner review. That review happened on 2026-10-29
+and rejected the frame composition; the direction and scope decision are
+recorded below.
+
+### Owner revision after Gate review — 2026-10-29
+
+Latest execution (2026-10-30): [all-tool recording evidence](evidence/2026-10-30-all-tool-videos.md)
+and [38-tool review gallery](evidence/tool-guide-preview/all-tools/index.html).
+All 38 tools now have Properties-only portrait videos; 27 also have synthetic
+production-audio examples. All 65 final site videos pass Firefox playback;
+all audible examples have nonzero measured output. Generated guide pages now
+include the recordings. Full per-property coverage is still open (26 recorded,
+48 configuration exemptions, 177 pending), so this is not completion of the
+entire feature contract. PR #90 remains a draft pending that scope.
+
+Review update (2026-10-30): the owner authorized a PR. A reviewable local gallery
+is committed at [Gate preview](evidence/tool-guide-preview/index.html), including
+all three portrait MP4s and posters. These are framing previews: graph rebuilds
+at parameter changes reset processor history, so continuous live automation is
+not qualified. Fix this before the full rollout. The capture generator is now
+opt-in with `AUDIOROUTER_RECORD_TOOL_GUIDES=1` so normal CI does not require
+ignored render inputs. Manifest regeneration preserves exemption explanations.
+The all-tool rollout, Firefox validation, and capture-process shutdown remain
+open. The PR must be a draft and describe this incomplete scope explicitly.
+
+The owner reviewed the rendered Gate clip and rejected its framing: it included
+the canvas, clipped the Gate card, and hid the most informative live visual at
+the top of the Properties panel. The review authorizes continuing the plan for
+all tools with this corrected capture requirement:
+
+- Portrait 9:16 output showing only the selected tool's Properties panel. Hide
+  the canvas, other workspace panels, and app chrome from the recorded frame.
+- Keep the top live visualization or status area visible during the main audio
+  playback. If the changing parameter is lower in a long panel, show it briefly
+  at the change and return to the panel top while playback continues.
+- Include all 37 domain node kinds and map every user-exposed property to a
+  clip or a documented non-audible/configuration exception. Use production DSP
+  output where a property changes sound; never imply device, network, plugin,
+  or hardware behavior from a synthetic UI fixture.
+- The rejected workspace crop has been replaced by three portrait Gate
+  captures. All three Edge tests report pass; the test process still requires
+  interruption after reporting, and React Flow logs a transient zero-size
+  warning while the offscreen canvas is resized. Use only the new portrait
+  MP4s/posters as evidence; do not publish generated output yet.
+
+Requirements remain UI-20/UI-17 and DSP-03, with all relevant DSP contracts;
+specify the distinction between conceptual diagrams and labelled real-UI,
+production-DSP recordings before guide pages are updated. The prior explicit
+Gate review is complete; proceed through the full all-tool scope the owner has
+now requested.
+
+Ordered tasks for this continuation:
+
+1. **Complete.** Rebuilt all three Gate captures as portrait, Properties-only
+   recordings. The canvas is outside the frame, the top live visual returns
+   after each parameter change, and event sync stays within one frame.
+2. **Inventory built.** The 37 `NodeKind` values plus the visual Group match
+   the site guides. The manifest includes all currently described properties.
+   Verify its metadata against the control catalog and UI editors, then keep
+   recordings or documented exceptions mapped to every field.
+3. **In progress.** Add a reusable production-engine renderer and deterministic
+   fixtures, then extend it with processor-specific telemetry and parameter
+   changes. The renderer now builds a synthetic signal route through any
+   `NodeKind`, applies before/after parameter objects at 3.2 seconds, and emits
+   synchronized 20 Hz output meter samples. A Gain smoke render confirmed the
+   raw audio and meter timeline. The real Properties capture remains Gate-only;
+   generalize it to every manifest entry with the same portrait framing, no
+   canvas, and top-first playback.
+4. Produce the corresponding silent/configuration UI recordings for tools
+   whose properties do not affect audio, then connect all reviewed recordings
+   to generated guide pages without removing current diagrams or previews.
+5. Add the approved UI-20 distinction and coverage, size, accessibility, and
+   no-layout-shift checks. Measure total media/page weight and phone layout.
+6. Repair/replace Firefox WebDriver BiDi playback validation; real-click each
+   audible clip and verify playback and nonzero output before publication.
+   Inspect the complete diff and record remaining limitations.
+
+Inventory progress: `tools/site/build-tool-guide-property-manifest.mjs` checks
+the guide inventory against `NodeKind::ALL` and builds
+`tools/site/tool-guide-property-manifest.json`. It currently maps 37 domain
+node kinds plus visual Group (38 guide kinds total) and 251 property rows,
+including 16 parametric EQ bands and nine Soundboard slots. The companion
+coverage checker is `tools/site/check-tool-guide-property-coverage.mjs`; rows
+remain pending while recordings are made.
+
+The renderer's initial smoke invocation used `Gain` instead of the serde name
+`gain`; after correcting the invocation, it produced the expected meter data.
+Rust formatting and `cargo check -p audiorouter-engine --example
+tool_guide_property_render` pass. Coverage check correctly reports all 251 rows
+pending; no all-tool recording is claimed yet.
+
+Rollback: revert this continuation's manifest, renderer/capture pipeline,
+media and generated guide changes; keep the already existing diagrams and
+interactive previews. Continue to keep generated work local until Firefox,
+size and accessibility checks pass. Next action: implement the manifest-driven
+Properties-only recorder and extend the production renderer with the needed
+processor routes/telemetry, then fill the 251 property mappings in validated
+clips or justified non-audible exceptions.
+
 ## Release 0.0.25 — 2026-10-30, owner request
 
 Prepare the app-only unsigned prerelease containing everything on main, including the Soundboard and the static-runtime installer fix. Scope, tasks, gates and rollback: [release plan](release-0.0.25.md). Next: finish local checks and request PR approval.
