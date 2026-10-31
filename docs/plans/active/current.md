@@ -1,4 +1,13 @@
-# Active plan — post-0.0.8 maintenance
+# Active plan — 0.0.26 release and maintenance
+
+## Release 0.0.26 — 2026-10-31, owner request
+
+Prepare and publish the next unsigned app-only experimental prerelease from
+merged main (`73ac6f85`), including the tested combined follow-ups. Explicit
+release authorization supersedes the earlier build-only scope. No PR, driver
+installation or owner-instance changes. Requirements, checks, risks and rollback:
+[release plan](release-0.0.26.md). Next: focused checks, tagged build and
+exact-package verification, then public prerelease publication.
 
 ## Combined review follow-ups and manual-test build — 2026-10-31
 

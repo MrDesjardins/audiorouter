@@ -1,6 +1,6 @@
 [package]
 name = "audiorouter-windows-audio"
-version = "0.0.25"
+version = "0.0.26"
 edition.workspace = true
 license.workspace = true
 publish = false
