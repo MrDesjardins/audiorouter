@@ -302,6 +302,28 @@ acceptance passed (213 Markdown files, 1,141 links), and the complete staged dif
 was inspected. Reproducible logs are in `target/soundboard-pr-*.log`; the earlier
 three-theme Edge, private-session audio and rebuilt-shell evidence remains above.
 
+### 2026-10-30: consolidate remaining Soundboard work into PR 94
+
+Owner explicitly requests all Soundboard work reported by the "Prepare Changes
+for Branch and PR" thread in PR 94. Read that thread's messages and activity:
+it audited this same shared working tree and made no changes. Eight of its nine
+reported paths are already committed in `51a2344d`; the sole excluded path is
+`ui/src/styles.css`, whose pending diff changes only Soundboard Properties row
+spacing/padding and range height/margin. This request authorizes including that
+previously excluded stylesheet change in the same branch/PR.
+
+Retain the existing styling diff and extend the three-theme Edge regression to
+open Properties, operate the level slider with Home/ArrowRight, and check that
+all slot fields/buttons stay within the row. Dark, light and high-contrast pass
+(3/3); inspected `soundboard-properties-*.png` beside the flow screenshots in
+`target/soundboard-flow-evidence/`. UI format, lint and typecheck pass. Rollback:
+revert this Properties styling/test follow-up without reverting the metering fix.
+Production UI build and format:check also pass; documentation acceptance passes
+213 Markdown files/1,141 links. The recorded 621 kB Vite bundle notice remains.
+Commit this follow-up on `fix/soundboard-source-meter` and push to PR 94; its
+combined nine-path diff accounts for every path in the other thread's audit.
+Next action: hosted Windows CI and human review of the updated PR.
+
 Remaining, in order: library category expansion for `slotNSet`; drag and drop (SND-19);
 remaining editor/picker interactions beyond the now-covered Play controls;
 inspect a built installer for `sound-library` (and `verify-artifacts.ps1` expectations);

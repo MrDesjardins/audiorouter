@@ -103,5 +103,25 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     });
     await expect(boardEdge.locator("g.flow-line.flow-edge-active")).toHaveCount(0);
     await expect(cableEdge.locator("g.flow-line.flow-edge-active")).toHaveCount(1);
+    await board.click();
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    const editor = page.locator(".soundboard-editor");
+    const slider = editor.getByRole("slider");
+    await expect(slider).toBeVisible();
+    await slider.press("Home");
+    await expect(slider).toHaveValue("-24");
+    await slider.press("ArrowRight");
+    await expect(slider).toHaveValue("-23");
+    const slot = editor.locator(".soundboard-slot").first();
+    expect(
+      await slot.evaluate((element) => {
+        const row = element.getBoundingClientRect();
+        return [...element.querySelectorAll("input, select, button")].every((control) => {
+          const bounds = control.getBoundingClientRect();
+          return bounds.width > 0 && bounds.left >= row.left && bounds.right <= row.right;
+        });
+      }),
+    ).toBe(true);
+    await editor.screenshot({ path: testInfo.outputPath(`soundboard-properties-${theme}.png`) });
   });
 }
