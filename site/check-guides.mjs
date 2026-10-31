@@ -72,7 +72,8 @@ for (const guide of manifest.guides) {
   for (const match of html.matchAll(/\b(?:href|src)="([^"]+)"/g)) {
     const url = match[1];
     if (/^(https?:|data:|mailto:)/.test(url)) continue;
-    const [path, fragment] = url.split("#");
+    const [resource, fragment] = url.split("#");
+    const path = resource.split("?")[0];
     const target = path
       ? resolve(dirname(file), decodeURIComponent(path))
       : file;

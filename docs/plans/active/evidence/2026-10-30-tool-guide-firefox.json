@@ -1,0 +1,652 @@
+[
+  {
+    "kind": "gain",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.429333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "gain",
+    "type": "demos",
+    "passed": true,
+    "time": 1.458666,
+    "paused": false,
+    "peak": 0.18518736958503723,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "volume",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "volume",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.18609842658042908,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "bassTreble",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "bassTreble",
+    "type": "demos",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0.04621030390262604,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "graphicEq",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.05216306820511818,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "parametricEq",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "parametricEq",
+    "type": "demos",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0.05538312345743179,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "compressor",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "compressor",
+    "type": "demos",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.056981779634952545,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "gate",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "gate",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.0568879172205925,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "limiter",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "limiter",
+    "type": "demos",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.05731309950351715,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "delay",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "delay",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.296742707490921,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "pitch",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "pitch",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.12274044752120972,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "dehum",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "dehum",
+    "type": "demos",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.0958135724067688,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "declick",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "declick",
+    "type": "demos",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.0046829539351165295,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "denoise",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "denoise",
+    "type": "demos",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.05706387013196945,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "speechDenoise",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "speechDenoise",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.056969448924064636,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "spectralGate",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "spectralGate",
+    "type": "demos",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.056892480701208115,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "firFilter",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "firFilter",
+    "type": "demos",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.11063450574874878,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "mute",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "mute",
+    "type": "demos",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.18609842658042908,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "duck",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "duck",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.056981779634952545,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "timeShift",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "timeShift",
+    "type": "demos",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.296742707490921,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "mixer",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "mixer",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.0009482464520260692,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "meter",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "meter",
+    "type": "demos",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.18609842658042908,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "funVoiceChanger",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "funVoiceChanger",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.05611215904355049,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "physicalInput",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "physicalOutput",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "applicationCapture",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "endpointLoopback",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "virtualRenderSource",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "virtualCaptureSink",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "testSignal",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "testSignal",
+    "type": "demos",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.1290053278207779,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "audioFile",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "audioFile",
+    "type": "demos",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.18618859350681305,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "soundboard",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "soundboard",
+    "type": "demos",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.18618859350681305,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "recorder",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "networkSend",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "networkReceive",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "plugin",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "group",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "inputSwitch",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "inputSwitch",
+    "type": "demos",
+    "passed": true,
+    "time": 1.458666,
+    "paused": false,
+    "peak": 0.08585018664598465,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "outputSwitch",
+    "type": "overviews",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "outputSwitch",
+    "type": "demos",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0.0804160088300705,
+    "state": "running",
+    "error": null
+  }
+]

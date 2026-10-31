@@ -1,5 +1,36 @@
 (() => {
   "use strict";
+  const linkStatus = document.createElement("span");
+  linkStatus.className = "guide-link-status";
+  linkStatus.setAttribute("role", "status");
+  document.body.append(linkStatus);
+  for (const heading of document.querySelectorAll(".guide-section[id] > h2")) {
+    const section = heading.parentElement;
+    const link = document.createElement("a");
+    link.className = "guide-heading-link";
+    link.href = `#${section.id}`;
+    link.textContent = "#";
+    const label = `Copy link to ${heading.textContent.trim()}`;
+    link.setAttribute("aria-label", label);
+    link.title = label;
+    link.addEventListener("click", async (event) => {
+      event.preventDefault();
+      const url = new URL(location.href);
+      url.search = "";
+      url.hash = section.id;
+      history.replaceState(null, "", url.href);
+      section.scrollIntoView({ block: "start" });
+      try {
+        await navigator.clipboard.writeText(url.href);
+        linkStatus.textContent = "Section link copied.";
+        link.title = "Link copied";
+      } catch {
+        location.hash = section.id;
+        linkStatus.textContent = "Copy the section link from the address bar.";
+      }
+    });
+    heading.append(" ", link);
+  }
   const data = document.getElementById("guide-data");
   if (data) {
     const guide = JSON.parse(data.textContent);
@@ -50,6 +81,27 @@
         audio,
       );
     const rangeInputs = [...document.querySelectorAll("[data-demo-key]")];
+    const recordings = [...document.querySelectorAll(".guide-recording video")];
+    for (const video of recordings) {
+      video.addEventListener("play", () => {
+        demo.stop();
+        for (const other of recordings) if (other !== video) other.pause();
+      });
+    }
+    const recordingTransportObserver = new MutationObserver(() => {
+      if (
+        document.querySelector("[data-guide-demo]").dataset.audioState ===
+        "playing"
+      )
+        for (const video of recordings) video.pause();
+    });
+    recordingTransportObserver.observe(
+      document.querySelector("[data-guide-demo]"),
+      {
+        attributes: true,
+        attributeFilter: ["data-audio-state"],
+      },
+    );
     const updateRangeInputs = () => {
       rangeInputs.forEach((input) => {
         const key = input.dataset.demoKey;
@@ -102,6 +154,7 @@
     window.addEventListener(
       "pagehide",
       () => {
+        recordingTransportObserver.disconnect();
         playback?.destroy();
         demo.destroy();
         audio?.destroy();

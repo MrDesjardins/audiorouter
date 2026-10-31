@@ -38,6 +38,7 @@ const injected = globalThis as {
   /** `apps.list` and `devices.list` answers, for the app checks (D1). */
   __routeFixtureApplications?: ApplicationInfo[];
   __routeFixtureDevices?: DeviceListItem[];
+  __routeFixtureSoundboardStatus?: Awaited<ReturnType<NonNullable<UiBackend["soundboardStatus"]>>>;
 };
 /** A JSON-RPC error the next Play answers with, set by a test at any time. */
 type StartErrorFixture = ConstructorParameters<typeof AudioRouterRpcError>[0];
@@ -225,7 +226,13 @@ const previewBackend: UiBackend = {
       session: committed,
       // Opt-in discovery data (presets, node types) for tool editors.
       ...(injected.__routeFixtureDiscovery
-        ? { discovery: { ...(initial.discovery ?? {}), ...injected.__routeFixtureDiscovery } as DiscoveryDocument }
+        ? {
+            discovery: {
+              ...(initial.discovery ?? {}),
+              ...injected.__routeFixtureDiscovery,
+              presets: { ...initial.discovery?.presets, ...injected.__routeFixtureDiscovery.presets },
+            } as DiscoveryDocument,
+          }
         : {}),
       diagnostics: diagnostics(),
       status: {
@@ -372,6 +379,21 @@ const previewBackend: UiBackend = {
     sequence += 1;
     return { sessionId, nodeId, state: sourceStates.get(nodeId) ?? "stopped", loop: false };
   },
+  ...(injected.__routeFixtureSoundboardStatus
+    ? {
+        async soundboardStatus(sessionId: string, nodeId: string) {
+          const status = injected.__routeFixtureSoundboardStatus;
+          if (!status) throw new Error("Offline Soundboard telemetry is unavailable");
+          return {
+            sessionId,
+            nodeId,
+            slots: structuredClone(status.slots),
+            ignoredTriggers: status.ignoredTriggers,
+            droppedCommands: status.droppedCommands,
+          };
+        },
+      }
+    : {}),
   async listApplications() {
     if (injected.__routeFixtureApplications) return structuredClone(injected.__routeFixtureApplications);
     return [
