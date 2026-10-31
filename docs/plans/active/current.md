@@ -1,5 +1,26 @@
 # Active plan — post-0.0.8 maintenance
 
+## Owner documentation review and push — 2026-10-30
+
+Owner approved the current documentation presentation and requested pushing all
+worktree changes to `feature/tool-guide-property-videos`. Requirements: UI-20,
+UI-17, CAP-02 and DSP-03. Added 72 property recordings and two Duck configuration
+walkthroughs; the media checker passes 139 referenced clips. Physical Input now
+shows device selection, channels and spatial controls. Application Capture shows
+the picker opening and Add running app, and explains identity matching after PID
+changes. Portrait recordings use adjacent text on desktop and stack on phones.
+Section heading links copy the anchored page URL and update the address bar;
+an Edge click check verified the URL and clipboard. Content hashes version media
+URLs. AGENTS.md requires updating these recordings when tools change.
+
+Windows checks: both Rust formatting checks, guide links, media format/size/duration
+and authoritative catalog checks pass. Exhaustive property coverage remains open:
+99 repeated EQ/Soundboard rows have no individual recording or approved grouping.
+This approval does not waive those rows or continuous-transition qualification.
+No release, deployment or hardware evidence is claimed. Next task: finish those
+remaining property families and extend playback verification to the new clips.
+Rollback: revert this documentation/capture change and regenerate the guide pages.
+
 ## Tool-guide real-property-window video spike — 2026-10-29
 
 Owner authorized the future plan on a new branch from the latest fetched

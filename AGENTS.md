@@ -27,6 +27,8 @@ Use this canonical uppercase filename on Windows. Do not add `agent.md`, `agents
 
 ## Static website writing
 
+When adding or changing a tool or its user-visible controls, create or refresh its guide videos in the same change. Record the real Properties panel alone in portrait 9:16, keep the top live visualization visible during audio playback, briefly reveal the changed control, and return to the top. Use production-engine audio for audible effects; label configuration-only recordings as silent. Update the property coverage manifest and generated guide pages, and verify playback in Firefox before reporting the tool documentation ready. See `docs/plans/active/evidence/2026-10-29-tool-guide-capture-decision.md`.
+
 Write website copy in a natural, human voice: use plain, specific language and speak directly to the reader. Prefer clear descriptions of what AudioRouter does over generic marketing slogans, inflated claims, or formulaic AI-sounding phrasing. Preserve technical accuracy and the existing privacy and permission details.
 
 ## UI conventions

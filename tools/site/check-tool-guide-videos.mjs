@@ -66,7 +66,7 @@ for (const tool of tools) {
       `${clip.video}: invalid duration`,
     );
     const audio = metadata.streams.find((s) => s.codec_type === "audio");
-    if (clip.video.endsWith("-demo.mp4"))
+    if (clip.silent !== true && (clip.video.endsWith("-demo.mp4") || clip.video.includes("--")))
       assert.equal(
         audio?.codec_name,
         "aac",

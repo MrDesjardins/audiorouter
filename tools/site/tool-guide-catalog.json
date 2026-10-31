@@ -1,0 +1,2609 @@
+{
+  "nodeTypes": [
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "device-bound",
+      "type": "physical-input@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "device-bound",
+      "type": "application-capture@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "device-bound",
+      "type": "endpoint-loopback@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "device-bound",
+      "type": "physical-output@1"
+    },
+    {
+      "availability": {
+        "reason": "requires M03 managed virtual driver",
+        "status": "unavailable"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "device-bound",
+      "type": "virtual-render-source@1"
+    },
+    {
+      "availability": {
+        "reason": "requires M03 managed virtual driver",
+        "status": "unavailable"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "device-bound",
+      "type": "virtual-capture-sink@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 440,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "frequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": -18,
+          "maximum": 0,
+          "minimum": -60,
+          "name": "levelDb",
+          "type": "number",
+          "unit": "dBFS"
+        },
+        {
+          "default": 1000,
+          "maximum": 600000,
+          "minimum": 1,
+          "name": "durationMs",
+          "type": "number",
+          "unit": "ms"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "test-signal@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 100,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "inputVolume:",
+          "namePattern": "inputVolume:<upstreamNodeId>",
+          "type": "number",
+          "unit": "%"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "mixer@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -60,
+          "name": "gainDb",
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "gain@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": false,
+          "name": "muted",
+          "type": "boolean"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "mute@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "low",
+      "type": "meter@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "frequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "gainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band0Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band0Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band0FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band0Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band0GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band1Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band1Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band1FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band1Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band1GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band2Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band2Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band2FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band2Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band2GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band3Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band3Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band3FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band3Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band3GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band4Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band4Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band4FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band4Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band4GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band5Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band5Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band5FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band5Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band5GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band6Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band6Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band6FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band6Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band6GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band7Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band7Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band7FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band7Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band7GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band8Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band8Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band8FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band8Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band8GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band9Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band9Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band9FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band9Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band9GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band10Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band10Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band10FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band10Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band10GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band11Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band11Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band11FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band11Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band11GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band12Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band12Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band12FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band12Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band12GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band13Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band13Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band13FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band13Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band13GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band14Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band14Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band14FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band14Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band14GainDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "band15Enabled",
+          "type": "boolean"
+        },
+        {
+          "default": "peaking",
+          "enum": [
+            "peaking",
+            "lowShelf",
+            "highShelf",
+            "lowPass",
+            "highPass",
+            "bandPass",
+            "allPass",
+            "notch"
+          ],
+          "name": "band15Type",
+          "type": "string"
+        },
+        {
+          "default": 1000,
+          "maximum": 20000,
+          "minimum": 20,
+          "name": "band15FrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 0.1,
+          "name": "band15Q",
+          "type": "number"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "name": "band15GainDb",
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "parametric-eq@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": -18,
+          "maximum": 0,
+          "minimum": -60,
+          "name": "thresholdDb",
+          "type": "number",
+          "unit": "dBFS"
+        },
+        {
+          "default": 3,
+          "maximum": 20,
+          "minimum": 1,
+          "name": "ratio",
+          "type": "number"
+        },
+        {
+          "default": 10,
+          "maximum": 200,
+          "minimum": 0.1,
+          "name": "attackMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 150,
+          "maximum": 2000,
+          "minimum": 10,
+          "name": "releaseMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 6,
+          "maximum": 24,
+          "minimum": 0,
+          "name": "kneeDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 24,
+          "minimum": 0,
+          "name": "makeupDb",
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "compressor@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": -45,
+          "maximum": 0,
+          "minimum": -80,
+          "name": "thresholdDb",
+          "type": "number",
+          "unit": "dBFS"
+        },
+        {
+          "default": 60,
+          "maximum": 80,
+          "minimum": 0,
+          "name": "rangeDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 5,
+          "maximum": 100,
+          "minimum": 0.1,
+          "name": "attackMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 3,
+          "maximum": 12,
+          "minimum": 0,
+          "name": "hysteresisDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 4,
+          "maximum": 20,
+          "minimum": 1,
+          "name": "ratio",
+          "type": "number"
+        },
+        {
+          "default": 50,
+          "maximum": 1000,
+          "minimum": 0,
+          "name": "holdMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 150,
+          "maximum": 2000,
+          "minimum": 10,
+          "name": "releaseMs",
+          "type": "number",
+          "unit": "ms"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "gate@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 240,
+      "parameters": [
+        {
+          "default": -1,
+          "maximum": 0,
+          "minimum": -12,
+          "name": "ceilingDb",
+          "type": "number",
+          "unit": "dBFS"
+        },
+        {
+          "default": 5,
+          "maximum": 10,
+          "minimum": 0,
+          "name": "lookaheadMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 100,
+          "maximum": 1000,
+          "minimum": 10,
+          "name": "releaseMs",
+          "type": "number",
+          "unit": "ms"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "limiter@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 0,
+          "maximum": 1000,
+          "minimum": 0,
+          "name": "delayMs",
+          "type": "number",
+          "unit": "ms"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "delay@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band0Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band1Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band2Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band3Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band4Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band5Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band6Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band7Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band8Db",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 18,
+          "minimum": -18,
+          "name": "band9Db",
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "graphic-eq@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 1024,
+      "parameters": [
+        {
+          "default": 0,
+          "maximum": 12,
+          "minimum": -12,
+          "name": "semitones",
+          "type": "number",
+          "unit": "semitones"
+        },
+        {
+          "default": 0,
+          "maximum": 100,
+          "minimum": -100,
+          "name": "cents",
+          "type": "number",
+          "unit": "cents"
+        }
+      ],
+      "realtimeCostClass": "high",
+      "type": "pitch@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": "wavPcm24",
+          "enum": [
+            "wavPcm24",
+            "wavPcm16",
+            "wavFloat32",
+            "flac24",
+            "flac16",
+            "mp3"
+          ],
+          "name": "format",
+          "type": "string"
+        },
+        {
+          "default": false,
+          "name": "autoRecord",
+          "type": "boolean"
+        },
+        {
+          "default": 0,
+          "maximum": 240,
+          "minimum": 0,
+          "name": "splitMinutes",
+          "step": 1,
+          "type": "number",
+          "unit": "min"
+        }
+      ],
+      "realtimeCostClass": "device-bound",
+      "type": "recorder@1"
+    },
+    {
+      "availability": {
+        "reason": "requires a bound isolated plugin worker",
+        "status": "unavailable"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "worker-bound",
+      "type": "plugin@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "low",
+      "type": "audio-file@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 100,
+          "maximum": 200,
+          "minimum": 0,
+          "name": "percent",
+          "type": "number",
+          "unit": "%"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "volume@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 0,
+          "maximum": 12,
+          "minimum": -12,
+          "name": "bassDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 0,
+          "maximum": 12,
+          "minimum": -12,
+          "name": "trebleDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 500,
+          "maximum": 1000,
+          "minimum": 80,
+          "name": "bassFrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1500,
+          "maximum": 12000,
+          "minimum": 800,
+          "name": "trebleFrequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "bass-treble@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 60,
+          "maximum": 65,
+          "minimum": 45,
+          "name": "frequencyHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "amountPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": 4,
+          "maximum": 8,
+          "minimum": 1,
+          "name": "harmonics",
+          "step": 1,
+          "type": "number"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "dehum@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 64,
+      "parameters": [
+        {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "thresholdPercent",
+          "type": "number",
+          "unit": "%"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "declick@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": "a",
+          "enum": [
+            "a",
+            "b"
+          ],
+          "name": "selected",
+          "type": "string"
+        },
+        {
+          "default": "normal",
+          "enum": [
+            "normal",
+            "slow"
+          ],
+          "name": "fade",
+          "type": "string"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "input-switch@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": "a",
+          "enum": [
+            "a",
+            "b"
+          ],
+          "name": "selected",
+          "type": "string"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "output-switch@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 1024,
+      "parameters": [
+        {
+          "default": 70,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "reductionPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": 10,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "floorPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": false,
+          "name": "learning",
+          "type": "boolean"
+        }
+      ],
+      "realtimeCostClass": "high",
+      "type": "denoise@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 1024,
+      "parameters": [
+        {
+          "default": 70,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "strengthPercent",
+          "type": "number",
+          "unit": "%"
+        }
+      ],
+      "realtimeCostClass": "high",
+      "type": "speech-denoise@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 512,
+      "parameters": [
+        {
+          "default": 100,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "wetPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": 0,
+          "maximum": 12,
+          "minimum": -24,
+          "name": "gainDb",
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCostClass": "high",
+      "type": "fir-filter@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 1024,
+      "parameters": [
+        {
+          "default": 3,
+          "maximum": 20,
+          "minimum": -20,
+          "name": "thresholdDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 40,
+          "maximum": 80,
+          "minimum": 0,
+          "name": "reductionDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "learning",
+          "type": "boolean"
+        }
+      ],
+      "realtimeCostClass": "high",
+      "type": "spectral-gate@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": 60,
+          "maximum": 120,
+          "minimum": 10,
+          "name": "bufferSeconds",
+          "step": 1,
+          "type": "number",
+          "unit": "s"
+        }
+      ],
+      "realtimeCostClass": "medium",
+      "type": "time-shift@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "device-bound",
+      "type": "network-send@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "device-bound",
+      "type": "network-receive@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [
+        {
+          "default": -35,
+          "maximum": 0,
+          "minimum": -80,
+          "name": "thresholdDb",
+          "type": "number",
+          "unit": "dBFS"
+        },
+        {
+          "default": 6,
+          "maximum": 40,
+          "minimum": 0,
+          "name": "amountDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": 20,
+          "maximum": 500,
+          "minimum": 1,
+          "name": "attackMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 300,
+          "maximum": 2000,
+          "minimum": 0,
+          "name": "holdMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 500,
+          "maximum": 5000,
+          "minimum": 20,
+          "name": "releaseMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": "level",
+          "enum": [
+            "level",
+            "siegeRound"
+          ],
+          "name": "trigger",
+          "type": "string"
+        },
+        {
+          "name": "keyNodeId",
+          "reference": "node",
+          "type": "string"
+        },
+        {
+          "default": true,
+          "name": "duckMenu",
+          "type": "boolean"
+        },
+        {
+          "default": true,
+          "name": "duckPrep",
+          "type": "boolean"
+        },
+        {
+          "default": true,
+          "name": "duckBetweenRounds",
+          "type": "boolean"
+        },
+        {
+          "default": false,
+          "name": "duckAction",
+          "type": "boolean"
+        }
+      ],
+      "realtimeCostClass": "low",
+      "type": "duck@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 1024,
+      "parameters": [
+        {
+          "default": "custom",
+          "enum": [
+            "pitchCorrectSubtle",
+            "pitchCorrectHard",
+            "deep",
+            "chipmunk",
+            "monster",
+            "child",
+            "robot",
+            "alien",
+            "radio",
+            "megaphone",
+            "telephone",
+            "whisper",
+            "cave",
+            "custom"
+          ],
+          "name": "preset",
+          "type": "string"
+        },
+        {
+          "default": -90,
+          "maximum": -20,
+          "minimum": -90,
+          "name": "gateDb",
+          "type": "number",
+          "unit": "dBFS"
+        },
+        {
+          "default": false,
+          "name": "correctEnabled",
+          "type": "boolean"
+        },
+        {
+          "default": "c",
+          "enum": [
+            "c",
+            "cs",
+            "d",
+            "ds",
+            "e",
+            "f",
+            "fs",
+            "g",
+            "gs",
+            "a",
+            "as",
+            "b"
+          ],
+          "name": "key",
+          "type": "string"
+        },
+        {
+          "default": "chromatic",
+          "enum": [
+            "chromatic",
+            "major",
+            "minor",
+            "majorPentatonic",
+            "minorPentatonic",
+            "blues",
+            "monotone"
+          ],
+          "name": "scale",
+          "type": "string"
+        },
+        {
+          "default": 50,
+          "maximum": 400,
+          "minimum": 0,
+          "name": "retuneMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "humanizePercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": false,
+          "name": "shiftEnabled",
+          "type": "boolean"
+        },
+        {
+          "default": 0,
+          "maximum": 12,
+          "minimum": -12,
+          "name": "pitchSemitones",
+          "type": "number",
+          "unit": "st"
+        },
+        {
+          "default": 0,
+          "maximum": 100,
+          "minimum": -100,
+          "name": "pitchCents",
+          "type": "number",
+          "unit": "cents"
+        },
+        {
+          "default": 0,
+          "maximum": 12,
+          "minimum": -12,
+          "name": "formantSemitones",
+          "type": "number",
+          "unit": "st"
+        },
+        {
+          "default": false,
+          "name": "ringEnabled",
+          "type": "boolean"
+        },
+        {
+          "default": 50,
+          "maximum": 2000,
+          "minimum": 20,
+          "name": "ringHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 100,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "ringDepthPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": false,
+          "name": "crushEnabled",
+          "type": "boolean"
+        },
+        {
+          "default": 16,
+          "maximum": 16,
+          "minimum": 4,
+          "name": "crushBits",
+          "step": 1,
+          "type": "number"
+        },
+        {
+          "default": 1,
+          "maximum": 12,
+          "minimum": 1,
+          "name": "crushDownsample",
+          "step": 1,
+          "type": "number"
+        },
+        {
+          "default": false,
+          "name": "driveEnabled",
+          "type": "boolean"
+        },
+        {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "drivePercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": 0,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "whisperPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": false,
+          "name": "toneEnabled",
+          "type": "boolean"
+        },
+        {
+          "default": 20,
+          "maximum": 2000,
+          "minimum": 20,
+          "name": "lowCutHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 20000,
+          "maximum": 20000,
+          "minimum": 1000,
+          "name": "highCutHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 1000,
+          "maximum": 8000,
+          "minimum": 200,
+          "name": "peakHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 0,
+          "maximum": 12,
+          "minimum": -12,
+          "name": "peakDb",
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "default": false,
+          "name": "modEnabled",
+          "type": "boolean"
+        },
+        {
+          "default": "chorus",
+          "enum": [
+            "chorus",
+            "flanger"
+          ],
+          "name": "modType",
+          "type": "string"
+        },
+        {
+          "default": 0.5,
+          "maximum": 5,
+          "minimum": 0.05,
+          "name": "modRateHz",
+          "type": "number",
+          "unit": "Hz"
+        },
+        {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "modDepthPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": 0,
+          "maximum": 90,
+          "minimum": -90,
+          "name": "modFeedbackPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": false,
+          "name": "spaceEnabled",
+          "type": "boolean"
+        },
+        {
+          "default": 50,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "spaceSizePercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": 1000,
+          "maximum": 4000,
+          "minimum": 200,
+          "name": "spaceDecayMs",
+          "type": "number",
+          "unit": "ms"
+        },
+        {
+          "default": 30,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "spaceLevelPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": 100,
+          "maximum": 100,
+          "minimum": 0,
+          "name": "mixPercent",
+          "type": "number",
+          "unit": "%"
+        },
+        {
+          "default": 0,
+          "maximum": 12,
+          "minimum": -24,
+          "name": "outputDb",
+          "type": "number",
+          "unit": "dB"
+        }
+      ],
+      "realtimeCostClass": "high",
+      "type": "fun-voice-changer@1"
+    },
+    {
+      "availability": {
+        "status": "available"
+      },
+      "latencySamples": 0,
+      "parameters": [],
+      "realtimeCostClass": "low",
+      "type": "soundboard@1"
+    }
+  ],
+  "voicePresets": [
+    {
+      "basicParameters": [
+        "key",
+        "scale",
+        "retuneMs",
+        "humanizePercent"
+      ],
+      "description": "Gently pulls sung notes to the scale; keeps natural movement.",
+      "id": "pitchCorrectSubtle",
+      "name": "Pitch Correct (subtle)",
+      "parameters": {
+        "correctEnabled": true,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 0,
+        "gateDb": -55,
+        "highCutHz": 20000,
+        "humanizePercent": 40,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "pitchCorrectSubtle",
+        "retuneMs": 80,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": false,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "key",
+        "scale",
+        "retuneMs",
+        "mixPercent"
+      ],
+      "description": "Snaps every note instantly: the robotic tuned-vocal sound.",
+      "id": "pitchCorrectHard",
+      "name": "Pitch Correct (hard)",
+      "parameters": {
+        "correctEnabled": true,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 0,
+        "gateDb": -55,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "pitchCorrectHard",
+        "retuneMs": 0,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": false,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "pitchSemitones",
+        "formantSemitones",
+        "mixPercent"
+      ],
+      "description": "A lower, bigger voice.",
+      "id": "deep",
+      "name": "Deep",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": -3,
+        "gateDb": -90,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": -5,
+        "preset": "deep",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": true,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "pitchSemitones",
+        "formantSemitones",
+        "mixPercent"
+      ],
+      "description": "High and squeaky.",
+      "id": "chipmunk",
+      "name": "Chipmunk",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 5,
+        "gateDb": -90,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 7,
+        "preset": "chipmunk",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": true,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "pitchSemitones",
+        "formantSemitones",
+        "drivePercent",
+        "spaceLevelPercent"
+      ],
+      "description": "Low, growling and roomy.",
+      "id": "monster",
+      "name": "Monster",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": true,
+        "drivePercent": 40,
+        "formantSemitones": -5,
+        "gateDb": -90,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": -8,
+        "preset": "monster",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": true,
+        "spaceDecayMs": 800,
+        "spaceEnabled": true,
+        "spaceLevelPercent": 20,
+        "spaceSizePercent": 30,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "pitchSemitones",
+        "formantSemitones"
+      ],
+      "description": "A smaller, younger-sounding voice.",
+      "id": "child",
+      "name": "Child",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 3,
+        "gateDb": -90,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 150,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 4,
+        "preset": "child",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": true,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": true,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "ringHz",
+        "ringDepthPercent",
+        "crushBits"
+      ],
+      "description": "Flat, buzzing machine voice.",
+      "id": "robot",
+      "name": "Robot",
+      "parameters": {
+        "correctEnabled": true,
+        "crushBits": 10,
+        "crushDownsample": 1,
+        "crushEnabled": true,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 0,
+        "gateDb": -90,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 40,
+        "modEnabled": true,
+        "modFeedbackPercent": 50,
+        "modRateHz": 0.2,
+        "modType": "flanger",
+        "outputDb": 7,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "robot",
+        "retuneMs": 0,
+        "ringDepthPercent": 70,
+        "ringEnabled": true,
+        "ringHz": 50,
+        "scale": "monotone",
+        "shiftEnabled": false,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "pitchSemitones",
+        "ringHz",
+        "modDepthPercent"
+      ],
+      "description": "Strange, shimmering and a little higher.",
+      "id": "alien",
+      "name": "Alien",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 0,
+        "gateDb": -90,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 60,
+        "modEnabled": true,
+        "modFeedbackPercent": 0,
+        "modRateHz": 1.5,
+        "modType": "chorus",
+        "outputDb": 5,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 3,
+        "preset": "alien",
+        "retuneMs": 50,
+        "ringDepthPercent": 40,
+        "ringEnabled": true,
+        "ringHz": 300,
+        "scale": "chromatic",
+        "shiftEnabled": true,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "lowCutHz",
+        "highCutHz",
+        "drivePercent"
+      ],
+      "description": "Thin and slightly gritty, like an old radio.",
+      "id": "radio",
+      "name": "Radio",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": true,
+        "drivePercent": 30,
+        "formantSemitones": 0,
+        "gateDb": -90,
+        "highCutHz": 3000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 300,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": -3,
+        "peakDb": 4,
+        "peakHz": 1500,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "radio",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": false,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": true,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "drivePercent",
+        "peakDb"
+      ],
+      "description": "Loud, honky and distorted.",
+      "id": "megaphone",
+      "name": "Megaphone",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": true,
+        "drivePercent": 70,
+        "formantSemitones": 0,
+        "gateDb": -90,
+        "highCutHz": 4000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 500,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": -3,
+        "peakDb": 6,
+        "peakHz": 2000,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "megaphone",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": false,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": true,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "highCutHz",
+        "crushBits"
+      ],
+      "description": "Narrow, low-fidelity phone line.",
+      "id": "telephone",
+      "name": "Telephone",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 12,
+        "crushDownsample": 6,
+        "crushEnabled": true,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 0,
+        "gateDb": -90,
+        "highCutHz": 3400,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 300,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "telephone",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": false,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": true,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "whisperPercent",
+        "highCutHz"
+      ],
+      "description": "Breathy whisper with no voiced tone.",
+      "id": "whisper",
+      "name": "Whisper",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 0,
+        "gateDb": -50,
+        "highCutHz": 8000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 200,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 8,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "whisper",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": false,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": true,
+        "whisperPercent": 100
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [
+        "spaceSizePercent",
+        "spaceDecayMs",
+        "spaceLevelPercent"
+      ],
+      "description": "Big, echoing space.",
+      "id": "cave",
+      "name": "Cave",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 0,
+        "gateDb": -90,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "cave",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": false,
+        "spaceDecayMs": 2500,
+        "spaceEnabled": true,
+        "spaceLevelPercent": 50,
+        "spaceSizePercent": 90,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    },
+    {
+      "basicParameters": [],
+      "description": "Everything off: build your own voice.",
+      "id": "custom",
+      "name": "Custom",
+      "parameters": {
+        "correctEnabled": false,
+        "crushBits": 16,
+        "crushDownsample": 1,
+        "crushEnabled": false,
+        "driveEnabled": false,
+        "drivePercent": 0,
+        "formantSemitones": 0,
+        "gateDb": -90,
+        "highCutHz": 20000,
+        "humanizePercent": 0,
+        "key": "c",
+        "lowCutHz": 20,
+        "mixPercent": 100,
+        "modDepthPercent": 50,
+        "modEnabled": false,
+        "modFeedbackPercent": 0,
+        "modRateHz": 0.5,
+        "modType": "chorus",
+        "outputDb": 0,
+        "peakDb": 0,
+        "peakHz": 1000,
+        "pitchCents": 0,
+        "pitchSemitones": 0,
+        "preset": "custom",
+        "retuneMs": 50,
+        "ringDepthPercent": 100,
+        "ringEnabled": false,
+        "ringHz": 50,
+        "scale": "chromatic",
+        "shiftEnabled": false,
+        "spaceDecayMs": 1000,
+        "spaceEnabled": false,
+        "spaceLevelPercent": 30,
+        "spaceSizePercent": 50,
+        "toneEnabled": false,
+        "whisperPercent": 0
+      },
+      "version": 1
+    }
+  ],
+  "sourceHashes": {
+    "crates/control/src/catalog.rs": "93f6ea7f53f5a350e0c134663f18d37b75d005299cd07fc028f5068bf3ecb60f",
+    "crates/domain/src/voice_changer.rs": "221e9abc0f3bfb14214ce907adb197983d6cdcbab5bf9587476edd6eb904cf14"
+  }
+}

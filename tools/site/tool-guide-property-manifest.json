@@ -120,8 +120,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "bassTreble--trebleDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Treble in the app",
+              "video": "assets/tool-guides/bassTreble--trebleDb.mp4",
+              "poster": "assets/tool-guides/bassTreble--trebleDb.jpg",
+              "description": "The Treble control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "trebleDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "bassFrequencyHz",
@@ -135,8 +144,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "bassTreble--bassFrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Bass frequency in the app",
+              "video": "assets/tool-guides/bassTreble--bassFrequencyHz.mp4",
+              "poster": "assets/tool-guides/bassTreble--bassFrequencyHz.jpg",
+              "description": "The Bass frequency control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "bassFrequencyHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "trebleFrequencyHz",
@@ -150,8 +168,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "bassTreble--trebleFrequencyHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Treble frequency in the app",
+              "video": "assets/tool-guides/bassTreble--trebleFrequencyHz.mp4",
+              "poster": "assets/tool-guides/bassTreble--trebleFrequencyHz.jpg",
+              "description": "The Treble frequency control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "trebleFrequencyHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -257,8 +284,16 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "graphicEq--band5Db",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "1 kHz in the app",
+              "video": "assets/tool-guides/graphicEq-demo.mp4",
+              "poster": "assets/tool-guides/graphicEq-demo.jpg",
+              "description": "1 kHz changes from 0 to 12 dB at 3.2 seconds. Add a little if the midrange feels distant after level matching. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+              "property": "band5Db"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band6Db",
@@ -341,8 +376,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band0Enabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Band enabled · band 1 in the app",
+              "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
+              "description": "The Band enabled · band 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "band0Enabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band1Enabled",
@@ -590,8 +634,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band0Type",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Filter type · band 1 in the app",
+              "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+              "description": "The Filter type · band 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "band0Type",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band1Type",
@@ -1213,8 +1266,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band0Q",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Q · band 1 in the app",
+              "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+              "description": "The Q · band 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "band0Q",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band1Q",
@@ -1453,8 +1515,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "parametricEq--band0GainDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Gain · band 1 in the app",
+              "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+              "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+              "description": "The Gain · band 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "band0GainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "band1GainDb",
@@ -1725,8 +1796,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "compressor--ratio",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Ratio in the app",
+              "video": "assets/tool-guides/compressor--ratio.mp4",
+              "poster": "assets/tool-guides/compressor--ratio.jpg",
+              "description": "The Ratio control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "ratio",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "attackMs",
@@ -1740,8 +1820,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "compressor--attackMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Attack in the app",
+              "video": "assets/tool-guides/compressor--attackMs.mp4",
+              "poster": "assets/tool-guides/compressor--attackMs.jpg",
+              "description": "The Attack control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "attackMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "releaseMs",
@@ -1755,8 +1844,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "compressor--releaseMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Release in the app",
+              "video": "assets/tool-guides/compressor--releaseMs.mp4",
+              "poster": "assets/tool-guides/compressor--releaseMs.jpg",
+              "description": "The Release control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "releaseMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "kneeDb",
@@ -1770,8 +1868,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "compressor--kneeDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Knee in the app",
+              "video": "assets/tool-guides/compressor--kneeDb.mp4",
+              "poster": "assets/tool-guides/compressor--kneeDb.jpg",
+              "description": "The Knee control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "kneeDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "makeupDb",
@@ -1785,8 +1892,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "compressor--makeupDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Makeup gain in the app",
+              "video": "assets/tool-guides/compressor--makeupDb.mp4",
+              "poster": "assets/tool-guides/compressor--makeupDb.jpg",
+              "description": "The Makeup gain control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "makeupDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -1832,8 +1948,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "gate--rangeDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Range in the app",
+              "video": "assets/tool-guides/gate--rangeDb.mp4",
+              "poster": "assets/tool-guides/gate--rangeDb.jpg",
+              "description": "The Range control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "rangeDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "attackMs",
@@ -1847,8 +1972,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "gate--attackMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Attack in the app",
+              "video": "assets/tool-guides/gate--attackMs.mp4",
+              "poster": "assets/tool-guides/gate--attackMs.jpg",
+              "description": "The Attack control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "attackMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "hysteresisDb",
@@ -1862,8 +1996,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "gate--hysteresisDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Hysteresis in the app",
+              "video": "assets/tool-guides/gate--hysteresisDb.mp4",
+              "poster": "assets/tool-guides/gate--hysteresisDb.jpg",
+              "description": "The Hysteresis control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "hysteresisDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "ratio",
@@ -1877,8 +2020,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "gate--ratio",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Ratio in the app",
+              "video": "assets/tool-guides/gate--ratio.mp4",
+              "poster": "assets/tool-guides/gate--ratio.jpg",
+              "description": "The Ratio control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "ratio",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "holdMs",
@@ -1892,8 +2044,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "gate--holdMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Hold in the app",
+              "video": "assets/tool-guides/gate--holdMs.mp4",
+              "poster": "assets/tool-guides/gate--holdMs.jpg",
+              "description": "The Hold control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "holdMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "releaseMs",
@@ -1907,8 +2068,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "gate--releaseMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Release in the app",
+              "video": "assets/tool-guides/gate--releaseMs.mp4",
+              "poster": "assets/tool-guides/gate--releaseMs.jpg",
+              "description": "The Release control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "releaseMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -1954,8 +2124,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "limiter--lookaheadMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Look-ahead in the app",
+              "video": "assets/tool-guides/limiter--lookaheadMs.mp4",
+              "poster": "assets/tool-guides/limiter--lookaheadMs.jpg",
+              "description": "The Look-ahead control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "lookaheadMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "releaseMs",
@@ -1969,8 +2148,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "limiter--releaseMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Release in the app",
+              "video": "assets/tool-guides/limiter--releaseMs.mp4",
+              "poster": "assets/tool-guides/limiter--releaseMs.jpg",
+              "description": "The Release control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "releaseMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2048,8 +2236,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "pitch--cents",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Fine tune in the app",
+              "video": "assets/tool-guides/pitch--cents.mp4",
+              "poster": "assets/tool-guides/pitch--cents.jpg",
+              "description": "The Fine tune control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "cents",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2095,8 +2292,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "dehum--amountPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Amount in the app",
+              "video": "assets/tool-guides/dehum--amountPercent.mp4",
+              "poster": "assets/tool-guides/dehum--amountPercent.jpg",
+              "description": "The Amount control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "amountPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "harmonics",
@@ -2110,8 +2316,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "dehum--harmonics",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Harmonics in the app",
+              "video": "assets/tool-guides/dehum--harmonics.mp4",
+              "poster": "assets/tool-guides/dehum--harmonics.jpg",
+              "description": "The Harmonics control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "harmonics",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2189,8 +2404,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "denoise--floorPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Noise left in in the app",
+              "video": "assets/tool-guides/denoise--floorPercent.mp4",
+              "poster": "assets/tool-guides/denoise--floorPercent.jpg",
+              "description": "The Noise left in control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "floorPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "learning",
@@ -2204,8 +2428,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "denoise--learning",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Learn noise in the app",
+              "video": "assets/tool-guides/denoise--learning.mp4",
+              "poster": "assets/tool-guides/denoise--learning.jpg",
+              "description": "The Learn noise control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "learning",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2283,8 +2516,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "spectralGate--reductionDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Reduction in the app",
+              "video": "assets/tool-guides/spectralGate--reductionDb.mp4",
+              "poster": "assets/tool-guides/spectralGate--reductionDb.jpg",
+              "description": "The Reduction control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "reductionDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "learning",
@@ -2298,8 +2540,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "spectralGate--learning",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Learn noise in the app",
+              "video": "assets/tool-guides/spectralGate--learning.mp4",
+              "poster": "assets/tool-guides/spectralGate--learning.jpg",
+              "description": "The Learn noise control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "learning",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2367,8 +2618,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "firFilter--gainDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Output gain in the app",
+              "video": "assets/tool-guides/firFilter--gainDb.mp4",
+              "poster": "assets/tool-guides/firFilter--gainDb.jpg",
+              "description": "The Output gain control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "gainDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2452,8 +2712,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "inputSwitch--fade",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Switch speed in the app",
+              "video": "assets/tool-guides/inputSwitch--fade.mp4",
+              "poster": "assets/tool-guides/inputSwitch--fade.jpg",
+              "description": "The Switch speed control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "fade",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -2534,8 +2803,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "duck--amountDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Amount in the app",
+              "video": "assets/tool-guides/duck--amountDb.mp4",
+              "poster": "assets/tool-guides/duck--amountDb.jpg",
+              "description": "The Amount control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "amountDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "attackMs",
@@ -2549,8 +2827,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "duck--attackMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Attack in the app",
+              "video": "assets/tool-guides/duck--attackMs.mp4",
+              "poster": "assets/tool-guides/duck--attackMs.jpg",
+              "description": "The Attack control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "attackMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "holdMs",
@@ -2564,8 +2851,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "duck--holdMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Hold in the app",
+              "video": "assets/tool-guides/duck--holdMs.mp4",
+              "poster": "assets/tool-guides/duck--holdMs.jpg",
+              "description": "The Hold control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "holdMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "releaseMs",
@@ -2579,8 +2875,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "duck--releaseMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Release in the app",
+              "video": "assets/tool-guides/duck--releaseMs.mp4",
+              "poster": "assets/tool-guides/duck--releaseMs.jpg",
+              "description": "The Release control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "releaseMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "trigger",
@@ -2595,10 +2900,18 @@
             "siegeRound"
           ],
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger.",
           "recordingId": "duck--trigger",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Game state trigger settings",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "keyNodeId",
@@ -2610,10 +2923,18 @@
           "default": null,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger.",
           "recordingId": "duck--keyNodeId",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Sidechain level trigger settings",
+              "video": "assets/tool-guides/duck--level.mp4",
+              "poster": "assets/tool-guides/duck--level.jpg",
+              "silent": true,
+              "description": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "duckMenu",
@@ -2625,10 +2946,18 @@
           "default": true,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger.",
           "recordingId": "duck--duckMenu",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Game state trigger settings",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "duckPrep",
@@ -2640,10 +2969,18 @@
           "default": true,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger.",
           "recordingId": "duck--duckPrep",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Game state trigger settings",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "duckAction",
@@ -2655,10 +2992,18 @@
           "default": false,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger.",
           "recordingId": "duck--duckAction",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Game state trigger settings",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger."
+            }
+          ],
+          "status": "exempted"
         },
         {
           "key": "duckBetweenRounds",
@@ -2670,10 +3015,18 @@
           "default": true,
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": null,
+          "nonAudibleReason": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger.",
           "recordingId": "duck--duckBetweenRounds",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Game state trigger settings",
+              "video": "assets/tool-guides/duck--game.mp4",
+              "poster": "assets/tool-guides/duck--game.jpg",
+              "silent": true,
+              "description": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger."
+            }
+          ],
+          "status": "exempted"
         }
       ]
     },
@@ -2783,8 +3136,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--preset",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Preset in the app",
+              "video": "assets/tool-guides/funVoiceChanger--preset.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--preset.jpg",
+              "description": "The Preset control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "preset",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "gateDb",
@@ -2821,8 +3183,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--correctEnabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Pitch correction in the app",
+              "video": "assets/tool-guides/funVoiceChanger--correctEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--correctEnabled.jpg",
+              "description": "The Pitch correction control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "correctEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "key",
@@ -2849,8 +3220,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--key",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Key in the app",
+              "video": "assets/tool-guides/funVoiceChanger--key.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--key.jpg",
+              "description": "The Key control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "key",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "scale",
@@ -2872,8 +3252,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--scale",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Scale in the app",
+              "video": "assets/tool-guides/funVoiceChanger--scale.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--scale.jpg",
+              "description": "The Scale control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "scale",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "retuneMs",
@@ -2887,8 +3276,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--retuneMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Retune speed in the app",
+              "video": "assets/tool-guides/funVoiceChanger--retuneMs.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--retuneMs.jpg",
+              "description": "The Retune speed control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "retuneMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "humanizePercent",
@@ -2902,8 +3300,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--humanizePercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Humanize in the app",
+              "video": "assets/tool-guides/funVoiceChanger--humanizePercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--humanizePercent.jpg",
+              "description": "The Humanize control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "humanizePercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "shiftEnabled",
@@ -2917,8 +3324,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--shiftEnabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Pitch and formant in the app",
+              "video": "assets/tool-guides/funVoiceChanger--shiftEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--shiftEnabled.jpg",
+              "description": "The Pitch and formant control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "shiftEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "pitchSemitones",
@@ -2932,8 +3348,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--pitchSemitones",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Pitch in the app",
+              "video": "assets/tool-guides/funVoiceChanger--pitchSemitones.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--pitchSemitones.jpg",
+              "description": "The Pitch control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "pitchSemitones",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "pitchCents",
@@ -2947,8 +3372,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--pitchCents",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Fine pitch in the app",
+              "video": "assets/tool-guides/funVoiceChanger--pitchCents.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--pitchCents.jpg",
+              "description": "The Fine pitch control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "pitchCents",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "formantSemitones",
@@ -2962,8 +3396,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--formantSemitones",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Formant in the app",
+              "video": "assets/tool-guides/funVoiceChanger--formantSemitones.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--formantSemitones.jpg",
+              "description": "The Formant control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "formantSemitones",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "ringEnabled",
@@ -2977,8 +3420,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--ringEnabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Ring modulator in the app",
+              "video": "assets/tool-guides/funVoiceChanger--ringEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--ringEnabled.jpg",
+              "description": "The Ring modulator control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "ringEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "ringHz",
@@ -2992,8 +3444,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--ringHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Ring frequency in the app",
+              "video": "assets/tool-guides/funVoiceChanger--ringHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--ringHz.jpg",
+              "description": "The Ring frequency control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "ringHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "ringDepthPercent",
@@ -3007,8 +3468,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--ringDepthPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Ring depth in the app",
+              "video": "assets/tool-guides/funVoiceChanger--ringDepthPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--ringDepthPercent.jpg",
+              "description": "The Ring depth control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "ringDepthPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "crushEnabled",
@@ -3022,8 +3492,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--crushEnabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Bit crusher in the app",
+              "video": "assets/tool-guides/funVoiceChanger--crushEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--crushEnabled.jpg",
+              "description": "The Bit crusher control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "crushEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "crushBits",
@@ -3037,8 +3516,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--crushBits",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Bits in the app",
+              "video": "assets/tool-guides/funVoiceChanger--crushBits.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--crushBits.jpg",
+              "description": "The Bits control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "crushBits",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "crushDownsample",
@@ -3052,8 +3540,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--crushDownsample",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Downsample in the app",
+              "video": "assets/tool-guides/funVoiceChanger--crushDownsample.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--crushDownsample.jpg",
+              "description": "The Downsample control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "crushDownsample",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "driveEnabled",
@@ -3067,8 +3564,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--driveEnabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Saturation in the app",
+              "video": "assets/tool-guides/funVoiceChanger--driveEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--driveEnabled.jpg",
+              "description": "The Saturation control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "driveEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "drivePercent",
@@ -3082,8 +3588,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--drivePercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Drive in the app",
+              "video": "assets/tool-guides/funVoiceChanger--drivePercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--drivePercent.jpg",
+              "description": "The Drive control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "drivePercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "whisperPercent",
@@ -3097,8 +3612,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--whisperPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Whisper in the app",
+              "video": "assets/tool-guides/funVoiceChanger--whisperPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--whisperPercent.jpg",
+              "description": "The Whisper control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "whisperPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "toneEnabled",
@@ -3112,8 +3636,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--toneEnabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Tone in the app",
+              "video": "assets/tool-guides/funVoiceChanger--toneEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--toneEnabled.jpg",
+              "description": "The Tone control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "toneEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "lowCutHz",
@@ -3127,8 +3660,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--lowCutHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Low cut in the app",
+              "video": "assets/tool-guides/funVoiceChanger--lowCutHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--lowCutHz.jpg",
+              "description": "The Low cut control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "lowCutHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "highCutHz",
@@ -3142,8 +3684,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--highCutHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "High cut in the app",
+              "video": "assets/tool-guides/funVoiceChanger--highCutHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--highCutHz.jpg",
+              "description": "The High cut control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "highCutHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "peakHz",
@@ -3157,8 +3708,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--peakHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Peak frequency in the app",
+              "video": "assets/tool-guides/funVoiceChanger--peakHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--peakHz.jpg",
+              "description": "The Peak frequency control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "peakHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "peakDb",
@@ -3172,8 +3732,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--peakDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Peak in the app",
+              "video": "assets/tool-guides/funVoiceChanger--peakDb.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--peakDb.jpg",
+              "description": "The Peak control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "peakDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "modEnabled",
@@ -3187,8 +3756,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--modEnabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Modulation in the app",
+              "video": "assets/tool-guides/funVoiceChanger--modEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modEnabled.jpg",
+              "description": "The Modulation control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "modEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "modType",
@@ -3205,8 +3783,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--modType",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Modulation type in the app",
+              "video": "assets/tool-guides/funVoiceChanger--modType.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modType.jpg",
+              "description": "The Modulation type control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "modType",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "modRateHz",
@@ -3220,8 +3807,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--modRateHz",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Rate in the app",
+              "video": "assets/tool-guides/funVoiceChanger--modRateHz.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modRateHz.jpg",
+              "description": "The Rate control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "modRateHz",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "modDepthPercent",
@@ -3235,8 +3831,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--modDepthPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Depth in the app",
+              "video": "assets/tool-guides/funVoiceChanger--modDepthPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modDepthPercent.jpg",
+              "description": "The Depth control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "modDepthPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "modFeedbackPercent",
@@ -3250,8 +3855,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--modFeedbackPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Feedback in the app",
+              "video": "assets/tool-guides/funVoiceChanger--modFeedbackPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--modFeedbackPercent.jpg",
+              "description": "The Feedback control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "modFeedbackPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "spaceEnabled",
@@ -3265,8 +3879,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--spaceEnabled",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Space in the app",
+              "video": "assets/tool-guides/funVoiceChanger--spaceEnabled.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--spaceEnabled.jpg",
+              "description": "The Space control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "spaceEnabled",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "spaceSizePercent",
@@ -3280,8 +3903,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--spaceSizePercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Room size in the app",
+              "video": "assets/tool-guides/funVoiceChanger--spaceSizePercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--spaceSizePercent.jpg",
+              "description": "The Room size control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "spaceSizePercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "spaceDecayMs",
@@ -3295,8 +3927,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--spaceDecayMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Echo length in the app",
+              "video": "assets/tool-guides/funVoiceChanger--spaceDecayMs.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--spaceDecayMs.jpg",
+              "description": "The Echo length control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "spaceDecayMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "spaceLevelPercent",
@@ -3310,8 +3951,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--spaceLevelPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Echo level in the app",
+              "video": "assets/tool-guides/funVoiceChanger--spaceLevelPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--spaceLevelPercent.jpg",
+              "description": "The Echo level control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "spaceLevelPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "mixPercent",
@@ -3325,8 +3975,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--mixPercent",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Mix in the app",
+              "video": "assets/tool-guides/funVoiceChanger--mixPercent.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--mixPercent.jpg",
+              "description": "The Mix control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "mixPercent",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "outputDb",
@@ -3340,8 +3999,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "funVoiceChanger--outputDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Output in the app",
+              "video": "assets/tool-guides/funVoiceChanger--outputDb.mp4",
+              "poster": "assets/tool-guides/funVoiceChanger--outputDb.jpg",
+              "description": "The Output control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "outputDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -3625,8 +4293,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "testSignal--levelDb",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Level in the app",
+              "video": "assets/tool-guides/testSignal--levelDb.mp4",
+              "poster": "assets/tool-guides/testSignal--levelDb.jpg",
+              "description": "The Level control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "levelDb",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "durationMs",
@@ -3640,8 +4317,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "testSignal--durationMs",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Duration in the app",
+              "video": "assets/tool-guides/testSignal--durationMs.mp4",
+              "poster": "assets/tool-guides/testSignal--durationMs.jpg",
+              "description": "The Duration control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "durationMs",
+              "silent": false
+            }
+          ],
+          "status": "recorded"
         }
       ]
     },
@@ -3938,8 +4624,17 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot1Caption",
-          "recordings": [],
-          "status": "pending"
+          "recordings": [
+            {
+              "title": "Caption · button 1 in the app",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "The Caption · button 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot2Caption",
@@ -4218,13 +4913,15 @@
           "recordingId": "soundboard--slot1Mode",
           "recordings": [
             {
-              "title": "Browse Properties",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+              "title": "When pressed · button 1 in the app",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "The When pressed · button 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         },
         {
           "key": "slot2Mode",

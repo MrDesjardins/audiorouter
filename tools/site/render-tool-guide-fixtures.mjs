@@ -54,8 +54,8 @@ for (const tool of manifest.tools.filter(
       )
       .map((p) => [p.key, p.default]),
   );
-  if (tool.kind === "audioFile") before.mediaId = "lib:guide-fixture";
-  if (tool.kind === "soundboard") before.slot1MediaId = "lib:guide-fixture";
+  if (tool.kind === "audioFile") { before.mediaId = "lib:guide-fixture"; before.fileName = 'Prepared synthetic source'; }
+  if (tool.kind === "soundboard") { before.slot1MediaId = "lib:guide-fixture"; before.slot1FileName = 'Prepared synthetic tone'; }
   if (tool.kind === "parametricEq") {
     before.band0Enabled = true;
     before.band0GainDb = 9;
@@ -80,6 +80,7 @@ for (const tool of manifest.tools.filter(
       maximum: 1,
     };
   }
+  if (tool.kind === 'graphicEq') candidate = tool.properties.find(p => p.key === 'band5Db');
   if (["inputSwitch", "outputSwitch"].includes(tool.kind))
     candidate = { key: "selected", type: "string", default: "a" };
   const after = { ...before };
@@ -93,6 +94,7 @@ for (const tool of manifest.tools.filter(
             ? candidate.maximum
             : candidate.minimum;
   if (tool.kind === "testSignal") after.frequencyHz = 880;
+  if (tool.kind === 'graphicEq') after.band5Db = 12;
   const beforePath = resolve(directory, "before.json");
   const afterPath = resolve(directory, "after.json");
   writeFileSync(beforePath, JSON.stringify(before));

@@ -27,9 +27,37 @@ struct NativeRender {
     prepared: Option<audiorouter_engine::CompiledPathSet>,
     runtime: Option<audiorouter_engine::RealtimeMixerFanout>,
     outputs: Vec<audiorouter_engine::AudioBlockRing>,
+    use_fixture: bool,
+    key_samples: Option<Vec<f32>>,
+    monitor_index: usize,
 }
 
 impl GuideRuntime {
+    fn soundboard(&self, id: &EntityId) -> Option<Value> {
+        let source = match self {
+            Self::Linear(graph) => graph.soundboard_for_node(id),
+            Self::Native(native) => native.runtime.as_ref()?.soundboard_for_node(id),
+        }?;
+        Some(
+            json!({ "slots": (0..9).map(|slot| json!({ "slot": slot + 1, "loaded": source.slot_loaded(slot), "playing": source.playing_mask() & (1 << slot) != 0, "progress": f64::from(source.progress_per_mille(slot)) / 1000.0 })).collect::<Vec<_>>(), "ignoredTriggers": source.ignored_triggers(), "droppedCommands": source.dropped_commands() }),
+        )
+    }
+    fn voice(&self, id: &EntityId) -> Option<Value> {
+        let state = match self {
+            Self::Linear(graph) => graph.voice_changer_for_node(id),
+            Self::Native(native) => native.runtime.as_ref()?.voice_changer_for_node(id),
+        }?;
+        let value = state.telemetry()?;
+        Some(
+            json!({ "voiced": value.voiced, "f0Hz": value.voiced.then_some(value.f0_hz), "note": value.voiced.then_some(value.note), "cents": value.voiced.then_some(value.cents) }),
+        )
+    }
+    fn noise_profile(&self, id: &EntityId) -> Option<String> {
+        match self {
+            Self::Linear(graph) => graph.noise_profile_for_node(id),
+            Self::Native(native) => native.runtime.as_ref()?.noise_profile_for_node(id),
+        }
+    }
     fn spectrum(&self, id: &EntityId) -> Option<audiorouter_engine::SpectrumLevels> {
         match self {
             Self::Linear(graph) => graph.spectrum_levels_for_node(id),
@@ -57,7 +85,7 @@ impl GuideRuntime {
                 for index in 0..runtime.input_count() {
                     let mut source = AudioBlock::new(CHANNELS, QUANTUM).unwrap();
                     let frequency = if index == 0 { 110.0 } else { 880.0 };
-                    let samples: Vec<f32> = (0..QUANTUM)
+                    let mut samples: Vec<f32> = (0..QUANTUM)
                         .flat_map(|frame| {
                             let value = 0.08
                                 * ((start + frame) as f32 / RATE as f32
@@ -67,6 +95,15 @@ impl GuideRuntime {
                             [value, value]
                         })
                         .collect();
+                    if native.use_fixture {
+                        block.copy_to_interleaved(&mut samples).unwrap();
+                    }
+                    if runtime.input_node_ids()[index].as_str() == "key-input" {
+                        samples.copy_from_slice(
+                            &native.key_samples.as_ref().unwrap()
+                                [start * CHANNELS..(start + QUANTUM) * CHANNELS],
+                        );
+                    }
                     source.copy_from_interleaved(&samples).unwrap();
                     assert!(runtime
                         .try_submit_input(index, runtime.generation(), &source)
@@ -76,7 +113,7 @@ impl GuideRuntime {
                 assert_eq!(runtime.process_once(&refs).unwrap(), native.outputs.len());
                 for (index, ring) in native.outputs.iter().enumerate() {
                     let output = ring.try_receive().unwrap();
-                    if index == 0 {
+                    if index == native.monitor_index {
                         let mut samples = vec![0.0; QUANTUM * CHANNELS];
                         output.copy_to_interleaved(&mut samples).unwrap();
                         block.copy_from_interleaved(&samples).unwrap();
@@ -132,7 +169,8 @@ fn fixture(name: &str) -> Vec<f32> {
         .iter()
         .any(|(start, end)| time >= *start && time < *end);
         let sample = match name {
-            "speech-bursts" | "noisy-speech" => {
+            "noise-only" => white * 0.008,
+            "speech-bursts" | "noisy-speech" | "expressive-voice" => {
                 let noise = white
                     * if name == "noisy-speech" {
                         0.008
@@ -141,13 +179,20 @@ fn fixture(name: &str) -> Vec<f32> {
                     };
                 if speaking {
                     let phase = time * std::f32::consts::TAU;
+                    let fundamental = phase * 137.0
+                        + if name == "expressive-voice" {
+                            (1.0 - (phase * 5.0).cos()) * 0.822
+                                + (1.0 - (phase * 0.8).cos()) * 10.275
+                        } else {
+                            0.0
+                        };
                     let syllable =
                         (1.0 - ((time * 7.0).fract() - 0.45).abs() * 1.35).clamp(0.15, 1.0);
                     noise
                         + syllable
-                            * (0.045 * (phase * 137.0).sin()
-                                + 0.018 * (phase * 274.0).sin()
-                                + 0.009 * (phase * 411.0).sin())
+                            * (0.045 * fundamental.sin()
+                                + 0.018 * (fundamental * 2.0).sin()
+                                + 0.009 * (fundamental * 3.0).sin())
                 } else {
                     noise
                 }
@@ -179,13 +224,21 @@ fn fixture(name: &str) -> Vec<f32> {
                 let frequency = [220.0, 440.0, 880.0, 1760.0][(time as usize / 2).min(3)];
                 0.12 * (time * std::f32::consts::TAU * frequency).sin()
             }
-            "mains-hum" => {
+            "mains-hum" | "harmonic-hum" => {
                 let voice = if speaking {
                     (time * std::f32::consts::TAU * 193.0).sin() * 0.06
                 } else {
                     0.0
                 };
-                voice + 0.035 * (time * std::f32::consts::TAU * 50.0).sin() + white * 0.0002
+                voice
+                    + 0.035 * (time * std::f32::consts::TAU * 50.0).sin()
+                    + white * 0.0002
+                    + if name == "harmonic-hum" {
+                        0.018 * (time * std::f32::consts::TAU * 100.0).sin()
+                            + 0.01 * (time * std::f32::consts::TAU * 150.0).sin()
+                    } else {
+                        0.0
+                    }
             }
             "click-train" => {
                 let click = (time * 10.0).fract() < 0.002;
@@ -283,6 +336,21 @@ fn compile(kind: NodeKind, parameters: Map<String, Value>, revision: u64) -> Gui
         edges: vec![edge("input-to-tool", "input", "tool"), output_edge],
     };
     let mut media = HashMap::new();
+    if kind == NodeKind::Duck {
+        session.nodes.push(route_node(
+            "key-input",
+            NodeKind::PhysicalInput,
+            PortDirection::Output,
+        ));
+        session.nodes.push(route_node(
+            "key-output",
+            NodeKind::PhysicalOutput,
+            PortDirection::Input,
+        ));
+        session
+            .edges
+            .push(edge("key-monitor", "key-input", "key-output"));
+    }
     if kind == NodeKind::FirFilter {
         media.insert(
             "lib:guide-impulse".to_string(),
@@ -320,7 +388,10 @@ fn compile(kind: NodeKind, parameters: Map<String, Value>, revision: u64) -> Gui
         second.source_port = "b".into();
         session.edges.push(second);
     }
-    if matches!(kind, NodeKind::InputSwitch | NodeKind::OutputSwitch) {
+    if !matches!(
+        kind,
+        NodeKind::AudioFile | NodeKind::Soundboard | NodeKind::TestSignal
+    ) {
         let paths = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
             &session,
             RuntimeGeneration::new(1),
@@ -328,6 +399,11 @@ fn compile(kind: NodeKind, parameters: Map<String, Value>, revision: u64) -> Gui
             &media,
         )
         .unwrap();
+        let monitor_index = paths
+            .output_node_ids()
+            .iter()
+            .position(|id| id.as_str() == "output")
+            .unwrap();
         let outputs = paths
             .output_node_ids()
             .iter()
@@ -337,9 +413,15 @@ fn compile(kind: NodeKind, parameters: Map<String, Value>, revision: u64) -> Gui
             prepared: Some(paths),
             runtime: None,
             outputs,
+            use_fixture: !matches!(kind, NodeKind::InputSwitch | NodeKind::OutputSwitch),
+            key_samples: (kind == NodeKind::Duck).then(|| fixture("speech-bursts")),
+            monitor_index,
         });
     }
-    if matches!(kind, NodeKind::AudioFile | NodeKind::Soundboard) {
+    if matches!(
+        kind,
+        NodeKind::AudioFile | NodeKind::Soundboard | NodeKind::TestSignal
+    ) {
         session.nodes.remove(0);
         session.edges.remove(0);
         session.nodes[0]
@@ -424,9 +506,15 @@ fn write_f32(path: PathBuf, values: &[f32]) {
 
 fn main() {
     let mut args = env::args().skip(1);
-    let out = PathBuf::from(args.next().expect(
+    let first = args.next().expect(
         "usage: tool_guide_property_render <out-dir> <kind> <fixture> <before.json> <after.json>",
-    ));
+    );
+    if first == "--voice-presets" {
+        let presets: Vec<_> = audiorouter_domain::voice_changer::VOICE_PRESETS.iter().map(|preset| json!({"id": preset.id, "name": preset.name, "description": preset.description, "version": preset.version, "basicParameters": preset.basic, "parameters": audiorouter_domain::voice_changer::voice_preset_parameters(preset)})).collect();
+        println!("{}", serde_json::to_string(&presets).unwrap());
+        return;
+    }
+    let out = PathBuf::from(first);
     let kind_name = args.next().expect("kind is required");
     let fixture_name = args.next().expect("fixture is required");
     let before_path = PathBuf::from(args.next().expect("before parameters file is required"));
@@ -437,7 +525,9 @@ fn main() {
         .expect("kind must be a NodeKind serde name");
     fs::create_dir_all(&out).unwrap();
     let input = fixture(&fixture_name);
-    if matches!(kind, NodeKind::Denoise | NodeKind::SpectralGate) {
+    if matches!(kind, NodeKind::Denoise | NodeKind::SpectralGate)
+        && after_value["learning"] != json!(true)
+    {
         let mut learning = parameter_map(&before_value);
         learning.insert("learning".into(), json!(true));
         let mut learner = compile(kind, learning, 99);
@@ -448,9 +538,9 @@ fn main() {
                 .unwrap();
             learner.process(&mut block, start);
         }
-        if let GuideRuntime::Linear(graph) = &learner {
-            let profile = graph
-                .noise_profile_for_node(&EntityId::new("tool"))
+        {
+            let profile = learner
+                .noise_profile(&EntityId::new("tool"))
                 .expect("noise-only warmup must produce a profile");
             for value in [&mut before_value, &mut after_value] {
                 value["noiseProfile"] = json!(profile);
@@ -462,6 +552,9 @@ fn main() {
     let mut output = vec![0.0_f32; input.len()];
     let mut telemetry = Vec::new();
     let mut spectra = Vec::new();
+    let mut voices = Vec::new();
+    let mut boards = Vec::new();
+    let mut profiles = Vec::new();
     let mut meter_samples = Vec::new();
     let mut block = AudioBlock::new(CHANNELS, QUANTUM).unwrap();
     let frames = RATE as usize * DURATION_SECONDS;
@@ -470,7 +563,16 @@ fn main() {
     let mut next_telemetry_frame = 0;
     for start in (0..frames).step_by(QUANTUM) {
         if !changed && start >= CHANGE_FRAME {
-            graph.replace(compile(kind, parameter_map(&after_value), 2));
+            if kind == NodeKind::AudioFile {
+                if let GuideRuntime::Linear(runtime) = &graph {
+                    runtime
+                        .audio_file_source_for_node(&EntityId::new("tool"))
+                        .unwrap()
+                        .set_looping(after_value["loop"].as_bool().unwrap_or(false));
+                }
+            } else {
+                graph.replace(compile(kind, parameter_map(&after_value), 2));
+            }
             changed = true;
         }
         let input_start = start * CHANNELS;
@@ -485,6 +587,19 @@ fn main() {
         meter_samples.push(meter_sample(&output[input_start..input_end], start));
         let end_frame = start + QUANTUM;
         if end_frame >= next_telemetry_frame {
+            if let Some(profile) = graph.noise_profile(&EntityId::new("tool")) {
+                profiles.push(
+                    json!({ "atSeconds": end_frame as f64 / RATE as f64, "noiseProfile": profile }),
+                );
+            }
+            if let Some(mut board) = graph.soundboard(&EntityId::new("tool")) {
+                board["atSeconds"] = json!(end_frame as f64 / RATE as f64);
+                boards.push(board);
+            }
+            if let Some(mut voice) = graph.voice(&EntityId::new("tool")) {
+                voice["atSeconds"] = json!(end_frame as f64 / RATE as f64);
+                voices.push(voice);
+            }
             if let Some(levels) = graph.spectrum(&EntityId::new("tool")) {
                 spectra.push(json!({ "atSeconds": end_frame as f64 / RATE as f64, "levelsDb": levels.to_vec(), "bandFrequenciesHz": audiorouter_engine::spectrum_band_frequencies_hz().to_vec() }));
             }
@@ -518,6 +633,9 @@ fn main() {
             "parametersAfter": after_value,
             "samples": telemetry,
             "spectrumSamples": spectra,
+            "voiceSamples": voices,
+            "soundboardSamples": boards,
+            "noiseProfiles": profiles,
             "meterSamples": meter_samples
         }))
         .unwrap(),

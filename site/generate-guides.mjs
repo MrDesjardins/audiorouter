@@ -1,6 +1,8 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 const site = dirname(fileURLToPath(import.meta.url));
 const esc = (value) =>
   String(value ?? "").replace(
@@ -26,22 +28,21 @@ const tutorials = JSON.parse(
 const recordings = JSON.parse(
   await readFile(resolve(site, "guide-content/recordings.json"), "utf8"),
 );
+const mediaVersion = (path) => esc(path) + "?v=" + createHash("sha256").update(readFileSync(resolve(site, path))).digest("hex").slice(0, 12);
 const recordingSection = (kind) =>
   '<section class="guide-section" id="in-the-app"><h2>In the app.</h2>' +
   (recordings[kind] ?? [])
     .map(
       (clip) =>
-        '<article class="guide-recording"><h3>' +
+        '<article class="guide-recording"><div class="guide-recording-copy"><h3>' +
         esc(clip.title) +
-        '</h3><video controls preload="none" playsinline width="720" height="1280" poster="../' +
-        esc(clip.poster) +
+        '</h3><p>' + esc(clip.description) + '</p></div><video controls preload="none" playsinline width="720" height="1280" poster="../' +
+        mediaVersion(clip.poster) +
         '" aria-label="' +
         esc(clip.title) +
         '"><source src="../' +
-        esc(clip.video) +
-        '" type="video/mp4"></video><p>' +
-        esc(clip.description) +
-        "</p></article>",
+        mediaVersion(clip.video) +
+        '" type="video/mp4"></video></article>',
     )
     .join("") +
   "</section>";
@@ -253,7 +254,7 @@ const doc = (title, description, body, scripts = "") =>
   esc(title) +
   '</title><meta name="description" content="' +
   esc(description) +
-  '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css"><script defer src="../assets/site.js"></script>' +
+  '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css?v=heading-links-3"><script defer src="../assets/site.js"></script>' +
   scripts +
   '</head><body class="guide-body">' +
   header +
@@ -647,7 +648,7 @@ for (let i = 0; i < tools.length; i++) {
       pageTitle(t),
       t.purpose,
       body,
-      '<script defer src="../assets/guide-animation.js"></script><script defer src="../assets/guide-signal.js"></script><script defer src="../assets/guide-audio.js"></script><script defer src="../assets/guide-playback.js"></script><script defer src="../assets/guides.js"></script>',
+      '<script defer src="../assets/guide-animation.js"></script><script defer src="../assets/guide-signal.js"></script><script defer src="../assets/guide-audio.js"></script><script defer src="../assets/guide-playback.js"></script><script defer src="../assets/guides.js?v=heading-links-4"></script>',
     ),
   );
 }
@@ -687,7 +688,7 @@ await writeFile(
       ' visual guides</p></section><section class="guide-index-grid" aria-label="Visual tool guides">' +
       cards +
       '</section><p class="guide-no-results" hidden>No guide matches. Try a tool name or a property such as threshold.</p></main>',
-    '<script defer src="../assets/guides.js"></script>',
+    '<script defer src="../assets/guides.js?v=heading-links-4"></script>',
   ),
 );
 await writeFile(
