@@ -20,8 +20,13 @@ Regenerated with `GUIDE_METADATA_ONLY=1` (no re-encode; media unchanged), then
 `check-tool-guide-videos`, `check-tool-guide-catalog`, `site/check-guides`,
 `generate-social --check --check-changed`, `tools/docs/validate.mjs`, Firefox
 real-click playback (`check-tool-guide-video-firefox`) and the phone layout
-review, plus Edge screenshots of Compressor and Soundboard in dark, light and
-forced-colors. `check-tool-guide-property-coverage` still fails on the 100
+review, plus Edge screenshots of Compressor and Soundboard (the site has one
+dark theme; light emulation renders the same, forced-colors stood in for high
+contrast). A follow-up commit uses the guide's on/off text for toggles and
+names the switch renders' real 110/880 Hz inputs. Note: `GUIDE_METADATA_ONLY`
+still re-extracts posters and copies evidence overviews into `site/assets`;
+newer `target/` overviews for Physical Input and Application Capture were
+restored by hand and will change on the next full run. `check-tool-guide-property-coverage` still fails on the 100
 pending rows, as before. Rollback: revert this commit and rerun the generator.
 
 ## Owner documentation review and push — 2026-10-30
