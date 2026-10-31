@@ -1023,6 +1023,23 @@ graded VM by hand below; **no regression from the raw map**.
   ended on its time condition first (reported 279 ms). Fixed: the tool now
   also counts the gap at loop exit (`m03_bridge_tone` 24 tests pass, Clippy
   and fmt clean); takes effect in the next bundle. Verdict: VM.
+- hardening rerun, bundle r11 (2026-10-30, results
+  `stage-a-hardening-20261030-170157.zip`, 0 FAIL): Verifier on/active/off
+  PASS; crash recovery 3/3 PASS; **IOCTL fuzz 30 min under Verifier PASS**
+  (30,355,553 calls, 0 unexpected, 22,311 opens); no bugcheck event and no
+  dump. Tone VM (non-zero glitch counters); tone stall VM (the tool froze
+  4.0 s, lease expired by design, 0x80070016); bit-exact 2 ch VM (dropped
+  15,840 frames). A10 and A11 pass on the decisive checks.
+  Earlier the same day, one attempt hung in the 30 s tone step under
+  Verifier (about 14:20; all four vCPUs busy, UI dead, no log activity;
+  VM power-off after about 7 h). Not reproduced in the next full run and the
+  10-29 run completed the same step. Core dump kept on the host
+  (`hang-20261030.elf`, VirtualBox ELF; WinDbg cannot open it). The guest now
+  has `NMICrashDump=1` and kernel dumps, so a repeat can be forced with
+  `VBoxManage debugvm AR-DriverTest injectnmi` and read with WinDbg. Open:
+  unreproduced, cause unknown. Forced power-offs make `run-stage-a.ps1` score
+  the resume as an unplanned restart (tone FAIL, later steps SKIP, no
+  bugcheck FAIL); rerun fresh instead of grading that zip.
 
 Product finding (no fix yet, decision needed): the app's cable route
 (`cable_routes.rs` `service_cable_route`) stops the session when a lease
