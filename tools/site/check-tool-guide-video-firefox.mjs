@@ -52,12 +52,16 @@ const send = (method, params) =>
     }, 15000).unref();
   });
 const selected = process.env.GUIDE_KIND?.split(",");
+const recordings = JSON.parse(
+  readFileSync(resolve(root, "site/guide-content/recordings.json"), "utf8"),
+);
 const resultPath = resolve(root, "target/tool-guide-firefox-results.json");
-const results = selected
-  ? JSON.parse(readFileSync(resultPath, "utf8")).filter(
-      (row) => !selected.includes(row.kind),
-    )
-  : [];
+const results =
+  selected && existsSync(resultPath)
+    ? JSON.parse(readFileSync(resultPath, "utf8")).filter(
+        (row) => !selected.includes(row.kind),
+      )
+    : [];
 try {
   await send("session.new", { capabilities: {} });
   const { context } = await send("browsingContext.create", { type: "tab" });
@@ -76,29 +80,18 @@ try {
       "utf8",
     ),
   ).tools;
-  const published = JSON.parse(
-    readFileSync(resolve(root, "site/guide-content/recordings.json"), "utf8"),
-  );
   for (const tool of tools.filter(
     (tool) => !selected || selected.includes(tool.kind),
   )) {
-    // The tool's overview and demo, then every other published clip
-    // (per-property and family clips). Audible clips must produce sound.
-    const probes = [
-      ...["overviews", "demos"].map((type) => ({
-        type,
-        path: `site/assets/tool-guides/${tool.kind}-${type === "overviews" ? "overview" : "demo"}.mp4`,
-        audible: type === "demos",
-      })),
-      ...(published[tool.kind] ?? [])
-        .filter((clip) => !`site/${clip.video}`.match(/-(overview|demo)\.mp4$/))
-        .map((clip) => ({
-          type: "clips",
-          path: `site/${clip.video}`,
-          audible: Boolean(clip.property) && clip.silent !== true,
-        })),
-    ];
-    for (const { type, path, audible } of probes) {
+    // Every published clip: the overview, the demo and each per-property clip.
+    for (const clip of recordings[tool.kind] ?? []) {
+      const path = `site/${clip.video}`;
+      const type = clip.video.endsWith("-overview.mp4")
+        ? "overviews"
+        : clip.video.endsWith("-demo.mp4")
+          ? "demos"
+          : "properties";
+      const audible = type !== "overviews" && clip.silent !== true;
       if (!existsSync(resolve(root, path))) continue;
       try {
         await send("browsingContext.navigate", {
@@ -141,17 +134,23 @@ try {
           (audible && state.peak < 0.00001)
         )
           throw new Error(JSON.stringify(state));
-        results.push({ kind: tool.kind, type, video: path, passed: true, ...state });
-        console.log(`${tool.kind} ${type} ${path}: PASS`);
+        results.push({
+          kind: tool.kind,
+          type,
+          video: clip.video,
+          passed: true,
+          ...state,
+        });
+        console.log(`${clip.video}: PASS`);
       } catch (error) {
         results.push({
           kind: tool.kind,
           type,
-          video: path,
+          video: clip.video,
           passed: false,
           error: String(error),
         });
-        console.error(`${tool.kind} ${type} ${path}: ${error}`);
+        console.error(`${clip.video}: ${error}`);
       }
     }
   }

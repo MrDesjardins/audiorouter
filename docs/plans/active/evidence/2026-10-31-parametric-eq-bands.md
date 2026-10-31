@@ -163,3 +163,42 @@ Rollback: revert the commit and rerun the manifest builder, the review build
 `site/generate-social.mjs`. Next task: Graphic EQ bands and Soundboard
 buttons 2–9 (parallel threads), then qualify continuous parameter
 transitions.
+
+## Merge with the Graphic EQ branch
+
+`origin/docs/guide-graphic-eq-bands` (`b973a77c`, `c3433677`: nine Graphic EQ
+band clips) is merged into this branch. Conflicts were in three scripts and the
+2026-10-30 record, and were resolved by keeping both behaviours:
+
+- `check-tool-guide-video-firefox.mjs`: took the Graphic EQ version, which
+  plays every `recordings.json` clip and no longer needs an earlier results
+  file. It replaces the narrower change made here; same result (audible clips
+  must produce sound).
+- `build-tool-guide-review.mjs`: kept `GUIDE_KIND=<kind>[,…]` and the poster
+  helper from Graphic EQ, and the family clip handling from here. One option
+  selects "encode only new clips": `GUIDE_REUSE_ENCODED=1`, with
+  `GUIDE_ENCODE_MISSING=1` kept as an alias, so callers and docs using either
+  name work.
+- `render-tool-guide-properties.mjs`: the Graphic EQ filter (skip repeated
+  bands only for Advanced EQ) and the per-band +12 dB values merged without
+  conflict with this branch's keep-every-row change.
+- The generated manifest, `recordings.json`, `graphic-eq.html` and the review
+  gallery were not hand-merged: this branch's version was taken, the nine
+  Graphic EQ render and recording artifacts and report rows were copied into
+  `target/`, and the manifest builder, the review build in reuse mode and
+  `site/generate-guides.mjs` and `generate-social.mjs` were rerun. The result
+  matches the Graphic EQ branch exactly for Graphic EQ (identical
+  `graphic-eq.html` and recordings), and differs from it only in the 75
+  Advanced EQ rows. The four Physical Input and Application Capture files the
+  generator rewrote from the older `target/` were restored.
+
+Merged counts: 251 rows, **182 recorded, 16 pending (Soundboard buttons 2–9),
+53 exempted**; 38 tools, 149 videos (52,300,737 bytes). Passing after the
+merge: guards and families tests (15), `check-tool-guide-videos`,
+`check-tool-guide-catalog`, `site/check-guides` (1,129 local links/assets),
+`generate-social --check --check-changed`, and Firefox real-click playback of
+all 18 Graphic EQ and Advanced EQ clips (every audible clip produces sound;
+[Advanced EQ results](2026-10-31-parametric-eq-bands-firefox.json), re-run with
+the merged checker). `check-tool-guide-property-coverage` fails only on the 16
+Soundboard rows. Not rerun after the merge: the 390 px layout review and the
+Edge themes; no cargo command ran.
