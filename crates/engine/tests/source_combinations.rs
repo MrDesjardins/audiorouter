@@ -251,6 +251,8 @@ fn start_generators(set: &CompiledPathSet, session: &Session, label: &str) {
                         assert!(board.trigger(0), "{label}: Soundboard trigger rejected");
                     }
                 }
+                // Guarded by the exhaustive classifier: a new generator kind
+                // fails here until it gets a start arm above.
                 _ => assert!(!renders_own_audio(node.kind), "{label}: {:?}", node.kind),
             }
         }

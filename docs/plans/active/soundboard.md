@@ -367,7 +367,12 @@ app ran): `cargo test -p audiorouter-engine` all pass (lib 177 + 1 ignored,
 source combinations 5/5, tool combinations 4/4, deterministic audio 33, others);
 the opt-in owner replay passed with the private session copy; workspace and
 `src-tauri` Clippy `--all-targets --all-features -D warnings` clean; both rustfmt
-checks clean. Not run: `cargo test --workspace`, the UI suites (no UI change), the
+checks clean. `cargo test -p audiorouter-control -p audiorouter-transport` passes
+(control 301 + 11 ignored, transport 33), covering the dispatcher that serves node
+telemetry. Follow-up for the owner, outside this change: the control plane's
+source binding (`native_dispatch.rs` ~702, which has a `_ => continue` arm) and
+the `native_paths.rs` ~397 check still name the three generator kinds by hand.
+Not run: `cargo test --workspace`, the UI suites (no UI change), the
 continuity harness, a rebuilt shell or a live check of the canvas animation for
 Audio File / Test Signal. Rollback: revert this commit; the 51a2344d Soundboard
 behaviour returns. Next action: owner review of the branch; no PR without approval.
