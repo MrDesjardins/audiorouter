@@ -5,20 +5,23 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const debugPort = Number(process.env.GUIDE_FIREFOX_PORT ?? 9337);
+if (!Number.isInteger(debugPort) || debugPort < 1024 || debugPort > 65535)
+  throw new Error("GUIDE_FIREFOX_PORT must be a port from 1024 to 65535");
 const profile = mkdtempSync(join(tmpdir(), "audiorouter-video-firefox-"));
 const ff = spawn("C:/Program Files/Mozilla Firefox/firefox.exe", [
   "--headless",
   "--no-remote",
   "--profile",
   profile,
-  "--remote-debugging-port=9337",
+  `--remote-debugging-port=${debugPort}`,
 ]);
 let ws;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 for (let retry = 0; retry < 40 && !ws; retry++) {
   await wait(250);
   try {
-    const socket = new WebSocket("ws://127.0.0.1:9337/session");
+    const socket = new WebSocket(`ws://127.0.0.1:${debugPort}/session`);
     await new Promise((res, rej) => {
       socket.onopen = res;
       socket.onerror = rej;

@@ -4,6 +4,7 @@
 import { test, expect, type Page } from "./browser-test";
 import type { Session } from "@audiorouter/contracts";
 import { setColorTheme } from "./workbench";
+import { writeFile } from "node:fs/promises";
 
 type SlotStatus = { slot: number; loaded: boolean; playing: boolean; progress: number };
 
@@ -198,6 +199,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(editor.locator(".soundboard-slot-state").nth(0)).toHaveText("");
     await expect(card.locator(".soundboard-button.is-playing")).toHaveCount(0);
     const moved = samples.filter((sample) => JSON.stringify(sample.layout) !== JSON.stringify(baseline));
+    const evidence = JSON.stringify({ theme, baseline, samples, moved }, null, 2);
+    await writeFile(testInfo.outputPath(`soundboard-layout-${theme}.json`), evidence);
+    await testInfo.attach(`soundboard-layout-${theme}`, {
+      body: evidence,
+      contentType: "application/json",
+    });
     expect(moved.map((sample) => sample.phase)).toEqual([]);
     expect(samples).toHaveLength(phases.length * 4);
   });

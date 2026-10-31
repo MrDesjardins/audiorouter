@@ -1116,6 +1116,14 @@
       "silent": true
     },
     {
+      "title": "Other buttons",
+      "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+      "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+      "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+      "property": "otherButtons",
+      "silent": true
+    },
+    {
       "title": "Every setting",
       "video": "assets/tool-guides/soundboard-overview.mp4",
       "poster": "assets/tool-guides/soundboard-overview.jpg",

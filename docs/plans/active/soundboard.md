@@ -489,3 +489,74 @@ The runner has not exited after reporting the scenarios; investigate teardown
 before calling the command passed. Inspected card and Properties screenshots
 in `target/soundboard-editor-evidence/` in all three themes. Native Explorer
 drop, hardware, continuity and packaged-shell checks remain unrun here.
+
+### Follow-ups exercised and guide coverage closed (2026-10-31)
+
+Commits: `5ba7b1ba` category expansion; `9023458e` file drops, set-only slots,
+picker/editor interactions and layout correction; `faf259d5` merges the
+owner-approved combined EQ guide base `048d1444`. Requirements exercised:
+SND-12/13/14/17/19, UI-17/20/25. SND-19 specifies file drops, not reordering;
+no reorder UI was added. No PR, release, final installer or manual-test exe.
+
+Windows validation (Rust 1.96.0, Node 22.22.3):
+
+- `cargo test -p audiorouter-engine -p audiorouter-control --locked` passes,
+  including category expansion, the real dispatcher, deterministic audio,
+  source combinations (5) and processor combinations (4). Explicit private
+  session/hardware fixtures remain ignored; no device was opened for them.
+- Workspace and shell Clippy, all targets/features, warnings denied: pass.
+  Shell initially failed because this fresh worktree had no `ui/dist`;
+  `npm.cmd --prefix ui run build` supplied it and shell Clippy then passed.
+  Both Rust format checks pass. Vite reports its 625 kB application chunk;
+  bundle splitting is outside this Soundboard change.
+- UI full suite 773 tests/84 files; typecheck:all, format:check and lint pass.
+  Stream Deck 35 tests/7 files and build/typecheck pass (dependency Rollup
+  diagnostics described above). No attended deck test or plugin installation.
+- Edge editor test command exits successfully, 5/5. The earlier run hung in
+  managed webServer teardown after all scenarios; reusing a separately owned
+  Vite server gives a clean exit. Final run took 17.5 s. Three themes each
+  retain 24 bounds samples covering idle, playback/progress, overlapping sounds,
+  drop highlight and return to idle, with no moved bounds. JSON and inspected
+  screenshots are in [soundboard-followups](evidence/soundboard-followups/).
+  NO_COLOR/FORCE_COLOR and React Flow attribution notices were emitted by the
+  harness; no attribution or terminal-colour settings were changed.
+
+Guide work reuses the EQ family mechanism. One silent portrait Properties clip
+shows button 2 Caption, Level and When pressed changing together and returns to
+the top; all buttons 2-9 reference it plus the matching button-1 clip. Mode
+rows now have this evidence instead of exemptions. The existing level example
+uses production-engine PCM. The silent overview was refreshed for the drop hint.
+Capture metadata records 120 frames at 15 fps, no page errors, action at
+3.206 s and 0.060 s to update all three controls. Inspected the changed-control
+frame: caption, -12 dB level and loop selection are visible together.
+
+Reproduction: copy the existing renderer/artifacts from the owner's guide
+worktree into this worktree's ignored `target/`; run
+`GUIDE_KIND=soundboard node tools/site/render-tool-guide-families.mjs`, then
+`GUIDE_PROPERTIES=1 GUIDE_KIND=soundboard GUIDE_PROPERTY=otherButtons node
+tools/site/record-tool-guide-overviews.mjs` against the local harness on 4186.
+Run the recorder again with only `GUIDE_KIND=soundboard` for the overview;
+build with `GUIDE_KIND=soundboard node tools/site/build-tool-guide-review.mjs`,
+then regenerate guides/social. The manifest builder reclassifies unrelated
+exempted rows with overview recordings as recorded; retained the merged base's
+non-Soundboard rows so this scoped change does not alter their evidence claims.
+Unchanged demo/caption media re-encoded by the builder was restored; only the
+new family clip and refreshed overview are included.
+
+Passing: family/guard tests (16), property coverage (251 rows: 206 recorded,
+45 exempted, zero pending), media budgets (150 clips), authoritative catalog,
+guide links/allowlists, social generation check and docs validation (218 files /
+1164 links before this final note). Firefox real pointer-click playback passes
+all five Soundboard clips, with nonzero measured output for the audible demo;
+see [results](evidence/soundboard-followups/firefox.json). Restricted Firefox
+discarded the browsing context; outside that sandbox it passed once the static
+server on 4187 was started. `GUIDE_FIREFOX_PORT=9348` isolates its BiDi port
+from concurrent guide work. No firewall or installed browser setting changed.
+
+Remaining owner gates: native Explorer drop into the combined exe, live audio
+continuity, fresh install, attended Stream Deck, installer library inspection
+and manual-test build. A set picker remains outside this slice: set-only slots
+are visible/playable but sets are assigned through saved graphs/API. Next:
+parent integrates this branch and the control classifier branch, checks the
+installer and makes its combined manual-test build. Rollback: revert the
+Soundboard follow-up commits, preserving the independent EQ merge; no migration.

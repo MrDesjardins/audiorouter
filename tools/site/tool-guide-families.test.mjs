@@ -11,6 +11,15 @@ const eq = families.parametricEq;
 const clip = (name) => ({ video: `assets/${name}.mp4`, poster: `assets/${name}.jpg` });
 const shared = { ...clip("other-bands"), property: "otherBands" };
 
+test("Soundboard buttons map each repeated control to button 1", () => {
+  for (let slot = 2; slot <= 9; slot++)
+    for (const field of ["Caption", "GainDb", "Mode"])
+      assert.equal(representativeKey(families.soundboard, `slot${slot}${field}`), `slot1${field}`);
+  assert.equal(representativeKey(families.soundboard, "slot1Caption"), null);
+  assert.equal(representativeKey(families.soundboard, "slot2MediaId"), null);
+  assert.equal(families.soundboard.clip.audible, false);
+});
+
 // A two-band manifest: band 1 (representative) and band 2 (member).
 function fixture(overrides = {}) {
   const representative = {
