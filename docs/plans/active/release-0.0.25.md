@@ -65,3 +65,14 @@ account, missing-WebView2, physical audio, live MCP and Soundboard playback from
 the packaged build remain open. The final assets must be rebuilt from the tagged
 main commit; this candidate's hashes will not carry over.
 Next: owner decides on the PR (branch is not pushed).
+
+## Hosted checks — 2026-10-30
+
+PR #93 at `a6e0bedf`: all required checks passed (Windows build, tests and
+release preparation 27m57s; Edge UI tests; CodeQL for all languages;
+dependency advisories; documentation; Stream Deck). The only check annotations
+are GitHub notices that the `ubuntu-latest` label moves to Ubuntu 26. They name
+no failure, and changing the runner image is a CI change that does not belong
+in a release-preparation PR, so it stays; pinning the label is a follow-up.
+`main` gained #92 (a docs-only virtual-cable plan update) during review and
+was merged into the branch so the release contains all of main.
