@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "identity": {
+    "integrityRid": 8192,
+    "isAdministrator": false
+  },
+  "stage": "C:\\code\\audiorouter\\target\\local-test-0.0.26-tagged",
+  "librarySounds": 105,
+  "embeddedDrop": true,
+  "errors": [],
+  "shellSha256": "23f3c5f0b1714d6c8bbcf04db09ee9162403bf9165021fc7fe31c5b73645fa3c",
+  "scope": "Disposable private native backend, category-only slot presentation, bundled library and embedded HTML5 drop/upload. No audio endpoint or owner data used. Play blocked: default pipe occupied; external CLI operator lacks DeviceAdministration. Not Explorer drop, audio continuity, installer execution or fresh-machine evidence."
+}

@@ -2,12 +2,16 @@
 
 ## Release 0.0.26 — 2026-10-31, owner request
 
-Prepare and publish the next unsigned app-only experimental prerelease from
-merged main (`73ac6f85`), including the tested combined follow-ups. Explicit
-release authorization supersedes the earlier build-only scope. No PR, driver
-installation or owner-instance changes. Requirements, checks, risks and rollback:
-[release plan](release-0.0.26.md). Next: focused checks, tagged build and
-exact-package verification, then public prerelease publication.
+Published the unsigned app-only experimental
+[v0.0.26 prerelease](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.26)
+from tag `a455281e`, based on merged main `73ac6f85`. Tagged build, actual
+installer payload/static imports/105 sound hashes, native editor/drop smoke and
+downloaded draft/public assets pass. No installation or owner-instance changes.
+[Execution record](../archived/2026-10-31-release-0.0.26.md) and
+[release evidence](evidence/2026-10-31-release-0.0.26.md) retain commands, hashes
+and known limitations. Next: owner normal Play/Stop, real Explorer drop,
+attended Stream Deck and installer checks. Release metadata is on
+`release/0.0.26`; integrating it into main needs a future owner-approved PR.
 
 ## Combined review follow-ups and manual-test build — 2026-10-31
 
