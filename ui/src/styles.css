@@ -7993,8 +7993,11 @@ input[type="color"] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A fixed line box: an empty span was 1.8 px shorter than "Playing" and moved (UI-17). */
 .soundboard-slot-state {
-  min-height: 1.2em;
+  height: 15px;
+  overflow: hidden;
+  line-height: 15px;
   text-align: right;
   font-size: 11px;
 }
@@ -8005,6 +8008,17 @@ input[type="color"] {
 .soundboard-slot input[type="range"] {
   height: 0.45rem;
   margin: 0;
+}
+/* Drop targets for a sound file (SND-19): an outline only, never a size change (UI-17). */
+.soundboard-drop {
+  display: contents;
+}
+.soundboard-node.is-drop-target,
+.soundboard-drop.is-drop-target > .soundboard-button,
+.soundboard-slot.is-drop-target,
+.soundboard-editor.is-drop-target {
+  outline: 2px dashed var(--accent, #65d1b5);
+  outline-offset: 2px;
 }
 .soundboard-editor-status {
   box-sizing: border-box;

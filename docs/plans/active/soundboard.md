@@ -459,3 +459,33 @@ Rollback: each task is its own commit; reverting restores the previous
 behaviour (category sets silent again, no drop targets). No migration.
 Not run here by design: live continuity, fresh install, attended Stream Deck,
 installer inspection, a real Explorer drag into the built exe.
+
+### Continuation checkpoint (2026-10-31)
+
+Category expansion is committed as `5ba7b1ba`. The previous run stopped during
+UI verification; preserve its uncommitted UI/Stream Deck changes. Recovered
+the earlier approval to run builds. Current typecheck, lint and focused jsdom
+checks pass (24 tests). Re-run the full UI suite and five Edge editor tests,
+inspect three-theme screenshots, then commit the editor/drop changes.
+The prior run qualified the layout regression: removing the fixed status-line
+height made the dark-theme layout test fail; the stylesheet was restored.
+
+Owner update: do not build the combined installer, open a PR or release. The
+parent will integrate this branch with `docs/guide-parametric-eq-bands` at
+`048d1444` and the control classifier fix `647646a7`, inspect installer library
+contents and produce the manual-test build. Reuse the pushed guide-family
+mechanism (supersedes the earlier guide fallback decision above). Finish guide
+captures and Firefox verification here, push logical commits, and notify the
+parent with exact commits/checks/gaps. No device/session changes are needed.
+
+UI verification on Windows (Node 22.22.3): full Vitest 773/773 (84 files),
+focused Soundboard 24/24, typecheck:all, lint and format pass. Stream Deck
+35/35 tests and build/typecheck pass. Rollup removes two misplaced PURE
+annotations in zod and reports its circular core/util import; those dependency
+diagnostics remain, with no plugin dependency changes in this task.
+Edge reports five editor tests passing: three themes with 24 stable bounds
+samples each, file drops, picker preview/search/filter, removal and mode edit.
+The runner has not exited after reporting the scenarios; investigate teardown
+before calling the command passed. Inspected card and Properties screenshots
+in `target/soundboard-editor-evidence/` in all three themes. Native Explorer
+drop, hardware, continuity and packaged-shell checks remain unrun here.

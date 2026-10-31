@@ -1,9 +1,10 @@
 // Live Soundboard state and triggers, kept out of App state (like liveTelemetry.tsx):
 // polling runs several times a second while a board plays, and only the cards and
 // the Properties editor that show it subscribe.
-import { createContext, useContext, useEffect, useEffectEvent, useState, useSyncExternalStore } from "react";
+import { createContext, useContext, useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from "react";
 import type { Session } from "@audiorouter/contracts";
-import type { UiBackend } from "./backend";
+import { formatUiError, type UiBackend } from "./backend";
+import { importSoundFile, type ImportedSound } from "./soundImport";
 
 export type SoundboardSlotLive = { slot: number; loaded: boolean; playing: boolean; progress: number };
 export type SoundboardLive = { slots: SoundboardSlotLive[]; ignoredTriggers: number };
@@ -38,10 +39,35 @@ export type SoundboardController = {
   ready: boolean;
   trigger: (nodeId: string, slot: number, action?: "press" | "release") => void;
   stop: (nodeId: string, slot?: number) => void;
+  /** Whether a user file is being imported; one import runs at a time. */
+  importing: boolean;
+  /**
+   * Imports the owner's file onto `slot` of the draft (same checks as the picker) and
+   * resolves with the message to show. `keepCaption` when replacing a slot's sound.
+   */
+  importFile: (
+    nodeId: string,
+    slot: number,
+    file: File,
+    keepCaption: boolean,
+  ) => Promise<{ ok: boolean; message: string }>;
+  /** Shows a message to the owner in the app's status line. */
+  announce: (message: string) => void;
+  /** Puts a sound on a slot of the draft as one change, clearing the slot's random set. */
+  assign: (nodeId: string, slot: number, sound: { mediaId: string; fileName: string }, keepCaption: boolean) => void;
 };
 
 const idleStore = createSoundboardStore();
-const idleController: SoundboardController = { store: idleStore, ready: false, trigger: () => {}, stop: () => {} };
+const idleController: SoundboardController = {
+  store: idleStore,
+  ready: false,
+  trigger: () => {},
+  stop: () => {},
+  importing: false,
+  importFile: async () => ({ ok: false, message: "Sounds cannot be imported here." }),
+  announce: () => {},
+  assign: () => {},
+};
 export const SoundboardContext = createContext<SoundboardController>(idleController);
 
 /** The live state of one board, or null when it is not running. */
@@ -67,14 +93,46 @@ export function useSoundboardController({
   sessionRunning,
   startSession,
   report,
+  assign = () => {},
+  announce = () => {},
 }: {
   backend: UiBackend;
   session: Session;
   sessionRunning: boolean;
   startSession: () => Promise<boolean>;
   report: (message: string) => void;
+  /** Puts an imported sound on a slot of the draft as one change. */
+  assign?: (
+    nodeId: string,
+    slot: number,
+    sound: Pick<ImportedSound, "mediaId" | "fileName">,
+    keepCaption: boolean,
+  ) => void;
+  announce?: (message: string) => void;
 }): SoundboardController {
   const [store] = useState(createSoundboardStore);
+  const [importing, setImporting] = useState(false);
+  // The ref closes the gap between a second drop and the re-render that disables it.
+  const importBusy = useRef(false);
+  const importFile = async (nodeId: string, slot: number, file: File, keepCaption: boolean) => {
+    if (importBusy.current)
+      return { ok: false, message: "Another sound is still being imported. Try again when it is done." };
+    importBusy.current = true;
+    setImporting(true);
+    try {
+      const sound = await importSoundFile(backend, file);
+      assign(nodeId, slot, sound, keepCaption);
+      return {
+        ok: true,
+        message: `${sound.fileName} is on button ${slot} (${Math.round(sound.durationMs / 1000)} s). Plan and commit the change, then press Play.`,
+      };
+    } catch (error) {
+      return { ok: false, message: formatUiError(error, "The sound could not be imported.") };
+    } finally {
+      importBusy.current = false;
+      setImporting(false);
+    }
+  };
   const nodeIds = session.nodes
     .filter((node) => node.kind === "soundboard" && node.enabled)
     .map((node) => node.id)
@@ -136,5 +194,5 @@ export function useSoundboardController({
     if (!send || !backend.connected || !sessionRunning) return;
     void send.call(backend, sessionId, nodeId, slot).catch(() => report("The sounds could not be stopped."));
   };
-  return { store, ready: backend.connected && sessionRunning, trigger, stop };
+  return { store, ready: backend.connected && sessionRunning, trigger, stop, importing, importFile, announce, assign };
 }

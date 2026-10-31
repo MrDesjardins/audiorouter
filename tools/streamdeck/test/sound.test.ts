@@ -61,4 +61,15 @@ describe("sound names", () => {
     expect(choices[1]).toEqual({ slot: 2, filled: true, label: "Burp 03" });
     expect(choices[0]).toEqual({ slot: 1, filled: false, label: "(empty)" });
   });
+
+  it("lists a slot that holds only a random set, named by its set", () => {
+    const choices = soundSlotChoices(
+      board({ slot3Set: "bodily-humor", slot4Set: ["lib:a", "lib:b"], slot5Set: "", slot6Set: [] }),
+    );
+    expect(choices[2]).toEqual({ slot: 3, filled: true, label: "Random: bodily-humor" });
+    expect(choices[3]).toEqual({ slot: 4, filled: true, label: "Random: 2 sounds" });
+    expect(choices[4].filled).toBe(false);
+    expect(choices[5].filled).toBe(false);
+    expect(slotCaption(board({ slot3Set: "bodily-humor", slot3Caption: "Gross" }), 3)).toBe("Gross");
+  });
 });

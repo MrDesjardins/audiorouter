@@ -39,6 +39,10 @@ const injected = globalThis as {
   __routeFixtureApplications?: ApplicationInfo[];
   __routeFixtureDevices?: DeviceListItem[];
   __routeFixtureSoundboardStatus?: Awaited<ReturnType<NonNullable<UiBackend["soundboardStatus"]>>>;
+  /** `soundLibrary.list` answer; library previews return a tiny silent WAV. */
+  __routeFixtureSoundLibrary?: Awaited<ReturnType<NonNullable<UiBackend["soundLibraryList"]>>>;
+  /** When set, audio uploads succeed with this decoded length; each finished upload is recorded. */
+  __routeFixtureUploadDurationMs?: number;
 };
 /** A JSON-RPC error the next Play answers with, set by a test at any time. */
 type StartErrorFixture = ConstructorParameters<typeof AudioRouterRpcError>[0];
@@ -179,9 +183,49 @@ const verboseStatus = () => {
   };
 };
 
+const uploads: { fileName: string; sizeBytes: number; chunks: number }[] = [];
+const libraryCalls: string[] = [];
+Object.assign(window, {
+  __routeFixtureUploads: () => structuredClone(uploads),
+  __routeFixtureLibraryCalls: () => [...libraryCalls],
+});
+/** A 44-byte header plus four silent stereo frames: enough for the browser to decode a preview. */
+function silentWavBase64(): string {
+  const bytes = new Uint8Array(44 + 16);
+  const view = new DataView(bytes.buffer);
+  const text = (offset: number, value: string) =>
+    [...value].forEach((character, index) => view.setUint8(offset + index, character.charCodeAt(0)));
+  text(0, "RIFF");
+  view.setUint32(4, 36 + 16, true);
+  text(8, "WAVE");
+  text(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 2, true);
+  view.setUint32(24, 48_000, true);
+  view.setUint32(28, 48_000 * 4, true);
+  view.setUint16(32, 4, true);
+  view.setUint16(34, 16, true);
+  text(36, "data");
+  view.setUint32(40, 16, true);
+  return btoa(String.fromCharCode(...bytes));
+}
+
 const previewBackend: UiBackend = {
   ...fixtureBackend,
   connected: true,
+  ...(injected.__routeFixtureSoundLibrary
+    ? {
+        async soundLibraryList() {
+          libraryCalls.push("soundLibrary.list");
+          return structuredClone(injected.__routeFixtureSoundLibrary!);
+        },
+        async soundLibraryRead(id: string) {
+          libraryCalls.push(`soundLibrary.read:${id}`);
+          return { id, format: "flac", dataBase64: silentWavBase64() };
+        },
+      }
+    : {}),
   ...(injected.__routeFixturePluginInventory
     ? {
         async pluginInventory() {
@@ -450,12 +494,26 @@ const previewBackend: UiBackend = {
   },
   async beginAudioUpload(fileName, sizeBytes) {
     if (!fileName.match(/\.(wav|mp3)$/i) || sizeBytes > 64 * 1024 * 1024) throw new Error("Preview upload rejected.");
-    return { uploadId: "e2e-audio-upload", chunkBytes: 64 * 1024 };
+    uploads.push({ fileName, sizeBytes, chunks: 0 });
+    return { uploadId: `e2e-audio-upload-${uploads.length}`, chunkBytes: 64 * 1024 };
   },
-  async uploadAudioChunk(_uploadId, _chunkIndex, _dataBase64) {
-    return { receivedBytes: 4, nextChunkIndex: 1 };
+  async uploadAudioChunk(uploadId, chunkIndex, _dataBase64) {
+    const upload = uploads[Number(uploadId.slice("e2e-audio-upload-".length)) - 1];
+    if (upload) upload.chunks += 1;
+    return { receivedBytes: 4, nextChunkIndex: chunkIndex + 1 };
   },
-  async finishAudioUpload() {
+  async finishAudioUpload(uploadId) {
+    const upload = uploads[Number(uploadId.slice("e2e-audio-upload-".length)) - 1];
+    // A test that sets the decoded length gets its own file back (Soundboard drops).
+    if (upload && injected.__routeFixtureUploadDurationMs !== undefined)
+      return {
+        mediaId: `e2e-audio-media-${uploads.indexOf(upload) + 1}`,
+        fileName: upload.fileName,
+        format: upload.fileName.toLowerCase().endsWith(".mp3") ? "mp3" : "wav",
+        durationMs: injected.__routeFixtureUploadDurationMs,
+        channels: 2,
+        sampleRateHz: 48_000,
+      };
     return {
       mediaId: "e2e-audio-media",
       fileName: "calibration.wav",
