@@ -9,7 +9,27 @@ pack Stream Deck, run Tauri's production UI/typecheck and NSIS build, stage
 a new dated folder, check payload and hashes, then attempt disposable native
 shell validation. No installation, PR or publication. Rollback: use the previous
 test package. Hardware and installer-execution qualification remain separate.
-Build logs: `target/manual-full-*.log`. Next: finish the running build.
+Result: full unsigned static-runtime package at
+`C:\code\audiorouter\target\local-test-static-20261031-1118`, including
+`AudioRouter_0.0.25_x64-setup.exe` and directly runnable shell/companions.
+Windows production UI/typecheck, static CLI/plugin/VST3 worker and shell builds,
+NSIS bundle, extracted binary comparisons, 105 library hashes and all four
+portable-runtime import checks passed. The first unrestricted-job shell build
+lost two rustc processes without diagnostics; explicit UI build and shell
+`cargo build --release --locked -j 2 --features custom-protocol --manifest-path
+src-tauri/Cargo.toml` passed. Stream Deck build/typecheck passed but validation
+fetch was network-blocked; reused the parent's validated package from the same
+source. Native editor/library/category-only slot and HTML5 drop/upload smoke
+passed as Medium/non-admin, zero observed page errors; playback intentionally
+unrun because the default pipe is occupied and the private CLI lacks device-admin
+scope. The restricted-token launcher failed with error 87; authorized execution
+outside that token passed. No installation or owner-instance changes.
+Build logs: `target/manual-full-*.log`; checksums in package `SHA256SUMS.txt`;
+native result/screenshots: `target/combined-shell-smoke-1793471339922/`;
+identity: `target/manual-full-smoke-token.json`.
+Installer SHA-256: `ca2d2fac24327baa45b6a7860a73befc3f3f527f12bc2c78e02ec6ec5508307e`.
+Next: owner tests normal Play/Stop, real Explorer drop and attended Stream Deck
+using this package; installer execution and hardware continuity remain open.
 
 Resume the authorized control-source, Soundboard and tool-guide follow-ups.
 Requirements: GRAPH-12/15, UI-17/20/25, SND-12/13/14/17/19 and DIST-01/06.
