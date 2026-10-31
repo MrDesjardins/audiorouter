@@ -324,6 +324,54 @@ Commit this follow-up on `fix/soundboard-source-meter` and push to PR 94; its
 combined nine-path diff accounts for every path in the other thread's audit.
 Next action: hosted Windows CI and human review of the updated PR.
 
+### 2026-10-31: review of `51a2344d` — generator meters, pre-tool level, private IDs
+
+A code review of `51a2344d` found three defects. Requirements GRAPH-12, GRAPH-15,
+UI-25 and the owner rule "every source works in every layout" (2026-10-29).
+
+1. **(High) The meter fix covered Soundboard only.** `renders_soundboard_node`
+   matched `ProcessingStage::Soundboard`, while all three compilers treat Test
+   Signal, Audio File and Soundboard alike as generators. Reproduced by widening
+   the `source_combinations` meter assertions to every generator kind (starting
+   each through its real transport handle: Test Signal / Audio File `play`,
+   Soundboard `trigger`): Test Signal failed `meter measured silence` in single,
+   pair and connected-Mixer layouts; with Test Signal excluded, Audio File failed
+   the same way. A Duck keyed on a generator saw two publishers on one level:
+   the new in-crate test `a_generator_publishes_its_duck_level_once_per_quantum`
+   counted 8 publications for 4 quanta without the fix (connected layout).
+2. **(Medium) The meter read after the whole input chain.** New layout test
+   `every_generator_meters_its_own_sound_before_the_next_tool` (generator → Mute
+   in single, Mixer and connected-Mixer routes) failed for Soundboard → Mute →
+   Mixer with source meter 0 before the fix.
+3. **(Low)** `soundboard_saved_route.rs` hard-coded the owner's node IDs. It now
+   documents the session source (`AUDIOROUTER_COMPILE_SESSION_JSON`, private copy
+   in ignored `target/soundboard-owner-session.json`) and reads the IDs from
+   `AUDIOROUTER_SOUNDBOARD_NODE_ID` / `AUDIOROUTER_SOUNDBOARD_OUTPUT_NODE_ID`,
+   defaulting to `soundboard-1` / `voice-to-cable-a`.
+
+Fix (engine only): one exhaustive classifier `renders_own_audio(NodeKind)` (no `_`
+arm) replaces the three hand-kept `matches!` lists (Mixer entry, direct entry,
+connected Mixers). `CompiledMixerFanoutGraph` records per input, at compile time,
+an `InputMeterSource` (`Native`, `InputChain`, `OutputChain(i)`). For a generator,
+`meter_snapshot_for_node` reads the chain's own `RuntimeGraph` meter (Test Signal's
+`source.meter`, otherwise the generator stage's `stage_meters` entry, observed
+before the next stage), and the silent input meter is neither observed nor linked
+to the Duck level (the chain already publishes its generator stage). The
+per-quantum `renders_soundboard_node` scans and the three post-chain `observe`
+calls are removed; the callback now does one enum compare per input. No allocation
+or lock was added. `MixTestSignal` belongs to the capture+signal linear graph and
+is unaffected.
+
+Validation (2026-10-31, Windows, Rust 1.96.0; owner allowed the builds while the
+app ran): `cargo test -p audiorouter-engine` all pass (lib 177 + 1 ignored,
+source combinations 5/5, tool combinations 4/4, deterministic audio 33, others);
+the opt-in owner replay passed with the private session copy; workspace and
+`src-tauri` Clippy `--all-targets --all-features -D warnings` clean; both rustfmt
+checks clean. Not run: `cargo test --workspace`, the UI suites (no UI change), the
+continuity harness, a rebuilt shell or a live check of the canvas animation for
+Audio File / Test Signal. Rollback: revert this commit; the 51a2344d Soundboard
+behaviour returns. Next action: owner review of the branch; no PR without approval.
+
 Remaining, in order: library category expansion for `slotNSet`; drag and drop (SND-19);
 remaining editor/picker interactions beyond the now-covered Play controls;
 inspect a built installer for `sound-library` (and `verify-artifacts.ps1` expectations);

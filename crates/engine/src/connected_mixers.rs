@@ -51,6 +51,8 @@ pub(super) fn compile(
         privacy_mute: PrivacyMute::default(),
         input_node_ids: sources.iter().map(|node| node.id.clone()).collect(),
         input_meters: sources.iter().map(|_| BlockMeter::default()).collect(),
+        // Set to the generator's cache chain below.
+        input_meter_sources: vec![InputMeterSource::Native; sources.len()],
         output_matrices: Vec::new(),
         output_node_ids: Vec::new(),
         output_sources: Vec::new(),
@@ -98,11 +100,9 @@ pub(super) fn compile(
             ready: AtomicBool::new(false),
         });
         let mut source_ref = OutputBranchSource::Input(index);
-        if matches!(
-            source.kind,
-            NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard
-        ) {
+        if renders_own_audio(source.kind) {
             let chain_index = graph.output_chains.len();
+            graph.input_meter_sources[index] = InputMeterSource::OutputChain(chain_index);
             graph.output_chains.push(OutputProcessorChain {
                 source: source_ref,
                 entry_matrix: vec![0.0; usize::from(channels).pow(2)],
@@ -905,6 +905,53 @@ mod tests {
         assert!(signal.is_playing());
         let output = run(graph);
         assert!((output["monitor"] - output["game-output"] - 0.1).abs() < 1e-6);
+    }
+
+    /// A Duck keyed on a generator follows the level published for it. Only
+    /// the generator's own stage may publish it, once per quantum; the
+    /// pacing input's meter publishing too made that level alternate
+    /// between the sound and the silent packets (2026-10-31 review).
+    #[test]
+    fn a_generator_publishes_its_duck_level_once_per_quantum() {
+        let connected = fixture();
+        let mut single = fixture();
+        let kept = ["game", "discord", "game-mix", "game-output"];
+        single.nodes.retain(|node| kept.contains(&node.id.as_str()));
+        single.edges.retain(|edge| {
+            kept.contains(&edge.source_node.as_str())
+                && kept.contains(&edge.destination_node.as_str())
+        });
+        let mut game = single.edges[0].clone();
+        game.id = EntityId::new("game-game-mix");
+        game.source_node = EntityId::new("game");
+        single.edges.push(game);
+        for (label, mut session) in [("connected", connected), ("single", single)] {
+            session.id = EntityId::new(format!("duck-level-{label}"));
+            let source = session
+                .nodes
+                .iter_mut()
+                .find(|node| node.id.as_str() == "discord")
+                .unwrap();
+            source.kind = NodeKind::TestSignal;
+            source.parameters = Default::default();
+            let set = compile_fixture(&session);
+            let graph = &set.paths[0];
+            graph
+                .test_signal_source_for_node(&EntityId::new("discord"))
+                .unwrap()
+                .play();
+            let level = node_level_for(session.id.as_str(), "discord");
+            let (_, before) = level.read();
+            for _ in 0..4 {
+                run(graph);
+            }
+            let (value, after) = level.read();
+            assert_eq!(after - before, 4, "{label}: one publication per quantum");
+            assert!(
+                value > 0.01,
+                "{label}: published the silent input ({value})"
+            );
+        }
     }
 
     #[test]
