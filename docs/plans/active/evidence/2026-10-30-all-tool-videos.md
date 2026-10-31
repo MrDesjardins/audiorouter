@@ -104,8 +104,14 @@ Check on the rendered audio (Goertzel power around each band centre, output
 against input, windowed 4–7 s): +10.6 to +11.5 dB at the changed band, 0.0 dB
 before the change, and an unchanged 500 Hz comparison band for every band except
 250 Hz (2.5 dB, one octave away, where the neighbouring band's skirt overlaps) and
-500 Hz itself. The 16 kHz lift is the quietest to the ear because the fixture
-carries little level there; the response graph and Level reading show it.
+500 Hz itself (so 500 Hz has no off-band comparison, and 250 Hz is the only
+band whose neighbour was measured to move). Frame review of all nine clips at
+the six-second mark shows the response graph peaking at the right frequency
+each time. The Level reading in those single frames, against about −30.7 dB
+before the change, has moved by under 1.5 dB for 31.5 Hz, 63 Hz and 2 kHz,
+about 3–4 dB for 125–500 Hz, and 4–6 dB for 4–16 kHz. Those are snapshots of a
+live meter, not measurements; the low-frequency lifts change the overall level
+least.
 
 Tooling changes:
 
@@ -136,6 +142,11 @@ list the Graphic EQ page, so the same check was run for it separately.
 Coverage now: 107 recorded, 53 exempted, 91 pending (251 rows). The pending rows
 are Advanced EQ points 2–16 and Soundboard buttons 2–9;
 `check-tool-guide-property-coverage` still fails on them. Not run: Edge visual
-check of the page in light and high-contrast themes, a site deployment. The audio
-comes from the existing renderer executable built for the earlier branch; no Rust
-code changed. Rollback: revert this commit and rerun the generators.
+check of the page in light and high-contrast themes, a site deployment, and a
+full (all-tool) run of the extended Firefox checker: it now plays every
+per-property clip, and clips whose sound starts after the 1.5 s sample may fail
+its nonzero-peak test until that is tuned. `node tools/quality/verify.mjs
+--checks site,docs`, the entry point CI uses, passes. The audio comes from the
+existing renderer executable built at `7a2b1f84`; no Rust code changed here, and
+the engine changes on main since then (generator Mixer metering, source
+combination tests) do not touch the Graphic EQ processor. Rollback: revert this commit and rerun the generators.
