@@ -1,5 +1,12 @@
 $ErrorActionPreference = "Stop"
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
+foreach ($profile in @("tauri.release.conf.json", "tauri.app-only.release.conf.json")) {
+    $profileConfig = Get-Content -LiteralPath (Join-Path $workspace "src-tauri/$profile") -Raw | ConvertFrom-Json
+    $libraryResource = $profileConfig.bundle.resources.PSObject.Properties["../resources/sound-library"]
+    if ($null -eq $libraryResource -or $libraryResource.Value -ne "sound-library") {
+        throw "$profile must bundle the offline sound-library directory at sound-library."
+    }
+}
 $config = Get-Content -LiteralPath (Join-Path $workspace "src-tauri/tauri.release.conf.json") -Raw | ConvertFrom-Json
 $nsis = $config.bundle.windows.nsis
 if ($nsis.installMode -ne "currentUser") { throw "Cable installer must remain per-user." }
