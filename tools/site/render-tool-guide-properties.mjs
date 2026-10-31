@@ -42,8 +42,11 @@ for (const tool of inventory.tools) {
       !(tool.kind === "soundboard" && property.key === "slot1Mode")
     )
       continue;
+    // Advanced EQ points 2-16 and Soundboard buttons 2-9 repeat the control
+    // family of point 1 / button 1. Each Graphic EQ band is a different
+    // frequency, so every band is rendered.
     if (
-      /^band(?:[1-9]|1[0-5])/.test(property.key) ||
+      (tool.kind === "parametricEq" && /^band(?:[1-9]|1[0-5])/.test(property.key)) ||
       /^slot[2-9]/.test(property.key)
     )
       continue;
@@ -167,6 +170,10 @@ for (const tool of inventory.tools) {
         cents: 70,
         levelDb: -30,
         durationMs: 2000,
+        // Graphic EQ: the same +12 dB lift the 1 kHz demo uses, for each band.
+        ...Object.fromEntries(
+          Array.from({ length: 10 }, (_, band) => [`band${band}Db`, 12]),
+        ),
       };
       after[property.key] = exampleNumber(
         property,

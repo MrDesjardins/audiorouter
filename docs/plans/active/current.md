@@ -83,6 +83,20 @@ No release, deployment or hardware evidence is claimed. Next task: finish those
 remaining property families and extend playback verification to the new clips.
 Rollback: revert this documentation/capture change and regenerate the guide pages.
 
+## Graphic EQ band recordings — 2026-10-31
+
+Owner request on `docs/guide-graphic-eq-bands` (from `origin/main`): record
+the nine Graphic EQ bands that lacked a clip (every band but 1 kHz). Requirements
+UI-20, UI-17, DSP-03. Done: nine portrait Properties clips at +12 dB on pink
+noise, Firefox playback of all 11 Graphic EQ clips, updated manifest (107
+recorded, 53 exempted, 91 pending). Details, checks and limits:
+[evidence](evidence/2026-10-30-all-tool-videos.md#graphic-eq-bands-2026-10-31).
+The Firefox checker now plays per-property clips too, so the other tools'
+per-property clips have not been through a Firefox run yet. No pull request is open; the owner tests
+a build first. Next: Advanced EQ points 2–16 (another thread) and Soundboard
+buttons 2–9, then the continuous-transition qualification. Rollback: revert the
+commit and regenerate.
+
 ## Tool-guide real-property-window video spike — 2026-10-29
 
 Owner authorized the future plan on a new branch from the latest fetched
