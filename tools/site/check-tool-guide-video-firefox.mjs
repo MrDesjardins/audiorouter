@@ -76,11 +76,29 @@ try {
       "utf8",
     ),
   ).tools;
+  const published = JSON.parse(
+    readFileSync(resolve(root, "site/guide-content/recordings.json"), "utf8"),
+  );
   for (const tool of tools.filter(
     (tool) => !selected || selected.includes(tool.kind),
   )) {
-    for (const type of ["overviews", "demos"]) {
-      const path = `site/assets/tool-guides/${tool.kind}-${type === "overviews" ? "overview" : "demo"}.mp4`;
+    // The tool's overview and demo, then every other published clip
+    // (per-property and family clips). Audible clips must produce sound.
+    const probes = [
+      ...["overviews", "demos"].map((type) => ({
+        type,
+        path: `site/assets/tool-guides/${tool.kind}-${type === "overviews" ? "overview" : "demo"}.mp4`,
+        audible: type === "demos",
+      })),
+      ...(published[tool.kind] ?? [])
+        .filter((clip) => !`site/${clip.video}`.match(/-(overview|demo)\.mp4$/))
+        .map((clip) => ({
+          type: "clips",
+          path: `site/${clip.video}`,
+          audible: Boolean(clip.property) && clip.silent !== true,
+        })),
+    ];
+    for (const { type, path, audible } of probes) {
       if (!existsSync(resolve(root, path))) continue;
       try {
         await send("browsingContext.navigate", {
@@ -120,19 +138,20 @@ try {
           state.error ||
           state.paused ||
           state.time < 0.5 ||
-          (type === "demos" && state.peak < 0.00001)
+          (audible && state.peak < 0.00001)
         )
           throw new Error(JSON.stringify(state));
-        results.push({ kind: tool.kind, type, passed: true, ...state });
-        console.log(`${tool.kind} ${type}: PASS`);
+        results.push({ kind: tool.kind, type, video: path, passed: true, ...state });
+        console.log(`${tool.kind} ${type} ${path}: PASS`);
       } catch (error) {
         results.push({
           kind: tool.kind,
           type,
+          video: path,
           passed: false,
           error: String(error),
         });
-        console.error(`${tool.kind} ${type}: ${error}`);
+        console.error(`${tool.kind} ${type} ${path}: ${error}`);
       }
     }
   }

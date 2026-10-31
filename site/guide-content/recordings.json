@@ -124,6 +124,14 @@
       "silent": false
     },
     {
+      "title": "Other bands",
+      "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+      "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+      "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+      "property": "otherBands",
+      "silent": false
+    },
+    {
       "title": "Every setting",
       "video": "assets/tool-guides/parametricEq-overview.mp4",
       "poster": "assets/tool-guides/parametricEq-overview.jpg",

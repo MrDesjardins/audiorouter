@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { familyIssues, loadFamilies } from "./tool-guide-families.mjs";
 
 const root = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const manifestPath = resolve(root, "tools/site/tool-guide-property-manifest.json");
@@ -38,6 +39,13 @@ if (manifest.tools.length !== manifest.guideKindCount)
   issues.push(`manifest declares ${manifest.guideKindCount} guide kinds but contains ${manifest.tools.length}`);
 if (keys.size !== manifest.propertyCount)
   issues.push(`manifest declares ${manifest.propertyCount} properties but contains ${keys.size}`);
+// A repeated-control row (EQ bands 2-16) counts as recorded only through its
+// representative row's clips and the family's shared clip.
+issues.push(
+  ...familyIssues(manifest, loadFamilies(), (path) =>
+    Boolean(path) && !isAbsolute(path) && existsSync(resolve(root, "site", path)),
+  ),
+);
 const pending = manifest.tools.flatMap((tool) =>
   tool.properties.filter((property) => property.status === "pending").map((property) => `${tool.kind}.${property.key}`),
 );

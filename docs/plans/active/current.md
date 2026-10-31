@@ -1,5 +1,21 @@
 # Active plan — post-0.0.8 maintenance
 
+## Advanced EQ bands 2–16 guide clips — 2026-10-31
+
+Objective: finish the 75 pending Advanced EQ rows (`band1*`–`band15*`) without
+75 near-identical videos. Requirements: UI-20, UI-17, DSP-03. Branch
+`docs/guide-parametric-eq-bands`; no PR until the owner has tested a build.
+Decision: bands 2–16 share band 1's schema, ranges, defaults, engine path and
+editor controls (only the legacy-parameter fallback is band 1's), so one new
+audible clip, "Other bands", plus each band 1 field clip covers them. A generic
+family mechanism (`tool-guide-families.*`, coverage check, unit tests) lets
+Soundboard buttons 2–9 reuse it. Result: 173 recorded, 25 pending (Graphic EQ 9,
+Soundboard 16), 53 exempted. Details, checks and limits:
+[Advanced EQ bands record](evidence/2026-10-31-parametric-eq-bands.md).
+Rollback: revert the commit and regenerate. Next: Graphic EQ and Soundboard
+rows (other threads), then expect a rebase over their manifest and
+`recordings.json` changes.
+
 ## Stream Deck sound title priority — 2026-10-31
 
 Owner reports custom text leaves the numbered Sound label visible. Scope:

@@ -8,7 +8,9 @@ import {
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { loadFamilies } from "./tool-guide-families.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const families = loadFamilies();
 const inventory = JSON.parse(
   readFileSync(
     resolve(root, "tools/site/tool-guide-property-manifest.json"),
@@ -179,6 +181,10 @@ const encode = (source, destination) => {
       throw new Error(`Missing encoded asset: ${destination}`);
     return;
   }
+  // Encode only clips that are not published yet, so adding one clip does not
+  // rewrite every other video.
+  if (process.env.GUIDE_ENCODE_MISSING === "1" && existsSync(destination))
+    return;
   const result = spawnSync(
     "ffmpeg",
     [
@@ -344,6 +350,22 @@ for (const tool of tools) {
     encode(videoSource, resolve(assets, videoName));
     const posterResult = spawnSync("ffmpeg", ["-y", "-i", videoSource, "-frames:v", "1", "-q:v", "3", resolve(assets, posterName)], { encoding: "utf8" });
     if (posterResult.status !== 0) throw new Error(posterResult.stderr);
+    if (render.family) {
+      // The shared clip of a repeated-control family (EQ bands 2-16). It has
+      // no property row of its own: the member rows list it below.
+      const { clip } = families[tool.kind] ?? {};
+      if (clip?.id !== render.id)
+        throw new Error(`${render.id} is not the shared clip of a ${tool.kind} family`);
+      changeClips.push({
+        title: clip.title,
+        video: `assets/tool-guides/${videoName}`,
+        poster: `assets/tool-guides/${posterName}`,
+        description: clip.description,
+        property: clip.property,
+        silent: false,
+      });
+      continue;
+    }
     const property = tool.properties.find((row) => row.key === render.parameter);
     if (!property) throw new Error(`No inventory row for ${render.id}`);
     const telemetry = JSON.parse(
@@ -373,14 +395,27 @@ for (const tool of tools) {
   }
   // Sort by the property's place in the Properties panel. A demo whose
   // parameter has no inventory row (Mixer input level, Meter) leads.
+  // A family's shared clip follows the last of its representative rows.
+  const family = families[tool.kind];
+  const familyIndex = family
+    ? Math.max(
+        ...tool.properties
+          .filter((row) => row.representativeKey)
+          .map((row) =>
+            tool.properties.findIndex((other) => other.key === row.representativeKey),
+          ),
+      ) + 0.5
+    : null;
   const panelIndex = (clip) =>
-    tool.properties.findIndex(
-      (row) =>
-        row.key === clip.property ||
-        (tool.kind === "mixer" &&
-          row.dynamic &&
-          clip.property?.startsWith("inputVolume:")),
-    );
+    family && clip.property === family.clip.property
+      ? familyIndex
+      : tool.properties.findIndex(
+          (row) =>
+            row.key === clip.property ||
+            (tool.kind === "mixer" &&
+              row.dynamic &&
+              clip.property?.startsWith("inputVolume:")),
+        );
   changeClips.sort((a, b) => panelIndex(a) - panelIndex(b));
   recordings[tool.kind] = [...changeClips, overview];
   // The review page leads with the representative per-tool demo.
@@ -438,6 +473,19 @@ for (const tool of tools) {
       // property (for example a demo that now changes another band).
       property.recordings = [];
       property.status = "pending";
+      property.nonAudibleReason = null;
+    }
+  }
+  // Rows that repeat another row's controls (EQ bands 2-16) are covered by
+  // the representative row's clips plus the family's shared clip. Taking the
+  // clips from the representative row keeps one object per clip.
+  if (family) {
+    const shared = recordings[tool.kind].find((clip) => clip.property === family.clip.property);
+    for (const property of tool.properties.filter((row) => row.representativeKey)) {
+      const representative = tool.properties.find((row) => row.key === property.representativeKey);
+      const covered = shared && representative?.status === "recorded";
+      property.recordings = covered ? [shared, ...representative.recordings] : [];
+      property.status = covered ? "recorded" : "pending";
       property.nonAudibleReason = null;
     }
   }
