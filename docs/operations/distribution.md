@@ -110,7 +110,7 @@ manifest must state that the app and installer are unsigned; Windows trust
 prompts are expected. App signing is separate from driver signing. The
 AudioRouter-owned driver is planned under DEC-18 as a separate signed
 package; current releases do not include it.
-The published 0.0.24 CLI fails to start on a Windows VM without the Visual C++ runtime; see the [installer investigation](../plans/active/evidence/2026-10-28-installer-runtime.md). A fix is under qualification. Standard-user install, upgrade/rollback, uninstall/data retention,
+The published 0.0.23 and 0.0.24 CLI fail to start on a Windows VM without the Visual C++ runtime; see the [installer investigation](../plans/active/evidence/2026-10-28-installer-runtime.md). 0.0.25 is built with a static runtime to fix this; its fix is verified by artifact import checks and a test-ready VM, not a clean machine. Standard-user install, upgrade/rollback, uninstall/data retention,
 clean-machine and missing-WebView2 qualification remain open M08 gates, so do
 not present the current bundle as a supported consumer release.
 
