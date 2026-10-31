@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.0.25 — 2026-10-30 (unsigned experimental preview)
+
+- **Soundboard tool.** A new source with up to nine sounds, played on demand from a button on its canvas card, from its Properties window, through the local API (`soundboard.trigger`, `soundboard.stop`, `soundboard.status`) or from the new **Sound** key in the Stream Deck plugin. Each sound has a caption, a level and a mode: play once, loop until pressed again, toggle, or play while held; a Stream Deck key can set its own behavior. A bundled library of 105 CC0, public-domain and original sounds is installed with the app (`NOTICES.md` lists the source and license of each); library titles may be renamed in a later release. A Soundboard or an Audio file that shares a Mixer with a microphone now plays on the multi-path engine.
+- **Devices that stop Play are marked.** A node whose device is not chosen gets a red dashed outline and a tag on the canvas.
+- **The CLI starts on a clean Windows install.** The 0.0.23 and 0.0.24 CLI needed the Visual C++ runtime (`VCRUNTIME140.dll`) and exited with 0xC0000135 where it was missing. The shell, CLI and plugin workers are now built with a static runtime, and the release script refuses a package that imports it.
+- **Apps tab refresh.** A slow first application read no longer drops the next one.
+- **Panel resize and website.** The right panel's resize handle covers the full canvas edge. The homepage setup and Voice Gate demos are short recordings.
+- **Maintenance.** Development-only dependency updates for the UI (zod advisory GHSA-mrhx-c7xc-m3w5) and the Stream Deck build tools (fast-uri advisories); production dependencies are unchanged.
+
+Windows 11 x64. This is an unsigned, experimental, app-only prerelease; Windows may show a trust warning. It does not include or install an AudioRouter virtual driver. Close AudioRouter before upgrading. No database or session format migration is intended; keep the 0.0.24 installer and configuration backups for rollback.
+
+Soundboard limits: drag and drop of sounds is not built, a library category in a random set is accepted but not expanded (explicit lists work), and the API and Stream Deck do not choose the worker themselves. The owner confirmed every Stream Deck Sound key mode on a real key (2026-10-30). Clean-machine install/upgrade, missing-WebView2, accessibility, hardware and driver-signing qualification remain open.
+
 ## 0.0.24 — 2026-10-27 (unsigned experimental preview)
 
 - **Voice after sleep.** A saved multi-input route can recover after Windows sleep when its original devices return, without Stop and Play. The owner confirmed voice worked after a long sleep using the 0.0.23 development build from main commit `26de4a4f`. Other native route types and sessions with an active recording are not automatically recovered by this change. If a route remains stopped, check its devices and use Play.

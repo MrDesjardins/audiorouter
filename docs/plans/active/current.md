@@ -2,6 +2,11 @@
 
 ## Owner documentation review and push — 2026-10-30
 
+Main synchronization: merged `origin/main` at `b33fa54b`; resolved the sole
+conflict here by preserving both the tool-guide record and the 0.0.25 release
+plan. Guide links, catalog consistency, documentation validation (215 Markdown
+files / 1154 local links) and staged whitespace checks pass on Windows.
+
 Owner approved the current documentation presentation and requested pushing all
 worktree changes to `feature/tool-guide-property-videos`. Requirements: UI-20,
 UI-17, CAP-02 and DSP-03. Added 72 property recordings and two Duck configuration
@@ -234,6 +239,10 @@ size and accessibility checks pass. Next action: implement the manifest-driven
 Properties-only recorder and extend the production renderer with the needed
 processor routes/telemetry, then fill the 251 property mappings in validated
 clips or justified non-audible exceptions.
+
+## Release 0.0.25 — 2026-10-30, owner request
+
+Prepare the app-only unsigned prerelease containing everything on main, including the Soundboard and the static-runtime installer fix. Scope, tasks, gates and rollback: [release plan](release-0.0.25.md). Next: finish local checks and request PR approval.
 
 ## Recovery, installer and inventory qualification — 2026-10-28
 

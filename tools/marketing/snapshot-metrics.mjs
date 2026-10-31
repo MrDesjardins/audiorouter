@@ -6,7 +6,7 @@
 //   node tools/marketing/snapshot-metrics.mjs
 //   node tools/marketing/snapshot-metrics.mjs --dry-run   print the row only
 import { execFileSync } from "node:child_process";
-import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
@@ -67,7 +67,11 @@ if (process.argv.includes("--dry-run")) {
   console.log(row);
 } else {
   const existing = await readFile(csv, "utf8").catch(() => "");
-  if (!existing) await writeFile(csv, header.join(",") + "\n");
-  await appendFile(csv, row + "\n");
+  const lines = existing.split("\n").filter(Boolean);
+  if (lines.length === 0) lines.push(header.join(","));
+  // One row per day: a rerun on the same day replaces that day's row.
+  const today = row.slice(0, 10) + ",";
+  const kept = lines.filter((line, i) => i === 0 || !line.startsWith(today));
+  await writeFile(csv, [...kept, row].join("\n") + "\n");
   console.log("Added to docs/marketing-metrics.csv:\n" + row);
 }

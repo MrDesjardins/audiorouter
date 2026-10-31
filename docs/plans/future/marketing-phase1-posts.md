@@ -73,20 +73,73 @@ flair, keep "open source" in the title and put the GitHub link first.
 >
 > I'd love feedback on what's confusing when you first open it.
 
-## Post 2: r/Windows11 (week 2, after reading what worked in week 1)
+## Next: r/Windows11 Sunday thread
 
-**Title:** Windows 11 lets you pick an output per app, but not process it. I built a free tool that does: per-app capture, EQ and routing on one canvas
+Status: not posted. The owner confirmed that r/Windows11 only allows this
+in the Software Showoff Sunday thread. Find the current thread using the
+[Sunday thread search](https://www.reddit.com/r/Windows11/search/?q=author%3Afroggypwns+Software+Showoff+Sunday&restrict_sr=on&sort=new&t=week),
+check its instructions and comment there; do not create a standalone post.
+Wait until [PR #84](https://github.com/MrDesjardins/audiorouter/pull/84) is
+merged and the revised site is live. Prepare a simple screenshot of an
+application source → EQ → headphones, and be available to answer replies.
 
-Check that this title is accurate on your PC before using it: Windows 11's
-**Settings → Sound → Volume mixer** sets an output device per app, but offers
-no EQ or noise cleanup per app.
+Draft comment (review in your own words before posting):
 
-**Image:** a route with an Application source (a game or browser) → EQ or
-Volume → headphones, ideally beside the Windows volume mixer.
+> Hi, I'm the developer of AudioRouter, a free, open-source audio router for
+> Windows 11.
+>
+> One thing I wanted to do was capture audio from a single app, run it through
+> an EQ, and send it to my headphones without affecting every other app.
+> AudioRouter lets you build that route on a canvas and adjust it while it's
+> playing.
+>
+> It's an early preview. The installer is unsigned, and sending audio into an
+> app as a microphone still requires a virtual cable such as VB-Cable. I built
+> it with substantial AI coding assistance and continue to test and maintain it.
+>
+> Project: https://github.com/MrDesjardins/audiorouter
+> Website: https://audiorouter.org
+>
+> If you try the per-app route, I'd like to know whether it's clear how to set
+> it up.
 
-**First comment:** reuse the r/software comment, but lead with per-app
-capture and "never changes your Windows default devices or volumes", which
-Windows users care about most.
+## Later: r/SideProject
+
+Status: not posted. After the Windows11 thread, wait about a week, review its
+feedback, and check r/SideProject's current rules, eligible flair and any
+account requirements. Those rules have not been verified. Use the same simple
+screenshot, but tell the project story rather than repeating the Windows post.
+Only say the website has been revised once the changes are live.
+
+Suggested title: I built an open-source Windows audio router because I wanted to see where my sound was going
+
+Draft post (review in your own words before posting):
+
+> I use Windows for gaming and wanted to route my microphone and application
+> audio without having to keep a mental map of several mixer panels. So I built
+> AudioRouter: you connect sources, effects and outputs on a canvas and can
+> adjust them while audio is running.
+>
+> I shared it in r/software recently. One useful piece of feedback was that my
+> first screenshot showed too much at once, so I'm working on a simpler
+> example. People also pointed out that the website copy felt too AI-generated;
+> I've been revising it.
+>
+> The app is free and open source. It's still an early Windows 11 preview, the
+> installer is unsigned, and routing into Discord as a microphone requires a
+> virtual cable. I used AI coding assistance extensively and continue to test
+> and maintain it.
+>
+> I'd appreciate feedback on the first impression: looking at this simple
+> route, is it clear what the app does?
+>
+> Project: https://github.com/MrDesjardins/audiorouter
+> Website: https://audiorouter.org
+
+After each post, record its link, responses and any measurable changes in
+stars or downloads; don't infer installs from votes. The original
+[r/software post](https://www.reddit.com/r/software/comments/1xc69ah/audiorouter_free_open_source_visual_audio_routing/)
+received 84 upvotes as reported by the owner on 2026-10-27.
 
 ## dev.to cross-post (any time this week)
 
