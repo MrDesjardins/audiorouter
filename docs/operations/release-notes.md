@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.0.26 — 2026-10-31 (unsigned experimental preview)
+
+- Soundboard source meters and connection animation follow playback; random sets
+  expand library categories, and audio files can be dropped onto the board.
+- Stream Deck Sound keys respect custom title/name/caption priority.
+- Native generator routing uses the engine's source classification consistently.
+  Both installer profiles guard the bundled sound library.
+- Portrait tool-guide recordings cover remaining EQ bands and Soundboard
+  controls, with clearer copy, panel order and Firefox playback checks.
+
+Windows 11 x64, unsigned app-only experimental prerelease. No driver or intended
+session/database migration. Close the app before upgrading; retain configuration
+backups and the previous installer/test package for rollback. Packaged playback,
+hardware continuity, final Stream Deck hardware checks, real Explorer drop,
+installer execution and clean-machine qualification remain open. See the
+[full notes](../plans/active/evidence/2026-10-31-release-0.0.26-notes.md).
+
 ## 0.0.25 — 2026-10-30 (unsigned experimental preview)
 
 - **Soundboard tool.** A new source with up to nine sounds, played on demand from a button on its canvas card, from its Properties window, through the local API (`soundboard.trigger`, `soundboard.stop`, `soundboard.status`) or from the new **Sound** key in the Stream Deck plugin. Each sound has a caption, a level and a mode: play once, loop until pressed again, toggle, or play while held; a Stream Deck key can set its own behavior. A bundled library of 105 CC0, public-domain and original sounds is installed with the app (`NOTICES.md` lists the source and license of each); library titles may be renamed in a later release. A Soundboard or an Audio file that shares a Mixer with a microphone now plays on the multi-path engine.
