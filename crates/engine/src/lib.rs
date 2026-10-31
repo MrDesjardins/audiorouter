@@ -43,7 +43,10 @@ mod soundboard;
 pub use audio_file_source::{
     decode_audio_bytes, decode_audio_file, AudioFileDecodeError, AudioFileSource, DecodedAudio,
 };
-pub use soundboard::{SlotMode, SoundboardSlot, SoundboardSource, SOUNDBOARD_SLOT_COUNT};
+pub use soundboard::{
+    soundboard_category_media_key, SlotMode, SoundboardSlot, SoundboardSource, MAX_SLOT_SOUNDS,
+    SOUNDBOARD_SLOT_COUNT,
+};
 
 const PCM16_QUANTUM_SAMPLES: usize = MAX_CHANNELS * PROCESSING_QUANTUM_FRAMES;
 pub const MAX_PCM16_PACKET_FRAMES: usize = 4_096;
@@ -8794,7 +8797,23 @@ fn prepare_soundboard(
                         .filter_map(|item| item.as_str().and_then(usable)),
                 );
             }
-            _ => sounds.extend(text("MediaId").and_then(usable)),
+            // A library category: the control plane stored its sounds under
+            // category keys; order them by library id (stable, SND-14).
+            Some(serde_json::Value::String(category)) => {
+                let prefix = soundboard::soundboard_category_media_prefix(category);
+                let mut keys = audio_media
+                    .keys()
+                    .filter(|key| key.starts_with(&prefix))
+                    .collect::<Vec<_>>();
+                keys.sort();
+                sounds.extend(keys.into_iter().filter_map(|key| usable(key)));
+            }
+            _ => {}
+        }
+        // An unknown or empty category, or an empty list, falls back to the
+        // slot's own sound.
+        if sounds.is_empty() {
+            sounds.extend(text("MediaId").and_then(usable));
         }
         if sounds.is_empty() {
             return None;
@@ -17911,5 +17930,124 @@ mod tests {
             "the triggered sound reaches the graph output: {peak}"
         );
         assert_eq!(source.playing_mask() & 1, 1);
+    }
+
+    /// A slot whose set names a library category plays the sounds the
+    /// control plane stored under that category's keys, ordered by library
+    /// id whatever the map order, and never the same sound twice in a row
+    /// (SND-14, SND-17). An unknown category falls back to the slot's own
+    /// sound.
+    #[test]
+    fn soundboard_category_set_plays_the_category_sounds_in_id_order() {
+        use audiorouter_domain::{EntityId, Node, NodeKind, Port, PortDirection, Session};
+        let node_id = EntityId::new("soundboard");
+        let session = Session {
+            id: EntityId::new("soundboard-session"),
+            name: "Soundboard".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![Node {
+                id: node_id.clone(),
+                kind: NodeKind::Soundboard,
+                type_version: 1,
+                name: "Soundboard".into(),
+                enabled: true,
+                bypass: false,
+                parameters: serde_json::json!({
+                    "slot1Set": "bodily-humor",
+                    "slot2Set": "no-such-category",
+                    "slot2MediaId": "media-own",
+                    "slot3Set": "no-such-category",
+                })
+                .as_object()
+                .unwrap()
+                .clone(),
+                ports: vec![Port {
+                    name: "out".into(),
+                    direction: PortDirection::Output,
+                    channels: 2,
+                }],
+            }],
+            edges: vec![],
+        };
+        // Each sound is a short constant level, over before the next press,
+        // so the first output sample names it.
+        let sound = |level: f32| {
+            Arc::new(DecodedAudio {
+                channels: 2,
+                sample_rate_hz: 48_000,
+                samples: vec![level; 2 * 1_000].into(),
+            })
+        };
+        let levels = [
+            ("lib:fart-03", 0.3),
+            ("lib:burp-01", 0.1),
+            ("lib:fart-01", 0.2),
+        ];
+        // Builds the media map in the given insertion order; every map also
+        // has its own hash seed, so the key order differs between maps.
+        let media_in = |order: &[usize]| {
+            let mut media = HashMap::from([("media-own".to_owned(), sound(0.05))]);
+            for &index in order {
+                let (id, level) = levels[index];
+                media.insert(
+                    soundboard_category_media_key("bodily-humor", id),
+                    sound(level),
+                );
+            }
+            // Another category's sounds stay out of this set.
+            media.insert(
+                soundboard_category_media_key("bodily-humorous", "lib:other"),
+                sound(0.9),
+            );
+            media
+        };
+        let picks = |media: &HashMap<String, Arc<DecodedAudio>>| {
+            let graph = compile_session_at_sample_rate_with_plugins_and_audio(
+                &session,
+                RuntimeGeneration::new(13),
+                48_000,
+                &HashMap::new(),
+                media,
+            )
+            .unwrap();
+            let source = graph.soundboard_for_node(&node_id).unwrap();
+            assert_eq!(source.slot_sound_count(0), 3, "the category expands");
+            assert_eq!(source.slot_sound_count(1), 1, "unknown category: own sound");
+            assert!(!source.slot_loaded(2), "unknown category, no sound: empty");
+            let mut picks = Vec::new();
+            for _ in 0..30 {
+                assert!(source.trigger(0));
+                let mut block = AudioBlock::new(2, 128).unwrap();
+                graph.process(&mut block);
+                picks.push(block.channel(0).unwrap()[0].to_bits());
+                // Let the sound end and the trigger gap (50 ms) pass.
+                for _ in 0..20 {
+                    graph.process(&mut AudioBlock::new(2, 128).unwrap());
+                }
+            }
+            picks
+        };
+        let first = picks(&media_in(&[0, 1, 2]));
+        assert!(
+            first.windows(2).all(|pair| pair[0] != pair[1]),
+            "repeated a sound: {first:?}"
+        );
+        let heard = first
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        let expected = [0.1_f32, 0.2, 0.3]
+            .map(f32::to_bits)
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(heard, expected, "exactly the category's sounds play");
+        for order in [[2, 1, 0], [1, 2, 0], [2, 0, 1]] {
+            assert_eq!(
+                picks(&media_in(&order)),
+                first,
+                "the set order follows library ids, not the media map"
+            );
+        }
     }
 }

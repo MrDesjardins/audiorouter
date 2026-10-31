@@ -383,3 +383,79 @@ inspect a built installer for `sound-library` (and `verify-artifacts.ps1` expect
 three-theme screenshots with layout-shift sampling; live continuity, fresh-install and
 attended Stream Deck qualification (task 10), which need the owner. The Stage A
 `hardening` session still needs the owner to run it in the VM.
+
+### 2026-10-31: Soundboard follow-ups (branch `feature/soundboard-followups`)
+
+Owner request: finish the remaining Soundboard work in this order: category
+sets, drag and drop, picker/editor coverage, three-theme screenshots with
+layout-shift sampling, guide clips (including the 16 pending slot 2–9 Caption
+and Level rows). Live continuity, fresh-install, attended Stream Deck and the
+built-installer inspection stay owner-run. No PR without approval.
+Requirements: SND-12, SND-13, SND-14, SND-17, SND-19, UI-17, UI-20, UI-25.
+
+Decisions:
+
+- **Category sets (SND-17, SND-14).** A string `slotNSet` names a library
+  category. The control plane, which owns the library, expands it while it
+  decodes the board's media: every manifest sound of that category, sorted by
+  its stable `lib:` id (never manifest order), at most 64 sounds. Each decoded
+  sound is also stored in the shared media map under a key built by one engine
+  helper (`soundboard_category_media_key`), so every compiler path that already
+  receives that map (single chain, Mixer fan-out, connected Mixers, native
+  paths) sees the same expansion; `prepare_soundboard` is the only reader. The
+  sounds count once against the 256 MB board budget. An unknown or empty
+  category, or a library that is not installed, falls back to the slot's
+  `MediaId` (empty slot when there is none), like a missing sound today: the
+  route still starts and `soundboard.status` reports `loaded: false`.
+- **A set wins over MediaId, so assigning a sound clears the set.** Choosing,
+  changing or dropping a sound on a slot removes `slotNSet` (it was already a
+  latent defect for list sets).
+- **Set-only slots are real slots.** The canvas, Properties, `firstFreeSlot`
+  and the Stream Deck slot list count a slot with a set and no MediaId; its
+  label is the caption, else the file name, else "Random: <category>".
+- **Drag and drop (SND-19).** A file dropped on a slot replaces that slot's
+  sound (caption kept, as Change does); dropped elsewhere on the card or the
+  Properties editor it fills the first free slot. Only drags whose
+  `dataTransfer.types` include `Files` are intercepted, so dragging a tool
+  from the library over a card still reaches the canvas. Before any upload:
+  one file only, a free or target slot, no import already running, and the
+  picker's checks (`audioUploadProblem`: WAV/MP3, 64 MiB); after decoding, the
+  same 120 s limit (SND-13). The drop highlight is an outline only (UI-17).
+  The shell already calls `disable_drag_drop_handler()`, so WebView2 delivers
+  HTML5 file drops. **Reordering slots is not built: SND-19 does not ask for
+  it** (owner may request it separately).
+- **Picker (SND-12).** Search also matches the category title; the list is
+  sorted by category, then title. Preview stays in the page's own audio
+  context and never calls a route method.
+- **Known gap, not built:** no UI chooses a set; category and list sets are
+  reachable through the graph API (and saved sessions) only.
+- **Guides.** The Parametric EQ "repeated family" branch was not on origin at
+  start (re-check before guide work). Record one silent "Other buttons"
+  configuration clip and map rows in `build-tool-guide-property-manifest.mjs`:
+  slot 2–9 Caption rows to it; slot 2–9 Level rows to it and to the audible
+  `soundboard-demo.mp4` (button 1 level, production engine). Refresh the
+  overview tour because drag and drop adds a visible hint. Pass condition: no
+  pending `soundboard.*` row; other tools' pending rows are outside this task.
+
+Ordered tasks and checks:
+
+1. Engine + control category expansion; engine test (sorted ids, random never
+   repeats) and a dispatcher test (`nativePaths.prepare`, `session.start`,
+   `soundboard.status` reports the category slot loaded; trigger plays) that
+   fails without the fix. fmt, Clippy, engine/control tests, source/tool
+   combination suites.
+2. UI set-only slots, assign clears the set (jsdom regression), Stream Deck
+   slot choices.
+3. Drag and drop: shared import helper, controller, card and editor targets;
+   jsdom (validation, target slot, busy, non-file drags ignored) and Edge
+   Playwright (synthetic `DataTransfer` drop through the harness upload).
+4. Picker and editor coverage: search, category filter and sort, preview
+   without routing, Change/Delete, mode change (jsdom + Edge).
+5. Three-theme Edge screenshots of card and Properties, layout shift sampled
+   over several status polls (idle, playing with progress, idle).
+6. Guide clips, manifest generator, generated pages, Firefox playback check.
+
+Rollback: each task is its own commit; reverting restores the previous
+behaviour (category sets silent again, no drop targets). No migration.
+Not run here by design: live continuity, fresh install, attended Stream Deck,
+installer inspection, a real Explorer drag into the built exe.

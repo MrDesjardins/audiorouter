@@ -190,49 +190,64 @@ impl ControlPlane {
         sample_rate_hz: u32,
         media: &mut HashMap<String, Arc<DecodedAudio>>,
     ) -> Result<(), ControlError> {
+        // Read once, and only when a board names a category.
+        let mut manifest: Option<Option<Value>> = None;
         for node in session
             .nodes
             .iter()
             .filter(|node| node.enabled && node.kind == NodeKind::Soundboard)
         {
-            let mut ids = Vec::<String>::new();
+            // (media key, sound id): a category sound is stored under its
+            // category key as well as its own id (SND-17).
+            let mut ids = Vec::<(String, String)>::new();
             for slot in 1..=SOUNDBOARD_SLOTS {
                 if let Some(id) = node
                     .parameters
                     .get(&format!("slot{slot}MediaId"))
                     .and_then(Value::as_str)
                 {
-                    ids.push(id.to_owned());
+                    ids.push((id.to_owned(), id.to_owned()));
                 }
-                if let Some(Value::Array(set)) = node.parameters.get(&format!("slot{slot}Set")) {
-                    ids.extend(set.iter().filter_map(Value::as_str).map(str::to_owned));
+                match node.parameters.get(&format!("slot{slot}Set")) {
+                    Some(Value::Array(set)) => ids.extend(
+                        set.iter()
+                            .filter_map(Value::as_str)
+                            .map(|id| (id.to_owned(), id.to_owned())),
+                    ),
+                    Some(Value::String(category)) => {
+                        let manifest = manifest.get_or_insert_with(|| {
+                            library_root().and_then(|root| read_manifest(&root).ok())
+                        });
+                        for id in category_sounds(manifest.as_ref(), category) {
+                            ids.push((
+                                audiorouter_engine::soundboard_category_media_key(category, &id),
+                                id,
+                            ));
+                        }
+                    }
+                    _ => {}
                 }
             }
+            // Each decoded sound counts once against the board's budget.
+            let mut counted = std::collections::HashSet::<String>::new();
             let mut budget = 0usize;
-            for id in ids {
-                if media.contains_key(&id) {
-                    budget += media[&id].samples.len() * std::mem::size_of::<f32>();
-                    continue;
+            let mut count = |id: &str, audio: &DecodedAudio, budget: &mut usize| {
+                if counted.insert(id.to_owned()) {
+                    *budget += audio.samples.len() * std::mem::size_of::<f32>();
                 }
-                let loaded = if id.starts_with(SOUND_LIBRARY_PREFIX) {
-                    Self::read_library_sound(&id)
-                        .ok()
-                        .map(|bytes| (bytes, "flac".to_owned()))
-                } else {
-                    self.storage
-                        .as_ref()
-                        .and_then(|storage| storage.load_audio_media(&id).ok().flatten())
-                        .map(|(_, format, bytes)| (bytes, format))
+            };
+            for (key, id) in ids {
+                let audio = match media.get(&id).cloned() {
+                    Some(audio) => audio,
+                    None => match self.decode_board_sound(&id, sample_rate_hz) {
+                        Some(audio) => {
+                            media.insert(id.clone(), Arc::clone(&audio));
+                            audio
+                        }
+                        None => continue,
+                    },
                 };
-                let Some((bytes, format)) = loaded else {
-                    continue;
-                };
-                let Ok(decoded) = self.while_servicing_audio(|| {
-                    audiorouter_engine::decode_audio_bytes(bytes, &format, sample_rate_hz)
-                }) else {
-                    continue;
-                };
-                budget += decoded.samples.len() * std::mem::size_of::<f32>();
+                count(&id, &audio, &mut budget);
                 if budget > MAX_BOARD_DECODED_BYTES {
                     return Err(ControlError::NodeNotReady {
                         node_id: node.id.as_str().to_owned(),
@@ -242,9 +257,54 @@ impl ControlPlane {
                         ),
                     });
                 }
-                media.insert(id, Arc::new(decoded));
+                media.entry(key).or_insert(audio);
             }
         }
         Ok(())
     }
+
+    /// Decodes one board sound: a `lib:` sound from the library or the
+    /// user's own from the media store. None when it is missing or cannot be
+    /// decoded, so the slot stays empty and the route still starts.
+    fn decode_board_sound(&mut self, id: &str, sample_rate_hz: u32) -> Option<Arc<DecodedAudio>> {
+        let (bytes, format) = if id.starts_with(SOUND_LIBRARY_PREFIX) {
+            (Self::read_library_sound(id).ok()?, "flac".to_owned())
+        } else {
+            let (_, format, bytes) = self.storage.as_ref()?.load_audio_media(id).ok().flatten()?;
+            (bytes, format)
+        };
+        self.while_servicing_audio(|| {
+            audiorouter_engine::decode_audio_bytes(bytes, &format, sample_rate_hz)
+        })
+        .ok()
+        .map(Arc::new)
+    }
 }
+
+/// The ids of every sound of library category `category`, sorted by id so a
+/// saved board keeps the same set across releases (SND-14), at most
+/// `MAX_SLOT_SOUNDS`. Empty when the library or the category is missing; the
+/// slot then falls back to its own sound.
+fn category_sounds(manifest: Option<&Value>, category: &str) -> Vec<String> {
+    let mut ids = manifest
+        .and_then(|manifest| manifest.get("sounds"))
+        .and_then(Value::as_array)
+        .map(|sounds| {
+            sounds
+                .iter()
+                .filter(|sound| sound.get("category").and_then(Value::as_str) == Some(category))
+                .filter_map(|sound| sound.get("id").and_then(Value::as_str))
+                .filter(|id| id.starts_with(SOUND_LIBRARY_PREFIX))
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    ids.sort();
+    ids.dedup();
+    ids.truncate(audiorouter_engine::MAX_SLOT_SOUNDS);
+    ids
+}
+
+#[cfg(test)]
+#[path = "sound_library_tests.rs"]
+mod tests;
