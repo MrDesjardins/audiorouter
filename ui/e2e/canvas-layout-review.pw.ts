@@ -146,9 +146,14 @@ test("connector edits and geometry undo in order and a new edit clears redo", as
   await page.goto("/backend-harness.html");
   const voice = page.getByTestId("rf__node-voice");
   await expect(voice).toBeVisible();
+  // Act only on a settled canvas: the session adoption's layout reset and view
+  // fit move the buttons under the pointer (CI flake on PR #91, 2026-10-30,
+  // the same race as the test below).
+  await canvasSettled(page);
   const position = () => voice.evaluate((element) => (element as HTMLElement).style.transform);
   const before = await position();
   await page.getByRole("button", { name: "Arrange", exact: true }).click();
+  await canvasSettled(page);
   const arranged = await position();
   expect(arranged).not.toBe(before);
   const edgeId = (await page.locator(".react-flow__edges .react-flow__edge").first().getAttribute("data-id"))!;
