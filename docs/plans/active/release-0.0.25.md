@@ -29,10 +29,11 @@ Rollback: retain the 0.0.24 installer and configuration backups; revert the
 preparation commit if not published; never overwrite published assets.
 
 Known open items carried into the notes: Soundboard drag and drop (SND-19),
-category expansion in random sets, Stream Deck per-key modes unconfirmed on a
-key, library titles pending friendlier names, Playwright e2e and dark/light/
+category expansion in random sets, library titles pending friendlier names, Playwright e2e and dark/light/
 high-contrast screenshots for the Soundboard UI not run on its branch, clean
 machine and standard-account install, accessibility, hardware, signing.
 
 Release notes: [0.0.25 notes](evidence/2026-10-30-release-0.0.25-notes.md).
-Next: run the local checks below, then ask for PR approval.
+The owner tested the Stream Deck Sound key on hardware on 2026-10-30 and all
+modes work (attended result on the owner's build; not re-run on the final installer).
+Next: build the candidate and ask for PR approval.
