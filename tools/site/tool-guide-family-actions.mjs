@@ -39,6 +39,31 @@ const controls = (inspector) => ({
 });
 
 export const familyActions = {
+  soundboard: {
+    async focus({ inspector }) {
+      await inspector.locator(".soundboard-slot").nth(1).scrollIntoViewIfNeeded();
+    },
+    async act({ inspector, after }) {
+      const row = inspector.locator(".soundboard-slot").nth(1);
+      await row.getByRole("textbox", { name: "Caption" }).fill(after.slot2Caption);
+      await setNumber(row.getByRole("slider"), after.slot2GainDb);
+      await row.getByRole("combobox", { name: "When pressed" }).selectOption(after.slot2Mode);
+    },
+    async reveal({ inspector }) {
+      await inspector.locator(".soundboard-slot").nth(1).scrollIntoViewIfNeeded();
+    },
+    async verify({ inspector, after }) {
+      const row = inspector.locator(".soundboard-slot").nth(1);
+      const actual = [
+        await row.getByRole("textbox", { name: "Caption" }).inputValue(),
+        Number(await row.getByRole("slider").inputValue()),
+        await row.getByRole("combobox", { name: "When pressed" }).inputValue(),
+      ];
+      const expected = [after.slot2Caption, after.slot2GainDb, after.slot2Mode];
+      if (JSON.stringify(actual) !== JSON.stringify(expected))
+        throw new Error(`Soundboard controls show ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
+    },
+  },
   parametricEq: {
     // Bring the graph into view before the change; the live readings stay at
     // the top of the panel the rest of the time.

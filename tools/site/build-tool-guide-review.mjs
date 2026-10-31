@@ -380,7 +380,7 @@ for (const tool of tools) {
         poster: `assets/tool-guides/${posterName}`,
         description: clip.description,
         property: clip.property,
-        silent: false,
+        silent: render.audible === false,
       });
       continue;
     }

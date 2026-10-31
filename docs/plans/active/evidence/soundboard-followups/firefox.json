@@ -1,0 +1,57 @@
+[
+  {
+    "kind": "soundboard",
+    "type": "properties",
+    "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "soundboard",
+    "type": "demos",
+    "video": "assets/tool-guides/soundboard-demo.mp4",
+    "passed": true,
+    "time": 1.448,
+    "paused": false,
+    "peak": 0.18518736958503723,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "soundboard",
+    "type": "properties",
+    "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+    "passed": true,
+    "time": 1.466666,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "soundboard",
+    "type": "properties",
+    "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+    "passed": true,
+    "time": 1.469333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "soundboard",
+    "type": "overviews",
+    "video": "assets/tool-guides/soundboard-overview.mp4",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  }
+]

@@ -59,7 +59,7 @@ for (const kind of kinds) {
     parameter: clip.property,
     family: true,
     directory,
-    audible: true,
+    audible: clip.audible !== false,
     status: result.status === 0 ? "audio-rendered-unreviewed" : "render-failed",
     error: result.status === 0 ? null : result.stderr,
   });

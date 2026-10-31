@@ -6056,8 +6056,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot2Caption",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1Caption",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot3Caption",
@@ -6071,8 +6089,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot3Caption",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1Caption",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot4Caption",
@@ -6086,8 +6122,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot4Caption",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1Caption",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot5Caption",
@@ -6101,8 +6155,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot5Caption",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1Caption",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot6Caption",
@@ -6116,8 +6188,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot6Caption",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1Caption",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot7Caption",
@@ -6131,8 +6221,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot7Caption",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1Caption",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot8Caption",
@@ -6146,8 +6254,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot8Caption",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1Caption",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot9Caption",
@@ -6161,8 +6287,26 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot9Caption",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1Caption",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Caption · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
+              "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
+              "property": "slot1Caption",
+              "silent": true
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot1GainDb",
@@ -6199,8 +6343,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot2GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1GainDb",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot3GainDb",
@@ -6214,8 +6375,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot3GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1GainDb",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot4GainDb",
@@ -6229,8 +6407,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot4GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1GainDb",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot5GainDb",
@@ -6244,8 +6439,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot5GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1GainDb",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot6GainDb",
@@ -6259,8 +6471,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot6GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1GainDb",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot7GainDb",
@@ -6274,8 +6503,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot7GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1GainDb",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot8GainDb",
@@ -6289,8 +6535,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot8GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1GainDb",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot9GainDb",
@@ -6304,8 +6567,25 @@
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot9GainDb",
-          "recordings": [],
-          "status": "pending"
+          "representativeKey": "slot1GainDb",
+          "recordings": [
+            {
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "Level · button 1",
+              "video": "assets/tool-guides/soundboard-demo.mp4",
+              "poster": "assets/tool-guides/soundboard-demo.jpg",
+              "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
+              "property": "slot1GainDb"
+            }
+          ],
+          "status": "recorded"
         },
         {
           "key": "slot1Mode",
@@ -6341,17 +6621,28 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": "When pressed · button 2 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "nonAudibleReason": null,
           "recordingId": "soundboard--slot2Mode",
+          "representativeKey": "slot1Mode",
           "recordings": [
             {
-              "title": "Every setting",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         },
         {
           "key": "slot3Mode",
@@ -6363,17 +6654,28 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": "When pressed · button 3 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "nonAudibleReason": null,
           "recordingId": "soundboard--slot3Mode",
+          "representativeKey": "slot1Mode",
           "recordings": [
             {
-              "title": "Every setting",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         },
         {
           "key": "slot4Mode",
@@ -6385,17 +6687,28 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": "When pressed · button 4 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "nonAudibleReason": null,
           "recordingId": "soundboard--slot4Mode",
+          "representativeKey": "slot1Mode",
           "recordings": [
             {
-              "title": "Every setting",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         },
         {
           "key": "slot5Mode",
@@ -6407,17 +6720,28 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": "When pressed · button 5 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "nonAudibleReason": null,
           "recordingId": "soundboard--slot5Mode",
+          "representativeKey": "slot1Mode",
           "recordings": [
             {
-              "title": "Every setting",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         },
         {
           "key": "slot6Mode",
@@ -6429,17 +6753,28 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": "When pressed · button 6 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "nonAudibleReason": null,
           "recordingId": "soundboard--slot6Mode",
+          "representativeKey": "slot1Mode",
           "recordings": [
             {
-              "title": "Every setting",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         },
         {
           "key": "slot7Mode",
@@ -6451,17 +6786,28 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": "When pressed · button 7 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "nonAudibleReason": null,
           "recordingId": "soundboard--slot7Mode",
+          "representativeKey": "slot1Mode",
           "recordings": [
             {
-              "title": "Every setting",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         },
         {
           "key": "slot8Mode",
@@ -6473,17 +6819,28 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": "When pressed · button 8 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "nonAudibleReason": null,
           "recordingId": "soundboard--slot8Mode",
+          "representativeKey": "slot1Mode",
           "recordings": [
             {
-              "title": "Every setting",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         },
         {
           "key": "slot9Mode",
@@ -6495,17 +6852,28 @@
           "default": "once",
           "options": null,
           "dynamic": false,
-          "nonAudibleReason": "When pressed · button 9 works the same way as button 1, which has its own clip. The silent Properties tour shows where to find it.",
+          "nonAudibleReason": null,
           "recordingId": "soundboard--slot9Mode",
+          "representativeKey": "slot1Mode",
           "recordings": [
             {
-              "title": "Every setting",
-              "video": "assets/tool-guides/soundboard-overview.mp4",
-              "poster": "assets/tool-guides/soundboard-overview.jpg",
-              "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
+              "title": "Other buttons",
+              "video": "assets/tool-guides/soundboard--other-buttons.mp4",
+              "poster": "assets/tool-guides/soundboard--other-buttons.jpg",
+              "description": "Buttons 2–9 have the same Caption, Level and When pressed controls as button 1. This silent configuration clip changes button 2's caption to Applause, lowers its level to -12 dB and chooses Loop (press again to stop), then returns to the top. The separate Level recording lets you hear the level change through the production engine. Drop a WAV or MP3 onto a button to replace its sound, or onto the card or Properties to fill the next free button.",
+              "property": "otherButtons",
+              "silent": true
+            },
+            {
+              "title": "When pressed · button 1",
+              "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+              "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+              "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+              "property": "slot1Mode",
+              "silent": true
             }
           ],
-          "status": "exempted"
+          "status": "recorded"
         }
       ]
     },

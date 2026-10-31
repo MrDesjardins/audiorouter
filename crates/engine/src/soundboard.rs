@@ -14,6 +14,23 @@ use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::sync::Arc;
 
 pub const SOUNDBOARD_SLOT_COUNT: usize = 9;
+/// Most sounds one slot can pick from: a library category expands to at most
+/// this many (SND-17). Voices index sounds with a `u8`.
+pub const MAX_SLOT_SOUNDS: usize = 64;
+
+/// The decoded-media key of one sound of library category `category`, for a
+/// slot whose set names that category (SND-17). The control plane, which owns
+/// the library, stores each sound of the category under this key; the
+/// Soundboard compiler collects every key of the category and orders the
+/// sounds by their stable library id (SND-14), so every compiler path that
+/// receives the media map sees the same set.
+pub fn soundboard_category_media_key(category: &str, sound_id: &str) -> String {
+    format!("{}{sound_id}", soundboard_category_media_prefix(category))
+}
+
+pub(crate) fn soundboard_category_media_prefix(category: &str) -> String {
+    format!("soundboard-category:{category}\u{0}")
+}
 /// Sounds that may overlap at once; the oldest voice is replaced beyond this.
 const MAX_VOICES: usize = 16;
 const COMMAND_CAPACITY: usize = 64;
@@ -131,6 +148,10 @@ impl SoundboardSource {
         slots: [Option<SoundboardSlot>; SOUNDBOARD_SLOT_COUNT],
         sample_rate_hz: u32,
     ) -> Self {
+        let mut slots = slots;
+        for slot in slots.iter_mut().flatten() {
+            slot.sounds.truncate(MAX_SLOT_SOUNDS);
+        }
         Self {
             slots,
             sample_rate_hz,
@@ -152,6 +173,15 @@ impl SoundboardSource {
     /// Whether slot `slot` (0-based) has a sound to play.
     pub fn slot_loaded(&self, slot: usize) -> bool {
         self.slots.get(slot).is_some_and(Option::is_some)
+    }
+
+    /// How many sounds slot `slot` (0-based) picks from: 0 when empty, more
+    /// than 1 for a random set.
+    pub fn slot_sound_count(&self, slot: usize) -> usize {
+        self.slots
+            .get(slot)
+            .and_then(Option::as_ref)
+            .map_or(0, |slot| slot.sounds.len())
     }
 
     fn push(&self, command: Command) -> bool {

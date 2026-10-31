@@ -1,0 +1,13 @@
+{
+  "id": "soundboard--other-buttons",
+  "status": "complete",
+  "kind": "soundboard",
+  "parameter": "otherButtons",
+  "sourceHash": "295cee0149e56a5fa763884e07dc8356c31ce652ce93246055f0ab81d96ed8f2",
+  "eventAtSeconds": 3.2064098999999997,
+  "family": true,
+  "familyActionSeconds": 0.06033920000000048,
+  "frameRate": 15,
+  "frames": 120,
+  "pageErrors": []
+}

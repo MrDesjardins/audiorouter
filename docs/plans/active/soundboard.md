@@ -405,3 +405,180 @@ inspect a built installer for `sound-library` (and `verify-artifacts.ps1` expect
 three-theme screenshots with layout-shift sampling; live continuity, fresh-install and
 attended Stream Deck qualification (task 10), which need the owner. The Stage A
 `hardening` session still needs the owner to run it in the VM.
+
+### 2026-10-31: Soundboard follow-ups (branch `feature/soundboard-followups`)
+
+Owner request: finish the remaining Soundboard work in this order: category
+sets, drag and drop, picker/editor coverage, three-theme screenshots with
+layout-shift sampling, guide clips (including the 16 pending slot 2–9 Caption
+and Level rows). Live continuity, fresh-install, attended Stream Deck and the
+built-installer inspection stay owner-run. No PR without approval.
+Requirements: SND-12, SND-13, SND-14, SND-17, SND-19, UI-17, UI-20, UI-25.
+
+Decisions:
+
+- **Category sets (SND-17, SND-14).** A string `slotNSet` names a library
+  category. The control plane, which owns the library, expands it while it
+  decodes the board's media: every manifest sound of that category, sorted by
+  its stable `lib:` id (never manifest order), at most 64 sounds. Each decoded
+  sound is also stored in the shared media map under a key built by one engine
+  helper (`soundboard_category_media_key`), so every compiler path that already
+  receives that map (single chain, Mixer fan-out, connected Mixers, native
+  paths) sees the same expansion; `prepare_soundboard` is the only reader. The
+  sounds count once against the 256 MB board budget. An unknown or empty
+  category, or a library that is not installed, falls back to the slot's
+  `MediaId` (empty slot when there is none), like a missing sound today: the
+  route still starts and `soundboard.status` reports `loaded: false`.
+- **A set wins over MediaId, so assigning a sound clears the set.** Choosing,
+  changing or dropping a sound on a slot removes `slotNSet` (it was already a
+  latent defect for list sets).
+- **Set-only slots are real slots.** The canvas, Properties, `firstFreeSlot`
+  and the Stream Deck slot list count a slot with a set and no MediaId; its
+  label is the caption, else the file name, else "Random: <category>".
+- **Drag and drop (SND-19).** A file dropped on a slot replaces that slot's
+  sound (caption kept, as Change does); dropped elsewhere on the card or the
+  Properties editor it fills the first free slot. Only drags whose
+  `dataTransfer.types` include `Files` are intercepted, so dragging a tool
+  from the library over a card still reaches the canvas. Before any upload:
+  one file only, a free or target slot, no import already running, and the
+  picker's checks (`audioUploadProblem`: WAV/MP3, 64 MiB); after decoding, the
+  same 120 s limit (SND-13). The drop highlight is an outline only (UI-17).
+  The shell already calls `disable_drag_drop_handler()`, so WebView2 delivers
+  HTML5 file drops. **Reordering slots is not built: SND-19 does not ask for
+  it** (owner may request it separately).
+- **Picker (SND-12).** Search also matches the category title; the list is
+  sorted by category, then title. Preview stays in the page's own audio
+  context and never calls a route method.
+- **Known gap, not built:** no UI chooses a set; category and list sets are
+  reachable through the graph API (and saved sessions) only.
+- **Guides.** The Parametric EQ "repeated family" branch was not on origin at
+  start (re-check before guide work). Record one silent "Other buttons"
+  configuration clip and map rows in `build-tool-guide-property-manifest.mjs`:
+  slot 2–9 Caption rows to it; slot 2–9 Level rows to it and to the audible
+  `soundboard-demo.mp4` (button 1 level, production engine). Refresh the
+  overview tour because drag and drop adds a visible hint. Pass condition: no
+  pending `soundboard.*` row; other tools' pending rows are outside this task.
+
+Ordered tasks and checks:
+
+1. Engine + control category expansion; engine test (sorted ids, random never
+   repeats) and a dispatcher test (`nativePaths.prepare`, `session.start`,
+   `soundboard.status` reports the category slot loaded; trigger plays) that
+   fails without the fix. fmt, Clippy, engine/control tests, source/tool
+   combination suites.
+2. UI set-only slots, assign clears the set (jsdom regression), Stream Deck
+   slot choices.
+3. Drag and drop: shared import helper, controller, card and editor targets;
+   jsdom (validation, target slot, busy, non-file drags ignored) and Edge
+   Playwright (synthetic `DataTransfer` drop through the harness upload).
+4. Picker and editor coverage: search, category filter and sort, preview
+   without routing, Change/Delete, mode change (jsdom + Edge).
+5. Three-theme Edge screenshots of card and Properties, layout shift sampled
+   over several status polls (idle, playing with progress, idle).
+6. Guide clips, manifest generator, generated pages, Firefox playback check.
+
+Rollback: each task is its own commit; reverting restores the previous
+behaviour (category sets silent again, no drop targets). No migration.
+Not run here by design: live continuity, fresh install, attended Stream Deck,
+installer inspection, a real Explorer drag into the built exe.
+
+### Continuation checkpoint (2026-10-31)
+
+Category expansion is committed as `5ba7b1ba`. The previous run stopped during
+UI verification; preserve its uncommitted UI/Stream Deck changes. Recovered
+the earlier approval to run builds. Current typecheck, lint and focused jsdom
+checks pass (24 tests). Re-run the full UI suite and five Edge editor tests,
+inspect three-theme screenshots, then commit the editor/drop changes.
+The prior run qualified the layout regression: removing the fixed status-line
+height made the dark-theme layout test fail; the stylesheet was restored.
+
+Owner update: do not build the combined installer, open a PR or release. The
+parent will integrate this branch with `docs/guide-parametric-eq-bands` at
+`048d1444` and the control classifier fix `647646a7`, inspect installer library
+contents and produce the manual-test build. Reuse the pushed guide-family
+mechanism (supersedes the earlier guide fallback decision above). Finish guide
+captures and Firefox verification here, push logical commits, and notify the
+parent with exact commits/checks/gaps. No device/session changes are needed.
+
+UI verification on Windows (Node 22.22.3): full Vitest 773/773 (84 files),
+focused Soundboard 24/24, typecheck:all, lint and format pass. Stream Deck
+35/35 tests and build/typecheck pass. Rollup removes two misplaced PURE
+annotations in zod and reports its circular core/util import; those dependency
+diagnostics remain, with no plugin dependency changes in this task.
+Edge reports five editor tests passing: three themes with 24 stable bounds
+samples each, file drops, picker preview/search/filter, removal and mode edit.
+The runner has not exited after reporting the scenarios; investigate teardown
+before calling the command passed. Inspected card and Properties screenshots
+in `target/soundboard-editor-evidence/` in all three themes. Native Explorer
+drop, hardware, continuity and packaged-shell checks remain unrun here.
+
+### Follow-ups exercised and guide coverage closed (2026-10-31)
+
+Commits: `5ba7b1ba` category expansion; `9023458e` file drops, set-only slots,
+picker/editor interactions and layout correction; `faf259d5` merges the
+owner-approved combined EQ guide base `048d1444`. Requirements exercised:
+SND-12/13/14/17/19, UI-17/20/25. SND-19 specifies file drops, not reordering;
+no reorder UI was added. No PR, release, final installer or manual-test exe.
+
+Windows validation (Rust 1.96.0, Node 22.22.3):
+
+- `cargo test -p audiorouter-engine -p audiorouter-control --locked` passes,
+  including category expansion, the real dispatcher, deterministic audio,
+  source combinations (5) and processor combinations (4). Explicit private
+  session/hardware fixtures remain ignored; no device was opened for them.
+- Workspace and shell Clippy, all targets/features, warnings denied: pass.
+  Shell initially failed because this fresh worktree had no `ui/dist`;
+  `npm.cmd --prefix ui run build` supplied it and shell Clippy then passed.
+  Both Rust format checks pass. Vite reports its 625 kB application chunk;
+  bundle splitting is outside this Soundboard change.
+- UI full suite 773 tests/84 files; typecheck:all, format:check and lint pass.
+  Stream Deck 35 tests/7 files and build/typecheck pass (dependency Rollup
+  diagnostics described above). No attended deck test or plugin installation.
+- Edge editor test command exits successfully, 5/5. The earlier run hung in
+  managed webServer teardown after all scenarios; reusing a separately owned
+  Vite server gives a clean exit. Final run took 17.5 s. Three themes each
+  retain 24 bounds samples covering idle, playback/progress, overlapping sounds,
+  drop highlight and return to idle, with no moved bounds. JSON and inspected
+  screenshots are in [soundboard-followups](evidence/soundboard-followups/).
+  NO_COLOR/FORCE_COLOR and React Flow attribution notices were emitted by the
+  harness; no attribution or terminal-colour settings were changed.
+
+Guide work reuses the EQ family mechanism. One silent portrait Properties clip
+shows button 2 Caption, Level and When pressed changing together and returns to
+the top; all buttons 2-9 reference it plus the matching button-1 clip. Mode
+rows now have this evidence instead of exemptions. The existing level example
+uses production-engine PCM. The silent overview was refreshed for the drop hint.
+Capture metadata records 120 frames at 15 fps, no page errors, action at
+3.206 s and 0.060 s to update all three controls. Inspected the changed-control
+frame: caption, -12 dB level and loop selection are visible together.
+
+Reproduction: copy the existing renderer/artifacts from the owner's guide
+worktree into this worktree's ignored `target/`; run
+`GUIDE_KIND=soundboard node tools/site/render-tool-guide-families.mjs`, then
+`GUIDE_PROPERTIES=1 GUIDE_KIND=soundboard GUIDE_PROPERTY=otherButtons node
+tools/site/record-tool-guide-overviews.mjs` against the local harness on 4186.
+Run the recorder again with only `GUIDE_KIND=soundboard` for the overview;
+build with `GUIDE_KIND=soundboard node tools/site/build-tool-guide-review.mjs`,
+then regenerate guides/social. The manifest builder reclassifies unrelated
+exempted rows with overview recordings as recorded; retained the merged base's
+non-Soundboard rows so this scoped change does not alter their evidence claims.
+Unchanged demo/caption media re-encoded by the builder was restored; only the
+new family clip and refreshed overview are included.
+
+Passing: family/guard tests (16), property coverage (251 rows: 206 recorded,
+45 exempted, zero pending), media budgets (150 clips), authoritative catalog,
+guide links/allowlists, social generation check and docs validation (218 files /
+1164 links before this final note). Firefox real pointer-click playback passes
+all five Soundboard clips, with nonzero measured output for the audible demo;
+see [results](evidence/soundboard-followups/firefox.json). Restricted Firefox
+discarded the browsing context; outside that sandbox it passed once the static
+server on 4187 was started. `GUIDE_FIREFOX_PORT=9348` isolates its BiDi port
+from concurrent guide work. No firewall or installed browser setting changed.
+
+Remaining owner gates: native Explorer drop into the combined exe, live audio
+continuity, fresh install, attended Stream Deck, installer library inspection
+and manual-test build. A set picker remains outside this slice: set-only slots
+are visible/playable but sets are assigned through saved graphs/API. Next:
+parent integrates this branch and the control classifier branch, checks the
+installer and makes its combined manual-test build. Rollback: revert the
+Soundboard follow-up commits, preserving the independent EQ merge; no migration.
