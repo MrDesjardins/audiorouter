@@ -1,5 +1,29 @@
 # Active plan — post-0.0.8 maintenance
 
+## Tool-guide clip copy and order review fixes — 2026-10-31
+
+Code review of `a3354170` found two defects in
+`tools/site/build-tool-guide-review.mjs` (UI-20, website voice rule):
+every property clip repeated a stilted "synthetic production-engine example"
+disclaimer, and `unshift` listed property clips in reverse panel order.
+The generator now describes each clip from its render telemetry (from/to
+values, the test sound, the guide's own increase/decrease text) and states the
+"prepared test signal, not your microphone or device" fact once per page in the
+"In the app." intro. Clips follow Properties-panel order with the per-tool demo
+at its own property; the review gallery still leads with that demo. Exemption
+reasons are written per tool/type. A stale manifest claim (graphic EQ band 1
+"recorded" by a demo that now changes 1 kHz) is reset to pending: 98 recorded,
+100 pending, 53 exempted.
+
+Regenerated with `GUIDE_METADATA_ONLY=1` (no re-encode; media unchanged), then
+`site/generate-guides.mjs` and `site/generate-social.mjs`. Passing on Windows:
+`check-tool-guide-videos`, `check-tool-guide-catalog`, `site/check-guides`,
+`generate-social --check --check-changed`, `tools/docs/validate.mjs`, Firefox
+real-click playback (`check-tool-guide-video-firefox`) and the phone layout
+review, plus Edge screenshots of Compressor and Soundboard in dark, light and
+forced-colors. `check-tool-guide-property-coverage` still fails on the 100
+pending rows, as before. Rollback: revert this commit and rerun the generator.
+
 ## Owner documentation review and push — 2026-10-30
 
 Main synchronization: merged `origin/main` at `b33fa54b`; resolved the sole

@@ -1,1085 +1,1085 @@
 {
   "gain": [
     {
-      "title": "Gain in the app",
+      "title": "Gain",
       "video": "assets/tool-guides/gain-demo.mp4",
       "poster": "assets/tool-guides/gain-demo.jpg",
-      "description": "Gain changes from 0 to -60 dB at 3.2 seconds. More negative values make it quieter. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "description": "Gain moves from 0 dB to −60 dB about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Gain. More negative values make it quieter.",
       "property": "gainDb"
     },
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/gain-overview.mp4",
       "poster": "assets/tool-guides/gain-overview.jpg",
-      "description": "A silent recording of the real Gain Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Gain Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "volume": [
     {
-      "title": "Volume in the app",
+      "title": "Volume",
       "video": "assets/tool-guides/volume-demo.mp4",
       "poster": "assets/tool-guides/volume-demo.jpg",
-      "description": "Volume changes from 100 to 0 % at 3.2 seconds. 0% silences this output. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "description": "Volume moves from 100% to 0% about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Volume. 0% silences this output.",
       "property": "percent"
     },
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/volume-overview.mp4",
       "poster": "assets/tool-guides/volume-overview.jpg",
-      "description": "A silent recording of the real Volume Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Volume Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "bassTreble": [
     {
-      "title": "Treble frequency in the app",
-      "video": "assets/tool-guides/bassTreble--trebleFrequencyHz.mp4",
-      "poster": "assets/tool-guides/bassTreble--trebleFrequencyHz.jpg",
-      "description": "The Treble frequency control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "trebleFrequencyHz",
-      "silent": false
+      "title": "Bass",
+      "video": "assets/tool-guides/bassTreble-demo.mp4",
+      "poster": "assets/tool-guides/bassTreble-demo.jpg",
+      "description": "Bass moves from 0 dB to −12 dB about three seconds in, while steady pink noise plays through the Bass & Treble. Cuts low frequencies.",
+      "property": "bassDb"
     },
     {
-      "title": "Bass frequency in the app",
-      "video": "assets/tool-guides/bassTreble--bassFrequencyHz.mp4",
-      "poster": "assets/tool-guides/bassTreble--bassFrequencyHz.jpg",
-      "description": "The Bass frequency control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "bassFrequencyHz",
-      "silent": false
-    },
-    {
-      "title": "Treble in the app",
+      "title": "Treble",
       "video": "assets/tool-guides/bassTreble--trebleDb.mp4",
       "poster": "assets/tool-guides/bassTreble--trebleDb.jpg",
-      "description": "The Treble control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "description": "Treble moves from 0 dB to −12 dB about three seconds in, while steady pink noise plays through the Bass & Treble. Reduces brightness.",
       "property": "trebleDb",
       "silent": false
     },
     {
-      "title": "Bass in the app",
-      "video": "assets/tool-guides/bassTreble-demo.mp4",
-      "poster": "assets/tool-guides/bassTreble-demo.jpg",
-      "description": "Bass changes from 0 to -12 dB at 3.2 seconds. Cuts low frequencies. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "bassDb"
+      "title": "Bass frequency",
+      "video": "assets/tool-guides/bassTreble--bassFrequencyHz.mp4",
+      "poster": "assets/tool-guides/bassTreble--bassFrequencyHz.jpg",
+      "description": "Bass frequency moves from 500 Hz to 160 Hz about three seconds in, while steady pink noise plays through the Bass & Treble. Keeps the adjustment lower in the spectrum.",
+      "property": "bassFrequencyHz",
+      "silent": false
     },
     {
-      "title": "Browse Properties",
+      "title": "Treble frequency",
+      "video": "assets/tool-guides/bassTreble--trebleFrequencyHz.mp4",
+      "poster": "assets/tool-guides/bassTreble--trebleFrequencyHz.jpg",
+      "description": "Treble frequency moves from 1500 Hz to 5000 Hz about three seconds in, while steady pink noise plays through the Bass & Treble. Keeps the adjustment in higher frequencies.",
+      "property": "trebleFrequencyHz",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
       "video": "assets/tool-guides/bassTreble-overview.mp4",
       "poster": "assets/tool-guides/bassTreble-overview.jpg",
-      "description": "A silent recording of the real Bass & Treble Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Bass & Treble Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "graphicEq": [
     {
-      "title": "1 kHz in the app",
+      "title": "1 kHz",
       "video": "assets/tool-guides/graphicEq-demo.mp4",
       "poster": "assets/tool-guides/graphicEq-demo.jpg",
-      "description": "1 kHz changes from 0 to 12 dB at 3.2 seconds. Add a little if the midrange feels distant after level matching. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "description": "1 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a little if the midrange feels distant after level matching.",
       "property": "band5Db"
     },
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/graphicEq-overview.mp4",
       "poster": "assets/tool-guides/graphicEq-overview.jpg",
-      "description": "A silent recording of the real Graphic EQ Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Graphic EQ Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "parametricEq": [
     {
-      "title": "Gain · band 1 in the app",
-      "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
-      "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
-      "description": "The Gain · band 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "band0GainDb",
-      "silent": false
-    },
-    {
-      "title": "Q · band 1 in the app",
-      "video": "assets/tool-guides/parametricEq--band0Q.mp4",
-      "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
-      "description": "The Q · band 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "band0Q",
-      "silent": false
-    },
-    {
-      "title": "Filter type · band 1 in the app",
-      "video": "assets/tool-guides/parametricEq--band0Type.mp4",
-      "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
-      "description": "The Filter type · band 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "band0Type",
-      "silent": false
-    },
-    {
-      "title": "Band enabled · band 1 in the app",
+      "title": "Band enabled · band 1",
       "video": "assets/tool-guides/parametricEq--band0Enabled.mp4",
       "poster": "assets/tool-guides/parametricEq--band0Enabled.jpg",
-      "description": "The Band enabled · band 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "description": "Band enabled · band 1 is turned off about three seconds in, while steady pink noise plays through the Advanced EQ. Whether this numbered filter contributes to the curve.",
       "property": "band0Enabled",
       "silent": false
     },
     {
-      "title": "Frequency · band 1 in the app",
+      "title": "Filter type · band 1",
+      "video": "assets/tool-guides/parametricEq--band0Type.mp4",
+      "poster": "assets/tool-guides/parametricEq--band0Type.jpg",
+      "description": "Filter type · band 1 switches from Peaking to Low pass about three seconds in, while steady pink noise plays through the Advanced EQ. Shape of the selected filter.",
+      "property": "band0Type",
+      "silent": false
+    },
+    {
+      "title": "Frequency · band 1",
       "video": "assets/tool-guides/parametricEq-demo.mp4",
       "poster": "assets/tool-guides/parametricEq-demo.jpg",
-      "description": "Frequency · band 1 changes from 1000 to 20 Hz at 3.2 seconds. Moves it toward lower-pitched content. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "description": "Frequency · band 1 moves from 1000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
       "property": "band0FrequencyHz"
     },
     {
-      "title": "Browse Properties",
+      "title": "Q · band 1",
+      "video": "assets/tool-guides/parametricEq--band0Q.mp4",
+      "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
+      "description": "Q · band 1 moves from 1 to 8 about three seconds in, while steady pink noise plays through the Advanced EQ. Narrows bell/notch/band-pass filters; may increase resonance in pass filters.",
+      "property": "band0Q",
+      "silent": false
+    },
+    {
+      "title": "Gain · band 1",
+      "video": "assets/tool-guides/parametricEq--band0GainDb.mp4",
+      "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
+      "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
+      "property": "band0GainDb",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
       "video": "assets/tool-guides/parametricEq-overview.mp4",
       "poster": "assets/tool-guides/parametricEq-overview.jpg",
-      "description": "A silent recording of the real Advanced EQ Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Advanced EQ Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "compressor": [
     {
-      "title": "Makeup gain in the app",
-      "video": "assets/tool-guides/compressor--makeupDb.mp4",
-      "poster": "assets/tool-guides/compressor--makeupDb.jpg",
-      "description": "The Makeup gain control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "makeupDb",
+      "title": "Threshold",
+      "video": "assets/tool-guides/compressor-demo.mp4",
+      "poster": "assets/tool-guides/compressor-demo.jpg",
+      "description": "Threshold moves from −18 dBFS to −60 dBFS about three seconds in, while a short, buzzy test voice plays through the Compressor. Lower values compress more of the signal.",
+      "property": "thresholdDb"
+    },
+    {
+      "title": "Ratio",
+      "video": "assets/tool-guides/compressor--ratio.mp4",
+      "poster": "assets/tool-guides/compressor--ratio.jpg",
+      "description": "Ratio moves from 3 to 8 about three seconds in, while a short, buzzy test voice plays through the Compressor. Applies stronger level reduction.",
+      "property": "ratio",
       "silent": false
     },
     {
-      "title": "Knee in the app",
+      "title": "Attack",
+      "video": "assets/tool-guides/compressor--attackMs.mp4",
+      "poster": "assets/tool-guides/compressor--attackMs.jpg",
+      "description": "Attack moves from 10 ms to 100 ms about three seconds in, while a short, buzzy test voice plays through the Compressor. Makes engagement slower.",
+      "property": "attackMs",
+      "silent": false
+    },
+    {
+      "title": "Release",
+      "video": "assets/tool-guides/compressor--releaseMs.mp4",
+      "poster": "assets/tool-guides/compressor--releaseMs.jpg",
+      "description": "Release moves from 150 ms to 600 ms about three seconds in, while a short, buzzy test voice plays through the Compressor. Makes recovery slower.",
+      "property": "releaseMs",
+      "silent": false
+    },
+    {
+      "title": "Knee",
       "video": "assets/tool-guides/compressor--kneeDb.mp4",
       "poster": "assets/tool-guides/compressor--kneeDb.jpg",
-      "description": "The Knee control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "description": "Knee moves from 6 dB to 18 dB about three seconds in, while a short, buzzy test voice plays through the Compressor. Makes compression begin more gradually around the boundary.",
       "property": "kneeDb",
       "silent": false
     },
     {
-      "title": "Release in the app",
-      "video": "assets/tool-guides/compressor--releaseMs.mp4",
-      "poster": "assets/tool-guides/compressor--releaseMs.jpg",
-      "description": "The Release control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "releaseMs",
+      "title": "Makeup gain",
+      "video": "assets/tool-guides/compressor--makeupDb.mp4",
+      "poster": "assets/tool-guides/compressor--makeupDb.jpg",
+      "description": "Makeup gain moves from 0 dB to 24 dB about three seconds in, while a short, buzzy test voice plays through the Compressor. Makes the compressed output louder.",
+      "property": "makeupDb",
       "silent": false
     },
     {
-      "title": "Attack in the app",
-      "video": "assets/tool-guides/compressor--attackMs.mp4",
-      "poster": "assets/tool-guides/compressor--attackMs.jpg",
-      "description": "The Attack control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "attackMs",
-      "silent": false
-    },
-    {
-      "title": "Ratio in the app",
-      "video": "assets/tool-guides/compressor--ratio.mp4",
-      "poster": "assets/tool-guides/compressor--ratio.jpg",
-      "description": "The Ratio control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "ratio",
-      "silent": false
-    },
-    {
-      "title": "Threshold in the app",
-      "video": "assets/tool-guides/compressor-demo.mp4",
-      "poster": "assets/tool-guides/compressor-demo.jpg",
-      "description": "Threshold changes from -18 to -60 dBFS at 3.2 seconds. Lower values compress more of the signal. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "thresholdDb"
-    },
-    {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/compressor-overview.mp4",
       "poster": "assets/tool-guides/compressor-overview.jpg",
-      "description": "A silent recording of the real Compressor Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Compressor Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "gate": [
     {
-      "title": "Release in the app",
-      "video": "assets/tool-guides/gate--releaseMs.mp4",
-      "poster": "assets/tool-guides/gate--releaseMs.jpg",
-      "description": "The Release control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "releaseMs",
-      "silent": false
+      "title": "Threshold",
+      "video": "assets/tool-guides/gate-demo.mp4",
+      "poster": "assets/tool-guides/gate-demo.jpg",
+      "description": "Threshold moves from −45 dBFS to −80 dBFS about three seconds in, while a short, buzzy test voice plays through the Gate / Expander. Opens for quieter sound and potentially room noise.",
+      "property": "thresholdDb"
     },
     {
-      "title": "Hold in the app",
-      "video": "assets/tool-guides/gate--holdMs.mp4",
-      "poster": "assets/tool-guides/gate--holdMs.jpg",
-      "description": "The Hold control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "holdMs",
-      "silent": false
-    },
-    {
-      "title": "Ratio in the app",
-      "video": "assets/tool-guides/gate--ratio.mp4",
-      "poster": "assets/tool-guides/gate--ratio.jpg",
-      "description": "The Ratio control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "ratio",
-      "silent": false
-    },
-    {
-      "title": "Hysteresis in the app",
-      "video": "assets/tool-guides/gate--hysteresisDb.mp4",
-      "poster": "assets/tool-guides/gate--hysteresisDb.jpg",
-      "description": "The Hysteresis control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "hysteresisDb",
-      "silent": false
-    },
-    {
-      "title": "Attack in the app",
-      "video": "assets/tool-guides/gate--attackMs.mp4",
-      "poster": "assets/tool-guides/gate--attackMs.jpg",
-      "description": "The Attack control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "attackMs",
-      "silent": false
-    },
-    {
-      "title": "Range in the app",
+      "title": "Range",
       "video": "assets/tool-guides/gate--rangeDb.mp4",
       "poster": "assets/tool-guides/gate--rangeDb.jpg",
-      "description": "The Range control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "description": "Range moves from 60 dB to 12 dB about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Preserves more background; 0 dB disables attenuation.",
       "property": "rangeDb",
       "silent": false
     },
     {
-      "title": "Threshold in the app",
-      "video": "assets/tool-guides/gate-demo.mp4",
-      "poster": "assets/tool-guides/gate-demo.jpg",
-      "description": "Threshold changes from -45 to -80 dBFS at 3.2 seconds. Opens for quieter sound and potentially room noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "thresholdDb"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/gate-overview.mp4",
-      "poster": "assets/tool-guides/gate-overview.jpg",
-      "description": "A silent recording of the real Gate / Expander Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "limiter": [
-    {
-      "title": "Release in the app",
-      "video": "assets/tool-guides/limiter--releaseMs.mp4",
-      "poster": "assets/tool-guides/limiter--releaseMs.jpg",
-      "description": "The Release control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "releaseMs",
-      "silent": false
-    },
-    {
-      "title": "Look-ahead in the app",
-      "video": "assets/tool-guides/limiter--lookaheadMs.mp4",
-      "poster": "assets/tool-guides/limiter--lookaheadMs.jpg",
-      "description": "The Look-ahead control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "lookaheadMs",
-      "silent": false
-    },
-    {
-      "title": "Ceiling in the app",
-      "video": "assets/tool-guides/limiter-demo.mp4",
-      "poster": "assets/tool-guides/limiter-demo.jpg",
-      "description": "Ceiling changes from -1 to -12 dBFS at 3.2 seconds. Leaves more headroom. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "ceilingDb"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/limiter-overview.mp4",
-      "poster": "assets/tool-guides/limiter-overview.jpg",
-      "description": "A silent recording of the real Limiter Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "delay": [
-    {
-      "title": "Delay in the app",
-      "video": "assets/tool-guides/delay-demo.mp4",
-      "poster": "assets/tool-guides/delay-demo.jpg",
-      "description": "Delay changes from 0 to 1000 ms at 3.2 seconds. Moves sound later. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "delayMs"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/delay-overview.mp4",
-      "poster": "assets/tool-guides/delay-overview.jpg",
-      "description": "A silent recording of the real Sync (delay) Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "pitch": [
-    {
-      "title": "Fine tune in the app",
-      "video": "assets/tool-guides/pitch--cents.mp4",
-      "poster": "assets/tool-guides/pitch--cents.jpg",
-      "description": "The Fine tune control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "cents",
-      "silent": false
-    },
-    {
-      "title": "Semitones in the app",
-      "video": "assets/tool-guides/pitch-demo.mp4",
-      "poster": "assets/tool-guides/pitch-demo.jpg",
-      "description": "Semitones changes from 0 to -12 semitones at 3.2 seconds. Lowers pitch. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "semitones"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/pitch-overview.mp4",
-      "poster": "assets/tool-guides/pitch-overview.jpg",
-      "description": "A silent recording of the real Pitch Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "dehum": [
-    {
-      "title": "Harmonics in the app",
-      "video": "assets/tool-guides/dehum--harmonics.mp4",
-      "poster": "assets/tool-guides/dehum--harmonics.jpg",
-      "description": "The Harmonics control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "harmonics",
-      "silent": false
-    },
-    {
-      "title": "Amount in the app",
-      "video": "assets/tool-guides/dehum--amountPercent.mp4",
-      "poster": "assets/tool-guides/dehum--amountPercent.jpg",
-      "description": "The Amount control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "amountPercent",
-      "silent": false
-    },
-    {
-      "title": "Mains frequency in the app",
-      "video": "assets/tool-guides/dehum-demo.mp4",
-      "poster": "assets/tool-guides/dehum-demo.jpg",
-      "description": "Mains frequency changes from 60 to 45 Hz at 3.2 seconds. Moves the series lower. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "frequencyHz"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/dehum-overview.mp4",
-      "poster": "assets/tool-guides/dehum-overview.jpg",
-      "description": "A silent recording of the real Dehum Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "declick": [
-    {
-      "title": "Threshold in the app",
-      "video": "assets/tool-guides/declick-demo.mp4",
-      "poster": "assets/tool-guides/declick-demo.jpg",
-      "description": "Threshold changes from 50 to 0 % at 3.2 seconds. Detects more subtle clicks. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "thresholdPercent"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/declick-overview.mp4",
-      "poster": "assets/tool-guides/declick-overview.jpg",
-      "description": "A silent recording of the real Declick Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "denoise": [
-    {
-      "title": "Learn noise in the app",
-      "video": "assets/tool-guides/denoise--learning.mp4",
-      "poster": "assets/tool-guides/denoise--learning.jpg",
-      "description": "The Learn noise control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "learning",
-      "silent": false
-    },
-    {
-      "title": "Noise left in in the app",
-      "video": "assets/tool-guides/denoise--floorPercent.mp4",
-      "poster": "assets/tool-guides/denoise--floorPercent.jpg",
-      "description": "The Noise left in control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "floorPercent",
-      "silent": false
-    },
-    {
-      "title": "Reduction in the app",
-      "video": "assets/tool-guides/denoise-demo.mp4",
-      "poster": "assets/tool-guides/denoise-demo.jpg",
-      "description": "Reduction changes from 70 to 0 % at 3.2 seconds. Retains more original sound. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "reductionPercent"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/denoise-overview.mp4",
-      "poster": "assets/tool-guides/denoise-overview.jpg",
-      "description": "A silent recording of the real Denoise Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "speechDenoise": [
-    {
-      "title": "Strength in the app",
-      "video": "assets/tool-guides/speechDenoise-demo.mp4",
-      "poster": "assets/tool-guides/speechDenoise-demo.jpg",
-      "description": "Strength changes from 70 to 0 % at 3.2 seconds. Retains more of the original signal. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "strengthPercent"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/speechDenoise-overview.mp4",
-      "poster": "assets/tool-guides/speechDenoise-overview.jpg",
-      "description": "A silent recording of the real Speech Denoise Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "spectralGate": [
-    {
-      "title": "Learn noise in the app",
-      "video": "assets/tool-guides/spectralGate--learning.mp4",
-      "poster": "assets/tool-guides/spectralGate--learning.jpg",
-      "description": "The Learn noise control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "learning",
-      "silent": false
-    },
-    {
-      "title": "Reduction in the app",
-      "video": "assets/tool-guides/spectralGate--reductionDb.mp4",
-      "poster": "assets/tool-guides/spectralGate--reductionDb.jpg",
-      "description": "The Reduction control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "reductionDb",
-      "silent": false
-    },
-    {
-      "title": "Threshold above noise in the app",
-      "video": "assets/tool-guides/spectralGate-demo.mp4",
-      "poster": "assets/tool-guides/spectralGate-demo.jpg",
-      "description": "Threshold above noise changes from 3 to -20 dB at 3.2 seconds. Lets more frequency regions pass. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "thresholdDb"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/spectralGate-overview.mp4",
-      "poster": "assets/tool-guides/spectralGate-overview.jpg",
-      "description": "A silent recording of the real Spectral Gate Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "firFilter": [
-    {
-      "title": "Output gain in the app",
-      "video": "assets/tool-guides/firFilter--gainDb.mp4",
-      "poster": "assets/tool-guides/firFilter--gainDb.jpg",
-      "description": "The Output gain control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "gainDb",
-      "silent": false
-    },
-    {
-      "title": "Wet mix in the app",
-      "video": "assets/tool-guides/firFilter-demo.mp4",
-      "poster": "assets/tool-guides/firFilter-demo.jpg",
-      "description": "Wet mix changes from 100 to 0 % at 3.2 seconds. Includes more dry sound. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "wetPercent"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/firFilter-overview.mp4",
-      "poster": "assets/tool-guides/firFilter-overview.jpg",
-      "description": "A silent recording of the real FIR Filter Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "mute": [
-    {
-      "title": "Muted in the app",
-      "video": "assets/tool-guides/mute-demo.mp4",
-      "poster": "assets/tool-guides/mute-demo.jpg",
-      "description": "Muted changes from false to true at 3.2 seconds. Silences the branch passing through this node. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "muted"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/mute-overview.mp4",
-      "poster": "assets/tool-guides/mute-overview.jpg",
-      "description": "A silent recording of the real Mute Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "inputSwitch": [
-    {
-      "title": "Switch speed in the app",
-      "video": "assets/tool-guides/inputSwitch--fade.mp4",
-      "poster": "assets/tool-guides/inputSwitch--fade.jpg",
-      "description": "The Switch speed control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "fade",
-      "silent": false
-    },
-    {
-      "title": "Active input in the app",
-      "video": "assets/tool-guides/inputSwitch-demo.mp4",
-      "poster": "assets/tool-guides/inputSwitch-demo.jpg",
-      "description": "Active input changes from a to b at 3.2 seconds. Which explicitly wired port is heard. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "selected"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/inputSwitch-overview.mp4",
-      "poster": "assets/tool-guides/inputSwitch-overview.jpg",
-      "description": "A silent recording of the real Input Switch Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "outputSwitch": [
-    {
-      "title": "Active output in the app",
-      "video": "assets/tool-guides/outputSwitch-demo.mp4",
-      "poster": "assets/tool-guides/outputSwitch-demo.jpg",
-      "description": "Active output changes from a to b at 3.2 seconds. Which output port receives audio. The control appears briefly, then the view returns to the top visual while the synthetic audio continues. You hear output A: it becomes silent when the signal moves to B.",
-      "property": "selected"
-    },
-    {
-      "title": "Browse Properties",
-      "video": "assets/tool-guides/outputSwitch-overview.mp4",
-      "poster": "assets/tool-guides/outputSwitch-overview.jpg",
-      "description": "A silent recording of the real Output Switch Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
-    }
-  ],
-  "duck": [
-    {
-      "title": "Release in the app",
-      "video": "assets/tool-guides/duck--releaseMs.mp4",
-      "poster": "assets/tool-guides/duck--releaseMs.jpg",
-      "description": "The Release control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "releaseMs",
-      "silent": false
-    },
-    {
-      "title": "Hold in the app",
-      "video": "assets/tool-guides/duck--holdMs.mp4",
-      "poster": "assets/tool-guides/duck--holdMs.jpg",
-      "description": "The Hold control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "holdMs",
-      "silent": false
-    },
-    {
-      "title": "Attack in the app",
-      "video": "assets/tool-guides/duck--attackMs.mp4",
-      "poster": "assets/tool-guides/duck--attackMs.jpg",
-      "description": "The Attack control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "title": "Attack",
+      "video": "assets/tool-guides/gate--attackMs.mp4",
+      "poster": "assets/tool-guides/gate--attackMs.jpg",
+      "description": "Attack moves from 5 ms to 100 ms about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Makes engagement slower.",
       "property": "attackMs",
       "silent": false
     },
     {
-      "title": "Amount in the app",
+      "title": "Hysteresis",
+      "video": "assets/tool-guides/gate--hysteresisDb.mp4",
+      "poster": "assets/tool-guides/gate--hysteresisDb.jpg",
+      "description": "Hysteresis moves from 3 dB to 9 dB about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Keeps it open through larger level dips.",
+      "property": "hysteresisDb",
+      "silent": false
+    },
+    {
+      "title": "Ratio",
+      "video": "assets/tool-guides/gate--ratio.mp4",
+      "poster": "assets/tool-guides/gate--ratio.jpg",
+      "description": "Ratio moves from 4 to 1 about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Approaches unchanged dynamics at 1:1.",
+      "property": "ratio",
+      "silent": false
+    },
+    {
+      "title": "Hold",
+      "video": "assets/tool-guides/gate--holdMs.mp4",
+      "poster": "assets/tool-guides/gate--holdMs.jpg",
+      "description": "Hold moves from 50 ms to 600 ms about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Bridges longer gaps.",
+      "property": "holdMs",
+      "silent": false
+    },
+    {
+      "title": "Release",
+      "video": "assets/tool-guides/gate--releaseMs.mp4",
+      "poster": "assets/tool-guides/gate--releaseMs.jpg",
+      "description": "Release moves from 150 ms to 600 ms about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Makes recovery slower.",
+      "property": "releaseMs",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/gate-overview.mp4",
+      "poster": "assets/tool-guides/gate-overview.jpg",
+      "description": "A silent tour of the Gate / Expander Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "limiter": [
+    {
+      "title": "Ceiling",
+      "video": "assets/tool-guides/limiter-demo.mp4",
+      "poster": "assets/tool-guides/limiter-demo.jpg",
+      "description": "Ceiling moves from −1 dBFS to −12 dBFS about three seconds in, while a short, buzzy test voice plays through the Limiter. Leaves more headroom.",
+      "property": "ceilingDb"
+    },
+    {
+      "title": "Look-ahead",
+      "video": "assets/tool-guides/limiter--lookaheadMs.mp4",
+      "poster": "assets/tool-guides/limiter--lookaheadMs.jpg",
+      "description": "Look-ahead moves from 5 ms to 10 ms about three seconds in, while a simple drum loop plays through the Limiter. Adds more look-ahead and delay.",
+      "property": "lookaheadMs",
+      "silent": false
+    },
+    {
+      "title": "Release",
+      "video": "assets/tool-guides/limiter--releaseMs.mp4",
+      "poster": "assets/tool-guides/limiter--releaseMs.jpg",
+      "description": "Release moves from 100 ms to 600 ms about three seconds in, while a simple drum loop plays through the Limiter. Makes recovery slower.",
+      "property": "releaseMs",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/limiter-overview.mp4",
+      "poster": "assets/tool-guides/limiter-overview.jpg",
+      "description": "A silent tour of the Limiter Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "delay": [
+    {
+      "title": "Delay",
+      "video": "assets/tool-guides/delay-demo.mp4",
+      "poster": "assets/tool-guides/delay-demo.jpg",
+      "description": "Delay moves from 0 ms to 1000 ms about three seconds in, while a simple drum loop plays through the Sync (delay). Moves sound later.",
+      "property": "delayMs"
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/delay-overview.mp4",
+      "poster": "assets/tool-guides/delay-overview.jpg",
+      "description": "A silent tour of the Sync (delay) Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "pitch": [
+    {
+      "title": "Semitones",
+      "video": "assets/tool-guides/pitch-demo.mp4",
+      "poster": "assets/tool-guides/pitch-demo.jpg",
+      "description": "Semitones moves from 0 semitones to −12 semitones about three seconds in, while a tone that steps up from 220 Hz to 1,760 Hz plays through the Pitch. Lowers pitch.",
+      "property": "semitones"
+    },
+    {
+      "title": "Fine tune",
+      "video": "assets/tool-guides/pitch--cents.mp4",
+      "poster": "assets/tool-guides/pitch--cents.jpg",
+      "description": "Fine tune moves from 0 cents to 70 cents about three seconds in, while a tone that steps up from 220 Hz to 1,760 Hz plays through the Pitch. Raises pitch slightly.",
+      "property": "cents",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/pitch-overview.mp4",
+      "poster": "assets/tool-guides/pitch-overview.jpg",
+      "description": "A silent tour of the Pitch Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "dehum": [
+    {
+      "title": "Mains frequency",
+      "video": "assets/tool-guides/dehum-demo.mp4",
+      "poster": "assets/tool-guides/dehum-demo.jpg",
+      "description": "Mains frequency moves from 60 Hz to 45 Hz about three seconds in, while a test voice over 50 Hz mains hum plays through the Dehum. Moves the series lower.",
+      "property": "frequencyHz"
+    },
+    {
+      "title": "Amount",
+      "video": "assets/tool-guides/dehum--amountPercent.mp4",
+      "poster": "assets/tool-guides/dehum--amountPercent.jpg",
+      "description": "Amount moves from 50% to 0% about three seconds in, while a test voice over 50 Hz mains hum plays through the Dehum. Approaches exact unity at 0%.",
+      "property": "amountPercent",
+      "silent": false
+    },
+    {
+      "title": "Harmonics",
+      "video": "assets/tool-guides/dehum--harmonics.mp4",
+      "poster": "assets/tool-guides/dehum--harmonics.jpg",
+      "description": "Harmonics moves from 4 to 1 about three seconds in, while a test voice over 50 Hz hum and its overtones plays through the Dehum. Limits treatment to fewer hum components.",
+      "property": "harmonics",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/dehum-overview.mp4",
+      "poster": "assets/tool-guides/dehum-overview.jpg",
+      "description": "A silent tour of the Dehum Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "declick": [
+    {
+      "title": "Threshold",
+      "video": "assets/tool-guides/declick-demo.mp4",
+      "poster": "assets/tool-guides/declick-demo.jpg",
+      "description": "Threshold moves from 50% to 0% about three seconds in, while quiet hiss with sharp clicks plays through the Declick. Detects more subtle clicks.",
+      "property": "thresholdPercent"
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/declick-overview.mp4",
+      "poster": "assets/tool-guides/declick-overview.jpg",
+      "description": "A silent tour of the Declick Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "denoise": [
+    {
+      "title": "Reduction",
+      "video": "assets/tool-guides/denoise-demo.mp4",
+      "poster": "assets/tool-guides/denoise-demo.jpg",
+      "description": "Reduction moves from 70% to 0% about three seconds in, while a buzzy test voice over background hiss plays through the Denoise. Retains more original sound.",
+      "property": "reductionPercent"
+    },
+    {
+      "title": "Noise left in",
+      "video": "assets/tool-guides/denoise--floorPercent.mp4",
+      "poster": "assets/tool-guides/denoise--floorPercent.jpg",
+      "description": "Noise left in moves from 10% to 60% about three seconds in, while a buzzy test voice over background hiss plays through the Denoise. Retains more background and may sound more natural.",
+      "property": "floorPercent",
+      "silent": false
+    },
+    {
+      "title": "Learn noise",
+      "video": "assets/tool-guides/denoise--learning.mp4",
+      "poster": "assets/tool-guides/denoise--learning.jpg",
+      "description": "Learn noise is turned on about three seconds in, while quiet background hiss plays through the Denoise. Runtime learning controlled by Learn and Keep profile actions.",
+      "property": "learning",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/denoise-overview.mp4",
+      "poster": "assets/tool-guides/denoise-overview.jpg",
+      "description": "A silent tour of the Denoise Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "speechDenoise": [
+    {
+      "title": "Strength",
+      "video": "assets/tool-guides/speechDenoise-demo.mp4",
+      "poster": "assets/tool-guides/speechDenoise-demo.jpg",
+      "description": "Strength moves from 70% to 0% about three seconds in, while a buzzy test voice over background hiss plays through the Speech Denoise. Retains more of the original signal.",
+      "property": "strengthPercent"
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/speechDenoise-overview.mp4",
+      "poster": "assets/tool-guides/speechDenoise-overview.jpg",
+      "description": "A silent tour of the Speech Denoise Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "spectralGate": [
+    {
+      "title": "Threshold above noise",
+      "video": "assets/tool-guides/spectralGate-demo.mp4",
+      "poster": "assets/tool-guides/spectralGate-demo.jpg",
+      "description": "Threshold above noise moves from 3 dB to −20 dB about three seconds in, while a buzzy test voice over background hiss plays through the Spectral Gate. Lets more frequency regions pass.",
+      "property": "thresholdDb"
+    },
+    {
+      "title": "Reduction",
+      "video": "assets/tool-guides/spectralGate--reductionDb.mp4",
+      "poster": "assets/tool-guides/spectralGate--reductionDb.jpg",
+      "description": "Reduction moves from 40 dB to 10 dB about three seconds in, while a buzzy test voice over background hiss plays through the Spectral Gate. Keeps more sound in blocked regions.",
+      "property": "reductionDb",
+      "silent": false
+    },
+    {
+      "title": "Learn noise",
+      "video": "assets/tool-guides/spectralGate--learning.mp4",
+      "poster": "assets/tool-guides/spectralGate--learning.jpg",
+      "description": "Learn noise is turned on about three seconds in, while quiet background hiss plays through the Spectral Gate. Runtime learning controlled by Learn and Keep profile actions.",
+      "property": "learning",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/spectralGate-overview.mp4",
+      "poster": "assets/tool-guides/spectralGate-overview.jpg",
+      "description": "A silent tour of the Spectral Gate Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "firFilter": [
+    {
+      "title": "Wet mix",
+      "video": "assets/tool-guides/firFilter-demo.mp4",
+      "poster": "assets/tool-guides/firFilter-demo.jpg",
+      "description": "Wet mix moves from 100% to 0% about three seconds in, while steady pink noise plays through the FIR Filter. Includes more dry sound.",
+      "property": "wetPercent"
+    },
+    {
+      "title": "Output gain",
+      "video": "assets/tool-guides/firFilter--gainDb.mp4",
+      "poster": "assets/tool-guides/firFilter--gainDb.jpg",
+      "description": "Output gain moves from 0 dB to −12 dB about three seconds in, while steady pink noise plays through the FIR Filter. More negative values make it quieter.",
+      "property": "gainDb",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/firFilter-overview.mp4",
+      "poster": "assets/tool-guides/firFilter-overview.jpg",
+      "description": "A silent tour of the FIR Filter Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "mute": [
+    {
+      "title": "Muted",
+      "video": "assets/tool-guides/mute-demo.mp4",
+      "poster": "assets/tool-guides/mute-demo.jpg",
+      "description": "Muted is turned on about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Mute. Silences the branch passing through this node.",
+      "property": "muted"
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/mute-overview.mp4",
+      "poster": "assets/tool-guides/mute-overview.jpg",
+      "description": "A silent tour of the Mute Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "inputSwitch": [
+    {
+      "title": "Active input",
+      "video": "assets/tool-guides/inputSwitch-demo.mp4",
+      "poster": "assets/tool-guides/inputSwitch-demo.jpg",
+      "description": "Active input switches from A to B about three seconds in, while a two-tone chord of 110 Hz and 880 Hz plays through the Input Switch. Which explicitly wired port is heard.",
+      "property": "selected"
+    },
+    {
+      "title": "Switch speed",
+      "video": "assets/tool-guides/inputSwitch--fade.mp4",
+      "poster": "assets/tool-guides/inputSwitch--fade.jpg",
+      "description": "Switch speed switches from Normal to Slow about three seconds in, while a two-tone chord of 110 Hz and 880 Hz plays through the Input Switch. Length of the equal-power input transition.",
+      "property": "fade",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/inputSwitch-overview.mp4",
+      "poster": "assets/tool-guides/inputSwitch-overview.jpg",
+      "description": "A silent tour of the Input Switch Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "outputSwitch": [
+    {
+      "title": "Active output",
+      "video": "assets/tool-guides/outputSwitch-demo.mp4",
+      "poster": "assets/tool-guides/outputSwitch-demo.jpg",
+      "description": "Active output switches from A to B about three seconds in, while a two-tone chord of 110 Hz and 880 Hz plays through the Output Switch. Which output port receives audio. You're listening to output A, so the sound stops when the switch moves to B.",
+      "property": "selected"
+    },
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/outputSwitch-overview.mp4",
+      "poster": "assets/tool-guides/outputSwitch-overview.jpg",
+      "description": "A silent tour of the Output Switch Properties panel. It scrolls through every setting, then returns to the top."
+    }
+  ],
+  "duck": [
+    {
+      "title": "Trigger level",
+      "video": "assets/tool-guides/duck-demo.mp4",
+      "poster": "assets/tool-guides/duck-demo.jpg",
+      "description": "Trigger level moves from −35 dBFS to −80 dBFS about three seconds in, while a short, buzzy test voice plays through the Duck. Engages for quieter trigger sound, potentially room noise.",
+      "property": "thresholdDb"
+    },
+    {
+      "title": "Amount",
       "video": "assets/tool-guides/duck--amountDb.mp4",
       "poster": "assets/tool-guides/duck--amountDb.jpg",
-      "description": "The Amount control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "description": "Amount moves from 6 dB to 0 dB about three seconds in, while a short, buzzy test voice plays through the Duck. Keeps it closer to normal level; 0 dB makes no reduction.",
       "property": "amountDb",
       "silent": false
     },
     {
-      "title": "Trigger level in the app",
-      "video": "assets/tool-guides/duck-demo.mp4",
-      "poster": "assets/tool-guides/duck-demo.jpg",
-      "description": "Trigger level changes from -35 to -80 dBFS at 3.2 seconds. Engages for quieter trigger sound, potentially room noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "thresholdDb"
+      "title": "Attack",
+      "video": "assets/tool-guides/duck--attackMs.mp4",
+      "poster": "assets/tool-guides/duck--attackMs.jpg",
+      "description": "Attack moves from 20 ms to 100 ms about three seconds in, while a short, buzzy test voice plays through the Duck. Makes engagement slower.",
+      "property": "attackMs",
+      "silent": false
     },
     {
-      "title": "Browse Properties",
+      "title": "Hold",
+      "video": "assets/tool-guides/duck--holdMs.mp4",
+      "poster": "assets/tool-guides/duck--holdMs.jpg",
+      "description": "Hold moves from 300 ms to 600 ms about three seconds in, while a short, buzzy test voice plays through the Duck. Bridges longer gaps.",
+      "property": "holdMs",
+      "silent": false
+    },
+    {
+      "title": "Release",
+      "video": "assets/tool-guides/duck--releaseMs.mp4",
+      "poster": "assets/tool-guides/duck--releaseMs.jpg",
+      "description": "Release moves from 500 ms to 600 ms about three seconds in, while a short, buzzy test voice plays through the Duck. Makes recovery slower.",
+      "property": "releaseMs",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
       "video": "assets/tool-guides/duck-overview.mp4",
       "poster": "assets/tool-guides/duck-overview.jpg",
-      "description": "A silent recording of the real Duck Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Duck Properties panel. It scrolls through every setting, then returns to the top."
     },
     {
-      "title": "Game state trigger settings",
+      "title": "Siege round trigger",
       "video": "assets/tool-guides/duck--game.mp4",
       "poster": "assets/tool-guides/duck--game.jpg",
       "silent": true,
-      "description": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger."
+      "description": "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio."
     },
     {
-      "title": "Sidechain level trigger settings",
+      "title": "Triggered by another node",
       "video": "assets/tool-guides/duck--level.mp4",
       "poster": "assets/tool-guides/duck--level.jpg",
       "silent": true,
-      "description": "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger."
+      "description": "A silent look at the Triggered by setting: pick another node in the same session, such as your processed voice, whose level lowers this sound. Hearing it work needs that second source playing, so this clip has no audio."
     }
   ],
   "timeShift": [
     {
-      "title": "Rewind buffer in the app",
+      "title": "Rewind buffer",
       "video": "assets/tool-guides/timeShift-demo.mp4",
       "poster": "assets/tool-guides/timeShift-demo.jpg",
-      "description": "Rewind buffer changes from 60 to 10 s at 3.2 seconds. Keeps less history. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "description": "Rewind buffer moves from 60 s to 10 s about three seconds in, while a simple drum loop plays through the Time Shift. Keeps less history.",
       "property": "bufferSeconds"
     },
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/timeShift-overview.mp4",
       "poster": "assets/tool-guides/timeShift-overview.jpg",
-      "description": "A silent recording of the real Time Shift Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Time Shift Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "mixer": [
     {
-      "title": "Input volume in the app",
+      "title": "Input volume",
       "video": "assets/tool-guides/mixer-demo.mp4",
       "poster": "assets/tool-guides/mixer-demo.jpg",
-      "description": "Input volume changes from 1 to 0 at 3.2 seconds. Lowers it; 0% removes its contribution. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "description": "Input volume moves from 100% to 0% about three seconds in, while a two-tone chord of 110 Hz and 880 Hz plays through the Mixer. Lowers it; 0% removes its contribution.",
       "property": "inputVolume:input"
     },
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/mixer-overview.mp4",
       "poster": "assets/tool-guides/mixer-overview.jpg",
-      "description": "A silent recording of the real Mixer Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Mixer Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "meter": [
     {
-      "title": "Live level in the app",
+      "title": "Live level",
       "video": "assets/tool-guides/meter-demo.mp4",
       "poster": "assets/tool-guides/meter-demo.jpg",
-      "description": "A synthetic signal passes through the real processor. Watch the live readings rise and fall with the sound.",
+      "description": "A 220 Hz tone that jumps between quiet and loud plays through the Meter. Watch the readings rise and fall with it.",
       "property": null
     },
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/meter-overview.mp4",
       "poster": "assets/tool-guides/meter-overview.jpg",
-      "description": "A silent recording of the real Meter Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Meter Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "funVoiceChanger": [
     {
-      "title": "Output in the app",
-      "video": "assets/tool-guides/funVoiceChanger--outputDb.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--outputDb.jpg",
-      "description": "The Output control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "outputDb",
-      "silent": false
-    },
-    {
-      "title": "Mix in the app",
-      "video": "assets/tool-guides/funVoiceChanger--mixPercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--mixPercent.jpg",
-      "description": "The Mix control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "mixPercent",
-      "silent": false
-    },
-    {
-      "title": "Echo level in the app",
-      "video": "assets/tool-guides/funVoiceChanger--spaceLevelPercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--spaceLevelPercent.jpg",
-      "description": "The Echo level control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "spaceLevelPercent",
-      "silent": false
-    },
-    {
-      "title": "Echo length in the app",
-      "video": "assets/tool-guides/funVoiceChanger--spaceDecayMs.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--spaceDecayMs.jpg",
-      "description": "The Echo length control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "spaceDecayMs",
-      "silent": false
-    },
-    {
-      "title": "Room size in the app",
-      "video": "assets/tool-guides/funVoiceChanger--spaceSizePercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--spaceSizePercent.jpg",
-      "description": "The Room size control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "spaceSizePercent",
-      "silent": false
-    },
-    {
-      "title": "Space in the app",
-      "video": "assets/tool-guides/funVoiceChanger--spaceEnabled.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--spaceEnabled.jpg",
-      "description": "The Space control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "spaceEnabled",
-      "silent": false
-    },
-    {
-      "title": "Feedback in the app",
-      "video": "assets/tool-guides/funVoiceChanger--modFeedbackPercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--modFeedbackPercent.jpg",
-      "description": "The Feedback control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "modFeedbackPercent",
-      "silent": false
-    },
-    {
-      "title": "Depth in the app",
-      "video": "assets/tool-guides/funVoiceChanger--modDepthPercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--modDepthPercent.jpg",
-      "description": "The Depth control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "modDepthPercent",
-      "silent": false
-    },
-    {
-      "title": "Rate in the app",
-      "video": "assets/tool-guides/funVoiceChanger--modRateHz.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--modRateHz.jpg",
-      "description": "The Rate control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "modRateHz",
-      "silent": false
-    },
-    {
-      "title": "Modulation type in the app",
-      "video": "assets/tool-guides/funVoiceChanger--modType.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--modType.jpg",
-      "description": "The Modulation type control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "modType",
-      "silent": false
-    },
-    {
-      "title": "Modulation in the app",
-      "video": "assets/tool-guides/funVoiceChanger--modEnabled.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--modEnabled.jpg",
-      "description": "The Modulation control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "modEnabled",
-      "silent": false
-    },
-    {
-      "title": "Peak in the app",
-      "video": "assets/tool-guides/funVoiceChanger--peakDb.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--peakDb.jpg",
-      "description": "The Peak control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "peakDb",
-      "silent": false
-    },
-    {
-      "title": "Peak frequency in the app",
-      "video": "assets/tool-guides/funVoiceChanger--peakHz.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--peakHz.jpg",
-      "description": "The Peak frequency control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "peakHz",
-      "silent": false
-    },
-    {
-      "title": "High cut in the app",
-      "video": "assets/tool-guides/funVoiceChanger--highCutHz.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--highCutHz.jpg",
-      "description": "The High cut control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "highCutHz",
-      "silent": false
-    },
-    {
-      "title": "Low cut in the app",
-      "video": "assets/tool-guides/funVoiceChanger--lowCutHz.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--lowCutHz.jpg",
-      "description": "The Low cut control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "lowCutHz",
-      "silent": false
-    },
-    {
-      "title": "Tone in the app",
-      "video": "assets/tool-guides/funVoiceChanger--toneEnabled.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--toneEnabled.jpg",
-      "description": "The Tone control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "toneEnabled",
-      "silent": false
-    },
-    {
-      "title": "Whisper in the app",
-      "video": "assets/tool-guides/funVoiceChanger--whisperPercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--whisperPercent.jpg",
-      "description": "The Whisper control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "whisperPercent",
-      "silent": false
-    },
-    {
-      "title": "Drive in the app",
-      "video": "assets/tool-guides/funVoiceChanger--drivePercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--drivePercent.jpg",
-      "description": "The Drive control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "drivePercent",
-      "silent": false
-    },
-    {
-      "title": "Saturation in the app",
-      "video": "assets/tool-guides/funVoiceChanger--driveEnabled.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--driveEnabled.jpg",
-      "description": "The Saturation control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "driveEnabled",
-      "silent": false
-    },
-    {
-      "title": "Downsample in the app",
-      "video": "assets/tool-guides/funVoiceChanger--crushDownsample.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--crushDownsample.jpg",
-      "description": "The Downsample control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "crushDownsample",
-      "silent": false
-    },
-    {
-      "title": "Bits in the app",
-      "video": "assets/tool-guides/funVoiceChanger--crushBits.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--crushBits.jpg",
-      "description": "The Bits control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "crushBits",
-      "silent": false
-    },
-    {
-      "title": "Bit crusher in the app",
-      "video": "assets/tool-guides/funVoiceChanger--crushEnabled.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--crushEnabled.jpg",
-      "description": "The Bit crusher control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "crushEnabled",
-      "silent": false
-    },
-    {
-      "title": "Ring depth in the app",
-      "video": "assets/tool-guides/funVoiceChanger--ringDepthPercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--ringDepthPercent.jpg",
-      "description": "The Ring depth control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "ringDepthPercent",
-      "silent": false
-    },
-    {
-      "title": "Ring frequency in the app",
-      "video": "assets/tool-guides/funVoiceChanger--ringHz.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--ringHz.jpg",
-      "description": "The Ring frequency control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "ringHz",
-      "silent": false
-    },
-    {
-      "title": "Ring modulator in the app",
-      "video": "assets/tool-guides/funVoiceChanger--ringEnabled.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--ringEnabled.jpg",
-      "description": "The Ring modulator control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "ringEnabled",
-      "silent": false
-    },
-    {
-      "title": "Formant in the app",
-      "video": "assets/tool-guides/funVoiceChanger--formantSemitones.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--formantSemitones.jpg",
-      "description": "The Formant control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "formantSemitones",
-      "silent": false
-    },
-    {
-      "title": "Fine pitch in the app",
-      "video": "assets/tool-guides/funVoiceChanger--pitchCents.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--pitchCents.jpg",
-      "description": "The Fine pitch control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "pitchCents",
-      "silent": false
-    },
-    {
-      "title": "Pitch in the app",
-      "video": "assets/tool-guides/funVoiceChanger--pitchSemitones.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--pitchSemitones.jpg",
-      "description": "The Pitch control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "pitchSemitones",
-      "silent": false
-    },
-    {
-      "title": "Pitch and formant in the app",
-      "video": "assets/tool-guides/funVoiceChanger--shiftEnabled.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--shiftEnabled.jpg",
-      "description": "The Pitch and formant control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "shiftEnabled",
-      "silent": false
-    },
-    {
-      "title": "Humanize in the app",
-      "video": "assets/tool-guides/funVoiceChanger--humanizePercent.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--humanizePercent.jpg",
-      "description": "The Humanize control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "humanizePercent",
-      "silent": false
-    },
-    {
-      "title": "Retune speed in the app",
-      "video": "assets/tool-guides/funVoiceChanger--retuneMs.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--retuneMs.jpg",
-      "description": "The Retune speed control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "retuneMs",
-      "silent": false
-    },
-    {
-      "title": "Scale in the app",
-      "video": "assets/tool-guides/funVoiceChanger--scale.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--scale.jpg",
-      "description": "The Scale control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "scale",
-      "silent": false
-    },
-    {
-      "title": "Key in the app",
-      "video": "assets/tool-guides/funVoiceChanger--key.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--key.jpg",
-      "description": "The Key control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "key",
-      "silent": false
-    },
-    {
-      "title": "Pitch correction in the app",
-      "video": "assets/tool-guides/funVoiceChanger--correctEnabled.mp4",
-      "poster": "assets/tool-guides/funVoiceChanger--correctEnabled.jpg",
-      "description": "The Pitch correction control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "correctEnabled",
-      "silent": false
-    },
-    {
-      "title": "Preset in the app",
+      "title": "Preset",
       "video": "assets/tool-guides/funVoiceChanger--preset.mp4",
       "poster": "assets/tool-guides/funVoiceChanger--preset.jpg",
-      "description": "The Preset control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "description": "Preset switches from Custom to Robot about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. The starting voice. Choosing one writes all of its settings at once.",
       "property": "preset",
       "silent": false
     },
     {
-      "title": "Noise gate in the app",
+      "title": "Noise gate",
       "video": "assets/tool-guides/funVoiceChanger-demo.mp4",
       "poster": "assets/tool-guides/funVoiceChanger-demo.jpg",
-      "description": "Noise gate changes from -90 to -20 dBFS at 3.2 seconds. Ignores more room and keyboard noise. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "description": "Noise gate moves from −90 dBFS to −20 dBFS about three seconds in, while a short, buzzy test voice plays through the Fun Voice Changer. Ignores more room and keyboard noise.",
       "property": "gateDb"
     },
     {
-      "title": "Browse Properties",
+      "title": "Pitch correction",
+      "video": "assets/tool-guides/funVoiceChanger--correctEnabled.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--correctEnabled.jpg",
+      "description": "Pitch correction is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Pulls the voice to the nearest note of the scale.",
+      "property": "correctEnabled",
+      "silent": false
+    },
+    {
+      "title": "Key",
+      "video": "assets/tool-guides/funVoiceChanger--key.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--key.jpg",
+      "description": "Key switches from C to C♯ about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. The key of the correction scale.",
+      "property": "key",
+      "silent": false
+    },
+    {
+      "title": "Scale",
+      "video": "assets/tool-guides/funVoiceChanger--scale.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--scale.jpg",
+      "description": "Scale switches from Major to Chromatic about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Which notes correction may use.",
+      "property": "scale",
+      "silent": false
+    },
+    {
+      "title": "Retune speed",
+      "video": "assets/tool-guides/funVoiceChanger--retuneMs.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--retuneMs.jpg",
+      "description": "Retune speed moves from 50 ms to 150 ms about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Slower, more natural correction.",
+      "property": "retuneMs",
+      "silent": false
+    },
+    {
+      "title": "Humanize",
+      "video": "assets/tool-guides/funVoiceChanger--humanizePercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--humanizePercent.jpg",
+      "description": "Humanize moves from 0% to 80% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Long notes keep more natural vibrato.",
+      "property": "humanizePercent",
+      "silent": false
+    },
+    {
+      "title": "Pitch and formant",
+      "video": "assets/tool-guides/funVoiceChanger--shiftEnabled.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--shiftEnabled.jpg",
+      "description": "Pitch and formant is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Turns the pitch and formant shift on.",
+      "property": "shiftEnabled",
+      "silent": false
+    },
+    {
+      "title": "Pitch",
+      "video": "assets/tool-guides/funVoiceChanger--pitchSemitones.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--pitchSemitones.jpg",
+      "description": "Pitch moves from 7 st to −7 st about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Lower voice; −12 is one octave down.",
+      "property": "pitchSemitones",
+      "silent": false
+    },
+    {
+      "title": "Fine pitch",
+      "video": "assets/tool-guides/funVoiceChanger--pitchCents.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--pitchCents.jpg",
+      "description": "Fine pitch moves from 0 cents to 70 cents about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Slightly higher.",
+      "property": "pitchCents",
+      "silent": false
+    },
+    {
+      "title": "Formant",
+      "video": "assets/tool-guides/funVoiceChanger--formantSemitones.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--formantSemitones.jpg",
+      "description": "Formant moves from 3 st to −4 st about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Bigger, darker voice.",
+      "property": "formantSemitones",
+      "silent": false
+    },
+    {
+      "title": "Ring modulator",
+      "video": "assets/tool-guides/funVoiceChanger--ringEnabled.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--ringEnabled.jpg",
+      "description": "Ring modulator is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Multiplies the voice by a tone.",
+      "property": "ringEnabled",
+      "silent": false
+    },
+    {
+      "title": "Ring frequency",
+      "video": "assets/tool-guides/funVoiceChanger--ringHz.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--ringHz.jpg",
+      "description": "Ring frequency moves from 70 Hz to 160 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Bell-like, alien sound.",
+      "property": "ringHz",
+      "silent": false
+    },
+    {
+      "title": "Ring depth",
+      "video": "assets/tool-guides/funVoiceChanger--ringDepthPercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--ringDepthPercent.jpg",
+      "description": "Ring depth moves from 70% to 20% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More of the normal voice.",
+      "property": "ringDepthPercent",
+      "silent": false
+    },
+    {
+      "title": "Bit crusher",
+      "video": "assets/tool-guides/funVoiceChanger--crushEnabled.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--crushEnabled.jpg",
+      "description": "Bit crusher is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Lowers audio quality on purpose.",
+      "property": "crushEnabled",
+      "silent": false
+    },
+    {
+      "title": "Bits",
+      "video": "assets/tool-guides/funVoiceChanger--crushBits.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--crushBits.jpg",
+      "description": "Bits moves from 6 to 12 about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Cleaner; 16 is clean.",
+      "property": "crushBits",
+      "silent": false
+    },
+    {
+      "title": "Downsample",
+      "video": "assets/tool-guides/funVoiceChanger--crushDownsample.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--crushDownsample.jpg",
+      "description": "Downsample moves from 4 to 12 about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Lo-fi, muffled and aliased.",
+      "property": "crushDownsample",
+      "silent": false
+    },
+    {
+      "title": "Saturation",
+      "video": "assets/tool-guides/funVoiceChanger--driveEnabled.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--driveEnabled.jpg",
+      "description": "Saturation is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Distorts the voice.",
+      "property": "driveEnabled",
+      "silent": false
+    },
+    {
+      "title": "Drive",
+      "video": "assets/tool-guides/funVoiceChanger--drivePercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--drivePercent.jpg",
+      "description": "Drive moves from 45% to 80% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More distortion.",
+      "property": "drivePercent",
+      "silent": false
+    },
+    {
+      "title": "Whisper",
+      "video": "assets/tool-guides/funVoiceChanger--whisperPercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--whisperPercent.jpg",
+      "description": "Whisper moves from 0% to 85% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More breathy whisper.",
+      "property": "whisperPercent",
+      "silent": false
+    },
+    {
+      "title": "Tone",
+      "video": "assets/tool-guides/funVoiceChanger--toneEnabled.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--toneEnabled.jpg",
+      "description": "Tone is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Turns the tone filters on.",
+      "property": "toneEnabled",
+      "silent": false
+    },
+    {
+      "title": "Low cut",
+      "video": "assets/tool-guides/funVoiceChanger--lowCutHz.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--lowCutHz.jpg",
+      "description": "Low cut moves from 20 Hz to 350 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Thinner sound.",
+      "property": "lowCutHz",
+      "silent": false
+    },
+    {
+      "title": "High cut",
+      "video": "assets/tool-guides/funVoiceChanger--highCutHz.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--highCutHz.jpg",
+      "description": "High cut moves from 20000 Hz to 3000 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Duller, more muffled sound.",
+      "property": "highCutHz",
+      "silent": false
+    },
+    {
+      "title": "Peak frequency",
+      "video": "assets/tool-guides/funVoiceChanger--peakHz.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--peakHz.jpg",
+      "description": "Peak frequency moves from 1000 Hz to 2500 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Brighter, thinner character.",
+      "property": "peakHz",
+      "silent": false
+    },
+    {
+      "title": "Peak",
+      "video": "assets/tool-guides/funVoiceChanger--peakDb.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--peakDb.jpg",
+      "description": "Peak moves from 9 dB to −12 dB about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Cuts that frequency.",
+      "property": "peakDb",
+      "silent": false
+    },
+    {
+      "title": "Modulation",
+      "video": "assets/tool-guides/funVoiceChanger--modEnabled.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--modEnabled.jpg",
+      "description": "Modulation is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Turns chorus or flanger on.",
+      "property": "modEnabled",
+      "silent": false
+    },
+    {
+      "title": "Modulation type",
+      "video": "assets/tool-guides/funVoiceChanger--modType.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--modType.jpg",
+      "description": "Modulation type switches from Chorus to Flanger about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Chorus doubles the voice; flanger sweeps it.",
+      "property": "modType",
+      "silent": false
+    },
+    {
+      "title": "Rate",
+      "video": "assets/tool-guides/funVoiceChanger--modRateHz.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--modRateHz.jpg",
+      "description": "Rate moves from 0.5 Hz to 5 Hz about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Faster wobble.",
+      "property": "modRateHz",
+      "silent": false
+    },
+    {
+      "title": "Depth",
+      "video": "assets/tool-guides/funVoiceChanger--modDepthPercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--modDepthPercent.jpg",
+      "description": "Depth moves from 60% to 15% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Subtler effect.",
+      "property": "modDepthPercent",
+      "silent": false
+    },
+    {
+      "title": "Feedback",
+      "video": "assets/tool-guides/funVoiceChanger--modFeedbackPercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--modFeedbackPercent.jpg",
+      "description": "Feedback moves from 0% to 70% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Ringing, metallic sweeps.",
+      "property": "modFeedbackPercent",
+      "silent": false
+    },
+    {
+      "title": "Space",
+      "video": "assets/tool-guides/funVoiceChanger--spaceEnabled.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--spaceEnabled.jpg",
+      "description": "Space is turned off about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Adds a room or cave echo.",
+      "property": "spaceEnabled",
+      "silent": false
+    },
+    {
+      "title": "Room size",
+      "video": "assets/tool-guides/funVoiceChanger--spaceSizePercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--spaceSizePercent.jpg",
+      "description": "Room size moves from 50% to 85% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Bigger, more distant space.",
+      "property": "spaceSizePercent",
+      "silent": false
+    },
+    {
+      "title": "Echo length",
+      "video": "assets/tool-guides/funVoiceChanger--spaceDecayMs.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--spaceDecayMs.jpg",
+      "description": "Echo length moves from 1000 ms to 3000 ms about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Longer echo.",
+      "property": "spaceDecayMs",
+      "silent": false
+    },
+    {
+      "title": "Echo level",
+      "video": "assets/tool-guides/funVoiceChanger--spaceLevelPercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--spaceLevelPercent.jpg",
+      "description": "Echo level moves from 40% to 75% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More echo.",
+      "property": "spaceLevelPercent",
+      "silent": false
+    },
+    {
+      "title": "Mix",
+      "video": "assets/tool-guides/funVoiceChanger--mixPercent.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--mixPercent.jpg",
+      "description": "Mix moves from 100% to 30% about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. More of your normal voice; 0 % is unchanged.",
+      "property": "mixPercent",
+      "silent": false
+    },
+    {
+      "title": "Output",
+      "video": "assets/tool-guides/funVoiceChanger--outputDb.mp4",
+      "poster": "assets/tool-guides/funVoiceChanger--outputDb.jpg",
+      "description": "Output moves from 0 dB to −12 dB about three seconds in, while a test voice that glides up and down in pitch plays through the Fun Voice Changer. Quieter.",
+      "property": "outputDb",
+      "silent": false
+    },
+    {
+      "title": "Every setting",
       "video": "assets/tool-guides/funVoiceChanger-overview.mp4",
       "poster": "assets/tool-guides/funVoiceChanger-overview.jpg",
-      "description": "A silent recording of the real Fun Voice Changer Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Fun Voice Changer Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "physicalInput": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/physicalInput-overview.mp4",
       "poster": "assets/tool-guides/physicalInput-overview.jpg",
-      "description": "A silent recording of the real Physical Input Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Physical Input Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "physicalOutput": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/physicalOutput-overview.mp4",
       "poster": "assets/tool-guides/physicalOutput-overview.jpg",
-      "description": "A silent recording of the real Physical Output Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Physical Output Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "applicationCapture": [
     {
-      "title": "Choose a running application",
-      "video": "assets/tool-guides/applicationCapture-picker.mp4",
-      "poster": "assets/tool-guides/applicationCapture-picker.jpg",
-      "description": "The application picker dialog shows a running Music application, its current PID and audio activity, alongside the option to choose an executable while it is closed. This silent UI recording uses example applications."
+      "title": "Every setting",
+      "video": "assets/tool-guides/applicationCapture-overview.mp4",
+      "poster": "assets/tool-guides/applicationCapture-overview.jpg",
+      "description": "A silent tour of the Application Capture Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "endpointLoopback": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/endpointLoopback-overview.mp4",
       "poster": "assets/tool-guides/endpointLoopback-overview.jpg",
-      "description": "A silent recording of the real Endpoint Loopback Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Endpoint Loopback Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "virtualRenderSource": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/virtualRenderSource-overview.mp4",
       "poster": "assets/tool-guides/virtualRenderSource-overview.jpg",
-      "description": "A silent recording of the real Virtual Render Source Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Virtual Render Source Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "virtualCaptureSink": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/virtualCaptureSink-overview.mp4",
       "poster": "assets/tool-guides/virtualCaptureSink-overview.jpg",
-      "description": "A silent recording of the real Virtual Capture Sink Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Virtual Capture Sink Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "testSignal": [
     {
-      "title": "Duration in the app",
-      "video": "assets/tool-guides/testSignal--durationMs.mp4",
-      "poster": "assets/tool-guides/testSignal--durationMs.jpg",
-      "description": "The Duration control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "durationMs",
-      "silent": false
+      "title": "Tone frequency",
+      "video": "assets/tool-guides/testSignal-demo.mp4",
+      "poster": "assets/tool-guides/testSignal-demo.jpg",
+      "description": "Tone frequency moves from 440 Hz to 880 Hz about three seconds in, while the Test Signal plays its test tone. Makes the sine wave oscillate faster and sound higher.",
+      "property": "frequencyHz"
     },
     {
-      "title": "Level in the app",
+      "title": "Level",
       "video": "assets/tool-guides/testSignal--levelDb.mp4",
       "poster": "assets/tool-guides/testSignal--levelDb.jpg",
-      "description": "The Level control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "description": "Level moves from −18 dBFS to −30 dBFS about three seconds in, while the Test Signal plays its test tone. Reduces tone amplitude.",
       "property": "levelDb",
       "silent": false
     },
     {
-      "title": "Tone frequency in the app",
-      "video": "assets/tool-guides/testSignal-demo.mp4",
-      "poster": "assets/tool-guides/testSignal-demo.jpg",
-      "description": "Tone frequency changes from 440 to 880 Hz at 3.2 seconds. Makes the sine wave oscillate faster and sound higher. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
-      "property": "frequencyHz"
+      "title": "Duration",
+      "video": "assets/tool-guides/testSignal--durationMs.mp4",
+      "poster": "assets/tool-guides/testSignal--durationMs.jpg",
+      "description": "Duration moves from 8000 ms to 2000 ms about three seconds in, while the Test Signal plays its test tone. Produces a shorter burst.",
+      "property": "durationMs",
+      "silent": false
     },
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/testSignal-overview.mp4",
       "poster": "assets/tool-guides/testSignal-overview.jpg",
-      "description": "A silent recording of the real Test Signal Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Test Signal Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "audioFile": [
     {
-      "title": "Loop in the app",
+      "title": "Loop",
       "video": "assets/tool-guides/audioFile-demo.mp4",
       "poster": "assets/tool-guides/audioFile-demo.jpg",
-      "description": "Loop changes from false to true at 3.2 seconds. Repeat the imported audio when it reaches the end. The control appears briefly, then the view returns to the top visual while the synthetic audio continues. This short example shows the Loop setting; it ends before the full source repeats.",
+      "description": "Loop is turned on about three seconds in, while the Audio File plays a prepared tone file. Repeat the imported audio when it reaches the end. The clip is shorter than the file, so you won't hear it start over.",
       "property": "loop"
     },
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/audioFile-overview.mp4",
       "poster": "assets/tool-guides/audioFile-overview.jpg",
-      "description": "A silent recording of the real Audio File Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Audio File Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "soundboard": [
     {
-      "title": "When pressed · button 1 in the app",
-      "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
-      "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
-      "description": "The When pressed · button 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
-      "property": "slot1Mode",
-      "silent": true
-    },
-    {
-      "title": "Caption · button 1 in the app",
+      "title": "Caption · button 1",
       "video": "assets/tool-guides/soundboard--slot1Caption.mp4",
       "poster": "assets/tool-guides/soundboard--slot1Caption.jpg",
-      "description": "The Caption · button 1 control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.",
+      "description": "Caption · button 1 is set to “Bright tone” about three seconds in. The change has no sound of its own, so this clip is silent. The name shown on the button. When empty, the sound's file name is used.",
       "property": "slot1Caption",
       "silent": true
     },
     {
-      "title": "Level · button 1 in the app",
+      "title": "Level · button 1",
       "video": "assets/tool-guides/soundboard-demo.mp4",
       "poster": "assets/tool-guides/soundboard-demo.jpg",
-      "description": "Level · button 1 changes from 0 to -24 dB at 3.2 seconds. The control appears briefly, then the view returns to the top visual while the synthetic audio continues.",
+      "description": "Level · button 1 moves from 0 dB to −24 dB about three seconds in, while the Soundboard plays a prepared tone file. The sound plays quieter.",
       "property": "slot1GainDb"
     },
     {
-      "title": "Browse Properties",
+      "title": "When pressed · button 1",
+      "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
+      "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
+      "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+      "property": "slot1Mode",
+      "silent": true
+    },
+    {
+      "title": "Every setting",
       "video": "assets/tool-guides/soundboard-overview.mp4",
       "poster": "assets/tool-guides/soundboard-overview.jpg",
-      "description": "A silent recording of the real Soundboard Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Soundboard Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "recorder": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/recorder-overview.mp4",
       "poster": "assets/tool-guides/recorder-overview.jpg",
-      "description": "A silent recording of the real Recorder Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Recorder Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "networkSend": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/networkSend-overview.mp4",
       "poster": "assets/tool-guides/networkSend-overview.jpg",
-      "description": "A silent recording of the real Network Send Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Network Send Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "networkReceive": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/networkReceive-overview.mp4",
       "poster": "assets/tool-guides/networkReceive-overview.jpg",
-      "description": "A silent recording of the real Network Receive Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "plugin": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/plugin-overview.mp4",
       "poster": "assets/tool-guides/plugin-overview.jpg",
-      "description": "A silent recording of the real VST Plugin Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the VST Plugin Properties panel. It scrolls through every setting, then returns to the top."
     }
   ],
   "group": [
     {
-      "title": "Browse Properties",
+      "title": "Every setting",
       "video": "assets/tool-guides/group-overview.mp4",
       "poster": "assets/tool-guides/group-overview.jpg",
-      "description": "A silent recording of the real Visual Group Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview."
+      "description": "A silent tour of the Visual Group Properties panel. It scrolls through every setting, then returns to the top."
     }
   ]
 }

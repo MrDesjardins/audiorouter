@@ -30,7 +30,11 @@ const recordings = JSON.parse(
 );
 const mediaVersion = (path) => esc(path) + "?v=" + createHash("sha256").update(readFileSync(resolve(site, path))).digest("hex").slice(0, 12);
 const recordingSection = (kind) =>
-  '<section class="guide-section" id="in-the-app"><h2>In the app.</h2>' +
+  '<section class="guide-section" id="in-the-app"><h2>In the app.</h2><p>' +
+  ((recordings[kind] ?? []).some((clip) => clip.property && !clip.silent)
+    ? "These are screen recordings of the real Properties panel. Where a clip has sound, it’s a prepared test signal run through AudioRouter’s own audio engine, not a recording of anyone’s microphone or audio device."
+    : "These are screen recordings of the real Properties panel. They have no sound.") +
+  "</p>" +
   (recordings[kind] ?? [])
     .map(
       (clip) =>

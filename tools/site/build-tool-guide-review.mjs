@@ -36,6 +36,125 @@ const guideSources = ["processing", "routing"].flatMap(
       readFileSync(resolve(root, `site/guide-content/${name}.json`), "utf8"),
     ).tools,
 );
+// Plain names for the synthetic fixtures in
+// crates/engine/examples/tool_guide_property_render.rs.
+const testSounds = {
+  "noise-only": "quiet background hiss",
+  "speech-bursts": "a short, buzzy test voice",
+  "noisy-speech": "a buzzy test voice over background hiss",
+  "expressive-voice": "a test voice that glides up and down in pitch",
+  "pink-noise": "steady pink noise",
+  "drum-loop": "a simple drum loop",
+  "tone-steps": "a tone that steps up from 220 Hz to 1,760 Hz",
+  "mains-hum": "a test voice over 50 Hz mains hum",
+  "harmonic-hum": "a test voice over 50 Hz hum and its overtones",
+  "click-train": "quiet hiss with sharp clicks",
+  "two-tones": "a two-tone chord of 110 Hz and 880 Hz",
+  "level-bursts": "a 220 Hz tone that jumps between quiet and loud",
+};
+// Tools that make the sound themselves rather than process the fixture.
+const selfPlaying = {
+  testSignal: "its test tone",
+  audioFile: "a prepared tone file",
+  soundboard: "a prepared tone file",
+};
+const noteNames = {
+  c: "C",
+  cs: "C♯",
+  d: "D",
+  ds: "D♯",
+  e: "E",
+  f: "F",
+  fs: "F♯",
+  g: "G",
+  gs: "G♯",
+  a: "A",
+  as: "A♯",
+  b: "B",
+};
+const formatValue = (value, property) => {
+  if (typeof value === "number") {
+    const number = String(value).replace("-", "−");
+    const unit = property?.unit;
+    if (!unit || unit === "normalized") return number;
+    return unit === "%" ? `${number}%` : `${number} ${unit}`;
+  }
+  if (property?.key === "key") return noteNames[value] ?? value;
+  if (typeof value === "string" && value.length <= 2)
+    return value.toUpperCase();
+  const words = String(value).replace(/([A-Z])/g, " $1").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+const guideProperty = (kind, key) =>
+  guideSources
+    .find((t) => t.kind === kind)
+    ?.properties.find(
+      (p) =>
+        p.key === key ||
+        p.key === key?.replace(/(band|slot)\d+/, "$1{index}") ||
+        p.key === key?.replace(/slot\d+/, "slot") ||
+        (kind === "mixer" && p.key.startsWith("inputVolume:")),
+    );
+const capitalize = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+// Describe one recorded change in plain words: what moves, when, what is
+// playing, and what the reader should hear.
+const describeChange = ({
+  tool,
+  key,
+  label,
+  property,
+  before,
+  after,
+  fixture,
+  silent,
+}) => {
+  const original = guideProperty(tool.kind, key);
+  let change;
+  if (typeof before === "number" && typeof after === "number")
+    change = `${label} moves from ${formatValue(before, property)} to ${formatValue(after, property)}`;
+  else if (typeof after === "boolean")
+    change = `${label} is turned ${after ? "on" : "off"}`;
+  else if (before === undefined || before === "")
+    change = `${label} is set to ${typeof after === "string" && /\s/.test(after) ? `“${after}”` : formatValue(after, property)}`;
+  else
+    change = `${label} switches from ${formatValue(before, property)} to ${formatValue(after, property)}`;
+  const explanation =
+    typeof before === "number" && typeof after === "number"
+      ? after < before
+        ? original?.decrease
+        : original?.increase
+      : original?.meaning;
+  if (silent)
+    return `${change} about three seconds in. The change has no sound of its own, so this clip is silent.${explanation ? " " + explanation : ""}`;
+  const playing = selfPlaying[tool.kind]
+    ? `while the ${tool.title} plays ${selfPlaying[tool.kind]}`
+    : `while ${testSounds[fixture] ?? "a test sound"} plays through the ${tool.title}`;
+  return `${change} about three seconds in, ${playing}.${explanation ? " " + explanation : ""}`;
+};
+const needsYourSetup = {
+  physicalInput: "your own audio device",
+  physicalOutput: "your own audio device",
+  endpointLoopback: "your own audio device",
+  applicationCapture: "an app running on your PC",
+  virtualRenderSource: "a virtual cable on your PC",
+  virtualCaptureSink: "a virtual cable on your PC",
+  networkSend: "another computer on your network",
+  networkReceive: "another computer on your network",
+  plugin: "a plugin installed on your PC",
+  recorder: "the files the Recorder saves on your PC",
+};
+const exemptionReason = (tool, property) => {
+  const tour = "The silent Properties tour shows where to find it.";
+  if (tool.kind === "group")
+    return `${property.label} only changes how the group looks on the canvas, so there is nothing to hear. ${tour}`;
+  if (property.type === "file")
+    return `${property.label} plays a WAV or MP3 file you choose, so there is no fixed sound to record. ${tour}`;
+  if (needsYourSetup[tool.kind])
+    return `${property.label} works with ${needsYourSetup[tool.kind]}, which a prepared recording can't stand in for. ${tour}`;
+  if (/^slot\dMode$/.test(property.key))
+    return `${property.label} works the same way as button 1, which has its own clip. ${tour}`;
+  return `${property.label} depends on other nodes in your own route, so no separate clip plays it. ${tour}`;
+};
 const encode = (source, destination) => {
   if (process.env.GUIDE_METADATA_ONLY === "1") {
     if (!existsSync(destination))
@@ -107,14 +226,15 @@ for (const tool of tools) {
     resolve(output, poster),
     resolve(assets, `${tool.kind}-overview.jpg`),
   );
-  recordings[tool.kind] = [
-    {
-      title: "Browse Properties",
-      video: `assets/tool-guides/${tool.kind}-overview.mp4`,
-      poster: `assets/tool-guides/${tool.kind}-overview.jpg`,
-      description: `A silent recording of the real ${tool.title} Properties panel. The view browses its settings and returns to the top. Device, network and plugin operation are not demonstrated by this configuration overview.`,
-    },
-  ];
+  const overview = {
+    title: "Every setting",
+    video: `assets/tool-guides/${tool.kind}-overview.mp4`,
+    poster: `assets/tool-guides/${tool.kind}-overview.jpg`,
+    description: `A silent tour of the ${tool.title} Properties panel. It scrolls through every setting, then returns to the top.`,
+  };
+  // Clips that change one property, kept in Properties-panel order.
+  const changeClips = [];
+  let demo;
   const demoPath = resolve(
     root,
     "target/tool-guide-demos",
@@ -138,25 +258,24 @@ for (const tool of tools) {
     const label =
       property?.label ??
       (tool.kind === "mixer" ? "Input volume" : "Live level");
-    const before = telemetry.parametersBefore[render.parameter];
-    const after = telemetry.parametersAfter[render.parameter];
-    const original = guideSources
-      .find((t) => t.kind === tool.kind)
-      ?.properties.find(
-        (p) =>
-          p.key === render.parameter ||
-          p.key === render.parameter?.replace(/band\d+/, "band{index}") ||
-          (tool.kind === "mixer" && p.key.startsWith("inputVolume:")),
-      );
-    const explanation =
-      typeof before === "number" && typeof after === "number"
-        ? after < before
-          ? original?.decrease
-          : original?.increase
-        : original?.meaning;
+    // Mixer input levels are stored as 0–1 gains and shown as percentages.
+    const mixerInput =
+      tool.kind === "mixer" && render.parameter?.startsWith("inputVolume:");
+    const shown = (value) =>
+      mixerInput && typeof value === "number" ? value * 100 : value;
     const description = render.parameter
-      ? `${label} changes from ${before} to ${after}${property?.unit ? " " + property.unit : ""} at 3.2 seconds.${explanation ? " " + explanation : ""} The control appears briefly, then the view returns to the top visual while the synthetic audio continues.${tool.kind === "outputSwitch" ? " You hear output A: it becomes silent when the signal moves to B." : ""}${tool.kind === "audioFile" ? " This short example shows the Loop setting; it ends before the full source repeats." : ""}`
-      : "A synthetic signal passes through the real processor. Watch the live readings rise and fall with the sound.";
+      ? `${describeChange({
+          tool,
+          key: render.parameter,
+          label,
+          property: mixerInput
+            ? tool.properties.find((row) => row.dynamic)
+            : property,
+          before: shown(telemetry.parametersBefore[render.parameter]),
+          after: shown(telemetry.parametersAfter[render.parameter]),
+          fixture: telemetry.fixture,
+        })}${tool.kind === "outputSwitch" ? " You're listening to output A, so the sound stops when the switch moves to B." : ""}${tool.kind === "audioFile" ? " The clip is shorter than the file, so you won't hear it start over." : ""}`
+      : `${capitalize(testSounds[telemetry.fixture] ?? "a test sound")} plays through the ${tool.title}. Watch the readings rise and fall with it.`;
     encode(demoPath, resolve(assets, `${tool.kind}-demo.mp4`));
     const posterResult = spawnSync(
       "ffmpeg",
@@ -181,13 +300,14 @@ for (const tool of tools) {
       resolve(assets, `${tool.kind}-demo.jpg`),
       resolve(output, `${tool.kind}-demo.jpg`),
     );
-    recordings[tool.kind].unshift({
-      title: `${label} in the app`,
+    demo = {
+      title: label,
       video: `assets/tool-guides/${tool.kind}-demo.mp4`,
       poster: `assets/tool-guides/${tool.kind}-demo.jpg`,
       description,
       property: render.parameter,
-    });
+    };
+    changeClips.push(demo);
   }
   // Publish every verified per-property capture, not only the representative
   // per-tool demo. These clips are generated by the production renderer and
@@ -208,19 +328,45 @@ for (const tool of tools) {
     if (posterResult.status !== 0) throw new Error(posterResult.stderr);
     const property = tool.properties.find((row) => row.key === render.parameter);
     if (!property) throw new Error(`No inventory row for ${render.id}`);
+    const telemetry = JSON.parse(
+      readFileSync(
+        resolve(root, "target/tool-guide-properties", render.id, "telemetry.json"),
+        "utf8",
+      ),
+    );
     const recording = {
-      title: `${property.label} in the app`,
+      title: property.label,
       video: `assets/tool-guides/${videoName}`,
       poster: `assets/tool-guides/${posterName}`,
-      description: `The ${property.label} control changes during a synthetic production-engine example. This clip demonstrates this property only; it does not qualify device or live-microphone behavior.`,
+      description: describeChange({
+        tool,
+        key: render.parameter,
+        label: property.label,
+        property,
+        before: telemetry.parametersBefore[render.parameter],
+        after: telemetry.parametersAfter[render.parameter],
+        fixture: telemetry.fixture,
+        silent: render.audible === false,
+      }),
       property: render.parameter,
       silent: render.audible === false,
     };
-    recordings[tool.kind].unshift(recording);
-    property.recordings = [recording];
-    property.status = "recorded";
+    changeClips.push(recording);
   }
-  const primary = recordings[tool.kind][0];
+  // Sort by the property's place in the Properties panel. A demo whose
+  // parameter has no inventory row (Mixer input level, Meter) leads.
+  const panelIndex = (clip) =>
+    tool.properties.findIndex(
+      (row) =>
+        row.key === clip.property ||
+        (tool.kind === "mixer" &&
+          row.dynamic &&
+          clip.property?.startsWith("inputVolume:")),
+    );
+  changeClips.sort((a, b) => panelIndex(a) - panelIndex(b));
+  recordings[tool.kind] = [...changeClips, overview];
+  // The review page leads with the representative per-tool demo.
+  const primary = demo ?? recordings[tool.kind][0];
   if (tool.kind === "duck") {
     for (const mode of ["game", "level"]) {
       const id = `duck--${mode}`;
@@ -230,7 +376,16 @@ for (const tool of tools) {
       encode(resolve(sourceDir, "overview.mp4"), resolve(assets, `${id}.mp4`));
       const result = spawnSync("ffmpeg", ["-y", "-i", resolve(sourceDir, "overview.mp4"), "-frames:v", "1", "-q:v", "3", resolve(assets, `${id}.jpg`)], { encoding: "utf8" });
       if (result.status !== 0) throw new Error(result.stderr);
-      const clip = { title: `${mode === "game" ? "Game state" : "Sidechain level"} trigger settings`, video: `assets/tool-guides/${id}.mp4`, poster: `assets/tool-guides/${id}.jpg`, silent: true, description: "Silent configuration walkthrough. A real game-state feed or connected sidechain is required to exercise this trigger." };
+      const clip = {
+        title: mode === "game" ? "Siege round trigger" : "Triggered by another node",
+        video: `assets/tool-guides/${id}.mp4`,
+        poster: `assets/tool-guides/${id}.jpg`,
+        silent: true,
+        description:
+          mode === "game"
+            ? "A silent look at the Siege round trigger: choose which parts of a Siege match lower the sound. Hearing it work needs live game data from a match in progress, so this clip has no audio."
+            : "A silent look at the Triggered by setting: pick another node in the same session, such as your processed voice, whose level lowers this sound. Hearing it work needs that second source playing, so this clip has no audio.",
+      };
       recordings[tool.kind].push(clip);
       for (const property of tool.properties.filter(row => mode === "game" ? ["trigger", "duckMenu", "duckPrep", "duckAction", "duckBetweenRounds"].includes(row.key) : row.key === "keyNodeId")) {
         property.recordings = [clip];
@@ -250,14 +405,22 @@ for (const tool of tools) {
     if (demonstration) {
       property.recordings = [demonstration];
       property.status = "recorded";
+      property.nonAudibleReason = null;
     } else if (
       tool.capture === "configuration" ||
       ["file", "selection"].includes(property.type)
     ) {
-      property.recordings = [recordings[tool.kind].at(-1)];
+      property.recordings = [overview];
       property.status = "exempted";
-      property.nonAudibleReason =
-        "Configuration selection is shown in the silent Properties overview. Actual device, file, peer or installed-plugin operation is outside this synthetic recording.";
+      property.nonAudibleReason = exemptionReason(tool, property);
+    } else if (
+      !property.recordings?.some((clip) => recordings[tool.kind].includes(clip))
+    ) {
+      // A clip carried over from an earlier run no longer shows this
+      // property (for example a demo that now changes another band).
+      property.recordings = [];
+      property.status = "pending";
+      property.nonAudibleReason = null;
     }
   }
   const primaryVideo = primary.video.split("/").pop();
