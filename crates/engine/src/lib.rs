@@ -8818,8 +8818,9 @@ fn prepare_soundboard(
 /// as stage 0 of its input chain, its native input only paces it with silent
 /// packets, and its level is that stage's meter. Exhaustive on purpose (no
 /// `_` arm): every compiler and meter that treats generators alike uses it,
-/// so a new kind must decide here.
-pub(crate) fn renders_own_audio(kind: audiorouter_domain::NodeKind) -> bool {
+/// so a new kind must decide here. The control plane's native source bindings
+/// use it too, so they cannot drift from the engine.
+pub fn renders_own_audio(kind: audiorouter_domain::NodeKind) -> bool {
     use audiorouter_domain::NodeKind;
     match kind {
         NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard => true,

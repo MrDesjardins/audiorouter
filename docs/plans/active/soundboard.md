@@ -377,6 +377,28 @@ continuity harness, a rebuilt shell or a live check of the canvas animation for
 Audio File / Test Signal. Rollback: revert this commit; the 51a2344d Soundboard
 behaviour returns. Next action: owner review of the branch; no PR without approval.
 
+### 2026-10-31: control-plane source bindings follow the engine classifier
+
+Owner asked for the follow-up above (branch `fix/control-source-kinds`). The
+multi-input binding in `native_dispatch.rs` ended in `_ => continue`, so a new
+source kind would have been skipped silently and failed later as "no device or
+application is chosen" — the Soundboard's first defect class. The engine's
+exhaustive `renders_own_audio` is now public; the binding uses it in a guard arm,
+and its `_` arm is replaced by an explicit list of every non-source kind, so a
+new `NodeKind` stops the build there. `native_paths.rs` checks a `Generated`
+binding with the same function instead of its own copy of the three kinds. No
+behaviour change for existing kinds. Validation (Windows, Rust 1.96.0, `-j 4`
+while the owner's app ran): `cargo test -p audiorouter-control -p
+audiorouter-engine` all pass (control 301 + 11 ignored, engine lib 177 + 1
+ignored, source combinations 5, tool combinations 4); workspace Clippy
+`--all-targets --all-features -D warnings` and `cargo fmt --all -- --check`
+clean. No new test: both prepare paths enumerate live endpoints first, and the
+guarantee is by construction (one classifier, compile-time exhaustiveness). Not
+run: a live multi-input Play with each generator. Still hand-kept, outside this
+change: `is_chain_processor` in `crates/engine/src/lib.rs` (`matches!` list) and
+two generator lists in `crates/engine/examples/tool_guide_property_render.rs`.
+Rollback: revert the commit.
+
 Remaining, in order: library category expansion for `slotNSet`; drag and drop (SND-19);
 remaining editor/picker interactions beyond the now-covered Play controls;
 inspect a built installer for `sound-library` (and `verify-artifacts.ps1` expectations);

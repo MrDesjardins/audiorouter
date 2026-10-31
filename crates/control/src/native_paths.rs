@@ -393,10 +393,9 @@ impl ControlPlane {
                     ControlError::InvalidRequest("source node output port is missing".into())
                 })?;
             match (node.kind, binding) {
-                (
-                    NodeKind::TestSignal | NodeKind::AudioFile | NodeKind::Soundboard,
-                    NativeMultiInputSourceBinding::Generated,
-                ) => {}
+                // The same engine classifier the binding used, not a copy of it.
+                (kind, NativeMultiInputSourceBinding::Generated)
+                    if audiorouter_engine::renders_own_audio(kind) => {}
                 (NodeKind::NetworkReceive, NativeMultiInputSourceBinding::Network(_)) => {
                     if !(1..=audiorouter_windows_audio::MAX_NETWORK_CHANNELS).contains(&channels) {
                         return Err(ControlError::InvalidRequest(
