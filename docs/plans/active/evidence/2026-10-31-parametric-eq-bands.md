@@ -70,6 +70,31 @@ bands 2–16 are documented as "the same as band 1", and the page says so.
   clips that are not published yet, so adding a clip does not re-encode every
   other video.
 
+- **Render report no longer loses rows.** `render-tool-guide-properties.mjs`
+  started from an empty report (or, with `GUIDE_KIND`, kept only other tools'
+  rows) and wrote only the properties it rendered, so any run would have
+  removed the recorded band 1 rows and the family clip from
+  `render-report.json`, and with them their videos from the next build. It now
+  keeps every row it does not render again and replaces a row by id. Checked
+  against a backup of the report: `GUIDE_KIND=parametricEq` (no pending rows)
+  left the file byte-identical; `GUIDE_KIND=graphicEq` rendered one property,
+  added its row, and kept all five Parametric EQ rows including
+  `parametricEq--other-bands`. The report was restored afterwards.
+
+## Renderer provenance
+
+The clip's audio came from `tool_guide_property_render.exe` built in the
+earlier tool-guide worktree on 2026-10-30 15:50 (PDT); it was copied, not
+rebuilt, because no cargo command may run while the owner's app is live. Its
+source file and `crates/engine` changed in later commits (voice-preset and
+fixture additions, generator metering, connected Mixers). `crates/dsp` has no
+change since the first recordings commit (`b768ec23`, Cargo.toml version only),
+the Parametric EQ stage in `crates/engine/src/lib.rs` is unchanged, and the
+`pink-noise` fixture is unchanged. The output was also measured directly (see
+above), so the clip shows what the engine does, but it was not produced by an
+exe built from this branch's source. Rebuild and re-render before a release
+build if that distinction matters.
+
 ## Counts
 
 Property rows: 251. Before: 98 recorded, 100 pending, 53 exempted. After:
@@ -95,11 +120,20 @@ Firefox for playback.
 | `GUIDE_KIND=parametricEq node tools/site/check-tool-guide-video-firefox.mjs` | Pass: 7 of 7 EQ clips play after a real click; every audible clip, including Other bands (peak 0.058), produces sound ([results](2026-10-31-parametric-eq-bands-firefox.json), [media](2026-10-31-parametric-eq-bands-media.json)) |
 | `node tools/site/review-tool-guide-layout.mjs` | Pass: 390 px Gate, Advanced EQ, Soundboard, Physical Input pages; shared playback |
 
+CI's `policy`, `docs` and `site` checks cover changes under `site/**`,
+`tools/site/**` and `docs/**` (`tools/quality/checks.mjs`). Run together with
+`node tools/quality/verify.mjs --checks policy,docs,site`: all three pass.
+
 Not run: Rust checks (no Rust changed; the renderer example was reused as
 built and no cargo command ran, because the owner's app was running), the full
 UI test suite, a re-recording of the existing band 1 clips, and a Firefox pass
-over the other 37 tools' clips with the extended check. Not covered: a
-recording of every band's own fields (by design), live devices, hardware.
+over the other 37 tools' clips. The extended Firefox check now probes every
+published clip, about 130 more than before; it plays through the default
+output, so run it for those tools when the owner's app is not live, and expect
+it to be the first run of the check on those files. Neither
+`tool-guide-families.test.mjs` nor `tool-guide-guards.test.mjs` runs in CI.
+Not covered: a recording of every band's own fields (by design), live devices,
+hardware.
 
 ## Notes for the next run
 
@@ -118,8 +152,11 @@ recording of every band's own fields (by design), live devices, hardware.
 - Soundboard buttons 2–9 can reuse the mechanism: add a `soundboard` entry to
   `tool-guide-families.json` (`memberPattern` for `slot<n>…`,
   `representativeIndex` 1, a clip) and a `soundboard` entry to
-  `tool-guide-family-actions.mjs`. The existing `slot<n>Mode` exemptions are
-  untouched here.
+  `tool-guide-family-actions.mjs`. This branch leaves the existing
+  `slot<n>Mode` exemptions alone, but the review build's family pass sets the
+  status of every member row of a family (`recorded` when the representative
+  and the shared clip exist, otherwise `pending`). Adding a Soundboard family
+  therefore replaces those exemptions; decide that on purpose.
 
 Rollback: revert the commit and rerun the manifest builder, the review build
 (`GUIDE_METADATA_ONLY=1`) and `site/generate-guides.mjs` +

@@ -1,6 +1,6 @@
 // Render one example for each remaining parameter family. Repeated EQ points
 // and Soundboard buttons share the same control-family demonstration.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -27,13 +27,15 @@ writeFileSync(
   resolve(output, "voice-presets.json"),
   JSON.stringify(presets, null, 2),
 );
-const selected = process.env.GUIDE_KIND?.split(",");
 const reportPath = resolve(output, "render-report.json");
-const report = selected
-  ? JSON.parse(readFileSync(reportPath, "utf8")).filter(
-      (row) => !selected.includes(row.kind),
-    )
+// Keep every row this run does not render again. The review build lists a
+// clip only while its render is in the report, so dropping the rows of
+// recorded properties or of a family's shared clip (tool-guide-families.mjs)
+// would remove their videos from the guides on the next build.
+const report = existsSync(reportPath)
+  ? JSON.parse(readFileSync(reportPath, "utf8"))
   : [];
+const rendered = [];
 for (const tool of inventory.tools) {
   if (tool.capture !== "production-dsp") continue;
   for (const property of tool.properties) {
@@ -206,7 +208,7 @@ for (const tool of inventory.tools) {
       [directory, tool.kind, fixture, beforePath, afterPath],
       { encoding: "utf8" },
     );
-    report.push({
+    const row = {
       id,
       kind: tool.kind,
       parameter: property.key,
@@ -215,12 +217,13 @@ for (const tool of inventory.tools) {
       status:
         result.status === 0 ? "audio-rendered-unreviewed" : "render-failed",
       error: result.status === 0 ? null : result.stderr,
-    });
-    writeFileSync(
-      resolve(output, "render-report.json"),
-      JSON.stringify(report, null, 2),
-    );
-    console.log(`${id}: ${report.at(-1).status}`);
+    };
+    const previous = report.findIndex((existing) => existing.id === id);
+    if (previous >= 0) report[previous] = row;
+    else report.push(row);
+    rendered.push(row);
+    writeFileSync(reportPath, JSON.stringify(report, null, 2));
+    console.log(`${id}: ${row.status}`);
   }
 }
-if (report.some((row) => row.status === "render-failed")) process.exitCode = 1;
+if (rendered.some((row) => row.status === "render-failed")) process.exitCode = 1;

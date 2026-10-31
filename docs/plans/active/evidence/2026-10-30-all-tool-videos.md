@@ -88,3 +88,10 @@ Rollback: revert the site recording metadata/generated pages, video assets,
 capture scripts and engine example changes. Existing interactive guides remain
 the previous implementation. Next task: finish the outstanding property groups
 and qualify continuous parameter transitions before completing the full plan.
+
+**Update 2026-10-31:** property coverage is now 173 recorded, 25 pending and
+53 exempted of 251 rows (the 26/48/177 split above predates the per-property
+recordings). Advanced EQ is complete: bands 2–16 are covered by one "Other
+bands" clip plus the band 1 field clips; see the
+[Advanced EQ bands record](2026-10-31-parametric-eq-bands.md). The 25 pending
+rows are Graphic EQ (9) and Soundboard buttons 2–9 (16).
