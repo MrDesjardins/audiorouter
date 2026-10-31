@@ -19,6 +19,25 @@ Validation records go here and in the Soundboard plan. Rollback: keep the
 previous test build and revert only these follow-up changes; no migration.
 Next: installer resource regression while the Soundboard thread finishes.
 
+## Advanced EQ bands 2–16 guide clips — 2026-10-31
+
+Objective: finish the 75 pending Advanced EQ rows (`band1*`–`band15*`) without
+75 near-identical videos. Requirements: UI-20, UI-17, DSP-03. Branch
+`docs/guide-parametric-eq-bands`; no PR until the owner has tested a build.
+Decision: bands 2–16 share band 1's schema, ranges, defaults, engine path and
+editor controls (only the legacy-parameter fallback is band 1's), so one new
+audible clip, "Other bands", plus each band 1 field clip covers them. A generic
+family mechanism (`tool-guide-families.*`, coverage check, unit tests) lets
+Soundboard buttons 2–9 reuse it. Result on this branch alone: 173 recorded, 25
+pending (Graphic EQ 9, Soundboard 16), 53 exempted. After merging the Graphic EQ
+branch (`docs/guide-graphic-eq-bands`, see its section below): 182 recorded, 16
+pending (Soundboard buttons 2–9), 53 exempted. The generated manifest,
+`recordings.json` and pages were regenerated, not hand-merged; both
+`GUIDE_REUSE_ENCODED=1` and `GUIDE_ENCODE_MISSING=1` select "encode only new
+clips". Details, checks and limits:
+[Advanced EQ bands record](evidence/2026-10-31-parametric-eq-bands.md).
+Rollback: revert the commit and regenerate. Next: Soundboard buttons 2–9.
+
 ## Stream Deck sound title priority — 2026-10-31
 
 Owner reports custom text leaves the numbered Sound label visible. Scope:
@@ -101,6 +120,20 @@ This approval does not waive those rows or continuous-transition qualification.
 No release, deployment or hardware evidence is claimed. Next task: finish those
 remaining property families and extend playback verification to the new clips.
 Rollback: revert this documentation/capture change and regenerate the guide pages.
+
+## Graphic EQ band recordings — 2026-10-31
+
+Owner request on `docs/guide-graphic-eq-bands` (from `origin/main`): record
+the nine Graphic EQ bands that lacked a clip (every band but 1 kHz). Requirements
+UI-20, UI-17, DSP-03. Done: nine portrait Properties clips at +12 dB on pink
+noise, Firefox playback of all 11 Graphic EQ clips, updated manifest (107
+recorded, 53 exempted, 91 pending). Details, checks and limits:
+[evidence](evidence/2026-10-30-all-tool-videos.md#graphic-eq-bands-2026-10-31).
+The Firefox checker now plays per-property clips too, so the other tools'
+per-property clips have not been through a Firefox run yet. No pull request is open; the owner tests
+a build first. Next: Advanced EQ points 2–16 (another thread) and Soundboard
+buttons 2–9, then the continuous-transition qualification. Rollback: revert the
+commit and regenerate.
 
 ## Tool-guide real-property-window video spike — 2026-10-29
 

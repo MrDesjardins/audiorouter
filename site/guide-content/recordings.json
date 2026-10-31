@@ -70,11 +70,83 @@
   ],
   "graphicEq": [
     {
+      "title": "31.5 Hz",
+      "video": "assets/tool-guides/graphicEq--band0Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band0Db.jpg",
+      "description": "31.5 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost only if your source has clean sub-bass and your speakers can reproduce it.",
+      "property": "band0Db",
+      "silent": false
+    },
+    {
+      "title": "63 Hz",
+      "video": "assets/tool-guides/graphicEq--band1Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band1Db.jpg",
+      "description": "63 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a small amount when a clean source sounds too thin at the bottom.",
+      "property": "band1Db",
+      "silent": false
+    },
+    {
+      "title": "125 Hz",
+      "video": "assets/tool-guides/graphicEq--band2Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band2Db.jpg",
+      "description": "125 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a little if a close-miked voice or instrument feels too lean.",
+      "property": "band2Db",
+      "silent": false
+    },
+    {
+      "title": "250 Hz",
+      "video": "assets/tool-guides/graphicEq--band3Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band3Db.jpg",
+      "description": "250 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost gently when a source lacks body and sounds small.",
+      "property": "band3Db",
+      "silent": false
+    },
+    {
+      "title": "500 Hz",
+      "video": "assets/tool-guides/graphicEq--band4Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band4Db.jpg",
+      "description": "500 Hz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost modestly if it has lost body after other cuts.",
+      "property": "band4Db",
+      "silent": false
+    },
+    {
       "title": "1 kHz",
       "video": "assets/tool-guides/graphicEq-demo.mp4",
       "poster": "assets/tool-guides/graphicEq-demo.jpg",
       "description": "1 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a little if the midrange feels distant after level matching.",
       "property": "band5Db"
+    },
+    {
+      "title": "2 kHz",
+      "video": "assets/tool-guides/graphicEq--band6Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band6Db.jpg",
+      "description": "2 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost gently when a voice is clear but its articulation is buried.",
+      "property": "band6Db",
+      "silent": false
+    },
+    {
+      "title": "4 kHz",
+      "video": "assets/tool-guides/graphicEq--band7Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band7Db.jpg",
+      "description": "4 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a little when speech lacks presence against background sound.",
+      "property": "band7Db",
+      "silent": false
+    },
+    {
+      "title": "8 kHz",
+      "video": "assets/tool-guides/graphicEq--band8Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band8Db.jpg",
+      "description": "8 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Boost subtly if a clean source sounds dull and needs a little sparkle.",
+      "property": "band8Db",
+      "silent": false
+    },
+    {
+      "title": "16 kHz",
+      "video": "assets/tool-guides/graphicEq--band9Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band9Db.jpg",
+      "description": "16 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. A tiny boost can add air to a clean, full-band source.",
+      "property": "band9Db",
+      "silent": false
     },
     {
       "title": "Every setting",
@@ -121,6 +193,14 @@
       "poster": "assets/tool-guides/parametricEq--band0GainDb.jpg",
       "description": "Gain · band 1 moves from 9 dB to −12 dB about three seconds in, while steady pink noise plays through the Advanced EQ. Cuts their affected region.",
       "property": "band0GainDb",
+      "silent": false
+    },
+    {
+      "title": "Other bands",
+      "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+      "poster": "assets/tool-guides/parametricEq--other-bands.jpg",
+      "description": "Bands 2–16 work the same way as band 1, so only band 1 is recorded field by field. About three seconds in, a second band is added by double-clicking the graph where it should sit (the Add point button adds one at 1,000 Hz instead), then set to a 9 dB cut at 5,000 Hz. Band 1 keeps its 9 dB boost at 1,000 Hz, so you hear both bands at once while steady pink noise plays through the Advanced EQ. The panel calls each band a point: pick any of them from Select point to change its filter, frequency, gain and Q.",
+      "property": "otherBands",
       "silent": false
     },
     {

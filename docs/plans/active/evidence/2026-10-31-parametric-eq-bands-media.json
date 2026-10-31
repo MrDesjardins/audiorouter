@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "parametricEq",
+    "video": "assets/tool-guides/parametricEq--other-bands.mp4",
+    "bytes": 488716,
+    "sha256": "404ae613f20626fc7439a254ce69b00e4217c18aea2203a49013ebef4757e9e3",
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 720,
+        "height": 1280
+      },
+      {
+        "codec_name": "aac",
+        "codec_type": "audio"
+      }
+    ],
+    "format": {
+      "duration": "8.000000"
+    }
+  }
+]

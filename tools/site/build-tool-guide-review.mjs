@@ -8,7 +8,10 @@ import {
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { loadFamilies } from "./tool-guide-families.mjs";
+import { selectedKinds } from "./tool-guide-guards.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const families = loadFamilies();
 const inventory = JSON.parse(
   readFileSync(
     resolve(root, "tools/site/tool-guide-property-manifest.json"),
@@ -16,6 +19,23 @@ const inventory = JSON.parse(
   ),
 );
 const tools = inventory.tools;
+// GUIDE_KIND=a,b rebuilds only those tools. Every other tool keeps its
+// recordings from site/guide-content/recordings.json and its encoded media.
+const kinds = selectedKinds(
+  process.env.GUIDE_KIND,
+  tools.map((tool) => tool.kind),
+);
+// GUIDE_REUSE_ENCODED=1 keeps media that is already encoded and encodes only
+// the files that do not exist yet. GUIDE_ENCODE_MISSING=1 is the same option
+// under its earlier name.
+const reuseEncoded =
+  process.env.GUIDE_REUSE_ENCODED === "1" ||
+  process.env.GUIDE_ENCODE_MISSING === "1";
+const previousRecordings = kinds
+  ? JSON.parse(
+      readFileSync(resolve(root, "site/guide-content/recordings.json"), "utf8"),
+    )
+  : {};
 const output = resolve(
   root,
   "docs/plans/active/evidence/tool-guide-preview/all-tools",
@@ -179,6 +199,7 @@ const encode = (source, destination) => {
       throw new Error(`Missing encoded asset: ${destination}`);
     return;
   }
+  if (reuseEncoded && existsSync(destination)) return;
   const result = spawnSync(
     "ffmpeg",
     [
@@ -207,10 +228,44 @@ const encode = (source, destination) => {
   );
   if (result.status !== 0) throw new Error(result.stderr);
 };
+const extractPoster = (source, destination) => {
+  if (reuseEncoded && existsSync(destination)) return;
+  const result = spawnSync(
+    "ffmpeg",
+    ["-y", "-i", source, "-frames:v", "1", "-q:v", "3", destination],
+    { encoding: "utf8" },
+  );
+  if (result.status !== 0) throw new Error(result.stderr);
+};
+const galleryEntry = ({ tool, primary, clipCount, video, poster }) => {
+  const primaryVideo = primary.video.split("/").pop();
+  const primaryPoster = primary.poster.split("/").pop();
+  return `<article data-title="${escape(tool.title.toLowerCase())}"><h2>${escape(tool.title)}</h2><video controls preload="none" poster="${primaryPoster}" aria-label="${escape(tool.title)} Properties recording"><source src="${primaryVideo}" type="video/mp4"></video><p>${escape(primary.description)}</p>${clipCount > 1 ? `<details><summary>Browse the full Properties panel (silent)</summary><video controls preload="none" poster="${poster}" aria-label="${escape(tool.title)} configuration overview"><source src="${video}" type="video/mp4"></video></details>` : ""}</article>`;
+};
 const recordings = {};
 const assets = resolve(root, "site/assets/tool-guides");
 mkdirSync(assets, { recursive: true });
 for (const tool of tools) {
+  const video = `${tool.kind}.mp4`;
+  const poster = `${tool.kind}.jpg`;
+  if (kinds && !kinds.includes(tool.kind)) {
+    const kept = previousRecordings[tool.kind];
+    if (!kept?.length)
+      throw new Error(`No recordings.json entry to keep for ${tool.kind}`);
+    recordings[tool.kind] = kept;
+    entries.push(
+      galleryEntry({
+        tool,
+        primary:
+          kept.find((clip) => clip.video.endsWith(`/${tool.kind}-demo.mp4`)) ??
+          kept[0],
+        clipCount: kept.length,
+        video,
+        poster,
+      }),
+    );
+    continue;
+  }
   const source = resolve(
     root,
     "target/tool-guide-overviews",
@@ -218,24 +273,8 @@ for (const tool of tools) {
     "overview.mp4",
   );
   if (!existsSync(source)) throw new Error(`Missing overview: ${tool.kind}`);
-  const video = `${tool.kind}.mp4`;
-  const poster = `${tool.kind}.jpg`;
   encode(source, resolve(output, video));
-  const result = spawnSync(
-    "ffmpeg",
-    [
-      "-y",
-      "-i",
-      source,
-      "-frames:v",
-      "1",
-      "-q:v",
-      "3",
-      resolve(output, poster),
-    ],
-    { encoding: "utf8" },
-  );
-  if (result.status !== 0) throw new Error(result.stderr);
+  extractPoster(source, resolve(output, poster));
   copyFileSync(
     resolve(output, video),
     resolve(assets, `${tool.kind}-overview.mp4`),
@@ -295,21 +334,7 @@ for (const tool of tools) {
         })}${tool.kind === "outputSwitch" ? " You're listening to output A, so the sound stops when the switch moves to B." : ""}${tool.kind === "audioFile" ? " The clip is shorter than the file, so you won't hear it start over." : ""}`
       : `${capitalize(testSounds[telemetry.fixture] ?? "a test sound")} plays through the ${tool.title}. Watch the readings rise and fall with it.`;
     encode(demoPath, resolve(assets, `${tool.kind}-demo.mp4`));
-    const posterResult = spawnSync(
-      "ffmpeg",
-      [
-        "-y",
-        "-i",
-        demoPath,
-        "-frames:v",
-        "1",
-        "-q:v",
-        "3",
-        resolve(assets, `${tool.kind}-demo.jpg`),
-      ],
-      { encoding: "utf8" },
-    );
-    if (posterResult.status !== 0) throw new Error(posterResult.stderr);
+    extractPoster(demoPath, resolve(assets, `${tool.kind}-demo.jpg`));
     copyFileSync(
       resolve(assets, `${tool.kind}-demo.mp4`),
       resolve(output, `${tool.kind}-demo.mp4`),
@@ -342,8 +367,23 @@ for (const tool of tools) {
     const videoName = `${render.id}.mp4`;
     const posterName = `${render.id}.jpg`;
     encode(videoSource, resolve(assets, videoName));
-    const posterResult = spawnSync("ffmpeg", ["-y", "-i", videoSource, "-frames:v", "1", "-q:v", "3", resolve(assets, posterName)], { encoding: "utf8" });
-    if (posterResult.status !== 0) throw new Error(posterResult.stderr);
+    extractPoster(videoSource, resolve(assets, posterName));
+    if (render.family) {
+      // The shared clip of a repeated-control family (EQ bands 2-16). It has
+      // no property row of its own: the member rows list it below.
+      const { clip } = families[tool.kind] ?? {};
+      if (clip?.id !== render.id)
+        throw new Error(`${render.id} is not the shared clip of a ${tool.kind} family`);
+      changeClips.push({
+        title: clip.title,
+        video: `assets/tool-guides/${videoName}`,
+        poster: `assets/tool-guides/${posterName}`,
+        description: clip.description,
+        property: clip.property,
+        silent: false,
+      });
+      continue;
+    }
     const property = tool.properties.find((row) => row.key === render.parameter);
     if (!property) throw new Error(`No inventory row for ${render.id}`);
     const telemetry = JSON.parse(
@@ -373,14 +413,27 @@ for (const tool of tools) {
   }
   // Sort by the property's place in the Properties panel. A demo whose
   // parameter has no inventory row (Mixer input level, Meter) leads.
+  // A family's shared clip follows the last of its representative rows.
+  const family = families[tool.kind];
+  const familyIndex = family
+    ? Math.max(
+        ...tool.properties
+          .filter((row) => row.representativeKey)
+          .map((row) =>
+            tool.properties.findIndex((other) => other.key === row.representativeKey),
+          ),
+      ) + 0.5
+    : null;
   const panelIndex = (clip) =>
-    tool.properties.findIndex(
-      (row) =>
-        row.key === clip.property ||
-        (tool.kind === "mixer" &&
-          row.dynamic &&
-          clip.property?.startsWith("inputVolume:")),
-    );
+    family && clip.property === family.clip.property
+      ? familyIndex
+      : tool.properties.findIndex(
+          (row) =>
+            row.key === clip.property ||
+            (tool.kind === "mixer" &&
+              row.dynamic &&
+              clip.property?.startsWith("inputVolume:")),
+        );
   changeClips.sort((a, b) => panelIndex(a) - panelIndex(b));
   recordings[tool.kind] = [...changeClips, overview];
   // The review page leads with the representative per-tool demo.
@@ -441,6 +494,19 @@ for (const tool of tools) {
       property.nonAudibleReason = null;
     }
   }
+  // Rows that repeat another row's controls (EQ bands 2-16) are covered by
+  // the representative row's clips plus the family's shared clip. Taking the
+  // clips from the representative row keeps one object per clip.
+  if (family) {
+    const shared = recordings[tool.kind].find((clip) => clip.property === family.clip.property);
+    for (const property of tool.properties.filter((row) => row.representativeKey)) {
+      const representative = tool.properties.find((row) => row.key === property.representativeKey);
+      const covered = shared && representative?.status === "recorded";
+      property.recordings = covered ? [shared, ...representative.recordings] : [];
+      property.status = covered ? "recorded" : "pending";
+      property.nonAudibleReason = null;
+    }
+  }
   const primaryVideo = primary.video.split("/").pop();
   const primaryPoster = primary.poster.split("/").pop();
   copyFileSync(
@@ -452,7 +518,13 @@ for (const tool of tools) {
     resolve(output, primaryPoster),
   );
   entries.push(
-    `<article data-title="${escape(tool.title.toLowerCase())}"><h2>${escape(tool.title)}</h2><video controls preload="none" poster="${primaryPoster}" aria-label="${escape(tool.title)} Properties recording"><source src="${primaryVideo}" type="video/mp4"></video><p>${escape(primary.description)}</p>${recordings[tool.kind].length > 1 ? `<details><summary>Browse the full Properties panel (silent)</summary><video controls preload="none" poster="${poster}" aria-label="${escape(tool.title)} configuration overview"><source src="${video}" type="video/mp4"></video></details>` : ""}</article>`,
+    galleryEntry({
+      tool,
+      primary,
+      clipCount: recordings[tool.kind].length,
+      video,
+      poster,
+    }),
   );
 }
 writeFileSync(
