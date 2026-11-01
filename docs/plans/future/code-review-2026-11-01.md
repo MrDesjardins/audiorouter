@@ -1,6 +1,6 @@
 # Repository code review — 2026-11-01
 
-A second full review of the repository, after the
+A second repository-wide review, after the
 [2026-10-07 review](code-review-2026-10-07.md). It re-checks that review's
 open items and reads the newest and riskiest code: the plugin latency
 and licence guard (U4/U6) and the HTTP and tunnel entry points. A second
@@ -265,10 +265,16 @@ Not re-measured in this review. Each still needs its recorded evidence:
   refused too. The backup command also opens the source with
   `Storage::open`, which runs migrations on it, so "backing up" an older
   database changes it first.
-- **Fix.** Derive the backup limit from the largest database the app
-  allows (session documents, journal and the 512 MiB media budget, plus
-  headroom), or drop the size check in favor of the integrity check. Open
-  the source read-only for a backup, without migrating.
+- **Spec.** STATE-12 (`docs/spec/12-persistence.md`) sets a "documented
+  100 MiB default configuration backup budget". The spec states no audio
+  media budget, so storing up to 512 MiB of audio inside the configuration
+  database is where code and spec part ways. The fix needs a decision
+  record and a STATE-12 update, not only a new constant.
+- **Fix.** Pick one with the owner: keep configuration backups at 100 MiB
+  and back up audio media separately (a media-free configuration backup
+  plus a media export), or raise the budget to cover the media limit and
+  say so in STATE-12. In both cases, open the source read-only for a
+  backup, without migrating.
 - **Verify.** A storage test that stores audio media past 100 MiB, backs up
   and restores, and checks the restored media bytes.
 
@@ -281,13 +287,15 @@ Not re-measured in this review. Each still needs its recorded evidence:
   file (up to 2 MiB) and computes its SHA-256, all outside
   `while_servicing_audio`; only the decode runs inside it (`lib.rs:269-283`).
   A user sound is loaded from SQLite with `load_audio_media` the same way.
-  A board can name 9 slots × 64 sounds (`MAX_SLOT_SOUNDS`), a category slot
+  Each sound ID is loaded once per Play (the `media` map), a category slot
   expands to the whole category, and the manifest lookup is linear per
   sound.
 - **Impact (measure).** Starting a route with a large Soundboard while
   another route plays can delay the next audio pass past the 10 ms
-  period: up to 576 manifest parses, file reads and hashes, plus blob
-  reads, in one request. This is the P0-1 remainder in a new place.
+  period. In one request that is up to about 105 manifest parses, file
+  reads and hashes (every sound in the shipped `library.json`), plus up to
+  9 slots × 64 (`MAX_SLOT_SOUNDS`) = 576 blob reads for the user's own
+  sounds. This is the P0-1 remainder in a new place.
 - **Fix.** Parse the manifest once per Play and index it by ID. Move the
   file read and hash into the `while_servicing_audio` closure with the
   decode. Load the user's blobs before entering it, or in a short bounded
@@ -300,13 +308,14 @@ Not re-measured in this review. Each still needs its recorded evidence:
 
 - **Evidence.** `Storage::open` runs `PRAGMA integrity_check`, then
   migrations and recovery pruning, every time (`crates/storage/src/lib.rs:763-775`).
-  The desktop shell opens the database several times at start
-  (`recovery_safe_mode` and `record_backend_failure`,
-  `src-tauri/src/main.rs:1470-1482`, then the backend). Every CLI command
+  The desktop shell opens it at least twice per start: `recovery_safe_mode`
+  (`src-tauri/src/main.rs:1632`), then the backend (`main.rs:1642`). After a
+  backend failure it opens it again, in `record_backend_failure` and the
+  restart (and in a safe-mode check at `main.rs:1728`). Every CLI command
   and every `mcp serve` launch opens it again.
 - **Impact (measure).** `integrity_check` reads every page. With the
   audio library allowed to reach 512 MiB, app start and each MCP client
-  launch can pay a full read of the database, several times. A corrupt
+  launch can pay a full read of the database, at least twice per app start. A corrupt
   database also makes `recovery_safe_mode` quietly return `None`
   (`.ok()?`), and the shell reads that as "not in safe mode"
   (`unwrap_or(false)`, `main.rs:1632`) with no log line; the backend's own
@@ -356,10 +365,9 @@ Not re-measured in this review. Each still needs its recorded evidence:
   bound. Count the budget across the session.
 - **Denormals (measure).** Only the Fun Voice Changer flushes tiny values
   (`crates/dsp/src/voice_changer.rs:57`), and no thread sets
-  flush-to-zero. Biquads keep `f64` state and dynamics work in dB, so the
-  risk is low, but a gate's exact silence feeding long filters or reverb-like
-  tools is the classic case. Time a block of silence after a loud tone
-  through each tool in `benches/realtime.rs`.
+  flush-to-zero. Biquads keep `f64` state and the compressor works in dB,
+  so the risk is low; the other tools' state was not checked. Time a block
+  of silence after a loud tone through each tool in `benches/realtime.rs`.
 
 ## Unmerged branch: `feature/plugin-library-ux`
 
@@ -381,8 +389,8 @@ no contract change. Reviewed by reading the diff; tests not run here.
 
 1. **P2-2**: it can silence and fail a working plugin in normal use, and
    the fix is local to the poll and the VST3 worker.
-2. **P2-7**: users with a large audio library cannot back up today; the
-   fix is a constant and a read-only open.
+2. **P2-7**: users with a large audio library cannot back up today. It
+   needs an owner decision and a STATE-12 update, then a small code change.
 3. **P2-1**: close the privacy gap or make the limit explicit in code and
    tests.
 4. **P2-8** and **P2-9**: measure first, then fix together with the P0-1
