@@ -9,7 +9,9 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
-pub const INTERNAL_SAMPLE_RATE_HZ: u32 = 48_000;
+/// The rate every route runs at; route inspection in the domain uses the same
+/// value to turn milliseconds into samples.
+pub const INTERNAL_SAMPLE_RATE_HZ: u32 = audiorouter_domain::GRAPH_SAMPLE_RATE_HZ;
 /// Live band levels of a FIR Filter Hz node: power in dB for each of the 64
 /// log-spaced profile bands (see `audiorouter_dsp::spectral`).
 pub type SpectrumLevels = [f32; audiorouter_dsp::spectral::NOISE_PROFILE_BANDS];
@@ -10775,6 +10777,48 @@ fn reset_dsp<T>(processor: &RealtimeDsp<T>, reset: impl FnOnce(&mut T)) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The domain's latency table names DSP delays by value; pin each one to
+    /// the DSP constant it describes (review 2026-11-01, P2-4).
+    #[test]
+    fn domain_latency_constants_match_the_dsp() {
+        assert_eq!(
+            audiorouter_domain::PITCH_LATENCY_SAMPLES as usize,
+            audiorouter_dsp::PitchShifter::GRAIN_FRAMES
+        );
+        assert_eq!(
+            audiorouter_domain::VOICE_CHANGER_LATENCY_SAMPLES as usize,
+            audiorouter_dsp::voice_changer::VOICE_CHANGER_LATENCY_SAMPLES
+        );
+        let limiter = audiorouter_dsp::PeakLimiter::new_at_sample_rate(
+            audiorouter_dsp::LimiterParams {
+                ceiling_db: -1.0,
+                lookahead_ms: audiorouter_domain::LIMITER_DEFAULT_LOOKAHEAD_MS as f32,
+                release_ms: 100.0,
+            },
+            INTERNAL_SAMPLE_RATE_HZ as f32,
+            1,
+        )
+        .unwrap();
+        let mut node = audiorouter_domain::Node {
+            id: audiorouter_domain::EntityId::new("limiter"),
+            kind: audiorouter_domain::NodeKind::Limiter,
+            type_version: 1,
+            name: "Limiter".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: Vec::new(),
+        };
+        assert_eq!(
+            audiorouter_domain::node_latency_samples(&node) as usize,
+            limiter.lookahead_frames()
+        );
+        node.kind = audiorouter_domain::NodeKind::Delay;
+        node.parameters
+            .insert("delayMs".into(), serde_json::json!(10.0));
+        assert_eq!(audiorouter_domain::node_latency_samples(&node), 480);
+    }
 
     struct CountingTap {
         calls: AtomicU64,

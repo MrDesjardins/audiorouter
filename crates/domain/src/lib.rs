@@ -61,6 +61,76 @@ pub const FIR_LATENCY_SAMPLES: u32 = 512;
 /// Fun Voice Changer delay (DSP-20), fixed whatever the preset; it must
 /// equal `audiorouter_dsp::voice_changer::VOICE_CHANGER_LATENCY_SAMPLES`.
 pub const VOICE_CHANGER_LATENCY_SAMPLES: u32 = 1_024;
+/// Pitch shifts in 1024-frame grains; output lags by one grain. It must
+/// equal `audiorouter_dsp::PitchShift::GRAIN_FRAMES`.
+pub const PITCH_LATENCY_SAMPLES: u32 = 1_024;
+/// Default Limiter lookahead (`lookaheadMs`), which delays its output.
+pub const LIMITER_DEFAULT_LOOKAHEAD_MS: f64 = 5.0;
+/// The rate every route runs at inside the engine
+/// (`audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ` is this value).
+pub const GRAPH_SAMPLE_RATE_HZ: u32 = 48_000;
+
+/// The delay one node adds on a route, in samples at
+/// [`GRAPH_SAMPLE_RATE_HZ`], read from `parameter` (a node's saved values;
+/// `None` gives the default). Every kind is listed, with no catch-all, so a
+/// new processor must state its delay (owner rule, 2026-10-29). Plugin
+/// delay is only known once a worker runs, so a saved route counts it as 0.
+fn latency_samples_with(kind: NodeKind, parameter: impl Fn(&str) -> Option<f64>) -> u32 {
+    let milliseconds = |name: &str, default: f64| {
+        let ms = parameter(name)
+            .filter(|ms| ms.is_finite() && *ms >= 0.0)
+            .unwrap_or(default);
+        (ms * f64::from(GRAPH_SAMPLE_RATE_HZ) / 1_000.0).round() as u32
+    };
+    match kind {
+        NodeKind::Pitch => PITCH_LATENCY_SAMPLES,
+        NodeKind::Limiter => milliseconds("lookaheadMs", LIMITER_DEFAULT_LOOKAHEAD_MS),
+        NodeKind::Delay => milliseconds("delayMs", 0.0),
+        NodeKind::Declick => DECLICK_LATENCY_SAMPLES,
+        NodeKind::Denoise | NodeKind::SpeechDenoise | NodeKind::SpectralGate => {
+            SPECTRAL_LATENCY_SAMPLES
+        }
+        NodeKind::FirFilter => FIR_LATENCY_SAMPLES,
+        NodeKind::FunVoiceChanger => VOICE_CHANGER_LATENCY_SAMPLES,
+        NodeKind::PhysicalInput
+        | NodeKind::ApplicationCapture
+        | NodeKind::EndpointLoopback
+        | NodeKind::PhysicalOutput
+        | NodeKind::VirtualRenderSource
+        | NodeKind::VirtualCaptureSink
+        | NodeKind::TestSignal
+        | NodeKind::Mixer
+        | NodeKind::Gain
+        | NodeKind::Mute
+        | NodeKind::Meter
+        | NodeKind::ParametricEq
+        | NodeKind::Compressor
+        | NodeKind::Gate
+        | NodeKind::GraphicEq
+        | NodeKind::Recorder
+        | NodeKind::Plugin
+        | NodeKind::AudioFile
+        | NodeKind::Volume
+        | NodeKind::BassTreble
+        | NodeKind::Dehum
+        | NodeKind::InputSwitch
+        | NodeKind::OutputSwitch
+        | NodeKind::TimeShift
+        | NodeKind::NetworkSend
+        | NodeKind::NetworkReceive
+        | NodeKind::Duck
+        | NodeKind::Soundboard => 0,
+    }
+}
+
+/// The delay `node` adds with its saved parameters (Delay's `delayMs`,
+/// Limiter's `lookaheadMs`), in samples at [`GRAPH_SAMPLE_RATE_HZ`]. Route
+/// inspection sums it along each path.
+pub fn node_latency_samples(node: &Node) -> u32 {
+    latency_samples_with(node.kind, |name| {
+        node.parameters.get(name).and_then(|value| value.as_f64())
+    })
+}
 
 /// Linear gain for a Mixer input; absent or invalid values are unity.
 pub fn mixer_input_volume(mixer: &Node, upstream: &EntityId) -> f32 {
@@ -463,19 +533,18 @@ pub fn node_registry() -> [NodeTypeSpec; 37] {
             | NodeKind::SpectralGate
             | NodeKind::FunVoiceChanger => "high",
             NodeKind::Plugin => "worker-bound",
-            _ => "device-bound",
+            NodeKind::PhysicalInput
+            | NodeKind::ApplicationCapture
+            | NodeKind::EndpointLoopback
+            | NodeKind::PhysicalOutput
+            | NodeKind::VirtualRenderSource
+            | NodeKind::VirtualCaptureSink
+            | NodeKind::Recorder
+            | NodeKind::NetworkSend
+            | NodeKind::NetworkReceive => "device-bound",
         },
-        latency_samples: match kind {
-            NodeKind::Pitch => 1_024,
-            NodeKind::Limiter => 240,
-            NodeKind::Declick => DECLICK_LATENCY_SAMPLES,
-            NodeKind::Denoise | NodeKind::SpeechDenoise | NodeKind::SpectralGate => {
-                SPECTRAL_LATENCY_SAMPLES
-            }
-            NodeKind::FirFilter => FIR_LATENCY_SAMPLES,
-            NodeKind::FunVoiceChanger => VOICE_CHANGER_LATENCY_SAMPLES,
-            _ => 0,
-        },
+        // The delay with default parameters.
+        latency_samples: latency_samples_with(kind, |_| None),
     })
 }
 
@@ -2836,17 +2905,8 @@ pub fn inspect_routes(
             let latency_samples = path_nodes
                 .iter()
                 .filter_map(|node_id| nodes_by_id.get(node_id))
-                .map(|node| match node.kind {
-                    NodeKind::Pitch => 1_024,
-                    NodeKind::Delay => node
-                        .parameters
-                        .get("delayMs")
-                        .and_then(|value| value.as_f64())
-                        .filter(|delay| delay.is_finite() && *delay >= 0.0)
-                        .map_or(0, |delay| (delay * 48.0).round() as u32),
-                    _ => 0,
-                })
-                .sum();
+                .map(|node| node_latency_samples(node))
+                .fold(0_u32, u32::saturating_add);
             paths.push(RoutePath {
                 nodes: path_nodes,
                 edges: edges.iter().rev().cloned().collect(),
@@ -3996,6 +4056,70 @@ mod tests {
         );
         let inspection = inspect_routes(&graph, &EntityId::new("out")).unwrap();
         assert_eq!(inspection.paths[0].latency_samples, 1_504);
+    }
+
+    /// Route inspection and the tool catalog use one latency per node
+    /// (review 2026-11-01, P2-4): a path through a Limiter, Denoise and FIR
+    /// filter reports their delays, which `inspect_routes` used to omit.
+    #[test]
+    fn route_latency_counts_every_processor_and_matches_the_catalog() {
+        for kind in NodeKind::ALL {
+            let defaults = node("x", kind, PortDirection::Input);
+            assert_eq!(
+                node_latency_samples(&defaults),
+                node_registry()
+                    .into_iter()
+                    .find(|spec| spec.kind == kind)
+                    .unwrap()
+                    .latency_samples,
+                "{kind:?}"
+            );
+        }
+        let processor = |id: &str, kind: NodeKind| {
+            let mut processor = node(id, kind, PortDirection::Input);
+            processor.ports = vec![
+                Port {
+                    name: "main".into(),
+                    direction: PortDirection::Input,
+                    channels: 1,
+                },
+                Port {
+                    name: "main-out".into(),
+                    direction: PortDirection::Output,
+                    channels: 1,
+                },
+            ];
+            processor
+        };
+        let mut limiter = processor("limiter", NodeKind::Limiter);
+        limiter
+            .parameters
+            .insert("lookaheadMs".into(), serde_json::json!(2.0));
+        let nodes = vec![
+            node("in", NodeKind::PhysicalInput, PortDirection::Output),
+            limiter,
+            processor("denoise", NodeKind::Denoise),
+            processor("fir", NodeKind::FirFilter),
+            node("out", NodeKind::PhysicalOutput, PortDirection::Input),
+        ];
+        let ids = ["in", "limiter", "denoise", "fir", "out"];
+        let edges = ids
+            .windows(2)
+            .map(|pair| Edge {
+                id: EntityId::new(format!("{}-{}", pair[0], pair[1])),
+                source_node: EntityId::new(pair[0]),
+                source_port: if pair[0] == "in" { "main" } else { "main-out" }.into(),
+                destination_node: EntityId::new(pair[1]),
+                destination_port: "main".into(),
+                enabled: true,
+                matrix: vec![1.0],
+            })
+            .collect();
+        let inspection = inspect_routes(&session(nodes, edges), &EntityId::new("out")).unwrap();
+        assert_eq!(
+            inspection.paths[0].latency_samples,
+            96 + SPECTRAL_LATENCY_SAMPLES + FIR_LATENCY_SAMPLES
+        );
     }
 
     #[test]
