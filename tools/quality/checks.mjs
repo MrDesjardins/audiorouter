@@ -5,7 +5,7 @@ const ps = script => ({ executable: 'powershell', args: ['-NoProfile', '-Executi
 export const checks = {
   docs: [{ executable: 'node', args: ['tools/docs/validate.mjs'] }],
   site: [{ executable: 'node', args: ['site/generate-social.mjs', '--check', '--check-changed'] }, { executable: 'node', args: ['site/check-guides.mjs'] }],
-  policy: [{ executable: 'node', args: ['--test', 'tools/quality/policy.test.mjs', 'tools/quality/verify.test.mjs'] }],
+  policy: [{ executable: 'node', args: ['--test', 'tools/quality/policy.test.mjs', 'tools/quality/verify.test.mjs', 'tools/metrics/code-size.test.mjs'] }],
   'rust-format': [{ executable: 'cargo', args: ['fmt', '--all', '--', '--check'] }, { executable: 'cargo', args: ['fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check'] }],
   // custom-protocol embeds frontendDist, so build current assets before shell lint.
   'rust-clippy': [{ ...npm('ui', 'run', 'build'), windows: true }, cargo('clippy', '--workspace', '--all-targets', '--all-features', '--locked', '--', '-D', 'warnings'), cargo('clippy', '--manifest-path', 'src-tauri/Cargo.toml', '--all-targets', '--all-features', '--locked', '--', '-D', 'warnings')],

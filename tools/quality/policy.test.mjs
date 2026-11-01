@@ -27,6 +27,7 @@ const fixtures = [
   ['Jev workflow', ['.github/workflows/jev-review.yml'], []],
   ['quality workflow', ['.github/workflows/quality.yml'], areas],
   ['policy change', ['tools/quality/policy.mjs'], []],
+  ['project size metrics', ['tools/metrics/code-size.mjs'], []],
   ['documentation validator', ['tools/docs/validate.mjs'], ['docs']],
   ['mixed website and backend', ['site/compare.html', 'crates/engine/src/lib.rs'], ['site', 'backend', 'rust', 'windows']],
   ['toolchain', ['rust-toolchain.toml'], areas],
