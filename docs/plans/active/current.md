@@ -8,6 +8,38 @@ reload assertions. Validate UI typecheck, lint and focused Playwright.
 No hardware or driver is needed. Rollback: revert this test/export change.
 Hosted CI remains required; GitHub access is restricted locally.
 
+## Project size charts — 2026-11-01, owner request
+
+Objective: show the project's growth in the README. Branch
+`feature/code-stats`. No requirement ID (developer documentation); no
+Windows, hardware or driver prerequisite.
+
+Decisions: count non-blank lines per area (front end `ui/`; back end Rust
+crates, shell, contracts and acceptance scripts; audio driver `drivers/`,
+`crates/driver-helper` and M03 acceptance scripts; Markdown split
+specs-and-plans versus other), with Rust `#[cfg(test)]` items counted as
+tests. `tools/`, `site/` and `examples/` are not counted; the generated API
+reference is excluded. `tools/metrics/code-size.mjs` reads git objects, one
+sample per UTC day (last first-parent commit on `main`), so it back-fills
+history from 2026-09-05 and is incremental afterwards; `RULES_VERSION` forces
+a recount when the area rules change. `main` refuses bot pushes (GH013, see
+`marketing-metrics.yml`), so the daily `code-size.yml` writes the CSV and two
+SVGs to its own `code-stats-data` branch, and the README embeds them through
+`raw.githubusercontent.com`.
+
+Validation: `node --test tools/metrics/code-size.test.mjs` (area table,
+inline-test lexer, CSV, charts; part of the `policy` check); inline-test
+counts matched an independent count for the three largest Rust files; the
+workflow's shell steps ran twice against a local bare origin (orphan
+creation, then "already current"); both SVGs inspected in headless Edge.
+Not run: the workflow on GitHub (scheduled and dispatched runs need it on
+`main`). Until the first run, or a manual push of the seeded branch, the
+README images are missing. After the first run, confirm GitHub renders the
+SVGs from the data branch.
+
+Rollback: delete `code-size.yml`, `tools/metrics/`, the README section and
+the `code-stats-data` branch.
+
 ## UAD U4 and U6: live plugin latency and silent licence failures — 2026-10-31, owner request
 
 Objective: finish the remaining parts of U4 and U6 in the

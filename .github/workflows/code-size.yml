@@ -1,0 +1,75 @@
+name: Project size (daily)
+
+# Records non-blank lines of code, tests and Markdown for the front end, back
+# end and audio driver, one row per UTC day, and redraws the two README
+# charts. tools/metrics/code-size.mjs reads git objects, so the first run
+# back-fills every day since the first commit; later runs add the missing
+# days and refresh the newest one.
+#
+# main requires a pull request and the "Quality gate" check, so the CSV and
+# SVGs live on the unprotected `code-stats-data` branch (created from an
+# orphan the first time) and README.md shows them from there. It is separate
+# from `metrics-data` so the two workflows never race on one branch.
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-size
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Record daily project size
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          # Every day since the first commit is read from history.
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+
+      - name: Start from the recorded history
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin code-stats-data >/dev/null; then
+            git fetch --depth=1 origin code-stats-data
+            git worktree add -B code-stats-data data FETCH_HEAD
+          else
+            git worktree add --detach data
+            git -C data switch --orphan code-stats-data
+          fi
+
+      - name: Measure and redraw
+        shell: bash
+        run: node tools/metrics/code-size.mjs update data/code-size-history.csv data HEAD
+
+      - name: Commit the update
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd data
+          git add -- code-size-history.csv code-size-areas.svg code-size-total.svg
+          if git diff --cached --quiet; then
+            echo "Project size history is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "docs: record daily project size"
+          git push origin code-stats-data

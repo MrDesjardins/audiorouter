@@ -302,6 +302,34 @@ clone:
 `git config core.hooksPath .githooks`. More in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
+#### Project size
+
+How the project has grown since its first commit, counted in non-blank
+lines, one point per day. A daily workflow (`code-size.yml`) reads each day's
+last commit on `main` and publishes the charts and the
+[daily numbers](https://github.com/MrDesjardins/audiorouter/blob/code-stats-data/code-size-history.csv)
+on the `code-stats-data` branch.
+
+- **Front end:** `ui/`. Tests are `*.test.*`, `ui/e2e/` and the test
+  harness pages.
+- **Back end:** the Rust crates, the desktop shell and the TypeScript API
+  contracts. Tests are `tests/` folders, `*_tests.rs` files, the
+  `#[cfg(test)]` modules inside source files and `tests/acceptance/`.
+- **Audio driver:** `drivers/` and the driver helper crate. Tests are its
+  `tests/` folder and the M03 acceptance scripts.
+- **Markdown:** specifications and plans (`docs/spec/`, `docs/plans/`)
+  against every other Markdown file. The generated API reference is left
+  out.
+
+Tools under `tools/`, the website and the examples are not counted.
+
+![Lines of code, tests and their sum over time for the front end, the back end, the audio driver and Markdown](https://raw.githubusercontent.com/MrDesjardins/audiorouter/code-stats-data/code-size-areas.svg)
+
+![Total lines of code, tests, Markdown and their sum over time](https://raw.githubusercontent.com/MrDesjardins/audiorouter/code-stats-data/code-size-total.svg)
+
+Run it locally with
+`node tools/metrics/code-size.mjs update <history.csv> <out-dir> origin/main`.
+
 ### Working on the project
 
 - **Start here:** the [documentation index](docs/README.md), the

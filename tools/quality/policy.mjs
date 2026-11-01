@@ -9,7 +9,7 @@ export function classifyChanges(files, { full = false } = {}) {
     file = file.replaceAll('\\', '/').replace(/^\.\//, '');
     if (!file || file.includes('\0') || file.startsWith('/') || /^[a-z]:/i.test(file) || file.split('/').includes('..')) throw Error('Invalid changed path');
     if (file.endsWith('.md')) { flags.docs = true; continue; }
-    if (file === '.github/workflows/ci.yml' || file === '.github/workflows/jev-review.yml' || file.startsWith('tools/quality/')) continue;
+    if (file === '.github/workflows/ci.yml' || file === '.github/workflows/jev-review.yml' || file.startsWith('tools/quality/') || file.startsWith('tools/metrics/')) continue;
     if (file.startsWith('.github/') || file === 'rust-toolchain.toml' || file.startsWith('.cargo/')) {
       for (const area of areas) flags[area] = true;
       continue;
