@@ -38,13 +38,13 @@ Status key: **todo**, **done** (code and regression test committed),
 
 | Item | Task | Status |
 | --- | --- | --- |
-| P2-2 | VST3 worker answers Latency from its cache on the pipe thread; a plugin-requested restart is posted to the UI thread and runs under a processing lock; the worker's UI timeout drops below the host's 5 s response timeout. Fixture mode on the Rust worker for a slow latency answer; host test that a slow poll does not fail the worker | todo |
-| P2-1 | One unchanged-audio watch for a whole VST2 chain (chain input vs. final output); the chain is guarded when any member is; tests on bridge behavior | todo |
-| P2-4 | One exhaustive `node_latency_samples` in the domain, used by the catalog and `inspect_routes`; engine sample rate instead of 48; exhaustive cost class; remove unused `routeLatencyText` or use it | todo |
+| P2-2 | VST3 worker answers Latency from its cache on the pipe thread; a plugin-requested restart is posted to the UI thread and runs under a processing lock; the worker's UI timeout drops below the host's 5 s response timeout. Fixture mode on the Rust worker for a slow latency answer; host test that a slow poll does not fail the worker | done (16a17403) |
+| P2-1 | One unchanged-audio watch for a whole VST2 chain (chain input vs. final output); the chain is guarded when any member is; tests on bridge behavior | done (16a17403) |
+| P2-4 | One exhaustive `node_latency_samples` in the domain, used by the catalog and `inspect_routes`; engine sample rate instead of 48; exhaustive cost class; remove unused `routeLatencyText` or use it | done (86bf5943) |
 | P2-3 | Plugin shared memory on `MmapRaw`, raw-pointer access, volatile payload copies and acquire/release fences | todo |
-| P2-7 | Backup budget covers the media budget; source opened read-only without migration; STATE-12 and a decision record | todo |
-| P2-8 | Soundboard Play: manifest parsed once and indexed; file read and hash inside `while_servicing_audio`; blobs loaded in bounded steps | todo |
-| P2-9 | Full integrity check once per app start; light open for the shell's small reads; corrupt-database result logged | todo |
+| P2-7 | Backup budget covers the media budget; source opened read-only without migration; STATE-12 and a decision record | done (0d163449) |
+| P2-8 | Soundboard Play: manifest parsed once and indexed; file read and hash inside `while_servicing_audio`; blobs loaded in bounded steps | done |
+| P2-9 | Full integrity check once per app start; light open for the shell's small reads; corrupt-database result logged | done (0d163449) |
 | P2-5 | `App.tsx` and `SessionFlowCanvas.tsx` split by pure moves; engine and windows-audio splits | todo |
 | P3-1 | Doc comment; HTTP header `BufReader`; sample-rate-derived poll and watch windows; `unsavedReport` diagnostic; MCP stdio bounded byte reads with -32700 for bad UTF-8; SID passed from the I/O thread and a pipe read timeout; session-wide Soundboard memory budget; denormal bench | todo |
 | P2-6 | Carried items from 2026-10-07 (below) | see below |
@@ -98,6 +98,13 @@ version change is reverted together with its UI note.
 - 2026-11-01: plans tidied (Soundboard, Output Switch, Wave Link first
   round, release 0.0.24/0.0.25 and the old `current.md` archived); this plan
   created.
+- 2026-11-01: P2-2 and P2-1 (VST3 latency on the pipe thread, guarded
+  VST2 chains; `again.vst3` acceptance and the plugin-host suite pass), P2-4
+  (one exhaustive node latency), P2-7 and P2-9 (backup budget with media,
+  read-only backups, integrity check once per start) and P2-8 with the
+  session-wide Soundboard budget (manifest read once, reads and decodes on a
+  worker; `soundboard_load_reads_the_manifest_once_and_bounds_the_session`).
+  The sample-rate poll and watch windows of P3-1 landed with P2-1.
 
 ## Next action
 
