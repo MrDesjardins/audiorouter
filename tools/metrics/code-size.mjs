@@ -7,7 +7,7 @@
 //
 // `update` adds every day missing from the CSV (the first run back-fills the
 // whole history) and always recomputes the newest day, then redraws
-// <out-dir>/code-size-areas.svg (2×2: front end, back end, audio driver,
+// <out-dir>/code-size-areas.svg (front end, back end, audio driver, tooling,
 // Markdown) and <out-dir>/code-size-total.svg. `ref` defaults to origin/main;
 // each day uses the last commit on its first-parent history at 23:59:59 UTC.
 // A change to the area rules below must bump RULES_VERSION: rows recorded
@@ -17,7 +17,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export const RULES_VERSION = 1;
+export const RULES_VERSION = 2;
 
 export const COLUMNS = [
   "date",
@@ -29,6 +29,8 @@ export const COLUMNS = [
   "backend_test",
   "driver_code",
   "driver_test",
+  "tooling_code",
+  "tooling_test",
   "markdown_specs",
   "markdown_other",
 ];
@@ -36,13 +38,14 @@ export const COLUMNS = [
 const FRONTEND_EXT = /\.(?:ts|tsx|js|jsx|mjs|cjs|css|html)$/;
 const DRIVER_EXT = /\.(?:c|cpp|h|hpp|inx|inf|rc|ps1)$/;
 const ACCEPTANCE_EXT = /\.(?:ps1|py)$/;
+const TOOLING_EXT = /\.(?:rs|ts|tsx|js|jsx|mjs|cjs|py|ps1|psm1|sh|c|cpp|h|hpp|html|css)$/;
 const EXCLUDED = /(?:^|\/)(?:node_modules|third_party|target|dist[^/]*|coverage|gen|test-results|playwright-report)\//;
 // Generated Markdown would make a curve jump on each regeneration day.
 const GENERATED_MARKDOWN = new Set(["docs/operations/api-reference.md"]);
 
 /**
  * The area of a tracked file, or null when it is not counted.
- * Returns { area: "frontend"|"backend"|"driver", test: boolean, rust: boolean }
+ * Returns { area: "frontend"|"backend"|"driver"|"tooling", test: boolean, rust: boolean }
  * or { area: "markdown", bucket: "specs"|"other" }.
  *
  * Front end: everything under ui/ (tests: *.test.*, *.spec.*, ui/e2e/, the
@@ -51,8 +54,10 @@ const GENERATED_MARKDOWN = new Set(["docs/operations/api-reference.md"]);
  * acceptance scripts in tests/acceptance/ except the M03 driver ones.
  * Audio driver: drivers/, crates/driver-helper and the M03 acceptance
  * scripts. Rust tests are tests/ folders, *_tests.rs / tests.rs files, and
- * #[cfg(test)] items inside source files. tools/, site/, examples/ and
- * videos/ are not counted as product code; all Markdown is counted.
+ * #[cfg(test)] items inside source files. Tooling: scripts and programs in
+ * tools/, the GitHub workflows and the git hooks (tests: *.test.*, test/
+ * and tests/ folders, Rust tests as above). site/, examples/ and videos/
+ * are not counted; all Markdown is counted.
  */
 export function classify(path) {
   if (EXCLUDED.test(path)) return null;
@@ -84,6 +89,15 @@ export function classify(path) {
   if (path.startsWith("tests/acceptance/") && ACCEPTANCE_EXT.test(path)) {
     const name = path.slice("tests/acceptance/".length);
     return { area: name.startsWith("m03-") ? "driver" : "backend", test: true, rust: false };
+  }
+  if (path.startsWith("tools/") || path.startsWith(".githooks/")) {
+    // Git hooks have no extension.
+    if (!TOOLING_EXT.test(path) && !path.startsWith(".githooks/")) return null;
+    const test = rustTest || /(?:^|\/)tests?\//.test(path) || /\.(?:test|spec)\.[^/]+$/.test(path);
+    return { area: "tooling", test, rust };
+  }
+  if (path.startsWith(".github/workflows/") && /\.ya?ml$/.test(path)) {
+    return { area: "tooling", test: false, rust: false };
   }
   return null;
 }
@@ -422,23 +436,28 @@ function areaSeries(rows, codeKey, testKey, labels = ["Code", "Tests"]) {
 export function renderAreas(rows) {
   const dates = rows.map((r) => r.date);
   const last = rows[rows.length - 1];
-  const w = 480;
+  // Three product areas on the top row, tooling and Markdown below.
+  const gap = 16;
+  const top = 388;
+  const inner = top * 3 + gap * 2;
+  const bottom = (inner - gap) / 2;
   const h = 300;
   const panels = [
-    ["Front end (ui/)", areaSeries(rows, "frontend_code", "frontend_test")],
-    ["Back end (Rust crates, shell, contracts)", areaSeries(rows, "backend_code", "backend_test")],
-    ["Audio driver (drivers/, driver helper)", areaSeries(rows, "driver_code", "driver_test")],
-    ["Markdown", areaSeries(rows, "markdown_specs", "markdown_other", ["Specs & plans", "Other docs"])],
+    ["Front end (ui/)", areaSeries(rows, "frontend_code", "frontend_test"), 0, 0, top],
+    ["Back end (Rust crates, shell, contracts)", areaSeries(rows, "backend_code", "backend_test"), top + gap, 0, top],
+    ["Audio driver (drivers/, driver helper)", areaSeries(rows, "driver_code", "driver_test"), (top + gap) * 2, 0, top],
+    ["Tooling (tools/, workflows, git hooks)", areaSeries(rows, "tooling_code", "tooling_test"), 0, 1, bottom],
+    ["Markdown", areaSeries(rows, "markdown_specs", "markdown_other", ["Specs & plans", "Other docs"]), bottom + gap, 1, bottom],
   ];
   const body = panels
-    .map(([title, series], k) => panel({ x: 24 + (k % 2) * (w + 16), y: 80 + Math.floor(k / 2) * (h + 16), width: w, height: h, title, dates, series }))
+    .map(([title, series, dx, row, width]) => panel({ x: 24 + dx, y: 80 + row * (h + gap), width, height: h, title, dates, series }))
     .join("\n");
   return svgDocument({
-    width: 24 * 2 + w * 2 + 16,
-    height: 80 + h * 2 + 16 + 24,
+    width: 24 * 2 + inner,
+    height: 80 + h * 2 + gap + 24,
     title: "AudioRouter · lines of code and tests by area",
     subtitle: `Non-blank lines per day, ${dates[0]} to ${last.date} · commit ${last.commit.slice(0, 8)} · daily values in the CSV`,
-    description: "Four panels (front end, back end, audio driver, Markdown), each with code, tests and their sum over time.",
+    description: "Five panels (front end, back end, audio driver, tooling, Markdown), each with code, tests and their sum over time.",
     body,
   });
 }
@@ -446,8 +465,8 @@ export function renderAreas(rows) {
 export function renderTotal(rows) {
   const dates = rows.map((r) => r.date);
   const last = rows[rows.length - 1];
-  const code = rows.map((r) => r.frontend_code + r.backend_code + r.driver_code);
-  const test = rows.map((r) => r.frontend_test + r.backend_test + r.driver_test);
+  const code = rows.map((r) => r.frontend_code + r.backend_code + r.driver_code + r.tooling_code);
+  const test = rows.map((r) => r.frontend_test + r.backend_test + r.driver_test + r.tooling_test);
   const docs = rows.map((r) => r.markdown_specs + r.markdown_other);
   const series = [
     { label: "Code", color: SERIES[0], values: code },
@@ -459,7 +478,7 @@ export function renderTotal(rows) {
     width: 1000,
     height: 440,
     title: "AudioRouter · total project size",
-    subtitle: `Non-blank lines per day across front end, back end, audio driver and Markdown, ${dates[0]} to ${last.date}`,
+    subtitle: `Non-blank lines per day across front end, back end, audio driver, tooling and Markdown, ${dates[0]} to ${last.date}`,
     description: "Total code, tests, Markdown and their sum over time.",
     body: panel({ x: 24, y: 80, width: 952, height: 336, title: "All areas", dates, series }),
   });

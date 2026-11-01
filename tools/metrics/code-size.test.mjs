@@ -40,7 +40,17 @@ test('classifies files into areas', () => {
     ['drivers/audiorouter-virtual/README.md', 'markdown:other'],
     ['docs/operations/api-reference.md', null],
     ['third_party/x/README.md', null],
-    ['tools/m00-wasapi-probe/src/main.rs', null],
+    ['tools/m00-wasapi-probe/src/main.rs', 'tooling:code'],
+    ['tools/m00-wasapi-probe/target/debug/build/out.rs', null],
+    ['tools/quality/policy.mjs', 'tooling:code'],
+    ['tools/quality/policy.test.mjs', 'tooling:test'],
+    ['tools/streamdeck/src/plugin.ts', 'tooling:code'],
+    ['tools/streamdeck/test/sound.test.ts', 'tooling:test'],
+    ['tools/streamdeck/package.json', null],
+    ['tools/vm/run-cable-tone.ps1', 'tooling:code'],
+    ['tools/soundboard/README.md', 'markdown:other'],
+    ['.github/workflows/ci.yml', 'tooling:code'],
+    ['.githooks/pre-commit', 'tooling:code'],
     ['site/tools/gate.html', null],
   ];
   for (const [path, expected] of cases) assert.equal(area(path), expected, path);
@@ -79,8 +89,8 @@ test('counts single-line test items and unterminated test modules', () => {
 });
 
 const rows = [
-  { date: '2026-09-05', commit: 'a'.repeat(40), rules: RULES_VERSION, frontend_code: 0, frontend_test: 0, backend_code: 100, backend_test: 50, driver_code: 0, driver_test: 0, markdown_specs: 10, markdown_other: 5 },
-  { date: '2026-09-06', commit: 'b'.repeat(40), rules: RULES_VERSION, frontend_code: 20, frontend_test: 10, backend_code: 150, backend_test: 70, driver_code: 30, driver_test: 4, markdown_specs: 40, markdown_other: 9 },
+  { date: '2026-09-05', commit: 'a'.repeat(40), rules: RULES_VERSION, frontend_code: 0, frontend_test: 0, backend_code: 100, backend_test: 50, driver_code: 0, driver_test: 0, tooling_code: 0, tooling_test: 0, markdown_specs: 10, markdown_other: 5 },
+  { date: '2026-09-06', commit: 'b'.repeat(40), rules: RULES_VERSION, frontend_code: 20, frontend_test: 10, backend_code: 150, backend_test: 70, driver_code: 30, driver_test: 4, tooling_code: 12, tooling_test: 3, markdown_specs: 40, markdown_other: 9 },
 ];
 
 test('round-trips the history CSV and drops a CSV with other columns', () => {
@@ -88,13 +98,14 @@ test('round-trips the history CSV and drops a CSV with other columns', () => {
   assert.deepEqual(parseCsv('date,commit\n2026-09-05,abc\n'), []);
 });
 
-test('draws four area panels and the total with direct end labels', () => {
+test('draws five area panels and the total with direct end labels', () => {
   const areas = renderAreas(rows);
-  for (const title of ['Front end', 'Back end', 'Audio driver', 'Markdown']) assert.match(areas, new RegExp(title));
+  for (const title of ['Front end', 'Back end', 'Audio driver', 'Tooling', 'Markdown']) assert.match(areas, new RegExp(title));
   assert.match(areas, /All 220</);
+  assert.match(areas, /All 15</);
   assert.match(areas, /Specs &amp; plans 40</);
   const total = renderTotal(rows);
-  assert.match(total, /Code 200</);
-  assert.match(total, /Tests 84</);
-  assert.match(total, /All 333</);
+  assert.match(total, /Code 212</);
+  assert.match(total, /Tests 87</);
+  assert.match(total, /All 348</);
 });

@@ -18,8 +18,11 @@ Decisions: count non-blank lines per area (front end `ui/`; back end Rust
 crates, shell, contracts and acceptance scripts; audio driver `drivers/`,
 `crates/driver-helper` and M03 acceptance scripts; Markdown split
 specs-and-plans versus other), with Rust `#[cfg(test)]` items counted as
-tests. `tools/`, `site/` and `examples/` are not counted; the generated API
-reference is excluded. `tools/metrics/code-size.mjs` reads git objects, one
+tests. Owner revision (same day): tooling is its own area (`tools/`,
+`.github/workflows`, `.githooks`) and part of the totals; the areas chart
+shows three product panels above tooling and Markdown, and the charts stay
+under "For developers". `site/` and `examples/` are not counted; the
+generated API reference is excluded. `tools/metrics/code-size.mjs` reads git objects, one
 sample per UTC day (last first-parent commit on `main`), so it back-fills
 history from 2026-09-05 and is incremental afterwards; `RULES_VERSION` forces
 a recount when the area rules change. `main` refuses bot pushes (GH013, see

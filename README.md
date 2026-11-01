@@ -317,13 +317,16 @@ on the `code-stats-data` branch.
   `#[cfg(test)]` modules inside source files and `tests/acceptance/`.
 - **Audio driver:** `drivers/` and the driver helper crate. Tests are its
   `tests/` folder and the M03 acceptance scripts.
+- **Tooling:** the scripts and programs in `tools/` (Stream Deck plugin,
+  probes, VM, release and website scripts), the GitHub workflows and the
+  git hooks. Tests are `*.test.*` files and `test/` or `tests/` folders.
 - **Markdown:** specifications and plans (`docs/spec/`, `docs/plans/`)
   against every other Markdown file. The generated API reference is left
   out.
 
-Tools under `tools/`, the website and the examples are not counted.
+The website and the examples are not counted.
 
-![Lines of code, tests and their sum over time for the front end, the back end, the audio driver and Markdown](https://raw.githubusercontent.com/MrDesjardins/audiorouter/code-stats-data/code-size-areas.svg)
+![Lines of code, tests and their sum over time for the front end, the back end, the audio driver, tooling and Markdown](https://raw.githubusercontent.com/MrDesjardins/audiorouter/code-stats-data/code-size-areas.svg)
 
 ![Total lines of code, tests, Markdown and their sum over time](https://raw.githubusercontent.com/MrDesjardins/audiorouter/code-stats-data/code-size-total.svg)
 
