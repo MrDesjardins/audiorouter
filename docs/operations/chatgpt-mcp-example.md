@@ -12,6 +12,10 @@ the [ChatGPT tunnel setup](headless-runbook.md#chatgpt-secure-mcp-tunnel).
 The default Observer permission
 allows reading sessions. Creating or editing a session requires the owner to
 grant **Editor** to `audiorouter-chatgpt` in AudioRouter's MCP Client permissions.
+Grant **Operator** instead if ChatGPT should also control audio that is
+already playing: press Soundboard sounds, play or pause an Audio file, move a
+Time Shift, mute the microphone or stop the session. Starting audio needs
+device access that MCP clients never get, so press Play in AudioRouter.
 
 The PD200X microphone, CABLE-A output and Scarlett headphones in this example
 are devices on the owner's PC. Use the names of your own devices in a request;

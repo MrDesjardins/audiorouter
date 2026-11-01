@@ -19,10 +19,18 @@ and [Cowork architecture overview](https://support.claude.com/en/articles/144792
    remote connector URL or a Desktop chat configuration entry.
 4. Ask: **“Use AudioRouter to list my sessions. Do not change anything.”**
    Check AudioRouter's MCP activity for the matching client and successful call.
-5. To permit session/graph edits, expand **Client permissions** in AudioRouter's
-   MCP tab and change `audiorouter-cowork-local` to **Editor**. Start with a
-   stopped test session. Playback, recording and device administration remain
-   governed by their own backend scopes; Editor is not universal authority.
+5. To permit edits, expand **Client permissions** in AudioRouter's MCP tab and
+   choose the role for `audiorouter-cowork-local`:
+   - **Editor** builds and changes sessions: add, connect and set tools, fill
+     Soundboard slots, undo, duplicate and delete sessions.
+   - **Operator** can also control audio that is already playing: press and
+     stop Soundboard sounds, play or pause an Audio file, move a Time Shift,
+     reset a Meter, mute the microphone and stop a session.
+
+   Start with a stopped test session. Starting audio (Play) opens your audio
+   devices, which needs device administration that MCP clients never receive:
+   press Play in AudioRouter yourself. Recording needs its own record scope.
+   No role is universal authority.
 
 The ZIP contains only the manifest and a README. Its exact CLI, database and
 pipe paths are personal configuration for this PC; do not publish the ZIP.

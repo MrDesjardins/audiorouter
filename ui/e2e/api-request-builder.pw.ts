@@ -43,6 +43,42 @@ for (const theme of ["dark", "light", "high-contrast"]) {
   });
 }
 
+// The catalog describes the Soundboard's numbered slot settings (spec AUTO-18):
+// the builder offers one key per slot, accepts a caption and stays usable.
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`request builder offers Soundboard slot settings in ${theme}`, async ({ page, backend }, testInfo) => {
+    await page.goto("/backend-harness.html");
+    await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
+    await setColorTheme(page, theme);
+    await page.getByRole("tab", { name: "Tools", exact: true }).click();
+    await page
+      .locator(".tool-card")
+      .filter({ has: page.getByText("Soundboard", { exact: true }) })
+      .click();
+    // The builder addresses saved nodes.
+    await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByRole("tab", { name: "API", exact: true }).click();
+    const builder = page.getByRole("region", { name: "Request builder" });
+    await expect(builder).toBeVisible();
+    await expect(builder.getByLabel("Request tool").locator("option", { hasText: "Soundboard 1" })).toHaveCount(1);
+    await builder.getByLabel("Request tool").selectOption({ label: "Soundboard 1" });
+    const setting = builder.getByLabel("Request setting");
+    for (const key of ["slot1MediaId", "slot9Mode", "slot5GainDb (dB)"])
+      await expect(setting.locator("option", { hasText: key })).toHaveCount(1);
+    const before = await builder.boundingBox();
+    await setting.selectOption({ label: "slot2Caption" });
+    await builder.getByLabel("Request value").fill("Applause");
+    const generated = builder.getByLabel("Generated request");
+    await expect(generated).toHaveValue(/"slot2Caption": "Applause"/);
+    const after = await builder.boundingBox();
+    // The builder keeps its width; choosing a key must not reflow the panel sideways.
+    expect(after?.width).toBe(before?.width);
+    expect(backend.methods.filter((method) => method === "nodes.set")).toHaveLength(0);
+    await builder.scrollIntoViewIfNeeded();
+    await builder.screenshot({ path: testInfo.outputPath(`request-builder-soundboard-${theme}.png`) });
+  });
+}
+
 // The catalog now describes Duck's trigger settings for API clients; the
 // inspector keeps them in the Duck editor and shows no raw duplicate fields.
 test("Duck inspector shows no raw trigger fields from the catalog", async ({ page }) => {

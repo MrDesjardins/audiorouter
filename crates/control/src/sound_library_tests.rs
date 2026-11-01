@@ -149,3 +149,123 @@ fn a_category_set_slot_loads_and_plays_through_the_dispatcher() {
     assert!(playing, "the category slot plays after a press");
     call(&mut plane, "soundboard.stop", ids);
 }
+
+/// An assistant (MCP) or script addresses a Soundboard by its name and
+/// leaves out `sessionId`: the backend resolves the active session and the
+/// name (`resolve_node_target`). Before, every such call failed with
+/// "sessionId is required". IDs keep working, so Stream Deck is unchanged.
+#[cfg(windows)]
+#[test]
+fn soundboard_calls_resolve_the_active_session_and_a_node_name() {
+    let port_number = std::net::UdpSocket::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let port = |name: &str, direction| Port {
+        name: name.into(),
+        direction,
+        channels: 2,
+    };
+    let node = |id: &str, name: &str, kind, ports, parameters: Value| Node {
+        id: EntityId::new(id),
+        kind,
+        type_version: 1,
+        name: name.into(),
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::from_value(parameters).unwrap(),
+        ports,
+    };
+    let session = Session {
+        id: EntityId::new("named-board"),
+        name: "Named board".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![
+            node(
+                "board",
+                "Party Board",
+                NodeKind::Soundboard,
+                vec![port("out", PortDirection::Output)],
+                json!({ "slot1Set": "horns-alerts" }),
+            ),
+            node(
+                "net-send",
+                "Network send",
+                NodeKind::NetworkSend,
+                vec![port("in", PortDirection::Input)],
+                json!({ "host": "127.0.0.1", "port": port_number }),
+            ),
+        ],
+        edges: vec![audiorouter_domain::Edge {
+            id: EntityId::new("board-net-send"),
+            source_node: EntityId::new("board"),
+            source_port: "out".into(),
+            destination_node: EntityId::new("net-send"),
+            destination_port: "in".into(),
+            matrix: vec![1.0, 0.0, 0.0, 1.0],
+            enabled: true,
+        }],
+    };
+    let mut plane = ControlPlane::default();
+    plane.insert_session(session).unwrap();
+    let request = |plane: &mut ControlPlane, method: &str, params: Value| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        })
+    };
+    let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+        let response = request(plane, method, params);
+        assert!(response.error.is_none(), "{method}: {:?}", response.error);
+        response.result.unwrap()
+    };
+    call(
+        &mut plane,
+        "sessions.active.set",
+        json!({ "sessionId": "named-board", "idempotencyKey": "open" }),
+    );
+    call(
+        &mut plane,
+        "nativePaths.prepare",
+        json!({ "sessionId": "named-board" }),
+    );
+    call(
+        &mut plane,
+        "session.start",
+        json!({ "sessionId": "named-board", "idempotencyKey": "start" }),
+    );
+
+    let by_name = json!({ "nodeId": "party board" });
+    let status = call(&mut plane, "soundboard.status", by_name.clone());
+    assert_eq!(status["sessionId"], "named-board", "{status}");
+    assert_eq!(status["nodeId"], "board", "the name resolves to the ID");
+    assert_eq!(status["slots"][0]["loaded"], true, "{status}");
+    let trigger = call(
+        &mut plane,
+        "soundboard.trigger",
+        json!({ "nodeId": "Party Board", "slot": 1 }),
+    );
+    assert_eq!(trigger["accepted"], true, "{trigger}");
+    call(&mut plane, "soundboard.stop", by_name);
+    // The ID form Stream Deck sends still works.
+    call(
+        &mut plane,
+        "soundboard.status",
+        json!({ "sessionId": "named-board", "nodeId": "board" }),
+    );
+
+    let unknown = request(
+        &mut plane,
+        "soundboard.status",
+        json!({ "nodeId": "No such board" }),
+    );
+    let message = unknown.error.expect("an unknown name is refused").message;
+    assert!(
+        message.contains("no node named") && message.contains("Party Board"),
+        "the refusal lists the session's nodes: {message}"
+    );
+}

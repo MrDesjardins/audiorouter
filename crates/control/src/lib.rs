@@ -687,16 +687,26 @@ impl ControlPlane {
                         self.dispatch_audio_media_import_temporary_recording(request.params)
                     }
                     "audioMedia.delete" => self.dispatch_audio_media_delete(request.params),
-                    "audioSources.transport" => {
-                        self.dispatch_audio_source_transport(request.params)
-                    }
                     "soundLibrary.list" => self.dispatch_sound_library_list(),
                     "soundLibrary.read" => self.dispatch_sound_library_read(request.params),
-                    "soundboard.trigger" => self.dispatch_soundboard_trigger(request.params),
-                    "soundboard.stop" => self.dispatch_soundboard_stop(request.params),
-                    "soundboard.status" => self.dispatch_soundboard_status(request.params),
-                    "timeShift.transport" => self.dispatch_time_shift_transport(request.params),
-                    "meters.reset" => self.dispatch_meter_reset(request.params),
+                    "audioSources.transport"
+                    | "soundboard.trigger"
+                    | "soundboard.stop"
+                    | "soundboard.status"
+                    | "timeShift.transport"
+                    | "meters.reset" => {
+                        let params = self.resolve_node_target(request.params)?;
+                        match request.method.as_str() {
+                            "audioSources.transport" => {
+                                self.dispatch_audio_source_transport(params)
+                            }
+                            "soundboard.trigger" => self.dispatch_soundboard_trigger(params),
+                            "soundboard.stop" => self.dispatch_soundboard_stop(params),
+                            "soundboard.status" => self.dispatch_soundboard_status(params),
+                            "timeShift.transport" => self.dispatch_time_shift_transport(params),
+                            _ => self.dispatch_meter_reset(params),
+                        }
+                    }
                     "recorders.list" => self.dispatch_recorders_list(request.params),
                     "recorders.create" => self.dispatch_recorder_create(request.params),
                     "recorders.arm" | "recorders.start" | "recorders.pause"

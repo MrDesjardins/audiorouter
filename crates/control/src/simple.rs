@@ -89,7 +89,8 @@ fn kind_name(kind: NodeKind) -> String {
         .unwrap_or_default()
 }
 
-/// Default parameter values of a kind, from the node catalog.
+/// Default parameter values of a kind, from the node catalog. A parameter
+/// family (`namePattern`, such as `slot<N>Mode`) is never a literal key.
 fn default_parameters(kind: NodeKind) -> serde_json::Map<String, Value> {
     ControlPlane::node_parameter_schema(kind)
         .as_array()
@@ -97,7 +98,7 @@ fn default_parameters(kind: NodeKind) -> serde_json::Map<String, Value> {
         .flatten()
         .filter_map(|parameter| {
             let name = parameter["name"].as_str()?;
-            if name.ends_with(':') {
+            if name.ends_with(':') || parameter.get("namePattern").is_some() {
                 None
             } else {
                 Some((name.to_owned(), parameter.get("default")?.clone()))
@@ -339,6 +340,35 @@ impl ControlPlane {
         })
     }
 
+    /// Apply the common rules to a runtime call aimed at one node
+    /// (`soundboard.*`, `audioSources.transport`, `timeShift.transport`,
+    /// `meters.reset`): a missing `sessionId` means the active session, and
+    /// `nodeId` may be the node's exact name. IDs are matched first, so a
+    /// caller that already sends IDs (Stream Deck, the UI) is unaffected.
+    pub(crate) fn resolve_node_target(
+        &self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, ControlError> {
+        let Some(mut params) = params else {
+            return Ok(None);
+        };
+        if !params.is_object() {
+            return Ok(Some(params));
+        }
+        let session_id = self.simple_session_id(&params)?;
+        if let Some(reference) = params
+            .get("nodeId")
+            .and_then(Value::as_str)
+            .filter(|reference| !reference.is_empty())
+        {
+            let session = self.get_session(&session_id)?;
+            let node_id = resolve_node(session, reference)?.id.clone();
+            params["nodeId"] = json!(node_id);
+        }
+        params["sessionId"] = json!(session_id);
+        Ok(Some(params))
+    }
+
     fn simple_running(&self, session_id: &EntityId) -> bool {
         self.runtimes
             .get(session_id)
@@ -550,6 +580,9 @@ impl ControlPlane {
                             .get(name)
                             .cloned()
                             .or_else(|| spec.get("default").cloned())
+                            // An unset on/off setting with no default (Audio
+                            // file `loop`) is off.
+                            .or_else(|| (spec["type"] == "boolean").then_some(json!(false)))
                             .unwrap_or(Value::Null);
                         let next = match (&current_value, spec["enum"].as_array()) {
                             (Value::Bool(flag), _) => json!(!flag),

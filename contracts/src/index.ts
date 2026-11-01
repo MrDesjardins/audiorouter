@@ -667,6 +667,29 @@ export interface MethodDescription {
   outputSchema: unknown;
 }
 
+/** One setting of a node type or processor in discovery. */
+export interface ParameterDescriptor {
+  name: string;
+  type: string;
+  unit?: string;
+  step?: number;
+  minimum?: number;
+  maximum?: number;
+  enum?: string[];
+  /** "node": the value is the ID of another node in the same session. */
+  reference?: "node";
+  /** A parameter family such as "inputVolume:<upstreamNodeId>" or "slot<N>Mode"; never a literal key. */
+  namePattern?: string;
+  /** Range of N in a "<N>" family (Soundboard slots 1 to 9). */
+  slots?: { minimum: number; maximum: number };
+  maxLength?: number;
+  maxItems?: number;
+  /** Plain-language note: where the value comes from, cross-field rules, the value used when unset. */
+  description?: string;
+  /** Absent when the backend saves nothing for a newly added node. */
+  default?: boolean | number | string;
+}
+
 export interface DiscoveryDocument {
   protocolVersion: { major: number; minor: number };
   schemaVersion: number;
@@ -677,20 +700,7 @@ export interface DiscoveryDocument {
     availability: { status: "available" | "unavailable"; reason?: string };
     realtimeCostClass: string;
     latencySamples: number;
-    parameters: Array<{
-      name: string;
-      type: string;
-      unit?: string;
-      step?: number;
-      minimum?: number;
-      maximum?: number;
-      enum?: string[];
-      /** "node": the value is the ID of another node in the same session. */
-      reference?: "node";
-      /** A parameter family such as "inputVolume:<upstreamNodeId>". */
-      namePattern?: string;
-      default?: boolean | number | string;
-    }>;
+    parameters: ParameterDescriptor[];
   }>;
   processors: Array<{
     id: string;
@@ -698,16 +708,7 @@ export interface DiscoveryDocument {
     category: string;
     availability: { status: "available" | "unavailable"; reason?: string };
     latencySamples: number;
-    parameters: Array<{
-      name: string;
-      type: string;
-      unit?: string;
-      step?: number;
-      minimum?: number;
-      maximum?: number;
-      enum?: string[];
-      default?: boolean | number | string;
-    }>;
+    parameters: ParameterDescriptor[];
   }>;
   presets: {
     voiceChains: Array<{
@@ -1493,7 +1494,7 @@ export type ImplementedMethod =
   | "sessions.stop";
 
 export type MethodParams = {
-  "meters.reset": { sessionId: EntityId; nodeId: EntityId };
+  "meters.reset": { sessionId?: EntityId; nodeId: EntityId };
   "system.describe": undefined;
   "system.handshake": { protocolVersion: { major: number; minor: number } };
   "status.get": undefined;
@@ -1515,18 +1516,19 @@ export type MethodParams = {
   "audioMedia.finishUpload": { uploadId: EntityId };
   "audioMedia.importTemporaryRecording": { recordingId: EntityId };
   "audioMedia.delete": { mediaId: EntityId };
-  "timeShift.transport": { sessionId: EntityId; nodeId: EntityId; action: "pause" | "resume" | "back" | "forward" | "live" | "status" };
-  "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; action: "play" | "pause" | "stop" | "status" };
+  "timeShift.transport": { sessionId?: EntityId; nodeId: EntityId; action: "pause" | "resume" | "back" | "forward" | "live" | "status" };
+  "audioSources.transport": { sessionId?: EntityId; nodeId: EntityId; action: "play" | "pause" | "stop" | "status" };
   "soundboard.trigger": {
-    sessionId: EntityId;
+    /** Optional: the active session. `nodeId` may also be the node's exact name. */
+    sessionId?: EntityId;
     nodeId: EntityId;
     slot: number;
     action?: "press" | "release";
     /** Replaces the slot's own mode for this press. */
     mode?: "once" | "loop" | "toggle" | "hold";
   };
-  "soundboard.stop": { sessionId: EntityId; nodeId: EntityId; slot?: number };
-  "soundboard.status": { sessionId: EntityId; nodeId: EntityId };
+  "soundboard.stop": { sessionId?: EntityId; nodeId: EntityId; slot?: number };
+  "soundboard.status": { sessionId?: EntityId; nodeId: EntityId };
   "soundLibrary.list": undefined;
   "soundLibrary.read": { id: string };
   "recorders.list": undefined;

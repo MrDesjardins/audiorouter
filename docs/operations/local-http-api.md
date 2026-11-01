@@ -62,8 +62,15 @@ permission, like `nativePaths.prepare`.
 
 AI assistants use the same operations through MCP: `get_recipes`,
 `get_session_summary`, `add_tool`, `change_settings`, `toggle_setting`,
-`connect_nodes`, `play`, `toggle_mic_mute`, `start_recording` and others.
+`connect_nodes`, `play`, `toggle_mic_mute`, `start_recording`,
+`trigger_sound`, `control_audio_file`, `undo_last_change` and others.
 They take names and generate the idempotency key automatically.
+
+`soundboard.trigger`, `soundboard.stop`, `soundboard.status`,
+`audioSources.transport`, `timeShift.transport` and `meters.reset` follow the
+same rules: leave out `sessionId` to use the open session, and give `nodeId`
+as the node's ID or its exact name. For example, `POST
+/api/v1/soundboard/trigger` with `{"nodeId": "Party Board", "slot": 1}`.
 
 ## Build a request in the app
 

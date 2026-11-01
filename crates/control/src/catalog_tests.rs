@@ -635,7 +635,7 @@ fn describe_exposes_input_and_output_schemas_for_methods() {
     );
     assert_eq!(
         node_types["outputSchema"]["items"]["properties"]["parameters"]["items"]["required"],
-        json!(["name", "type", "default"])
+        json!(["name", "type"])
     );
     let clients = methods
         .iter()
@@ -1243,4 +1243,253 @@ fn processors_response_uses_bounded_shared_eq_coefficients() {
         params: Some(json!({"sampleRateHz": 48_000.0, "bands": [], "frequenciesHz": []})),
     });
     assert!(invalid.error.is_some());
+}
+
+/// Kinds whose schema is empty, and why. Exhaustive so a new kind must be
+/// classified here before it compiles.
+fn has_no_settings(kind: audiorouter_domain::NodeKind) -> bool {
+    use audiorouter_domain::NodeKind::*;
+    match kind {
+        // A Meter only measures; the validator accepts no parameter.
+        Meter => true,
+        // Plugin settings are per plugin (`pluginParameter:<id>`), listed by
+        // plugins.parameters for the loaded plugin, not by the kind.
+        Plugin => true,
+        PhysicalInput | ApplicationCapture | EndpointLoopback | PhysicalOutput
+        | VirtualRenderSource | VirtualCaptureSink | TestSignal | Mixer | Gain | Mute
+        | ParametricEq | Compressor | Gate | Limiter | Delay | GraphicEq | Pitch | Recorder
+        | AudioFile | Soundboard | Volume | BassTreble | Dehum | Declick | InputSwitch
+        | OutputSwitch | Denoise | SpeechDenoise | FirFilter | SpectralGate | TimeShift
+        | NetworkSend | NetworkReceive | Duck | FunVoiceChanger => false,
+    }
+}
+
+#[test]
+fn every_kind_with_settings_describes_them() {
+    for kind in audiorouter_domain::NodeKind::ALL {
+        let schema = ControlPlane::node_parameter_schema(kind);
+        let parameters = schema.as_array().unwrap();
+        assert_eq!(
+            parameters.is_empty(),
+            has_no_settings(kind),
+            "{kind:?} schema: {schema}"
+        );
+    }
+}
+
+/// A concrete parameter name for a schema entry: a family's placeholders
+/// (`<N>`, `<upstreamNodeId>`) become slot 1 or a node ID.
+fn concrete_parameter_name(parameter: &Value) -> String {
+    let Some(pattern) = parameter["namePattern"].as_str() else {
+        return parameter["name"].as_str().unwrap().to_owned();
+    };
+    let mut name = String::new();
+    let mut rest = pattern;
+    while let Some(start) = rest.find('<') {
+        let end = rest[start..].find('>').unwrap() + start;
+        name.push_str(&rest[..start]);
+        name.push_str(if &rest[start + 1..end] == "N" {
+            "1"
+        } else {
+            "node-1"
+        });
+        rest = &rest[end + 1..];
+    }
+    name.push_str(rest);
+    name
+}
+
+/// A number as a client sends it: whole for a whole-step setting.
+fn number_value(parameter: &Value, number: f64) -> Value {
+    if parameter["step"] == json!(1.0) && number >= 0.0 && number.fract() == 0.0 {
+        json!(number as u64)
+    } else {
+        json!(number)
+    }
+}
+
+/// A value the schema says is valid: the default, else the first choice,
+/// the minimum, `true`, or a representative string.
+fn representative_value(name: &str, parameter: &Value) -> Value {
+    // The default exactly as published: `nodes.add` saves it verbatim.
+    if let Some(default) = parameter.get("default") {
+        return default.clone();
+    }
+    if let Some(first) = parameter["enum"].get(0) {
+        return first.clone();
+    }
+    match parameter["type"].as_str().unwrap() {
+        "boolean" => json!(true),
+        "number" => number_value(parameter, parameter["minimum"].as_f64().unwrap()),
+        _ => match name {
+            "host" | "sender" => json!("192.168.1.20"),
+            "pairingKey" => json!("0123456789abcdef"),
+            "creationTime100ns" => json!("133000000000000000"),
+            _ => json!("value-1"),
+        },
+    }
+}
+
+/// Parameters a kind needs for its cross-field rules to hold, so a check
+/// sees only the parameter under test.
+fn base_parameters(kind: audiorouter_domain::NodeKind) -> Value {
+    match kind {
+        audiorouter_domain::NodeKind::ApplicationCapture => json!({
+            "executable": "Discord.exe",
+            "processPolicy": "selectedInstance",
+            "processId": 42,
+            "creationTime100ns": "133000000000000000"
+        }),
+        _ => json!({}),
+    }
+}
+
+/// Whether `validate_session` rejects `name` on a node of `kind` set to `value`.
+fn validator_rejects(kind: audiorouter_domain::NodeKind, name: &str, value: Value) -> bool {
+    let mut parameters = base_parameters(kind);
+    parameters[name] = value;
+    let session = audiorouter_domain::Session {
+        id: EntityId::new("schema"),
+        name: "Schema".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![audiorouter_domain::Node {
+            id: EntityId::new("node-1"),
+            kind,
+            type_version: 1,
+            name: "Node".into(),
+            enabled: true,
+            bypass: false,
+            parameters: serde_json::from_value(parameters).unwrap(),
+            ports: vec![audiorouter_domain::Port {
+                name: "out".into(),
+                direction: audiorouter_domain::PortDirection::Output,
+                channels: 2,
+            }],
+        }],
+        edges: Vec::new(),
+    };
+    let suffix = format!(".parameters.{name}");
+    audiorouter_domain::validate_session(&session)
+        .err()
+        .unwrap_or_default()
+        .iter()
+        .any(|error| {
+            matches!(error, audiorouter_domain::ValidationError::InvalidParameter { path } if path.ends_with(&suffix))
+        })
+}
+
+/// The schema every client reads and the validator the backend applies
+/// must agree: each described value is accepted and each advertised bound
+/// is enforced.
+#[test]
+fn every_described_parameter_is_accepted_and_its_bounds_are_enforced() {
+    for kind in audiorouter_domain::NodeKind::ALL {
+        for parameter in ControlPlane::node_parameter_schema(kind)
+            .as_array()
+            .unwrap()
+        {
+            let name = concrete_parameter_name(parameter);
+            let value = representative_value(&name, parameter);
+            assert!(
+                !validator_rejects(kind, &name, value.clone()),
+                "{kind:?}.{name} = {value} is described but rejected"
+            );
+            if let Some(minimum) = parameter["minimum"].as_f64() {
+                assert!(
+                    validator_rejects(kind, &name, number_value(parameter, minimum - 1.0)),
+                    "{kind:?}.{name} accepts below its minimum"
+                );
+            }
+            if let Some(maximum) = parameter["maximum"].as_f64() {
+                assert!(
+                    validator_rejects(kind, &name, number_value(parameter, maximum + 1.0)),
+                    "{kind:?}.{name} accepts above its maximum"
+                );
+            }
+            if parameter["type"] == "string" && parameter.get("enum").is_some() {
+                assert!(
+                    validator_rejects(kind, &name, json!("notAnOption")),
+                    "{kind:?}.{name} accepts a value outside its choices"
+                );
+            }
+            if let Some(max_length) = parameter["maxLength"].as_u64() {
+                let long = "x".repeat(usize::try_from(max_length).unwrap() + 1);
+                assert!(
+                    validator_rejects(kind, &name, json!(long)),
+                    "{kind:?}.{name} accepts more than {max_length} bytes"
+                );
+            }
+        }
+    }
+}
+
+/// Every descriptor in nodes.types and processors.list fits the published
+/// output schema: only known fields, and the required ones present.
+#[test]
+fn parameter_descriptors_match_their_published_schema() {
+    let schema = crate::api_output_schema::parameter_descriptor_schema();
+    let known = schema["properties"].as_object().unwrap();
+    let types = schema["properties"]["type"]["enum"].as_array().unwrap();
+    let description = ControlPlane::default().describe();
+    let descriptors = description["nodeTypes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .chain(description["processors"].as_array().unwrap())
+        .flat_map(|item| item["parameters"].as_array().unwrap().clone());
+    for descriptor in descriptors {
+        for field in descriptor.as_object().unwrap().keys() {
+            assert!(
+                known.contains_key(field),
+                "unpublished field {field} in {descriptor}"
+            );
+        }
+        for field in schema["required"].as_array().unwrap() {
+            assert!(
+                descriptor.get(field.as_str().unwrap()).is_some(),
+                "{descriptor} lacks {field}"
+            );
+        }
+        assert!(types.contains(&descriptor["type"]), "{descriptor} type");
+    }
+}
+
+/// Families are never literal keys, and the Soundboard family covers every
+/// field the validator accepts for a slot.
+#[test]
+fn soundboard_slots_are_described_as_families() {
+    let schema = ControlPlane::node_parameter_schema(audiorouter_domain::NodeKind::Soundboard);
+    let fields = schema
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|parameter| {
+            assert!(parameter.get("default").is_none(), "{parameter}");
+            assert_eq!(
+                parameter["slots"]["maximum"],
+                audiorouter_domain::SOUNDBOARD_SLOTS
+            );
+            parameter["namePattern"]
+                .as_str()
+                .unwrap()
+                .strip_prefix("slot<N>")
+                .unwrap()
+                .to_owned()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        fields,
+        ["MediaId", "FileName", "Caption", "GainDb", "Mode", "Set"]
+    );
+    assert!(!validator_rejects(
+        audiorouter_domain::NodeKind::Soundboard,
+        "slot9Set",
+        json!(["lib:a", "lib:b"])
+    ));
+    assert!(validator_rejects(
+        audiorouter_domain::NodeKind::Soundboard,
+        "slot10MediaId",
+        json!("lib:a")
+    ));
 }

@@ -1,6 +1,6 @@
 // Property editors of the selected node (moved from App.tsx).
 import { useContext, useEffect, useState } from "react";
-import type { Node, PluginParametersResult } from "@audiorouter/contracts";
+import type { Node, NodeKind, PluginParametersResult } from "@audiorouter/contracts";
 import { formatUiError, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { applicationCaptureChoices, applicationChoiceKey, mixerInputs, mixerInputVolumeKey } from "./draft";
@@ -16,6 +16,53 @@ import { deviceChoiceLabel, sortDevicesAlphabetically } from "./endpointBinding"
 import { useHiddenDevices, visibleDevices } from "./hiddenDevices";
 import type { VirtualCableStatus } from "@audiorouter/contracts";
 import { cableEndpointName, cableUnavailableReason } from "./virtualCableStatus";
+
+/**
+ * Whether the catalog's settings of a kind are edited by the generic list
+ * below. Device and source kinds have dedicated fields (device pickers,
+ * channel and spatial fields, network, file and Soundboard editors), so the
+ * catalog describes them for API and MCP clients only. A Record keeps the
+ * list exhaustive: a new kind fails to typecheck until it is classified.
+ */
+export const GENERIC_SETTINGS_EDITOR: Record<NodeKind, boolean> = {
+  physicalInput: false,
+  applicationCapture: false,
+  endpointLoopback: false,
+  physicalOutput: false,
+  virtualRenderSource: false,
+  virtualCaptureSink: false,
+  audioFile: false,
+  soundboard: false,
+  networkSend: false,
+  networkReceive: false,
+  meter: false,
+  testSignal: true,
+  mixer: true,
+  gain: true,
+  mute: true,
+  parametricEq: true,
+  compressor: true,
+  gate: true,
+  limiter: true,
+  delay: true,
+  graphicEq: true,
+  pitch: true,
+  recorder: true,
+  plugin: true,
+  volume: true,
+  bassTreble: true,
+  dehum: true,
+  declick: true,
+  inputSwitch: true,
+  outputSwitch: true,
+  denoise: true,
+  speechDenoise: true,
+  firFilter: true,
+  spectralGate: true,
+  timeShift: true,
+  duck: true,
+  funVoiceChanger: true,
+};
 
 /** Duck settings the Duck editor owns (trigger mode and Siege phases). */
 export const DUCK_EDITOR_PARAMETERS = new Set(["trigger", "duckMenu", "duckPrep", "duckBetweenRounds", "duckAction"]);
@@ -105,6 +152,7 @@ export function ProcessorParameterEditor({
       </>
     );
   }
+  if (!GENERIC_SETTINGS_EDITOR[node.kind]) return null;
   const wireKind = node.kind.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
   const descriptor = processors?.find((processor) => processor.id === node.kind);
   // Parameter families such as the Mixer's `inputVolume:<nodeId>` have their own editor.
@@ -117,6 +165,7 @@ export function ProcessorParameterEditor({
   ).filter(
     (parameter) =>
       !parameter.name.endsWith(":") &&
+      parameter.namePattern === undefined &&
       !(parameter.name === "learning" && (node.kind === "denoise" || node.kind === "spectralGate")) &&
       // Node references and the Duck trigger/phase choices have dedicated pickers in the Duck editor.
       !("reference" in parameter && parameter.reference) &&

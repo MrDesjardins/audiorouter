@@ -116,7 +116,7 @@ fn assert_stdio_client(client_id: &str) {
     );
     assert_eq!(
         modern_tools["result"]["tools"].as_array().unwrap().len(),
-        76
+        89
     );
     assert_eq!(modern_tools["result"]["resultType"], "complete");
     assert_eq!(modern_tools["result"]["cacheScope"], "public");
@@ -133,6 +133,39 @@ fn assert_stdio_client(client_id: &str) {
     );
     assert_eq!(modern_call["result"]["isError"], false);
     assert_eq!(modern_call["result"]["resultType"], "complete");
+
+    // Task tools added for API parity (spec AUTO-18), through the real
+    // binary: reads work for this Observer, a Soundboard press is refused.
+    for (index, tool) in ["get_status", "list_sounds"].into_iter().enumerate() {
+        let read = send(
+            &mut input,
+            &mut output,
+            json!({
+                "jsonrpc": "2.0", "id": format!("parity-read-{index}"), "method": "tools/call",
+                "params": { "name": tool, "arguments": {}, "_meta": modern_meta }
+            }),
+        );
+        assert_eq!(read["result"]["isError"], false, "{tool}: {read}");
+    }
+    let denied_press = send(
+        &mut input,
+        &mut output,
+        json!({
+            "jsonrpc": "2.0", "id": "parity-denied-press", "method": "tools/call",
+            "params": {
+                "name": "trigger_sound", "arguments": { "node": "Board", "slot": 1 },
+                "_meta": modern_meta
+            }
+        }),
+    );
+    assert_eq!(denied_press["result"]["isError"], true, "{denied_press}");
+    assert!(
+        denied_press
+            .to_string()
+            .to_lowercase()
+            .contains("permission"),
+        "an Observer may not press a Soundboard: {denied_press}"
+    );
     assert_eq!(
         modern_call["result"]["_meta"]["io.modelcontextprotocol/serverInfo"]["name"],
         "audiorouter"
@@ -267,7 +300,7 @@ fn assert_stdio_client(client_id: &str) {
         &mut output,
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": { "_meta": { "example.com/trace": "legacy-list" } } }),
     );
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 76);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 89);
 
     // A malformed line gets a JSON-RPC parse error and the session continues.
     writeln!(input, "{{ not json").unwrap();

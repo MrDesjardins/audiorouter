@@ -90,6 +90,35 @@ describe("request builder", () => {
     expect(find(targets, "inputVolume:siege").kind).toBe("parameter");
   });
 
+  it("expands a Soundboard slot family into one key per slot, never the pattern itself", () => {
+    const soundboard = { ...session.nodes[4], id: "board", kind: "soundboard" } as Session["nodes"][number];
+    const types = [
+      {
+        type: "soundboard@1",
+        availability: { status: "available" },
+        realtimeCostClass: "low",
+        latencySamples: 0,
+        parameters: [
+          {
+            name: "slot<N>GainDb",
+            namePattern: "slot<N>GainDb",
+            slots: { minimum: 1, maximum: 9 },
+            type: "number",
+            unit: "dB",
+            minimum: -24,
+            maximum: 6,
+          },
+          { name: "other<id>", namePattern: "other<id>", type: "string" },
+        ],
+      },
+    ] as unknown as DiscoveryDocument["nodeTypes"];
+    const keys = builderTargets(session, soundboard, types).map((target) => target.key);
+    expect(keys).toEqual(["enabled", "bypass", ...Array.from({ length: 9 }, (_, index) => `slot${index + 1}GainDb`)]);
+    expect(parseValue(find(builderTargets(session, soundboard, types), "slot9GainDb"), "7")).toEqual({
+      error: "Enter a value from -24 to 6 dB.",
+    });
+  });
+
   it("offers the Duck trigger node by name and sends its ID", () => {
     const targets = builderTargets(session, session.nodes[4], nodeTypes);
     const key = find(targets, "keyNodeId");

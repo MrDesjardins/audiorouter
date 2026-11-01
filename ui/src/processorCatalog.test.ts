@@ -37,6 +37,39 @@ describe("processor catalog presentation", () => {
     expect(processorParametersText(pitch)).toBe("no parameters");
   });
 
+  // A free text setting (device ID, address, node reference) has no choices;
+  // the backend validates it. Rejecting it blocked the device picker once
+  // the catalog described endpointId, and blocked the Duck trigger node.
+  it("accepts free text settings and still checks their length", () => {
+    const nodeTypes: DiscoveryDocument["nodeTypes"] = [
+      {
+        type: "physicalInput@1",
+        availability: { status: "available" },
+        realtimeCostClass: "io",
+        latencySamples: 0,
+        parameters: [
+          { name: "endpointId", type: "string", maxLength: 128, description: "Device ID from devices.list." },
+          { name: "channelMode", type: "string", enum: ["stereo", "mono", "left", "right"] },
+        ],
+      },
+    ];
+    const duck: ProcessorDescriptor = {
+      ...pitch,
+      id: "duck",
+      parameters: [{ name: "keyNodeId", type: "string", reference: "node" }],
+    };
+    expect(processorParameterError(null, "physicalInput", "endpointId", "{0.0.1.00000000}.{abc}", nodeTypes)).toBe(
+      null,
+    );
+    expect(processorParameterError(null, "physicalInput", "endpointId", "x".repeat(129), nodeTypes)).toBe(
+      "endpointId must be at most 128 characters",
+    );
+    expect(processorParameterError(null, "physicalInput", "channelMode", "surround", nodeTypes)).toBe(
+      "channelMode must be one of the advertised values",
+    );
+    expect(processorParameterError([duck], "duck", "keyNodeId", "mic")).toBe(null);
+  });
+
   it("validates and presents enumerated string parameters", () => {
     const descriptor = { ...pitch, parameters: [{ name: "filter", type: "string", enum: ["peaking", "notch"] }] };
     expect(processorParameterError([descriptor], "pitch", "filter", "notch")).toBeNull();

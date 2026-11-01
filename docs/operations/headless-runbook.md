@@ -267,7 +267,10 @@ enable AudioRouter from its add-tools menu. A ready local runtime does not
 prove that ChatGPT has completed approval or enabled the connector in that
 conversation. The `audiorouter-chatgpt` client starts as Observer, which is
 read-only; creating a session requires changing it to Editor under Client
-permissions. That grant remains until changed or revoked. Disconnect stops
+permissions, and controlling playing audio (Soundboard presses, Audio file
+and Time Shift transport, microphone mute, stop) requires Operator. Starting
+audio needs device access MCP clients never receive, so Play stays in the
+window. That grant remains until changed or revoked. Disconnect stops
 the local process and leaves the OpenAI tunnel and runtime key in place;
 revoke or rotate those from OpenAI Platform when no longer needed. **Forget
 saved details** also removes the local protected copy, but does not revoke
