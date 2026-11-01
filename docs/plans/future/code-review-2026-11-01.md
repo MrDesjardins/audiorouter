@@ -2,9 +2,10 @@
 
 A second full review of the repository, after the
 [2026-10-07 review](code-review-2026-10-07.md). It re-checks that review's
-open items and reads the code added since then: the plugin latency and
-licence guard (U4/U6), the Soundboard, network audio and the HTTP/MCP
-surface. Findings are ranked P0 to P3. Like every plan in this folder, this
+open items and reads the newest and riskiest code: the plugin latency
+and licence guard (U4/U6) and the HTTP and tunnel entry points. It is a
+targeted review, not a line-by-line read of the whole repository; the
+areas not reviewed are listed below. Findings are ranked P0 to P3. Like every plan in this folder, this
 is a backlog, not authorized work. Each item needs the owner's go-ahead and
 a place in the [active plan](../active/current.md).
 
@@ -31,6 +32,16 @@ a place in the [active plan](../active/current.md).
     vulnerabilities.
   - GitHub: CI, CodeQL and the website deploy passed on `f2b84169`; the
     nightly quality run passed on `068b395a`.
+- **Read:** the plugin-host runtime bridge and shared memory, the VST3
+  worker's latency path (`tools/m06-vst3-worker/main.cpp`), control
+  `plugins.rs`, the domain catalog and `inspect_routes`,
+  `src-tauri/src/http_api.rs`, the tunnel launcher (`mcp_tunnel.rs`), a
+  lock/allocation scan of `network_audio.rs`, a `NodeKind` catch-all scan
+  of all production Rust, and a UI size and swallowed-error scan.
+- **Not reviewed:** storage, recording, transport, the engine DSP and
+  graph compiler, the `windows-audio` WASAPI and driver-bridge code, the
+  Soundboard, the CLI MCP server (`crates/cli`), the drivers, and
+  `src-tauri/src/main.rs`. A second pass should cover them.
 - **Not run:** `cargo build`, `cargo test`, Clippy, Vitest and Playwright.
   The owner's `audiorouter-shell.exe` was running, and heavy compiles
   starve live audio. Nothing was measured with audio hardware. Line numbers
@@ -89,8 +100,10 @@ a place in the [active plan](../active/current.md).
   watch ever runs for them.
 - **Impact.** Microphone → VST2 A → VST2 B, where both plugins pass audio
   through unchanged (unlicensed or self-bypassed): the dry voice goes on
-  indefinitely with no silence and no hint, while the API reports the
-  guard's policy as applied. DEC U6 scopes the guard to "a single plugin",
+  indefinitely with no silence and no hint. The `passThroughAllowed`
+  description that `list_tool_kinds` gives assistants says that any plugin
+  fed by a recording device is silenced (`crates/control/src/catalog.rs:165`),
+  which is not true for chain members. DEC U6 scopes the guard to "a single plugin",
   so this is a documented limit. However, the code and the test suggest
   wider coverage than the bridge delivers. VST3 (UADx) plugins each get
   their own worker, so the owner's UADx case is covered. A chain's
@@ -125,9 +138,8 @@ a place in the [active plan](../active/current.md).
   re-activation, stops this bridge's audio. No frames are exchanged while
   the poll waits, so the pipeline drains into output misses (silence).
   After 5 s the host kills the worker, which counts toward quarantine.
-  Before U4 the latency was read only at start and after closing the
-  editor. The poll now repeats twice a second, so the window is reachable
-  in normal use. The mismatched timeouts also mean the host kills the
+  Before U4 the latency was not polled while playing. The poll now
+  repeats twice a second, so the window is reachable in normal use. The mismatched timeouts also mean the host kills the
   worker before the worker's own guard can report the UI hang.
 - **Fix.** Keep the poll off the UI thread. The pipe thread always answers
   from the cache and posts the re-activation to the UI thread, and the
@@ -160,8 +172,9 @@ a place in the [active plan](../active/current.md).
   only. Copy the payload with `ptr::read_volatile` or atomic-sized loads,
   and put `fence(Acquire)` before the second state load (with the matching
   `fence(Release)` after the writer's odd store). Run the shared-memory
-  unit tests under Miri, with a non-file mapping, to check.
-- **Verify.** Miri on the region tests; the existing worker-process
+  unit tests under Miri, if it can run them, to check.
+- **Verify.** Miri on the region tests, if Miri can run them (file
+  mappings may need an in-memory stand-in); the existing worker-process
   continuity tests.
 
 ### P2-4 Two latency tables and catch-all arms in the domain catalog
@@ -172,10 +185,13 @@ a place in the [active plan](../active/current.md).
   (`crates/domain/src/lib.rs:466-477`). `inspect_routes` computes each
   path's `latency_samples` from a separate list that counts only Pitch
   (hard-coded 1,024) and Delay (`delayMs × 48`), with `_ => 0`
-  (`lib.rs:2836-2848`). The UI shows that number as "N samples estimated
-  latency" (`ui/src/graphView.ts:20`).
-- **Impact.** A route with a Limiter, Denoise or FIR filter reports less
-  delay than the engine adds, and plugin delay is never included. A new
+  (`lib.rs:2836-2848`). That number goes out through the `inspect_routes`
+  API and MCP output. `ui/src/graphView.ts:20` (`routeLatencyText`) formats
+  it, but has no production caller, only tests.
+- **Impact.** Through the API and MCP, a route with a Limiter, Denoise or
+  FIR filter reports less delay than the engine adds, and plugin delay is
+  never included. The playing route's runtime stage delays are a separate
+  path and were not checked here. A new
   processor would silently get latency 0 and the "device-bound" cost
   class. That is the hand-kept list the owner rule (2026-10-29) forbids.
 - **Fix.** One exhaustive `fn node_latency_samples(node, sample_rate)` with
@@ -183,8 +199,9 @@ a place in the [active plan](../active/current.md).
   engine's sample rate instead of 48, and the reported plugin delay when the
   route is playing. Make the cost-class match exhaustive too.
 - **Verify.** A domain test that walks every `NodeKind` and checks that
-  the path estimate equals the sum of the catalog values for a chain of that
-  kind.
+  the path estimate equals the sum of `node_latency_samples` for each node
+  (the function takes the node, so Delay's parameter counts). Remove
+  `routeLatencyText` or use it.
 
 ### P2-5 The largest files grew back
 
@@ -194,9 +211,9 @@ a place in the [active plan](../active/current.md).
   Rust side, `crates/engine/src/lib.rs` (18,054) and
   `crates/windows-audio/src/lib.rs` (13,772) were not split as `control`
   was.
-- **Impact.** Parallel sessions edit the same few files, which led to the
-  2026-10-04 commit mix-up. Reviews of those files are slow, and every
-  App-level state change re-renders more (see the 20 Hz telemetry lesson).
+- **Impact.** These are the four largest source files. The two UI files
+  grew by 1,162 and 2,370 lines since the last split. Size alone is not a
+  defect, so this is a maintainability item.
 - **Fix.** Do it the same way as P2-1/P2-2 last time: mechanical,
   one-area-at-a-time moves with no behavior change. Candidates: the
   plugin, network and soundboard handlers out of `App.tsx`; canvas
