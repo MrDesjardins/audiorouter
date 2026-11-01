@@ -123,6 +123,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.saveState` | `pluginScan` | mutating; captures a playing plugin node's opaque state, stores it under the database's `plugin-states` folder, and returns a `stateId` to set on the node |
 | `plugins.openEditor` | `pluginScan` | external operation; opens a playing VST3 or VST2 plugin's own editor inside a parent window owned by `ownerProcessId` (the desktop shell) |
 | `plugins.closeEditor` | `pluginScan` | external operation; closes the editor and applies its edits to the instance that processes audio |
+| `plugins.resume` | `sessionControl` | mutating; `nodeId` (ID or exact name) selects a plugin in a playing route, `sessionId` defaults to the active session; Retry after the plugin was silenced for passing a recording device's audio through unchanged (`plugin.silencedUnchanged`); `resumed` is false, and the plugin stays silent, while it still passes audio through |
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
 | `plugins.inspect` | `pluginScan` | read-only |
 | `plugins.parameters` | `pluginScan` | external operation; bounded descriptors from the exact revalidated plugin worker |

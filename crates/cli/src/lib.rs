@@ -2400,6 +2400,7 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "control_audio_file",
     "control_time_shift",
     "reset_meter",
+    "resume_plugin",
     "undo_last_change",
     "duplicate_session",
     "delete_session",
@@ -2725,6 +2726,7 @@ fn mcp_tools() -> Value {
         { "name": "control_audio_file", "description": "Play, pause or stop one Audio file (or Test signal) source while the route plays, without stopping the rest; status reads its position.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Audio file or Test signal node name or ID." }, "action": { "type": "string", "enum": ["play", "pause", "stop", "status"] } }, "required": ["node", "action"], "additionalProperties": false } },
         { "name": "control_time_shift", "description": "Pause, resume, jump back or forward 10 s, or return to live on a Time Shift node while audio plays; status reads its buffer.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Time Shift node name or ID." }, "action": { "type": "string", "enum": ["pause", "resume", "back", "forward", "live", "status"] } }, "required": ["node", "action"], "additionalProperties": false } },
         { "name": "reset_meter", "description": "Clear the held peak and clipping count of a Meter node while audio plays.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Meter node name or ID." } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "resume_plugin", "description": "Retry a plugin that AudioRouter silenced because it passed the microphone through unchanged (get_levels shows plugin.silencedUnchanged), usually because it is not licensed or signed in. Ask the user to sign in to the plugin's licence app first. Returns resumed=false and keeps it silent while the plugin still passes audio through; then the user must stop and play the route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "undo_last_change", "description": "Undo the most recent saved change to the session (a tool added, removed, connected or changed), like Undo in the window. Applied live and saved.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
         { "name": "duplicate_session", "description": "Copy a saved session under a new name; the copy is not opened.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to copy (from list_sessions)." }, "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Optional name of the copy." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "delete_session", "description": "Permanently delete a saved session. Ask the user to confirm the exact session first.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to delete (from list_sessions)." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
@@ -2880,6 +2882,7 @@ fn mcp_tool_call(
         "control_audio_file" => ("audioSources.transport", Some(mcp_node_params(arguments))),
         "control_time_shift" => ("timeShift.transport", Some(mcp_node_params(arguments))),
         "reset_meter" => ("meters.reset", Some(mcp_node_params(arguments))),
+        "resume_plugin" => ("plugins.resume", Some(mcp_node_params(arguments))),
         "duplicate_session" => {
             let source = arguments["sessionId"].as_str().unwrap_or_default();
             let copy_id = format!(
@@ -3711,6 +3714,9 @@ mod tests {
                 json!({ "node": "Replay", "action": "status" }),
             ),
             ("reset_meter", json!({ "node": "Level" })),
+            // No plugin can be added here; the name still resolves and the
+            // backend refuses because nothing plays.
+            ("resume_plugin", json!({ "node": "Level" })),
         ] {
             let (_, payload) = call(&mut plane, tool, arguments);
             let text = payload.to_string();
@@ -5617,7 +5623,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 89);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 90);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

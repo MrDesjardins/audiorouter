@@ -3160,6 +3160,81 @@ button.primary {
   border: 1px solid rgb(255 255 255 / 12%);
   border-radius: 6px;
 }
+/* Voice protection: the unchanged-audio guard of a plugin node. Its status
+   variants stack in one cell and its steps are always laid out, so a silence
+   starting or ending never moves the panel (UI-17). */
+.plugin-voice-guard {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--ambient-surface);
+}
+.plugin-voice-guard.is-alert {
+  border-color: color-mix(in srgb, var(--danger, #ff6b6b) 60%, var(--ambient-edge));
+  background: color-mix(in srgb, var(--danger, #ff6b6b) 9%, var(--ambient-surface));
+}
+.plugin-guard-stack {
+  display: grid;
+}
+.plugin-guard-stack > * {
+  grid-area: 1 / 1;
+}
+.plugin-guard-stack > div {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+}
+.plugin-voice-guard.is-alert .plugin-guard-title {
+  color: var(--danger, #ff6b6b);
+}
+/* A numbered step: number, text, then an optional action on the right. */
+.plugin-guard-step {
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: start;
+}
+.plugin-guard-step > span:nth-child(2) {
+  display: grid;
+  gap: 0.2rem;
+  justify-items: start;
+}
+.plugin-guard-number {
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--ambient-surface-hi);
+  border: 1px solid var(--ambient-edge);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.plugin-voice-guard.is-alert .plugin-guard-number {
+  border-color: var(--danger, #ff6b6b);
+  color: var(--danger, #ff6b6b);
+}
+.plugin-voice-guard .plugin-pass-through {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+}
+.theme-light .plugin-voice-guard.is-alert .plugin-guard-title,
+.theme-light .plugin-voice-guard.is-alert .plugin-guard-number {
+  color: #b42318;
+  border-color: #b42318;
+}
+.theme-high-contrast .plugin-voice-guard.is-alert {
+  border-color: #fff;
+}
+.theme-high-contrast .plugin-voice-guard.is-alert .plugin-guard-title,
+.theme-high-contrast .plugin-voice-guard.is-alert .plugin-guard-number {
+  color: #fff;
+  border-color: #fff;
+}
 .plugin-worker-health.is-alert {
   border-color: rgb(255 107 107 / 45%);
   background: rgb(255 107 107 / 10%);

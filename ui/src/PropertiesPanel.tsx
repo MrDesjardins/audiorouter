@@ -564,6 +564,12 @@ export function PropertiesPanel({
               disabled={!backend.connected}
               onUnload={() => unloadPluginNode(selectedNode.id)}
               snapshot={liveDiagnostics ?? null}
+              backend={backend}
+              sessionId={session.id}
+              onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+              onRemove={(names) =>
+                recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)
+              }
             />
           </>
         )}

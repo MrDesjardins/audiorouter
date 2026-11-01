@@ -203,6 +203,7 @@ impl ControlPlane {
                     &worker.output_node_ids(),
                 );
                 session = audiorouter_engine::prune_inactive_upstream(&session).into_owned();
+                let guards = crate::plugins::plugin_unchanged_guards(&session);
                 for node in session
                     .nodes
                     .iter_mut()
@@ -213,6 +214,7 @@ impl ControlPlane {
                         Err(_) if !node.enabled => continue,
                         Err(error) => return Err(error),
                     };
+                    bridge.set_silence_if_unchanged(guards.contains(&node.id));
                     bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
                     stages.insert(node.id.clone(), bridge);
                     node.enabled = true;

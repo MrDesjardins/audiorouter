@@ -104,6 +104,8 @@ fn run() -> Result<(), String> {
         .collect();
     let mut selected_instance = 0;
     let mut chain_configured = false;
+    #[cfg(feature = "test-fixtures")]
+    let mut fixture_latency_requests = 0_u32;
     let initial_plugin_sha256 = plugin_sha256.clone();
     #[cfg(not(windows))]
     if plugin_path.is_some() {
@@ -362,14 +364,23 @@ fn run() -> Result<(), String> {
                     latency
                 };
                 #[cfg(feature = "test-fixtures")]
-                let latency = if _fixture_mode.as_deref() == Some("latency") {
-                    audiorouter_plugin_host::WorkerLatency::new(
+                let latency = match _fixture_mode.as_deref() {
+                    Some("latency") => audiorouter_plugin_host::WorkerLatency::new(
                         latency.samples.saturating_add(64),
                         latency.sample_rate_hz,
                     )
-                    .map_err(|error| format!("fixture latency invalid: {error:?}"))?
-                } else {
-                    latency
+                    .map_err(|error| format!("fixture latency invalid: {error:?}"))?,
+                    // A plugin whose delay grows while it runs: 64 samples
+                    // more each time it is asked.
+                    Some("latency-steps") => {
+                        fixture_latency_requests = fixture_latency_requests.saturating_add(1);
+                        audiorouter_plugin_host::WorkerLatency::new(
+                            fixture_latency_requests.saturating_mul(64),
+                            latency.sample_rate_hz,
+                        )
+                        .map_err(|error| format!("fixture latency invalid: {error:?}"))?
+                    }
+                    _ => latency,
                 };
                 write_worker_message(&mut writer, &WorkerMessage::Latency(latency))
                     .map_err(|error| format!("latency write failed: {error:?}"))?;
@@ -700,7 +711,12 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
                         .ok_or_else(|| "--fixture-mode requires a value".to_string())?;
                     if !matches!(
                         mode.as_str(),
-                        "crash" | "hang" | "invalid-output" | "descriptors" | "latency"
+                        "crash"
+                            | "hang"
+                            | "invalid-output"
+                            | "descriptors"
+                            | "latency"
+                            | "latency-steps"
                     ) {
                         return Err("unsupported --fixture-mode".into());
                     }

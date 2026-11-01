@@ -95,11 +95,15 @@ running. **Loaded plugins** lists every plugin in the current session.
   and leave it.
 - Bypass the block and listen for the difference.
 - The Properties panel shows the delay each tool adds, including the
-  plugin's worker queue and the delay the plugin reports for itself.
+  plugin's worker queue and the delay the plugin reports for itself. If you
+  switch on a setting that changes that delay (lookahead or oversampling),
+  the figure updates within about half a second while the route plays.
+  Other branches of a Mixer are not delayed to match.
 - If the plugin returns your audio unchanged for a couple of seconds,
   **Isolated worker health** says so. That is normal for an effect at
   neutral settings, but it is also how an unlicensed plugin behaves; see
-  [troubleshooting](#a-plugin-is-silent-or-shows-failed).
+  [troubleshooting](#a-plugin-is-silent-or-shows-failed). On a microphone
+  path the plugin is then silenced (below).
 
 ### The protected voice rule
 
@@ -109,6 +113,26 @@ sends your unprocessed voice instead, so a broken noise gate can't suddenly
 broadcast your room. The block and **Loaded plugins** show the failure. Fix
 the cause, then press **Stop** and **Play** to start the plugin again.
 AudioRouter does not keep restarting a failing plugin on its own.
+
+An unlicensed plugin often doesn't fail at all: it passes your voice
+through untouched. On a path fed by a recording device, AudioRouter treats
+that as a failure too. After about two seconds of clearly audible, unchanged
+audio, the plugin's output goes silent. Those first two seconds do reach the
+output, because AudioRouter cannot tell sooner. The **Voice protection**
+card in the plugin's Properties turns red and offers two ways to get your
+voice back:
+
+1. **Expected an effect?** Sign in to the vendor's app, then press
+   **Retry**. If the plugin still passes the audio through, it stays
+   silent; press **Stop** and **Play** so it loads again.
+2. **Meant to leave your voice unchanged?** (an EQ kept flat, a meter
+   plugin) Turn on **Allow unchanged audio**. The plugin reloads, with a
+   short gap if the route is playing, and is no longer muted for this.
+
+Going back to a version from before 2026-10-31? Turn **Allow unchanged
+audio** off and save first. Older versions don't know that setting: one
+saved route that still has it can stop them from listing your sessions at
+all. Older undo history that includes it may still fail to open there.
 
 ## Troubleshooting
 
@@ -191,7 +215,9 @@ Each one processes audio in mono and stereo.
 
 If a UADx plugin passes your audio through unchanged (the inspector says so
 after a couple of seconds of sound), it is not authorized on this PC: open UA Connect, check that you are signed in and the title is
-licensed (a Spark subscription must be active), then press Stop and Play.
+licensed (a Spark subscription must be active), then press Retry, or Stop
+and Play. On a microphone path the plugin is silent until then (see
+[the protected voice rule](#the-protected-voice-rule)).
 
 **UADx PolyMAX Synth** is an instrument. AudioRouter has no MIDI input, so
 a scan lists it as `unsupportedInstrument` (in the **Advanced** Plugin scan

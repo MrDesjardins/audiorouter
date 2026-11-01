@@ -946,6 +946,16 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
             "required": ["sessionId", "nodeId", "stateId", "sizeBytes"],
             "additionalProperties": false
         }),
+        "plugins.resume" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "resumed": { "type": "boolean" }
+            },
+            "required": ["sessionId", "nodeId", "resumed"],
+            "additionalProperties": false
+        }),
         "plugins.openEditor" | "plugins.closeEditor" => json!({
             "type": "object",
             "properties": {
@@ -1817,7 +1827,8 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                                 "failureCount": { "type": "integer", "minimum": 0 },
                                 "outputMisses": { "type": "integer", "minimum": 0 },
                                 "inputDrops": { "type": "integer", "minimum": 0 },
-                                "unchangedAudio": { "type": "boolean" }
+                                "unchangedAudio": { "type": "boolean" },
+                                "silencedUnchanged": { "type": "boolean" }
                             },
                             "required": ["state", "failureCount"],
                             "additionalProperties": false

@@ -3,7 +3,9 @@
 Status: proposed, 2026-10-22 (owner request). U0 and the U3 channel
 adaptation were implemented the same day on the owner's instruction ("I
 want VST3 VST2 AND UAD to work"); the eight free UADx effects now process in
-the app's worker. The remaining packages still need the owner's go-ahead.
+the app's worker. U5 followed on 2026-10-22; U4 and U6 were authorized on
+2026-10-31 (see "Next action"). The remaining packages still need the
+owner's go-ahead.
 Phases that change PLUG-01 (instruments) or PLUG-05 (latency changes) also
 need a decision record and a matching specification update first.
 
@@ -67,9 +69,9 @@ G11 and G12 were found by the U1 run
 | G14 | **Fixed 2026-10-22 (U0).** The worker ran with an empty environment (`env_clear`); plugins that resolve `%LOCALAPPDATA%`, `%ProgramData%` or `%TEMP%` lose their licence and settings stores | `PLUGIN_WORKER_ENVIRONMENT` in `crates/plugin-host/src/lib.rs` | A fixed list of Windows system and profile variables is passed; nothing else from the parent |
 | G1 | Inspection discovers `classIds` and the UI stores `classIds[0]` on the node, but the VST3 worker takes no class argument and loads the first audio-effect class that initializes | `ui/src/draft.ts` `appendPluginPlaceholderNode`, `tools/m06-vst3-worker/main.cpp` (`parse_arguments`, factory loop) | A module with several effects (or mono and stereo variants) always gives the first one |
 | G2 | **Fixed in the worker 2026-10-22.** The worker now calls `setBusArrangements` and, when the plugin keeps its own mono or stereo layout, adapts inside the worker (mono copied to both inputs; stereo output summed as 0.5·(L+R)). The adapter is not yet shown in the inspector | `negotiate_main_bus`, `process` in the worker | Every UADx effect is stereo-only and now runs on mono paths |
-| G3 | **Reported 2026-10-22.** The bridge asks for `getLatencySamples` at start and after the editor closes and adds it to the stage delay the app shows. Not done: compensating parallel branches (decision 2), reacting to `restartComponent` while running | `ComponentHandler`; control-plane path latency | Plugin latency (UADx: 31–714 samples) is missing from path latency |
+| G3 | **Reported 2026-10-22; followed while running 2026-10-31 (decision 2, branch `feature/uad-latency-licence`, not yet built).** The bridge reads the plugin's delay at start, after the editor closes and about every half second; the VST3 worker re-activates on `restartComponent(kLatencyChanged)`. Not done: compensating parallel branches | `ComponentHandler`; control-plane path latency | Plugin latency (UADx: 31–714 samples) is missing from path latency |
 | G4 | **Fixed 2026-10-22.** VST3 editors open in the shell window (`IPlugView` on the worker's UI thread); WebView2 editors need the job's process limit raised while open (owner decision, SEC-07). Was: `editorUnavailable` | worker and `PluginPanels.tsx` | UAD plugins are designed around their editors; some licence prompts live there |
-| G5 | **Partly fixed 2026-10-22.** A plugin that returns loud input unchanged for ~2 s is flagged (`unchangedAudio`) with a licence hint; demo and "hardware not found" states are still not distinguished | worker diagnostics, UI | An unauthorized UAD plugin looks like a silent or failed node with no reason |
+| G5 | **Partly fixed 2026-10-22; silenced on microphone paths 2026-10-31 (DEC U6, branch `feature/uad-latency-licence`, not yet built).** A plugin that returns loud input unchanged for ~2 s is flagged (`unchangedAudio`) with a licence hint; fed by a recording device it is silenced (`silencedUnchanged`) until `plugins.resume` or `passThroughAllowed`. Demo and "hardware not found" states are still not distinguished | worker diagnostics, UI | An unauthorized UAD plugin looks like a silent or failed node with no reason |
 | G6 | One worker process per VST3 instance; shared workers exist only for adjacent VST2 | plugin-host | Unknown whether many processes can share UAD-2 DSP; process count grows with long UAD chains |
 | G7 | Fixed 128-frame engine quantum passed to the plugin | engine and worker | UAD-2 DSP plugins may need larger host blocks *(confirm in U8)* |
 | G8 | Auxiliary (side-chain) buses are deactivated; runtime is single-stream | PLUG-03 runtime | Side-chain inputs on UAD compressors are unavailable |
@@ -278,10 +280,17 @@ build: store them as an optional field that older builds ignore.
 
 ## Next action
 
-The owner plays a UADx effect (1176) on a real route in the app and confirms
-it is audible. Then, with the owner's go-ahead: U4 (feed the reported
-latency into path latency), U5 (VST3 editors; UADx editors use WebView2,
-which needs more than the worker job's one-process limit, so that limit
-needs a reviewed decision), U6 (licence diagnostics: a signed-out UADx
-plugin passes audio through, and on a voice path that must become silence)
-and scan-time instrument filtering. Decision 1 (UAD-2 hardware) can wait.
+Done before 2026-10-31: the audible 1176 on a real route (owner, 2026-10-22),
+U5 VST3 editors with the 16-process job limit while an editor is open (owner
+decision, SEC-07, owner-tested 2026-10-22), and scan-time instrument
+filtering.
+
+In progress (2026-10-31, owner go-ahead, decisions recorded in the
+[active plan](../active/current.md#uad-u4-and-u6-live-plugin-latency-and-silent-licence-failures-2026-10-31-owner-request)):
+U4 latency followed while running (decision 2 taken: accept reported
+changes; parallel-branch compensation stays future) and U6 silence on
+microphone paths with Retry (`plugins.resume`) and a per-node
+`passThroughAllowed`. Code is written on `feature/uad-latency-licence` but
+not built or tested yet, at the owner's request while the app was in use.
+Then: the attended UA Connect signed-out → silenced → sign in → Retry check.
+Decision 1 (UAD-2 hardware) can wait.

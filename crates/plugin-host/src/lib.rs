@@ -4065,6 +4065,9 @@ impl SupervisedWorkerProcess {
 }
 
 const MAX_PLUGIN_PIPELINE_SLOTS: usize = 8;
+/// How often the runtime thread re-reads each plugin's delay: half a second
+/// at 48 kHz. One short worker exchange between frames.
+const PLUGIN_LATENCY_POLL_FRAMES: usize = 24_000;
 
 struct PluginQuantum {
     block: audiorouter_engine::AudioBlock,
@@ -4096,6 +4099,13 @@ pub struct PluginRuntimeBridge {
     /// Set once a single plugin has returned loud input unchanged for a
     /// couple of seconds and has never changed it (see [`UnchangedAudioWatch`]).
     unchanged_audio: Arc<AtomicBool>,
+    /// Control-plane policy: on a protected path (recording device upstream,
+    /// pass-through not allowed by the user) the unchanged verdict silences
+    /// the plugin instead of only flagging it.
+    silence_unchanged: Arc<AtomicBool>,
+    /// Latched by the runtime thread when that policy fires; cleared only by
+    /// [`PluginRuntimeBridge::resume_after_unchanged`] or by lifting the policy.
+    silenced_unchanged: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
     /// Frames per pipeline quantum, for reporting pipeline delay.
     quantum_frames: usize,
@@ -4279,6 +4289,8 @@ impl PluginRuntimeBridge {
                 requests: Arc::clone(&head.requests),
                 plugin_latency: Arc::clone(&head.plugin_latency),
                 unchanged_audio: Arc::clone(&head.unchanged_audio),
+                silence_unchanged: Arc::clone(&head.silence_unchanged),
+                silenced_unchanged: Arc::clone(&head.silenced_unchanged),
                 worker: None,
                 quantum_frames: frames,
                 instance_index,
@@ -4341,6 +4353,10 @@ impl PluginRuntimeBridge {
         let thread_plugin_latency = Arc::clone(&plugin_latency);
         let unchanged_audio = Arc::new(AtomicBool::new(false));
         let thread_unchanged_audio = Arc::clone(&unchanged_audio);
+        let silence_unchanged = Arc::new(AtomicBool::new(false));
+        let thread_silence_unchanged = Arc::clone(&silence_unchanged);
+        let silenced_unchanged = Arc::new(AtomicBool::new(false));
+        let thread_silenced_unchanged = Arc::clone(&silenced_unchanged);
         let requests = Arc::new(Mutex::new(std::collections::VecDeque::<(
             usize,
             BridgeRequest,
@@ -4367,6 +4383,8 @@ impl PluginRuntimeBridge {
                 // again every quantum would undo edits made in the plugin's
                 // own window, so only a changed slider list is sent.
                 let mut sent_parameters: Vec<Vec<ParameterEvent>> = vec![Vec::new(); members];
+                // Frames processed since the plugins' delay was last read.
+                let mut frames_since_latency = 0_usize;
                 while thread_running.load(Ordering::Acquire) {
                     // Serve control requests between frames; the worker
                     // protocol is strictly request/response, so they cannot
@@ -4511,18 +4529,27 @@ impl PluginRuntimeBridge {
                                 && result.frame_count() == frames
                                 && quantum.block.copy_from_interleaved(&result.samples).is_ok() =>
                         {
-                            if let Err(quantum) = thread_output.push(quantum) {
-                                let _ = thread_free.push(quantum);
-                            }
                             // A bypassed plugin passes audio unchanged on purpose.
-                            if let Some(watch) = unchanged_watch
-                                .as_mut()
-                                .filter(|_| thread_active[0].load(Ordering::Acquire))
-                            {
+                            let processing = thread_active[0].load(Ordering::Acquire);
+                            if let Some(watch) = unchanged_watch.as_mut().filter(|_| processing) {
                                 if let Some(unchanged) = watch.observe(&input_copy, &result.samples)
                                 {
                                     thread_unchanged_audio.store(unchanged, Ordering::Release);
+                                    // Protected path: an unlicensed plugin
+                                    // would send the dry voice on. The watch
+                                    // keeps observing the real output, so a
+                                    // later Retry can see whether it recovered.
+                                    if unchanged && thread_silence_unchanged.load(Ordering::Acquire)
+                                    {
+                                        thread_silenced_unchanged.store(true, Ordering::Release);
+                                    }
                                 }
+                            }
+                            if processing && thread_silenced_unchanged.load(Ordering::Acquire) {
+                                quantum.block.clear();
+                            }
+                            if let Err(quantum) = thread_output.push(quantum) {
+                                let _ = thread_free.push(quantum);
                             }
                             samples = result.samples;
                         }
@@ -4553,6 +4580,33 @@ impl PluginRuntimeBridge {
                     if should_stop {
                         break;
                     }
+                    // A plugin may change its delay while it runs (lookahead
+                    // or oversampling switched in its window). Re-read it
+                    // between frames; the engine reads the atomics, so the
+                    // shown stage and path delay follow (PLUG-05).
+                    frames_since_latency = frames_since_latency.saturating_add(frames);
+                    if frames_since_latency >= PLUGIN_LATENCY_POLL_FRAMES {
+                        frames_since_latency = 0;
+                        let now = Instant::now();
+                        for (index, slot) in thread_plugin_latency.iter().enumerate() {
+                            if members > 1 && worker.select_instance(index, now).is_err() {
+                                break;
+                            }
+                            if let Ok(samples) = worker.plugin_latency_samples(now) {
+                                slot.store(samples, Ordering::Release);
+                            }
+                        }
+                        thread_health_state
+                            .store(encode_worker_state(worker.state()), Ordering::Release);
+                        if worker.state() != WorkerState::Running {
+                            thread_failed.store(true, Ordering::Release);
+                            if let Some(diagnostic) = worker.failure_diagnostic() {
+                                thread_health_failure_count
+                                    .store(diagnostic.failure_count, Ordering::Release);
+                            }
+                            break;
+                        }
+                    }
                 }
             })
             .map_err(|_| PluginRuntimeBridgeError::ThreadStart)?;
@@ -4571,6 +4625,8 @@ impl PluginRuntimeBridge {
             requests,
             plugin_latency,
             unchanged_audio,
+            silence_unchanged,
+            silenced_unchanged,
             worker: Some(worker_thread),
             quantum_frames: frames,
             instance_index: 0,
@@ -4593,6 +4649,45 @@ impl PluginRuntimeBridge {
     /// without reporting an error, so the UI only suggests checking.
     pub fn passes_audio_unchanged(&self) -> bool {
         self.unchanged_audio.load(Ordering::Acquire)
+    }
+
+    /// Protected-path policy (control plane): when set, the unchanged
+    /// verdict silences this plugin until a deliberate resume. Lifting it
+    /// (the user allowed pass-through) also lifts a latched silence.
+    pub fn set_silence_if_unchanged(&self, silence: bool) {
+        self.silence_unchanged.store(silence, Ordering::Release);
+        if !silence {
+            self.silenced_unchanged.store(false, Ordering::Release);
+        }
+    }
+
+    /// True while this plugin's output is silenced because it passed
+    /// protected audio through unchanged.
+    pub fn silenced_for_unchanged_audio(&self) -> bool {
+        self.silenced_unchanged.load(Ordering::Acquire)
+    }
+
+    /// Deliberate recovery (Retry). Lets audio through again only when the
+    /// plugin has changed loud audio since it was silenced, so a plugin that
+    /// is still unlicensed never sends the dry voice on. Returns whether the
+    /// plugin now plays.
+    pub fn resume_after_unchanged(&self) -> bool {
+        if !self.silenced_unchanged.load(Ordering::Acquire) {
+            return true;
+        }
+        if self.unchanged_audio.load(Ordering::Acquire) {
+            return false;
+        }
+        self.silenced_unchanged.store(false, Ordering::Release);
+        true
+    }
+
+    /// The delay the plugin itself reports, in samples, without the
+    /// pipeline quanta the engine-facing `latency_samples` adds.
+    pub fn reported_latency_samples(&self) -> u32 {
+        self.plugin_latency
+            .get(self.instance_index)
+            .map_or(0, |samples| samples.load(Ordering::Acquire))
     }
 
     /// Bounded callback counters; output misses include startup warm-up.
@@ -4928,7 +5023,7 @@ impl WorkerProcess {
     ) -> Result<Self, WorkerProcessError> {
         if !matches!(
             mode,
-            "crash" | "hang" | "invalid-output" | "descriptors" | "latency"
+            "crash" | "hang" | "invalid-output" | "descriptors" | "latency" | "latency-steps"
         ) {
             return Err(WorkerProcessError::Protocol(
                 "invalid worker fixture mode".into(),

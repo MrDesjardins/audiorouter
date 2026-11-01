@@ -1,5 +1,5 @@
 {
-  "backendMethods": 121,
+  "backendMethods": 122,
   "operations": [
     {
       "method": "POST",
@@ -595,6 +595,13 @@
       "operation": "plugins.closeEditor",
       "permission": "PluginScan",
       "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/resume",
+      "operation": "plugins.resume",
+      "permission": "SessionControl",
+      "effect": "Mutating"
     },
     {
       "method": "POST",

@@ -328,7 +328,7 @@ pub(crate) fn validate_method_params(
         "plugins.retry" => &["directory", "idempotencyKey"],
         "plugins.inspect" => &["path"],
         "plugins.parameters" => &["path"],
-        "plugins.saveState" | "plugins.closeEditor" => &["sessionId", "nodeId"],
+        "plugins.saveState" | "plugins.closeEditor" | "plugins.resume" => &["sessionId", "nodeId"],
         "plugins.openEditor" => &["sessionId", "nodeId", "parentWindow", "ownerProcessId"],
         "virtualDevices.list" => &["cursor", "limit"],
         "virtualDevices.plan" => &["operation"],

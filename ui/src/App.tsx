@@ -130,7 +130,7 @@ import {
 } from "./shortcuts";
 import { setupChecklist } from "./setup";
 import { uiIdempotencyKey } from "./idempotency";
-import { processorParameterError, type ProcessorDescriptor } from "./processorCatalog";
+import { pluginNodeParameterError, processorParameterError, type ProcessorDescriptor } from "./processorCatalog";
 import { mergeSessionInventory, reconcileSessionDraft, sameSessionDraft } from "./sessionInventory";
 import { unsavedNodeIds } from "./nodeSaveState";
 import type { Connection } from "@xyflow/react";
@@ -1262,17 +1262,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             ? "Invalid audio source setting"
             : null
           : targetNode.kind === "plugin"
-            ? (() => {
-                const id = Number(name.slice("pluginParameter:".length));
-                const descriptor = pluginParameters?.parameters.find((parameter) => parameter.parameterId === id);
-                return !descriptor ||
-                  typeof value !== "number" ||
-                  !Number.isFinite(value) ||
-                  value < descriptor.minimum ||
-                  value > descriptor.maximum
-                  ? "Plugin parameter value is outside the worker-provided range"
-                  : null;
-              })()
+            ? pluginNodeParameterError(name, value, pluginParameters, () =>
+                processorParameterError(processors, "plugin", name, value, snapshot?.discovery?.nodeTypes ?? null),
+              )
             : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null);
     if (error) {
       setActionMessage(`Draft rejected: ${error}.`);

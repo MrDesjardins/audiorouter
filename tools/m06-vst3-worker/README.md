@@ -29,7 +29,11 @@ Since 2026-10-22 the worker also:
 - describes only automatable, visible, writable, non-program-change
   parameters, at most 256;
 - refuses classes whose VST3 sub-categories contain `Instrument`;
-- answers `Latency` with `getLatencySamples`.
+- answers `Latency` with `getLatencySamples`, from a cache on the pipe thread
+  so the host can poll it without waiting for a busy plugin window; after
+  `restartComponent(kLatencyChanged)`, a state change or an editor request it
+  asks the UI thread, which re-activates the component first when the plugin
+  reported a latency change.
 The worker accepts either one mono/stereo input and output bus through
 `Process`, or a bounded auxiliary-bus layout through `HelloBuses` and
 `ProcessBuses` (up to four buses and eight aggregate channels per direction).
