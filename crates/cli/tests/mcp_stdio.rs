@@ -116,7 +116,7 @@ fn assert_stdio_client(client_id: &str) {
     );
     assert_eq!(
         modern_tools["result"]["tools"].as_array().unwrap().len(),
-        89
+        90
     );
     assert_eq!(modern_tools["result"]["resultType"], "complete");
     assert_eq!(modern_tools["result"]["cacheScope"], "public");
@@ -300,7 +300,7 @@ fn assert_stdio_client(client_id: &str) {
         &mut output,
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": { "_meta": { "example.com/trace": "legacy-list" } } }),
     );
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 89);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 90);
 
     // A malformed line gets a JSON-RPC parse error and the session continues.
     writeln!(input, "{{ not json").unwrap();

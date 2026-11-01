@@ -551,6 +551,16 @@ private:
 
 static EditorEditQueue g_editor_edits;
 
+// The plugin's own delay. The host asks for it about twice a second, so the
+// pipe thread answers from this cache instead of waiting for a UI thread that
+// a busy plugin window may hold. `restartComponent(kLatencyChanged)` and every
+// other UI request (state, editor) invalidate it; the next Latency request
+// then goes to the UI thread, which re-activates the component if the plugin
+// asked for it and stores the fresh value.
+static std::atomic<bool> g_latency_restart_pending{false};
+static std::atomic<bool> g_latency_cached{false};
+static std::atomic<uint32_t> g_latency_samples{0};
+
 class ComponentHandler final : public Vst::IComponentHandler {
 public:
     tresult PLUGIN_API queryInterface(const TUID, void** object) override {
@@ -565,7 +575,13 @@ public:
         return kResultOk;
     }
     tresult PLUGIN_API endEdit(Vst::ParamID) override { return kResultOk; }
-    tresult PLUGIN_API restartComponent(int32) override { return kResultOk; }
+    // Called by the controller, usually on the UI thread. Only a latency
+    // change needs host action; the SDK requires a re-activation before the
+    // new value applies, done between quanta by the next Latency request.
+    tresult PLUGIN_API restartComponent(int32 flags) override {
+        if (flags & Vst::kLatencyChanged) g_latency_restart_pending.store(true, std::memory_order_release);
+        return kResultOk;
+    }
 };
 
 class StateStream final : public IBStream {
@@ -1031,6 +1047,24 @@ public:
     Vst::IEditController* controller() const { return controller_; }
 
     uint32_t latency_samples() const { return processor_ ? processor_->getLatencySamples() : 0; }
+
+    // The SDK applies a reported latency change only after the component is
+    // deactivated and activated again. UI thread, between quanta: the pipe
+    // thread waits for this request, so no Process call runs meanwhile.
+    void restart_for_latency() {
+        if (processing_) {
+            require_result("VST3 processor pause for latency", processor_->setProcessing(false));
+            processing_ = false;
+        }
+        if (active_) {
+            require_result("VST3 component pause for latency", component_->setActive(false));
+            active_ = false;
+        }
+        require_result("VST3 component resume after latency", component_->setActive(true));
+        active_ = true;
+        require_result("VST3 processor resume after latency", processor_->setProcessing(true));
+        processing_ = true;
+    }
 
 private:
     static void append_u32(std::vector<uint8_t>& output, uint32_t value) {
@@ -1641,6 +1675,15 @@ static UiContext g_ui;
 static HWND g_ui_window = nullptr;
 static std::atomic<bool> g_audio_stopped{false};
 
+static bool is_latency_message(const std::string& json) {
+    return json.find("\"type\":\"Latency\"") != std::string::npos;
+}
+
+static std::string latency_message(uint32_t samples, uint64_t sample_rate) {
+    return "{\"type\":\"Latency\",\"payload\":{\"samples\":" + std::to_string(samples) +
+           ",\"sample_rate_hz\":" + std::to_string(sample_rate) + "}}";
+}
+
 // Every request except audio processing. Runs on the UI thread.
 static std::string handle_ui_request(const std::string& json, bool& shutdown) {
     auto& effect = *g_ui.effect;
@@ -1685,11 +1728,13 @@ static std::string handle_ui_request(const std::string& json, bool& shutdown) {
         }
         return state_message(static_cast<uint32_t>(version), bytes);
     }
-    if (json.find("\"type\":\"Latency\"") != std::string::npos) {
+    if (is_latency_message(json)) {
         const auto sample_rate = required_uint_field(json, "\"sample_rate_hz\":");
-        return "{\"type\":\"Latency\",\"payload\":{\"samples\":" +
-               std::to_string(effect.latency_samples()) + ",\"sample_rate_hz\":" +
-               std::to_string(sample_rate) + "}}";
+        if (g_latency_restart_pending.exchange(false, std::memory_order_acq_rel)) effect.restart_for_latency();
+        const auto samples = effect.latency_samples();
+        g_latency_samples.store(samples, std::memory_order_release);
+        g_latency_cached.store(true, std::memory_order_release);
+        return latency_message(samples, sample_rate);
     }
     throw protocol_error("expected Process or Shutdown");
 }
@@ -1759,6 +1804,15 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
         const auto payload = read_frame();
         const std::string json(payload.begin(), payload.end());
         if (!is_audio_message(json)) {
+            const bool latency = is_latency_message(json);
+            if (latency && g_latency_cached.load(std::memory_order_acquire) &&
+                !g_latency_restart_pending.load(std::memory_order_acquire)) {
+                write_frame(latency_message(g_latency_samples.load(std::memory_order_acquire),
+                                            required_uint_field(json, "\"sample_rate_hz\":")));
+                continue;
+            }
+            // State and editor requests can change the plugin's delay.
+            if (!latency) g_latency_cached.store(false, std::memory_order_release);
             UiRequest request;
             request.json = &json;
             DWORD_PTR ignored = 0;

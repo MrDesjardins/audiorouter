@@ -1253,9 +1253,9 @@ fn has_no_settings(kind: audiorouter_domain::NodeKind) -> bool {
         // A Meter only measures; the validator accepts no parameter.
         Meter => true,
         // Plugin settings are per plugin (`pluginParameter:<id>`), listed by
-        // plugins.parameters for the loaded plugin, not by the kind.
-        Plugin => true,
-        PhysicalInput | ApplicationCapture | EndpointLoopback | PhysicalOutput
+        // plugins.parameters for the loaded plugin; the kind lists only
+        // AudioRouter's own `passThroughAllowed` guard.
+        PhysicalInput | ApplicationCapture | EndpointLoopback | PhysicalOutput | Plugin
         | VirtualRenderSource | VirtualCaptureSink | TestSignal | Mixer | Gain | Mute
         | ParametricEq | Compressor | Gate | Limiter | Delay | GraphicEq | Pitch | Recorder
         | AudioFile | Soundboard | Volume | BassTreble | Dehum | Declick | InputSwitch

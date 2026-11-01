@@ -612,12 +612,14 @@ impl ControlPlane {
         let mut bridge_flags = Vec::new();
         let plugin_stages = if flags_only {
             let mut stages: HashMap<EntityId, Arc<dyn RealtimePluginProcessor>> = HashMap::new();
+            let guards = crate::plugins::plugin_unchanged_guards(&session);
             for node in session
                 .nodes
                 .iter_mut()
                 .filter(|node| node.kind == NodeKind::Plugin)
             {
                 let bridge = self.plugin_bridge(session_id, &node.id)?;
+                bridge.set_silence_if_unchanged(guards.contains(&node.id));
                 bridge_flags.push((Arc::clone(&bridge), node.enabled && !node.bypass));
                 stages.insert(node.id.clone(), bridge);
                 node.enabled = true;
@@ -1058,6 +1060,7 @@ impl ControlPlane {
                         "outputMisses": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().0).unwrap_or(0),
                         "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
                         "unchangedAudio": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.passes_audio_unchanged()),
+                        "silencedUnchanged": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.silenced_for_unchanged_audio()),
                     })
                 });
                 let noise_profile = processor.noise_profile_for_node(&node.id);
@@ -1192,6 +1195,7 @@ impl ControlPlane {
                         "outputMisses": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().0).unwrap_or(0),
                         "inputDrops": self.plugin_bridge(session_id, &node.id).ok().map(|bridge| bridge.continuity_counts().1).unwrap_or(0),
                         "unchangedAudio": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.passes_audio_unchanged()),
+                        "silencedUnchanged": self.plugin_bridge(session_id, &node.id).ok().is_some_and(|bridge| bridge.silenced_for_unchanged_audio()),
                     })
                 });
                 let network = worker

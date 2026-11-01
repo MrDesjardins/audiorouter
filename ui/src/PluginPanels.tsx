@@ -577,11 +577,20 @@ export function PluginNodeInspector({
   disabled,
   onUnload,
   snapshot,
+  backend,
+  sessionId,
+  onChange,
+  onRemove,
 }: {
   node: Node;
   disabled: boolean;
   onUnload: () => void;
   snapshot: import("@audiorouter/contracts").DiagnosticsSnapshot | null;
+  backend?: Pick<UiBackend, "resumePlugin">;
+  sessionId?: string;
+  onChange?: (name: string, value: boolean) => void;
+  /** Remove settings from the node; "off" removes the key so older builds can still load the route. */
+  onRemove?: (names: string[]) => void;
 }) {
   const path = typeof node.parameters.path === "string" ? node.parameters.path : "";
   const format = node.parameters.format;
@@ -589,7 +598,45 @@ export function PluginNodeInspector({
   const fingerprint = typeof node.parameters.fingerprint === "string" ? node.parameters.fingerprint : "";
   const fileName = path.replace(/\\/g, "/").split("/").pop() || path;
   const health = snapshot?.nodeTelemetry.find((item) => item.nodeId === node.id)?.plugin ?? null;
+  const silenced = health?.silencedUnchanged === true;
   const healthAlert = health?.state === "failed" || health?.state === "quarantined";
+  const passThroughAllowed = node.parameters.passThroughAllowed === true;
+  // The result of the last Retry while this plugin stays silenced.
+  const [retry, setRetry] = useState<{ pending: boolean; refused: boolean; error: string | null }>({
+    pending: false,
+    refused: false,
+    error: null,
+  });
+  const [retriedWhileSilenced, setRetriedWhileSilenced] = useState(silenced);
+  if (retriedWhileSilenced !== silenced) {
+    // A new silence starts with a clean Retry state.
+    setRetriedWhileSilenced(silenced);
+    setRetry({ pending: false, refused: false, error: null });
+  }
+  const resume = async () => {
+    if (!backend?.resumePlugin || !sessionId) return;
+    setRetry({ pending: true, refused: false, error: null });
+    try {
+      const result = await backend.resumePlugin(sessionId, node.id);
+      setRetry({ pending: false, refused: !result.resumed, error: null });
+    } catch (error) {
+      setRetry({ pending: false, refused: false, error: formatUiError(error, "Retry failed.") });
+    }
+  };
+  // What the Voice protection card says. Every status is laid out in the same
+  // grid cell, so the card keeps one size whichever is shown (UI-17).
+  const guard: "watching" | "allowed" | "hint" | "muted" = silenced
+    ? "muted"
+    : passThroughAllowed
+      ? "allowed"
+      : health?.unchangedAudio
+        ? "hint"
+        : "watching";
+  const shownWhen = (visible: boolean) => ({
+    "aria-hidden": visible ? undefined : true,
+    style: { visibility: visible ? ("visible" as const) : ("hidden" as const) },
+  });
+  const retryNote = retry.error ? "error" : retry.refused ? "refused" : "ask";
   return (
     <div className="node-binding-editor plugin-node-editor" aria-label="VST plugin binding">
       <div>
@@ -604,13 +651,108 @@ export function PluginNodeInspector({
         SHA-256 fingerprint
         <input aria-label="Plugin fingerprint" value={fingerprint} readOnly />
       </label>
+      <section
+        className={`plugin-voice-guard${silenced ? " is-alert" : ""}`}
+        role={silenced ? "alert" : undefined}
+        aria-label="Voice protection"
+      >
+        <span className="eyebrow">Voice protection</span>
+        <div className="plugin-guard-stack" aria-live="polite">
+          <div {...shownWhen(guard === "watching")}>
+            <strong>On</strong>
+            <small>
+              If this plugin passes your microphone through unchanged for about 2 seconds, as an unlicensed plugin does,
+              AudioRouter mutes it so your voice is never sent on as if it were processed.
+            </small>
+          </div>
+          <div {...shownWhen(guard === "hint")}>
+            <strong>Audio passes through unchanged</strong>
+            <small>
+              If you expected an effect, the plugin may not be licensed or activated: check it in its vendor&apos;s app
+              (UA Connect for UADx plugins), then press Stop and Play.
+            </small>
+          </div>
+          <div {...shownWhen(guard === "allowed")}>
+            <strong>Off for this plugin</strong>
+            <small>
+              This plugin may pass your voice through unchanged. Turn the switch below off if it should always change
+              your voice.
+            </small>
+          </div>
+          <div {...shownWhen(guard === "muted")}>
+            <strong className="plugin-guard-title">
+              {retry.refused ? "Still muted" : "Muted: your voice came through unchanged"}
+            </strong>
+            <div className="plugin-guard-step">
+              <span className="plugin-guard-number" aria-hidden="true">
+                1
+              </span>
+              <span>
+                <strong>Expected an effect?</strong>
+                <span className="plugin-guard-stack">
+                  <small {...shownWhen(silenced && retryNote === "ask")}>
+                    It is probably not licensed. Sign in to its vendor&apos;s app (UA Connect for UADx plugins), then
+                    press Retry.
+                  </small>
+                  <small {...shownWhen(silenced && retryNote === "refused")}>
+                    It still passes your voice through. After signing in, press Stop and Play so it loads again.
+                  </small>
+                  <small {...shownWhen(silenced && retryNote === "error")} role={retry.error ? "alert" : undefined}>
+                    {retry.error}
+                  </small>
+                </span>
+              </span>
+              <button
+                type="button"
+                tabIndex={silenced ? undefined : -1}
+                disabled={!silenced || retry.pending || !backend?.resumePlugin || !sessionId}
+                onClick={() => void resume()}
+              >
+                {retry.pending ? "Retrying…" : "Retry"}
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="plugin-guard-step">
+          <span className="plugin-guard-number" {...shownWhen(silenced)}>
+            2
+          </span>
+          <span>
+            <strong>Meant to leave your voice unchanged?</strong>
+            <label className="plugin-pass-through">
+              <input
+                aria-label="Allow unchanged audio"
+                type="checkbox"
+                checked={passThroughAllowed}
+                disabled={disabled || !onChange}
+                onChange={(event) => {
+                  if (event.target.checked) onChange?.("passThroughAllowed", true);
+                  else if (onRemove) onRemove(["passThroughAllowed"]);
+                  else onChange?.("passThroughAllowed", false);
+                }}
+              />
+              Allow unchanged audio
+            </label>
+            <small className="parameter-help">
+              For a meter, an analyser or a plugin set to bypass. The plugin reloads, with a short gap if the route is
+              playing.
+            </small>
+          </span>
+        </div>
+      </section>
       <div
         className={`plugin-worker-health${healthAlert ? " is-alert" : ""}`}
         role={healthAlert ? "alert" : undefined}
         aria-label="Plugin worker health"
       >
         <span className="eyebrow">Isolated worker health</span>
-        <strong>{health ? (PLUGIN_HEALTH_LABELS[health.state] ?? health.state) : "Not running"}</strong>
+        <strong>
+          {!health
+            ? "Not running"
+            : silenced && health.state === "running"
+              ? "Silenced"
+              : (PLUGIN_HEALTH_LABELS[health.state] ?? health.state)}
+        </strong>
         {health && health.failureCount > 0 && (
           <small>
             {health.failureCount} failure{health.failureCount === 1 ? "" : "s"} recorded
@@ -622,17 +764,6 @@ export function PluginNodeInspector({
           <small>
             Audio continuity: {health.outputMisses} missing output blocks (includes startup), {health.inputDrops ?? 0}{" "}
             dropped input blocks. These counts are shared by plugins in the same worker.
-          </small>
-        )}
-        {health && (
-          // Always laid out, shown only when it applies (UI-17: no layout shift).
-          <small
-            className="plugin-unchanged-audio"
-            aria-hidden={health.unchangedAudio ? undefined : true}
-            style={{ visibility: health.unchangedAudio ? "visible" : "hidden" }}
-          >
-            Your audio comes out of this plugin unchanged. If you expected an effect, the plugin may not be licensed or
-            activated: check it in its vendor&apos;s app (UA Connect for UADx plugins), then press Stop and Play.
           </small>
         )}
       </div>

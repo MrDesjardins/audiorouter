@@ -423,6 +423,10 @@ const previewBackend: UiBackend = {
     sequence += 1;
     return { sessionId, nodeId, state: sourceStates.get(nodeId) ?? "stopped", loop: false };
   },
+  // The offline harness has no worker to recover, so Retry always stays silenced.
+  async resumePlugin(sessionId: string, nodeId: string) {
+    return { sessionId, nodeId, resumed: false };
+  },
   ...(injected.__routeFixtureSoundboardStatus
     ? {
         async soundboardStatus(sessionId: string, nodeId: string) {

@@ -862,6 +862,12 @@ export interface DiagnosticsSnapshot {
        * that silently bypasses itself does.
        */
       unchangedAudio?: boolean;
+      /**
+       * The plugin's output is silenced: a recording device feeds it and it
+       * passed that audio through unchanged, as an unlicensed plugin does.
+       * Stays set until `plugins.resume` succeeds or `passThroughAllowed` is on.
+       */
+      silencedUnchanged?: boolean;
     } | null;
     /** Present while a Denoise or FIR Filter Hz node is learning: its current noise profile. */
     noiseProfile?: string;
@@ -1445,6 +1451,7 @@ export type ImplementedMethod =
   | "plugins.saveState"
   | "plugins.openEditor"
   | "plugins.closeEditor"
+  | "plugins.resume"
   | "plugins.retry"
   | "plugins.inspect"
   | "plugins.parameters"
@@ -1614,6 +1621,7 @@ export type MethodParams = {
   "plugins.saveState": { sessionId: EntityId; nodeId: EntityId };
   "plugins.openEditor": { sessionId: EntityId; nodeId: EntityId; parentWindow: number; ownerProcessId: number };
   "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId };
+  "plugins.resume": { sessionId?: EntityId; nodeId: EntityId };
   "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
   "plugins.parameters": { path: string };
@@ -1803,6 +1811,7 @@ export type MethodResult = {
   "plugins.saveState": { sessionId: EntityId; nodeId: EntityId; stateId: string; sizeBytes: number };
   "plugins.openEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
   "plugins.closeEditor": { sessionId: EntityId; nodeId: EntityId; state: "open" | "closed" };
+  "plugins.resume": { sessionId: EntityId; nodeId: EntityId; resumed: boolean };
   "plugins.retry": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
   "plugins.parameters": PluginParametersResult;

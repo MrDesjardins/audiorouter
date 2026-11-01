@@ -158,7 +158,12 @@ impl ControlPlane {
                 { "name": "semitones", "type": "number", "unit": "semitones", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
                 { "name": "cents", "type": "number", "unit": "cents", "minimum": -100.0, "maximum": 100.0, "default": 0.0 }
             ]),
-            audiorouter_domain::NodeKind::Plugin => json!([]),
+            // Plugin settings are per plugin (`plugins.parameters`); this is
+            // AudioRouter's own guard. Its unset value is in `description`, as
+            // `nodes.add` saves every `default`.
+            audiorouter_domain::NodeKind::Plugin => json!([
+                { "name": "passThroughAllowed", "type": "boolean", "description": "Allow this plugin to pass a microphone through unchanged. When off, a plugin fed by a recording device that returns its audio untouched for about 2 seconds (as an unlicensed plugin does) is silenced until plugins.resume. Turn on only for a plugin meant to be neutral. false when unset." }
+            ]),
             audiorouter_domain::NodeKind::Volume => json!([{
                 "name": "percent",
                 "type": "number",

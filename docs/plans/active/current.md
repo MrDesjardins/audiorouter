@@ -8,6 +8,189 @@ reload assertions. Validate UI typecheck, lint and focused Playwright.
 No hardware or driver is needed. Rollback: revert this test/export change.
 Hosted CI remains required; GitHub access is restricted locally.
 
+## UAD U4 and U6: live plugin latency and silent licence failures — 2026-10-31, owner request
+
+Objective: finish the remaining parts of U4 and U6 in the
+[UAD plan](../future/uad-plugin-support.md). Branch
+`feature/uad-latency-licence` (from main `068b395a`). U5 (VST3 editors, the
+16-process job limit while an editor is open) was already done, decided and
+owner-tested on 2026-10-22. Requirements: PLUG-03, PLUG-05 (changed), AUTO-18,
+UI-17, and the protected-voice rule in AGENTS.md. No PR until the owner
+approves one.
+
+Decisions (owner, 2026-10-31):
+- **DEC U4 / plan decision 2: accept a reported latency change while
+  playing.** The VST3 worker answers `restartComponent(kLatencyChanged)` by
+  re-activating the component on its UI thread between quanta, and the bridge
+  re-reads each plugin's delay about every half second off the audio thread.
+  The displayed stage and path delay follow. PLUG-05 now treats only an
+  unreported change as unsupported. Parallel Mixer branches are still not
+  delay-matched (future work).
+- **DEC U6: silence a plugin that passes recording-device audio through
+  unchanged.** A recording device (a `PhysicalInput` capture endpoint)
+  upstream of a single plugin makes its path protected. When the existing
+  ~2 s `UnchangedAudioWatch` verdict fires there, the plugin's output becomes
+  silence and stays silent until a deliberate Retry. The first ~2 s of dry
+  audio before the verdict is a known, accepted leak. A per-node
+  `passThroughAllowed` switch (default off) turns the guard off for a plugin
+  that really is neutral. Other paths keep the hint only.
+
+Design:
+- Worker (`tools/m06-vst3-worker/main.cpp`): `restartComponent` records
+  `kLatencyChanged` in an atomic. The pipe thread answers `Latency` from a
+  cached value with no UI-thread round trip (so polling can't stall audio
+  while an editor is busy). When a restart is pending, or after any other UI
+  request (state, editor), the request goes to the UI thread, which
+  re-activates if pending and refreshes the cache. The VST2 worker already
+  reads `initialDelay` on each request.
+- Bridge (`crates/plugin-host`): poll every member's latency every 0.5 s of
+  processed audio, between frames. Add a `silence_unchanged` policy flag, a
+  latch that clears the output once the verdict fires, a hidden recovery
+  watch that keeps observing the plugin's real output while latched, and
+  `resume_after_unchanged()` (unlatches only if the plugin has changed loud
+  audio since; otherwise it reports "still passing through").
+- Control: compute the protected flag from the session (recording device
+  upstream, `passThroughAllowed` not set). New node-targeted method
+  `plugins.resumeAfterLicence` (optional `sessionId`, `nodeId` as ID or exact
+  name, `SessionControl`), with a default MCP tool, contracts, schemas and
+  docs per AUTO-18. Telemetry `plugin.silencedUnchanged`.
+- UI: the reserved hint slot shows "Silenced: this plugin passed your voice
+  through unchanged…" with Retry when latched; a `passThroughAllowed` switch
+  in the plugin inspector. No layout shift.
+
+Tasks:
+1. Worker latency restart and cached answers.
+2. Bridge latency polling; regression with the `latency` fixture mode.
+3. Bridge silence latch and resume; unit tests with the unchanged watch, and a
+   bridge test with the AGain fixture at unity (passes audio unchanged).
+4. Control protected flag, parameter, catalog, method, MCP tool, contracts,
+   dispatcher test.
+5. UI hint, Retry and switch; tests; three-theme screenshots.
+6. Spec PLUG-05, UAD plan, API reference, guide.
+
+Validation (pending the owner's go-ahead to build; the owner asked for no
+builds while the app is in use, 2026-10-31): fmt and Clippy for the workspace
+and shell, plugin-host and control tests, the native VST3 worker build plus
+AGain acceptance, `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded`,
+contract drift, UI tests, lint, typecheck, `plugin-inspector.pw.ts` in three
+themes. Attended and not reproducible here: UA Connect signed out → Play a
+mic → UADx route → silence after ~2 s → sign in → Retry. Not available: a
+UADx plugin that changes latency on demand, so the live path is checked only
+with the fixture.
+
+Rollback: revert the branch. `passThroughAllowed` is an optional node
+setting that older builds reject on validation, and storage validates every
+session document it lists (`deserialize_validated_session` inside
+`list_sessions_after`, collected with `?`), so one saved route with the key
+stops an older build from listing any session. Turning the switch off
+removes the key (`onRemove`), so turn it off and commit before downgrading;
+history revisions that contain it can still fail to load there (recorded in
+the guide). The same risk applies to every node setting added since a
+build, so it is not new, but this one is user-set.
+
+Status (2026-10-31): all six tasks written and validated (below);
+the attended owner test is next. Files: `tools/m06-vst3-worker/main.cpp`
+(latency cache and re-activation); `crates/plugin-host` (bridge polling,
+latch, `resume_after_unchanged`, `reported_latency_samples`, fixture mode
+`latency-steps`, three bridge tests in `tests/worker_process.rs`);
+`crates/domain` (`passThroughAllowed`, `plugins.resume`); `crates/control`
+(`plugin_silences_unchanged_audio`, exhaustive `records_from_a_device`,
+guards in both live-commit paths, telemetry, dispatcher, schemas,
+authorization, catalog, two tests in `plugins.rs`); `crates/cli`
+(`resume_plugin`, by-name MCP test); contracts; UI (`PluginPanels.tsx`
+notes, Retry, switch; `PropertiesPanel.tsx`; `backend.ts`; route harness;
+`PluginNodeInspector.test.tsx`; `plugin-inspector.pw.ts` silenced case);
+spec PLUG-05, AUTO-15; API reference; local HTTP API page; plugin guide;
+UAD plan. Known limits: "recording device" is any `PhysicalInput`,
+including a virtual cable's output, so in the owner's three-cable setup
+Discord and game paths are guarded too (wider than "microphone paths";
+needs the owner's confirmation); plugins in a shared VST2 chain are not
+watched (`UnchangedAudioWatch` runs only for a single plugin); the first
+~2 s before the verdict pass dry; the upstream walk follows every input, so a
+microphone keying a Duck also guards a plugin after that Duck; Retry cannot
+restart the worker, so a plugin that only re-licenses on load needs Stop and
+Play; parallel branches are not delay-matched. Toggling the switch while
+playing is a parameter change, so the commit re-prepares the plugin (a
+reload with a short gap); read from `graph.rs` flags-only logic, not run.
+
+Validation (2026-10-31, Windows 11 Home, pinned 1.96.0, owner go-ahead):
+- `cargo fmt` (workspace, shell) `--check` clean; workspace and shell Clippy
+  `-D warnings` clean.
+- `cargo test --workspace --locked --no-fail-fast`: 1232 passed, 0 failed
+  (`target/uad-u4u6-workspace-tests.log`). plugin-host with
+  `test-fixtures`: all pass; the four bridge tests passed 8 runs in a row
+  after the silence test was changed to check a window of quanta (a late
+  worker quantum is also silent, so one checked quantum was flaky, 1 in 5).
+  First compile found `API_METHODS` length 136 → 137; MCP tool counts
+  89 → 90 updated in `lib.rs` and `mcp_stdio.rs`.
+- Shell `http_api` tests: 10 passed.
+- `tests/acceptance/m06-vst3-worker.ps1` (AGain, rebuilt worker): passed.
+  Release worker built to `target/uad-u4u6/`; opt-in
+  `native_vst3_fixture_signal_report` through it: UADx 1176 86, Pure Plate 31,
+  610-A 86 samples reported, mono, processed; `native_vst3_editor_opens_in_a_pumping_parent`
+  with the 1176: passed.
+- UI: 780 tests, typecheck, typecheck:all, lint, format:check pass;
+  `plugin-inspector.pw.ts` 6 passed (dark, light, high contrast), screenshots
+  inspected in `target/uad-u4u6-screens/`. The heading now says "Silenced"
+  instead of "Running" while latched. Contract drift: 137 methods pass;
+  docs validation passes; `site/assets/api-methods.json` regenerated (guide
+  page rewrites were meta-only and discarded).
+- Test build staged in `target/local-test-uad-u4u6/` (shell, CLI, both
+  workers rebuilt 23:24 after `ui/dist` 23:20; the rest copied from
+  `local-test-0.0.26-tagged`). Not launched: the owner's 0.0.26 test shell
+  is running and only one shell may run.
+
+Attended attempt (2026-10-31, owner, `local-test-uad-u4u6`): signing out of
+UA Connect (`signed out` 23:27:23 in `UA Connect.log`) does not unlicense a
+UADx plugin. The 1176 worker started at 23:27:27 logged
+`DiskPluginLicenseStateChanged … license valid: [true], license full:
+[true]` (`UAPW_uaudio_ua_1176_10_31_26_23_27_27.txt`), kept processing, and
+was correctly not silenced. A sign-out is therefore not a test case; an
+unlicensed state needs a deactivated licence or an unowned title. Pending:
+AGain at its default (unity) gain on a microphone path as the end-to-end
+check of the guard, then an unlicensed UADx if one can be arranged.
+Defect found in the attended AGain test (2026-10-31, owner): ticking "Allow
+unchanged audio" said "Draft rejected: Plugin parameter value is outside the
+worker-provided range". `changeNodeParameterOn` (`App.tsx`) treated every
+setting on a plugin node as a `pluginParameter:<id>` slider; `stateId` from
+"Save plugin settings" went through the same check (not reproduced in the
+app). Fix: `pluginNodeParameterError` (`processorCatalog.ts`) checks only
+`pluginParameter:` names against the worker ranges and the rest against the
+catalog; regression in `processorCatalog.test.ts`. UI 782 tests, typecheck,
+lint and format pass; rebuilt as `target/local-test-uad-u4u6-2/` (shell
+23:35:55 after `ui/dist` 23:35:26).
+Attended AGain check (2026-10-31, owner, `local-test-uad-u4u6-2`): muted
+after ~2 s at unity gain, Retry refused while unchanged, Allow applied;
+"looks all good". Backend log for that shell (pid 21020, from 23:36:31): no
+`outcome":"error"`, `plugins.resume` ok twice, `graph.commit` ok,
+`pumpErrors` 0. The two errors after 23:20 came from earlier processes: a
+single `graph.commit` `permissionDenied` from short-lived pid 19152, and
+`soundboard.status` `-32602` right after `session.stop` (pid 3328), which
+0.0.25 also logs (pid 46256), so it is not from this change. The 60/97
+`pumpErrors` and the high `lateGaps` belong to the owner's earlier long-running
+shells (pids 52024, 71644).
+
+UX defect (2026-10-31, owner): "Allow unchanged audio" was hard to notice
+because the red Retry area drew the eye and the switch sat below it, outside
+the alert. Redesign: one **Voice protection** card above the worker health
+box holds every unchanged-audio state (On, passes through unchanged, off for
+this plugin, muted, still muted). When muted it alone turns red and shows two
+numbered steps: 1 "Expected an effect?" with Retry beside it, 2 "Meant to
+leave your voice unchanged?" with the switch itself. The worker health box is
+no longer an alert for a mute. Every status shares one grid cell and step 1
+lives inside the muted status, so the card keeps one size (UI-17). A first
+version leaked the hidden step text over the hint (an explicit `visible`
+child overrides a hidden parent); jsdom and Playwright now assert it stays
+hidden. Light theme uses a darker red for the muted title. Checks:
+`PluginNodeInspector.test.tsx` 4, `plugin-inspector.pw.ts` 6 (dark, light,
+high contrast; clicking Allow in the muted card must not give "Draft
+rejected"), screenshots inspected in `target/uad-u4u6-screens4/`.
+
+Not run: an unlicensed UADx end to end (a sign-out does not unlicense it); a
+plugin that changes latency on demand (only the fixture covers the live
+re-read); a sine-continuity run with the plugin worker. Next action: commit on
+this branch and ask the owner for PR approval.
+
 ## REST and MCP parity after the Soundboard — 2026-10-31, owner request
 
 Objective: make every public feature reachable by an LLM through the default

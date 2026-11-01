@@ -1,6 +1,29 @@
-import type { DiscoveryDocument } from "@audiorouter/contracts";
+import type { DiscoveryDocument, PluginParametersResult } from "@audiorouter/contracts";
 
 export type ProcessorDescriptor = DiscoveryDocument["processors"][number];
+
+/**
+ * A plugin node's own sliders (`pluginParameter:<id>`) are checked against the
+ * ranges its worker reported. Every other setting on the node is AudioRouter's
+ * (`stateId`, `passThroughAllowed`) and follows the catalog like any tool.
+ */
+export function pluginNodeParameterError(
+  name: string,
+  value: boolean | number | string,
+  pluginParameters: PluginParametersResult | null,
+  catalogError: () => string | null,
+): string | null {
+  if (!name.startsWith("pluginParameter:")) return catalogError();
+  const id = Number(name.slice("pluginParameter:".length));
+  const descriptor = pluginParameters?.parameters.find((parameter) => parameter.parameterId === id);
+  return !descriptor ||
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < descriptor.minimum ||
+    value > descriptor.maximum
+    ? "Plugin parameter value is outside the worker-provided range"
+    : null;
+}
 
 export function processorParameterError(
   processors: ProcessorDescriptor[] | null,

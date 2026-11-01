@@ -866,7 +866,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 136] = [
+pub const API_METHODS: [ApiMethodSpec; 137] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1342,6 +1342,13 @@ pub const API_METHODS: [ApiMethodSpec; 136] = [
         name: "plugins.closeEditor",
         permission: PermissionScope::PluginScan,
         side_effect: SideEffectClass::ExternalOperation,
+    },
+    // Retry after a plugin was silenced for passing a recording device's
+    // audio through unchanged (U6); running-audio control, like Soundboard.
+    ApiMethodSpec {
+        name: "plugins.resume",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "virtualDevices.list",
@@ -2237,6 +2244,9 @@ pub fn validate_session(session: &Session) -> Result<(), Vec<ValidationError>> {
                 (NodeKind::Plugin, "classId") => value.as_str().is_some_and(|class_id| {
                     !class_id.is_empty() && class_id.len() <= MAX_PLUGIN_CLASS_ID_BYTES
                 }),
+                // The user says this plugin is meant to leave audio unchanged,
+                // so it is not silenced as unlicensed on a microphone path.
+                (NodeKind::Plugin, "passThroughAllowed") => value.is_boolean(),
                 (NodeKind::ApplicationCapture, "executable") => {
                     valid_bounded_string(value, MAX_APPLICATION_EXECUTABLE_BYTES)
                 }

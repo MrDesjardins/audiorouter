@@ -238,6 +238,8 @@ export interface UiBackend {
   ): Promise<MethodResult["soundboard.trigger"]>;
   soundboardStop?(sessionId: string, nodeId: string, slot?: number): Promise<MethodResult["soundboard.stop"]>;
   soundboardStatus?(sessionId: string, nodeId: string): Promise<MethodResult["soundboard.status"]>;
+  /** Retry a plugin silenced for passing a recording device's audio through unchanged. */
+  resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
   soundLibraryList?(): Promise<MethodResult["soundLibrary.list"]>;
   soundLibraryRead?(id: string): Promise<MethodResult["soundLibrary.read"]>;
   transportTimeShift?(
@@ -871,6 +873,9 @@ export function createLiveBackend(
     },
     async soundboardStatus(currentSessionId, nodeId) {
       return client.request("soundboard.status", { sessionId: currentSessionId, nodeId });
+    },
+    async resumePlugin(currentSessionId, nodeId) {
+      return client.request("plugins.resume", { sessionId: currentSessionId, nodeId });
     },
     async soundLibraryList() {
       return client.request("soundLibrary.list", undefined);

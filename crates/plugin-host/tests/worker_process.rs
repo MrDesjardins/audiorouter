@@ -2266,6 +2266,134 @@ fn runtime_bridge_counts_the_plugin_reported_latency() {
     assert_eq!(bridge.latency_samples(), 64);
 }
 
+#[cfg(feature = "test-fixtures")]
+fn fixture_bridge(mode: &str) -> Arc<audiorouter_plugin_host::PluginRuntimeBridge> {
+    let identity = PluginIdentity {
+        path: PathBuf::from("effect.vst3"),
+        binary_path: PathBuf::from("effect.vst3"),
+        format: PluginFormat::Vst3,
+        architecture: PeArchitecture::X64,
+        file_bytes: 1,
+        sha256: "e".repeat(64),
+        metadata: Default::default(),
+    };
+    let worker = SupervisedWorkerProcess::spawn_fixture(
+        fixture_worker_path(),
+        &identity,
+        1,
+        mode,
+        Instant::now(),
+    )
+    .expect("spawn fixture");
+    audiorouter_plugin_host::PluginRuntimeBridge::start(worker, 1, 128, 4).expect("start bridge")
+}
+
+/// Feed `block_value` quanta, as the engine callback does, until `done` holds
+/// or ten seconds pass. Returns the last output quantum.
+#[cfg(feature = "test-fixtures")]
+fn pump_bridge_until(
+    bridge: &audiorouter_plugin_host::PluginRuntimeBridge,
+    block_value: f32,
+    mut done: impl FnMut(&audiorouter_plugin_host::PluginRuntimeBridge) -> bool,
+) -> Vec<f32> {
+    use audiorouter_engine::RealtimePluginProcessor;
+    let mut block = audiorouter_engine::AudioBlock::new(1, 128).unwrap();
+    let mut output = vec![0.0; 128];
+    let until = Instant::now() + Duration::from_secs(10);
+    while !done(bridge) && Instant::now() < until {
+        block
+            .copy_from_interleaved(&vec![block_value; 128])
+            .unwrap();
+        bridge.process(&mut block);
+        block.copy_to_interleaved(&mut output).unwrap();
+        std::thread::sleep(Duration::from_micros(500));
+    }
+    output
+}
+
+/// A plugin that changes its delay while it runs (PLUG-05, owner decision
+/// 2026-10-31): the bridge re-reads it between frames, so the reported
+/// stage delay follows without a restart.
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn runtime_bridge_follows_a_latency_change_while_running() {
+    let bridge = fixture_bridge("latency-steps");
+    // Read once at start.
+    assert_eq!(bridge.reported_latency_samples(), 64);
+    pump_bridge_until(&bridge, 0.1, |bridge| {
+        bridge.reported_latency_samples() > 64
+    });
+    assert!(
+        bridge.reported_latency_samples() >= 128,
+        "the delay must be re-read while audio runs"
+    );
+    assert!(!bridge.failed());
+}
+
+/// The fixture worker returns audio unchanged, as a signed-out UADx effect
+/// does. On a protected path the bridge must silence it after the verdict
+/// and keep it silent through a Retry while it still passes audio through.
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn runtime_bridge_silences_a_plugin_that_passes_protected_audio_through() {
+    let bridge = fixture_bridge("latency");
+    bridge.set_silence_if_unchanged(true);
+    pump_bridge_until(&bridge, 0.5, |bridge| bridge.silenced_for_unchanged_audio());
+    assert!(bridge.passes_audio_unchanged());
+    assert!(bridge.silenced_for_unchanged_audio());
+    // Let the quanta already in flight drain, then no output carries sound.
+    // (A late worker quantum is also silent, fail-closed, so only "never
+    // audible" is checked here, not one particular quantum.)
+    pump_quanta(&bridge, 0.5, 16);
+    let outputs = pump_quanta(&bridge, 0.5, 64);
+    assert!(outputs.iter().flatten().all(|sample| *sample == 0.0));
+    // Still passing audio through: Retry refuses and stays silent.
+    assert!(!bridge.resume_after_unchanged());
+    assert!(bridge.silenced_for_unchanged_audio());
+    // The user marks the plugin as meant to be neutral: audio flows again.
+    bridge.set_silence_if_unchanged(false);
+    assert!(!bridge.silenced_for_unchanged_audio());
+    let outputs = pump_quanta(&bridge, 0.5, 64);
+    assert!(
+        outputs
+            .iter()
+            .any(|quantum| quantum.iter().all(|sample| (*sample - 0.5).abs() < 1e-6)),
+        "the unchanged audio must play again"
+    );
+}
+
+/// Feed `count` quanta of `value` and return every output quantum.
+#[cfg(feature = "test-fixtures")]
+fn pump_quanta(
+    bridge: &audiorouter_plugin_host::PluginRuntimeBridge,
+    value: f32,
+    count: usize,
+) -> Vec<Vec<f32>> {
+    use audiorouter_engine::RealtimePluginProcessor;
+    let mut block = audiorouter_engine::AudioBlock::new(1, 128).unwrap();
+    (0..count)
+        .map(|_| {
+            block.copy_from_interleaved(&vec![value; 128]).unwrap();
+            bridge.process(&mut block);
+            let mut output = vec![0.0; 128];
+            block.copy_to_interleaved(&mut output).unwrap();
+            std::thread::sleep(Duration::from_micros(500));
+            output
+        })
+        .collect()
+}
+
+/// Off a protected path the same verdict is only a hint.
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn runtime_bridge_only_flags_unchanged_audio_off_a_protected_path() {
+    let bridge = fixture_bridge("latency");
+    pump_bridge_until(&bridge, 0.5, |bridge| bridge.passes_audio_unchanged());
+    assert!(bridge.passes_audio_unchanged());
+    assert!(!bridge.silenced_for_unchanged_audio());
+    assert!(bridge.resume_after_unchanged());
+}
+
 #[test]
 fn disposable_worker_rejects_a_runtime_sample_rate_change() {
     let hash = "1".repeat(64);

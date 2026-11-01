@@ -694,9 +694,11 @@ impl ControlPlane {
                     | "soundboard.stop"
                     | "soundboard.status"
                     | "timeShift.transport"
-                    | "meters.reset" => {
+                    | "meters.reset"
+                    | "plugins.resume" => {
                         let params = self.resolve_node_target(request.params)?;
                         match request.method.as_str() {
+                            "plugins.resume" => self.dispatch_plugins_resume(params),
                             "audioSources.transport" => {
                                 self.dispatch_audio_source_transport(params)
                             }
