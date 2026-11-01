@@ -833,7 +833,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   const routeChanged = !sameSessionDraft(draft, session);
   // Lets the shell free the WebView on close only when nothing would be lost.
-  useReportUnsaved(routeChanged);
+  useReportUnsaved(routeChanged, recordUiDiagnostic);
   useEffect(() => {
     setAudioSourceStates({});
   }, [session.id]);

@@ -1009,7 +1009,6 @@ impl ControlPlane {
             .collect())
     }
 
-    /// The live runtime bridge of a plugin node in a playing route.
     /// `plugins.resume`: the deliberate Retry after a plugin was silenced for
     /// passing a recording device's audio through unchanged. The target is
     /// already resolved (`resolve_node_target`).
@@ -1033,6 +1032,7 @@ impl ControlPlane {
         Ok(json!({ "sessionId": session_id, "nodeId": node_id, "resumed": resumed }))
     }
 
+    /// The live runtime bridge of a plugin node in a playing route.
     pub(crate) fn plugin_bridge(
         &self,
         session_id: &EntityId,
