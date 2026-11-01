@@ -350,9 +350,8 @@ fn backup_command(args: &[&str]) -> Result<Value, CliError> {
             "--database and --output paths must be absolute".into(),
         ));
     }
-    Storage::open(source_path)
-        .map_err(|error| CliError::Storage(format!("{error:?}")))?
-        .backup_to(destination_path)
+    // Read-only: backing up never migrates or prunes the source.
+    Storage::backup_database(source_path, destination_path)
         .map_err(|error| CliError::Storage(format!("{error:?}")))?;
     Ok(json!({ "source": source, "destination": destination, "created": true }))
 }
@@ -4746,6 +4745,20 @@ mod tests {
         let source_arg = source.to_string_lossy().into_owned();
         let backup_arg = backup.to_string_lossy().into_owned();
         let restored_arg = restored.to_string_lossy().into_owned();
+        // A backup reads an existing database; it never creates one.
+        assert!(matches!(
+            run([
+                "backup",
+                "--database",
+                &source_arg,
+                "--output",
+                &backup_arg,
+                "--json",
+            ]),
+            Err(CliError::Storage(_))
+        ));
+        assert!(!source.exists() && !backup.exists());
+        drop(Storage::open(&source).unwrap());
         let created: Value = serde_json::from_str(
             &run([
                 "backup",

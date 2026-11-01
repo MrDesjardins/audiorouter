@@ -65,7 +65,12 @@ pub struct RecoveryStatus {
 }
 
 pub const MAX_SESSION_DOCUMENT_BYTES: usize = 1024 * 1024;
-pub const MAX_BACKUP_BYTES: u64 = 100 * 1024 * 1024;
+/// Budget for everything in a backup except imported audio (STATE-12).
+pub const MAX_CONFIGURATION_BACKUP_BYTES: u64 = 100 * 1024 * 1024;
+/// A backup copies the whole database, and imported audio (Audio File and
+/// Soundboard sounds) lives in it, so the budget is the configuration budget
+/// plus the audio library limit (owner decision 2026-11-01, STATE-12).
+pub const MAX_BACKUP_BYTES: u64 = MAX_CONFIGURATION_BACKUP_BYTES + MAX_AUDIO_MEDIA_TOTAL_BYTES;
 pub const MAX_BUNDLE_COMPRESSED_BYTES: u64 = 100 * 1024 * 1024;
 pub const MAX_BUNDLE_EXPANDED_BYTES: u64 = 250 * 1024 * 1024;
 pub const MAX_BUNDLE_ENTRIES: usize = 1_000;
@@ -94,6 +99,85 @@ fn validate_recording_id(recording_id: &str) -> Result<(), StorageError> {
         ));
     }
     Ok(())
+}
+
+/// The destination of a backup must be a new absolute file in an existing,
+/// regular (non-reparse) directory, and never the database being copied.
+fn validate_backup_destination(
+    destination: &std::path::Path,
+    live_database: Option<&std::path::Path>,
+) -> Result<(), StorageError> {
+    if !destination.is_absolute() {
+        return Err(StorageError::InvalidBackupPath(
+            "backup destination must be absolute".into(),
+        ));
+    }
+    let parent = destination.parent().ok_or_else(|| {
+        StorageError::InvalidBackupPath("backup destination must have a parent".into())
+    })?;
+    if !parent.is_dir() {
+        return Err(StorageError::InvalidBackupPath(
+            "backup destination parent must already exist".into(),
+        ));
+    }
+    let parent_metadata = std::fs::symlink_metadata(parent)?;
+    if !parent_metadata.is_dir()
+        || is_reparse_point(&parent_metadata)
+        || path_has_reparse_ancestor(parent)
+    {
+        return Err(StorageError::InvalidBackupPath(
+            "backup destination parent must be a regular non-reparse directory".into(),
+        ));
+    }
+    match std::fs::symlink_metadata(destination) {
+        Ok(metadata) => {
+            if is_reparse_point(&metadata) || path_is_symbolic_link(destination) {
+                return Err(StorageError::InvalidBackupPath(
+                    "backup destination cannot be a symbolic link or reparse point".into(),
+                ));
+            }
+            return Err(StorageError::InvalidBackupPath(
+                "backup destination must not already exist".into(),
+            ));
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(StorageError::Io(error)),
+    }
+    if let Some(source) = live_database {
+        let source = std::fs::canonicalize(source)?;
+        let existing = destination
+            .exists()
+            .then(|| std::fs::canonicalize(destination))
+            .transpose()?;
+        if existing.as_ref() == Some(&source) {
+            return Err(StorageError::InvalidBackupPath(
+                "backup destination cannot be the live database".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Copy `connection`'s main database to `destination`. The size is checked
+/// from the page count first, so an oversized database fails before any
+/// work, and again on the written file.
+fn backup_connection(
+    connection: &Connection,
+    destination: &std::path::Path,
+) -> Result<(), StorageError> {
+    let pages: u64 = connection.query_row("PRAGMA page_count", [], |row| row.get(0))?;
+    let page_bytes: u64 = connection.query_row("PRAGMA page_size", [], |row| row.get(0))?;
+    let estimated = pages.saturating_mul(page_bytes);
+    if estimated > MAX_BACKUP_BYTES {
+        return Err(StorageError::DocumentTooLarge {
+            bytes: usize::try_from(estimated).unwrap_or(usize::MAX),
+            maximum: MAX_BACKUP_BYTES as usize,
+        });
+    }
+    connection
+        .backup(rusqlite::MAIN_DB, destination, None)
+        .map_err(StorageError::Sql)?;
+    validate_backup_size(destination)
 }
 
 fn validate_backup_size(destination: &std::path::Path) -> Result<(), StorageError> {
@@ -760,18 +844,62 @@ impl Storage {
         Ok(storage)
     }
 
+    /// Open the database for ordinary use (CLI commands, `mcp serve`, the
+    /// shell's small recovery reads). The full `PRAGMA integrity_check` reads
+    /// every page, which with an audio library can mean hundreds of MiB, so
+    /// it runs here only before a migration changes the file. The desktop
+    /// backend checks once per app start with [`Storage::open_checked`]
+    /// (review 2026-11-01, P2-9).
     pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
-        let path = path.as_ref();
+        Self::open_with_check(path.as_ref(), false)
+    }
+
+    /// Open the database and always run the full integrity check first.
+    pub fn open_checked(path: impl AsRef<std::path::Path>) -> Result<Self, StorageError> {
+        Self::open_with_check(path.as_ref(), true)
+    }
+
+    fn open_with_check(path: &std::path::Path, full_check: bool) -> Result<Self, StorageError> {
         let storage = Self {
             connection: Connection::open(path)?,
             database_path: Some(path.to_path_buf()),
         };
         storage.connection.busy_timeout(BUSY_TIMEOUT)?;
-        storage.check_integrity()?;
+        if full_check || storage.needs_migration()? {
+            storage.check_integrity()?;
+        }
         storage.use_write_ahead_log();
         storage.migrate()?;
         storage.prune_expired_recovery()?;
         Ok(storage)
+    }
+
+    /// Whether [`Storage::migrate`] would change the schema: no migration
+    /// table yet, or an older version than this binary's newest. A file
+    /// SQLite cannot read at all is reported as corrupt.
+    fn needs_migration(&self) -> Result<bool, StorageError> {
+        let corrupt = |error: rusqlite::Error| StorageError::CorruptDatabase(error.to_string());
+        let table: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(corrupt)?;
+        if table.is_none() {
+            return Ok(true);
+        }
+        let version: i64 = self
+            .connection
+            .query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(corrupt)?;
+        Ok(version < MAX_SCHEMA_VERSION)
     }
 
     /// Commits run on the backend's control thread, which also feeds running
@@ -898,58 +1026,36 @@ impl Storage {
     /// Create a consistent SQLite backup while the source connection remains open.
     pub fn backup_to(&self, destination: impl AsRef<std::path::Path>) -> Result<(), StorageError> {
         let destination = destination.as_ref();
-        if !destination.is_absolute() {
+        validate_backup_destination(destination, self.database_path.as_deref())?;
+        backup_connection(&self.connection, destination)
+    }
+
+    /// Back up the database file at `source` without changing it: the file
+    /// is opened read-only and checked, but never migrated or pruned, so
+    /// backing up an older database keeps it as it was (review 2026-11-01,
+    /// P2-7). Use this rather than `open` + `backup_to` for a file backup.
+    pub fn backup_database(
+        source: impl AsRef<std::path::Path>,
+        destination: impl AsRef<std::path::Path>,
+    ) -> Result<(), StorageError> {
+        let source = source.as_ref();
+        let destination = destination.as_ref();
+        if !source.is_absolute() || !source.is_file() {
             return Err(StorageError::InvalidBackupPath(
-                "backup destination must be absolute".into(),
+                "backup source must be an existing absolute file".into(),
             ));
         }
-        let parent = destination.parent().ok_or_else(|| {
-            StorageError::InvalidBackupPath("backup destination must have a parent".into())
-        })?;
-        if !parent.is_dir() {
-            return Err(StorageError::InvalidBackupPath(
-                "backup destination parent must already exist".into(),
-            ));
+        validate_backup_destination(destination, Some(source))?;
+        let connection =
+            Connection::open_with_flags(source, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        connection.busy_timeout(BUSY_TIMEOUT)?;
+        let integrity: String = connection
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .map_err(|error| StorageError::CorruptDatabase(error.to_string()))?;
+        if integrity != "ok" {
+            return Err(StorageError::CorruptDatabase(integrity));
         }
-        let parent_metadata = std::fs::symlink_metadata(parent)?;
-        if !parent_metadata.is_dir()
-            || is_reparse_point(&parent_metadata)
-            || path_has_reparse_ancestor(parent)
-        {
-            return Err(StorageError::InvalidBackupPath(
-                "backup destination parent must be a regular non-reparse directory".into(),
-            ));
-        }
-        match std::fs::symlink_metadata(destination) {
-            Ok(metadata) => {
-                if is_reparse_point(&metadata) || path_is_symbolic_link(destination) {
-                    return Err(StorageError::InvalidBackupPath(
-                        "backup destination cannot be a symbolic link or reparse point".into(),
-                    ));
-                }
-                return Err(StorageError::InvalidBackupPath(
-                    "backup destination must not already exist".into(),
-                ));
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(StorageError::Io(error)),
-        }
-        if let Some(source) = &self.database_path {
-            let source = std::fs::canonicalize(source)?;
-            let existing = destination
-                .exists()
-                .then(|| std::fs::canonicalize(destination))
-                .transpose()?;
-            if existing.as_ref() == Some(&source) {
-                return Err(StorageError::InvalidBackupPath(
-                    "backup destination cannot be the live database".into(),
-                ));
-            }
-        }
-        self.connection
-            .backup(rusqlite::MAIN_DB, destination, None)
-            .map_err(StorageError::Sql)?;
-        validate_backup_size(destination)
+        backup_connection(&connection, destination)
     }
 
     /// Retain the newest ten explicitly named daily recovery backups.
@@ -5302,6 +5408,47 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
+    /// Review 2026-11-01, P2-9: an up-to-date database opens without the
+    /// full page scan, while `open_checked` (once per app start) still finds
+    /// damage the cheap open cannot see.
+    #[test]
+    fn only_a_checked_open_scans_every_page_of_a_current_database() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-storage-damaged-pages-{}.sqlite",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let storage = Storage::open(&path).unwrap();
+            storage
+                .store_audio_media(
+                    "sound",
+                    "sound.wav",
+                    "wav",
+                    &vec![7_u8; 4 * 1024 * 1024],
+                    None,
+                )
+                .unwrap();
+            storage
+                .connection
+                .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+                .unwrap();
+        }
+        // Damage the overflow-page chain of the stored sound.
+        let mut bytes = std::fs::read(&path).unwrap();
+        let middle = bytes.len() / 2;
+        bytes[middle..middle + 64 * 1024].fill(0xff);
+        std::fs::write(&path, &bytes).unwrap();
+        assert!(Storage::open(&path).is_ok());
+        assert!(matches!(
+            Storage::open_checked(&path),
+            Err(StorageError::CorruptDatabase(_))
+        ));
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("sqlite-wal"));
+        let _ = std::fs::remove_file(path.with_extension("sqlite-shm"));
+    }
+
     #[test]
     fn deleting_session_removes_current_and_history_rows() {
         let storage = Storage::open_memory().unwrap();
@@ -6046,6 +6193,80 @@ mod tests {
                     && maximum == MAX_BACKUP_BYTES as usize
         ));
         assert!(!destination.exists());
+    }
+
+    /// Review 2026-11-01, P2-7: imported audio lives in the database, so a
+    /// library past the 100 MiB configuration budget must still back up and
+    /// restore with its bytes intact.
+    #[test]
+    fn backups_carry_an_audio_library_past_the_configuration_budget() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-storage-large-backup-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("source.sqlite");
+        let backup = directory.join("backup.sqlite");
+        let restored = directory.join("restored.sqlite");
+        let first = vec![0x5a_u8; 60 * 1024 * 1024];
+        let second = vec![0xa5_u8; 60 * 1024 * 1024];
+        {
+            let storage = Storage::open(&source).unwrap();
+            storage
+                .store_audio_media("first", "first.wav", "wav", &first, None)
+                .unwrap();
+            storage
+                .store_audio_media("second", "second.wav", "wav", &second, None)
+                .unwrap();
+        }
+        assert!(std::fs::metadata(&source).unwrap().len() > MAX_CONFIGURATION_BACKUP_BYTES);
+        Storage::backup_database(&source, &backup).unwrap();
+        Storage::restore_backup(&backup, &restored).unwrap();
+        let storage = Storage::open(&restored).unwrap();
+        assert_eq!(storage.load_audio_media("first").unwrap().unwrap().2, first);
+        assert_eq!(
+            storage.load_audio_media("second").unwrap().unwrap().2,
+            second
+        );
+        drop(storage);
+        let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    /// Backing up a database file opens it read-only: an older or foreign
+    /// database is copied as it is, not migrated first (review 2026-11-01).
+    #[test]
+    fn file_backup_does_not_migrate_its_source() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-storage-readonly-backup-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("old.sqlite");
+        let backup = directory.join("backup.sqlite");
+        Connection::open(&source)
+            .unwrap()
+            .execute_batch("CREATE TABLE legacy(value INTEGER); INSERT INTO legacy VALUES (7);")
+            .unwrap();
+        let before = std::fs::read(&source).unwrap();
+        Storage::backup_database(&source, &backup).unwrap();
+        assert_eq!(std::fs::read(&source).unwrap(), before);
+        let copy = Connection::open(&backup).unwrap();
+        let tables: Vec<String> = copy
+            .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(tables, ["legacy"]);
+        drop(copy);
+        assert!(matches!(
+            Storage::backup_database(&source, &backup),
+            Err(StorageError::InvalidBackupPath(_))
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
     }
 
     /// 2026-10-07 review P1-3: commits run on the audio service thread, and a
