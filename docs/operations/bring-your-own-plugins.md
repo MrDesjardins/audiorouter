@@ -129,6 +129,12 @@ voice back:
    plugin) Turn on **Allow unchanged audio**. The plugin reloads, with a
    short gap if the route is playing, and is no longer muted for this.
 
+VST2 plugins placed directly one after another can share one worker. That
+group is checked as a whole: if the audio leaving the last one is the same
+as the audio entering the first, the whole group goes silent. To keep such
+a group unchanged on purpose, turn on **Allow unchanged audio** on every
+plugin in it.
+
 Going back to a version from before 2026-10-31? Turn **Allow unchanged
 audio** off and save first. Older versions don't know that setting: one
 saved route that still has it can stop them from listing your sessions at

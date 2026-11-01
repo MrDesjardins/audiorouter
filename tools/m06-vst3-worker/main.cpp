@@ -551,15 +551,25 @@ private:
 
 static EditorEditQueue g_editor_edits;
 
-// The plugin's own delay. The host asks for it about twice a second, so the
-// pipe thread answers from this cache instead of waiting for a UI thread that
-// a busy plugin window may hold. `restartComponent(kLatencyChanged)` and every
-// other UI request (state, editor) invalidate it; the next Latency request
-// then goes to the UI thread, which re-activates the component if the plugin
-// asked for it and stores the fresh value.
+// The plugin's own delay. The host asks for it about twice a second while
+// audio plays, so once the first answer is cached the pipe thread always
+// answers from the cache and never waits for a UI thread that a busy plugin
+// window may hold. The UI thread refreshes the cache after every request it
+// serves (state, editor). After `restartComponent(kLatencyChanged)` the next
+// Latency request still answers from the cache and posts the re-activation
+// to the UI thread, which runs it under `g_processing_mutex` and stores the
+// new value; the poll after that reports it.
 static std::atomic<bool> g_latency_restart_pending{false};
 static std::atomic<bool> g_latency_cached{false};
 static std::atomic<uint32_t> g_latency_samples{0};
+// Set when a posted re-activation failed; the audio thread then stops the
+// worker so the supervisor sees the failure, as it did before the posting.
+static std::atomic<bool> g_latency_restart_failed{false};
+// Held by the audio thread around each Process call and by the UI thread
+// around a posted latency re-activation, so the component is never
+// deactivated while it processes. The audio thread waits only for the
+// re-activation itself, not for a UI thread busy elsewhere.
+static std::mutex g_processing_mutex;
 
 class ComponentHandler final : public Vst::IComponentHandler {
 public:
@@ -1049,8 +1059,8 @@ public:
     uint32_t latency_samples() const { return processor_ ? processor_->getLatencySamples() : 0; }
 
     // The SDK applies a reported latency change only after the component is
-    // deactivated and activated again. UI thread, between quanta: the pipe
-    // thread waits for this request, so no Process call runs meanwhile.
+    // deactivated and activated again. UI thread only, with
+    // `g_processing_mutex` held so no Process call runs meanwhile.
     void restart_for_latency() {
         if (processing_) {
             require_result("VST3 processor pause for latency", processor_->setProcessing(false));
@@ -1347,11 +1357,15 @@ constexpr UINT kHostParametersMessage = WM_APP + 2; // lParam: owned HostParamet
 constexpr UINT kAttachEditorMessage = WM_APP + 3;   // wParam: editor generation
 constexpr UINT kReleaseEditorsMessage = WM_APP + 4;
 constexpr UINT kAudioStoppedMessage = WM_APP + 5;
+constexpr UINT kLatencyRestartMessage = WM_APP + 6; // posted: re-activate for a latency change
 constexpr UINT_PTR kParentSizeTimer = 1;
 constexpr UINT kParentSizePollMs = 200;
 // A UI thread that does not answer a request within this time is stuck in
-// plugin code; the worker then ends so the supervisor can contain it.
-constexpr UINT kUiRequestTimeoutMs = 15000;
+// plugin code; the worker then ends so the supervisor can contain it. It is
+// shorter than the host's 5 s response timeout (`WORKER_RESPONSE_TIMEOUT`,
+// pinned by `vst3_worker_ui_timeout_is_shorter_than_the_host_timeout`), so
+// the worker reports the stuck UI thread before the host gives up on it.
+constexpr UINT kUiRequestTimeoutMs = 4000;
 constexpr int32 kMaxEditorSide = 4096;
 
 using HostParameterValues = std::vector<std::pair<Vst::ParamID, Vst::ParamValue>>;
@@ -1730,7 +1744,12 @@ static std::string handle_ui_request(const std::string& json, bool& shutdown) {
     }
     if (is_latency_message(json)) {
         const auto sample_rate = required_uint_field(json, "\"sample_rate_hz\":");
-        if (g_latency_restart_pending.exchange(false, std::memory_order_acq_rel)) effect.restart_for_latency();
+        if (g_latency_restart_pending.exchange(false, std::memory_order_acq_rel)) {
+            // The pipe thread waits for this request, so the lock is free;
+            // taking it keeps the rule that a restart never overlaps Process.
+            std::lock_guard<std::mutex> processing(g_processing_mutex);
+            effect.restart_for_latency();
+        }
         const auto samples = effect.latency_samples();
         g_latency_samples.store(samples, std::memory_order_release);
         g_latency_cached.store(true, std::memory_order_release);
@@ -1745,11 +1764,31 @@ static LRESULT CALLBACK ui_window_proc(HWND window, UINT message, WPARAM wparam,
             auto* request = reinterpret_cast<UiRequest*>(lparam);
             try {
                 request->reply = handle_ui_request(*request->json, request->shutdown);
+                // State and editor requests can change the plugin's delay.
+                // The pipe thread is waiting, so reading it here cannot
+                // overlap Process; the next poll answers from this value.
+                if (!request->shutdown && !is_latency_message(*request->json)) {
+                    g_latency_samples.store(g_ui.effect->latency_samples(), std::memory_order_release);
+                    g_latency_cached.store(true, std::memory_order_release);
+                }
             } catch (const std::exception& error) {
                 request->error = error.what();
             }
             return 0;
         }
+        case kLatencyRestartMessage:
+            // Posted by the pipe thread after the plugin asked for a latency
+            // restart. Runs whenever this thread is free; audio keeps flowing
+            // until then and waits only while the component re-activates.
+            try {
+                std::lock_guard<std::mutex> processing(g_processing_mutex);
+                g_ui.effect->restart_for_latency();
+                g_latency_samples.store(g_ui.effect->latency_samples(), std::memory_order_release);
+            } catch (const std::exception& error) {
+                std::cerr << "VST3 latency restart failed: " << error.what() << '\n';
+                g_latency_restart_failed.store(true, std::memory_order_release);
+            }
+            return 0;
         case kHostParametersMessage: {
             std::unique_ptr<HostParameterValues> values(reinterpret_cast<HostParameterValues*>(lparam));
             // Keep the plugin's own window in step with AudioRouter's sliders.
@@ -1803,16 +1842,21 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
     while (true) {
         const auto payload = read_frame();
         const std::string json(payload.begin(), payload.end());
+        if (g_latency_restart_failed.load(std::memory_order_acquire)) {
+            throw std::runtime_error("VST3 latency restart failed");
+        }
         if (!is_audio_message(json)) {
-            const bool latency = is_latency_message(json);
-            if (latency && g_latency_cached.load(std::memory_order_acquire) &&
-                !g_latency_restart_pending.load(std::memory_order_acquire)) {
+            if (is_latency_message(json) && g_latency_cached.load(std::memory_order_acquire)) {
+                // Never wait for the UI thread here: answer the last known
+                // delay and hand a requested restart to the UI thread.
+                if (g_latency_restart_pending.exchange(false, std::memory_order_acq_rel) &&
+                    !PostMessageW(g_ui_window, kLatencyRestartMessage, 0, 0)) {
+                    g_latency_restart_pending.store(true, std::memory_order_release);
+                }
                 write_frame(latency_message(g_latency_samples.load(std::memory_order_acquire),
                                             required_uint_field(json, "\"sample_rate_hz\":")));
                 continue;
             }
-            // State and editor requests can change the plugin's delay.
-            if (!latency) g_latency_cached.store(false, std::memory_order_release);
             UiRequest request;
             request.json = &json;
             DWORD_PTR ignored = 0;
@@ -1866,7 +1910,10 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
                 throw protocol_error("expected ProcessBuses or Shutdown");
             }
             const auto frames = parse_bus_frames(json);
-            const auto output = effect.process_buses(frames, events);
+            const auto output = [&] {
+                std::lock_guard<std::mutex> processing(g_processing_mutex);
+                return effect.process_buses(frames, events);
+            }();
             write_frame(processed_buses_message(frames.front().sequence, frames.front().deadline,
                                                 input_buses, output_buses, output));
         } else {
@@ -1878,7 +1925,10 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
             const auto channels = required_uint_field(json, "\"channels\":");
             if (channels != arguments.channels || channels > 2) throw protocol_error("channel mismatch");
             const auto samples = parse_samples(json);
-            const auto output = effect.process(samples, arguments.channels, events);
+            const auto output = [&] {
+                std::lock_guard<std::mutex> processing(g_processing_mutex);
+                return effect.process(samples, arguments.channels, events);
+            }();
             write_frame(processed_message(sequence, deadline, arguments.channels, output));
         }
         if (!host_values.empty()) {
