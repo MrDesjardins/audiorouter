@@ -2098,6 +2098,49 @@ fn render_human(command: &str, value: &Value) -> String {
 
 /// Run the local MCP stdio adapter for modern stateless and legacy MCP clients.
 /// stdout is reserved for newline-delimited JSON-RPC; diagnostics go to stderr.
+/// The largest MCP message one stdio line may carry.
+const MAX_MCP_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
+
+/// One newline-delimited MCP message read from stdio.
+#[derive(Debug, PartialEq, Eq)]
+enum McpLine {
+    Text(String),
+    /// Over the limit; the rest of the line was skipped without buffering.
+    TooLong,
+    /// Not UTF-8; answered with a parse error instead of ending the session.
+    InvalidUtf8,
+}
+
+/// Reads the next line, buffering at most `limit` bytes of it (review
+/// 2026-11-01, P3-1: `lines()` buffered a whole line before the size check
+/// and ended the session on invalid UTF-8). None at end of input.
+fn read_mcp_line(
+    input: &mut impl std::io::BufRead,
+    limit: usize,
+) -> std::io::Result<Option<McpLine>> {
+    let mut bytes = Vec::new();
+    let read = std::io::Read::take(&mut *input, limit as u64 + 1).read_until(b'\n', &mut bytes)?;
+    if read == 0 {
+        return Ok(None);
+    }
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+        if bytes.last() == Some(&b'\r') {
+            bytes.pop();
+        }
+    } else if bytes.len() > limit {
+        input.skip_until(b'\n')?;
+        return Ok(Some(McpLine::TooLong));
+    }
+    if bytes.len() > limit {
+        return Ok(Some(McpLine::TooLong));
+    }
+    Ok(Some(match String::from_utf8(bytes) {
+        Ok(text) => McpLine::Text(text),
+        Err(_) => McpLine::InvalidUtf8,
+    }))
+}
+
 pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
     // The OpenAI tunnel runtime uses this credential only to authenticate its
     // control-plane connection. It launches this trusted MCP child with the
@@ -2139,17 +2182,29 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::BufWriter::new(std::io::stdout().lock());
     let mut initialized = false;
-    for line in stdin.lock().lines() {
-        let line = line.map_err(|error| CliError::Io(error.to_string()))?;
+    let mut input = stdin.lock();
+    while let Some(line) = read_mcp_line(&mut input, MAX_MCP_MESSAGE_BYTES)
+        .map_err(|error| CliError::Io(error.to_string()))?
+    {
         // One bad message is answered with a JSON-RPC error; the session
         // stays open for the client's next request.
-        if line.len() > 4 * 1024 * 1024 {
-            write_mcp_message(
-                &mut stdout,
-                &mcp_error(None, -32600, "MCP message exceeds the 4 MiB limit"),
-            )?;
-            continue;
-        }
+        let line = match line {
+            McpLine::Text(line) => line,
+            McpLine::TooLong => {
+                write_mcp_message(
+                    &mut stdout,
+                    &mcp_error(None, -32600, "MCP message exceeds the 4 MiB limit"),
+                )?;
+                continue;
+            }
+            McpLine::InvalidUtf8 => {
+                write_mcp_message(
+                    &mut stdout,
+                    &mcp_error(None, -32700, "parse error: invalid UTF-8"),
+                )?;
+                continue;
+            }
+        };
         let message: Value = match serde_json::from_str(&line) {
             Ok(message) => message,
             Err(_) => {
@@ -3292,6 +3347,33 @@ fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A non-UTF-8 line and an oversized line are each one bad message; the
+    /// lines after them still arrive (invalid UTF-8 used to end the MCP
+    /// session, and an oversized line was buffered whole first).
+    #[test]
+    fn mcp_stdio_lines_are_bounded_and_survive_invalid_utf8() {
+        let mut input = Vec::new();
+        input.extend_from_slice(b"{\"a\":1}\r\n");
+        input.extend_from_slice(b"\xff\xfe\n");
+        input.extend_from_slice(&[b'x'; 40]);
+        input.push(b'\n');
+        input.extend_from_slice(b"{\"b\":2}");
+        let mut reader = std::io::BufReader::with_capacity(8, input.as_slice());
+        let mut lines = Vec::new();
+        while let Some(line) = read_mcp_line(&mut reader, 16).unwrap() {
+            lines.push(line);
+        }
+        assert_eq!(
+            lines,
+            vec![
+                McpLine::Text("{\"a\":1}".into()),
+                McpLine::InvalidUtf8,
+                McpLine::TooLong,
+                McpLine::Text("{\"b\":2}".into()),
+            ]
+        );
+    }
 
     thread_local! {
         /// Backend methods `mcp_api_value` was asked to call on this thread.
