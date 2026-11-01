@@ -5,7 +5,7 @@ include about a hundred free sounds the user can pick, next to their own sounds,
 with a picker that can sort by category and search. Built-in sounds are short
 (under 5 seconds). The user's own sounds may be longer.
 
-Promoted to active work on 2026-10-29; see the [active plan](../active/soundboard.md).
+Promoted to active work on 2026-10-29; see the [Soundboard plan](../archived/2026-11-01-soundboard.md) (archived 2026-11-01, delivered).
 
 ## What "popular" can and cannot mean
 
@@ -281,4 +281,4 @@ and Settings shows a link to it.
 2. Bundled in the installer; no download.
 3. 120 seconds per slot and a total decoded budget for the board are accepted.
 
-Execution is tracked in the [active Soundboard plan](../active/soundboard.md).
+Execution is tracked in the [Soundboard plan](../archived/2026-11-01-soundboard.md).

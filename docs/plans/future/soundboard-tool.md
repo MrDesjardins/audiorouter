@@ -1,7 +1,7 @@
 # Soundboard tool
 
 Status: promoted to active work on 2026-10-29 (owner: "I want you to start").
-Execution and decisions are tracked in the [active plan](../active/soundboard.md);
+Execution and decisions are tracked in the [Soundboard plan](../archived/2026-11-01-soundboard.md) (archived 2026-11-01, delivered);
 this document stays the detailed specification. Key bindings step 2 (global
 shortcuts) and a ready-made Stream Deck profile are not authorized.
 

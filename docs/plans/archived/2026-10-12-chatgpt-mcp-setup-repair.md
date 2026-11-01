@@ -64,7 +64,7 @@ No AudioRouter tools are exposed to this Codex chat. Remaining integration
 qualification is denied writes, Disconnect/reconnect, credential revocation
 and privacy checks. Session creation requires the
 owner's Editor grant; plugin creation alone is not evidence of that authority.
-Keep these tasks in [the active integration plan](../active/current.md#chatgpt-mcp-integration-plan-2026-10-11-active).
+Keep these tasks in [the active integration plan](2026-11-01-maintenance-0.0.13-to-0.0.26.md#chatgpt-mcp-integration-plan-2026-10-11-active).
 
 Rollback: disconnect the tunnel, restore the saved CLI/shell backups and revert
 the paired compatibility/supervisor/staging changes. Preserve credentials,
