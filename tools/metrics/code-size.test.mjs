@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { classify, countLines, formatCsv, parseCsv, renderAreas, renderTotal, RULES_VERSION } from './code-size.mjs';
+import { classify, countLines, esc, formatCsv, parseCsv, renderAreas, renderTotal, RULES_VERSION } from './code-size.mjs';
 
 const area = (path) => {
   const kind = classify(path);
@@ -108,4 +108,8 @@ test('draws five area panels and the total with direct end labels', () => {
   assert.match(total, /Code 212</);
   assert.match(total, /Tests 87</);
   assert.match(total, /All 348</);
+});
+
+test('escapes quotes so a label cannot leave an SVG attribute', () => {
+  assert.equal(esc(`a"b'c<d>&`), 'a&quot;b&#39;c&lt;d&gt;&amp;');
 });

@@ -339,7 +339,9 @@ const BORDER = "#d7dee8";
 const SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"];
 const FONT = 'system-ui,-apple-system,"Segoe UI",sans-serif';
 
-const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// Text and attribute values both pass through here, so quotes are escaped too.
+export const esc = (s) =>
+  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const fmt = (v) => Math.round(v).toLocaleString("en-US");
 
 function niceStep(max, ticks) {
