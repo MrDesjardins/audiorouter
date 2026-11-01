@@ -1,5 +1,13 @@
 # Active plan — 0.0.26 release and maintenance
 
+CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
+settings to the generic tool-workflow test. Input, Soundboard and network
+nodes use dedicated editors. Reuse the inspector's exhaustive editor
+classification in the workflow; retain dedicated network edits and durable
+reload assertions. Validate UI typecheck, lint and focused Playwright.
+No hardware or driver is needed. Rollback: revert this test/export change.
+Hosted CI remains required; GitHub access is restricted locally.
+
 ## REST and MCP parity after the Soundboard — 2026-10-31, owner request
 
 Objective: make every public feature reachable by an LLM through the default

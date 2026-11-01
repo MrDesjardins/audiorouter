@@ -1,6 +1,7 @@
 import { test, expect } from "./real-backend";
 import { libraryEntries } from "../src/library";
 import { parameterText } from "../src/parameterText";
+import { GENERIC_SETTINGS_EDITOR } from "../src/NodeEditors";
 import type { DiscoveryDocument, Session } from "../../contracts/src/index";
 import { syntheticWav } from "./audio-fixtures";
 
@@ -35,7 +36,7 @@ for (const entry of entriesWithKind) {
     const changedParameters: Record<string, boolean | number | string> = {};
     // EQ has a dedicated response/point workflow; opaque paths and media IDs
     // are exercised through their dedicated import/binding workflows.
-    if (entry.kind !== "parametricEq") {
+    if (GENERIC_SETTINGS_EDITOR[entry.kind] && entry.kind !== "parametricEq") {
       for (const parameter of descriptor?.parameters ?? []) {
         // Learning is driven by the Learn buttons, not a settings field.
         if (parameter.name.endsWith(":") || parameter.name === "learning") continue;

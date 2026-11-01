@@ -24,7 +24,7 @@ import { cableEndpointName, cableUnavailableReason } from "./virtualCableStatus"
  * catalog describes them for API and MCP clients only. A Record keeps the
  * list exhaustive: a new kind fails to typecheck until it is classified.
  */
-const GENERIC_SETTINGS_EDITOR: Record<NodeKind, boolean> = {
+export const GENERIC_SETTINGS_EDITOR: Record<NodeKind, boolean> = {
   physicalInput: false,
   applicationCapture: false,
   endpointLoopback: false,
