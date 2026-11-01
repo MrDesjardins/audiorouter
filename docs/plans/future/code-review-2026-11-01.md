@@ -3,9 +3,12 @@
 A second full review of the repository, after the
 [2026-10-07 review](code-review-2026-10-07.md). It re-checks that review's
 open items and reads the newest and riskiest code: the plugin latency
-and licence guard (U4/U6) and the HTTP and tunnel entry points. It is a
-targeted review, not a line-by-line read of the whole repository; the
-areas not reviewed are listed below. Findings are ranked P0 to P3. Like every plan in this folder, this
+and licence guard (U4/U6) and the HTTP and tunnel entry points. A second
+pass the same day covered storage, transport, recording, the Soundboard,
+the CLI MCP server, the WASAPI code, the driver IOCTLs and the desktop
+shell. It is a targeted review, not a line-by-line read of the whole
+repository; what each pass read is listed below. Findings are ranked P0
+to P3. Like every plan in this folder, this
 is a backlog, not authorized work. Each item needs the owner's go-ahead and
 a place in the [active plan](../active/current.md).
 
@@ -38,10 +41,19 @@ a place in the [active plan](../active/current.md).
   `src-tauri/src/http_api.rs`, the tunnel launcher (`mcp_tunnel.rs`), a
   lock/allocation scan of `network_audio.rs`, a `NodeKind` catch-all scan
   of all production Rust, and a UI size and swallowed-error scan.
-- **Not reviewed:** storage, recording, transport, the engine DSP and
-  graph compiler, the `windows-audio` WASAPI and driver-bridge code, the
-  Soundboard, the CLI MCP server (`crates/cli`), the drivers, and
-  `src-tauri/src/main.rs`. A second pass should cover them.
+- **Read in the second pass:** the transport pipe framing, accept path and
+  the control/audio service loop; storage open, WAL, backup, restore and
+  audio-media code; the recording crate's outline and limits; the
+  Soundboard media loading (`crates/control/src/sound_library.rs`); the MCP
+  stdio loop (`crates/cli/src/lib.rs`); a blocking/allocation scan of
+  `windows-audio/src/lib.rs`; filter and envelope state in `dsp`; the
+  driver's control-device IOCTL dispatch and device ACL; the desktop
+  shell's Tauri commands, CSP and close handling.
+- **Still not read line by line:** the engine graph compiler (covered by
+  the exhaustive source and tool combination suites), the WASAPI stream
+  setup and driver-bridge internals, the WAV writer, the driver's WaveRT
+  stream code (it has its own active plan), and the UI beyond the scans
+  named above.
 - **Not run:** `cargo build`, `cargo test`, Clippy, Vitest and Playwright.
   The owner's `audiorouter-shell.exe` was running, and heavy compiles
   starve live audio. Nothing was measured with audio hardware. Line numbers
@@ -79,6 +91,9 @@ a place in the [active plan](../active/current.md).
 | [P2-4](#p2-4-two-latency-tables-and-catch-all-arms-in-the-domain-catalog) | P2 | Correctness | The route latency estimate ignores most DSP delays; two `_ =>` arms break the exhaustive-kind rule |
 | [P2-5](#p2-5-the-largest-files-grew-back) | P2 | Maintainability | `App.tsx` and `SessionFlowCanvas.tsx` grew back past the size P2-2 split them from |
 | [P2-6](#p2-6-open-items-carried-from-2026-10-07) | P2 | Mixed | Items from 2026-10-07 still open (not re-measured) |
+| [P2-7](#p2-7-backups-fail-once-the-audio-library-passes-100-mib) | P2 | Reliability | Backup and restore refuse databases over 100 MiB; the audio library may hold 512 MiB |
+| [P2-8](#p2-8-soundboard-play-reads-and-hashes-sounds-on-the-audio-service-thread) | P2 | Audio | Starting a Soundboard reads, hashes and re-parses library files on the thread that services audio |
+| [P2-9](#p2-9-every-database-open-runs-a-full-integrity-check) | P2 | Performance | Every `Storage::open` runs a full `PRAGMA integrity_check`, several times per app start |
 | [P3-1](#p3-1-smaller-items) | P3 | Mixed | Smaller cleanups |
 
 ## P2
@@ -234,6 +249,75 @@ Not re-measured in this review. Each still needs its recorded evidence:
   (this build may be stale). Lazy-load the rarely used panels if a fresh
   build agrees.
 
+### P2-7 Backups fail once the audio library passes 100 MiB
+
+- **Evidence.** Imported audio (Audio File and Soundboard sounds) is stored
+  as blobs in the database, up to 64 MiB each and 512 MiB in total
+  (`MAX_AUDIO_MEDIA_BYTES`, `MAX_AUDIO_MEDIA_TOTAL_BYTES`,
+  `crates/storage/src/lib.rs:37-38`). `backup_to` writes the backup and then
+  deletes it with `DocumentTooLarge` if it is over `MAX_BACKUP_BYTES` =
+  100 MiB (`validate_backup_size`, `lib.rs:99-109`). `restore_backup`
+  refuses any source over the same limit. The only callers are the CLI
+  `backup` and `restore` commands (`crates/cli/src/lib.rs:345-372`).
+- **Impact.** Someone who imported a few long sounds (two 64 MiB files, or
+  many short ones) can no longer back up their database. The command does
+  all the work first and then fails. Restoring an older large backup is
+  refused too. The backup command also opens the source with
+  `Storage::open`, which runs migrations on it, so "backing up" an older
+  database changes it first.
+- **Fix.** Derive the backup limit from the largest database the app
+  allows (session documents, journal and the 512 MiB media budget, plus
+  headroom), or drop the size check in favor of the integrity check. Open
+  the source read-only for a backup, without migrating.
+- **Verify.** A storage test that stores audio media past 100 MiB, backs up
+  and restores, and checks the restored media bytes.
+
+### P2-8 Soundboard Play reads and hashes sounds on the audio service thread
+
+- **Evidence.** `load_soundboard_media` (`crates/control/src/sound_library.rs:187`)
+  runs at Play on the control thread, which also services running audio.
+  For each library sound, `decode_board_sound` calls `read_library_sound`.
+  That function reads and parses the whole 67 kB manifest again, reads the
+  file (up to 2 MiB) and computes its SHA-256, all outside
+  `while_servicing_audio`; only the decode runs inside it (`lib.rs:269-283`).
+  A user sound is loaded from SQLite with `load_audio_media` the same way.
+  A board can name 9 slots × 64 sounds (`MAX_SLOT_SOUNDS`), a category slot
+  expands to the whole category, and the manifest lookup is linear per
+  sound.
+- **Impact (measure).** Starting a route with a large Soundboard while
+  another route plays can delay the next audio pass past the 10 ms
+  period: up to 576 manifest parses, file reads and hashes, plus blob
+  reads, in one request. This is the P0-1 remainder in a new place.
+- **Fix.** Parse the manifest once per Play and index it by ID. Move the
+  file read and hash into the `while_servicing_audio` closure with the
+  decode. Load the user's blobs before entering it, or in a short bounded
+  step per sound.
+- **Verify.** **(measure)** Watch `AudioServicePassTiming` (or the
+  `lateGaps` counter) while starting a full-category board with another
+  route playing; require no pass later than a few milliseconds.
+
+### P2-9 Every database open runs a full integrity check
+
+- **Evidence.** `Storage::open` runs `PRAGMA integrity_check`, then
+  migrations and recovery pruning, every time (`crates/storage/src/lib.rs:763-775`).
+  The desktop shell opens the database several times at start
+  (`recovery_safe_mode` and `record_backend_failure`,
+  `src-tauri/src/main.rs:1470-1482`, then the backend). Every CLI command
+  and every `mcp serve` launch opens it again.
+- **Impact (measure).** `integrity_check` reads every page. With the
+  audio library allowed to reach 512 MiB, app start and each MCP client
+  launch can pay a full read of the database, several times. A corrupt
+  database also makes `recovery_safe_mode` quietly return `None`
+  (`.ok()?`), and the shell reads that as "not in safe mode"
+  (`unwrap_or(false)`, `main.rs:1632`) with no log line; the backend's own
+  open fails afterwards.
+- **Fix.** Run the full check once per app start (or after an unclean
+  shutdown) and use `PRAGMA quick_check` or no check for other opens. Give
+  the shell's small reads a light open that skips migrations. Log a
+  corrupt-database result where it is swallowed.
+- **Verify.** **(measure)** Time `Storage::open` on a database with
+  400 MiB of media before and after; a storage test for the lighter open.
+
 ## P3-1 Smaller items
 
 - **Misplaced doc comment.** `/// The live runtime bridge of a plugin node in
@@ -253,6 +337,29 @@ Not re-measured in this review. Each still needs its recorded evidence:
   could lose unsaved work without a trace. Record a UI diagnostic. The
   other three `.catch(() => undefined)` calls (`App.tsx` polls, `main.tsx`)
   are commented, intentional keep-last-value cases.
+- **MCP stdio: one non-UTF-8 line ends the session.** `run_mcp_stdio`
+  reads with `stdin.lock().lines()` and propagates its error with `?`
+  (`crates/cli/src/lib.rs:2143-2144`). Invalid UTF-8 returns `InvalidData`
+  and stops the server, unlike invalid JSON, which gets -32700. The whole
+  line is also buffered before the 4 MiB check. Read bytes with a bounded
+  `read_until` and answer -32700 for bad encoding.
+- **Pipe I/O: per-request SID lookup and no read timeout.**
+  `dispatch_control_frame` resolves the client SID from its PID on the
+  control thread for every request (`crates/transport/src/lib.rs:1834`),
+  although `accept_client` already checked the user. Pass the SID from the
+  I/O thread instead. The I/O threads read frames with blocking pipe reads
+  and no timeout, so a stalled same-user client holding all four instances
+  blocks every other client until it disconnects.
+- **Soundboard memory budget is per board.** `MAX_BOARD_DECODED_BYTES`
+  (256 MB) applies to each enabled board separately
+  (`sound_library.rs:20`, `:251`), so several large boards have no total
+  bound. Count the budget across the session.
+- **Denormals (measure).** Only the Fun Voice Changer flushes tiny values
+  (`crates/dsp/src/voice_changer.rs:57`), and no thread sets
+  flush-to-zero. Biquads keep `f64` state and dynamics work in dB, so the
+  risk is low, but a gate's exact silence feeding long filters or reverb-like
+  tools is the classic case. Time a block of silence after a loud tone
+  through each tool in `benches/realtime.rs`.
 
 ## Unmerged branch: `feature/plugin-library-ux`
 
@@ -274,8 +381,12 @@ no contract change. Reviewed by reading the diff; tests not run here.
 
 1. **P2-2**: it can silence and fail a working plugin in normal use, and
    the fix is local to the poll and the VST3 worker.
-2. **P2-1**: close the privacy gap or make the limit explicit in code and
+2. **P2-7**: users with a large audio library cannot back up today; the
+   fix is a constant and a read-only open.
+3. **P2-1**: close the privacy gap or make the limit explicit in code and
    tests.
-3. **P2-4**: small, removes a forbidden hand-kept list.
-4. **P2-3**: soundness, best done with Miri in CI.
-5. **P2-5** and the P3 items alongside feature work.
+4. **P2-8** and **P2-9**: measure first, then fix together with the P0-1
+   remainder (work on the audio service thread and at start-up).
+5. **P2-4**: small, removes a forbidden hand-kept list.
+6. **P2-3**: soundness, best done with Miri in CI.
+7. **P2-5** and the P3 items alongside feature work.
