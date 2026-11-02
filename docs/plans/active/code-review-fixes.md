@@ -59,7 +59,7 @@ Status key: **todo**, **done** (code and regression test committed),
 | P2-2 remainder | `AppContent` handlers into hooks (with P2-5 above) | todo |
 | P2-5 remainder | Network audio encryption (ChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and replay protection for a restarted receiver (authenticated sender time, bounded skew) | todo |
 | P2-7 | Windows sine-continuity run for the optimized DSP loops | blocked: needs VB-Cable route and a quiet PC |
-| P3 UI bundle | Lazy-load rarely used panels if a fresh build still shows a large main chunk | todo |
+| P3 UI bundle | Lazy-load rarely used panels if a fresh build still shows a large main chunk | implemented; main 629.49 -> 513.06 kB; browser checks pass |
 | P3 silent catches | Diagnostic categories for the remaining swallowed UI errors | todo |
 | P3 unsafe audit | Bridge shared memory `MmapRaw` (with P2-3) | bridge already uses raw mappings; plugin mapping repaired with P2-3 |
 
@@ -216,3 +216,33 @@ splits. Behavior changes and lazy loading belong in separate commits.
   made as part of this mechanical move. Neither is a UI lint warning.
 - Fresh production baseline before splitting: main chunk 629.49 kB, Vite
   over-500-kB warning. This confirms the lazy-panel follow-up is warranted.
+
+### Lazy workbench panels (2026-11-01)
+
+API, Logs, settings, recording, timing, Apps and session-file panels now use
+dynamic imports. The existing side-panel error boundary contains load failures.
+A Suspense boundary covers the tab body, and tab clicks use a transition so
+the previous tab remains usable until the requested panel is ready. No source
+or tool controls changed, so no property-guide recapture is required.
+
+- Fresh `npm.cmd --prefix ui run build`: typecheck and production build pass;
+  main 513.06 kB / 150.50 kB gzip, down from 629.49 / 179.65. The remaining
+  size warning is retained deliberately: the main chunk contains the shared
+  canvas, inspector and backend adapter. Splitting core editor code solely to
+  cross 500 kB would not reduce the initial modules needed by this screen.
+  This change does not raise or suppress Vite's warning threshold.
+- Format, lint and all-project typecheck pass. Vitest: 783 / 86 files pass.
+  First run caught a synchronous Apps-panel assertion; it now awaits the
+  requested asynchronous panel without weakening its heading assertions.
+- Edge development Playwright: 19 panel/API/recording/session-file scenarios
+  pass, plus the dedicated delayed-panel regression (20 total).
+- Edge compiled-fixture Playwright with `playwright.ci.config.ts`: 20 pass
+  (22.7 s), including dark/light/high-contrast and blocked dynamic loading.
+  The new regression holds the real panel module response, asserts that
+  playback controls, tabs and canvas bounds remain available, then releases
+  it and verifies the requested panel appears. It covers both development
+  modules and compiled chunks, with the compiled-asset request guard active.
+- First compiled-fixture rebuild hit EPERM deleting old generated assets in
+  the restricted launcher; the same build passed outside that launcher.
+- Rollback: revert this UI commit; stored preferences and session data do
+  not change.

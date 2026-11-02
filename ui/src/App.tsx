@@ -1,5 +1,4 @@
 import { optionalLocalStorage } from "./presentationStorage";
-import { UiOptionsWorkbench } from "./UiOptionsWorkbench";
 import {
   customThemeStyle,
   readCustomThemeLibrary,
@@ -9,16 +8,13 @@ import {
 } from "./customTheme";
 import { UpdatesPanel } from "./UpdateNotice";
 import { setUpdateCheckEnabled } from "./updateCheck";
-import { FirstRunGuide } from "./FirstRunGuide";
 import { useCanvasGroups } from "./CanvasGroups";
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
-import { SignalTimingPanel } from "./SignalTiming";
 import { Workbench, type WorkbenchTab } from "./Workbench";
 import { useWorkbenchStatus } from "./useWorkbenchStatus";
-import { RequestBuilder } from "./ApiRequestBuilder";
 import { VersionLine } from "./UpdateNotice";
 import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
 import {
@@ -113,7 +109,6 @@ import {
   type ThemeMode,
 } from "./preferences";
 import { SidebarResizer } from "./SidebarResizer";
-import { SessionFilePanel } from "./SessionFilePanel";
 import {
   announceDeviceAccessChanged,
   DeviceAccessSetting,
@@ -147,7 +142,6 @@ import { ErrorBoundary, RootRecoveryPanel } from "./ErrorBoundary";
 import { EqBackendContext, PluginParameterContext, defaultBackend } from "./appContext";
 import { findVbCableEndpointPair, readEndpointBindingHint, routeEndpointBinding } from "./endpointBinding";
 
-import { ClientsPanel } from "./AdvancedPanels";
 import { PluginToolsGroup } from "./PluginPanels";
 export { formatRecordingDuration, recorderHasCaptureSource } from "./RecordingPanels";
 export { findVbCableEndpointPair, findVbCableCaptureEndpointId, deviceChoiceLabel } from "./endpointBinding";
@@ -155,10 +149,7 @@ import { useAudioFileStatus } from "./useAudioFileStatus";
 import { WORKSPACE_EVENT_CATEGORIES, useWorkspaceEvents } from "./useWorkspaceEvents";
 import { DIAGNOSTICS_REFRESH_INTERVAL_MS, useDiagnosticsRefresh } from "./useDiagnosticsRefresh";
 import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from "./useNativeCounters";
-import { ConnectionForm } from "./ConnectionForm";
-import { SetupWorkbench } from "./SetupWorkbench";
-import { AppsPanel } from "./AppsPanel";
-import { DiscordSetup, type DiscordSetupChoice } from "./DiscordSetup";
+import type { DiscordSetupChoice } from "./DiscordSetup";
 import { appendDiscordRoute, discordSetupOptions } from "./discordRoute";
 import { AppStatusStrip } from "./AppStatusStrip";
 import {
@@ -169,16 +160,42 @@ import {
   voiceCableOutputs,
 } from "./appUsage";
 import { APP_USAGE_FOLLOW_UP_MS, useApplicationUsage } from "./useApplicationUsage";
-import { ObsCard, type ObsActions } from "./ObsCard";
+import type { ObsActions } from "./ObsCard";
 import { obsCheck } from "./obsUsage";
 import { useObsStatus } from "./useObsStatus";
-import { DeviceTroubleshooting } from "./DeviceTroubleshooting";
-import { RecordingWorkbench } from "./RecordingWorkbench";
-import { AdvancedWorkbench } from "./AdvancedWorkbench";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { SignalFlowPanel } from "./SignalFlowPanel";
 export { WORKSPACE_EVENT_CATEGORIES, DIAGNOSTICS_REFRESH_INTERVAL_MS, formatNativePumpSummary };
 export { NATIVE_COUNTERS_REFRESH_MS } from "./useNativeCounters";
+
+// These panels mount only when their workbench tab is selected. Keep the
+// editor and playback controls available while the selected panel loads.
+const AdvancedWorkbench = lazy(() =>
+  import("./AdvancedWorkbench").then((module) => ({ default: module.AdvancedWorkbench })),
+);
+const RecordingWorkbench = lazy(() =>
+  import("./RecordingWorkbench").then((module) => ({ default: module.RecordingWorkbench })),
+);
+const SetupWorkbench = lazy(() => import("./SetupWorkbench").then((module) => ({ default: module.SetupWorkbench })));
+const UiOptionsWorkbench = lazy(() =>
+  import("./UiOptionsWorkbench").then((module) => ({ default: module.UiOptionsWorkbench })),
+);
+const ClientsPanel = lazy(() => import("./AdvancedPanels").then((module) => ({ default: module.ClientsPanel })));
+const RequestBuilder = lazy(() => import("./ApiRequestBuilder").then((module) => ({ default: module.RequestBuilder })));
+const SessionFilePanel = lazy(() =>
+  import("./SessionFilePanel").then((module) => ({ default: module.SessionFilePanel })),
+);
+const ConnectionForm = lazy(() => import("./ConnectionForm").then((module) => ({ default: module.ConnectionForm })));
+const DeviceTroubleshooting = lazy(() =>
+  import("./DeviceTroubleshooting").then((module) => ({ default: module.DeviceTroubleshooting })),
+);
+const SignalTimingPanel = lazy(() =>
+  import("./SignalTiming").then((module) => ({ default: module.SignalTimingPanel })),
+);
+const AppsPanel = lazy(() => import("./AppsPanel").then((module) => ({ default: module.AppsPanel })));
+const DiscordSetup = lazy(() => import("./DiscordSetup").then((module) => ({ default: module.DiscordSetup })));
+const ObsCard = lazy(() => import("./ObsCard").then((module) => ({ default: module.ObsCard })));
+const FirstRunGuide = lazy(() => import("./FirstRunGuide").then((module) => ({ default: module.FirstRunGuide })));
 
 /** Root failures outlive AppContent's state, so they go straight to storage for the next window. */
 function recordStoredUiDiagnostic(message: string) {
