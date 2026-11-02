@@ -2,8 +2,8 @@
 
 Owner request, 2026-11-01: "do the two code review markdown in the future
 folder. Set them in current and tackle all of them." Sources:
-[code review 2026-11-01](../future/code-review-2026-11-01.md) and the items
-still open in [code review 2026-10-07](../future/code-review-2026-10-07.md).
+[code review 2026-11-01](code-review-2026-11-01.md) and the items
+still open in [code review 2026-10-07](code-review-2026-10-07.md).
 
 - Branch `feature/code-review-fixes-2026-11-01`, created from
   `review/code-review-2026-11-01` (`9a0c4067`). No pull request without the
@@ -45,10 +45,10 @@ Status key: **todo**, **done** (code and regression test committed),
 | P2-7 | Backup budget covers the media budget; source opened read-only without migration; STATE-12 and a decision record | done (0d163449) |
 | P2-8 | Soundboard Play: manifest parsed once and indexed; file read and hash inside `while_servicing_audio`; blobs loaded in bounded steps | done |
 | P2-9 | Full integrity check once per app start; light open for the shell's small reads; corrupt-database result logged | done (0d163449) |
-| P2-5 | `App.tsx` and `SessionFlowCanvas.tsx` split by pure moves; engine and windows-audio splits | todo |
+| P2-5 | `App.tsx` and `SessionFlowCanvas.tsx` split by pure moves; engine and windows-audio splits | bounded concern splits implemented (7abc2e1b, aa1f6dbd); large compiler/endpoint files remain a maintainability risk |
 | P3-1 | Doc comment; HTTP header `BufReader`; sample-rate-derived poll and watch windows; `unsavedReport` diagnostic; MCP stdio bounded byte reads with -32700 for bad UTF-8; SID passed from the I/O thread and a pipe read timeout; session-wide Soundboard memory budget; denormal bench | implemented across 16a17403, b731cc48, 5bb1caf0, 481244c3 and 993dc18d; see progress |
 | P2-6 | Carried items from 2026-10-07 (below) | see below |
-| Branch | `pluginSkipReason` exhaustiveness is on the unmerged `feature/plugin-library-ux`; fix it on that branch, not here | todo |
+| Branch | `pluginSkipReason` exhaustiveness is on the unmerged `feature/plugin-library-ux`; fix it on that branch, not here | done on owning branch (ed1e41ec); 791 UI tests pass |
 
 ### From the 2026-10-07 review
 
@@ -56,7 +56,7 @@ Status key: **todo**, **done** (code and regression test committed),
 | --- | --- | --- |
 | P0-1 remainder | SQLite reads/writes at Play and export/import moved to worker connections; backups already run in the separate CLI process | implemented; live continuity measurement open |
 | P2-1 remainder | Typed method table for `dispatch` | implemented; 137 discovered methods covered exactly once |
-| P2-2 remainder | `AppContent` handlers into hooks (with P2-5 above) | todo |
+| P2-2 remainder | `AppContent` handlers into hooks (with P2-5 above) | recording actions and workbench polling extracted; existing UI/browser checks pass |
 | P2-5 remainder | Network audio encryption (XChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and fresh authenticated receiver challenges preventing replay after restart | implemented; Windows loopback/dispatcher and UI checks pass; see evidence below |
 | P2-4 remainder | Include the shell dependency tree in release notices and retain its Cargo SBOM | implemented; fixtures and both real metadata trees checked |
 | P2-7 | Windows sine-continuity run for the optimized DSP loops | blocked: needs VB-Cable route and a quiet PC |
@@ -109,8 +109,8 @@ version change is reverted together with its UI note.
 
 ## Next action
 
-Finish the remaining mechanical splits and evidence gaps in the tables, then
-the exhaustiveness fix on the plugin-library branch. No PR is authorized.
+Finish large-media open timing and HTTP idle-response evidence, then prepare
+the attended VB-Cable continuity/service-gap checks. No PR is authorized.
 
 ### Resumption and P2-3 verification (2026-11-01)
 
@@ -389,7 +389,7 @@ the shell SBOM, and the distribution runbook names it.
 ### Remaining mechanical splits: execution order
 
 P2-5 / old P2-2: move the recording-library actions from App into a hook,
-canvas signal attribution into its own module, engine delay compensation into
+canvas connector measurement into its own module, engine delay compensation into
 a module, and native packet codecs into a module. Preserve public exports,
 callbacks, state lifetime and existing tests. These are first bounded concern
 boundaries; larger compiler/endpoint moves can follow independently. Verify
@@ -422,3 +422,53 @@ implementations have become small files.
   successful repair and exhaustion are explicitly asserted. Its attribution
   warning and Node's conflicting color-environment warning remain as previously
   recorded; no license entitlement is inferred by this change.
+
+### Measurement follow-through
+
+P2-9: use a new target-only database with eight 50 MiB synthetic opaque blobs;
+alternate six checked and six ordinary opens, retain CSV, and verify first/last
+blob contents. This compares current checked-vs-light paths under warm OS cache,
+not an old-binary or cold-disk startup benchmark. The opt-in example refuses an
+existing generated directory and never touches the owner's database.
+Old P2-6: print the existing real idle-accept test's connect-to-response time;
+retain its no-polling, complete-response and stop/queue assertions. This is
+socket intake evidence, not a full UI/Stream Deck latency claim.
+
+Windows MSVC / Rust 1.96.0 results:
+
+- `cargo bench -p audiorouter-engine --bench realtime --locked`: pass.
+  Silent tails range 2.2–44.0 microseconds/128-frame quantum. Spectral Gate's
+  tail is 30.4 vs. 26.6 microseconds on voice; no order-of-magnitude tail
+  slowdown appeared. Pitch's voice processing is 54.2 microseconds; the
+  32-tool route is 330.5 microseconds (12.39% of the 2.667 ms budget).
+  These are local optimized microbenchmarks while the owner's app runs,
+  not device scheduling, reference-PC release NFRs or a physical latency gate.
+- `cargo run --release -p audiorouter-storage --example review_open_timing
+  --locked`: pass. Checked opens 318.390–440.378 ms; ordinary opens
+  1.649–2.977 ms, six each in alternating order on the same 400 MiB media DB.
+  First/last blobs verified unchanged. CSV:
+  [storage open timing](evidence/2026-11-01-storage-open-timing.csv).
+  Generated DB retained only in `target/review-storage-open-40028`.
+  Initial example compilation caught StorageError lacking std::error::Error;
+  it now maps errors at the example boundary without changing storage errors.
+- Full shell Windows unit suite: 86 passed, 4 opt-in ignored. Initial `--lib`
+  invocation correctly reported no library target; reran the real binary target.
+  Full transport suite: 34 library tests and the glitch detector pass;
+  explicitly attended/private/device scenarios remain ignored.
+- `idle_accept_waits_in_the_kernel_instead_of_polling -- --nocapture`:
+  pass; connect-to-response after 300 ms idle is 1.0696 ms in this run.
+  One sample through the socket pool is not an HTTP API percentile claim.
+- Both all-target/all-feature Clippy scopes and both Rust format checks pass.
+
+### Owning branch and document lifecycle
+
+`feature/plugin-library-ux` has `ed1e41ec`: both compatibility and error-code
+switches enforce `never`, and regression fixtures enumerate the declared
+unions. Typecheck/format/lint and 791 UI tests pass on that branch; its plan
+retains the independent desktop-app qualification gate. It was not merged into
+this branch, and the working checkout returned to the review-fixes branch.
+
+Both review records physically moved from `future/` into `active/`; historical
+findings remain unchanged and point to this status record. The future index
+no longer lists authorized active work. Soundboard and the other completed
+execution plans remain archived as recorded earlier.

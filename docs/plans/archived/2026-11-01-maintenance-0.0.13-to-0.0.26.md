@@ -4531,7 +4531,7 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   and fmt are clean. The tests were not run here (they need Windows), and
   the test binary does not link in the container (`-lSwdevice` is
   missing). The typed method table was not done. Module list in the
-  [review](../future/code-review-2026-10-07.md#p2-1-the-control-plane-is-one-21500-line-file).
+  [review](../active/code-review-2026-10-07.md#p2-1-the-control-plane-is-one-21500-line-file).
   Next action: a Windows CI run of `cargo test -p audiorouter-control`.
 
 - **P2-7 (DSP loops).** Engine block kernels (fixed delay, gain ramp,
@@ -4597,7 +4597,7 @@ Rollback: revert the commit.
   unmaintained rust-unic advisories in `src-tauri` are ignored until
   2027-01-07 (needs a Tauri update checked on Windows). Local: both
   `cargo deny` runs and all three audits pass. Details in the
-  [review](../future/code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
+  [review](../active/code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
   Next action: first CI run of the `supply-chain` job.
 - **P2-8 coverage and soak:** nightly/manual `quality.yml` (Windows):
   `cargo llvm-cov` and Vitest coverage (not gated), a 20-minute engine soak

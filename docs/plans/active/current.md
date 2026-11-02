@@ -8,12 +8,22 @@ older history is indexed in [archived plans](../archived/README.md).
 ## Active task: code-review fixes (2026-11-01, owner request)
 
 The owner asked to take the two code reviews out of `future/` and fix all of
-their open items: [code review 2026-11-01](../future/code-review-2026-11-01.md)
-and the remaining items of [code review 2026-10-07](../future/code-review-2026-10-07.md).
+their open items: [code review 2026-11-01](code-review-2026-11-01.md)
+and the remaining items of [code review 2026-10-07](code-review-2026-10-07.md).
 Scope, decisions, per-item tasks, validation and rollback are in the
 [code-review fixes plan](code-review-fixes.md). Branch
 `feature/code-review-fixes-2026-11-01`, from `review/code-review-2026-11-01`.
 No pull request without the owner's approval.
+
+Code fixes and bounded concern splits are committed, including encrypted
+network pairing/restart freshness (`4ec26071`), combined root/shell notices
+(`d720be19`) and UI/audio module extractions (`7abc2e1b`). The branch-specific
+plugin scan exhaustiveness fix is on `feature/plugin-library-ux` (`ed1e41ec`).
+Windows unit, loopback, source/tool combinations, browser/theme and guide
+playback checks pass as recorded in the plan. Large-media open timing and
+optimized DSP microbenchmarks are recorded there too. Live cable continuity,
+large-library service-gap measurements and an attended built-app run remain
+open; this is not a release qualification.
 
 ## Where things stand
 
