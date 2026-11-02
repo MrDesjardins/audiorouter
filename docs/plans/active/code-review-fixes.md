@@ -55,7 +55,7 @@ Status key: **todo**, **done** (code and regression test committed),
 | Item | Task | Status |
 | --- | --- | --- |
 | P0-1 remainder | SQLite reads/writes at Play and export/import moved to worker connections; backups already run in the separate CLI process | implemented; live continuity measurement open |
-| P2-1 remainder | Typed method table for `dispatch` | todo (behavior-sensitive; own commit) |
+| P2-1 remainder | Typed method table for `dispatch` | implemented; 137 discovered methods covered exactly once |
 | P2-2 remainder | `AppContent` handlers into hooks (with P2-5 above) | todo |
 | P2-5 remainder | Network audio encryption (ChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and replay protection for a restarted receiver (authenticated sender time, bounded skew) | todo |
 | P2-7 | Windows sine-continuity run for the optimized DSP loops | blocked: needs VB-Cable route and a quiet PC |
@@ -172,3 +172,23 @@ P0-1 implementation and verification, Windows MSVC / Rust 1.96.0:
   passed. Both format checks and `git diff --check`: passed.
 - Live `AudioServicePassTiming` under a large library / concurrent route and
   hardware DSP continuity remain open; these tests do not waive them.
+
+### Typed dispatch table (2026-11-01)
+
+`dispatch_methods.rs` replaces the top-level string match with typed function
+pointers. The table distinguishes ordinary calls, calls without parameters,
+method families and backend-resolved node targets. Parameter validation,
+authorization, mutating-notification rejection, error mapping and post-mutation
+refresh stay in their original order. Diagnostics construction moved into its
+own handler. No public methods or schema changed.
+
+Verification on Windows MSVC / Rust 1.96.0:
+
+- `cargo check -p audiorouter-control`: passed.
+- `cargo test -p audiorouter-control -p audiorouter-cli`: passed (316 control
+  tests, 11 opt-in ignored; 44 CLI unit tests and its stdio integration suite).
+  Includes default MCP reachability and real authorized dispatcher calls.
+- New `every_discovered_method_has_exactly_one_typed_handler` checks all 137
+  API entries, duplicates and undiscovered handlers in both directions.
+- Both all-target/all-feature Clippy scopes with `-D warnings`: passed.
+- Rollback: revert the table commit; no database or wire migration.
