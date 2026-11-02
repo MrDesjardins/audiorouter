@@ -385,3 +385,40 @@ the shell SBOM, and the distribution runbook names it.
   beyond this notice fix. No release, installer or signing claim is made.
 - Rollback: revert this tooling change. Existing release archives remain intact;
   the updated verifier requires the additional SBOM for newly checked manifests.
+
+### Remaining mechanical splits: execution order
+
+P2-5 / old P2-2: move the recording-library actions from App into a hook,
+canvas signal attribution into its own module, engine delay compensation into
+a module, and native packet codecs into a module. Preserve public exports,
+callbacks, state lifetime and existing tests. These are first bounded concern
+boundaries; larger compiler/endpoint moves can follow independently. Verify
+typecheck immediately per UI move, compile per Rust move, then existing full
+UI/Rust and browser suites. No API, audio policy or control changes; rollback
+each mechanical commit without data migration.
+
+Implemented concern boundaries: `useRecordingActions.ts` owns recording-library
+mutation serialization and preview/recovery ordering; `CanvasConnectorMeasurements.tsx`
+owns connector readiness/repair; `latency_compensation.rs` owns branch delay
+preparation and processing; `packet_codec.rs` owns native planar/interleaved
+conversion. Public Rust exports and App/Canvas callers are preserved. This
+bounded pass does not claim that the remaining large compiler and endpoint
+implementations have become small files.
+
+- Immediate typecheck/compile passed after each move. Initial canvas lint found
+  three now-unused imports; removed, then lint and format checks pass.
+- Existing UI suite: 786 tests / 87 files pass. Edge: 14 recording-library,
+  real WAV recording/settings and workbench scenarios pass (13.6 s), including
+  all themes and unchanged control geometry.
+- Full engine and native-audio test command passes, including 33 deterministic
+  audio tests (113.76 s), 6 planar reference comparisons and all source/tool
+  combination tests; native library 145 passed / 4 opt-in ignored. Explicit
+  private-session and physical-endpoint tests remain gated.
+- Both all-target/all-feature Clippy scopes pass; both Rust format checks pass.
+  No audio/UI behavior, control or API changed, so no guide recapture applies.
+- Connector-specific Edge regressions: 7 pass (7.3 s), including cold repair in
+  dark/light/high-contrast, reload/commit and exhausted bounds. React Flow's
+  missing-handle warnings are expected during intentionally removed bounds;
+  successful repair and exhaustion are explicitly asserted. Its attribution
+  warning and Node's conflicting color-environment warning remain as previously
+  recorded; no license entitlement is inferred by this change.
