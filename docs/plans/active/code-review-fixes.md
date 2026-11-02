@@ -41,7 +41,7 @@ Status key: **todo**, **done** (code and regression test committed),
 | P2-2 | VST3 worker answers Latency from its cache on the pipe thread; a plugin-requested restart is posted to the UI thread and runs under a processing lock; the worker's UI timeout drops below the host's 5 s response timeout. Fixture mode on the Rust worker for a slow latency answer; host test that a slow poll does not fail the worker | done (16a17403) |
 | P2-1 | One unchanged-audio watch for a whole VST2 chain (chain input vs. final output); the chain is guarded when any member is; tests on bridge behavior | done (16a17403) |
 | P2-4 | One exhaustive `node_latency_samples` in the domain, used by the catalog and `inspect_routes`; engine sample rate instead of 48; exhaustive cost class; remove unused `routeLatencyText` or use it | done (86bf5943) |
-| P2-3 | Plugin shared memory on `MmapRaw`, raw-pointer access, volatile payload copies and acquire/release fences | todo |
+| P2-3 | Plugin shared memory on `MmapRaw`, raw-pointer access, atomic payload words and acquire/release fences | implemented; Windows tests pass (see progress) |
 | P2-7 | Backup budget covers the media budget; source opened read-only without migration; STATE-12 and a decision record | done (0d163449) |
 | P2-8 | Soundboard Play: manifest parsed once and indexed; file read and hash inside `while_servicing_audio`; blobs loaded in bounded steps | done |
 | P2-9 | Full integrity check once per app start; light open for the shell's small reads; corrupt-database result logged | done (0d163449) |
@@ -61,7 +61,7 @@ Status key: **todo**, **done** (code and regression test committed),
 | P2-7 | Windows sine-continuity run for the optimized DSP loops | blocked: needs VB-Cable route and a quiet PC |
 | P3 UI bundle | Lazy-load rarely used panels if a fresh build still shows a large main chunk | todo |
 | P3 silent catches | Diagnostic categories for the remaining swallowed UI errors | todo |
-| P3 unsafe audit | Bridge shared memory `MmapRaw` (with P2-3) | todo |
+| P3 unsafe audit | Bridge shared memory `MmapRaw` (with P2-3) | bridge already uses raw mappings; plugin mapping repaired with P2-3 |
 
 ## Validation matrix
 
@@ -108,4 +108,33 @@ version change is reverted together with its UI note.
 
 ## Next action
 
-P2-2, then the items in the order of the tables.
+Finish P2-3 verification, then the remaining items in the tables.
+
+### Resumption and P2-3 verification (2026-11-01)
+
+The interrupted edit compiled after correcting its stale `MmapMut` import.
+Plugin slots now use raw mappings and aligned atomic 32-bit payload accesses;
+the state word remains atomic 64-bit. Release/acquire fences bracket the
+payload copy, without borrowing the mapping as a byte slice. Frame validation
+no longer clones the samples before writing. Invalid frames leave the previous
+published slot intact.
+
+Windows MSVC, pinned Rust 1.96.0, this workspace:
+
+- `cargo check -p audiorouter-plugin-host`: passed.
+- `cargo test -p audiorouter-plugin-host --features test-fixtures`: passed
+  (82 library, 2 worker unit and 39 worker-process tests; 20 fixture/private
+  tests ignored by their explicit opt-in gates). Includes an actual child
+  worker mapped-slot exchange, concurrent full-slot reads/writes, and rejected
+  invalid writes preserving the last frame.
+- Both Rust format checks and workspace and shell all-target/all-feature Clippy with
+  `-D warnings`: passed.
+- Miri and attended native-plugin/hardware continuity have not been run.
+  The child-worker test is transport evidence, not physical-audio evidence.
+- `tests/acceptance/docs.ps1`: passed (225 Markdown files, 1,245 local links).
+
+Other committed progress recovered from Git: HTTP buffering and unsaved-report
+diagnostic (`b731cc48`), bounded MCP UTF-8 handling (`5bb1caf0`), pipe SID lookup
+and stalled-request timeout (`481244c3`), and denormal-tail benchmark
+(`993dc18d`). These address the corresponding P3-1 subtasks; they must not be
+reimplemented from the stale aggregate todo row.
