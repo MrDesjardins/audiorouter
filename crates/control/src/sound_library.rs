@@ -266,8 +266,8 @@ impl ControlPlane {
     /// [`Self::load_soundboard_media`] with explicit budgets. The library
     /// manifest is read and indexed at most once; every file read, hash and
     /// decode runs off this thread while the running audio is serviced, and
-    /// each of the user's own sounds is one bounded SQLite read followed by
-    /// a service pass (review 2026-11-01, P2-8).
+    /// each of the user's own sounds is read through a separate worker
+    /// connection too (review 2026-11-01, P2-8 and P0-1 remainder).
     pub(crate) fn load_soundboard_media_with(
         &mut self,
         session: &Session,
@@ -410,13 +410,16 @@ impl ControlPlane {
                 audiorouter_engine::decode_audio_bytes(bytes, "flac", sample_rate_hz).ok()
             })
         } else {
-            // One row, bounded by the per-file media limit; the audio is
-            // serviced before the decode starts.
-            let (_, format, bytes) = self.storage.as_ref()?.load_audio_media(id).ok().flatten()?;
-            self.service_running_native_audio(std::time::Instant::now());
-            self.while_servicing_audio(|| {
-                audiorouter_engine::decode_audio_bytes(bytes, &format, sample_rate_hz).ok()
+            self.with_storage_worker(|storage| {
+                let Some((_, format, bytes)) =
+                    storage.load_audio_media(id).map_err(storage_error)?
+                else {
+                    return Ok(None);
+                };
+                Ok(audiorouter_engine::decode_audio_bytes(bytes, &format, sample_rate_hz).ok())
             })
+            .ok()
+            .flatten()
         };
         stats.decoded += usize::from(decoded.is_some());
         decoded.map(Arc::new)

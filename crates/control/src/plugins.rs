@@ -937,7 +937,9 @@ impl ControlPlane {
                     )
                 })?;
             // Re-inspect using the path exactly as scanned under its root.
-            let scanned_path = entry.get("path").and_then(Value::as_str).unwrap_or(path);
+            let scanned_path =
+                std::path::PathBuf::from(entry.get("path").and_then(Value::as_str).unwrap_or(path));
+            let configured_root = std::path::PathBuf::from(root);
             let channels = node
                 .ports
                 .iter()
@@ -947,29 +949,43 @@ impl ControlPlane {
             // The node's latest capture (editor close, Save state, Stop) wins;
             // a capture from a different plugin binary is ignored. Otherwise
             // the state saved with the route (or imported with it) applies.
-            let latest_id = self.storage.as_ref().and_then(|storage| {
-                storage
-                    .plugin_node_state(session.id.as_str(), node.id.as_str())
-                    .ok()
-                    .flatten()
-            });
-            let latest = latest_id
-                .as_deref()
-                .and_then(|id| self.load_plugin_state_asset(id, fingerprint).ok());
-            // Slider values the latest capture already contains; see
-            // capture_plugin_state.
-            let captured_sliders = latest
-                .as_ref()
-                .and(latest_id.as_deref())
-                .and_then(|id| self.plugin_slider_snapshot(id));
-            let state = match latest {
-                Some(state) => Some(state),
-                None => node
-                    .parameters
-                    .get("stateId")
-                    .and_then(Value::as_str)
-                    .map(|id| self.load_plugin_state_asset(id, fingerprint))
-                    .transpose()?,
+            let (state, captured_sliders) = if self.storage.is_some() {
+                self.with_storage_worker(|storage| {
+                    let latest_id = storage
+                        .plugin_node_state(session.id.as_str(), node.id.as_str())
+                        .ok()
+                        .flatten();
+                    let latest = latest_id.as_deref().and_then(|id| {
+                        Self::load_plugin_state_asset(storage, id, fingerprint).ok()
+                    });
+                    // Slider values the latest capture already contains; see
+                    // capture_plugin_state.
+                    let captured_sliders = latest
+                        .as_ref()
+                        .and(latest_id.as_deref())
+                        .and_then(|id| Self::plugin_slider_snapshot(storage, id));
+                    let state = match latest {
+                        Some(state) => Some(state),
+                        None => node
+                            .parameters
+                            .get("stateId")
+                            .and_then(Value::as_str)
+                            .map(|id| Self::load_plugin_state_asset(storage, id, fingerprint))
+                            .transpose()?,
+                    };
+                    Ok((state, captured_sliders))
+                })?
+            } else if node
+                .parameters
+                .get("stateId")
+                .and_then(Value::as_str)
+                .is_some()
+            {
+                return Err(ControlError::InvalidRequest(
+                    "plugin state storage is unavailable".into(),
+                ));
+            } else {
+                (None, None)
             };
             let mut parameters =
                 plugin_sliders_to_apply(&node.parameters, captured_sliders.as_ref())
@@ -985,8 +1001,8 @@ impl ControlPlane {
             parameters.sort_by_key(|event| event.parameter_id);
             requests.push(PluginStageRequest {
                 node_id: node.id.clone(),
-                scanned_path: std::path::PathBuf::from(scanned_path),
-                configured_root: std::path::PathBuf::from(root),
+                scanned_path,
+                configured_root,
                 fingerprint: fingerprint.to_owned(),
                 channels,
                 state,
@@ -1055,8 +1071,11 @@ impl ControlPlane {
 
     /// The slider values saved with a captured state, when it has them
     /// (captures from before 2026-10-22 do not).
-    fn plugin_slider_snapshot(&self, state_id: &str) -> Option<serde_json::Map<String, Value>> {
-        let root = self.storage.as_ref()?.plugin_state_directory()?;
+    fn plugin_slider_snapshot(
+        storage: &Storage,
+        state_id: &str,
+    ) -> Option<serde_json::Map<String, Value>> {
+        let root = storage.plugin_state_directory()?;
         let path = plugin_slider_snapshot_path(&root, state_id);
         // Bounded: at most 256 numeric sliders.
         if std::fs::metadata(&path).ok()?.len() > 64 * 1024 {
@@ -1071,13 +1090,10 @@ impl ControlPlane {
     /// Read and verify a stored plugin state for the plugin binary it was
     /// captured from.
     pub(crate) fn load_plugin_state_asset(
-        &self,
+        storage: &Storage,
         state_id: &str,
         plugin_sha256: &str,
     ) -> Result<audiorouter_plugin_host::PluginStateAsset, ControlError> {
-        let storage = self.storage.as_ref().ok_or_else(|| {
-            ControlError::InvalidRequest("plugin state storage is unavailable".into())
-        })?;
         let root = storage.plugin_state_directory().ok_or_else(|| {
             ControlError::InvalidRequest("plugin state storage is unavailable".into())
         })?;

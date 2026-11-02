@@ -669,6 +669,35 @@ pub struct StagedSessionBundle {
 pub struct Storage {
     connection: Connection,
     database_path: Option<std::path::PathBuf>,
+    memory_uri: Option<String>,
+}
+
+/// Reopens an already initialized database on a worker without migrations or
+/// recovery maintenance. Keep the originating `Storage` alive while using it,
+/// especially for a named in-memory database.
+#[derive(Clone)]
+pub struct StorageWorkerTarget {
+    database_path: Option<std::path::PathBuf>,
+    memory_uri: Option<String>,
+}
+
+impl StorageWorkerTarget {
+    pub fn open(&self) -> Result<Storage, StorageError> {
+        let flags =
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_URI;
+        let connection = match (&self.database_path, &self.memory_uri) {
+            (Some(path), _) => Connection::open_with_flags(path, flags)?,
+            (None, Some(uri)) => Connection::open_with_flags(uri, flags)?,
+            (None, None) => unreachable!("every storage has a connection target"),
+        };
+        connection.busy_timeout(BUSY_TIMEOUT)?;
+        connection.execute_batch("PRAGMA foreign_keys = ON;")?;
+        Ok(Storage {
+            connection,
+            database_path: self.database_path.clone(),
+            memory_uri: self.memory_uri.clone(),
+        })
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -834,14 +863,29 @@ pub enum JournalFailureStage {
 const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 impl Storage {
     pub fn open_memory() -> Result<Self, StorageError> {
+        static NEXT_MEMORY_DATABASE: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(1);
+        let id = NEXT_MEMORY_DATABASE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let uri = format!(
+            "file:audiorouter-memory-{}-{id}?mode=memory&cache=shared",
+            std::process::id()
+        );
         let storage = Self {
-            connection: Connection::open_in_memory()?,
+            connection: Connection::open(&uri)?,
             database_path: None,
+            memory_uri: Some(uri),
         };
         storage.check_integrity()?;
         storage.migrate()?;
         storage.prune_expired_recovery()?;
         Ok(storage)
+    }
+
+    pub fn worker_target(&self) -> StorageWorkerTarget {
+        StorageWorkerTarget {
+            database_path: self.database_path.clone(),
+            memory_uri: self.memory_uri.clone(),
+        }
     }
 
     /// Open the database for ordinary use (CLI commands, `mcp serve`, the
@@ -863,6 +907,7 @@ impl Storage {
         let storage = Self {
             connection: Connection::open(path)?,
             database_path: Some(path.to_path_buf()),
+            memory_uri: None,
         };
         storage.connection.busy_timeout(BUSY_TIMEOUT)?;
         if full_check || storage.needs_migration()? {
@@ -4193,6 +4238,47 @@ mod tests {
         RecordingChunk, RecordingError, RecordingQueue, WavFormat, WavRecorder, WavWriter,
     };
     use std::io::{Cursor, Write};
+
+    #[test]
+    fn worker_connections_share_only_their_originating_memory_database() {
+        let original = Storage::open_memory().unwrap();
+        let other = Storage::open_memory().unwrap();
+        original.save_privacy_mute(true).unwrap();
+        let target = original.worker_target();
+        std::thread::spawn(move || {
+            let worker = target.open().unwrap();
+            assert!(worker.load_privacy_mute().unwrap());
+            worker.save_privacy_mute(false).unwrap();
+            assert_eq!(
+                worker
+                    .connection
+                    .query_row("PRAGMA foreign_keys", [], |row| row.get::<_, i64>(0))
+                    .unwrap(),
+                1
+            );
+        })
+        .join()
+        .unwrap();
+        assert!(!original.load_privacy_mute().unwrap());
+        assert!(!other.load_privacy_mute().unwrap());
+        original.save_privacy_mute(true).unwrap();
+        assert!(!other.load_privacy_mute().unwrap());
+    }
+
+    #[test]
+    fn worker_open_does_not_create_a_missing_database() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-missing-worker-{}.sqlite",
+            std::process::id()
+        ));
+        assert!(!path.exists());
+        let target = StorageWorkerTarget {
+            database_path: Some(path.clone()),
+            memory_uri: None,
+        };
+        assert!(target.open().is_err());
+        assert!(!path.exists());
+    }
 
     #[test]
     fn sqlite_count_conversion_rejects_negative_values() {

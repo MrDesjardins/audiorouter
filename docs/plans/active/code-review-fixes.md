@@ -54,7 +54,7 @@ Status key: **todo**, **done** (code and regression test committed),
 
 | Item | Task | Status |
 | --- | --- | --- |
-| P0-1 remainder | SQLite reads/writes at Play, export/import and backups moved off the audio service thread or into bounded steps | todo |
+| P0-1 remainder | SQLite reads/writes at Play and export/import moved to worker connections; backups already run in the separate CLI process | implemented; live continuity measurement open |
 | P2-1 remainder | Typed method table for `dispatch` | todo (behavior-sensitive; own commit) |
 | P2-2 remainder | `AppContent` handlers into hooks (with P2-5 above) | todo |
 | P2-5 remainder | Network audio encryption (ChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and replay protection for a restarted receiver (authenticated sender time, bounded skew) | todo |
@@ -138,3 +138,37 @@ diagnostic (`b731cc48`), bounded MCP UTF-8 handling (`5bb1caf0`), pipe SID looku
 and stalled-request timeout (`481244c3`), and denormal-tail benchmark
 (`993dc18d`). These address the corresponding P3-1 subtasks; they must not be
 reimplemented from the stale aggregate todo row.
+
+### P0-1 remaining storage work: approach
+
+Keep the control plane's original connection present while a scoped helper
+opens a second connection to the same database. Worker opens must not migrate,
+prune recovery or repeat integrity scans. Route preparation, asset export and
+import use this worker connection through the existing audio-service loop.
+In-memory test databases need a unique named shared-memory SQLite target so
+the same path is tested without substituting a synchronous fallback. Production
+file-backed connections retain WAL. Test worker visibility, independent memory
+database isolation, errors, and the real dispatch upload/export/import paths;
+run storage/control suites, formatting and both Clippy scopes. Rollback is a
+revert with no schema change.
+
+P0-1 implementation and verification, Windows MSVC / Rust 1.96.0:
+
+- `with_storage_worker` keeps the original connection present during service
+  passes. The worker opens an existing database without integrity checks,
+  migrations or pruning. In-memory connections share a unique process-local
+  URI per database; separate test databases remain isolated.
+- Play's Audio File and Soundboard blobs, saved plugin state and slider files,
+  bundle export preparation, bundle restoration, upload blob writes and the
+  complete temporary-take import now run on helpers. No schema, REST method,
+  MCP method or response shape changed.
+- `cargo test -p audiorouter-storage -p audiorouter-control`: passed,
+  104 storage / 315 control tests, 11 opt-in control tests ignored. Includes
+  real dispatcher media uploads, temporary-take import and cross-database
+  bundle export/import, plus worker thread identity, shared visibility,
+  independent database isolation and service passes retaining the original
+  connection. A worker refuses to create a missing file database.
+- Workspace and shell all-target/all-feature Clippy with `-D warnings`:
+  passed. Both format checks and `git diff --check`: passed.
+- Live `AudioServicePassTiming` under a large library / concurrent route and
+  hardware DSP continuity remain open; these tests do not waive them.
