@@ -192,3 +192,27 @@ Verification on Windows MSVC / Rust 1.96.0:
   API entries, duplicates and undiscovered handlers in both directions.
 - Both all-target/all-feature Clippy scopes with `-D warnings`: passed.
 - Rollback: revert the table commit; no database or wire migration.
+
+### UI mechanical split, first slice (2026-11-01)
+
+Moved the unchanged MCP/Logs polling state and effect from `AppContent` into
+`useWorkbenchStatus`; moved canvas kind labels and families into
+`canvasNodeKinds`. Imports and exports are the only glue changes. This is an
+initial slice of P2-5, not completion of the larger App/canvas/engine/WASAPI
+splits. Behavior changes and lazy loading belong in separate commits.
+
+- `npm.cmd --prefix ui run typecheck:all`, `format`, `lint`: passed (unused
+  imports found by the first lint were removed; final lint has zero warnings).
+- `npm.cmd --prefix ui test`: 783 tests / 86 files passed.
+- Edge Playwright `workbench-organization.pw.ts --workers=1`: all 8 scenario
+  assertions passed, including dark/light/high-contrast and three sidebar
+  widths. Restricted-launcher run stalled after all assertions and was
+  cancelled (exit 1); rerun outside that launcher exited 0, 8 passed in 14.1 s.
+  Status screenshots were inspected in all three themes under
+  `%TEMP%/audiorouter-playwright-results/workbench-organization.pw.*/`.
+- Warnings examined: the Node color-environment warning is from conflicting
+  `NO_COLOR`/`FORCE_COLOR` environment variables. React Flow warns about hidden
+  attribution; no licensing determination or attribution setting changes are
+  made as part of this mechanical move. Neither is a UI lint warning.
+- Fresh production baseline before splitting: main chunk 629.49 kB, Vite
+  over-500-kB warning. This confirms the lazy-panel follow-up is warranted.

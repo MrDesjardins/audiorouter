@@ -16,7 +16,8 @@ import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
 import { SignalTimingPanel } from "./SignalTiming";
-import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo, type McpTunnelStatus } from "./Workbench";
+import { Workbench, type WorkbenchTab } from "./Workbench";
+import { useWorkbenchStatus } from "./useWorkbenchStatus";
 import { RequestBuilder } from "./ApiRequestBuilder";
 import { VersionLine } from "./UpdateNotice";
 import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
@@ -413,10 +414,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [diagnosticStorage] = useState(browserDiagnosticStorage);
   const uiDiagnosticsRef = useRef<string[]>(readClientDiagnostics(diagnosticStorage));
   const [uiDiagnostics, setUiDiagnostics] = useState<string[]>(uiDiagnosticsRef.current);
-  const [mcpActivity, setMcpActivity] = useState<McpActivity[]>([]);
-  const [mcpSetupInfo, setMcpSetupInfo] = useState<McpSetupInfo | null>(null);
-  const [mcpTunnelStatus, setMcpTunnelStatus] = useState<McpTunnelStatus | null>(null);
-  const [backendActivity, setBackendActivity] = useState<Record<string, unknown>[]>([]);
   const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() =>
     readShortcuts(optionalLocalStorage(), defaultShortcutBinding),
   );
@@ -713,63 +710,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   );
   // Failed backend requests, with the correlation ID that finds them in shell.jsonl and backend.jsonl (P2-3).
   useEffect(() => onRpcFailure(recordUiDiagnostic), [recordUiDiagnostic]);
-  useEffect(() => {
-    if ((workbenchTab !== "mcp" && workbenchTab !== "diagnostics") || !window.__TAURI_INTERNALS__?.invoke) return;
-    let active = true;
-    void window.__TAURI_INTERNALS__
-      .invoke("mcp_setup_info")
-      .then((info) => {
-        if (active) setMcpSetupInfo(info as McpSetupInfo);
-      })
-      .catch(() => {
-        if (active) setMcpSetupInfo(null);
-      });
-    const refreshTunnelStatus = () => {
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("mcp_tunnel_status")
-        .then((status) => {
-          if (active) setMcpTunnelStatus(status as McpTunnelStatus);
-        })
-        .catch(() => {
-          if (active) setMcpTunnelStatus(null);
-        });
-    };
-    refreshTunnelStatus();
-    void window.__TAURI_INTERNALS__
-      .invoke("backend_diagnostics_list")
-      .then((items) => {
-        if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]);
-      })
-      .catch(() => {
-        if (active) setBackendActivity([]);
-      });
-    const refreshActivity = () => {
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("mcp_activity_list")
-        .then((items) => {
-          if (active && Array.isArray(items)) setMcpActivity(items as McpActivity[]);
-        })
-        .catch((error: unknown) => {
-          if (active) {
-            const type = error instanceof Error ? error.name.slice(0, 48) : typeof error;
-            recordUiDiagnostic(`MCP activity read failed (${type})`);
-          }
-        });
-      refreshTunnelStatus();
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("backend_diagnostics_list")
-        .then((items) => {
-          if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]);
-        })
-        .catch(() => undefined);
-    };
-    refreshActivity();
-    const timer = window.setInterval(refreshActivity, 2000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [workbenchTab, recordUiDiagnostic]);
+  const { mcpActivity, mcpSetupInfo, mcpTunnelStatus, backendActivity } = useWorkbenchStatus(
+    workbenchTab,
+    recordUiDiagnostic,
+  );
   useEffect(() => {
     writeShortcuts(optionalLocalStorage(), shortcuts);
   }, [shortcuts]);
