@@ -1,0 +1,29 @@
+    Finished `release` profile [optimized] target(s) in 0.10s
+     Running tests\live_audio_continuity.rs (target\release\deps\live_audio_continuity-cf65f102071d6268.exe)
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{03498a2a-ef6a-4dd4-b9ba-72e22f567d7a}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started: {"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [4.3513ms, 1.2229ms, 343.1µs]
+chain: [Gain, ParametricEq, GraphicEq, BassTreble, Dehum, Compressor, Gate, Limiter, Delay, Meter]; audio service: {"active":true,"lateGaps":0,"maxGapMicros":4796,"passes":19603}; output underruns: 0
+  "source" timing={"delayMs":16.18181616543363} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.4917110266159695,"processingUsMax":2.3} plugin=null network=null processor=null
+  "tool-1" timing={"delayMs":0.0,"processingUsAvg":3.6690494296577945,"processingUsMax":32.8} plugin=null network=null processor=null
+  "tool-2" timing={"delayMs":0.0,"processingUsAvg":10.035703422053231,"processingUsMax":56.2} plugin=null network=null processor=null
+  "tool-3" timing={"delayMs":0.0,"processingUsAvg":2.5833460076045625,"processingUsMax":51.9} plugin=null network=null processor=null
+  "tool-4" timing={"delayMs":0.0,"processingUsAvg":4.483029150823828,"processingUsMax":57.5} plugin=null network=null processor=null
+  "tool-5" timing={"delayMs":0.0,"processingUsAvg":2.14404309252218,"processingUsMax":22.4} plugin=null network=null processor={"gainReductionDb":[0.0,0.0],"gateOpen":[false,false],"inputLevelDb":[-26.02063751220703,-26.02063751220703],"outputLevelDb":[-26.02063751220703,-26.02063751220703]}
+  "tool-6" timing={"delayMs":0.0,"processingUsAvg":11.47102661596958,"processingUsMax":83.1} plugin=null network=null processor={"gainReductionDb":[1.6815581571897805e-43,0.0],"gateOpen":[true,false],"inputLevelDb":[-26.02063751220703,-26.02063751220703],"outputLevelDb":[-26.02063751220703,-26.02063751220703]}
+  "tool-7" timing={"delayMs":5.0,"processingUsAvg":2.0600506970849177,"processingUsMax":37.4} plugin=null network=null processor={"gainReductionDb":[0.0,0.0],"gateOpen":[false,false],"inputLevelDb":[-26.02063751220703,-26.02063751220703],"outputLevelDb":[-26.022319793701172,-26.022319793701172]}
+  "tool-8" timing={"delayMs":0.0,"processingUsAvg":2.2914955640050696,"processingUsMax":46.2} plugin=null network=null processor=null
+  "tool-9" timing={"delayMs":0.0,"processingUsAvg":0.8613434727503169,"processingUsMax":9.2} plugin=null network=null processor=null
+  "destination" timing={"delayMs":15.478114521430918} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0502, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+test live::live_backend_service_keeps_a_routed_tone_continuous ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 22.18s
+

@@ -59,7 +59,7 @@ Status key: **todo**, **done** (code and regression test committed),
 | P2-2 remainder | `AppContent` handlers into hooks (with P2-5 above) | recording actions and workbench polling extracted; existing UI/browser checks pass |
 | P2-5 remainder | Network audio encryption (XChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and fresh authenticated receiver challenges preventing replay after restart | implemented; Windows loopback/dispatcher and UI checks pass; see evidence below |
 | P2-4 remainder | Include the shell dependency tree in release notices and retain its Cargo SBOM | implemented; fixtures and both real metadata trees checked |
-| P2-7 | Windows sine-continuity run for the optimized DSP loops | blocked: needs VB-Cable route and a quiet PC |
+| P2-7 | Windows sine-continuity run for the optimized DSP loops | done 2026-11-02 (live run below) |
 | P3 UI bundle | Lazy-load rarely used panels if a fresh build still shows a large main chunk | implemented; main 629.49 -> 513.06 kB; browser checks pass |
 | P3 silent catches | Diagnostic categories for the remaining swallowed UI errors | implemented; polling regressions cover redaction, recovery and keep-last-value |
 | P3 unsafe audit | Bridge shared memory `MmapRaw` (with P2-3) | bridge already uses raw mappings; plugin mapping repaired with P2-3 |
@@ -475,7 +475,7 @@ findings remain unchanged and point to this status record. The future index
 no longer lists authorized active work. Soundboard and the other completed
 execution plans remain archived as recorded earlier.
 
-### Live gate preparation (not executed)
+### Live gate preparation (executed 2026-11-02, see "Live continuity run")
 
 Read-only `cargo run -p audiorouter-cli --locked -- devices list --json`
 confirms the harness's CABLE and CABLE-B endpoint IDs still exist at 48 kHz.
@@ -498,3 +498,31 @@ environment settings in the test process before launch. A failure is evidence
 to investigate, not a waived gate. Large-library concurrent Play/export/import
 measurement and the latency-changing commercial-plugin run remain separate
 follow-ups; the baseline cannot stand in for either.
+
+### Live continuity run (2026-11-02, owner-approved)
+
+The owner confirmed the cables were free ("I dont play"). CABLE-B Input is
+now set to 8 channels in Windows, and both workers refuse it
+(`nativePaths.prepare`: "output fan-out endpoints must be stereo IEEE
+float32"; endpoint mode: "audio frame size was invalid"). With the owner's
+approval the result path used CABLE-A instead: tone → CABLE Input, route
+CABLE Output → chain → CABLE-A Input, result recorded from CABLE-A Output
+(`AUDIOROUTER_CONTINUITY_ROUTE_RENDER_ID` and `_RESULT_CAPTURE_ID`
+overrides; the harness still prints "CABLE-B Output" as a fixed label).
+The release harness ran for 20 s per chain, with the owner's release shell
+running on its own pipe.
+
+| Chain | Reference glitches | Routed glitches | Silent runs | Late gaps | Max gap | Underruns |
+| --- | --- | --- | --- | --- | --- | --- |
+| `gain` | 0 | 0 | 0 | 0 | 3.83 ms | 0 |
+| gain, parametricEq, graphicEq, bassTreble, dehum, compressor, gate, limiter, delay, meter | 0 | 0 | 0 | 0 | 4.80 ms | 0 |
+
+Logs: [baseline](evidence/2026-11-02-live-continuity/baseline.log),
+[optimized chain](evidence/2026-11-02-live-continuity/chain.log). This
+closes the 2026-10-07 P2-7 continuity gate. Still open: large-library
+concurrent Play/export/import service timing and the latency-changing
+commercial-plugin run. A side finding, not fixed here: a route whose output
+is a multichannel (8-channel) endpoint cannot start, so the owner's own
+routes to CABLE-B would fail while it stays at 8 channels. The Gate's
+telemetry showed a subnormal `gainReductionDb` (1.7e-43); the silent-tail
+bench found no slowdown from it.
