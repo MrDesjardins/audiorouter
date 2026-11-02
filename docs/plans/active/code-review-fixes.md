@@ -110,7 +110,9 @@ version change is reverted together with its UI note.
 ## Next action
 
 Finish large-media open timing and HTTP idle-response evidence, then prepare
-the attended VB-Cable continuity/service-gap checks. No PR is authorized.
+the attended VB-Cable continuity/service-gap checks. Measurements are now
+recorded below. The cable checks await the owner's safe-to-use confirmation;
+no PR is authorized.
 
 ### Resumption and P2-3 verification (2026-11-01)
 
@@ -472,3 +474,27 @@ Both review records physically moved from `future/` into `active/`; historical
 findings remain unchanged and point to this status record. The future index
 no longer lists authorized active work. Soundboard and the other completed
 execution plans remain archived as recorded earlier.
+
+### Live gate preparation (not executed)
+
+Read-only `cargo run -p audiorouter-cli --locked -- devices list --json`
+confirms the harness's CABLE and CABLE-B endpoint IDs still exist at 48 kHz.
+CABLE-B render is eight channels; its capture is stereo. The default capture
+is CABLE-A, which this harness does not open. No microphone or speaker endpoint
+is part of the proposed test. The optimized harness was built with
+`cargo test -p audiorouter-transport --test live_audio_continuity --release
+--locked --no-run`.
+
+Pending owner confirmation because the two cables may feed a running call or
+stream: baseline and optimized-chain synthetic-tone runs, 20 seconds each,
+on a disposable private backend/pipe. Set `AUDIOROUTER_LIVE_CONTINUITY=1`,
+`AUDIOROUTER_CONTINUITY_SECONDS=20` and the explicit four confirmed endpoint
+IDs; run `live::live_backend_service_keeps_a_routed_tone_continuous` with
+`--ignored --exact --nocapture`. Baseline chain is `gain`; second chain is
+`gain,parametricEq,graphicEq,bassTreble,dehum,compressor,gate,limiter,delay,meter`.
+Retain console output and service phase maxima; require a clean reference and
+no unexplained routed glitches. Clear unrelated optional continuity/plugin
+environment settings in the test process before launch. A failure is evidence
+to investigate, not a waived gate. Large-library concurrent Play/export/import
+measurement and the latency-changing commercial-plugin run remain separate
+follow-ups; the baseline cannot stand in for either.
