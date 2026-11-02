@@ -36,7 +36,7 @@ The release page carries only:
 | `AudioRouter_<version>_x64-setup.exe` | everyone |
 | `com.mrdesjardins.audiorouter.streamDeckPlugin` | a Stream Deck on another PC that controls AudioRouter over the network (the same file is inside the installer) |
 | `SHA256SUMS.txt`, `release-manifest.json` | verifying downloads and provenance |
-| `sbom.cargo.json`, `sbom.npm.json`, `sbom.npm.package-lock.json`, `sbom.streamdeck.json`, `sbom.streamdeck.package-lock.json`, `THIRD-PARTY-NOTICES.txt` | license and supply-chain review |
+| `sbom.cargo.json`, `sbom.shell.cargo.json`, `sbom.npm.json`, `sbom.npm.package-lock.json`, `sbom.streamdeck.json`, `sbom.streamdeck.package-lock.json`, `THIRD-PARTY-NOTICES.txt` | license and supply-chain review; Cargo notices combine root and shell dependencies |
 | `tunnel-client-runtime-LICENSE.txt`, `tunnel-client-runtime-NOTICE.txt`, `tunnel-client-runtime-licenses.txt`, `tunnel-client-runtime.spdx.json` (from 0.0.16) | bundled optional runtime licensing and supply-chain review |
 
 Up to 0.0.13 the page also listed `audiorouter-shell.exe`,

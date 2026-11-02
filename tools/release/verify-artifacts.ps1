@@ -72,6 +72,12 @@ if (-not (Test-Path -LiteralPath $sbom -PathType Leaf)) {
 }
 Assert-RegularFileNoReparse $sbom
 $null = Get-Content -LiteralPath $sbom -Raw | ConvertFrom-Json
+$shellSbom = Join-Path $root "sbom.shell.cargo.json"
+if (-not (Test-Path -LiteralPath $shellSbom -PathType Leaf)) {
+    throw "shell release SBOM is missing: $shellSbom"
+}
+Assert-RegularFileNoReparse $shellSbom
+$null = Get-Content -LiteralPath $shellSbom -Raw | ConvertFrom-Json
 $notices = Join-Path $root "THIRD-PARTY-NOTICES.txt"
 if (-not (Test-Path -LiteralPath $notices -PathType Leaf)) {
     throw "third-party notices are missing: $notices"
@@ -117,6 +123,7 @@ $driverArtifacts = @("audioroutervirtual.inf", "audioroutervirtual.sys", "audior
 $requiredArtifacts = @(
     "AudioRouter_$($manifest.version)_x64-setup.exe",
     "sbom.cargo.json",
+    "sbom.shell.cargo.json",
     "sbom.npm.json",
     "sbom.npm.package-lock.json",
     "com.mrdesjardins.audiorouter.streamDeckPlugin",

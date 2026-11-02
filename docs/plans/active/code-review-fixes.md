@@ -58,7 +58,7 @@ Status key: **todo**, **done** (code and regression test committed),
 | P2-1 remainder | Typed method table for `dispatch` | implemented; 137 discovered methods covered exactly once |
 | P2-2 remainder | `AppContent` handlers into hooks (with P2-5 above) | todo |
 | P2-5 remainder | Network audio encryption (XChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and fresh authenticated receiver challenges preventing replay after restart | implemented; Windows loopback/dispatcher and UI checks pass; see evidence below |
-| P2-4 remainder | Include the shell dependency tree in release notices and retain its Cargo SBOM | next |
+| P2-4 remainder | Include the shell dependency tree in release notices and retain its Cargo SBOM | implemented; fixtures and both real metadata trees checked |
 | P2-7 | Windows sine-continuity run for the optimized DSP loops | blocked: needs VB-Cable route and a quiet PC |
 | P3 UI bundle | Lazy-load rarely used panels if a fresh build still shows a large main chunk | implemented; main 629.49 -> 513.06 kB; browser checks pass |
 | P3 silent catches | Diagnostic categories for the remaining swallowed UI errors | implemented; polling regressions cover redaction, recovery and keep-last-value |
@@ -109,8 +109,8 @@ version change is reverted together with its UI note.
 
 ## Next action
 
-Finish release dependency notices for both Cargo workspaces, then the remaining
-mechanical splits and evidence gaps in the tables. No PR is authorized.
+Finish the remaining mechanical splits and evidence gaps in the tables, then
+the exhaustiveness fix on the plugin-library branch. No PR is authorized.
 
 ### Resumption and P2-3 verification (2026-11-01)
 
@@ -366,3 +366,22 @@ existing replay cache retains eight stream IDs, with 64 sequences per stream;
 restart protection comes from a fresh receiver token rather than that cache.
 No attended physical route, two-PC network or release executable was exercised.
 Rollback is the complete v3 commit with its compatibility copy and guide assets.
+
+### Combined release notices (2026-11-01)
+
+Old P2-4 remainder: release preparation now retains `sbom.shell.cargo.json`
+alongside the root Cargo SBOM, and generates notices from their union.
+Duplicates share name/version/source; conflicting license metadata fails
+instead of dropping a notice. The verifier and M08 acceptance inventory require
+the shell SBOM, and the distribution runbook names it.
+
+- `test-cargo-notices.ps1 -RealMetadata`: fixtures pass for shell-only/root-only
+  packages, duplicates, two versions, fallback labels, input order and license
+  conflicts. Real offline locked metadata yields 508 packages and includes
+  Tauri, XChaCha20/cipher/inout. Artifact: `target/review-cargo-notices.txt`.
+- `test-verify-artifacts.ps1`, `test-app-only-release.ps1`: pass, including a
+  missing shell-SBOM manifest entry rejection. Documentation acceptance passes.
+- Full release preparation was not run: it builds/packages release inputs
+  beyond this notice fix. No release, installer or signing claim is made.
+- Rollback: revert this tooling change. Existing release archives remain intact;
+  the updated verifier requires the additional SBOM for newly checked manifests.
