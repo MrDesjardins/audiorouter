@@ -60,7 +60,7 @@ Status key: **todo**, **done** (code and regression test committed),
 | P2-5 remainder | Network audio encryption (ChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and replay protection for a restarted receiver (authenticated sender time, bounded skew) | todo |
 | P2-7 | Windows sine-continuity run for the optimized DSP loops | blocked: needs VB-Cable route and a quiet PC |
 | P3 UI bundle | Lazy-load rarely used panels if a fresh build still shows a large main chunk | implemented; main 629.49 -> 513.06 kB; browser checks pass |
-| P3 silent catches | Diagnostic categories for the remaining swallowed UI errors | todo |
+| P3 silent catches | Diagnostic categories for the remaining swallowed UI errors | implemented; polling regressions cover redaction, recovery and keep-last-value |
 | P3 unsafe audit | Bridge shared memory `MmapRaw` (with P2-3) | bridge already uses raw mappings; plugin mapping repaired with P2-3 |
 
 ## Validation matrix
@@ -246,3 +246,24 @@ or tool controls changed, so no property-guide recapture is required.
   the restricted launcher; the same build passed outside that launcher.
 - Rollback: revert this UI commit; stored preferences and session data do
   not change.
+
+### Remaining silent catches (2026-11-01)
+
+MCP setup, tunnel status and backend activity failures now produce safe
+diagnostic categories. Repeated polling failures log once until a successful
+read rearms that category; failed reads retain the last successful answer.
+Virtual-cable polling uses the same one-message-per-failure-run rule, and a
+failed inventory read after deletion records its category. The intentional
+pre-App packaged-shell probe catch is documented at its call site. Expected
+pointer-capture fallback and diagnostic-sink fallback remain intentional.
+
+- New hook regressions exercise initial failures, unsafe error-name redaction,
+  repeated failures, successful recovery, retained tunnel state, cancellation
+  and late rejections after leaving the tab.
+- Typecheck and lint: passed. Focused accessibility/hook run: 106 passed.
+  Full run limited to four workers: 786 passed / 87 files.
+- An unconstrained run exposed the first Advanced panel's cold import taking
+  longer than the startup-status assertion's one-second window. The browser
+  paths pass; the unit scenario now explicitly waits for the lazy panel, then
+  tests registration with its original assertion. Final normal-worker run:
+  786 passed / 87 files (30.61 s). This does not alter startup performance gates.

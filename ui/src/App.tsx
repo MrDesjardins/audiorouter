@@ -679,12 +679,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return;
     }
     let active = true;
+    let statusFailed = false;
     const poll = () => {
       getStatus()
-        .then((status) => active && setVirtualCableStatus(status))
+        .then((status) => {
+          if (active) {
+            statusFailed = false;
+            setVirtualCableStatus(status);
+          }
+        })
         // Keep the last answer through a failed poll (UI-17); a backend
         // without the method never answers, so the status stays unknown.
-        .catch(() => undefined);
+        .catch(() => {
+          if (active && !statusFailed) {
+            statusFailed = true;
+            recordUiDiagnostic("Virtual cable status read failed");
+          }
+        });
     };
     poll();
     const timer = window.setInterval(poll, 2000);
@@ -692,7 +703,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       active = false;
       window.clearInterval(timer);
     };
-  }, [backend, backend.connected]);
+  }, [backend, backend.connected, recordUiDiagnostic]);
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
       const rawName = event.error instanceof Error ? event.error.name : "unknown";
@@ -1633,6 +1644,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         remaining = items;
       } catch {
         // Keep the cached list; the next refresh reports the inventory error.
+        recordUiDiagnostic("Session inventory refresh after deletion failed");
       }
       const fallback = remaining.find((item) => item.id !== session.id);
       if (fallback) await switchSession(fallback.id);
