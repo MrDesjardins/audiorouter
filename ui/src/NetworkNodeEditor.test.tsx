@@ -222,7 +222,9 @@ describe("network pairing keys", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
     expect(field.value).toMatch(/^[A-HJ-NP-Z2-9]{24}$/);
     expect(onChange).toHaveBeenLastCalledWith("pairingKey", field.value);
-    expect(note.textContent).toBe("Paired: only audio sent with this key is played.");
+    expect(note.textContent).toBe(
+      "Paired: only encrypted audio sent with this key is played. Update both computers together.",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
     expect(writeText).toHaveBeenCalledWith(field.value);
     expect(await screen.findByRole("button", { name: "Copied" })).toBeTruthy();
@@ -243,7 +245,7 @@ describe("network pairing keys", () => {
       />,
     );
     expect((screen.getByLabelText("Pairing key") as HTMLInputElement).value).toBe("K7QW2X9MPAIRSTUDIO4HJ8NV");
-    expect(screen.getByTestId("network-pairing-note").textContent).toContain("The audio is not encrypted");
+    expect(screen.getByTestId("network-pairing-note").textContent).toContain("audio is encrypted");
     cleanup();
     render(<NetworkNodeEditor node={node} disabled={false} telemetry={null} onChange={() => {}} />);
     expect(screen.getByTestId("network-pairing-note").textContent).toContain(
@@ -252,6 +254,17 @@ describe("network pairing keys", () => {
   });
 
   it("explains which side's pairing to fix", () => {
+    expect(
+      pairingAdvice({ direction: "receive", receivedPackets: 0, authFailures: 1, authProblem: "senderOutdated" }),
+    ).toContain("Update AudioRouter on both computers");
+    expect(
+      networkTelemetryText({
+        direction: "receive",
+        receivedPackets: 0,
+        authFailures: 1,
+        authProblem: "senderOutdated",
+      }),
+    ).toContain("used an older AudioRouter");
     expect(
       networkTelemetryText({ direction: "receive", receivedPackets: 0, authFailures: 30, authProblem: "wrongKey" }),
     ).toBe("Waiting for audio · 30 packets had another pairing key");

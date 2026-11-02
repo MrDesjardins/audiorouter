@@ -16,9 +16,14 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 136 methods, including backend-owned quit/finalize,
+The current catalog contains 137 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
+
+Network Send/Receive `pairingKey` settings now select encrypted v3 transport;
+update both paired peers together. Receive telemetry can report
+`authProblem: "senderOutdated"` when an older sender cannot use encryption.
+See [network privacy and permissions](privacy-permissions.md#audio-privacy-boundary).
 
 | Method | Permission | Side effect |
 | --- | --- | --- |

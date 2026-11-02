@@ -307,7 +307,7 @@ impl ControlPlane {
         json!({
             "name": "pairingKey", "type": "string", "maxLength": audiorouter_domain::MAX_NETWORK_PAIRING_KEY_CHARS,
             "description": format!(
-                "Shared key typed identically on both computers: blank (not paired) or {}-{} printable ASCII characters without leading or trailing spaces.",
+                "Shared key typed identically on both computers: blank (unencrypted, not paired) or {}-{} printable ASCII characters without leading or trailing spaces. Paired audio is encrypted and authenticated, with fresh receiver challenges preventing replay after restart. Both peers need encrypted transport v3; update both computers together.",
                 audiorouter_domain::MIN_NETWORK_PAIRING_KEY_CHARS,
                 audiorouter_domain::MAX_NETWORK_PAIRING_KEY_CHARS
             )

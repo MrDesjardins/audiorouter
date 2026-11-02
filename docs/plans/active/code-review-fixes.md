@@ -41,12 +41,12 @@ Status key: **todo**, **done** (code and regression test committed),
 | P2-2 | VST3 worker answers Latency from its cache on the pipe thread; a plugin-requested restart is posted to the UI thread and runs under a processing lock; the worker's UI timeout drops below the host's 5 s response timeout. Fixture mode on the Rust worker for a slow latency answer; host test that a slow poll does not fail the worker | done (16a17403) |
 | P2-1 | One unchanged-audio watch for a whole VST2 chain (chain input vs. final output); the chain is guarded when any member is; tests on bridge behavior | done (16a17403) |
 | P2-4 | One exhaustive `node_latency_samples` in the domain, used by the catalog and `inspect_routes`; engine sample rate instead of 48; exhaustive cost class; remove unused `routeLatencyText` or use it | done (86bf5943) |
-| P2-3 | Plugin shared memory on `MmapRaw`, raw-pointer access, atomic payload words and acquire/release fences | implemented; Windows tests pass (see progress) |
+| P2-3 | Plugin shared memory on `MmapRaw`, raw-pointer access, atomic payload words and acquire/release fences | done (165b5720); Windows transport tests pass |
 | P2-7 | Backup budget covers the media budget; source opened read-only without migration; STATE-12 and a decision record | done (0d163449) |
 | P2-8 | Soundboard Play: manifest parsed once and indexed; file read and hash inside `while_servicing_audio`; blobs loaded in bounded steps | done |
 | P2-9 | Full integrity check once per app start; light open for the shell's small reads; corrupt-database result logged | done (0d163449) |
 | P2-5 | `App.tsx` and `SessionFlowCanvas.tsx` split by pure moves; engine and windows-audio splits | todo |
-| P3-1 | Doc comment; HTTP header `BufReader`; sample-rate-derived poll and watch windows; `unsavedReport` diagnostic; MCP stdio bounded byte reads with -32700 for bad UTF-8; SID passed from the I/O thread and a pipe read timeout; session-wide Soundboard memory budget; denormal bench | todo |
+| P3-1 | Doc comment; HTTP header `BufReader`; sample-rate-derived poll and watch windows; `unsavedReport` diagnostic; MCP stdio bounded byte reads with -32700 for bad UTF-8; SID passed from the I/O thread and a pipe read timeout; session-wide Soundboard memory budget; denormal bench | implemented across 16a17403, b731cc48, 5bb1caf0, 481244c3 and 993dc18d; see progress |
 | P2-6 | Carried items from 2026-10-07 (below) | see below |
 | Branch | `pluginSkipReason` exhaustiveness is on the unmerged `feature/plugin-library-ux`; fix it on that branch, not here | todo |
 
@@ -57,7 +57,8 @@ Status key: **todo**, **done** (code and regression test committed),
 | P0-1 remainder | SQLite reads/writes at Play and export/import moved to worker connections; backups already run in the separate CLI process | implemented; live continuity measurement open |
 | P2-1 remainder | Typed method table for `dispatch` | implemented; 137 discovered methods covered exactly once |
 | P2-2 remainder | `AppContent` handlers into hooks (with P2-5 above) | todo |
-| P2-5 remainder | Network audio encryption (ChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and replay protection for a restarted receiver (authenticated sender time, bounded skew) | todo |
+| P2-5 remainder | Network audio encryption (XChaCha20 with HMAC-SHA256, encrypt-then-MAC, packet version 3) and fresh authenticated receiver challenges preventing replay after restart | implemented; Windows loopback/dispatcher and UI checks pass; see evidence below |
+| P2-4 remainder | Include the shell dependency tree in release notices and retain its Cargo SBOM | next |
 | P2-7 | Windows sine-continuity run for the optimized DSP loops | blocked: needs VB-Cable route and a quiet PC |
 | P3 UI bundle | Lazy-load rarely used panels if a fresh build still shows a large main chunk | implemented; main 629.49 -> 513.06 kB; browser checks pass |
 | P3 silent catches | Diagnostic categories for the remaining swallowed UI errors | implemented; polling regressions cover redaction, recovery and keep-last-value |
@@ -83,9 +84,9 @@ Status key: **todo**, **done** (code and regression test committed),
   acceptance fixture.
 - Network audio version 3 does not pair with AudioRouter 0.0.26 or older;
   both computers must be updated. The receiver says so ("senderOutdated").
-- Clock skew larger than the allowed window between two paired computers
-  would stop audio; the receiver reports `clockSkew` so the user can fix the
-  time setting.
+- Receiver freshness is negotiated without clocks. A captured valid probe can
+  consume bounded handshake work; IP filtering, queue bounds and response
+  throttling remain necessary and do not provide denial-of-service immunity.
 - Raising the backup budget makes a backup of a full library take longer.
 
 ## Rollback
@@ -108,7 +109,8 @@ version change is reverted together with its UI note.
 
 ## Next action
 
-Finish P2-3 verification, then the remaining items in the tables.
+Finish release dependency notices for both Cargo workspaces, then the remaining
+mechanical splits and evidence gaps in the tables. No PR is authorized.
 
 ### Resumption and P2-3 verification (2026-11-01)
 
@@ -267,3 +269,100 @@ pointer-capture fallback and diagnostic-sink fallback remain intentional.
   paths pass; the unit scenario now explicitly waits for the lazy panel, then
   tests registration with its original assertion. Final normal-worker run:
   786 passed / 87 files (30.61 s). This does not alter startup performance gates.
+
+### Network v3 freshness decision (2026-11-01)
+
+The owner's authorized scope is encryption and protection of a restarted
+receiver. Timestamp freshness with allowed clock skew cannot fully provide the
+latter: captured packets inside that skew window remain replayable. Replace
+the provisional timestamp design with a key-authenticated receiver challenge.
+This changes the transport design, not the authorized product scope.
+
+Ordered implementation and verification:
+
+1. Portable framing: version-3 data uses XChaCha20 with independently derived
+   encryption and HMAC keys, a random 24-byte nonce, a 16-byte receiver token,
+   and a 16-byte encrypt-then-MAC tag. Authenticate before decrypting.
+2. Authenticated transport-only probes carry a fresh 16-byte sender challenge;
+   receiver responses echo it and supply a fresh 16-byte receiver token.
+   Reject unsolicited/old responses. Refresh periodically for restart recovery.
+   A new receiver token invalidates every captured packet from its predecessor.
+3. Keep CSPRNG, negotiation, encryption and decryption on network threads;
+   retain bounded audio queues and callback packet construction. Unpaired
+   version 1 remains available with its warning; paired receivers reject v1/v2.
+4. Test altered headers, ciphertext and tags, wrong keys, nonce/token mismatch,
+   replay after receiver restart, challenge replay, live key/target changes,
+   and real loopback send/receive through backend dispatch. Keep the replay
+   window within a negotiated token too.
+5. Update SEC-13, GRAPH-16, pairing descriptions and compatibility guidance,
+   contracts/catalogs, dependency notices and checks. Run protocol, native
+   network, backend, source-combination, drift and UI checks. Record hardware
+   limits separately. Revert the complete v3 commit for rollback; no schema
+   migration or new setting is needed.
+
+Both peers must update together when paired; no silent v2 fallback. Clock
+skew is no longer a transport risk. The earlier clock-skew risk paragraph is
+superseded by this decision.
+
+### Network v3 verification and guide audit (2026-11-01)
+
+SEC-13 / GRAPH-16: encryption, authenticated receiver freshness, periodic
+renegotiation after restart, same-key no-op edits and explicit paired-v2 refusal
+are implemented. Default MCP tools configure pairing; the recipe explains the
+upgrade boundary. REST/contract output includes `senderOutdated`.
+
+Experiments caught two live-path defects before handoff. Rotating the receiver
+token on every periodic probe discarded genuine packets in flight; periodic
+probes now reconfirm the live token, while restart/key/peer changes replace it.
+Retargeting a connected UDP socket retained queued Windows ICMP errors from its
+old port; an actual destination change now opens a fresh socket. The original
+dispatcher live-edit regression and encrypted continuity scenario pass.
+
+Windows MSVC / Rust 1.96.0 verification:
+
+- Protocol: 25 passed. Native audio library: 145 passed, 4 opt-in ignored.
+  Includes tampered header/ciphertext/tag, wrong key, legacy rejection,
+  captured audio after receiver restart, old response rejection, live sender
+  recovery and same-key edits retaining replay history.
+- Control: 317 passed, 11 opt-in ignored. CLI: 45 unit tests plus stdio
+  integration passed. Paired loopback traverses real dispatcher entry points
+  in one backend and in two independent backends, with zero lost/replayed
+  packets in the continuity assertions. This is local UDP evidence, not
+  cross-computer or physical-audio latency qualification.
+- Source combinations: 5 passed; processor combinations: 4 passed.
+- Both Rust format checks, workspace and shell all-target/all-feature Clippy,
+  UI format/lint/typecheck, 786 UI tests and contract drift passed.
+  First UI run caught one old note-text expectation; updated and reran all.
+- Edge: 9 network pairing/address-hint scenarios passed, including all three
+  themes, field styling and reserved warning-slot geometry. Screenshots under
+  `%TEMP%/audiorouter-playwright-results/network-pairing.pw.*/` inspected.
+- Network Send/Receive and Plugin Properties-only portrait recordings refreshed;
+  all three silent overview videos passed actual Firefox click/playback checks.
+  Frames inspected under `target/tool-guide-overviews/`; Firefox results in
+  `target/tool-guide-firefox-results.json`. These demonstrate configuration,
+  not a live network or licensed-plugin effect.
+- Guide audit: 37 backend kinds / 221 parameter descriptors accounted for;
+  grouped picker fields explicitly map to their controls, and 4 API-only
+  descriptors have reasons. Soundboard mode choices and the existing Plugin
+  unchanged-audio control were missing from guide metadata and are now covered.
+  Regeneration preserves exemptions instead of inventing audible evidence.
+  Coverage: 38 guides / 252 properties. Video format check: 150 clips pass.
+- Documentation acceptance: 225 Markdown files / 1,246 links pass.
+- `cargo deny --offline --locked check` for both workspaces passed against
+  the cached advisory database. Full JSON diagnostics retained in
+  `target/review-deny-{root,shell}.jsonl`. Duplicate-version warnings cover
+  base64, bitflags, block-buffer, cpufeatures, crypto-common, digest,
+  getrandom, hashbrown, indexmap, miniz_oxide, sha2, syn, thiserror and its
+  derive crate, toml/toml_datetime/winnow and Windows crate families. Their
+  upstream dependencies require incompatible major/minor versions; this
+  transport change does not force incompatible dependency replacements.
+  Unencountered ignored-advisory warnings are shared-config bookkeeping;
+  the shell still needs the documented temporary Tauri/unic exceptions.
+  Offline checks are not evidence that the advisory database was refreshed.
+
+Residual limits: weak user keys are still guessable; metadata is visible;
+bounded authenticated negotiation does not prevent denial of service. The
+existing replay cache retains eight stream IDs, with 64 sequences per stream;
+restart protection comes from a fresh receiver token rather than that cache.
+No attended physical route, two-PC network or release executable was exercised.
+Rollback is the complete v3 commit with its compatibility copy and guide assets.

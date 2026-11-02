@@ -3093,7 +3093,7 @@ fn mcp_tool_call(
             );
         }
         "get_recipes" => {
-            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": MCP_RECIPES }], "isError": false } });
+            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}") }], "isError": false } });
         }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
@@ -3339,6 +3339,8 @@ fn mcp_generated_key(tool: &str) -> String {
 }
 
 const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
+
+const NETWORK_PAIRING_RECIPE: &str = "8. Send encrypted audio between computers: update AudioRouter on both peers together. On the sending PC add_tool kind=networkSend with parameters {host: <receiving PC IP>, port: 47777}; connect its input to the audio to send. On the receiving PC add_tool kind=networkReceive with parameters {sender: <sending PC IP>, port: 47777}; connect it to an output or Mixer. Ask the user to Generate a strong Pairing key in Properties and copy it to both peers with change_settings parameters {pairingKey: <same key>}. Never repeat the key in summaries or logs. With a key, audio is encrypted and authenticated and captured packets cannot play after receiver restart. Blank keys mean unencrypted, unpaired audio. Running-audio edits and Play require Operator/device authority; an Editor can prepare the stopped graph.";
 
 fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": message }] } })
@@ -5268,6 +5270,68 @@ mod tests {
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(candidate_path);
         let _ = std::fs::remove_file(plan_path);
+    }
+
+    #[test]
+    fn default_mcp_tools_configure_encrypted_network_pairing_and_explain_compatibility() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        plane.insert_session(session).unwrap();
+        let grant = audiorouter_control::ClientGrant::with_scopes([
+            PermissionScope::Read,
+            PermissionScope::GraphWrite,
+        ]);
+        let tool = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            let response = mcp_tool_call(
+                plane,
+                "paired-network",
+                &grant,
+                None,
+                &json!({"id":1,"params":{"name":name,"arguments":arguments}}),
+            );
+            assert_eq!(response["result"]["isError"], false, "{response}");
+            response
+        };
+        let recipes = tool(&mut plane, "get_recipes", json!({}));
+        assert!(recipes
+            .to_string()
+            .contains("update AudioRouter on both peers together"));
+        assert!(recipes
+            .to_string()
+            .contains("captured packets cannot play after receiver restart"));
+        tool(
+            &mut plane,
+            "add_tool",
+            json!({
+                "kind":"networkSend", "name":"Encrypted send",
+                "parameters":{"host":"127.0.0.1","port":47777}
+            }),
+        );
+        tool(
+            &mut plane,
+            "change_settings",
+            json!({
+                "node":"Encrypted send", "parameters":{"pairingKey":"NETWORK-PAIRING-TEST-KEY"}
+            }),
+        );
+        let saved = plane
+            .dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(2)),
+                method: "sessions.get".into(),
+                params: Some(json!({"sessionId":"session-fixture"})),
+            })
+            .result
+            .unwrap();
+        let node = saved["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["name"] == "Encrypted send")
+            .unwrap();
+        assert_eq!(node["parameters"]["pairingKey"], "NETWORK-PAIRING-TEST-KEY");
     }
 
     #[test]

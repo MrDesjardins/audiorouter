@@ -452,7 +452,7 @@ export interface NetworkNodeTelemetry {
   /** Receive: datagrams from the sender whose pairing did not match (never played). */
   authFailures?: number;
   /** Receive: why the latest of those failed. */
-  authProblem?: "wrongKey" | "senderNotPaired" | "receiverNotPaired";
+  authProblem?: "wrongKey" | "senderNotPaired" | "receiverNotPaired" | "senderOutdated";
   /** Receive: correctly tagged packets received a second time (replays), dropped. */
   replayedPackets?: number;
 }

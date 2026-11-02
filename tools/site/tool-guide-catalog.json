@@ -5,7 +5,43 @@
         "status": "available"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Device ID from devices.list.",
+          "maxLength": 128,
+          "name": "endpointId",
+          "type": "string"
+        },
+        {
+          "description": "How a stereo device is sent: both channels, both mixed to mono, or the left or right input only. stereo when unset.",
+          "enum": [
+            "stereo",
+            "mono",
+            "left",
+            "right"
+          ],
+          "name": "channelMode",
+          "type": "string"
+        },
+        {
+          "description": "Render a 5.1/7.1 capture device to two ears for headphones or two speakers. off when unset.",
+          "enum": [
+            "off",
+            "headphones",
+            "speakers"
+          ],
+          "name": "spatialMode",
+          "type": "string"
+        },
+        {
+          "description": "Room blend around the virtual speakers. 0 when unset.",
+          "maximum": 100,
+          "minimum": 0,
+          "name": "spatialRoomPercent",
+          "type": "number",
+          "unit": "%"
+        }
+      ],
       "realtimeCostClass": "device-bound",
       "type": "physical-input@1"
     },
@@ -14,7 +50,42 @@
         "status": "available"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Required. Executable name of the application, from apps.list (for example Discord.exe).",
+          "maxLength": 256,
+          "name": "executable",
+          "type": "string"
+        },
+        {
+          "description": "Full executable path, from apps.list.",
+          "maxLength": 512,
+          "name": "executablePath",
+          "type": "string"
+        },
+        {
+          "description": "Required. selectedInstance captures one process and then needs processId and creationTime100ns; allVerifiedInstances captures every verified instance and must not have them.",
+          "enum": [
+            "selectedInstance",
+            "allVerifiedInstances"
+          ],
+          "name": "processPolicy",
+          "type": "string"
+        },
+        {
+          "description": "Process ID from apps.list; only with processPolicy selectedInstance.",
+          "maximum": 4294967295,
+          "minimum": 1,
+          "name": "processId",
+          "step": 1,
+          "type": "number"
+        },
+        {
+          "description": "Opaque process start time from apps.list (a decimal string); only with processPolicy selectedInstance.",
+          "name": "creationTime100ns",
+          "type": "string"
+        }
+      ],
       "realtimeCostClass": "device-bound",
       "type": "application-capture@1"
     },
@@ -23,7 +94,24 @@
         "status": "available"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Render device ID from devices.list whose output is captured. Give exactly one of endpointId and defaultRole.",
+          "maxLength": 128,
+          "name": "endpointId",
+          "type": "string"
+        },
+        {
+          "description": "Follow the Windows default output of this role instead of a fixed device. Give exactly one of endpointId and defaultRole.",
+          "enum": [
+            "console",
+            "multimedia",
+            "communications"
+          ],
+          "name": "defaultRole",
+          "type": "string"
+        }
+      ],
       "realtimeCostClass": "device-bound",
       "type": "endpoint-loopback@1"
     },
@@ -32,7 +120,14 @@
         "status": "available"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Device ID from devices.list.",
+          "maxLength": 128,
+          "name": "endpointId",
+          "type": "string"
+        }
+      ],
       "realtimeCostClass": "device-bound",
       "type": "physical-output@1"
     },
@@ -42,7 +137,14 @@
         "status": "unavailable"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Required. ID of the virtual bus (see virtualDevices.list).",
+          "maxLength": 128,
+          "name": "busId",
+          "type": "string"
+        }
+      ],
       "realtimeCostClass": "device-bound",
       "type": "virtual-render-source@1"
     },
@@ -52,7 +154,14 @@
         "status": "unavailable"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Required. ID of the virtual bus (see virtualDevices.list).",
+          "maxLength": 128,
+          "name": "busId",
+          "type": "string"
+        }
+      ],
       "realtimeCostClass": "device-bound",
       "type": "virtual-capture-sink@1"
     },
@@ -1205,7 +1314,13 @@
         "status": "unavailable"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Allow this plugin to pass a microphone through unchanged. When off, a plugin fed by a recording device that returns its audio untouched for about 2 seconds (as an unlicensed plugin does) is silenced until plugins.resume. Adjacent VST2 plugins that share one worker are checked and silenced together, so allow pass-through on every one of them. Turn on only for a plugin meant to be neutral. false when unset.",
+          "name": "passThroughAllowed",
+          "type": "boolean"
+        }
+      ],
       "realtimeCostClass": "worker-bound",
       "type": "plugin@1"
     },
@@ -1214,7 +1329,25 @@
         "status": "available"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Opaque media ID returned by audioMedia.finishUpload.",
+          "maxLength": 128,
+          "name": "mediaId",
+          "type": "string"
+        },
+        {
+          "description": "File name shown for the media.",
+          "maxLength": 255,
+          "name": "fileName",
+          "type": "string"
+        },
+        {
+          "description": "Repeat the file. false when unset.",
+          "name": "loop",
+          "type": "boolean"
+        }
+      ],
       "realtimeCostClass": "low",
       "type": "audio-file@1"
     },
@@ -1507,7 +1640,27 @@
         "status": "available"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "IPv4 or IPv6 address of the receiving computer (names are not resolved).",
+          "name": "host",
+          "type": "string"
+        },
+        {
+          "description": "UDP port; the same on both computers.",
+          "maximum": 65535,
+          "minimum": 1,
+          "name": "port",
+          "step": 1,
+          "type": "number"
+        },
+        {
+          "description": "Shared key typed identically on both computers: blank (unencrypted, not paired) or 16-128 printable ASCII characters without leading or trailing spaces. Paired audio is encrypted and authenticated, with fresh receiver challenges preventing replay after restart. Both peers need encrypted transport v3; update both computers together.",
+          "maxLength": 128,
+          "name": "pairingKey",
+          "type": "string"
+        }
+      ],
       "realtimeCostClass": "device-bound",
       "type": "network-send@1"
     },
@@ -1516,7 +1669,35 @@
         "status": "available"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "IPv4 or IPv6 address of the sending computer (names are not resolved).",
+          "name": "sender",
+          "type": "string"
+        },
+        {
+          "description": "UDP port; the same on both computers.",
+          "maximum": 65535,
+          "minimum": 1,
+          "name": "port",
+          "step": 1,
+          "type": "number"
+        },
+        {
+          "description": "Shared key typed identically on both computers: blank (unencrypted, not paired) or 16-128 printable ASCII characters without leading or trailing spaces. Paired audio is encrypted and authenticated, with fresh receiver challenges preventing replay after restart. Both peers need encrypted transport v3; update both computers together.",
+          "maxLength": 128,
+          "name": "pairingKey",
+          "type": "string"
+        },
+        {
+          "description": "Jitter buffer. 40 ms when unset.",
+          "maximum": 500,
+          "minimum": 10,
+          "name": "bufferMs",
+          "type": "number",
+          "unit": "ms"
+        }
+      ],
       "realtimeCostClass": "device-bound",
       "type": "network-receive@1"
     },
@@ -1914,7 +2095,81 @@
         "status": "available"
       },
       "latencySamples": 0,
-      "parameters": [],
+      "parameters": [
+        {
+          "description": "Sound of slot N (1 to 9): a sound from soundLibrary.list (lib:<id>) or an uploaded media ID.",
+          "maxLength": 128,
+          "name": "slot<N>MediaId",
+          "namePattern": "slot<N>MediaId",
+          "slots": {
+            "maximum": 9,
+            "minimum": 1
+          },
+          "type": "string"
+        },
+        {
+          "description": "File name shown for the slot's sound.",
+          "maxLength": 255,
+          "name": "slot<N>FileName",
+          "namePattern": "slot<N>FileName",
+          "slots": {
+            "maximum": 9,
+            "minimum": 1
+          },
+          "type": "string"
+        },
+        {
+          "description": "Button caption; empty uses the file name.",
+          "maxLength": 64,
+          "name": "slot<N>Caption",
+          "namePattern": "slot<N>Caption",
+          "slots": {
+            "maximum": 9,
+            "minimum": 1
+          },
+          "type": "string"
+        },
+        {
+          "description": "Level of the slot's sound. 0 dB when unset.",
+          "maximum": 6,
+          "minimum": -24,
+          "name": "slot<N>GainDb",
+          "namePattern": "slot<N>GainDb",
+          "slots": {
+            "maximum": 9,
+            "minimum": 1
+          },
+          "type": "number",
+          "unit": "dB"
+        },
+        {
+          "description": "once plays to the end, loop repeats, toggle starts and stops, hold plays while held. once when unset.",
+          "enum": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
+          "name": "slot<N>Mode",
+          "namePattern": "slot<N>Mode",
+          "slots": {
+            "maximum": 9,
+            "minimum": 1
+          },
+          "type": "string"
+        },
+        {
+          "description": "Random pick on each press: a category ID from soundLibrary.list, or an array of up to 8 sound references (lib:<id> or media IDs).",
+          "maxItems": 8,
+          "name": "slot<N>Set",
+          "namePattern": "slot<N>Set",
+          "slots": {
+            "maximum": 9,
+            "minimum": 1
+          },
+          "type": "string"
+        }
+      ],
       "realtimeCostClass": "low",
       "type": "soundboard@1"
     }
@@ -2603,7 +2858,7 @@
     }
   ],
   "sourceHashes": {
-    "crates/control/src/catalog.rs": "93f6ea7f53f5a350e0c134663f18d37b75d005299cd07fc028f5068bf3ecb60f",
+    "crates/control/src/catalog.rs": "ad9ab4b81ab350e43d3518ea1257ff25bb91cc4f2db4dcd92ad84923b8b9005c",
     "crates/domain/src/voice_changer.rs": "221e9abc0f3bfb14214ce907adb197983d6cdcbab5bf9587476edd6eb904cf14"
   }
 }
