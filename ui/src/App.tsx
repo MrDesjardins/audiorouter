@@ -2099,7 +2099,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setSessionActionBusy(true);
     try {
       if (backend.connected) {
-        running = (await backend.snapshot(session.id)).status.activeSessionIds;
+        // Running sessions are backend-wide. Read them through the target:
+        // after a deletion the current session no longer exists.
+        running = (await backend.snapshot(id)).status.activeSessionIds;
         while (running.length > 0) {
           const confirmed = await new Promise<boolean>((resolve) =>
             setSessionSwitchPrompt({
@@ -2111,7 +2113,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             }),
           );
           if (!confirmed) return { switched: false, stopped: false };
-          const fresh = (await backend.snapshot(session.id)).status.activeSessionIds;
+          const fresh = (await backend.snapshot(id)).status.activeSessionIds;
           if (fresh.length === running.length && fresh.every((value) => running.includes(value))) break;
           running = fresh;
           setActionMessage("Running sessions changed. Review the current list before switching.");
