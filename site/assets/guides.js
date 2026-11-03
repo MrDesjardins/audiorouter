@@ -1,5 +1,146 @@
 (() => {
   "use strict";
+  // Tool pages group their sections into tabs. Every in-page link (table of
+  // contents, hero button, "Watch in the app", a shared #anchor) first opens
+  // the tab that holds its target, so no anchor lands on a hidden section.
+  const tabs = [...document.querySelectorAll('.guide-tabs [role="tab"]')];
+  const panelOf = (tab) =>
+    document.getElementById(tab.getAttribute("aria-controls"));
+  const layout = document.querySelector(".guide-layout");
+  const player = document.querySelector("[data-guide-player]");
+  const playerVideo = player?.querySelector("video");
+  const clips = player ? [...player.querySelectorAll(".guide-clip")] : [];
+  function selectTab(tab, { focus = false } = {}) {
+    for (const other of tabs) {
+      const selected = other === tab;
+      other.setAttribute("aria-selected", String(selected));
+      other.tabIndex = selected ? 0 : -1;
+      const panel = panelOf(other);
+      if (selected) panel.hidden = false;
+      else if (!panel.hidden) {
+        panel.hidden = true;
+        // Nothing keeps playing in a panel the reader cannot see.
+        for (const video of panel.querySelectorAll("video")) video.pause();
+      }
+    }
+    if (layout) layout.dataset.activeTab = tab.dataset.tab;
+    if (focus) tab.focus();
+  }
+  function openPanelOf(element) {
+    const panel = element.closest('[role="tabpanel"]');
+    if (!panel || !panel.hidden) return;
+    const tab = tabs.find((t) => panelOf(t) === panel);
+    if (tab) selectTab(tab);
+  }
+  // Keep the top of a newly shown tab in view when the reader had scrolled
+  // past it; the sticky tab bar stays where it is.
+  function scrollToTabs() {
+    const bar = document.querySelector(".guide-tabs");
+    if (!bar) return;
+    const top =
+      bar.parentElement.getBoundingClientRect().top +
+      scrollY -
+      parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop || "0");
+    if (scrollY > top) scrollTo({ top, behavior: "instant" });
+  }
+  function selectClip(link, { play = false } = {}) {
+    if (!playerVideo) return;
+    const source = playerVideo.querySelector("source");
+    for (const clip of clips)
+      clip.toggleAttribute("aria-current", clip === link);
+    if (source.getAttribute("src") !== link.getAttribute("href")) {
+      playerVideo.pause();
+      // Only the chosen clip's poster and video are ever requested.
+      playerVideo.poster = link.dataset.poster;
+      source.src = link.getAttribute("href");
+      playerVideo.setAttribute("aria-label", link.dataset.title);
+      playerVideo.load();
+      const caption = player.querySelector(".guide-player-caption");
+      caption.querySelector("h3").textContent = link.dataset.title;
+      caption.querySelector("p").textContent = link.dataset.description;
+    }
+    if (play) playerVideo.play().catch(() => {});
+  }
+  function showPlayer() {
+    const screen = player.querySelector(".guide-player-screen");
+    const box = screen.getBoundingClientRect();
+    if (box.top < 90 || box.bottom > innerHeight)
+      screen.scrollIntoView({ block: box.height > innerHeight - 90 ? "start" : "nearest" });
+  }
+  /** Open the tab holding `#id`, then bring it into view. */
+  function reveal(id, { play = false } = {}) {
+    const target = id && document.getElementById(id);
+    if (!target) return false;
+    openPanelOf(target);
+    if (target.classList.contains("guide-clip")) {
+      selectClip(target, { play });
+      showPlayer();
+    } else target.scrollIntoView({ block: "start" });
+    return true;
+  }
+  if (tabs.length) {
+    if (layout) layout.dataset.activeTab = "overview";
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => {
+        if (tab.getAttribute("aria-selected") === "true") return;
+        selectTab(tab);
+        const first = panelOf(tab).querySelector(".guide-section[id]");
+        if (first) history.replaceState(null, "", "#" + first.id);
+        scrollToTabs();
+      });
+      tab.addEventListener("keydown", (event) => {
+        const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+        let next = null;
+        if (step) next = tabs[(index + step + tabs.length) % tabs.length];
+        else if (event.key === "Home") next = tabs[0];
+        else if (event.key === "End") next = tabs[tabs.length - 1];
+        if (!next) return;
+        event.preventDefault();
+        next.click();
+        next.focus();
+      });
+    });
+    document.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target.closest("a");
+      if (!link) return;
+      if (link.classList.contains("guide-clip")) {
+        event.preventDefault();
+        history.replaceState(null, "", "#" + link.id);
+        selectClip(link, { play: true });
+        showPlayer();
+        return;
+      }
+      const href = link.getAttribute("href");
+      if (!href?.startsWith("#") || href.length < 2) return;
+      const target = document.getElementById(decodeURIComponent(href.slice(1)));
+      if (!target) return;
+      if (target.classList.contains("guide-clip")) {
+        event.preventDefault();
+        history.pushState(null, "", href);
+        reveal(target.id, { play: true });
+        return;
+      }
+      // Unhide first; the browser's own anchor scroll then finds the target.
+      openPanelOf(target);
+    });
+    // Back/forward to an anchor in another tab. A visible target is already
+    // scrolled to by the browser.
+    addEventListener("hashchange", () => {
+      const id = decodeURIComponent(location.hash.slice(1));
+      const target = id && document.getElementById(id);
+      if (target?.classList.contains("guide-clip")) reveal(id);
+      else if (target?.closest('[role="tabpanel"]')?.hidden) reveal(id);
+    });
+    if (location.hash.length > 1) {
+      const id = decodeURIComponent(location.hash.slice(1));
+      const target = document.getElementById(id);
+      if (target?.closest('[role="tabpanel"]')?.hidden)
+        requestAnimationFrame(() => reveal(id));
+      else if (target?.classList.contains("guide-clip")) selectClip(target);
+    }
+  }
   const linkStatus = document.createElement("span");
   linkStatus.className = "guide-link-status";
   linkStatus.setAttribute("role", "status");
@@ -81,13 +222,10 @@
         audio,
       );
     const rangeInputs = [...document.querySelectorAll("[data-demo-key]")];
-    const recordings = [...document.querySelectorAll(".guide-recording video")];
-    for (const video of recordings) {
-      video.addEventListener("play", () => {
-        demo.stop();
-        for (const other of recordings) if (other !== video) other.pause();
-      });
-    }
+    const recordings = playerVideo ? [playerVideo] : [];
+    // Leaving the Overview tab needs no handling here: the animation's own
+    // IntersectionObserver pauses the example once its panel is hidden.
+    for (const video of recordings) video.addEventListener("play", () => demo.stop());
     const recordingTransportObserver = new MutationObserver(() => {
       if (
         document.querySelector("[data-guide-demo]").dataset.audioState ===
