@@ -64,6 +64,7 @@ export function SessionFilePanel({
   const run = async (action: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
+    setMessage(null);
     try {
       await action();
     } finally {
@@ -75,14 +76,14 @@ export function SessionFilePanel({
       try {
         const path = await choosePath("save");
         if (!path) return;
-        setMessage("Saving the session file…");
+        setMessage("Exporting the saved version…");
         // The Windows Save dialog already asked before replacing a file.
         const result = await backend.exportSessionFile(session.id, path, Boolean(invoke));
         setMessage(
-          `Saved "${session.name}" to ${result.path}. It includes every node and its settings, imported audio and saved plugin settings. Plugins themselves must also be installed on the other PC.`,
+          `Exported the saved version of "${session.name}" to ${result.path}. Draft changes are not included. The file includes saved nodes and settings, imported audio and saved plugin settings. Plugins themselves must also be installed on the other PC.`,
         );
       } catch (error) {
-        setMessage(formatUiError(error, "Unable to save the session file."));
+        setMessage(formatUiError(error, "Unable to export the saved version."));
       }
     });
   const openFile = () =>
@@ -107,7 +108,8 @@ export function SessionFilePanel({
       </p>
       {unsaved && (
         <p className="muted session-file-note" role="note">
-          You have unsaved edits. The file holds the last saved version, so Save first to include them.
+          Draft changes await Save. Export uses the saved version only. Use Save in the header first to include your
+          changes; if Save fails or reports a conflict, resolve it before exporting.
         </p>
       )}
       {!invoke && (
@@ -129,7 +131,7 @@ export function SessionFilePanel({
           onClick={() => void saveFile()}
           disabled={!backend.connected || busy}
         >
-          Save to file…
+          Export saved version…
         </button>
         <button
           type="button"

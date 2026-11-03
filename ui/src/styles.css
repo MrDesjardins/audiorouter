@@ -7522,9 +7522,11 @@ input[type="color"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 2.4rem;
-  min-height: 2.4rem;
-  overflow: hidden;
+  /* Two text lines plus padding/borders exceed 2.4rem by a fraction of a
+     pixel. Reserve the same full height for one- and two-line captions. */
+  height: 2.5rem;
+  min-height: 2.5rem;
+  overflow-wrap: anywhere;
 }
 
 /* The selected node's status uses the canvas node-state colours, at a fixed

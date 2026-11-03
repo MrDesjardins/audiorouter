@@ -287,7 +287,11 @@ for (const tool of tools) {
     title: "Every setting",
     video: `assets/tool-guides/${tool.kind}-overview.mp4`,
     poster: `assets/tool-guides/${tool.kind}-overview.jpg`,
-    description: `A silent tour of the ${tool.title} Properties panel. It scrolls through every setting, then returns to the top.`,
+    description: ["networkSend", "networkReceive"].includes(tool.kind)
+      ? `A silent tour of the ${tool.title} Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream.`
+      : tool.kind === "plugin"
+        ? "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+      : `A silent tour of the ${tool.title} Properties panel. It scrolls through every setting, then returns to the top.`,
   };
   // Clips that change one property, kept in Properties-panel order.
   const changeClips = [];

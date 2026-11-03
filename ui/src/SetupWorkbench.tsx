@@ -1,6 +1,6 @@
 // Content of the Setup side-panel tab (moved from App.tsx).
 import { useMemo } from "react";
-import type { DeviceListItem, DiagnosticsSnapshot, Session } from "@audiorouter/contracts";
+import type { DeviceListItem, DiagnosticsSnapshot, Session, SetupFinding } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import type { SetupStep } from "./setup";
 import { SetupCheck, SetupCheckPanel } from "./SetupCheck";
@@ -8,19 +8,7 @@ import type { SetupCheckState } from "./useSetupCheck";
 import { ThisPcDevices } from "./ThisPcDevices";
 import { VirtualCablePanel } from "./VirtualCablePanel";
 
-export function setupCheckRefreshKey(
-  devices: DeviceListItem[],
-  sessions: Session[],
-  runningSessionIds: readonly string[],
-) {
-  return JSON.stringify([
-    devices
-      .map((device) => [device.id, device.state, "format" in device ? device.format : null])
-      .sort(([a], [b]) => String(a).localeCompare(String(b))),
-    sessions.map((session) => [session.id, session.revision]).sort(([a], [b]) => String(a).localeCompare(String(b))),
-    [...runningSessionIds].sort(),
-  ]);
-}
+import { setupCheckRefreshKey } from "./setupCheckRefreshKey";
 
 export function SetupWorkbench({
   section,
@@ -34,6 +22,7 @@ export function SetupWorkbench({
   onActionMessage,
   runningSessionIds = [],
   setupCheck,
+  onOpenFinding,
 }: {
   section: "status" | "virtualCables";
   backend: UiBackend;
@@ -46,6 +35,7 @@ export function SetupWorkbench({
   onActionMessage?: (text: string) => void;
   runningSessionIds?: readonly string[];
   setupCheck?: SetupCheckState;
+  onOpenFinding?: (finding: SetupFinding) => void;
 }) {
   // Stable across renders so the panel probes the shell once, not per refresh.
   const cableManagementAvailable = useMemo(() => backend.virtualCableManagementAvailable?.bind(backend), [backend]);
@@ -75,9 +65,14 @@ export function SetupWorkbench({
             </ul>
           </section>
           {setupCheck ? (
-            <SetupCheckPanel state={setupCheck} />
+            <SetupCheckPanel state={setupCheck} onOpenFinding={onOpenFinding} />
           ) : (
-            <SetupCheck connected={backend.connected} checkSetup={checkSetup} refreshKey={setupCheckKey} />
+            <SetupCheck
+              connected={backend.connected}
+              checkSetup={checkSetup}
+              refreshKey={setupCheckKey}
+              onOpenFinding={onOpenFinding}
+            />
           )}
           <ThisPcDevices devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} />
         </>

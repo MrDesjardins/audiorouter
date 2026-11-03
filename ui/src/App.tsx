@@ -1,5 +1,5 @@
 import { optionalLocalStorage } from "./presentationStorage";
-import { UiOptionsWorkbench } from "./UiOptionsWorkbench";
+import { SessionSwitchDialog } from "./SessionSwitchDialog";
 import {
   customThemeStyle,
   readCustomThemeLibrary,
@@ -9,15 +9,24 @@ import {
 } from "./customTheme";
 import { UpdatesPanel } from "./UpdateNotice";
 import { setUpdateCheckEnabled } from "./updateCheck";
-import { FirstRunGuide } from "./FirstRunGuide";
 import { useCanvasGroups } from "./CanvasGroups";
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
-import { SignalTimingPanel } from "./SignalTiming";
-import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo, type McpTunnelStatus } from "./Workbench";
-import { RequestBuilder } from "./ApiRequestBuilder";
+import { Workbench, type WorkbenchTab } from "./Workbench";
+import { useWorkbenchStatus } from "./useWorkbenchStatus";
+import { useRecordingActions } from "./useRecordingActions";
 import { VersionLine } from "./UpdateNotice";
 import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
 import {
@@ -34,6 +43,7 @@ import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
 import { SoundboardContext, useSoundboardController } from "./soundboardLive";
 import { assignSoundboardSlotDraft, isSoundboardParameter } from "./soundboard";
 import { useReportUnsaved } from "./unsavedReport";
+import { routePlaybackLabel } from "./routePlaybackLabel";
 import { QuitButton } from "./QuitButton";
 import {
   addSourceToOccupiedOutput,
@@ -112,7 +122,6 @@ import {
   type ThemeMode,
 } from "./preferences";
 import { SidebarResizer } from "./SidebarResizer";
-import { SessionFilePanel } from "./SessionFilePanel";
 import {
   announceDeviceAccessChanged,
   DeviceAccessSetting,
@@ -146,7 +155,6 @@ import { ErrorBoundary, RootRecoveryPanel } from "./ErrorBoundary";
 import { EqBackendContext, PluginParameterContext, defaultBackend } from "./appContext";
 import { findVbCableEndpointPair, readEndpointBindingHint, routeEndpointBinding } from "./endpointBinding";
 
-import { ClientsPanel } from "./AdvancedPanels";
 import { PluginToolsGroup } from "./PluginPanels";
 export { formatRecordingDuration, recorderHasCaptureSource } from "./RecordingPanels";
 export { findVbCableEndpointPair, findVbCableCaptureEndpointId, deviceChoiceLabel } from "./endpointBinding";
@@ -154,11 +162,9 @@ import { useAudioFileStatus } from "./useAudioFileStatus";
 import { WORKSPACE_EVENT_CATEGORIES, useWorkspaceEvents } from "./useWorkspaceEvents";
 import { DIAGNOSTICS_REFRESH_INTERVAL_MS, useDiagnosticsRefresh } from "./useDiagnosticsRefresh";
 import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from "./useNativeCounters";
-import { ConnectionForm } from "./ConnectionForm";
-import { SetupWorkbench, setupCheckRefreshKey } from "./SetupWorkbench";
+import { setupCheckRefreshKey } from "./setupCheckRefreshKey";
 import { useSetupCheck } from "./useSetupCheck";
-import { AppsPanel } from "./AppsPanel";
-import { DiscordSetup, type DiscordSetupChoice } from "./DiscordSetup";
+import type { DiscordSetupChoice } from "./DiscordSetup";
 import { appendDiscordRoute, discordSetupOptions } from "./discordRoute";
 import { AppStatusStrip } from "./AppStatusStrip";
 import {
@@ -169,16 +175,42 @@ import {
   voiceCableOutputs,
 } from "./appUsage";
 import { APP_USAGE_FOLLOW_UP_MS, useApplicationUsage } from "./useApplicationUsage";
-import { ObsCard, type ObsActions } from "./ObsCard";
+import type { ObsActions } from "./ObsCard";
 import { obsCheck } from "./obsUsage";
 import { useObsStatus } from "./useObsStatus";
-import { DeviceTroubleshooting } from "./DeviceTroubleshooting";
-import { RecordingWorkbench } from "./RecordingWorkbench";
-import { AdvancedWorkbench } from "./AdvancedWorkbench";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { SignalFlowPanel } from "./SignalFlowPanel";
 export { WORKSPACE_EVENT_CATEGORIES, DIAGNOSTICS_REFRESH_INTERVAL_MS, formatNativePumpSummary };
 export { NATIVE_COUNTERS_REFRESH_MS } from "./useNativeCounters";
+
+// These panels mount only when their workbench tab is selected. Keep the
+// editor and playback controls available while the selected panel loads.
+const AdvancedWorkbench = lazy(() =>
+  import("./AdvancedWorkbench").then((module) => ({ default: module.AdvancedWorkbench })),
+);
+const RecordingWorkbench = lazy(() =>
+  import("./RecordingWorkbench").then((module) => ({ default: module.RecordingWorkbench })),
+);
+const SetupWorkbench = lazy(() => import("./SetupWorkbench").then((module) => ({ default: module.SetupWorkbench })));
+const UiOptionsWorkbench = lazy(() =>
+  import("./UiOptionsWorkbench").then((module) => ({ default: module.UiOptionsWorkbench })),
+);
+const ClientsPanel = lazy(() => import("./AdvancedPanels").then((module) => ({ default: module.ClientsPanel })));
+const RequestBuilder = lazy(() => import("./ApiRequestBuilder").then((module) => ({ default: module.RequestBuilder })));
+const SessionFilePanel = lazy(() =>
+  import("./SessionFilePanel").then((module) => ({ default: module.SessionFilePanel })),
+);
+const ConnectionForm = lazy(() => import("./ConnectionForm").then((module) => ({ default: module.ConnectionForm })));
+const DeviceTroubleshooting = lazy(() =>
+  import("./DeviceTroubleshooting").then((module) => ({ default: module.DeviceTroubleshooting })),
+);
+const SignalTimingPanel = lazy(() =>
+  import("./SignalTiming").then((module) => ({ default: module.SignalTimingPanel })),
+);
+const AppsPanel = lazy(() => import("./AppsPanel").then((module) => ({ default: module.AppsPanel })));
+const DiscordSetup = lazy(() => import("./DiscordSetup").then((module) => ({ default: module.DiscordSetup })));
+const ObsCard = lazy(() => import("./ObsCard").then((module) => ({ default: module.ObsCard })));
+const FirstRunGuide = lazy(() => import("./FirstRunGuide").then((module) => ({ default: module.FirstRunGuide })));
 
 /** Root failures outlive AppContent's state, so they go straight to storage for the next window. */
 function recordStoredUiDiagnostic(message: string) {
@@ -267,13 +299,21 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [, setDevicesError] = useState<string | null>(null);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
   const [recordingsError, setRecordingsError] = useState<string | null>(null);
-  const [previewMessage, setPreviewMessage] = useState<string | null>(null);
-  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
-  const previewRequest = useRef(0);
-  const recoveryRequest = useRef(0);
   const [metadataTitles, setMetadataTitles] = useState<Record<string, string>>({});
   const [metadataArtists, setMetadataArtists] = useState<Record<string, string>>({});
   const [metadataComments, setMetadataComments] = useState<Record<string, string>>({});
+  const {
+    previewMessage,
+    recoveryMessage,
+    recordingMutationBusyState,
+    previewRecording,
+    inspectRecovery,
+    saveRecordingMetadata,
+    removeRecordingEntry,
+    renameRecording,
+    revealRecording,
+    recycleRecording,
+  } = useRecordingActions({ backend, setRecordings, metadataTitles, metadataArtists, metadataComments });
   const [recordingSearch, setRecordingSearch] = useState("");
   const [pendingWarnings, setPendingWarnings] = useState<string[]>([]);
   const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<Set<string>>(() => new Set());
@@ -287,8 +327,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [sessionCrudBusyState, setSessionCrudBusyState] = useState(false);
   const safetyActionBusy = useRef(false);
   const [safetyActionBusyState, setSafetyActionBusyState] = useState(false);
-  const recordingMutationBusy = useRef(false);
-  const [recordingMutationBusyState, setRecordingMutationBusyState] = useState(false);
   const [privacyMuted, setPrivacyMuted] = useState(true);
   const [librarySearch, setLibrarySearch] = useState("");
   const [processors, setProcessors] = useState<ProcessorDescriptor[] | null>(null);
@@ -410,14 +448,37 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setSelectedNodeIds([id]);
     setWorkbenchTab("properties");
   };
+  const [setupTarget, setSetupTarget] = useState<{ sessionId: string; nodeId?: string } | null>(null);
+  const openLoadedSetupTarget = useEffectEvent(() => {
+    if (!setupTarget || draft.id !== setupTarget.sessionId) return;
+    setSetupTarget(null);
+    if (!backend.connected) {
+      setActionMessage("Reconnect to AudioRouter before opening this finding.");
+      return;
+    }
+    if (setupTarget.nodeId) {
+      if (!draft.nodes.some((node) => node.id === setupTarget.nodeId)) {
+        setActionMessage("The affected tool is no longer in this route. Check again for current findings.");
+        return;
+      }
+      selectNodeProperties(setupTarget.nodeId);
+      setActionMessage("Opened the affected tool. Setup checks describe saved routes; unsaved edits are not checked.");
+    } else {
+      setWorkbenchTab("session");
+      setActionMessage("Opened the affected route for inspection. Review its connections; no wiring was changed.");
+    }
+    window.setTimeout(
+      () => document.querySelector<HTMLElement>('.right-workbench [role="tab"][aria-selected="true"]')?.focus(),
+      0,
+    );
+  });
+  useEffect(() => {
+    openLoadedSetupTarget();
+  }, [setupTarget, draft]);
   // Read once: the storage object never changes, which keeps recordUiDiagnostic stable.
   const [diagnosticStorage] = useState(browserDiagnosticStorage);
   const uiDiagnosticsRef = useRef<string[]>(readClientDiagnostics(diagnosticStorage));
   const [uiDiagnostics, setUiDiagnostics] = useState<string[]>(uiDiagnosticsRef.current);
-  const [mcpActivity, setMcpActivity] = useState<McpActivity[]>([]);
-  const [mcpSetupInfo, setMcpSetupInfo] = useState<McpSetupInfo | null>(null);
-  const [mcpTunnelStatus, setMcpTunnelStatus] = useState<McpTunnelStatus | null>(null);
-  const [backendActivity, setBackendActivity] = useState<Record<string, unknown>[]>([]);
   const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() =>
     readShortcuts(optionalLocalStorage(), defaultShortcutBinding),
   );
@@ -425,6 +486,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [connectionSource, setConnectionSource] = useState("");
   const [connectionDestination, setConnectionDestination] = useState("");
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
+  const [sessionSwitchPrompt, setSessionSwitchPrompt] = useState<{
+    names: string[];
+    decide: (confirmed: boolean) => void;
+  } | null>(null);
   const connectionDialogReturnFocus = useRef<HTMLElement | null>(null);
   const connectionDialog = useRef<HTMLElement | null>(null);
   const connectionDialogSource = useRef<HTMLSelectElement | null>(null);
@@ -441,7 +506,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     backend.connected ? [] : demoSessions,
   );
   const [, setSessionInventoryError] = useState<string | null>(null);
-  const [nativeGenerations, setNativeGenerations] = useState<Record<string, { generation: number; kind: string }>>({});
+  const [nativeGenerations, setNativeGenerations] = useState<
+    Record<string, { generation: number; kind: string; preview?: boolean }>
+  >({});
   const [nativePumpStats, setNativePumpStats] = useState<NativePumpStats | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   const applicationRefreshGeneration = useRef(0);
@@ -666,12 +733,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return;
     }
     let active = true;
+    let statusFailed = false;
     const poll = () => {
       getStatus()
-        .then((status) => active && setVirtualCableStatus(status))
+        .then((status) => {
+          if (active) {
+            statusFailed = false;
+            setVirtualCableStatus(status);
+          }
+        })
         // Keep the last answer through a failed poll (UI-17); a backend
         // without the method never answers, so the status stays unknown.
-        .catch(() => undefined);
+        .catch(() => {
+          if (active && !statusFailed) {
+            statusFailed = true;
+            recordUiDiagnostic("Virtual cable status read failed");
+          }
+        });
     };
     poll();
     const timer = window.setInterval(poll, 2000);
@@ -679,7 +757,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       active = false;
       window.clearInterval(timer);
     };
-  }, [backend, backend.connected]);
+  }, [backend, backend.connected, recordUiDiagnostic]);
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
       const rawName = event.error instanceof Error ? event.error.name : "unknown";
@@ -714,63 +792,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   );
   // Failed backend requests, with the correlation ID that finds them in shell.jsonl and backend.jsonl (P2-3).
   useEffect(() => onRpcFailure(recordUiDiagnostic), [recordUiDiagnostic]);
-  useEffect(() => {
-    if ((workbenchTab !== "mcp" && workbenchTab !== "diagnostics") || !window.__TAURI_INTERNALS__?.invoke) return;
-    let active = true;
-    void window.__TAURI_INTERNALS__
-      .invoke("mcp_setup_info")
-      .then((info) => {
-        if (active) setMcpSetupInfo(info as McpSetupInfo);
-      })
-      .catch(() => {
-        if (active) setMcpSetupInfo(null);
-      });
-    const refreshTunnelStatus = () => {
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("mcp_tunnel_status")
-        .then((status) => {
-          if (active) setMcpTunnelStatus(status as McpTunnelStatus);
-        })
-        .catch(() => {
-          if (active) setMcpTunnelStatus(null);
-        });
-    };
-    refreshTunnelStatus();
-    void window.__TAURI_INTERNALS__
-      .invoke("backend_diagnostics_list")
-      .then((items) => {
-        if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]);
-      })
-      .catch(() => {
-        if (active) setBackendActivity([]);
-      });
-    const refreshActivity = () => {
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("mcp_activity_list")
-        .then((items) => {
-          if (active && Array.isArray(items)) setMcpActivity(items as McpActivity[]);
-        })
-        .catch((error: unknown) => {
-          if (active) {
-            const type = error instanceof Error ? error.name.slice(0, 48) : typeof error;
-            recordUiDiagnostic(`MCP activity read failed (${type})`);
-          }
-        });
-      refreshTunnelStatus();
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("backend_diagnostics_list")
-        .then((items) => {
-          if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]);
-        })
-        .catch(() => undefined);
-    };
-    refreshActivity();
-    const timer = window.setInterval(refreshActivity, 2000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [workbenchTab, recordUiDiagnostic]);
+  const { mcpActivity, mcpSetupInfo, mcpTunnelStatus, backendActivity } = useWorkbenchStatus(
+    workbenchTab,
+    recordUiDiagnostic,
+  );
   useEffect(() => {
     writeShortcuts(optionalLocalStorage(), shortcuts);
   }, [shortcuts]);
@@ -842,7 +867,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   const routeChanged = !sameSessionDraft(draft, session);
   // Lets the shell free the WebView on close only when nothing would be lost.
-  useReportUnsaved(routeChanged);
+  useReportUnsaved(routeChanged, recordUiDiagnostic);
   useEffect(() => {
     setAudioSourceStates({});
   }, [session.id]);
@@ -1316,11 +1341,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const native = activation && activation.state === "running" ? activation.native : null;
       // A change applied to the playing audio starts a new runtime generation;
       // keep servicing the route with it (the old one is rejected as stale).
-      if (native?.state === "applied" && activation?.state === "running") {
+      if ((native?.state === "applied" || native?.state === "restarted") && activation?.state === "running") {
         const nextGeneration = activation.generation;
         setNativeGenerations((current) =>
           current[saved.id]
-            ? { ...current, [saved.id]: { ...current[saved.id], generation: nextGeneration } }
+            ? { ...current, [saved.id]: { ...current[saved.id], generation: nextGeneration, preview: false } }
             : current,
         );
       }
@@ -1443,141 +1468,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setGraphBusy(false);
     }
   };
-  const previewRecording = async (recordingId: string) => {
-    const request = ++previewRequest.current;
-    setPreviewMessage("Inspecting recording...");
-    try {
-      const result = await backend.previewRecording(recordingId);
-      if (request === previewRequest.current)
-        setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`);
-    } catch (error) {
-      if (request === previewRequest.current) setPreviewMessage(formatUiError(error, "Recording preview unavailable."));
-    }
-  };
-  const inspectRecovery = async (recordingId: string) => {
-    const request = ++recoveryRequest.current;
-    setRecoveryMessage("Inspecting recorder recovery...");
-    try {
-      const result = await backend.getRecordingRecovery(recordingId);
-      if (request === recoveryRequest.current)
-        setRecoveryMessage(
-          result.status === "missing"
-            ? "No persisted recovery checkpoint is available."
-            : `Recovery checkpoint: ${result.checkpoint.state}.`,
-        );
-    } catch (error) {
-      if (request === recoveryRequest.current)
-        setRecoveryMessage(formatUiError(error, "Recording recovery unavailable."));
-    }
-  };
-  const saveRecordingMetadata = async (recording: import("@audiorouter/contracts").RecordingRow) => {
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      const title = metadataTitles[recording.id]?.trim() ?? recording.title ?? "";
-      const artist = metadataArtists[recording.id]?.trim() ?? recording.artist ?? "";
-      const comment = metadataComments[recording.id]?.trim() ?? recording.comment ?? "";
-      await backend.setRecordingMetadata(recording.id, {
-        title: title || null,
-        artist: artist || null,
-        comment: comment || null,
-        idempotencyKey: uiIdempotencyKey("recording-metadata"),
-      });
-      setRecordings((current) =>
-        current.map((item) =>
-          item.id === recording.id
-            ? { ...item, title: title || null, artist: artist || null, comment: comment || null }
-            : item,
-        ),
-      );
-      setPreviewMessage("Recording metadata saved; the audio file was unchanged.");
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to save recording metadata."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
-  const removeRecordingEntry = async (recordingId: string) => {
-    if (!window.confirm("Remove this library entry? The audio file will be preserved.")) return;
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      await backend.removeRecordingEntry(recordingId, uiIdempotencyKey("recording-entry-remove"));
-      setRecordings((current) => current.filter((item) => item.id !== recordingId));
-      setPreviewMessage("Library entry removed; the audio file was preserved.");
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to remove recording entry."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
-  const renameRecording = async (recordingId: string, newPath: string) => {
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      const result = await backend.renameRecording(recordingId, newPath.trim(), uiIdempotencyKey("recording-rename"));
-      setRecordings((current) =>
-        current.map((item) => (item.id === recordingId ? { ...item, path: result.path, missing: false } : item)),
-      );
-      setPreviewMessage("Recording renamed within the approved directory.");
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to rename recording."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
-  const revealRecording = async (recordingId: string) => {
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      const result = await backend.revealRecording(recordingId);
-      setPreviewMessage(
-        result.revealed
-          ? "Recording revealed by the operating system."
-          : "Recording is missing; no operating-system action was performed.",
-      );
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to reveal recording."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
-  const recycleRecording = async (recordingId: string, confirm: boolean) => {
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      const result = await backend.recycleRecording(
-        recordingId,
-        confirm,
-        confirm ? uiIdempotencyKey("recording-recycle") : undefined,
-      );
-      setPreviewMessage(
-        result.fileAction === "recycled"
-          ? "Recording recycled."
-          : result.fileAction === "recycle"
-            ? "Recycle preview loaded; confirmation is still required."
-            : `Recording was not recycled: ${result.reason}.`,
-      );
-      if (result.fileAction === "recycled")
-        setRecordings((current) =>
-          current.map((item) => (item.id === recordingId ? { ...item, missing: true } : item)),
-        );
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to recycle recording."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
   const togglePrivacyMute = async () => {
     if (safetyActionBusy.current || !backend.connected) return;
     safetyActionBusy.current = true;
@@ -1683,6 +1573,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         remaining = items;
       } catch {
         // Keep the cached list; the next refresh reports the inventory error.
+        recordUiDiagnostic("Session inventory refresh after deletion failed");
       }
       const fallback = remaining.find((item) => item.id !== session.id);
       if (fallback) await switchSession(fallback.id);
@@ -2067,6 +1958,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         ...current,
         [session.id]: {
           generation: result.generation,
+          preview: result.preview ?? Boolean(candidate),
           kind: diagnostics.nativeSessionId === session.id ? (diagnostics.nativeAdapterKind ?? "endpoint") : "endpoint",
         },
       }));
@@ -2209,17 +2101,45 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage("Wait for the current audio action to finish before switching sessions.");
       return { switched: false, stopped: false };
     }
-    const running = snapshot?.status.activeSessionIds ?? [];
+    let running: string[] = [];
+    const stoppedNames: string[] = [];
+    const sessionName = (sessionId: string) =>
+      availableSessions.find((item) => item.id === sessionId)?.name ?? sessionId;
     sessionBusy.current = true;
     setSessionActionBusy(true);
     try {
-      if (backend.connected && running.length > 0) {
-        setActionMessage("Stopping the running session before switching...");
-        for (const runningId of running) await backend.stopSession(runningId, uiIdempotencyKey("session-switch-stop"));
+      if (backend.connected) {
+        // Running sessions are backend-wide. Read them through the target:
+        // after a deletion the current session no longer exists.
+        running = (await backend.snapshot(id)).status.activeSessionIds;
+        while (running.length > 0) {
+          const confirmed = await new Promise<boolean>((resolve) =>
+            setSessionSwitchPrompt({
+              names: running.map(sessionName),
+              decide: (value) => {
+                setSessionSwitchPrompt(null);
+                resolve(value);
+              },
+            }),
+          );
+          if (!confirmed) return { switched: false, stopped: false };
+          const fresh = (await backend.snapshot(id)).status.activeSessionIds;
+          if (fresh.length === running.length && fresh.every((value) => running.includes(value))) break;
+          running = fresh;
+          setActionMessage("Running sessions changed. Review the current list before switching.");
+        }
+        if (running.length > 0)
+          setActionMessage("Stopping sessions and finalizing their active recordings before switching...");
+        for (const runningId of running) {
+          await backend.stopSession(runningId, uiIdempotencyKey("session-switch-stop"));
+          stoppedNames.push(sessionName(runningId));
+        }
       }
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to stop the running session, so the session was not switched."));
-      return { switched: false, stopped: false };
+      setActionMessage(
+        `${stoppedNames.length ? `Stop completed for: ${stoppedNames.join(", ")}. ` : ""}Session was not switched. Other sessions or recordings may have changed; check Status and Recordings before retrying. ${formatUiError(error, "Unable to verify or stop running sessions.")}`,
+      );
+      return { switched: false, stopped: stoppedNames.length > 0 };
     } finally {
       sessionBusy.current = false;
       setSessionActionBusy(false);
@@ -2238,7 +2158,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setSelectedSessionId(id);
     if (backend.connected) void snapshotCache.refresh(backend, id).then(setSnapshotState);
     const name = availableSessions.find((item) => item.id === id)?.name ?? "the selected session";
-    if (running.length > 0) setActionMessage(`Stopped the running session. Press Play to start "${name}".`);
+    if (running.length > 0)
+      setActionMessage(
+        `Stopped: ${stoppedNames.join(", ")}. Check Recordings for finalization results. Press Play to start "${name}".`,
+      );
     return { switched: true, stopped: running.length > 0 };
   };
   // The listener below is re-registered only when its dependencies change, so
@@ -3057,6 +2980,27 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     <SetupWorkbench
       section="status"
       setupCheck={setupCheck}
+      onOpenFinding={(finding) => {
+        if (!backend.connected) {
+          setActionMessage("Reconnect to AudioRouter before opening this finding.");
+          return;
+        }
+        if (!availableSessions.some((item) => item.id === finding.sessionId)) {
+          setActionMessage("The affected session is no longer available. Check again for current findings.");
+          return;
+        }
+        if (finding.sessionId !== draft.id && routeChanged) {
+          setActionMessage("Save or discard your draft in Session before opening a finding in another session.");
+          return;
+        }
+        if (finding.sessionId === draft.id) {
+          setSetupTarget({ sessionId: finding.sessionId, nodeId: finding.nodeId });
+        } else {
+          void switchSession(finding.sessionId).then(({ switched }) => {
+            if (switched) setSetupTarget({ sessionId: finding.sessionId, nodeId: finding.nodeId });
+          });
+        }
+      }}
       runningSessionIds={snapshot?.status.activeSessionIds ?? []}
       backend={backend}
       devices={devices}
@@ -3254,9 +3198,24 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               </h1>
             </div>
             <div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite">
-              <span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">
+              <span
+                className={`audio-run-state${sessionRunning ? " is-running" : ""}`}
+                role="status"
+                title={
+                  routeChanged
+                    ? "Draft changes await Save. Running audio can differ from the canvas; only saved changes survive restart or enter an export."
+                    : "The route is saved. Running audio may have source playback stopped; use each source's Play control to start it."
+                }
+              >
                 <span className="audio-state-dot" aria-hidden="true" />
-                {sessionActionBusy ? "Updating audio…" : sessionRunning ? "Audio running" : "Audio stopped"}
+                {routePlaybackLabel({
+                  busy: sessionActionBusy,
+                  running: sessionRunning,
+                  fresh:
+                    backend.connected && !snapshotState.stale && snapshot?.diagnostics.nativeSessionId === session.id,
+                  generation: snapshot?.diagnostics.schedulerTelemetry?.activeGeneration,
+                  started: nativeGenerations[session.id],
+                })}
               </span>
               <span className="status-detail" title={statusSummary}>
                 {connectionLabel}
@@ -3297,8 +3256,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   autoSavePending
                     ? "Parameter changes save automatically after a short pause"
                     : routeChanged
-                      ? "Save the marked changes to this session"
-                      : "All changes saved"
+                      ? "Draft changes await Save; save the marked changes to this session"
+                      : "Saved route: changes survive restart and are included in exports"
                 }
                 data-save-required={routeChanged && !autoSavePending && !graphBusy}
                 onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
@@ -3313,6 +3272,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               <button
                 type="button"
                 className={sessionRunning ? "secondary" : "primary"}
+                title="Header Play starts the route; Stop stops the route. Source Play controls only that source and starts the route first if needed. A draft preview is temporary and does not Save changes."
                 onClick={() => void (sessionRunning ? stopSession() : startSession())}
                 disabled={!backend.connected || sessionActionBusy}
               >
@@ -3591,18 +3551,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   tab={workbenchTab}
                   onTab={(tab) => setWorkbenchTab(tab)}
                   sessionFileContent={
-                    <SessionFilePanel
-                      backend={backend}
-                      session={session}
-                      unsaved={routeChanged}
-                      onImported={(imported) => {
-                        setCreatedSessions((current) => [
-                          ...current.filter((item) => item.id !== imported.id),
-                          imported,
-                        ]);
-                        void switchSession(imported.id);
-                      }}
-                    />
+                    // Its own boundary: the session picker and actions above
+                    // must not wait for this lazily loaded section.
+                    <Suspense fallback={<p role="status">Loading session file tools...</p>}>
+                      <SessionFilePanel
+                        backend={backend}
+                        session={session}
+                        unsaved={routeChanged}
+                        onImported={(imported) => {
+                          setCreatedSessions((current) => [
+                            ...current.filter((item) => item.id !== imported.id),
+                            imported,
+                          ]);
+                          void switchSession(imported.id);
+                        }}
+                      />
+                    </Suspense>
                   }
                   pluginsContent={
                     <PluginToolsGroup
@@ -3751,6 +3715,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             </main>
           </div>
           <LibraryDragOverlay />
+          {sessionSwitchPrompt && (
+            <SessionSwitchDialog names={sessionSwitchPrompt.names} onDecision={sessionSwitchPrompt.decide} />
+          )}
           {deviceConsent && (
             <DeviceAccessDialog
               busy={deviceConsent.busy}

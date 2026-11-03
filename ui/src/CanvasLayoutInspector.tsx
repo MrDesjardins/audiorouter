@@ -1,3 +1,4 @@
+import { returnToPropertiesTab } from "./workbenchPanel";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { CanvasGroup } from "./CanvasGroups";
 
@@ -72,7 +73,14 @@ export function CanvasLayoutInspector({
       </button>
     ));
   return (
-    <section className="panel inspector canvas-selection-inspector" aria-label="Selection layout">
+    <section
+      className="panel inspector canvas-selection-inspector"
+      id="workbench-properties"
+      onKeyDown={returnToPropertiesTab}
+      role="tabpanel"
+      aria-labelledby="workbench-tab-properties"
+      tabIndex={0}
+    >
       <p className="eyebrow">Canvas selection</p>
       <h2>{items.length} items selected</h2>
       <p className="muted">

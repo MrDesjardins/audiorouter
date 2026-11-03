@@ -954,13 +954,11 @@ impl ControlPlane {
                 ));
             }
         }
-        let storage = self
-            .storage
-            .as_ref()
-            .ok_or_else(|| ControlError::InvalidRequest("session storage is unavailable".into()))?;
-        // Database reads stay here; reading plugin state files, hashing and
-        // writing the ZIP run while running routes keep being serviced.
-        let prepared = storage.prepare_bundle_export(&id).map_err(storage_error)?;
+        // Blob reads, plugin files, hashing and ZIP writing all run while
+        // running routes keep being serviced.
+        let prepared = self.with_storage_worker(|storage| {
+            storage.prepare_bundle_export(&id).map_err(storage_error)
+        })?;
         let replacing = existing.is_some();
         let bytes = self.while_servicing_audio(|| -> Result<u64, ControlError> {
             if replacing {
@@ -1003,17 +1001,16 @@ impl ControlPlane {
             ));
         }
         let staging = std::env::temp_dir().join("audiorouter-session-import");
-        // Unpacking, hash checks and asset reads run while running routes
-        // keep being serviced; the database step stays on this thread.
+        // Unpacking, hash checks, asset reads and database restoration run
+        // while running routes keep being serviced.
         let staged = self
             .while_servicing_audio(|| Storage::stage_session_bundle(&path, &staging))
             .map_err(storage_error)?;
-        let (mut session, report) = self
-            .storage
-            .as_ref()
-            .ok_or_else(|| ControlError::InvalidRequest("session storage is unavailable".into()))?
-            .restore_session_bundle(staged)
-            .map_err(storage_error)?;
+        let (mut session, report) = self.with_storage_worker(|storage| {
+            storage
+                .restore_session_bundle(staged)
+                .map_err(storage_error)
+        })?;
         let mut renamed = false;
         let taken = |plane: &mut Self, id: &EntityId| {
             let _ = plane.ensure_session_loaded(id);

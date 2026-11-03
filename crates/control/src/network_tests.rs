@@ -25,6 +25,29 @@ fn network_log_keeps_only_the_windows_socket_error_code() {
 #[cfg(windows)]
 #[test]
 fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
+    network_tone_through_backend(false);
+}
+
+#[cfg(windows)]
+#[test]
+fn encrypted_network_send_and_receive_work_through_the_backend_dispatcher() {
+    network_tone_through_backend(true);
+}
+
+/// Live network routes measure real-time continuity with their own 1 ms
+/// service loops and socket threads. Run them one at a time: the product
+/// has one backend, and two such loops competing for a small CI runner
+/// starved each other's 40 ms jitter buffer (one underrun, a stepped tone)
+/// while every packet still arrived. Either test passed alone on one core.
+#[cfg(windows)]
+fn live_network_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(windows)]
+fn network_tone_through_backend(paired: bool) {
+    let _serial = live_network_test_guard();
     let root = std::env::temp_dir().join(format!(
         "audiorouter-net-route-{}-{}",
         std::process::id(),
@@ -73,13 +96,13 @@ fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
         "net-send",
         NodeKind::NetworkSend,
         vec![port("in", PortDirection::Input)],
-        json!({ "host": "127.0.0.1", "port": port_number }),
+        json!({ "host": "127.0.0.1", "port": port_number, "pairingKey": if paired { "NETWORK-TEST-PAIRING-KEY" } else { "" } }),
     );
     let receive = node(
         "net-receive",
         NodeKind::NetworkReceive,
         vec![port("out", PortDirection::Output)],
-        json!({ "sender": "127.0.0.1", "port": port_number, "bufferMs": 40.0 }),
+        json!({ "sender": "127.0.0.1", "port": port_number, "bufferMs": 40.0, "pairingKey": if paired { "NETWORK-TEST-PAIRING-KEY" } else { "" } }),
     );
     let rec = node(
         "rec",
@@ -175,6 +198,26 @@ fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
         );
         let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
         service(&mut planes, 3.0);
+        // Sample the network log at the end of the serviced window, before
+        // the inspection calls below pause this test's service loop. The
+        // summary reads counters only.
+        let summaries = planes
+            .iter()
+            .flat_map(|(plane, id)| {
+                plane.write_network_summaries(
+                    id,
+                    &mut network_log::Sampler::default(),
+                    Instant::now(),
+                )
+            })
+            .collect::<Vec<_>>();
+        // End the recorded window before the diagnostics below.
+        let (plane, id) = &mut planes[receiver];
+        let stopped = call(
+            plane,
+            "recorders.stopRecording",
+            json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec-stop" }),
+        );
         let telemetry = |plane: &mut ControlPlane, node_id: &str| {
             let diagnostics = call(plane, "system.diagnostics", json!({}));
             diagnostics["nodeTelemetry"]
@@ -187,21 +230,15 @@ fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
         };
         let send = telemetry(&mut planes[sender].0, "net-send");
         let receive = telemetry(&mut planes[receiver].0, "net-receive");
+        assert_eq!(send["paired"], paired, "{send}");
+        assert_eq!(receive["paired"], paired, "{receive}");
+        assert_eq!(receive["authFailures"], 0, "{receive}");
+        assert_eq!(receive["replayedPackets"], 0, "{receive}");
         // The window names the addresses each computer must use.
         assert_eq!(receive["thisAddress"], "127.0.0.1", "{receive}");
         assert_eq!(send["localAddress"], "127.0.0.1", "{send}");
         assert!(send.get("lastErrorCode").is_none(), "{send}");
         // The network log summarizes both sides from the same counters.
-        let summaries = planes
-            .iter()
-            .flat_map(|(plane, id)| {
-                plane.write_network_summaries(
-                    id,
-                    &mut network_log::Sampler::default(),
-                    Instant::now(),
-                )
-            })
-            .collect::<Vec<_>>();
         let summary = |role: &str| {
             summaries
                 .iter()
@@ -226,15 +263,19 @@ fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
             "{receive_summary}"
         );
         assert_eq!(receive_summary["rejectedDatagrams"], 0, "{receive_summary}");
+        assert_eq!(receive_summary["authFailures"], 0, "{receive_summary}");
+        assert_eq!(receive_summary["receiveErrors"], 0, "{receive_summary}");
+        assert!(
+            receive_summary["lastRejectedSender"].is_null(),
+            "{receive_summary}"
+        );
+        assert!(
+            receive_summary["lastErrorCode"].is_null(),
+            "{receive_summary}"
+        );
         assert!(
             receive_summary["hint"].is_null(),
             "a healthy stream has no hint: {receive_summary}"
-        );
-        let (plane, id) = &mut planes[receiver];
-        let stopped = call(
-            plane,
-            "recorders.stopRecording",
-            json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec-stop" }),
         );
         for (plane, id) in planes.iter_mut() {
             call(
@@ -309,6 +350,7 @@ fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
 #[cfg(windows)]
 #[test]
 fn network_settings_corrected_while_playing_take_effect_without_restart() {
+    let _serial = live_network_test_guard();
     let send_port = std::net::UdpSocket::bind("127.0.0.1:0")
         .unwrap()
         .local_addr()

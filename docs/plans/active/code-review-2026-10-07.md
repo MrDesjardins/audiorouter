@@ -1,5 +1,10 @@
 # Repository code review — 2026-10-07
 
+**Promoted 2026-11-01 (owner: fix all remaining items).** The open items
+below, including network audio encryption, are tracked in the
+[code-review fixes plan](../active/code-review-fixes.md). This file stays as
+the review record.
+
 A full survey of the backend, the APIs (named-pipe JSON-RPC and local HTTP),
 the MCP server and the frontend. It covers performance, tests, user
 experience, reliability, debuggability and other non-functional
@@ -486,7 +491,7 @@ current implementation queue.
   `replayedPackets`. Blank keys keep version 1 unchanged. The inspector has
   Generate/Copy and a reserved "Not paired" warning. Portable logic is in
   `crates/protocol/src/network_audio.rs`; details and evidence are in the
-  [active plan](../active/current.md#code-review-p2p3-follow-ups-2026-10-07-user-request).
+  [active plan](../archived/2026-11-01-maintenance-0.0.13-to-0.0.26.md#code-review-p2p3-follow-ups-2026-10-07-user-request).
   Still open: encryption (listening stays possible) and replay of an
   earlier stream to a restarted receiver.
 
@@ -644,7 +649,7 @@ current implementation queue.
   write through pointers taken from `MmapMut`'s `&[u8]` view
   (`map.as_ptr()`), which Rust's aliasing rules do not allow; switching to
   `memmap2::MmapRaw` is a follow-up. Details are in the
-  [active plan](../active/current.md#code-review-p2p3-follow-ups-2026-10-07-user-request).
+  [active plan](../archived/2026-11-01-maintenance-0.0.13-to-0.0.26.md#code-review-p2p3-follow-ups-2026-10-07-user-request).
 - **UI bundle.** The main chunk is 632 kB. Split the rarely used panels (API,
   MCP, Advanced) with dynamic imports.
 - **Active plan size.** The active plan is long. Archive completed sections

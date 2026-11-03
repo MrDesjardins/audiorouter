@@ -149,7 +149,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 ## Validated lessons
 
 - **2026-10-31 — A generic REST mapping hides an incomplete MCP; test reachability, not a list.**
-  Evidence: [active plan, REST and MCP parity](docs/plans/active/current.md#rest-and-mcp-parity-after-the-soundboard-2026-10-31-owner-request),
+  Evidence: [active plan, REST and MCP parity](docs/plans/archived/2026-11-01-maintenance-0.0.13-to-0.0.26.md#rest-and-mcp-parity-after-the-soundboard-2026-10-31-owner-request),
   `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded`. Scope:
   any new API method, tool kind or MCP tool. Consequence: the Soundboard
   shipped with working REST (Stream Deck) because `POST /api/v1/a/b` maps to
@@ -170,7 +170,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 - **2026-10-29 — Cover sources, not only processors, in every Mixer layout (user rule).**
   Evidence: [source combination suite](crates/engine/tests/source_combinations.rs),
-  [Soundboard plan](docs/plans/active/soundboard.md). Scope: new source tools
+  [Soundboard plan](docs/plans/archived/2026-11-01-soundboard.md). Scope: new source tools
   and the connected-Mixer compiler. Consequence: the Soundboard compiled
   alone, yet pressing Play on a Mixer route said "an audio combination the
   current engine cannot play", because `connected_mixers.rs` kept its own list
@@ -243,7 +243,7 @@ Report the result, affected requirement IDs/files, checks performed and limitati
   until the owner asks to re-enable it.
 
 - **2026-10-21 — Construct decoded presentation values from allowed fields.**
-  Evidence: [Q2 persistence failures and regressions](docs/plans/active/current.md#quality-q2---presentation-persistence---2026-10-21),
+  Evidence: [Q2 persistence failures and regressions](docs/plans/archived/2026-11-01-maintenance-0.0.13-to-0.0.26.md#quality-q2---presentation-persistence---2026-10-21),
   `ui/src/layout.test.ts` and `ui/e2e/canvas-layout-review.pw.ts`.
   Scope: optional browser storage and JSON-derived geometry. Consequence:
   validating x/y while retaining the original object let a saved id override

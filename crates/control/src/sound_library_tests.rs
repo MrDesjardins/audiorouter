@@ -269,3 +269,109 @@ fn soundboard_calls_resolve_the_active_session_and_a_node_name() {
         "the refusal lists the session's nodes: {message}"
     );
 }
+
+/// Two boards share a category and a sound and the second adds one more.
+/// The manifest is read once for the whole load (it was read again for every
+/// library sound), each sound is decoded once, and the session budget counts
+/// across boards: a budget that fits the first board refuses the second
+/// (review 2026-11-01, P2-8 and P3).
+#[test]
+fn soundboard_load_reads_the_manifest_once_and_bounds_the_session() {
+    let horns = manifest_category("horns-alerts");
+    assert!(horns.len() > 1, "the library has a horns-alerts category");
+    let board = |id: &str, parameters: Value| Node {
+        id: EntityId::new(id),
+        kind: NodeKind::Soundboard,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::from_value(parameters).unwrap(),
+        ports: vec![Port {
+            name: "out".into(),
+            direction: PortDirection::Output,
+            channels: 2,
+        }],
+    };
+    let session = Session {
+        id: EntityId::new("two-boards"),
+        name: "Two boards".into(),
+        schema_version: 1,
+        revision: 0,
+        nodes: vec![
+            board(
+                "a",
+                json!({ "slot1Set": "horns-alerts", "slot2MediaId": "lib:applause-crowd-01" }),
+            ),
+            board(
+                "b",
+                json!({
+                    "slot1Set": "horns-alerts",
+                    "slot2MediaId": "lib:applause-crowd-01",
+                    "slot3MediaId": "lib:whoosh",
+                    "slot4MediaId": "lib:no-such-sound",
+                }),
+            ),
+        ],
+        edges: Vec::new(),
+    };
+    let extra = manifest_category("whooshes");
+    assert_eq!(extra, vec!["lib:whoosh".to_owned()], "the library's whoosh");
+
+    let mut plane = ControlPlane::default();
+    let mut media = HashMap::new();
+    let stats = plane
+        .load_soundboard_media_with(&session, 48_000, &mut media, SoundboardBudgets::default())
+        .unwrap();
+    assert_eq!(stats.manifest_reads, 1);
+    assert_eq!(
+        stats.decoded,
+        horns.len() + 2,
+        "each sound is decoded once; the missing one is skipped"
+    );
+    assert!(media.contains_key("lib:whoosh"));
+    assert!(!media.contains_key("lib:no-such-sound"));
+
+    let bytes = |id: &str| media[id].samples.len() * std::mem::size_of::<f32>();
+    let first_board =
+        horns.iter().map(|id| bytes(id)).sum::<usize>() + bytes("lib:applause-crowd-01");
+    let refused = |budgets| {
+        ControlPlane::default()
+            .load_soundboard_media_with(&session, 48_000, &mut HashMap::new(), budgets)
+            .unwrap_err()
+    };
+    match refused(SoundboardBudgets {
+        board_bytes: usize::MAX,
+        session_bytes: first_board,
+    }) {
+        ControlError::NodeNotReady { node_id, message } => {
+            assert_eq!(node_id, "b", "the first board fits, the second does not");
+            assert!(message.contains("together"), "{message}");
+        }
+        other => panic!("unexpected error {other:?}"),
+    }
+    match refused(SoundboardBudgets {
+        board_bytes: first_board - 1,
+        session_bytes: usize::MAX,
+    }) {
+        ControlError::NodeNotReady { node_id, message } => {
+            assert_eq!(node_id, "a");
+            assert!(message.contains("\"a\" holds more sound"), "{message}");
+        }
+        other => panic!("unexpected error {other:?}"),
+    }
+    // A route with no library sound never reads the manifest.
+    let own = Session {
+        nodes: vec![board("c", json!({ "slot1MediaId": "user-sound" }))],
+        ..session.clone()
+    };
+    let stats = ControlPlane::default()
+        .load_soundboard_media_with(
+            &own,
+            48_000,
+            &mut HashMap::new(),
+            SoundboardBudgets::default(),
+        )
+        .unwrap();
+    assert_eq!(stats, SoundboardLoadStats::default());
+}

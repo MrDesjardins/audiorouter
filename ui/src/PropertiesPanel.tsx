@@ -1,3 +1,4 @@
+import { returnToPropertiesTab } from "./workbenchPanel";
 import { ToolGuideLink } from "./ToolGuideLink";
 import { CanvasLayoutInspector } from "./CanvasLayoutInspector";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
@@ -169,7 +170,14 @@ export function PropertiesPanel({
     />
   ) : (
     <>
-      <section className="panel inspector" aria-labelledby="inspector-heading">
+      <section
+        className="panel inspector"
+        id="workbench-properties"
+        onKeyDown={returnToPropertiesTab}
+        role="tabpanel"
+        aria-labelledby="workbench-tab-properties"
+        tabIndex={0}
+      >
         <div className="section-heading">
           <div>
             <p className="eyebrow">Selected node</p>

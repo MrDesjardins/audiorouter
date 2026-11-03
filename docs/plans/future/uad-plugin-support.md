@@ -286,7 +286,7 @@ decision, SEC-07, owner-tested 2026-10-22), and scan-time instrument
 filtering.
 
 In progress (2026-10-31, owner go-ahead, decisions recorded in the
-[active plan](../active/current.md#uad-u4-and-u6-live-plugin-latency-and-silent-licence-failures-2026-10-31-owner-request)):
+[active plan](../archived/2026-11-01-maintenance-0.0.13-to-0.0.26.md#uad-u4-and-u6-live-plugin-latency-and-silent-licence-failures-2026-10-31-owner-request)):
 U4 latency followed while running (decision 2 taken: accept reported
 changes; parallel-branch compensation stays future) and U6 silence on
 microphone paths with Retry (`plugins.resume`) and a per-node

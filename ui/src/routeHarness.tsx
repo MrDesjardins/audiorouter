@@ -21,8 +21,11 @@ let planned: Session | null = null;
 // telemetry recorded from a real run, and start the fixture already playing.
 const injected = globalThis as {
   __routeFixtureSession?: Session;
+  /** Additional saved routes for disposable session-navigation qualification. */
+  __routeFixtureSessions?: Session[];
   __routeFixtureTelemetry?: unknown[];
   __routeFixtureRunning?: boolean;
+  __routeFixtureActiveSessionIds?: string[];
   __routeFixturePrivacyMuted?: boolean;
   __routeFixtureRecordings?: unknown[];
   __routeFixtureProcessors?: DiscoveryDocument["processors"];
@@ -265,7 +268,9 @@ const previewBackend: UiBackend = {
       fixtureBackend.listRecordings(sessionId)
     );
   },
-  async snapshot() {
+  async snapshot(sessionId) {
+    const selected = injected.__routeFixtureSessions?.find((session) => session.id === sessionId);
+    if (selected) committed = structuredClone(selected);
     if (injected.__routeFixtureDelayMs)
       await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureDelayMs));
     return structuredClone({
@@ -284,7 +289,7 @@ const previewBackend: UiBackend = {
       diagnostics: diagnostics(),
       status: {
         ...initial.status,
-        activeSessionIds: running ? [committed.id] : [],
+        activeSessionIds: running ? (injected.__routeFixtureActiveSessionIds ?? [committed.id]) : [],
         reason: "Browser fixture: simulated audio; no devices are opened.",
       },
     });
@@ -292,7 +297,7 @@ const previewBackend: UiBackend = {
   async listSessions() {
     if (injected.__routeFixtureDelayMs)
       await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureDelayMs));
-    return [structuredClone(committed)];
+    return structuredClone(injected.__routeFixtureSessions ?? [committed]);
   },
   async processorResponse({ bands, frequenciesHz }) {
     // Browser-only shape fixture for visual interaction; the desktop backend
