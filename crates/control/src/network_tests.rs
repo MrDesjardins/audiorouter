@@ -186,6 +186,15 @@ fn network_tone_through_backend(paired: bool) {
         );
         let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
         service(&mut planes, 3.0);
+        // End the measured audio window before diagnostics pause this test's
+        // control-plane servicing. The socket threads continue independently;
+        // inspecting them must not extend the recorded continuity interval.
+        let (plane, id) = &mut planes[receiver];
+        let stopped = call(
+            plane,
+            "recorders.stopRecording",
+            json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec-stop" }),
+        );
         let telemetry = |plane: &mut ControlPlane, node_id: &str| {
             let diagnostics = call(plane, "system.diagnostics", json!({}));
             diagnostics["nodeTelemetry"]
@@ -241,15 +250,28 @@ fn network_tone_through_backend(paired: bool) {
             "{receive_summary}"
         );
         assert_eq!(receive_summary["rejectedDatagrams"], 0, "{receive_summary}");
+        assert_eq!(receive_summary["authFailures"], 0, "{receive_summary}");
+        assert_eq!(receive_summary["receiveErrors"], 0, "{receive_summary}");
         assert!(
-            receive_summary["hint"].is_null(),
-            "a healthy stream has no hint: {receive_summary}"
+            receive_summary["lastRejectedSender"].is_null(),
+            "{receive_summary}"
         );
-        let (plane, id) = &mut planes[receiver];
-        let stopped = call(
-            plane,
-            "recorders.stopRecording",
-            json!({ "sessionId": id, "nodeId": "rec", "idempotencyKey": "net-rec-stop" }),
+        assert!(
+            receive_summary["lastErrorCode"].is_null(),
+            "{receive_summary}"
+        );
+        // A new sampler measures cumulative underruns. This later snapshot
+        // may observe an underrun during inspection even when telemetry above
+        // was healthy: verify its actual hint, not an earlier counter sample.
+        let expected_hint = network_log::receive_hint(&network_log::ReceiveSummary {
+            received_packets: receive_summary["receivedPackets"].as_u64().unwrap(),
+            underruns_since_last: receive_summary["underruns"].as_u64().unwrap(),
+            ..Default::default()
+        });
+        assert_eq!(
+            receive_summary["hint"],
+            json!(expected_hint),
+            "{receive_summary}"
         );
         for (plane, id) in planes.iter_mut() {
             call(

@@ -2,6 +2,35 @@
 
 ## Open owner gates
 
+PR #107 network test repair (0edfca51): both UDP tone dispatcher tests failed
+the unconditional no-hint assertion after healthy telemetry (underruns 0),
+while the later live summary correctly reported underruns 1. Tests pause their
+own backend servicing to inspect telemetry/logs while leaving recording active.
+Plan: finalize the three-second recording before diagnostic inspection, validate
+the later summary hint against its own counters, preserve all packet-loss and
+sample-continuity assertions, then repeat plain/encrypted tests and control
+suite. Deterministic network-log tests retain zero/recent-underrun hint checks.
+Rollback is test-only revert; no runtime/audio behavior change is intended.
+
+Repair results: four focused network tests pass (plain/encrypted dispatcher
+routes, live-setting correction and error-code redaction), followed by the
+full control library: 334 passed/11 opt-in ignored. Both strict Clippy and
+format scopes pass. Both failing original cases were exercised twice; all
+existing zero loss/rejection, packet count, level and zero-discontinuity
+recorded-wave assertions remain intact. New summary assertions also require
+no auth/I/O error or rejected sender. The existing deterministic hint tests
+exercise healthy and recent-underrun cases. No production artifact changed.
+
+PR #107 network test repair (0edfca51): both UDP tone dispatcher tests failed
+the unconditional no-hint assertion after healthy telemetry (underruns 0),
+while the later live summary correctly reported underruns 1. Tests pause their
+own backend servicing to inspect telemetry/logs while leaving recording active.
+Plan: finalize the three-second recording before diagnostic inspection, validate
+the later summary hint against its own counters, preserve all packet-loss and
+sample-continuity assertions, then repeat plain/encrypted tests and control
+suite. Deterministic network-log tests retain zero/recent-underrun hint checks.
+Rollback is test-only revert; no runtime/audio behavior change is intended.
+
 PR #107 Windows CI repair on 7c3cac7f: workspace/shell tests passed, then
 `probe-build` reproduced a stale independent WASAPI probe lockfile under
 `--locked`. Refreshed only `tools/m00-wasapi-probe/Cargo.lock` offline: records
