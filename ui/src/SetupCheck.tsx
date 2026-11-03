@@ -2,8 +2,8 @@
 // the backend. The list box has a fixed height so a result never moves the
 // devices panel below it (UI-17), and the last good result survives a failed
 // read.
-import { useCallback, useEffect, useRef, useState } from "react";
 import type { SetupCheckResult, SetupFinding } from "@audiorouter/contracts";
+import { useSetupCheck, type SetupCheckState } from "./useSetupCheck";
 
 const SEVERITY_LABEL: Record<SetupFinding["severity"], string> = {
   problem: "Problem",
@@ -41,35 +41,13 @@ export function SetupCheck({
   /** Changes when devices or saved sessions change, so the check runs again. */
   refreshKey: string;
 }) {
-  const [result, setResult] = useState<SetupCheckResult | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  // Only the latest request may update the panel.
-  const latest = useRef(0);
-  const run = useCallback(async () => {
-    if (!connected || !checkSetup) return;
-    const request = ++latest.current;
-    setChecking(true);
-    try {
-      const next = await checkSetup();
-      if (request !== latest.current) return;
-      setResult(next);
-      setFailure(null);
-    } catch (error) {
-      if (request !== latest.current) return;
-      setFailure(error instanceof Error ? error.message : "The check could not run.");
-    } finally {
-      if (request === latest.current) setChecking(false);
-    }
-  }, [connected, checkSetup]);
-  useEffect(() => {
-    if (connected) void run();
-    else setChecking(false);
-    return () => {
-      latest.current += 1;
-    };
-  }, [connected, run, refreshKey]);
-  if (!checkSetup) return null;
+  const state = useSetupCheck({ connected, checkSetup, refreshKey });
+  return <SetupCheckPanel state={state} />;
+}
+
+export function SetupCheckPanel({ state }: { state: SetupCheckState }) {
+  const { connected, available, result, checking, failure, run } = state;
+  if (!available) return null;
   const status = !connected
     ? "Not connected; the check runs when the service is available."
     : failure
@@ -130,7 +108,8 @@ export function SetupCheck({
         {status}
       </p>
       <p className="muted">
-        Checks saved routes while this tab is open. Unsaved edits are not included. Play validates the route separately.
+        Checks saved routes after connection and relevant setup changes, even outside this tab. Unsaved edits are not
+        included. Play validates the route separately.
       </p>
     </section>
   );

@@ -208,3 +208,47 @@ Next action: owner launches the embedded test executable and opens Status →
 Setup check with their real saved sessions. Their Windows settings and saved
 database were not modified by this smoke. Review does not qualify live-audio
 continuity or the separate release gates.
+
+### Status attention indicator and stopped audio wording (2026-11-02)
+
+Owner requests a red Status indicator for problems and asks why Audio engine
+says unavailable. Backend `audio_status_for` uses unavailable for an unprepared
+or stopped native worker; it is not a separate engine failure signal.
+UI-27/UI-19/UI-17 scope: move the existing read-only setup-check lifecycle to
+the App, run after its initial snapshot and on relevant device/saved-route/
+running-session changes even outside Status, and share the result with the
+panel. No periodic telemetry polling. Reserve a dot slot on the Status tab;
+red means a problem finding, with an accessible description. Keep the last
+result during refresh and failed reads. Use explicit stopped/idle wording for
+zero active sessions and preserve unavailable/disconnected states separately.
+The prior tab-open-only trigger decision is superseded by this owner request.
+
+Verify hook request lifetime and refresh behavior, indicator semantics and
+stable bounds, stopped-vs-running/disconnected checklist text, full UI checks,
+three-theme browser screenshots and contract drift. No API/schema or NodeKind
+changes. Rollback: revert the UI-only follow-up. Owner confirmed closure and
+authorized rebuilding.
+
+Verification: UI typecheck, lint, production build and 793 tests (87 files)
+passed on Windows. Edge reported three passing setup-check cases across dark,
+light and high-contrast themes; inspected screenshots. The dot appears before
+opening Status, clears after a clean result and preserves tab/device bounds.
+Runner teardown stalled after those passing cases; no clean runner exit is
+claimed. Existing chunk-size, attribution and color-environment warnings remain.
+
+Embedded release build passed with `custom-protocol --locked`. Artifact:
+`src-tauri/target/release/audiorouter-shell.exe`; SHA256
+`2C22E42DEDDB9A298C2A8E165E14608E63B9C123DDD04FFB572EBAA97C9E7D32`.
+Disposable-profile hidden native launch reached shell.instanceCheck, but the
+window was not exposed by computer-use; native visual validation remains for
+owner testing. Stopped owned test process 56180, leaving the separate older
+local-test executable alone. No audio started or device settings changed.
+Owner is starting Siege; live-audio checks remain deferred. Next: owner tests
+this local artifact.
+
+PR preparation (2026-11-02): owner requested preparing the PR while testing
+tonight. Prepare as draft, preserving the pending owner test and validation
+limitations above; do not merge or mark ready. Final UI format check, contract
+drift (138 methods, 37 kinds, 20 processors, 22 events) and diff whitespace
+checks passed. This follow-up changes only UI and documentation; the earlier
+Rust verification remains recorded above. No further live-audio checks.

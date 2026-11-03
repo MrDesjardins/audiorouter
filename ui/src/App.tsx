@@ -155,7 +155,8 @@ import { WORKSPACE_EVENT_CATEGORIES, useWorkspaceEvents } from "./useWorkspaceEv
 import { DIAGNOSTICS_REFRESH_INTERVAL_MS, useDiagnosticsRefresh } from "./useDiagnosticsRefresh";
 import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from "./useNativeCounters";
 import { ConnectionForm } from "./ConnectionForm";
-import { SetupWorkbench } from "./SetupWorkbench";
+import { SetupWorkbench, setupCheckRefreshKey } from "./SetupWorkbench";
+import { useSetupCheck } from "./useSetupCheck";
 import { AppsPanel } from "./AppsPanel";
 import { DiscordSetup, type DiscordSetupChoice } from "./DiscordSetup";
 import { appendDiscordRoute, discordSetupOptions } from "./discordRoute";
@@ -784,6 +785,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (backendPrivacyMuted !== undefined) setPrivacyMuted(backendPrivacyMuted);
   }, [backendPrivacyMuted]);
   const availableSessions = mergeSessionInventory(listedSessions, snapshot?.session ?? null, createdSessions);
+  const checkSetupCall = useMemo(() => backend.checkSetup?.bind(backend), [backend]);
+  const setupCheckKey = setupCheckRefreshKey(devices, availableSessions, snapshot?.status.activeSessionIds ?? []);
+  const setupCheck = useSetupCheck({
+    connected: backend.connected,
+    ready: appChecksReady,
+    checkSetup: checkSetupCall,
+    refreshKey: setupCheckKey,
+  });
   const session =
     availableSessions.find((item) => item.id === selectedSessionId) ?? availableSessions[0] ?? demoSession;
   const sessionIsAvailable = availableSessions.some((item) => item.id === session.id);
@@ -1137,6 +1146,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const setupSteps = setupChecklist({
     connected: backend.connected,
     audio: snapshot?.status.audio ?? null,
+    activeSessionCount: snapshot?.status.activeSessionCount ?? null,
+    audioReason: snapshot?.status.reason ?? null,
     storage: snapshot?.status.storage ?? null,
     deviceCount: devices.length,
     applicationCount: applications.length,
@@ -3045,6 +3056,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const statusWorkbenchContent = (
     <SetupWorkbench
       section="status"
+      setupCheck={setupCheck}
       runningSessionIds={snapshot?.status.activeSessionIds ?? []}
       backend={backend}
       devices={devices}
@@ -3715,6 +3727,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   }}
                   clientsPanel={<ClientsPanel backend={backend} />}
                   statusContent={statusWorkbenchContent}
+                  statusHasProblem={
+                    setupCheck.result?.findings.some((finding) => finding.severity === "problem") ?? false
+                  }
                   virtualCablesContent={cableWorkbenchContent}
                   appsContent={appsWorkbenchContent}
                   uiOptionsContent={uiOptionsWorkbenchContent}

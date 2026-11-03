@@ -787,6 +787,19 @@ button:disabled {
   background: var(--warning, #e5a43b);
 }
 /* Setup check (UI-27): fixed slots so results never move the panel below. */
+.status-problem-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--danger, #ff6b6b);
+  visibility: hidden;
+  vertical-align: middle;
+}
+.status-problem-indicator.is-problem {
+  visibility: visible;
+}
 .setup-check {
   display: grid;
   gap: 0.5rem;

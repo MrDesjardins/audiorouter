@@ -825,10 +825,11 @@ Windows offers right now and lists what does not fit, each with a fix:
 - **Tip:** a virtual cable not at 48 kHz.
 
 A device is judged by how your sessions use it, so the same 7.1 cable can be
-correct in one place and wrong in another. The check runs when the tab opens
-and, while open, after devices, saved sessions or playing sessions change;
+correct in one place and wrong in another. The check runs after connection
+and after devices, saved sessions or playing sessions change, even with Status closed;
 **Check again** runs it now. It checks saved routes, not unsaved drafts.
-It does not run in the background with the tab closed or add a new Play
+A red dot on Status indicates problem findings. A stopped audio engine is
+shown as **Stopped**, which is normal before Play. The check adds no new Play
 blocker: Play separately validates the route it starts. It reads
 only: change the device in Windows Sound settings or in the node's
 Properties. It cannot see settings inside other apps (a game's speaker setup;

@@ -452,8 +452,10 @@ audio readiness and explains the exact endpoint and authorization steps.
     so. Discord's own devices stay on the Apps tab (UI-26). The check is a
     read: it never changes a session, Windows or another app.
   - **Status tab:** a Setup check list under Readiness with Check again. It
-    runs while the tab is open, on opening it and after device, saved-session
-    or running-session changes; Check again requests a fresh read. Unsaved
+    runs after the initial connected snapshot and after device, saved-session
+    or running-session changes, including with Status closed; Check again
+    requests a fresh read. A reserved red dot on Status indicates problem
+    findings and has an accessible description. Unsaved
     drafts are not checked, and Play retains its separate authoritative
     validation. It keeps the last result
     through a failed read, and reserves its first lines (UI-17).

@@ -3,7 +3,8 @@ import { useMemo } from "react";
 import type { DeviceListItem, DiagnosticsSnapshot, Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import type { SetupStep } from "./setup";
-import { SetupCheck } from "./SetupCheck";
+import { SetupCheck, SetupCheckPanel } from "./SetupCheck";
+import type { SetupCheckState } from "./useSetupCheck";
 import { ThisPcDevices } from "./ThisPcDevices";
 import { VirtualCablePanel } from "./VirtualCablePanel";
 
@@ -32,6 +33,7 @@ export function SetupWorkbench({
   sessions,
   onActionMessage,
   runningSessionIds = [],
+  setupCheck,
 }: {
   section: "status" | "virtualCables";
   backend: UiBackend;
@@ -43,6 +45,7 @@ export function SetupWorkbench({
   sessions: Session[];
   onActionMessage?: (text: string) => void;
   runningSessionIds?: readonly string[];
+  setupCheck?: SetupCheckState;
 }) {
   // Stable across renders so the panel probes the shell once, not per refresh.
   const cableManagementAvailable = useMemo(() => backend.virtualCableManagementAvailable?.bind(backend), [backend]);
@@ -71,7 +74,11 @@ export function SetupWorkbench({
               ))}
             </ul>
           </section>
-          <SetupCheck connected={backend.connected} checkSetup={checkSetup} refreshKey={setupCheckKey} />
+          {setupCheck ? (
+            <SetupCheckPanel state={setupCheck} />
+          ) : (
+            <SetupCheck connected={backend.connected} checkSetup={checkSetup} refreshKey={setupCheckKey} />
+          )}
           <ThisPcDevices devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} />
         </>
       ) : (

@@ -59,7 +59,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       [theme, findings] as const,
     );
     await page.goto("/route-harness.html");
-    await page.getByRole("tab", { name: "Status", exact: true }).click();
+    const status = page.getByRole("tab", { name: "Status", exact: true });
+    const indicator = status.getByTestId("status-problem-indicator");
+    await expect(indicator).toBeVisible();
+    await expect(status).toHaveAccessibleDescription("Setup problems found. Open Status for details.");
+    const tabWithProblem = await status.boundingBox();
+    await status.click();
     const panel = page.locator("section.setup-check");
     await expect(panel.getByText("1 problem, 1 warning, 1 tip in 2 sessions.")).toBeVisible();
     await expect(panel.getByText(/Problem: "Result" plays to CABLE-B Input/)).toBeVisible();
@@ -75,6 +80,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     );
     await panel.getByRole("button", { name: "Check again" }).click();
     await expect(panel.getByText("No problems found in 2 sessions.")).toBeVisible();
+    await expect(indicator).toBeHidden();
+    expect(await status.boundingBox()).toEqual(tabWithProblem);
     await expect(panel.getByText("No issues found in the device and feedback checks performed.")).toBeVisible();
     const withoutFindings = await devicesHeading.boundingBox();
     expect(withoutFindings?.y).toBe(withFindings?.y);
