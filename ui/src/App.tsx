@@ -1351,11 +1351,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const native = activation && activation.state === "running" ? activation.native : null;
       // A change applied to the playing audio starts a new runtime generation;
       // keep servicing the route with it (the old one is rejected as stale).
-      if (native?.state === "applied" && activation?.state === "running") {
+      if ((native?.state === "applied" || native?.state === "restarted") && activation?.state === "running") {
         const nextGeneration = activation.generation;
         setNativeGenerations((current) =>
           current[saved.id]
-            ? { ...current, [saved.id]: { ...current[saved.id], generation: nextGeneration } }
+            ? { ...current, [saved.id]: { ...current[saved.id], generation: nextGeneration, preview: false } }
             : current,
         );
       }

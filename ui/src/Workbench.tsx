@@ -439,6 +439,10 @@ export function Workbench({
             onKeyDown={(event) => {
               // The Properties overlay precedes the tablist in DOM order.
               if (id === "properties" && event.key === "Tab" && !event.shiftKey) {
+                if (event.currentTarget.dataset.propertiesExit) {
+                  delete event.currentTarget.dataset.propertiesExit;
+                  return;
+                }
                 const panel = document.getElementById("workbench-properties");
                 if (panel) {
                   event.preventDefault();

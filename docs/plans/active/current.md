@@ -16,6 +16,20 @@ force-close an existing owner process. Rollback: retain previous compatible
 build, revert integration commits; no database migration is intended.
 Next: independent final review and worktree audit; parent integrates and builds.
 
+Final review found two P2 issues: forward Tab cycling through Properties and
+applied Save retaining preview provenance. Parent added explicit panel exit,
+cleared preview on applied/restarted activation (not restartRequired), and
+regressions at the keyboard and App save entry points. The full UI first run
+reported 812 passing/2 failing obsolete immediate-switch lifecycle expectations;
+updated them to use Stop and switch. Focused lifecycle/keyboard: 24 passed.
+Final typecheck/lint/format pass. Full UI rerun is in target/ux-final-vitest.log.
+Control/storage/CLI suites passed; shell 85 passed/4 opt-in ignored; both
+Clippy scopes clean; contract drift 138 methods/37 kinds/20 processors/22 events
+passed after the sandbox dependency-download restriction was resolved.
+Embedded release build completed with custom-protocol; matching CLI build and
+disposable packaged smoke pending. Build retains the 644.40 kB main chunk
+advisory; no threshold was raised and it does not establish a timing failure.
+
 ## Parallel UX implementation — 2026-11-02 owner authorization
 
 Owner authorized implementing the UX plan using parallel T3 Code workstreams,

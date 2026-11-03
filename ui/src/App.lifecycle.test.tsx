@@ -114,6 +114,79 @@ async function renderReady(element: Parameters<typeof render>[0]) {
 }
 
 describe("session refresh and playback regressions", () => {
+  it("clears draft-preview provenance after Save applies the running graph", async () => {
+    const { backend } = await fixture();
+    let generation = 1;
+    let running = false;
+    const snapshot = backend.snapshot;
+    const telemetry = () => ({
+      activeGeneration: generation,
+      activeSampleRateHz: 48000,
+      inputOverruns: 0,
+      inputUnderruns: 0,
+      outputOverruns: 0,
+      outputUnderruns: 0,
+      processedQuanta: 1,
+      repairedSamples: 0,
+      xruns: 0,
+      processingTimeNsTotal: 0,
+      processingTimeNsMax: 0,
+      deadlineMisses: 0,
+      deadlineLatenessNsTotal: 0,
+      deadlineLatenessNsMax: 0,
+    });
+    const refreshDiagnostics = async () => ({
+      ...(await snapshot()).diagnostics,
+      nativeSessionId: demoSession.id,
+      nativeAdapter: running ? ("running" as const) : ("configured-stopped" as const),
+      nativeAdapterKind: "endpoint" as const,
+      schedulerTelemetry: telemetry(),
+    });
+    backend.snapshot = vi.fn(async () => {
+      const value = await snapshot();
+      return {
+        ...value,
+        status: { ...value.status, activeSessionIds: running ? [demoSession.id] : [] },
+        diagnostics: await refreshDiagnostics(),
+      };
+    });
+    const commit = backend.commitGraph;
+    const view = await renderReady(
+      <App
+        backend={{
+          ...backend,
+          refreshDiagnostics,
+          startSession: async () => {
+            running = true;
+            return { sessionId: demoSession.id, state: "running", generation, runtime: "native", preview: true };
+          },
+          commitGraph: async () => {
+            const result = await commit();
+            generation = 2;
+            return {
+              ...result,
+              activation: {
+                state: "running",
+                generation,
+                runtime: "native",
+                native: { state: "applied", adapter: "endpoint" },
+              },
+            };
+          },
+        }}
+      />,
+    );
+    await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
+    start();
+    await waitFor(() =>
+      expect(view.container.querySelector(".audio-run-state")?.textContent).toContain("Draft preview"),
+    );
+    addGain();
+    fireEvent.click(within(document.querySelector(".topbar")!).getByRole("button", { name: /^Save$/ }));
+    await messageBar().findByText(/applied to the playing audio/);
+    await waitFor(() => expect(view.container.querySelector(".audio-run-state")?.textContent).toBe("Audio running"));
+  });
+
   it("opens Apps after a delayed initial snapshot without changing hook order", async () => {
     const { backend } = await fixture();
     const initial = await backend.snapshot();
@@ -493,7 +566,8 @@ describe("switching sessions", () => {
     start();
     await messageBar().findByText(/Audio session is running/);
     chooseSession(other.id);
-    await messageBar().findByText(/Stopped the running session\. Press Play to start "Other Session"/);
+    fireEvent.click(await screen.findByRole("button", { name: "Stop and switch" }));
+    await messageBar().findByText(/Check Recordings for finalization results\. Press Play to start "Other Session"/);
     expect(audio.stopSession).toHaveBeenCalledWith(demoSession.id, expect.any(String));
     expect(audio.detachNativeEndpoint).toHaveBeenCalledWith(demoSession.id);
     expect(audio.startSession).toHaveBeenCalledTimes(1);
@@ -503,7 +577,8 @@ describe("switching sessions", () => {
     expect(audio.startSession).toHaveBeenLastCalledWith(other.id, expect.any(String));
     // Going back works the same way.
     chooseSession(demoSession.id);
-    await messageBar().findByText(/Stopped the running session\. Press Play to start/);
+    fireEvent.click(await screen.findByRole("button", { name: "Stop and switch" }));
+    await messageBar().findByText(/Check Recordings for finalization results\. Press Play to start/);
     start();
     await waitFor(() => expect(audio.startSession).toHaveBeenLastCalledWith(demoSession.id, expect.any(String)));
   });
@@ -543,6 +618,7 @@ describe("switching sessions", () => {
     start();
     await messageBar().findByText(/Audio session is running/);
     chooseSession(other.id);
+    fireEvent.click(await screen.findByRole("button", { name: "Stop and switch" }));
     await messageBar().findByText(/stop refused/);
     expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe(demoSession.id);
   });

@@ -7,6 +7,28 @@ import { returnToPropertiesTab } from "./workbenchPanel";
 
 afterEach(cleanup);
 
+it("allows forward Tab to leave Properties after the last control", () => {
+  render(
+    <>
+      <section id="workbench-properties" role="tabpanel" tabIndex={0} onKeyDown={returnToPropertiesTab}>
+        <button>Last property</button>
+      </section>
+      <Workbench {...props} tab="properties" />
+      <button>After workbench</button>
+    </>,
+  );
+  const last = screen.getByRole("button", { name: "Last property" });
+  vi.spyOn(last, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
+  last.focus();
+  fireEvent.keyDown(last, { key: "Tab" });
+  const tab = screen.getByRole("tab", { name: "Properties" });
+  expect(document.activeElement).toBe(tab);
+  expect(fireEvent.keyDown(tab, { key: "Tab" })).toBe(true);
+  expect(document.activeElement).toBe(tab);
+  // jsdom does not perform default Tab navigation; lack of preventDefault lets
+  // the browser advance beyond the tablist rather than reenter the overlay.
+});
+
 it("tabs into the preceding Properties overlay and returns with Shift+Tab", () => {
   render(
     <>
