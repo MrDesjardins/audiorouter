@@ -2,6 +2,20 @@
 
 ## Open owner gates
 
+PR #107 first-head CI repair: Website checks found 39 generated tool pages
+missing social metadata; regenerated with `site/generate-social.mjs` and exact
+site profile now passes. Supply-chain check rejected yanked `inout 0.2.3`
+through ChaCha20; updated only inout to 0.2.5 in both lockfiles. Exact
+`cargo-deny,npm-audit` profile passes without policy changes. Duplicate-version
+warnings reflect incompatible transitive Tauri/Windows dependency requirements;
+retained rather than forcing incompatible versions. Root advisory-not-detected
+warnings arise because shared policy includes five shell-only unic exceptions;
+their existing dated reasons remain required by the shell graph. No new ignore
+was added. Protocol 25 and Windows audio 145 tests pass (opt-in hardware tests
+remain ignored); shell tests and refreshed local artifacts follow. Both failed
+job annotations were read; failure annotations contain only exit code, with
+Ubuntu image migration notices. This repair does not change user settings.
+
 Final consolidated source and local artifact evidence:
 [2026-11-02 final consolidation](evidence/2026-11-02-final-consolidation.md).
 Earlier review integration is merged with latest browser fixes. Parent full UI
