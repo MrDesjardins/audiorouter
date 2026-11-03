@@ -410,6 +410,33 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setSelectedNodeIds([id]);
     setWorkbenchTab("properties");
   };
+  const [setupTarget, setSetupTarget] = useState<{ sessionId: string; nodeId?: string } | null>(null);
+  const openLoadedSetupTarget = useEffectEvent(() => {
+    if (!setupTarget || draft.id !== setupTarget.sessionId) return;
+    setSetupTarget(null);
+    if (!backend.connected) {
+      setActionMessage("Reconnect to AudioRouter before opening this finding.");
+      return;
+    }
+    if (setupTarget.nodeId) {
+      if (!draft.nodes.some((node) => node.id === setupTarget.nodeId)) {
+        setActionMessage("The affected tool is no longer in this route. Check again for current findings.");
+        return;
+      }
+      selectNodeProperties(setupTarget.nodeId);
+      setActionMessage("Opened the affected tool. Setup checks describe saved routes; unsaved edits are not checked.");
+    } else {
+      setWorkbenchTab("session");
+      setActionMessage("Opened the affected route for inspection. Review its connections; no wiring was changed.");
+    }
+    window.setTimeout(
+      () => document.querySelector<HTMLElement>('.right-workbench [role="tab"][aria-selected="true"]')?.focus(),
+      0,
+    );
+  });
+  useEffect(() => {
+    openLoadedSetupTarget();
+  }, [setupTarget, draft]);
   // Read once: the storage object never changes, which keeps recordUiDiagnostic stable.
   const [diagnosticStorage] = useState(browserDiagnosticStorage);
   const uiDiagnosticsRef = useRef<string[]>(readClientDiagnostics(diagnosticStorage));
@@ -3057,6 +3084,27 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     <SetupWorkbench
       section="status"
       setupCheck={setupCheck}
+      onOpenFinding={(finding) => {
+        if (!backend.connected) {
+          setActionMessage("Reconnect to AudioRouter before opening this finding.");
+          return;
+        }
+        if (!availableSessions.some((item) => item.id === finding.sessionId)) {
+          setActionMessage("The affected session is no longer available. Check again for current findings.");
+          return;
+        }
+        if (finding.sessionId !== draft.id && routeChanged) {
+          setActionMessage("Save or discard your draft in Session before opening a finding in another session.");
+          return;
+        }
+        if (finding.sessionId === draft.id) {
+          setSetupTarget({ sessionId: finding.sessionId, nodeId: finding.nodeId });
+        } else {
+          void switchSession(finding.sessionId).then(({ switched }) => {
+            if (switched) setSetupTarget({ sessionId: finding.sessionId, nodeId: finding.nodeId });
+          });
+        }
+      }}
       runningSessionIds={snapshot?.status.activeSessionIds ?? []}
       backend={backend}
       devices={devices}

@@ -76,6 +76,24 @@ describe("setupCheckSummary", () => {
 });
 
 describe("SetupCheck", () => {
+  it("opens stable finding IDs and disables retained actions when disconnected", async () => {
+    const onOpenFinding = vi.fn();
+    const checkSetup = vi.fn(async () => surround);
+    const { rerender } = render(
+      <SetupCheck connected checkSetup={checkSetup} refreshKey="a" onOpenFinding={onOpenFinding} />,
+    );
+    const action = await screen.findByRole("button", { name: "Open affected tool" });
+    fireEvent.click(action);
+    expect(onOpenFinding).toHaveBeenLastCalledWith(surround.findings[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Inspect affected route" }));
+    expect(onOpenFinding).toHaveBeenLastCalledWith(surround.findings[1]);
+    rerender(<SetupCheck connected={false} checkSetup={checkSetup} refreshKey="a" onOpenFinding={onOpenFinding} />);
+    expect((screen.getByRole("button", { name: "Open affected tool" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(action);
+    expect(onOpenFinding).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/Not connected/)).toBeTruthy();
+    expect(screen.getByText(/Unsaved edits are not/)).toBeTruthy();
+  });
   it("does not keep announcing an initial failed request as checking", async () => {
     render(
       <SetupCheck

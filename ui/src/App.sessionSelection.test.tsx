@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { EventsSubscribeResult, Session, StateEvent } from "@audiorouter/contracts";
 import { App } from "./App";
@@ -86,6 +86,46 @@ async function backendWithSavedActiveSession() {
 }
 
 describe("startup session selection", () => {
+  it("opens a setup finding by node ID and focuses Properties without stopping audio", async () => {
+    const { backend } = await backendWithSavedActiveSession();
+    const stopSession = vi.fn(backend.stopSession);
+    const node = demoSession.nodes[1];
+    render(
+      <App
+        backend={{
+          ...backend,
+          stopSession,
+          checkSetup: async () => ({
+            sessionsChecked: 2,
+            devicesChecked: 1,
+            truncated: 0,
+            notChecked: [],
+            findings: [
+              {
+                code: "deviceMissing",
+                severity: "problem",
+                sessionId: "main-session",
+                sessionName: "Stale name",
+                nodeId: node.id,
+                nodeName: "Stale tool name",
+                message: "Missing test device",
+                fix: "Inspect the tool",
+              },
+            ],
+          }),
+        }}
+      />,
+    );
+    await waitFor(() => expect(backend.snapshot.mock.calls.some(([id]) => id === "main-session")).toBe(true));
+    fireEvent.click(screen.getByRole("tab", { name: /Status/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }));
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: /Properties/ }).getAttribute("aria-selected")).toBe("true"),
+    );
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Properties/ })));
+    expect(stopSession).not.toHaveBeenCalled();
+    expect(screen.getByText(/Opened the affected tool/)).toBeTruthy();
+  });
   it("opens the saved active session and does not flip between sessions", async () => {
     // A fresh WebView profile (first launch, or cleared data): nothing remembered.
     const { backend, active } = await backendWithSavedActiveSession();

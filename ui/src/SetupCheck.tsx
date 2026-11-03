@@ -35,17 +35,25 @@ export function SetupCheck({
   connected,
   checkSetup,
   refreshKey,
+  onOpenFinding,
 }: {
   connected: boolean;
   checkSetup?: () => Promise<SetupCheckResult>;
   /** Changes when devices or saved sessions change, so the check runs again. */
   refreshKey: string;
+  onOpenFinding?: (finding: SetupFinding) => void;
 }) {
   const state = useSetupCheck({ connected, checkSetup, refreshKey });
-  return <SetupCheckPanel state={state} />;
+  return <SetupCheckPanel state={state} onOpenFinding={onOpenFinding} />;
 }
 
-export function SetupCheckPanel({ state }: { state: SetupCheckState }) {
+export function SetupCheckPanel({
+  state,
+  onOpenFinding,
+}: {
+  state: SetupCheckState;
+  onOpenFinding?: (finding: SetupFinding) => void;
+}) {
   const { connected, available, result, checking, failure, run } = state;
   if (!available) return null;
   const status = !connected
@@ -90,6 +98,16 @@ export function SetupCheckPanel({ state }: { state: SetupCheckState }) {
                     Session {finding.sessionName}
                     {finding.nodeName ? ` · ${finding.nodeName}` : ""}
                   </small>
+                  {onOpenFinding && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={!connected}
+                      onClick={() => onOpenFinding(finding)}
+                    >
+                      {finding.nodeId ? "Open affected tool" : "Inspect affected route"}
+                    </button>
+                  )}
                 </span>
               </li>
             ))}
