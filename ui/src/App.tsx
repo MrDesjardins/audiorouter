@@ -10,7 +10,17 @@ import {
 import { UpdatesPanel } from "./UpdateNotice";
 import { setUpdateCheckEnabled } from "./updateCheck";
 import { useCanvasGroups } from "./CanvasGroups";
-import { lazy, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
@@ -3541,18 +3551,22 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   tab={workbenchTab}
                   onTab={(tab) => setWorkbenchTab(tab)}
                   sessionFileContent={
-                    <SessionFilePanel
-                      backend={backend}
-                      session={session}
-                      unsaved={routeChanged}
-                      onImported={(imported) => {
-                        setCreatedSessions((current) => [
-                          ...current.filter((item) => item.id !== imported.id),
-                          imported,
-                        ]);
-                        void switchSession(imported.id);
-                      }}
-                    />
+                    // Its own boundary: the session picker and actions above
+                    // must not wait for this lazily loaded section.
+                    <Suspense fallback={<p role="status">Loading session file tools...</p>}>
+                      <SessionFilePanel
+                        backend={backend}
+                        session={session}
+                        unsaved={routeChanged}
+                        onImported={(imported) => {
+                          setCreatedSessions((current) => [
+                            ...current.filter((item) => item.id !== imported.id),
+                            imported,
+                          ]);
+                          void switchSession(imported.id);
+                        }}
+                      />
+                    </Suspense>
                   }
                   pluginsContent={
                     <PluginToolsGroup
