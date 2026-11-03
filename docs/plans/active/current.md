@@ -1,5 +1,21 @@
 # Active plan — 0.0.26 release and maintenance
 
+## Final consolidation, review and local build — owner request
+
+Owner has finished playing and explicitly requests final review, tonight's
+worktree changes in main, plan cleanup, remaining improvements through a PR,
+and a local build for tomorrow. This supersedes the gaming-time build/PR
+restriction above. Preserve user profiles/devices and existing unrelated
+worktree edits. Audit all worktrees, distinguish tonight's work from historical
+branches, review the combined diff, run UI/contracts/docs checks and focused
+three-theme browser qualification, resolve findings, then push/create PR and
+merge only with required checks satisfied. No release publication or driver
+change. Build embedded UI before release shell, stage matching CLI, record
+hashes and timestamps; use a disposable profile for native smoke and never
+force-close an existing owner process. Rollback: retain previous compatible
+build, revert integration commits; no database migration is intended.
+Next: independent final review and worktree audit; parent integrates and builds.
+
 ## Parallel UX implementation — 2026-11-02 owner authorization
 
 Owner authorized implementing the UX plan using parallel T3 Code workstreams,
