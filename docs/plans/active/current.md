@@ -16,6 +16,16 @@ force-close an existing owner process. Rollback: retain previous compatible
 build, revert integration commits; no database migration is intended.
 Next: independent final review and worktree audit; parent integrates and builds.
 
+Worktree inventory covered 62 registered checkouts, but parent branch audit
+also found unattached `feature/code-review-fixes-2026-11-01` at `b8cc974f`
+with substantial earlier-today work absent main. A separate isolated integration
+workstream now reconciles it; do not claim all tonight work is in main until
+that result is reviewed. Packaged smoke passed against the current pre-extra-
+integration build (cold 1512 ms, warm 713 ms, Medium/non-admin, two graceful
+quits, device access false). Matching CLI staged with verified hashes. Rebuild
+and repeat smoke after any incoming source changes. Browser qualification still
+pending. User data and devices untouched.
+
 Final review found two P2 issues: forward Tab cycling through Properties and
 applied Save retaining preview provenance. Parent added explicit panel exit,
 cleared preview on applied/restarted activation (not restartRequired), and
