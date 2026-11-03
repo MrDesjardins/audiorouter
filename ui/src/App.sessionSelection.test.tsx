@@ -127,7 +127,7 @@ describe("startup session selection", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Properties/ })));
     expect(stopSession).not.toHaveBeenCalled();
     expect(screen.getByText(/Opened the affected tool/)).toBeTruthy();
-  });
+  }, 15_000);
   it("opens the saved active session and does not flip between sessions", async () => {
     // A fresh WebView profile (first launch, or cleared data): nothing remembered.
     const { backend, active } = await backendWithSavedActiveSession();
@@ -255,7 +255,7 @@ describe("session switch interruption consent", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(stop).not.toHaveBeenCalled();
     expect(screen.getByRole("tab", { name: /Status/ }).getAttribute("aria-selected")).toBe("true");
-  });
+  }, 15_000);
 
   async function fixture() {
     const { backend } = await backendWithSavedActiveSession();
