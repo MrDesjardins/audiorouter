@@ -1,5 +1,58 @@
 # Active plan — 0.0.26 release and maintenance
 
+## Website CSP — 2026-11-02 owner request
+
+Objective: assess the missing audiorouter.org CSP response header and add the
+protection supported by the existing static host. This is website hardening;
+SEC-05 applies to the desktop shell and is not a public-site acceptance claim.
+Live HTTPS HEAD returns 200 from GitHub.com with no CSP header. Pages deployment
+is `.github/workflows/pages.yml`; no custom header service is configured.
+Preserve unrelated network test and active-plan edits.
+
+Tasks: add an early HTML CSP to every generated/published page; allow only local
+scripts, required Google Fonts, GitHub release API and YouTube embeds; retain
+inline styling used by the guides, prohibit inline executable scripts, objects,
+base URLs and forms. Add generation/drift checks to deployment and site checks.
+Verify policy coverage and real browser loading/blocking, including guide media.
+No driver/hardware/credentials are needed for local checks; publication and DNS/
+proxy changes are separate. A literal response header and `frame-ancestors`
+require configurable hosting or a reverse proxy; do not claim a meta tag fixes
+a header scanner. Rollback: revert only the website CSP changes. Next: implement
+and verify the Pages-compatible policy, then report the remaining hosting gate.
+
+Implementation: `site/generate-csp.mjs` inserts policy after charset and before
+resource tags in all 50 HTML pages; Pages runs it after page generation and site
+CI checks drift/tests. `site/README.md` documents header delivery and its limits.
+First Windows Edge sweep found the Download page's GitHub sponsor iframe blocked;
+added only its exact URL to frame-src and repeated the browser sweep. Earlier
+probe failures were test-harness issues (Windows path separator and waiting for
+full media load); repaired the harness to use the native separator and DOM ready.
+Local Node site/docs checks and 68 quality policy/runner tests pass. HTML diff
+comparison confirms the CSP tag is the only change to every existing page.
+External services in the browser sweep are stubbed; real Firefox/media playback,
+external-service integration and production deployment are not qualified here.
+Live DNS uses dns1/dns2.registrar-servers.com and HTTPS serves directly from
+GitHub.com. No configurable header proxy or credentials are available in this
+task. Owner decision (2026-11-02): keep GitHub Pages with HTML CSP for now.
+Defer configurable hosting/proxy and response-header delivery; the missing-header
+scanner finding and lack of `frame-ancestors` protection remain accepted limits
+of this bounded website change. No DNS or hosting migration is authorized.
+The Cloudflare proxy option is planned in
+[Website behind Cloudflare](../future/website-cloudflare.md) (owner request
+2026-11-02; future, not authorized).
+Next task: review and publish the HTML-CSP change through the normal approved
+repository workflow, then verify the live policy and real service playback.
+
+Final local evidence (Windows, Node 22.22.3):
+`node site/check-csp-browser.mjs` passes all 50 pages in headless installed Edge,
+with zero normal-load CSP violations/page errors; injected inline JavaScript and
+an unapproved external fetch are blocked. `node tools/quality/verify.mjs --checks
+site,docs` passes (3 CSP regressions; 38 guides / 1,131 links; 236 Markdown files /
+1,359 links). `node --test tools/quality/verify.test.mjs
+tools/quality/policy.test.mjs` passes 68 tests; `git diff --check` passes.
+Committed on branch `website-csp` (from main after #108); CSP regenerated for the
+tabbed guide pages and the browser sweep repeated there. Not yet deployed.
+
 Setup check (2026-11-02, owner request): a backend check and Status-tab list
 that flags device setups Play will refuse, feedback loops across routes,
 missing devices and cable rates (UI-27). Branch `feature/setup-check`; plan,
