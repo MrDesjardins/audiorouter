@@ -12,6 +12,33 @@ Embedded release build is available at
 exercised with a disposable profile and real device inventory, without audio.
 Owner testing passed; PR #106 is authorized for merge after green checks.
 
+## Tool-guide tabs and lazy videos — 2026-11-02, owner request
+
+Objective: shorten the 38 tool-guide pages and stop downloading every video
+poster at load. Branch `feature/site-tool-guide-tabs`; the owner asked for a PR.
+
+- **Tabs.** `site/generate-guides.mjs` groups the sections into Overview,
+  Settings, Videos and Examples & fixes (WAI-ARIA tabs, arrow/Home/End keys).
+  `guides.js` opens the tab that holds any in-page anchor (TOC, hero button,
+  shared `#property-…` links, back/forward), so old deep links keep working.
+  Without script, a `<noscript>` style shows every panel and hides the bar.
+- **One player.** "In the app" is one `preload="none"` player plus a clip
+  list; each entry links to its MP4 (no-script fallback). Choosing a clip swaps
+  poster and source. Each setting card links to its clip (`#clip-…`).
+- **Measured.** Fun Voice Changer requested 37 posters (4.59 MB) on load;
+  now 1 poster and no video. Compressor 7 posters (0.70 MB) → 1.
+
+Validation (Windows, Edge and Firefox, site served on `127.0.0.1:4187`):
+`node site/check-guides.mjs` PASS (38 pages, 1266 links/assets);
+`node tools/site/check-tool-guide-videos.mjs` PASS (150 clips);
+`node tools/site/review-tool-guide-layout.mjs` PASS: phone layout for five
+pages, one poster and no video on load, anchors open their tab, Watch selects
+the clip, keyboard tabs, and tab switches pause the example and recording;
+`node tools/site/firefox-guide-audio.mjs` 0 failures; a JavaScript-off Edge
+load shows all four panels. Screenshots are in `target/tool-guide-layout/`.
+Limitation: the site has one dark theme only, so no theme matrix applies.
+Rollback: revert the branch commit and regenerate the guides.
+
 ## Dependabot PRs #103 and #104 — 2026-11-02
 
 Objective (ENG-02/04): merge the ZIP and rusqlite updates into current main
