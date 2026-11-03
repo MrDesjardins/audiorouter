@@ -98,6 +98,18 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       await expect(page.getByRole("tab", { name: "Properties", exact: true })).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(page.locator("#workbench-properties")).toBeFocused();
+      await page.evaluate(() => {
+        const exit = document.createElement("button");
+        exit.id = "keyboard-exit-probe";
+        exit.textContent = "After the workspace";
+        document.body.append(exit);
+      });
+      for (let step = 0; step < 100; step++) {
+        if (await page.locator("#keyboard-exit-probe").evaluate((element) => element === document.activeElement)) break;
+        await page.keyboard.press("Tab");
+      }
+      await expect(page.locator("#keyboard-exit-probe")).toBeFocused();
+      await page.locator("#keyboard-exit-probe").evaluate((element) => element.remove());
       await page.screenshot({ path: info.outputPath("finding-properties.png") });
       expect(await calls()).toEqual([]);
       await page.getByRole("button", { name: "Dismiss message", exact: true }).click();

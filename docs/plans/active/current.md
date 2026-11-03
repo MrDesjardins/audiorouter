@@ -26,6 +26,15 @@ quits, device access false). Matching CLI staged with verified hashes. Rebuild
 and repeat smoke after any incoming source changes. Browser qualification still
 pending. User data and devices untouched.
 
+Browser qualification child `0cc0c055` integrated as `f32bab82`: 23 scenarios
+passed across three themes/two viewport sizes. Parent strengthened the actual
+keyboard path to Tab through Properties and reach an external sentinel: six
+theme/viewport cases reported passing, screenshots inspected. The default Vite
+runner then stalled during teardown; cancelled only that owned exec session,
+so these six assertions are passing evidence, not a clean runner exit.
+Parent format/lint/typecheck pass. Remaining integration is earlier code-review
+branch; rebuild and repeat combined qualification after that source merge.
+
 Final review found two P2 issues: forward Tab cycling through Properties and
 applied Save retaining preview provenance. Parent added explicit panel exit,
 cleared preview on applied/restarted activation (not restartRequired), and
