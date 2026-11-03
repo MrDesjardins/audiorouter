@@ -2,8 +2,19 @@
 
 ## Objective and authority
 
+Promotion status (2026-11-02): the owner subsequently authorized bounded
+UX-01–06 implementation and final consolidation. Setup-check plus the five UX
+source workstreams are integrated in parent baseline `bf99cf97`; see
+[active execution](../active/current.md) and its linked slice records. This
+document retains the initial assessment and proposed acceptance at a stable
+path. Observations below describe the assessment baseline, not missing features
+in the integrated branch. Source integration does not complete M05/M08:
+native/recording/export, three-theme/scaling, Narrator, five-participant and
+UX-06 measurement evidence remain required. Independent viewed/running sessions,
+global tab regrouping and performance remediation are not silently promoted.
+
 Owner request: analyze the current project for user-experience obstacles and
-make an improvement plan. This is a source-based assessment and proposed M05/M08
+make an improvement plan. Initially this was a source-based assessment and proposed M05/M08
 follow-up, not authorization to implement, change audio settings, or open a PR.
 Reviewed on `feature/setup-check`; working tree was clean before this document.
 No application code changed. No live audio, device changes, builds or user study
@@ -186,8 +197,10 @@ Prefer UI-only additive slices with no storage migration. Roll back each slice
 independently while retaining compatible session files; any backend/storage
 change needs its own compatibility and migration rollback plan.
 
-Next proposed task: M05 UX baseline and UX-01 session-switch consequence design,
-followed by UX-02 actionable setup findings. Implementation remains unstarted.
+Current next task: parent final combined qualification and local build under
+the active plan. UX-01/02/03/05 source slices and the additive UX-04/06 guidance
+prototype are integrated; UX-06 measurements and all unfulfilled attended
+acceptance remain open. The original baseline study has not been performed.
 Analysis verification: source inspection only; documentation validation results
 are recorded in the active plan. No usability scores or measured improvements
 are claimed by this assessment.

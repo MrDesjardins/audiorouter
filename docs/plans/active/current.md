@@ -5,7 +5,7 @@
 Owner has finished playing and explicitly requests final review, tonight's
 worktree changes in main, plan cleanup, remaining improvements through a PR,
 and a local build for tomorrow. This supersedes the gaming-time build/PR
-restriction above. Preserve user profiles/devices and existing unrelated
+restriction recorded below. Preserve user profiles/devices and existing unrelated
 worktree edits. Audit all worktrees, distinguish tonight's work from historical
 branches, review the combined diff, run UI/contracts/docs checks and focused
 three-theme browser qualification, resolve findings, then push/create PR and
@@ -29,6 +29,14 @@ passed after the sandbox dependency-download restriction was resolved.
 Embedded release build completed with custom-protocol; matching CLI build and
 disposable packaged smoke pending. Build retains the 644.40 kB main chunk
 advisory; no threshold was raised and it does not establish a timing failure.
+Documentation reconciliation (ENG-04, M05/M08): audit all registered worktrees
+read-only, compare ancestry and patch equivalence against cached origin/main
+and parent baseline `bf99cf97`, then correct only superseded UX execution and
+authorization statements. Preserve historical evidence and every unfulfilled
+native, accessibility, usability and performance gate. Validate with
+`tests/acceptance/docs.ps1` and `git diff --check`; rollback is a revert of this
+documentation-only commit. Inventory and integration disposition:
+[2026-11-02 worktree audit](evidence/2026-11-02-worktree-audit.md).
 
 ## Parallel UX implementation — 2026-11-02 owner authorization
 
@@ -37,12 +45,15 @@ while continuing to play and test the running AudioRouter. This supersedes
 the assessment's planning-only status. Scope: UX-01 through UX-06 in the
 [UX plan](../future/ux-improvement-2026-11-02.md), M05/M08 and its mapped IDs.
 
-Hard boundary for every workstream: no contact with the live backend, no
+Historical gaming-time boundary for the isolated implementation workstreams
+(superseded for parent qualification by the final request above): no contact
+with the live backend, no
 AudioRouter launch/stop/restart, audio/device/driver changes, real profile or
 database access, release builds, sidecar staging, installs or replacement of
 the running artifacts. Use isolated T3-managed worktrees. Keep checks light
 and workers bounded; defer native, hardware, performance-load and attended
-checks until gaming/testing ends. No PR is authorized.
+checks until gaming/testing ends. No PR was authorized at that stage; the
+current parent scope is recorded above. Children do not push or open PRs.
 
 Ordered tasks: (1) parallel session-switch safety, actionable setup findings,
 state/export clarity, keyboard accessibility, and onboarding/recovery work;
@@ -57,7 +68,8 @@ Rollback: revert each isolated slice; avoid storage migrations. Preserve all
 existing draft/live-save and protected microphone semantics. Default UX-01
 choice is an explicit pre-switch consequence confirmation, retaining the
 existing stop policy; independent running/viewed sessions remain deferred.
-Next action: launch isolated workstreams and collect commits for integration.
+Source integration is complete at `bf99cf97`; next action is combined final
+qualification under the current parent scope above.
 
 Integration progress: created `feature/ux-improvements` from the setup-check
 head without replacing any running artifact. Planning commit `096a1132`;
@@ -66,15 +78,15 @@ Parent reran the four focused component files with `--maxWorkers=1
 --no-file-parallelism --no-cache`: 13 tests passed. The child also records
 typecheck/all, format and lint passing. This is an additive guidance prototype;
 template application, theme inspection, attended usability and UX-06 native
-measurements remain open. Other four isolated workstreams are still pending;
-next action is review/integration on their completion notifications.
+measurements remain open. This was the first integration checkpoint; the
+other four slices were subsequently integrated as recorded below.
 
 UX-02 child `47bd90cc` integrated as `6ae1d8a4`; UX-03 child `2aa66f02`
 integrated as `67517f83`. Shared App edits merged cleanly and were inspected.
 Parent `typecheck:all` passed; four focused test files (session selection,
 setup findings, session export, playback label) passed 18 tests with one
-concurrent worker and no cache. Cross-session finding acceptance still depends
-on pending UX-01 confirmation. UX-05 is also pending. Native audio, browser
+concurrent worker and no cache. At this intermediate checkpoint UX-01 and UX-05
+were pending; both were subsequently integrated below. Native audio, browser
 themes/geometry and attended gates remain unrun; running app untouched.
 
 Final children integrated: session safety `b04a6b4b` as `7b2bd937`, keyboard
@@ -88,8 +100,8 @@ No API/backend/storage changes, build, staging, launch, live backend access or
 device change. Deferred: three-theme/200% visual inspection, Narrator, packaged
 export round-trip, recorder finalization/audio continuity, five-participant
 onboarding and UX-06 performance measurements. No release-ready claim.
-Next: after gaming/testing ends, qualify this separate branch in a disposable
-packaged profile; do not replace the running test app.
+Next: parent qualifies this combined branch in a disposable packaged profile
+under the final consolidation request; preserve any existing owner process.
 
 Final bounded regression run: App session selection (including cross-session
 finding Cancel), playback label and existing App accessibility: 114 tests in
@@ -99,15 +111,17 @@ behavior. Final source integration commit records these adjustments.
 
 ## UX assessment and proposed improvements — 2026-11-02
 
-Owner requested analysis and a plan, not implementation. The
+The initial owner request was analysis and a plan. The subsequent parallel
+implementation authorization above promoted its bounded slices. The
 [UX improvement plan](../future/ux-improvement-2026-11-02.md) records source
 evidence, prioritized M05/M08 tasks, requirement IDs, prerequisites, acceptance,
 risks and rollback. Highest priorities: session navigation stopping active
 audio, actionable setup findings, and saved/draft/playing/export clarity.
 Working tree was clean at review start on `feature/setup-check`; only planning
 documents changed. No native app, live audio or usability study was run.
-Next proposed task: M05 UX baseline and session-switch consequence design;
-implementation is not authorized by this planning request.
+The initial planning request alone did not authorize implementation. UX source
+slices are now integrated; the M05 baseline, native and usability evidence
+remain open. Follow the current consolidation scope above.
 
 Validation: Windows documentation acceptance passed (224 Markdown files,
 1,196 local links); `git diff --check` passed. Product tests were not run
@@ -123,7 +137,9 @@ incomplete-result wording, multi-route loops, diagnostic I/O and finding order.
 Embedded release build is available at
 `src-tauri/target/release/audiorouter-shell.exe`; Status → Check again was
 exercised with a disposable profile and real device inventory, without audio.
-Next: owner tests their saved sessions. No PR has been authorized or opened.
+That setup-check build was left for owner testing. The final consolidation
+request above now governs parent PR/build work; this record does not assert
+that a PR has been opened or that owner-session qualification passed.
 ## Dependabot PRs #103 and #104 — 2026-11-02
 
 Objective (ENG-02/04): merge the ZIP and rusqlite updates into current main

@@ -1,5 +1,11 @@
 # UX-05 Workbench accessibility slice
 
+Current status (2026-11-02): source integrated as `9831785f` in parent
+`bf99cf97`. The gaming-time restrictions below describe the completed child
+assignment; parent qualification now follows the final consolidation request
+in [current.md](current.md). Narrator, attended keyboard/scaling and visual
+gates remain open. This child performs no native build or integration.
+
 ## Objective and authority
 
 Implement standard keyboard tab navigation for UI-11/12/17 under M05/M08.
@@ -32,7 +38,7 @@ visual qualification and reduced-motion attended gates remain unrun.
 
 Properties lives outside Workbench; integration must retain a valid association.
 Mock DOM cannot prove scaling or screen-reader behavior. Revert this slice's
-commit to roll back; no storage migration. Next: implement and run bounded checks.
+commit to roll back; no storage migration. Bounded source checks are recorded below.
 
 ## Implementation and evidence — 2026-11-02
 
@@ -60,6 +66,6 @@ Integration: changes include small panel-semantic edits in ApiPanel,
 PropertiesPanel, CanvasGroups and CanvasLayoutInspector plus shared
 workbenchPanel.ts; retain these when merging overlapping slices. No REST/MCP
 change. No processing-tool control changed, so guide recordings are unaffected.
-All attended/visual gates listed above remain unrun. Next: parent integrates
-this slice, then schedules disposable-profile three-theme/scaling and Narrator
+All attended/visual gates listed above remain unrun. Next: parent performs
+disposable-profile three-theme/scaling and Narrator
 qualification when the owner is ready. This does not complete M05/M08.

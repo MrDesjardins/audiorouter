@@ -33,7 +33,11 @@ reachability is enabled.
 [UX improvement assessment (2026-11-02)](ux-improvement-2026-11-02.md) proposes
 prioritized M05/M08 work on uninterrupted navigation, actionable diagnostics,
 state clarity, onboarding, accessibility and measured responsiveness.
-Analysis and planning only; implementation has not been started.
+Promoted by owner authorization on 2026-11-02: bounded source slices are
+integrated in `feature/ux-improvements`. The assessment stays at its stable
+path for rationale and acceptance; [active execution](../active/current.md)
+owns final qualification. Native, Narrator/scaling, participant and performance
+gates remain open; broader navigation redesign is still deferred.
 
 [Application quality and regression prevention](../active/application-quality.md) records
 the owner-requested plan (2026-10-21): consistent merge gates, state-transition

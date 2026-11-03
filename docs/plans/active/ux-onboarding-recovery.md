@@ -1,5 +1,10 @@
 # UX onboarding and recovery — 2026-11-02
 
+Current status: guidance source integrated as `c920fed7` in parent `bf99cf97`.
+The gaming-time restrictions below record the completed child assignment;
+parent final qualification follows [current.md](current.md). UX-04 remains a
+prototype, and UX-06 measurements and attended M05/M08 acceptance remain open.
+
 ## Objective and requirements
 
 Implement an additive UX-04 guided setup prototype and UX-06 recovery wording.
@@ -76,4 +81,5 @@ Windows worktree verification, 2026-11-02:
 
 No native build, backend access, audio, benchmark, packaged app or browser test
 was performed. No API methods, node controls, persistence or sidecars changed.
-Next: parent integration, then the deferred attended M05 UX-04/06 checklist.
+Next: parent executes the deferred attended M05 UX-04/06 checklist; source
+integration is complete. Do not infer participant success from the mock tests.

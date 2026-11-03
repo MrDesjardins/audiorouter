@@ -1,5 +1,10 @@
 # UX-03 state clarity — 2026-11-02
 
+Current status: source integrated as `67517f83` in parent `bf99cf97`, followed
+by combined wording/regression adjustments in `cd25f2e5`. The child restrictions
+below are historical. Parent final qualification follows [current.md](current.md);
+native export round-trip, concurrent edits and attended/visual gates remain open.
+
 Objective: distinguish saved routes, temporary draft playback and edits awaiting
 Save in existing UI space. Requirements: UX-03, UI-04/05/07/09/17, UC-07.
 
@@ -26,8 +31,8 @@ avoid claiming that every running route is the saved revision. Export is a
 backend snapshot at export time, not necessarily the revision seen before a
 file dialog opened. No save-then-export path will be introduced.
 
-Rollback: revert this slice; no storage or contract migration. Next: implement
-and record bounded verification results here, then parent integrates.
+Rollback: revert this slice; no storage or contract migration. Bounded source
+verification and integration are complete; parent qualification is next.
 
 ## Implementation and verification
 
@@ -56,8 +61,8 @@ Vite cache was explicitly confined to this worktree.
 
 Unrun: native/app/browser/audio/export round-trip, live save conflict and
 concurrent assistant journeys, three-theme geometry, Narrator and scaling.
-These remain parent integration/attended gates under the owner's gaming
-restriction; no running application or real data was accessed. No tool
+These remain parent qualification/attended gates; the child performed no
+running application or real data access under its gaming-time restriction. No tool
 Properties controls or API/contracts changed, so no tool guide capture or
-API catalog regeneration is needed. Next: parent cherry-picks this commit,
-resolves narrow App.tsx overlaps, and schedules those gates when authorized.
+API catalog regeneration is needed. Next: parent qualifies the combined state
+and export journeys; narrow App.tsx overlaps have already been integrated.

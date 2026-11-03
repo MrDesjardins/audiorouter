@@ -1,5 +1,10 @@
 # UX-02 setup actions
 
+Current status (2026-11-02): integrated as `6ae1d8a4` in parent `bf99cf97`;
+UX-01 is also integrated (`7b2bd937`). Combined cancellation tests are recorded
+in [current.md](current.md). Historical prerequisites/restrictions below applied
+to the child slice; final parent qualification now owns remaining acceptance.
+
 Objective: open affected tools by stable session/node ID and focus Properties.
 Requirements: UX-02, UI-05/08/17/19/27, UC-06. No API changes.
 Prerequisites: existing setup-check lifecycle and centralized switchSession;
@@ -29,8 +34,8 @@ tools explain why navigation failed. Findings without a unique node open Session
 for route inspection (including feedback); no automatic rewire. Focus moves to
 the selected Properties tab. Existing fixed findings viewport and result lifecycle
 are unchanged. Same-session draft inspection retains edits and states that saved
-checks do not cover them. Parent must integrate UX-01 before enabling safe
-cross-session use; this slice deliberately does not duplicate its stop policy.
+checks do not cover them. UX-01 now supplies the shared cross-session stop policy;
+this slice does not duplicate it.
 
 Windows source-only validation: local npm ci --ignore-scripts succeeded; initial
 commands could not run because dependencies were absent and PowerShell blocked
@@ -43,8 +48,8 @@ An attempted npm exec formatting command had the wrong relative path; reran
 the normal format script. No native binaries or live backend calls were made.
 Final normal format, zero-warning lint, typecheck:all and git diff --check pass.
 
-Remaining gates: cross-session confirmation/cancellation and partial-stop tests
-with integrated UX-01; all-theme fixed geometry, Narrator/scaling and packaged
+Integrated source regressions now cover cross-session cancellation and UX-01
+partial stops. Remaining gates: all-theme fixed geometry, Narrator/scaling and packaged
 Windows checks. No API/schema/storage change; no REST/MCP regeneration needed.
-Next: parent integrates UX-01 and runs combined navigation acceptance in a
-disposable profile after gaming restrictions lift.
+Next: parent runs combined navigation acceptance in a disposable profile under
+the final consolidation scope.

@@ -1,5 +1,13 @@
 # Setup check (UI-27) — active plan
 
+Current status (2026-11-02 final consolidation): setup-check source and review
+fixes are integrated in parent `bf99cf97`, together with the UX slices. The
+requests, restrictions and next actions below are dated execution checkpoints;
+the latest parent authority and qualification task are in [current.md](current.md).
+Parent now owns final review, PR/main consolidation and isolated local build.
+This audit child has no PR/push/merge or native-build authority. Earlier smoke
+and browser evidence does not close live-audio or M05/M08 release gates.
+
 Owner request 2026-11-02: "add a feature that look for these kinds of
 misconfiguration inside AudioRouter to help user to have a good
 configuration." Branch `feature/setup-check` from `origin/main`
@@ -128,8 +136,8 @@ Preserve the owner's saved data and Windows device configuration. Rollback:
 revert the review follow-up; no storage migration. Remaining live-audio
 qualification is separate from this read-only Status check.
 
-Next: implement and verify these fixes, then leave the local build for owner
-testing. Never call the feature release-qualified from mock/browser tests.
+That checkpoint's fixes and build were subsequently completed as recorded below.
+Never call the feature release-qualified from mock/browser tests.
 
 Review fixes implemented:
 

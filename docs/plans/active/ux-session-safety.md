@@ -1,5 +1,11 @@
 # UX-01 session switch safety
 
+Current status (2026-11-02): source integrated as `7b2bd937` in parent
+`bf99cf97`, with combined cancellation regression evidence in
+[current.md](current.md). Restrictions below describe the completed child
+assignment. Parent final qualification now owns themed/keyboard/Narrator and
+native recorder-finalization gates; these remain unrun in this slice.
+
 Objective: disclose the existing stop-all policy before session navigation.
 Requirements: UX-01, UI-08/09/10/14, UC-07/08, REC-04/12.
 Authority: assigned implementation slice, source-only isolated worktree; the
@@ -27,8 +33,8 @@ cannot establish audio continuity or durable recording outcomes.
 
 Risks: external automation can change state after a refresh; no atomic backend
 stop-set API exists. Report confirmed stop outcomes only; never auto-restart.
-Rollback: revert this slice; no data migration. Next: implement and run bounded
-mock checks, then parent integration and later attended qualification.
+Rollback: revert this slice; no data migration. Bounded mock checks and source
+integration are complete; attended qualification is next.
 
 ## Implementation and evidence (2026-11-02)
 
@@ -61,7 +67,7 @@ returned switched flag before selecting a node. No live/backend/native checks,
 release builds, full suites, PR or push performed. The unavoidable automation
 race between final status read and sequential stops remains a backend atomicity
 limit; independent viewed/running sessions remain out of scope. Next: parent
-integration; later disposable-profile themed/keyboard/Narrator and native
+disposable-profile themed/keyboard/Narrator and native
 recording-finalization qualification under M05/M08.
 
 Final verification: seven session-selection tests passed with one worker
