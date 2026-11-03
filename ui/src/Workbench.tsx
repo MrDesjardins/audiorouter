@@ -328,6 +328,21 @@ export function Workbench({
   verboseLogging?: VerboseLoggingControl;
 }) {
   const tabsRef = useRef<HTMLDivElement>(null);
+  const previousTab = useRef(tab);
+  const lastFocusedControl = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    // Only move focus when a tab switch removed its owner. External selection
+    // and telemetry/error updates must not steal focus from a surviving control.
+    if (
+      previousTab.current !== tab &&
+      document.activeElement === document.body &&
+      lastFocusedControl.current &&
+      !lastFocusedControl.current.isConnected
+    ) {
+      tabsRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus();
+    }
+    previousTab.current = tab;
+  }, [tab]);
   useLayoutEffect(() => {
     const tabs = tabsRef.current;
     const workspace = tabs?.closest<HTMLElement>(".main-content");
@@ -395,18 +410,59 @@ export function Workbench({
     ["api", "API"],
     ["diagnostics", "Logs"],
   ];
+  const panelProps = {
+    id: `workbench-panel-${tab}`,
+    "aria-labelledby": `workbench-tab-${tab}`,
+    tabIndex: 0,
+  };
   return (
-    <aside className="right-workbench" aria-label="Tools and settings">
+    <aside
+      className="right-workbench"
+      aria-label="Tools and settings"
+      onFocusCapture={(event) => {
+        lastFocusedControl.current = event.target;
+      }}
+    >
       <div ref={tabsRef} className="workbench-tabs" role="tablist" aria-label="Right sidebar">
         {tabs.map(([id, label]) => (
           <button
             key={id}
             type="button"
             role="tab"
+            id={`workbench-tab-${id}`}
+            aria-controls={id === "properties" ? "workbench-properties" : `workbench-panel-${id}`}
+            tabIndex={tab === id ? 0 : -1}
             aria-selected={tab === id}
             aria-describedby={id === "status" && statusHasProblem ? "status-problem-description" : undefined}
             title={id === "status" && statusHasProblem ? "Setup problems found. Open Status for details." : undefined}
             className={tab === id ? "active" : ""}
+            onKeyDown={(event) => {
+              // The Properties overlay precedes the tablist in DOM order.
+              if (id === "properties" && event.key === "Tab" && !event.shiftKey) {
+                const panel = document.getElementById("workbench-properties");
+                if (panel) {
+                  event.preventDefault();
+                  panel.focus();
+                }
+                return;
+              }
+              const index = tabs.findIndex(([key]) => key === id);
+              const next =
+                event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? tabs.length - 1
+                    : event.key === "ArrowRight"
+                      ? (index + 1) % tabs.length
+                      : event.key === "ArrowLeft"
+                        ? (index + tabs.length - 1) % tabs.length
+                        : null;
+              if (next === null || event.altKey || event.ctrlKey || event.metaKey) return;
+              event.preventDefault();
+              const target = tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next];
+              target?.focus();
+              target?.click();
+            }}
             onClick={(event) => {
               const workbench = event.currentTarget.closest(".right-workbench");
               if (workbench instanceof HTMLElement) workbench.scrollTop = 0;
@@ -449,7 +505,7 @@ export function Workbench({
         </div>
       )}
       {tab === "tools" && (
-        <section className="workbench-page" role="tabpanel" aria-label="Tools">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <p className="eyebrow">Build a route</p>
           <h2>Add tools</h2>
           <div className="tool-library-entry">
@@ -529,46 +585,50 @@ export function Workbench({
           ))}
         </section>
       )}
-      {tab === "api" && <ApiPanel builder={apiBuilder} />}
+      {tab === "api" && (
+        <div role="tabpanel" {...panelProps}>
+          <ApiPanel builder={apiBuilder} />
+        </div>
+      )}
       {tab === "timing" && (
-        <section className="workbench-page" role="tabpanel" aria-label="Timing">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <p className="eyebrow">Where the sound spends time</p>
           <h2>Signal timing</h2>
           {timingContent}
         </section>
       )}
       {tab === "properties" && (
-        <section className="workbench-page" role="tabpanel">
+        <section className="workbench-page">
           <h2>Node properties</h2>
           <p className="muted">Select a node on the canvas to edit it here.</p>
         </section>
       )}
       {tab === "status" && (
-        <section className="workbench-page" role="tabpanel">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <h2>Status</h2>
           {statusContent}
         </section>
       )}
       {tab === "apps" && (
-        <section className="workbench-page" role="tabpanel">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <h2>Apps</h2>
           {appsContent}
         </section>
       )}
       {tab === "virtualCables" && (
-        <section className="workbench-page" role="tabpanel">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <h2>Virtual Cables</h2>
           {virtualCablesContent}
         </section>
       )}
       {tab === "uiOptions" && (
-        <section className="workbench-page" role="tabpanel">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <h2>UI Options</h2>
           {uiOptionsContent}
         </section>
       )}
       {tab === "recording" && (
-        <section className="workbench-page" role="tabpanel">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <h2>Recording</h2>
           <p className="muted">
             Recording starts only after you explicitly arm and start a recorder. Confirm the destination and format
@@ -578,7 +638,7 @@ export function Workbench({
         </section>
       )}
       {tab === "advanced" && (
-        <section className="workbench-page" role="tabpanel">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <h2>Advanced controls</h2>
           <p className="muted">
             These controls affect plugins, startup, connected assistant clients, and recovery. Review each action before
@@ -588,7 +648,7 @@ export function Workbench({
         </section>
       )}
       {tab === "session" && (
-        <section className="workbench-page session-page" role="tabpanel">
+        <section className="workbench-page session-page" role="tabpanel" {...panelProps}>
           <h2>Sessions</h2>
           <p className="muted">
             Switch between saved audio setups, or create a copy to try another arrangement. Use Save at the top when you
@@ -656,7 +716,7 @@ export function Workbench({
         </section>
       )}
       {tab === "mcp" && (
-        <section className="workbench-page mcp-page" role="tabpanel">
+        <section className="workbench-page mcp-page" role="tabpanel" {...panelProps}>
           <header className="mcp-heading">
             <p className="eyebrow">Model Context Protocol</p>
             <h2>MCP connections</h2>
@@ -1113,7 +1173,7 @@ export function Workbench({
         </section>
       )}
       {tab === "diagnostics" && (
-        <section className="workbench-page" role="tabpanel">
+        <section className="workbench-page" role="tabpanel" {...panelProps}>
           <h2>Client diagnostics</h2>
           <LogFilesPanel verbose={verboseLogging} clientDiagnostics={diagnostics} />
           <p className="muted">

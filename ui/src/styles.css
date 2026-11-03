@@ -7522,9 +7522,8 @@ input[type="color"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 2.4rem;
   min-height: 2.4rem;
-  overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 /* The selected node's status uses the canvas node-state colours, at a fixed

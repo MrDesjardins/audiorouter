@@ -1,3 +1,4 @@
+import { returnToPropertiesTab } from "./workbenchPanel";
 import { ToolGuideLink } from "./ToolGuideLink";
 import { useEffect, useState } from "react";
 import { NodeResizer, type NodeProps } from "@xyflow/react";
@@ -223,7 +224,14 @@ export function CanvasGroupInspector({
   onRemove: () => void;
 }) {
   return (
-    <section className="panel inspector" aria-labelledby="inspector-heading">
+    <section
+      className="panel inspector"
+      id="workbench-properties"
+      onKeyDown={returnToPropertiesTab}
+      role="tabpanel"
+      aria-labelledby="workbench-tab-properties"
+      tabIndex={0}
+    >
       <p className="eyebrow">Visual group</p>
       <h2 id="inspector-heading">{group.name || "Group"}</h2>
       <ToolGuideLink kind="group" />
