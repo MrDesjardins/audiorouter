@@ -110,6 +110,48 @@ Embedded release build is available at
 `src-tauri/target/release/audiorouter-shell.exe`; Status → Check again was
 exercised with a disposable profile and real device inventory, without audio.
 Next: owner tests their saved sessions. No PR has been authorized or opened.
+## Dependabot PRs #103 and #104 — 2026-11-02
+
+Objective (ENG-02/04): merge the ZIP and rusqlite updates into current main
+with passing current-base CI. Preserve the owner's separate setup-check edits.
+Prerequisites: pinned Rust 1.96.0, Windows build tools, GitHub credentials;
+no live audio, driver or hardware activity is required.
+
+PR #103 passed Windows/Edge and supply-chain checks on its original base;
+update it to current main and require a fresh Quality gate. PR #104 fails
+compilation at both storage backup calls: rusqlite 0.41 makes the optional
+progress callback generic, so untyped None no longer infers its type.
+Specify the existing function-pointer callback type without changing behavior.
+The existing online backup and restore round-trip tests cover these calls;
+the compiler itself reproduces the dependency compatibility regression.
+
+Tasks: update bases; reproduce and fix compilation; run storage tests and
+Rust formatting/Clippy; inspect the diff and every hosted check annotation;
+push the scoped fix; require current-base Windows/Edge CI before merging
+each PR sequentially. Ubuntu image migration notices are informational and
+require no dependency change. Rollback: revert the relevant merge; no storage
+schema migration is introduced.
+
+Local evidence (Windows, Rust 1.96.0): `cargo test -p audiorouter-storage
+--locked` passes 99 tests, including live backup and restore round trips.
+Both workspace and shell strict Clippy commands and both rustfmt checks pass.
+Shell Clippy initially failed because this fresh checkout lacked `ui/dist`;
+locked `npm ci` and the real UI typecheck/production build repaired that
+prerequisite, then shell Clippy passed. Documentation validation passes
+(222 files, 1,185 links); `git diff --check` is clean.
+
+UI build reports a 629 kB application chunk; leave splitting to a separate
+UI performance change because this repair changes no UI. npm audit reports
+11 moderate development-tool findings rooted in minimatch
+GHSA-g3hv-75wg-m249 through ESLint/typescript-eslint; production audit
+(`npm --prefix ui audit --omit=dev`) reports zero vulnerabilities. npm's
+suggested fixes include incompatible major downgrades; retain locked UI
+dependencies in this Rust-only update and track tooling remediation separately.
+`cargo test -p audiorouter-cli --lib backup --locked` passes both tests,
+including the CLI backup/restore round trip and refusal to overwrite.
+An exploratory control-library backup filter matched zero tests and is not
+entry-point evidence. Next: push and require current-base CI, merge #103,
+then update #104 to the resulting main and require its fresh gate before merge.
 
 CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
 settings to the generic tool-workflow test. Input, Soundboard and network
