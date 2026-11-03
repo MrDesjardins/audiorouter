@@ -526,3 +526,25 @@ is a multichannel (8-channel) endpoint cannot start, so the owner's own
 routes to CABLE-B would fail while it stays at 8 channels. The Gate's
 telemetry showed a subnormal `gainReductionDb` (1.7e-43); the silent-tail
 bench found no slowdown from it.
+
+### Repeat runs and an isolation finding (2026-11-02)
+
+After the owner set CABLE-B Input back to stereo, six more 20 s `gain` runs
+alternated the result cable (tone → CABLE Input, route CABLE Output →
+CABLE-B or CABLE-A). Two passed; four failed with 2–10 routed glitches
+(exact-silence runs of 10–86 ms, mostly in the first 5 s). The backend
+service was never late in these runs (0 late gaps, pump ≤ 0.24 ms), and the
+reference path, which contains no AudioRouter code, also glitched in two of
+the three CABLE-B runs. Logs: [repeat/](evidence/2026-11-02-live-continuity/repeat/).
+
+Cause of the doubt: the cables were not free. The owner's shell (PID 35804)
+has played its main session since 2026-11-01 (backend log `session.start`,
+no stop). That route renders the voice to CABLE-A Input, loopback-captures
+CABLE-B Input (`siege-in`) and sends game sound to CABLE Input. A CABLE-B run
+therefore formed a loop (result → `siege-in` → CABLE Input → the test's
+route input), and a CABLE-A run mixed with the owner's voice output. The
+morning runs used CABLE-A under the same condition. Their zero-glitch result
+stands, but they are not isolated evidence, and the failures above cannot be
+attributed to AudioRouter or to the system until the runs are repeated with
+the owner's route stopped. Next action: with the owner's approval, stop the
+main route, repeat three runs per cable, then restart it.
