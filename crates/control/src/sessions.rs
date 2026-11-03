@@ -178,6 +178,13 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        if self.active_session_id.as_ref() == Some(id) {
+            // Never leave default node-targeted API/MCP calls aimed at a
+            // deleted graph. Selecting a different session is deliberate.
+            self.active_session_id = None;
+            self.events
+                .append(session.revision, None, "session.selectionChanged", None);
+        }
         #[cfg(windows)]
         let _ = self.stop_cable_route(id);
         self.deactivate_virtual_route_bridges(id);

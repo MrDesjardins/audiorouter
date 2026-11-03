@@ -148,6 +148,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-11-03 — Account queued frames before publishing audio.**
+  Evidence: `receiving_packet_publication_cannot_wrap_the_playout_frame_count`
+  in `crates/windows-audio/src/network_audio.rs` and the
+  [review continuation](docs/plans/active/current.md#open-owner-gates).
+  Scope: lock-free audio queues with a separate frame counter. Consequence:
+  a consumer can drain immediately after publication; incrementing afterward
+  wrapped the Network Receive counter to nearly `usize::MAX`. Reserve the
+  count before publication, roll back rejected pushes, and test immediate
+  consumption plus a full queue.
+
 - **2026-10-31 — A generic REST mapping hides an incomplete MCP; test reachability, not a list.**
   Evidence: [active plan, REST and MCP parity](docs/plans/archived/2026-11-01-maintenance-0.0.13-to-0.0.26.md#rest-and-mcp-parity-after-the-soundboard-2026-10-31-owner-request),
   `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded`. Scope:

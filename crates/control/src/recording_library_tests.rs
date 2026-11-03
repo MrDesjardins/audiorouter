@@ -4,6 +4,94 @@ use super::*;
 use crate::test_support::*;
 
 #[test]
+fn recording_rename_preserves_format_and_accepts_mp3_through_dispatch() {
+    let root =
+        std::env::temp_dir().join(format!("audiorouter-rename-formats-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let storage = Storage::open_memory().unwrap();
+    for extension in ["mp3", "wav", "flac"] {
+        let source = root.join(format!("original.{extension}"));
+        std::fs::write(&source, b"unchanged audio bytes").unwrap();
+        storage
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: extension.into(),
+                session_id: "session".into(),
+                recorder_id: "recorder".into(),
+                path: source.to_string_lossy().into_owned(),
+                format: extension.into(),
+                channels: 2,
+                sample_rate: 48_000,
+                frames: 1,
+                file_bytes: 21,
+                start_time: "2026-11-03T00:00:00Z".into(),
+                state: "completed".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+                dither: false,
+                conversion: "none".into(),
+            })
+            .unwrap();
+    }
+    let mut plane = ControlPlane::with_storage("rename-formats", storage);
+    fn call(
+        plane: &mut ControlPlane,
+        extension: &str,
+        destination: &std::path::Path,
+        key: &str,
+    ) -> JsonRpcResponse {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "recordings.rename".into(),
+            params: Some(
+                json!({ "recordingId": extension, "newPath": destination, "idempotencyKey": key }),
+            ),
+        })
+    }
+    for extension in ["mp3", "wav", "flac"] {
+        let source = root.join(format!("original.{extension}"));
+        let wrong = root.join(format!(
+            "wrong-{extension}.{}",
+            if extension == "wav" { "flac" } else { "wav" }
+        ));
+        let refused = call(&mut plane, extension, &wrong, &format!("wrong-{extension}"));
+        assert!(
+            refused.error.is_some(),
+            "rename must not relabel audio: {refused:?}"
+        );
+        assert!(source.exists());
+        assert!(!wrong.exists());
+        let destination = root.join(format!("renamed.{}", extension.to_ascii_uppercase()));
+        let key = format!("rename-{extension}");
+        let renamed = call(&mut plane, extension, &destination, &key);
+        assert!(renamed.error.is_none(), "{renamed:?}");
+        assert!(call(&mut plane, extension, &destination, &key)
+            .error
+            .is_none());
+        assert!(!source.exists());
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"unchanged audio bytes"
+        );
+        assert_eq!(
+            plane
+                .storage
+                .as_ref()
+                .unwrap()
+                .get_recording(extension)
+                .unwrap()
+                .unwrap()
+                .path,
+            destination.to_string_lossy()
+        );
+        std::fs::remove_file(destination).unwrap();
+    }
+    std::fs::remove_dir(root).unwrap();
+}
+
+#[test]
 fn recordings_list_dispatch_exposes_storage_metadata_without_file_actions() {
     let storage = Storage::open_memory().unwrap();
     storage

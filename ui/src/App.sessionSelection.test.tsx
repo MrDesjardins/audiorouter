@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { EventsSubscribeResult, Session, StateEvent } from "@audiorouter/contracts";
 import { App } from "./App";
@@ -162,6 +162,49 @@ describe("startup session selection", () => {
 });
 
 describe("session switch interruption consent", () => {
+  it("keeps an unsaved draft when the session picker requests another session", async () => {
+    const { backend } = await backendWithSavedActiveSession();
+    const snapshot = backend.snapshot;
+    backend.snapshot = vi.fn(async (id?: string) => {
+      const value = await snapshot(id);
+      return { ...value, status: { ...value.status, activeSessionIds: ["main-session"] } };
+    });
+    const stop = vi.fn(backend.stopSession);
+    backend.stopSession = stop;
+    render(<App backend={backend} />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Session" }));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session"),
+    );
+    const panel = within(document.querySelector<HTMLElement>(".right-workbench")!);
+    fireEvent.click(panel.getByRole("button", { name: "Rename" }));
+    fireEvent.change(panel.getByLabelText("Session name"), { target: { value: "Unsaved voice setup" } });
+    fireEvent.change(screen.getByLabelText("Choose session"), { target: { value: "desktop-session" } });
+    await screen.findByText(/Save or discard your draft in Session before switching sessions/);
+    expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session");
+    fireEvent.click(panel.getByRole("button", { name: "Rename" }));
+    expect((panel.getByLabelText("Session name") as HTMLInputElement).value).toBe("Unsaved voice setup");
+    expect(backend.setActiveSession).not.toHaveBeenCalled();
+    expect(stop).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("keeps an unsaved draft when another client selects a different session", async () => {
+    const { backend } = await backendWithSavedActiveSession();
+    render(<App backend={backend} />);
+    fireEvent.click(await screen.findByRole("tab", { name: "Session" }));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session"),
+    );
+    const panel = within(document.querySelector<HTMLElement>(".right-workbench")!);
+    fireEvent.click(panel.getByRole("button", { name: "Rename" }));
+    fireEvent.change(panel.getByLabelText("Session name"), { target: { value: "Unsaved voice setup" } });
+    await backend.setActiveSession("desktop-session");
+    await screen.findByText(/Another client selected a different session.*draft is preserved/, {}, { timeout: 4000 });
+    expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session");
+    expect((panel.getByLabelText("Session name") as HTMLInputElement).value).toBe("Unsaved voice setup");
+  });
+
   it("keeps a cross-session setup finding behind interruption consent", async () => {
     const { backend } = await backendWithSavedActiveSession();
     const snapshot = backend.snapshot;

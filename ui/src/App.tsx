@@ -849,9 +849,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // replacing; adopting that reverted the user's choice. The write's own
   // event brings the final value once it lands.
   const followBackendActiveSession = (sessionId: string) => {
-    if (activeSessionWritesRef.current > 0) return;
+    if (activeSessionWritesRef.current > 0) return false;
     backendActiveSessionRef.current = sessionId;
+    if (sessionId !== draftRef.current.id && !sameSessionDraft(draftRef.current, authoritativeSession.current)) {
+      setActionMessage(
+        "Another client selected a different session. Your draft is preserved; save or discard it in Session before switching.",
+      );
+      return false;
+    }
     setSelectedSessionId(sessionId);
+    return true;
   };
   const selectedSessionListed = availableSessions.some((item) => item.id === selectedSessionId);
   useEffect(() => {
@@ -1576,7 +1583,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         recordUiDiagnostic("Session inventory refresh after deletion failed");
       }
       const fallback = remaining.find((item) => item.id !== session.id);
-      if (fallback) await switchSession(fallback.id);
+      if (fallback) await switchSession(fallback.id, true);
       setActionMessage(`Deleted session ${session.name}.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to delete session."));
@@ -2095,8 +2102,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   // Switching sessions stops whatever is playing and releases its audio
   // devices first; the newly selected session then starts only on Play.
-  const switchSession = async (id: string): Promise<{ switched: boolean; stopped: boolean }> => {
+  const switchSession = async (
+    id: string,
+    deletedCurrentSession = false,
+  ): Promise<{ switched: boolean; stopped: boolean }> => {
     if (id === session.id) return { switched: true, stopped: false };
+    if (routeChanged && !deletedCurrentSession) {
+      setActionMessage("Save or discard your draft in Session before switching sessions.");
+      return { switched: false, stopped: false };
+    }
     if (sessionBusy.current) {
       setActionMessage("Wait for the current audio action to finish before switching sessions.");
       return { switched: false, stopped: false };

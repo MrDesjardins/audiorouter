@@ -1,6 +1,191 @@
 # Active plan — 0.0.26 release and maintenance
 
+## User-error code review — 2026-11-03 owner request
+
+Objective: review latest main for user-visible failures, prioritize confirmed
+bugs and repair them with regressions. Baseline: `a8051e862ea2940929f44c96f377068abc52200d`,
+branch `fix/user-error-review-2026-11-03`. Existing website edits are preserved
+in the named Git stash `Preserve website CSP work before 2026-11-03 main review`;
+the previous branch and other worktrees are untouched. Owner explicitly
+approved opening this branch's PR on 2026-11-03 after reviewing the local
+results ("Open a pr and I will review"). No merge or publication is authorized.
+
+Scope: STATE-02/04 (session durability/selection), UI-09/17 (recoverable states
+and stable UI), REC-02/10 (recording formats/library), API-03 and AUTO-18
+(shared backend behavior), ENG-02/04.
+Review session CRUD, draft reconciliation, recording/file operations, graph
+mutation, transport/authorization and runtime failure paths. Prioritize data
+loss and unintended audio interruption before misleading status or convenience.
+
+Ordered tasks: trace failures at real entry points; add failing regressions;
+fix the owning layer; immediately compile/typecheck; run relevant full suites,
+format/lint, contract drift and docs checks; inspect complete diff and record
+coverage, remaining risks and exact next action here. Windows/MSVC and local
+Node are available. Use disposable fixtures; no owner profile, live backend,
+audio endpoints, drivers, external credentials or publication are needed.
+Browser evidence covers UI behavior only, not physical audio or attended
+accessibility. Rollback: revert only this review's edits; no migration planned.
+Next: reproduce draft loss during session selection and audit backend CRUD.
+
+Confirmed priorities: P1 unsaved draft loss from the session picker and another
+client's active-session event (two failing UI entry-point regressions before
+repair); P2 deletion leaves the default API/MCP target pointing at a nonexistent
+session (dispatcher regression fails before repair). Guard manual selection
+before any stop call, decline external adoption while dirty, and refresh the
+current session when adoption is declined. Explicit confirmed deletion may
+discard its draft and move to the remaining session. Clear the deleted active
+ID in the same storage transaction, clear runtime selection only after success,
+and emit selection change. No method/schema or NodeKind changes are needed;
+default tools retain the shared dispatcher behavior. Next: finish regression,
+full UI/storage/control/CLI, three-theme browser and strict static checks.
+
+Recording audit: P2 Rename rejects `.mp3` despite the recorder supporting MP3,
+and allows a WAV to be renamed `.flac` without conversion. Extend the existing
+storage rule to all three recording formats and require the source extension
+to remain the same (case-insensitive). Verify real dispatcher rename calls,
+unchanged bytes, conflict rejection and idempotent retry; no format conversion,
+new API or UI control is introduced. Rollback: revert this validation fix.
+
+Verification and handoff (Windows/MSVC, Rust 1.96.0, Node 22.22.3):
+
+- Review covered session CRUD/active selection, draft reconciliation and event
+  adoption, recording rename/metadata/removal, bundle import/export, graph
+  transaction rollback, recovery/privacy boundaries, HTTP/pipe authorization
+  and bounded framing, and network packet authentication. Engine/DSP and
+  native routing were additionally exercised by their existing full suites;
+  this is a risk-based repository review, not a line-by-line soundness proof
+  of every driver, plugin or WASAPI implementation.
+- `cargo test --workspace --locked` passed, including source/tool combinations
+  and 33 deterministic audio scenarios. After the additional rename repair,
+  `cargo test -p audiorouter-storage -p audiorouter-control -p audiorouter-cli
+  --locked` passed: storage 106, control 336 (11 opt-in ignored), CLI 48 plus
+  5 stdio integration tests. The control rename regression was repeated after
+  its test-helper formatting cleanup. Logs: `target/user-error-review-workspace.log`
+  and `target/user-error-review-final-backend.log` (local, not committed).
+- Shell suite passed after final production changes: 86 passed, 4 opt-in
+  ignored. Workspace and shell all-target/all-feature Clippy with `-D warnings`
+  and both format checks passed. A rustfmt closure-layout drift was replaced
+  with a named test helper; the final format checks are clean.
+- Final locked UI install corrected stale Vite 8.3.4 to main's pinned 8.3.5;
+  `npm ci --prefix ui --no-audit --no-fund` changed no manifest/lockfile.
+  Format check, zero-warning lint, all-project typecheck and all 821 tests
+  passed with that install. Log: `target/user-error-review-ui-pinned.log`.
+- Built the disposable backend and compiled UI, then ran installed Edge with
+  `npx playwright test --config=playwright.ci.config.ts session-draft-safety.pw.ts
+  session-workflows.pw.ts --workers=1` from `ui/`: 10 passed, clean exit.
+  Three-theme screenshots were inspected; canvas bounds remain unchanged.
+  Log: `target/user-error-review-browser.log`; screenshots live in the normal
+  `%TEMP%/audiorouter-playwright-results/session-draft-safety.pw.ts-*/` folders.
+  Earlier development assertions passed but launcher teardown stalled and was
+  cancelled; that run is not clean-exit evidence. Restricted compiled-asset
+  cleanup hit EPERM; rebuilding outside that launcher passed. An initial
+  wrong-directory build failed entry resolution and is not passing evidence.
+- Browser warnings: Node inherits conflicting NO_COLOR/FORCE_COLOR; no product
+  diagnostic. Development React Flow attribution warning remains the existing
+  licensing/configuration question; no entitlement or waiver is inferred.
+  Compiled verification passed without changing attribution settings.
+- Contract drift passed (138 methods, 37 kinds, 20 processors, 22 categories);
+  docs passed (237 Markdown files / 1,365 links) and diff whitespace is clean.
+  Dispatcher and default MCP regressions exercise deletion/recovery and MP3
+  rename. Existing grants, API shapes and tool parameter catalogs are unchanged.
+
+Remaining limits: no release EXE build/launch, owner-profile changes, live audio,
+commercial-plugin timing, driver qualification or hosted PR CI in this task.
+Existing CPU-starved encrypted-network continuity and attended M05/M08 gates
+remain open, not waived by these passes. No new tool/Properties controls were
+introduced, so no guide recapture is required. Source fixes remain uncommitted
+on the review branch; no PR, push, release or deployment was performed.
+Next task: review this diff locally, then obtain explicit approval before
+opening a PR. Next technical qualification is the existing isolated network
+CPU-starvation reproduction, followed by the outstanding attended gates.
+
 ## Open owner gates
+
+PR opened for owner review: [#110](https://github.com/MrDesjardins/audiorouter/pull/110),
+source-fix commit `f91b437a4f1eb261da1ef23edf1391dab41f3f71`, branch
+`fix/user-error-review-2026-11-03`. Initial CI/CodeQL checks are running;
+no hosted pass or merge readiness is claimed. Next: owner review and hosted
+check results. No merge or release publication was requested.
+
+Push-time dependency warning inspected: open Dependabot alerts 9/8 concern
+minimatch globparts amplification in the UI/Stream Deck lockfiles (medium),
+7 concerns glib VariantStrIter unsoundness in the shell lockfile (medium),
+and 5 concerns deepmerge prototype poisoning in Stream Deck (low). These
+lockfiles are unchanged by this PR. Their dependency fixes require their own
+compatibility/build validation; they are recorded as unresolved dependency
+work, not dismissed or represented as repaired by the runtime fixes. The
+current PR adds no dependency or advisory suppression. Hosted supply-chain
+checks must independently report their result.
+
+2026-11-03 continuation (owner: "Fix all"): keep the review branch and all
+existing fixes. Investigate remaining reproducible user failures, beginning
+with paired-network starvation (GRAPH-16, SEC-13, NFR-03/04). Reproduce using
+only disposable loopback routes with this test process restricted to one CPU;
+do not stop the owner's route or open their devices. Preserve strict packet,
+continuity and hint assertions. Repair the owning layer and add deterministic
+regressions, then repeat native network/control suites and both Clippy/format
+scopes. Also finish available packaged-shell smoke using a disposable profile.
+Hardware/commercial-plugin/driver gates require their actual fixtures and are
+not silently waived. Rollback: revert this continuation's focused edits only.
+
+Continuation findings and experiments: the unchanged full control suite on
+one CPU reproduced paired underruns (`target/review-all-single-cpu-control.log`).
+Separately, a deterministic interleaving consumed a packet immediately after
+publication and wrapped `queued_frames` to 18,446,744,073,709,551,488. Account
+frames before queue publication and roll back a rejected enqueue. The regression
+also fills/drains the complete queue and checks failed publication accounting.
+This is a real concurrency defect, independent of host scheduling.
+
+The old network tests pumped inline and did not acquire the production timer/
+MMCSS guard. Guard-only, counter-only, and I/O-priority-only experiments still
+failed under a saturated single CPU. Recorder-construction offloading did not
+resolve it and was reverted. Tests now assert that the actual dedicated audio
+thread starts, as the transport does, and retain the original continuity,
+packet/error and strict null-hint assertions. Network socket threads join the
+same reversible audio scheduling facility so ordinary CPU work cannot starve
+encryption/socket delivery while the audio pump consumes their buffers.
+With the production thread and I/O scheduling together, three consecutive
+complete one-CPU control runs pass: 336 passed / 11 opt-in ignored each,
+20.32/20.17/20.84 s. Logs: `target/review-all-thread-priority-round-{1,2,3}.log`.
+No buffer setting, packet authentication or acceptance assertion was weakened.
+Scheduling remains best-effort when Windows does not grant MMCSS; this does
+not promise uninterrupted audio under every possible machine stall.
+
+The initial rebuilt desktop smoke passed on a disposable profile, Medium
+integrity/non-admin, cold usable UI 1,167 ms, warm 805 ms, Save 108 ms, two
+graceful exits and no device-access grant. Evidence:
+`target/review-all-packaged-smoke/result.json`. Rebuild and repeat after the
+final network changes before handing over the executable.
+
+Final rebuilt artifact and desktop verification (2026-11-03):
+`cargo build -p audiorouter-cli --release --locked -j 2`,
+`tools/stage-mcp-cli.ps1` and
+`cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features
+custom-protocol -j 2` pass. Source and staged CLI SHA-256 match:
+`71F58438D82F7B6EBBACF511323251C20857F0746A982172DA144CC707EDFD67`.
+Final shell SHA-256:
+`C055EAB1EE3CF57554972E49EC7B5570148ED533E05FF1023BE065FC94FF262D`.
+The shell (08:37:02 local) is newer than production UI (08:26:42).
+Final exact-binary smoke passes at `target/review-all-final-packaged-smoke/result.json`:
+Medium/non-admin, cold usable UI 1,337 ms, warm 719 ms, Save 95 ms, two
+graceful quits; device access stays denied. Matching companions stay beside
+`src-tauri/target/release/audiorouter-shell.exe`; this is a local test build,
+not a published installer. Existing installed user state was not used.
+Final workspace/shell Clippy and both Rust format checks pass; shell suite
+86 passed / 4 opt-in ignored; contracts drift and docs (237 files/1,366 links)
+pass. The full workspace rerun passed, including control 336, native audio
+146 (4 opt-in ignored), all source/tool combinations and 33 deterministic
+audio scenarios; log: `target/review-all-final-workspace.log`.
+No new API or settings surface, guide capture, migration or publication.
+Attended hardware, commercial plugins, endurance and release-signing gates
+remain separate requirements; no remaining reproduced review defect is being
+deferred to them. Changes remain uncommitted on the same review branch.
+PR handoff (2026-11-03): owner explicitly approved opening a PR for these
+reviewed fixes. Inspect the complete diff, repeat required pre-commit
+format/lint checks, commit the exact reviewed files, push this branch and
+open the PR against main for the owner's review. Prior local evidence above
+remains applicable; hosted CI is pending. Do not merge or publish. Preserve
+the unrelated website stash and all other worktrees.
 
 PR #107 network test repair (superseded 0edfca51/6601d820, fixed 0b1505b9):
 the first diagnosis (an underrun only while the test paused servicing for
@@ -11,11 +196,11 @@ main has one. Pinned to one core, each test passes alone and all four network
 tests pass serialized; the full suite failed both (24 and 10 steps). Fix: a
 shared lock serializes the live network tests, the summary is sampled at the
 end of the serviced window, and the strict `hint.is_null()` check is restored.
-Open finding (not chased): under one-core full-suite starvation the encrypted
+Historical finding (addressed by the 2026-11-03 continuation above): under one-core full-suite starvation the encrypted
 stream still lost a packet (1,333 sent, 1,332 received) and underran 3–4
 times while unencrypted did not; optimizing chacha20/hmac/sha2 in dev builds
-did not change this, so crypto CPU cost is not the cause. Investigate the
-paired sender/receiver handshake before relying on paired streams under load.
+did not change this. The continuation records the counter race, scheduling
+repair, production-path test correction and repeated one-CPU validation.
 
 PR #107 Edge failures (fixed 9b847cc1): deleting a session left the window on
 it, because `switchSession` read running sessions through a snapshot of the
