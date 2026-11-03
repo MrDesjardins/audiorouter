@@ -809,6 +809,33 @@ speaker is placed around your head with a measured dummy head (MIT KEMAR); the
 rest of the route stays stereo. A 2-channel device is refused with a message
 naming the node. Changing the mode while playing needs Stop and Play.
 
+## Checking your setup
+
+**Status → Setup check** compares every saved session with the audio devices
+Windows offers right now and lists what does not fit, each with a fix:
+
+- **Problem:** Play will be refused or the audio loops. An output device that
+  is not stereo (a cable set to 7.1 is fine for a Surround input but not as an
+  output), a Surround input on a device that is not 5.1/7.1, a device that is
+  unplugged or got a new ID after a driver update, or a route whose output
+  returns to its own input.
+- **Warning:** two sessions that would send audio into each other, for example
+  one plays into CABLE-B while the other records CABLE-B and plays back into
+  the cable the first one records.
+- **Tip:** a virtual cable not at 48 kHz.
+
+A device is judged by how your sessions use it, so the same 7.1 cable can be
+correct in one place and wrong in another. The check runs after connection
+and after devices, saved sessions or playing sessions change, even with Status closed;
+**Check again** runs it now. It checks saved routes, not unsaved drafts.
+A red dot on Status indicates problem findings. A stopped audio engine is
+shown as **Stopped**, which is normal before Play. The check adds no new Play
+blocker: Play separately validates the route it starts. It reads
+only: change the device in Windows Sound settings or in the node's
+Properties. It cannot see settings inside other apps (a game's speaker setup;
+Discord's devices are on the **Apps** tab). Assistants use the `check_setup`
+MCP tool and scripts call `system.checkSetup`.
+
 ## Properties status and timing
 
 Add **Meter** between tools from a connection's insert menu, or connect its

@@ -866,7 +866,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 137] = [
+pub const API_METHODS: [ApiMethodSpec; 138] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -956,6 +956,12 @@ pub const API_METHODS: [ApiMethodSpec; 137] = [
     },
     ApiMethodSpec {
         name: "system.diagnostics",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    // UI-27: saved sessions judged against the active devices.
+    ApiMethodSpec {
+        name: "system.checkSetup",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
     },

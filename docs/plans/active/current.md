@@ -1,5 +1,17 @@
 # Active plan — 0.0.26 release and maintenance
 
+Setup check (2026-11-02, owner request): a backend check and Status-tab list
+that flags device setups Play will refuse, feedback loops across routes,
+missing devices and cable rates (UI-27). Branch `feature/setup-check`; plan,
+tasks and validation in [setup-check.md](setup-check.md).
+
+Sol review follow-up (2026-11-02): fixed request lifecycle, refresh triggers,
+incomplete-result wording, multi-route loops, diagnostic I/O and finding order.
+Embedded release build is available at
+`src-tauri/target/release/audiorouter-shell.exe`; Status → Check again was
+exercised with a disposable profile and real device inventory, without audio.
+Owner testing passed; PR #106 is authorized for merge after green checks.
+
 ## Dependabot PRs #103 and #104 — 2026-11-02
 
 Objective (ENG-02/04): merge the ZIP and rusqlite updates into current main

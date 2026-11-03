@@ -71,6 +71,7 @@ mod recording;
 mod recording_library;
 mod safety;
 mod sessions;
+mod setup_check;
 mod sound_library;
 mod soundboard;
 mod status;
@@ -227,6 +228,43 @@ fn audio_control_error(error: audiorouter_windows_audio::AudioError) -> ControlE
 /// resampled by the Windows audio engine (CAP-14, 44.1/96 kHz devices).
 fn multi_path_rate_supported(sample_rate_hz: u32) -> bool {
     (8_000..=192_000).contains(&sample_rate_hz)
+}
+
+/// Whether a render device can be a multi-path output: stereo float32 at a
+/// supported rate. Native preparation refuses any other output, and the setup
+/// check (UI-27) reports the same devices with this one rule.
+fn output_format_supported(is_float32: bool, channels: u16, sample_rate_hz: u32) -> bool {
+    is_float32 && channels == 2 && multi_path_rate_supported(sample_rate_hz)
+}
+
+/// Why a device cannot feed a Physical Input set to Surround to headphones
+/// or speakers, or `None` when it can: a float32 5.1/7.1 device at a
+/// supported rate whose speaker mask the binaural renderer accepts. Shared by
+/// native preparation and the setup check (UI-27).
+fn surround_capture_refusal(
+    is_float32: bool,
+    channels: u16,
+    channel_mask: u32,
+    sample_rate_hz: u32,
+) -> Option<SurroundRefusal> {
+    if !is_float32 || !multi_path_rate_supported(sample_rate_hz) {
+        return Some(SurroundRefusal::Format);
+    }
+    if !matches!(channels, 6 | 8)
+        || audiorouter_dsp::binaural::BinauralRenderer::new(usize::from(channels), channel_mask)
+            .is_err()
+    {
+        return Some(SurroundRefusal::Layout);
+    }
+    None
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SurroundRefusal {
+    /// Not float32, or a rate outside 8–192 kHz.
+    Format,
+    /// Not a supported 5.1 or 7.1 speaker layout.
+    Layout,
 }
 
 /// An audio failure while opening one exact endpoint, identified so the
@@ -620,6 +658,7 @@ impl ControlPlane {
                         request.params.clone().unwrap_or(Value::Null),
                     )),
                     "system.osTransition" => self.dispatch_os_transition(request.params),
+                    "system.checkSetup" => self.dispatch_setup_check(request.params),
                     "system.diagnostics" => {
                         let (recent_recovery_crashes, recovery_safe_mode) =
                             self.recovery_status()?;

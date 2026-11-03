@@ -1,13 +1,15 @@
 export type SetupStep = {
   id: string;
   label: string;
-  state: "ready" | "needs-attention" | "unavailable";
+  state: "ready" | "idle" | "needs-attention" | "unavailable";
   detail: string;
 };
 
 export function setupChecklist(input: {
   connected: boolean;
   audio: string | null;
+  activeSessionCount?: number | null;
+  audioReason?: string | null;
   storage: string | null;
   deviceCount: number;
   applicationCount: number;
@@ -23,8 +25,20 @@ export function setupChecklist(input: {
     {
       id: "audio",
       label: "Audio engine",
-      state: input.audio === "available" ? "ready" : input.connected ? "needs-attention" : "unavailable",
-      detail: input.audio ?? "Not available until the service reports its status",
+      state: !input.connected
+        ? "unavailable"
+        : input.audio === "available"
+          ? "ready"
+          : input.activeSessionCount === 0
+            ? "idle"
+            : "needs-attention",
+      detail: !input.connected
+        ? "Not connected to the background service"
+        : input.audio === "available"
+          ? "Running"
+          : input.activeSessionCount === 0
+            ? "Stopped — press Play to start a configured route"
+            : (input.audioReason ?? "Waiting for the service to report its audio status"),
     },
     {
       id: "storage",

@@ -35,6 +35,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
             "Apply a lock, sign-out, sleep, or resume lifecycle transition policy."
         }
         "system.diagnostics" => "Return a redacted backend diagnostic snapshot.",
+        "system.checkSetup" => "Check saved sessions against the active audio devices: outputs or Surround inputs Play would refuse, feedback loops (also across sessions), missing devices and cable rates. Each finding has a plain fix; nothing is changed.",
         "diagnostics.getVerbose" => "Report whether opt-in verbose logging is on and how long it has left.",
         "diagnostics.setVerbose" => "Switch opt-in verbose logging on for one hour (routine reads and request durations, never parameters, paths or audio), or off.",
         "system.quit" => "Finalize active recorders and stop all running sessions before the owner exits.",
@@ -299,6 +300,12 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 }
             }),
             &["protocolVersion"],
+        ),
+        "system.checkSetup" => object_schema(
+            json!({
+                "sessionId": { "type": ["string", "null"], "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES }
+            }),
+            &[],
         ),
         "system.osTransition" => object_schema(
             json!({

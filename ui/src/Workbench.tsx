@@ -259,6 +259,7 @@ export function Workbench({
   onExportCoworkPlugin,
   clientsPanel,
   statusContent,
+  statusHasProblem = false,
   virtualCablesContent,
   appsContent,
   uiOptionsContent,
@@ -314,6 +315,7 @@ export function Workbench({
   onExportCoworkPlugin?: () => Promise<string>;
   clientsPanel: ReactNode;
   statusContent: ReactNode;
+  statusHasProblem?: boolean;
   virtualCablesContent: ReactNode;
   appsContent: ReactNode;
   uiOptionsContent: ReactNode;
@@ -402,6 +404,8 @@ export function Workbench({
             type="button"
             role="tab"
             aria-selected={tab === id}
+            aria-describedby={id === "status" && statusHasProblem ? "status-problem-description" : undefined}
+            title={id === "status" && statusHasProblem ? "Setup problems found. Open Status for details." : undefined}
             className={tab === id ? "active" : ""}
             onClick={(event) => {
               const workbench = event.currentTarget.closest(".right-workbench");
@@ -410,9 +414,19 @@ export function Workbench({
             }}
           >
             {label}
+            {id === "status" && (
+              <span
+                aria-hidden="true"
+                data-testid="status-problem-indicator"
+                className={`status-problem-indicator${statusHasProblem ? " is-problem" : ""}`}
+              />
+            )}
           </button>
         ))}
       </div>
+      <span id="status-problem-description" hidden>
+        Setup problems found. Open Status for details.
+      </span>
       {tab !== "properties" && (
         <div className="workbench-help">
           <HelpDisclosure key={tab} title={TAB_HELP[tab].title}>
