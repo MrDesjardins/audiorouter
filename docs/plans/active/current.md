@@ -47,6 +47,25 @@ native, accessibility, usability and performance gate. Validate with
 `tests/acceptance/docs.ps1` and `git diff --check`; rollback is a revert of this
 documentation-only commit. Inventory and integration disposition:
 [2026-11-02 worktree audit](evidence/2026-11-02-worktree-audit.md).
+Test workstream: `t3/ux-final-qualification` qualifies UX-01–05 / UI-05,
+UI-08–12, UI-17, UI-27 with the disposable in-memory route harness only.
+Ordered work: add saved-session fixture injection; exercise switch Cancel and
+Confirm, finding focus, tab keys/relationships, guide and export wording in
+three themes at 1280×720 and 640×360 CSS pixels (200% viewport equivalent);
+inspect screenshots, fix demonstrated failures, then format/lint/typecheck.
+Evidence and remaining gates go in a dedicated dated evidence record. No
+native backend/profile, production audio, owner-process control, driver or
+device access. Parent owns full unit/native build and integration. Rollback:
+revert this test-only slice; no persisted state or API contract changes.
+
+Browser qualification completed: 23 Edge scenarios pass with one worker,
+including the new two-active-session flow in three themes at 1280×720 and
+640×360. Fixed the reproduced UI-17 fractional tab-height difference (38/39 px)
+by reserving 2.5 rem; existing sidebar-width regressions pass unchanged.
+See [test workstream evidence](evidence/2026-11-02-ux-final-browser.md) for
+commands, inspected screenshots, cleanup workaround, notification overlap,
+console warnings and unrun native/attended gates. Next: parent integration
+and disposable-profile packaged qualification; no native/audio pass is claimed.
 
 ## Parallel UX implementation — 2026-11-02 owner authorization
 

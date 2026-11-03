@@ -7522,7 +7522,10 @@ input[type="color"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.4rem;
+  /* Two text lines plus padding/borders exceed 2.4rem by a fraction of a
+     pixel. Reserve the same full height for one- and two-line captions. */
+  height: 2.5rem;
+  min-height: 2.5rem;
   overflow-wrap: anywhere;
 }
 
