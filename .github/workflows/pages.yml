@@ -32,6 +32,11 @@ jobs:
         run: node site/generate-catalogs.mjs
       - name: Add link-preview tags, sitemap and robots.txt
         run: node site/generate-social.mjs
+      - name: Apply and verify HTML content security policy
+        run: |
+          node site/generate-csp.mjs
+          node site/generate-csp.mjs --check
+          node --test site/generate-csp.test.mjs
       - name: Upload static site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

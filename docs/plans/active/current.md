@@ -2,34 +2,26 @@
 
 ## Open owner gates
 
-PR #107 network test repair (0edfca51): both UDP tone dispatcher tests failed
-the unconditional no-hint assertion after healthy telemetry (underruns 0),
-while the later live summary correctly reported underruns 1. Tests pause their
-own backend servicing to inspect telemetry/logs while leaving recording active.
-Plan: finalize the three-second recording before diagnostic inspection, validate
-the later summary hint against its own counters, preserve all packet-loss and
-sample-continuity assertions, then repeat plain/encrypted tests and control
-suite. Deterministic network-log tests retain zero/recent-underrun hint checks.
-Rollback is test-only revert; no runtime/audio behavior change is intended.
+PR #107 network test repair (superseded 0edfca51/6601d820, fixed 0b1505b9):
+the first diagnosis (an underrun only while the test paused servicing for
+diagnostics) was wrong. The next CI run underran inside the recorded window
+(3 and 5 tone steps). Cause: the branch split the tone test into paired and
+unpaired runs that execute concurrently, each with its own 1 ms service loop;
+main has one. Pinned to one core, each test passes alone and all four network
+tests pass serialized; the full suite failed both (24 and 10 steps). Fix: a
+shared lock serializes the live network tests, the summary is sampled at the
+end of the serviced window, and the strict `hint.is_null()` check is restored.
+Open finding (not chased): under one-core full-suite starvation the encrypted
+stream still lost a packet (1,333 sent, 1,332 received) and underran 3–4
+times while unencrypted did not; optimizing chacha20/hmac/sha2 in dev builds
+did not change this, so crypto CPU cost is not the cause. Investigate the
+paired sender/receiver handshake before relying on paired streams under load.
 
-Repair results: four focused network tests pass (plain/encrypted dispatcher
-routes, live-setting correction and error-code redaction), followed by the
-full control library: 334 passed/11 opt-in ignored. Both strict Clippy and
-format scopes pass. Both failing original cases were exercised twice; all
-existing zero loss/rejection, packet count, level and zero-discontinuity
-recorded-wave assertions remain intact. New summary assertions also require
-no auth/I/O error or rejected sender. The existing deterministic hint tests
-exercise healthy and recent-underrun cases. No production artifact changed.
-
-PR #107 network test repair (0edfca51): both UDP tone dispatcher tests failed
-the unconditional no-hint assertion after healthy telemetry (underruns 0),
-while the later live summary correctly reported underruns 1. Tests pause their
-own backend servicing to inspect telemetry/logs while leaving recording active.
-Plan: finalize the three-second recording before diagnostic inspection, validate
-the later summary hint against its own counters, preserve all packet-loss and
-sample-continuity assertions, then repeat plain/encrypted tests and control
-suite. Deterministic network-log tests retain zero/recent-underrun hint checks.
-Rollback is test-only revert; no runtime/audio behavior change is intended.
+PR #107 Edge failures (fixed 9b847cc1): deleting a session left the window on
+it, because `switchSession` read running sessions through a snapshot of the
+deleted session; it now reads them through the target. Ten canvas-layout
+tests still looked for the "Selection layout" region, which became the
+Properties tab panel in the keyboard-accessibility change.
 
 PR #107 Windows CI repair on 7c3cac7f: workspace/shell tests passed, then
 `probe-build` reproduced a stale independent WASAPI probe lockfile under
@@ -250,6 +242,59 @@ remain open. Follow the current consolidation scope above.
 Validation: Windows documentation acceptance passed (224 Markdown files,
 1,196 local links); `git diff --check` passed. Product tests were not run
 because this change contains planning documents only.
+
+## Website CSP — 2026-11-02 owner request
+
+Objective: assess the missing audiorouter.org CSP response header and add the
+protection supported by the existing static host. This is website hardening;
+SEC-05 applies to the desktop shell and is not a public-site acceptance claim.
+Live HTTPS HEAD returns 200 from GitHub.com with no CSP header. Pages deployment
+is `.github/workflows/pages.yml`; no custom header service is configured.
+Preserve unrelated network test and active-plan edits.
+
+Tasks: add an early HTML CSP to every generated/published page; allow only local
+scripts, required Google Fonts, GitHub release API and YouTube embeds; retain
+inline styling used by the guides, prohibit inline executable scripts, objects,
+base URLs and forms. Add generation/drift checks to deployment and site checks.
+Verify policy coverage and real browser loading/blocking, including guide media.
+No driver/hardware/credentials are needed for local checks; publication and DNS/
+proxy changes are separate. A literal response header and `frame-ancestors`
+require configurable hosting or a reverse proxy; do not claim a meta tag fixes
+a header scanner. Rollback: revert only the website CSP changes. Next: implement
+and verify the Pages-compatible policy, then report the remaining hosting gate.
+
+Implementation: `site/generate-csp.mjs` inserts policy after charset and before
+resource tags in all 50 HTML pages; Pages runs it after page generation and site
+CI checks drift/tests. `site/README.md` documents header delivery and its limits.
+First Windows Edge sweep found the Download page's GitHub sponsor iframe blocked;
+added only its exact URL to frame-src and repeated the browser sweep. Earlier
+probe failures were test-harness issues (Windows path separator and waiting for
+full media load); repaired the harness to use the native separator and DOM ready.
+Local Node site/docs checks and 68 quality policy/runner tests pass. HTML diff
+comparison confirms the CSP tag is the only change to every existing page.
+External services in the browser sweep are stubbed; real Firefox/media playback,
+external-service integration and production deployment are not qualified here.
+Live DNS uses dns1/dns2.registrar-servers.com and HTTPS serves directly from
+GitHub.com. No configurable header proxy or credentials are available in this
+task. Owner decision (2026-11-02): keep GitHub Pages with HTML CSP for now.
+Defer configurable hosting/proxy and response-header delivery; the missing-header
+scanner finding and lack of `frame-ancestors` protection remain accepted limits
+of this bounded website change. No DNS or hosting migration is authorized.
+The Cloudflare proxy option is planned in
+[Website behind Cloudflare](../future/website-cloudflare.md) (owner request
+2026-11-02; future, not authorized).
+Next task: review and publish the HTML-CSP change through the normal approved
+repository workflow, then verify the live policy and real service playback.
+
+Final local evidence (Windows, Node 22.22.3):
+`node site/check-csp-browser.mjs` passes all 50 pages in headless installed Edge,
+with zero normal-load CSP violations/page errors; injected inline JavaScript and
+an unapproved external fetch are blocked. `node tools/quality/verify.mjs --checks
+site,docs` passes (3 CSP regressions; 38 guides / 1,131 links; 236 Markdown files /
+1,359 links). `node --test tools/quality/verify.test.mjs
+tools/quality/policy.test.mjs` passes 68 tests; `git diff --check` passes.
+Committed on branch `website-csp` (from main after #108); CSP regenerated for the
+tabbed guide pages and the browser sweep repeated there. Not yet deployed.
 
 Setup check (2026-11-02, owner request): a backend check and Status-tab list
 that flags device setups Play will refuse, feedback loops across routes,
