@@ -2,6 +2,12 @@
 
 ## Open owner gates
 
+Final consolidated source and local artifact evidence:
+[2026-11-02 final consolidation](evidence/2026-11-02-final-consolidation.md).
+Earlier review integration is merged with latest browser fixes. Parent full UI
+818 tests and compiled Edge 24 scenarios pass; rebuilt shell/CLI/plugin workers
+and disposable native smoke pass. Required PR CI and main merge are next.
+
 Earlier review fixes are being conserved with the latest UX in the
 [integration plan](ux-earlier-review-integration.md). The
 [review fixes plan](code-review-fixes.md) retains historical measurements and
