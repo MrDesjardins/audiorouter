@@ -30,6 +30,11 @@ reachability is enabled.
 
 ## Promoted quality work
 
+[UX improvement assessment (2026-11-02)](ux-improvement-2026-11-02.md) proposes
+prioritized M05/M08 work on uninterrupted navigation, actionable diagnostics,
+state clarity, onboarding, accessibility and measured responsiveness.
+Analysis and planning only; implementation has not been started.
+
 [Application quality and regression prevention](../active/application-quality.md) records
 the owner-requested plan (2026-10-21): consistent merge gates, state-transition
 and fault tests, production/packaged UI verification, backend/audio regression

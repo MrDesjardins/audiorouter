@@ -1,5 +1,50 @@
 # Active plan — 0.0.26 release and maintenance
 
+## Parallel UX implementation — 2026-11-02 owner authorization
+
+Owner authorized implementing the UX plan using parallel T3 Code workstreams,
+while continuing to play and test the running AudioRouter. This supersedes
+the assessment's planning-only status. Scope: UX-01 through UX-06 in the
+[UX plan](../future/ux-improvement-2026-11-02.md), M05/M08 and its mapped IDs.
+
+Hard boundary for every workstream: no contact with the live backend, no
+AudioRouter launch/stop/restart, audio/device/driver changes, real profile or
+database access, release builds, sidecar staging, installs or replacement of
+the running artifacts. Use isolated T3-managed worktrees. Keep checks light
+and workers bounded; defer native, hardware, performance-load and attended
+checks until gaming/testing ends. No PR is authorized.
+
+Ordered tasks: (1) parallel session-switch safety, actionable setup findings,
+state/export clarity, keyboard accessibility, and onboarding/recovery work;
+(2) inspect and integrate isolated commits, resolving shared App/Workbench
+edits; (3) run bounded mock/component checks, typecheck/lint/format and docs;
+(4) record exact remaining native/three-theme/participant gates. Each child
+records its own requirements, implementation decisions, regressions and
+rollback in a uniquely named active evidence file. UX-06 measurement tools
+may be prepared but must not benchmark the owner's running game/audio.
+
+Rollback: revert each isolated slice; avoid storage migrations. Preserve all
+existing draft/live-save and protected microphone semantics. Default UX-01
+choice is an explicit pre-switch consequence confirmation, retaining the
+existing stop policy; independent running/viewed sessions remain deferred.
+Next action: launch isolated workstreams and collect commits for integration.
+
+## UX assessment and proposed improvements — 2026-11-02
+
+Owner requested analysis and a plan, not implementation. The
+[UX improvement plan](../future/ux-improvement-2026-11-02.md) records source
+evidence, prioritized M05/M08 tasks, requirement IDs, prerequisites, acceptance,
+risks and rollback. Highest priorities: session navigation stopping active
+audio, actionable setup findings, and saved/draft/playing/export clarity.
+Working tree was clean at review start on `feature/setup-check`; only planning
+documents changed. No native app, live audio or usability study was run.
+Next proposed task: M05 UX baseline and session-switch consequence design;
+implementation is not authorized by this planning request.
+
+Validation: Windows documentation acceptance passed (224 Markdown files,
+1,196 local links); `git diff --check` passed. Product tests were not run
+because this change contains planning documents only.
+
 Setup check (2026-11-02, owner request): a backend check and Status-tab list
 that flags device setups Play will refuse, feedback loops across routes,
 missing devices and cable rates (UI-27). Branch `feature/setup-check`; plan,
