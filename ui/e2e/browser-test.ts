@@ -43,7 +43,11 @@ export const test = base.extend<BrowserOptions & { pageErrorGuard: void; bundled
       try {
         await use(served);
       } finally {
-        await context.unroute(matches);
+        // A test can end while a lazy chunk it requested is still being
+        // served. A plain unroute hands that request back to Playwright, so the
+        // late fulfill threw "Route is already handled!" and context teardown
+        // timed out; let in-flight handlers finish first.
+        await context.unrouteAll({ behavior: "wait" });
         if (missing.length || testInfo.status !== testInfo.expectedStatus)
           await testInfo.attach("bundled-fixture-assets", {
             body: JSON.stringify({ served, missing }),

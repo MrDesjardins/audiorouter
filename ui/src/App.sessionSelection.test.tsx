@@ -118,7 +118,9 @@ describe("startup session selection", () => {
     );
     await waitFor(() => expect(backend.snapshot.mock.calls.some(([id]) => id === "main-session")).toBe(true));
     fireEvent.click(screen.getByRole("tab", { name: /Status/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }));
+    // The Status tab loads its panel lazily; a cold import on a busy runner can
+    // take longer than the 1 s default.
+    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }, { timeout: 5000 }));
     await waitFor(() =>
       expect(screen.getByRole("tab", { name: /Properties/ }).getAttribute("aria-selected")).toBe("true"),
     );
@@ -244,7 +246,9 @@ describe("session switch interruption consent", () => {
       expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session"),
     );
     fireEvent.click(screen.getByRole("tab", { name: /Status/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }));
+    // The Status tab loads its panel lazily; a cold import on a busy runner can
+    // take longer than the 1 s default.
+    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }, { timeout: 5000 }));
     await screen.findByRole("dialog", { name: "Stop audio and switch session?" });
     expect(stop).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
