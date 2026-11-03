@@ -110,4 +110,101 @@ separate change.
 
 ## Next action
 
-Owner review of the branch, then a PR only with explicit approval.
+### Sol review and local build (2026-11-02, owner request)
+
+Owner closed AudioRouter and requested a review of the two setup-check commits,
+fixes, an explanation of trigger timing and a build to test. No PR is authorized.
+UI-27/UI-17/AUTO-18 review findings to address: stale requests after disconnect,
+misleading success when devices were not checked, refresh after Play/Stop or
+device-format changes, bypassed-device false positives, and multi-session loops
+beyond a pair. Keep pure analysis off the audio service thread as well as device
+enumeration. Add focused regressions before fixes, check real dispatch and MCP,
+typecheck/compile immediately, then full relevant suites, both Clippy/format
+scopes, browser themes and production build. Regenerate the public method
+catalog. Build UI before the release shell with `--features custom-protocol`,
+stage the matching CLI, verify
+timestamps/hashes, then exercise Status in the built app without starting audio.
+Preserve the owner's saved data and Windows device configuration. Rollback:
+revert the review follow-up; no storage migration. Remaining live-audio
+qualification is separate from this read-only Status check.
+
+Next: implement and verify these fixes, then leave the local build for owner
+testing. Never call the feature release-qualified from mock/browser tests.
+
+Review fixes implemented:
+
+- Pending UI requests are invalidated on disconnect, backend replacement,
+  refresh-key changes and unmount. An initial failed request no longer says
+  Checking forever. Empty/unavailable device inventory cannot claim all devices
+  fit; clean wording states the limits of the checks actually performed.
+- The Status refresh key includes Play/Stop's active session IDs and the full
+  exposed device format, not just channels/rate. Equivalent snapshots do not
+  start more checks. The panel and quickstart explicitly say saved routes only,
+  while Status is open; unsaved drafts and Play's own validation are separate.
+- Bypassed device nodes do not generate missing/format findings. Cross-session
+  cycle traversal now follows individual signal paths across three or more
+  sessions, avoiding false joins of unrelated branches. Problems precede tips
+  before truncation. The session filter enforces its declared ID length bound.
+- File-backed saved-session reads now use a read-only helper connection without
+  creation/migration/pruning/integrity scanning, while the original connection
+  remains available to service audio. Device enumeration and pure analysis also
+  run through `while_servicing_audio`. Regression verifies no file creation and
+  no migration of a diagnostic input.
+- Opus added the method to the API but did not regenerate the public website
+  method catalog. It now includes `system.checkSetup`. Guide generation also
+  needs `generate-social.mjs`; rerunning it preserves existing social metadata.
+
+Scope/evidence limits: the independent tool Properties catalog check still
+fails at the unchanged base source hash. An exploratory regenerated snapshot
+then exposed existing selector-vs-wire-type/coverage mismatches; it was reverted
+instead of falsely marking unrelated tool recordings complete. No NodeKind,
+tool setting or Properties control changes in this task, so no tool Properties
+video recapture applies. `site/check-guides.mjs` passes. This is an explicitly
+open documentation-tooling gate, not a passing check. The full Playwright suite
+was not run; the generic HTTP browser scenario requires its disposable fixture
+and was skipped. Actual HTTP dispatch is covered by the Windows shell suite.
+
+Build experiment: plain `cargo build --release` launched a localhost development
+URL, which the real desktop smoke caught. Rebuilt with
+`cargo build --manifest-path src-tauri/Cargo.toml --release --features custom-protocol --locked`
+after the final UI build; only that embedded-UI executable is the test artifact.
+The matching release CLI is staged beside it with verified identical hashes.
+
+Final verification (Windows 11, Rust 1.96.0, Node 22.22.3):
+
+- Four new regressions reproduced failures before fixes (disconnect, unavailable
+  inventory, bypassed devices, three-route cycle). Final focused setup tests:
+  17 passed, including severity ordering and the ID bound. Full control library:
+  329 passed / 11 opt-in ignored; storage: 100 passed. CLI/domain suites passed,
+  including default MCP `check_setup` and reachability. Shell: 85 passed /
+  4 opt-in ignored. Both workspace/shell Clippy scopes with `-D warnings` and
+  both format checks pass.
+- Final UI: 792 tests / 87 files pass; format/lint/typecheck pass. Contracts
+  drift: 138 methods / 37 kinds / 20 processors / 22 event categories pass.
+- Edge: 11 setup/workbench scenarios pass (one HTTP browser scenario skipped
+  for its explicit fixture requirement); final three-theme setup suite adds
+  unavailable-inventory state and stable geometry, 3 passed. Dark/light/high
+  contrast screenshots inspected under `%TEMP%/audiorouter-playwright-results/`.
+- Built native app exercised with a new disposable database/profile: Status
+  opens the setup check, Check again returns successfully against 15 Windows
+  devices, final explanatory text is embedded, and Audio stopped remains shown.
+  No microphone, speaker or cable stream was opened. Backend/shell logs contain
+  no error outcomes. Profile, UI text and screenshots retained at
+  `target/setup-check-smoke-embedded-2b1bf160bc1047ce9db92b4c48d50c20`.
+- Test artifact: `src-tauri/target/release/audiorouter-shell.exe`, SHA-256
+  `329290DC3E1903A931BDBFA09876FA32A6124C76FFDA4C68DB43EE8B1EA48EC5`.
+  Built 18:36:39 local, after `ui/dist` at 18:34:12. Matching CLI source/staged
+  hash: `2C596CBCDFDA004CE145D98BE2C4C20A3F31DD83661A1826B346DA9BF8770B8E`.
+- Build warning retained: the 633.03 kB main JS chunk exceeds Vite's 500 kB
+  advisory. No threshold was raised. Splitting the editor is independent of
+  setup correctness and remains a performance/maintainability follow-up.
+  Browser color-environment and React Flow attribution warnings were inspected;
+  this change does not establish a license entitlement or alter attribution.
+- Guide link/asset check and documentation acceptance pass. The independent
+  Properties catalog gate above and full browser suite remain open; neither is
+  represented as passing. No installer, release or PR was created.
+
+Next action: owner launches the embedded test executable and opens Status →
+Setup check with their real saved sessions. Their Windows settings and saved
+database were not modified by this smoke. Review does not qualify live-audio
+continuity or the separate release gates.

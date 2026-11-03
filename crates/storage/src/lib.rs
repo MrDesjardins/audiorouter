@@ -749,6 +749,35 @@ pub enum JournalFailureStage {
 /// "database is locked".
 const BUSY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
 impl Storage {
+    /// A file-backed inventory can be read on a helper without moving the
+    /// connection that the audio service uses for recorder bookkeeping.
+    pub fn session_inventory_path(&self) -> Option<&std::path::Path> {
+        self.database_path.as_deref()
+    }
+
+    /// Read saved sessions without creating, migrating, pruning or checking
+    /// the whole database. Intended for off-thread diagnostic snapshots.
+    pub fn read_session_inventory(path: &std::path::Path) -> Result<Vec<Session>, StorageError> {
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        connection.busy_timeout(BUSY_TIMEOUT)?;
+        let reader = Self {
+            connection,
+            database_path: Some(path.to_owned()),
+        };
+        let mut sessions = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = reader.list_sessions_after(cursor.as_deref(), MAX_SESSION_LIST_ITEMS)?;
+            let complete = page.len() < MAX_SESSION_LIST_ITEMS;
+            cursor = page.last().map(|session| session.id.as_str().to_owned());
+            sessions.extend(page);
+            if complete {
+                return Ok(sessions);
+            }
+        }
+    }
+
     pub fn open_memory() -> Result<Self, StorageError> {
         let storage = Self {
             connection: Connection::open_in_memory()?,
@@ -6026,6 +6055,38 @@ mod tests {
         drop(storage);
         let _ = std::fs::remove_file(source);
         let _ = std::fs::remove_file(destination);
+    }
+
+    #[test]
+    fn diagnostic_inventory_is_read_only_and_never_migrates_or_creates() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-inventory-{}.sqlite",
+            std::process::id()
+        ));
+        assert!(!path.exists());
+        assert!(Storage::read_session_inventory(&path).is_err());
+        assert!(!path.exists());
+        let storage = Storage::open(&path).unwrap();
+        let original = session();
+        storage.save_session(&original).unwrap();
+        // An older migration marker must not be repaired by a diagnostic read.
+        storage
+            .connection
+            .execute("DELETE FROM schema_migrations", [])
+            .unwrap();
+        assert_eq!(
+            Storage::read_session_inventory(&path).unwrap(),
+            vec![original]
+        );
+        let count: i64 = storage
+            .connection
+            .query_row("SELECT count(*) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(count, 0);
+        drop(storage);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

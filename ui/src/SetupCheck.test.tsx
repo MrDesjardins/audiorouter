@@ -3,6 +3,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SetupCheckResult } from "@audiorouter/contracts";
 import { SetupCheck, setupCheckSummary } from "./SetupCheck";
+import { setupCheckRefreshKey } from "./SetupWorkbench";
+import { demoSession } from "./fixtures";
+import type { DeviceListItem } from "@audiorouter/contracts";
 
 afterEach(cleanup);
 
@@ -38,6 +41,32 @@ const surround = result([
 ]);
 
 describe("setupCheckSummary", () => {
+  it("invalidates on playback and full device format changes, without polling on equivalent snapshots", () => {
+    const devices = [
+      {
+        id: "d",
+        name: "Device",
+        direction: "render",
+        state: "active",
+        defaultRoles: [],
+        format: {
+          channels: 2,
+          sampleRateHz: 48000,
+          bitsPerSample: 32,
+          bytesPerFrame: 8,
+          formatTag: 3,
+          isFloat32: true,
+        },
+        periods: { default100ns: 100000, minimum100ns: 30000 },
+      },
+    ] satisfies DeviceListItem[];
+    const before = setupCheckRefreshKey(devices, [demoSession], []);
+    expect(setupCheckRefreshKey(structuredClone(devices), [structuredClone(demoSession)], [])).toBe(before);
+    expect(setupCheckRefreshKey(devices, [demoSession], [demoSession.id])).not.toBe(before);
+    expect(
+      setupCheckRefreshKey([{ ...devices[0], format: { ...devices[0].format, isFloat32: false } }], [demoSession], []),
+    ).not.toBe(before);
+  });
   it("counts each severity and the sessions", () => {
     expect(setupCheckSummary(null)).toBe("Checking your sessions and devices…");
     expect(setupCheckSummary(result([]))).toBe("No problems found in 2 sessions.");
@@ -47,6 +76,54 @@ describe("setupCheckSummary", () => {
 });
 
 describe("SetupCheck", () => {
+  it("does not keep announcing an initial failed request as checking", async () => {
+    render(
+      <SetupCheck
+        connected
+        checkSetup={async () => {
+          throw new Error("denied");
+        }}
+        refreshKey="a"
+      />,
+    );
+    await screen.findByText("Last check failed: denied");
+    expect(screen.getByText("Setup check unavailable.")).toBeTruthy();
+    expect(screen.queryByText("Checking your sessions and devices…")).toBeNull();
+  });
+  it("discards a response after disconnect and stops showing a pending check", async () => {
+    let finish!: (result: SetupCheckResult) => void;
+    const checkSetup = vi.fn(
+      () =>
+        new Promise<SetupCheckResult>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const { rerender } = render(<SetupCheck connected checkSetup={checkSetup} refreshKey="a" />);
+    rerender(<SetupCheck connected={false} checkSetup={checkSetup} refreshKey="a" />);
+    await act(async () => {
+      finish(surround);
+    });
+    expect(screen.queryByText(/"Siege" uses Surround/)).toBeNull();
+    expect(screen.getByText(/Not connected/)).toBeTruthy();
+  });
+
+  it("does not claim devices fit when Windows device enumeration failed", async () => {
+    render(
+      <SetupCheck
+        connected
+        checkSetup={async () => ({
+          ...result([]),
+          devicesChecked: 0,
+          notChecked: ["Audio devices: the Windows device list could not be read."],
+        })}
+        refreshKey="a"
+      />,
+    );
+    await screen.findByText(/Windows device list could not be read/);
+    expect(screen.queryByText("Every device your sessions use fits how they use it.")).toBeNull();
+    expect(screen.queryByText("No problems found in 2 sessions.")).toBeNull();
+  });
+
   it("shows each finding with its fix and session", async () => {
     const checkSetup = vi.fn(async () => surround);
     render(<SetupCheck connected checkSetup={checkSetup} refreshKey="a" />);

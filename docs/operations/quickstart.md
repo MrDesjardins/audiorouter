@@ -826,7 +826,10 @@ Windows offers right now and lists what does not fit, each with a fix:
 
 A device is judged by how your sessions use it, so the same 7.1 cable can be
 correct in one place and wrong in another. The check runs when the tab opens
-and after devices or sessions change; **Check again** runs it now. It reads
+and, while open, after devices, saved sessions or playing sessions change;
+**Check again** runs it now. It checks saved routes, not unsaved drafts.
+It does not run in the background with the tab closed or add a new Play
+blocker: Play separately validates the route it starts. It reads
 only: change the device in Windows Sound settings or in the node's
 Properties. It cannot see settings inside other apps (a game's speaker setup;
 Discord's devices are on the **Apps** tab). Assistants use the `check_setup`

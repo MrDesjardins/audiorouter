@@ -170,6 +170,43 @@ fn disabled_or_unconnected_nodes_are_not_judged() {
 }
 
 #[test]
+fn bypassed_devices_do_not_produce_format_or_missing_device_findings() {
+    let mut route = route("bypassed", "gone", false, "cable-b-in");
+    for node in &mut route.nodes {
+        node.bypass = true;
+    }
+    assert!(check_setup(&[(&route, false)], &devices()).is_empty());
+}
+
+#[test]
+fn three_sessions_can_form_a_loop_without_any_pair_looping() {
+    let a = route("a", "cable-out", false, "cable-a-in");
+    let b = route("b", "cable-a-out", false, "headphones");
+    let mut c = route("c", "cable-b-out", false, "cable-in");
+    let mut b = b;
+    b.nodes[1]
+        .parameters
+        .insert("endpointId".into(), json!("cable-b-in"));
+    let mut inventory = devices();
+    inventory[4].channels = 2;
+    let findings = check_setup(&[(&a, true), (&b, true), (&c, true)], &inventory);
+    assert!(findings
+        .iter()
+        .any(|finding| finding.code == "crossSessionLoop"));
+    assert!(
+        !check_setup(&[(&a, false), (&b, false), (&c, false)], &inventory)
+            .iter()
+            .any(|finding| finding.code == "crossSessionLoop")
+    );
+    c.edges[0].enabled = false;
+    assert!(
+        !check_setup(&[(&a, true), (&b, true), (&c, true)], &inventory)
+            .iter()
+            .any(|finding| finding.code == "crossSessionLoop")
+    );
+}
+
+#[test]
 fn a_loop_inside_one_session_is_the_play_refusal() {
     // CABLE Output → CABLE Input: what it plays comes straight back.
     let route = route("loop", "cable-out", false, "cable-in");
@@ -274,6 +311,23 @@ fn every_device_kind_is_classified() {
 }
 
 #[test]
+fn problems_precede_tips_before_the_response_limit() {
+    let mut inventory = devices();
+    inventory[2].sample_rate_hz = 44_100;
+    let mut routes = (0..101)
+        .map(|index| route(&format!("tip-{index}"), "mic", false, "cable-a-in"))
+        .collect::<Vec<_>>();
+    routes.push(route("problem", "gone", false, "headphones"));
+    let sessions = routes
+        .iter()
+        .map(|session| (session, false))
+        .collect::<Vec<_>>();
+    let findings = check_setup(&sessions, &inventory);
+    assert!(findings.len() > MAX_SETUP_FINDINGS);
+    assert_eq!(findings[0].code, "deviceMissing");
+}
+
+#[test]
 fn dispatch_reports_through_the_control_plane() {
     let mut plane = ControlPlane::default();
     plane
@@ -321,4 +375,13 @@ fn dispatch_reports_through_the_control_plane() {
         params: Some(json!({ "other": true })),
     });
     assert!(unknown.error.is_some());
+    let oversized = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(4)),
+        method: "system.checkSetup".into(),
+        params: Some(
+            json!({ "sessionId": "a".repeat(audiorouter_domain::MAX_ENTITY_ID_BYTES + 1) }),
+        ),
+    });
+    assert!(oversized.error.unwrap().message.contains("ID limit"));
 }

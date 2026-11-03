@@ -14,6 +14,8 @@ const SEVERITY_LABEL: Record<SetupFinding["severity"], string> = {
 /** One line that sums up a result, for the fixed summary slot. */
 export function setupCheckSummary(result: SetupCheckResult | null): string {
   if (!result) return "Checking your sessions and devices…";
+  if (result.devicesChecked === 0 && result.findings.length === 0)
+    return "No active Windows audio devices were checked.";
   const count = (severity: SetupFinding["severity"]) =>
     result.findings.filter((finding) => finding.severity === severity).length;
   const parts = [
@@ -45,7 +47,7 @@ export function SetupCheck({
   // Only the latest request may update the panel.
   const latest = useRef(0);
   const run = useCallback(async () => {
-    if (!checkSetup) return;
+    if (!connected || !checkSetup) return;
     const request = ++latest.current;
     setChecking(true);
     try {
@@ -59,21 +61,19 @@ export function SetupCheck({
     } finally {
       if (request === latest.current) setChecking(false);
     }
-  }, [checkSetup]);
+  }, [connected, checkSetup]);
   useEffect(() => {
     if (connected) void run();
-  }, [connected, run, refreshKey]);
-  useEffect(
-    () => () => {
+    else setChecking(false);
+    return () => {
       latest.current += 1;
-    },
-    [],
-  );
+    };
+  }, [connected, run, refreshKey]);
   if (!checkSetup) return null;
-  const status = failure
-    ? `Last check failed: ${failure}`
-    : !connected
-      ? "Not connected; the check runs when the service is available."
+  const status = !connected
+    ? "Not connected; the check runs when the service is available."
+    : failure
+      ? `Last check failed: ${failure}`
       : checking && result
         ? "Checking again…"
         : result?.notChecked[0]
@@ -88,7 +88,11 @@ export function SetupCheck({
         </button>
       </div>
       <p className="setup-check-summary" aria-live="polite">
-        {setupCheckSummary(result)}
+        {!connected && !result
+          ? "Connect to AudioRouter to check your setup."
+          : failure && !result
+            ? "Setup check unavailable."
+            : setupCheckSummary(result)}
       </p>
       <div className="setup-check-findings" tabIndex={0} aria-label="Setup check findings">
         {result && result.findings.length > 0 ? (
@@ -114,13 +118,20 @@ export function SetupCheck({
           </ul>
         ) : (
           <p className="muted">
-            {result
-              ? "Every device your sessions use fits how they use it."
-              : "Results appear here: devices Play would refuse, feedback loops, missing devices and cable rates."}
+            {result?.devicesChecked === 0
+              ? "Device checks are incomplete. See the check status below and try Check again."
+              : result
+                ? "No issues found in the device and feedback checks performed."
+                : "Results appear here: devices Play would refuse, feedback loops, missing devices and cable rates."}
           </p>
         )}
       </div>
-      <p className="muted setup-check-status">{status}</p>
+      <p className="muted setup-check-status" title={status}>
+        {status}
+      </p>
+      <p className="muted">
+        Checks saved routes while this tab is open. Unsaved edits are not included. Play validates the route separately.
+      </p>
     </section>
   );
 }

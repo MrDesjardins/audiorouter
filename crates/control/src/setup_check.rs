@@ -138,6 +138,7 @@ pub(crate) fn cable_returns(devices: &[DeviceFacts]) -> Vec<(String, String)> {
 /// A node Play would bind: enabled and connected by an enabled edge.
 fn in_use(session: &Session, node: &audiorouter_domain::Node) -> bool {
     node.enabled
+        && !node.bypass
         && session.edges.iter().any(|edge| {
             edge.enabled && (edge.source_node == node.id || edge.destination_node == node.id)
         })
@@ -179,6 +180,11 @@ pub(crate) fn check_setup(
         }
     }
     cross_session_loops(sessions, devices, &returns, &mut findings);
+    findings.sort_by_key(|finding| match finding.severity {
+        Severity::Problem => 0,
+        Severity::Warning => 1,
+        Severity::Tip => 2,
+    });
     findings
 }
 
@@ -296,7 +302,7 @@ fn check_session_devices(
                 Severity::Tip,
                 Some(device),
                 format!(
-                    "{} runs at {}. AudioRouter works at 48 kHz, so Windows converts this cable's audio.",
+                    "{} runs at {}. AudioRouter works at 48 kHz, so rate conversion is needed for this cable's audio.",
                     device.name, format_rate(device.sample_rate_hz)
                 ),
                 format!("In Windows Sound settings, set {} to 48000 Hz (Properties → Advanced).", device.name),
@@ -326,6 +332,7 @@ fn cross_session_loops(
             let mut flow = Vec::<(String, String)>::new();
             for source in session.nodes.iter().filter(|node| {
                 node.enabled
+                    && !node.bypass
                     && matches!(
                         device_use(node.kind),
                         Some(DeviceUse::Input | DeviceUse::Loopback)
@@ -419,6 +426,85 @@ fn cross_session_loops(
             });
         }
     }
+    // A cycle can cross three or more routes without any pair returning
+    // directly. Vertices are individual source-to-output flows, rather than
+    // sessions, so unrelated branches within a session cannot invent a loop.
+    let paths = flows
+        .iter()
+        .enumerate()
+        .flat_map(|(session, flows)| {
+            flows
+                .iter()
+                .map(move |(capture, render)| (session, capture, render))
+        })
+        .collect::<Vec<_>>();
+    let mut reported_cycles = std::collections::BTreeSet::new();
+    let mut captures = std::collections::HashMap::<&str, Vec<usize>>::new();
+    for (index, (_, capture, _)) in paths.iter().enumerate() {
+        captures.entry(capture.as_str()).or_default().push(index);
+    }
+    let adjacency = paths
+        .iter()
+        .map(|(_, _, render)| {
+            heard_as(render)
+                .iter()
+                .flat_map(|id| captures.get(id.as_str()).into_iter().flatten().copied())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    for start in 0..paths.len() {
+        let mut parents = vec![usize::MAX; paths.len()];
+        parents[start] = start;
+        let mut pending = std::collections::VecDeque::from([start]);
+        while let Some(current) = pending.pop_front() {
+            for &next in &adjacency[current] {
+                if next != start {
+                    if parents[next] == usize::MAX {
+                        parents[next] = current;
+                        pending.push_back(next);
+                    }
+                    continue;
+                }
+                let mut cycle = vec![paths[start].0];
+                let mut previous = current;
+                while previous != start {
+                    cycle.push(paths[previous].0);
+                    previous = parents[previous];
+                }
+                cycle.sort_unstable();
+                cycle.dedup();
+                if cycle.len() < 3
+                    || !cycle.iter().any(|&index| sessions[index].1)
+                    || !reported_cycles.insert(cycle.clone())
+                {
+                    continue;
+                }
+                let names = cycle
+                    .iter()
+                    .map(|&index| format!("\"{}\"", sessions[index].0.name))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let message = if cycle.iter().all(|&index| sessions[index].1) {
+                    format!(
+                        "The playing routes {names} form a feedback loop through their devices."
+                    )
+                } else {
+                    format!("Running the routes {names} together would form a feedback loop through their devices.")
+                };
+                for (position, &index) in cycle.iter().enumerate() {
+                    let session = sessions[index].0;
+                    findings.push(SetupFinding {
+                        code: "crossSessionLoop", severity: Severity::Warning,
+                        session_id: session.id.as_str().to_owned(), session_name: session.name.clone(),
+                        node_id: None, node_name: None, device_id: None, device_name: None,
+                        other_session_id: Some(sessions[cycle[(position + 1) % cycle.len()]].0.id.as_str().to_owned()),
+                        message: message.clone(),
+                        fix: "Stop a route in this loop, or change a return connection so these routes cannot feed back into each other.".into(),
+                    });
+                }
+            }
+        }
+    }
 }
 
 impl ControlPlane {
@@ -435,21 +521,36 @@ impl ControlPlane {
             .map(|value| {
                 value
                     .as_str()
-                    .filter(|value| !value.is_empty())
+                    .filter(|value| {
+                        !value.is_empty() && value.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES
+                    })
                     .map(EntityId::new)
                     .ok_or_else(|| {
-                        ControlError::InvalidRequest("sessionId must be a string".into())
+                        ControlError::InvalidRequest(
+                            "sessionId must be a nonempty string within the ID limit".into(),
+                        )
                     })
             })
             .transpose()?;
         let mut by_id = BTreeMap::<String, Session>::new();
-        if let Some(storage) = &self.storage {
-            for session in storage
+        let inventory_path = self
+            .storage
+            .as_ref()
+            .and_then(|storage| storage.session_inventory_path())
+            .map(ToOwned::to_owned);
+        let persisted = if let Some(path) = inventory_path {
+            self.while_servicing_audio(move || Storage::read_session_inventory(&path))
+                .map_err(storage_error)?
+        } else if let Some(storage) = &self.storage {
+            // Memory-only fixtures have no disk or busy file lock to wait on.
+            storage
                 .list_sessions_after(None, MAX_SESSION_LIST_ITEMS)
                 .map_err(storage_error)?
-            {
-                by_id.insert(session.id.as_str().to_owned(), session);
-            }
+        } else {
+            Vec::new()
+        };
+        for session in persisted {
+            by_id.insert(session.id.as_str().to_owned(), session);
         }
         for session in self.store.sessions_after(None, MAX_SESSION_LIST_ITEMS) {
             by_id.insert(session.id.as_str().to_owned(), session);
@@ -482,7 +583,7 @@ impl ControlPlane {
             "Settings inside other apps, such as a game's speaker setup or the devices Discord uses (see the Apps tab).",
         ];
         let mut findings = match &devices {
-            Some(devices) => check_setup(&sessions, devices),
+            Some(devices) => self.while_servicing_audio(|| check_setup(&sessions, devices)),
             None => {
                 not_checked.push("Audio devices: the Windows device list could not be read.");
                 Vec::new()

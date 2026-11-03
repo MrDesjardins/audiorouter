@@ -75,9 +75,24 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     );
     await panel.getByRole("button", { name: "Check again" }).click();
     await expect(panel.getByText("No problems found in 2 sessions.")).toBeVisible();
-    await expect(panel.getByText("Every device your sessions use fits how they use it.")).toBeVisible();
+    await expect(panel.getByText("No issues found in the device and feedback checks performed.")).toBeVisible();
     const withoutFindings = await devicesHeading.boundingBox();
     expect(withoutFindings?.y).toBe(withFindings?.y);
     await page.screenshot({ path: info.outputPath(`${theme}-setup-check-clean.png`) });
+    await page.evaluate(() =>
+      Object.assign(window, {
+        __routeFixtureSetupCheck: {
+          findings: [],
+          truncated: 0,
+          sessionsChecked: 2,
+          devicesChecked: 0,
+          notChecked: ["Audio devices: the Windows device list could not be read."],
+        },
+      }),
+    );
+    await panel.getByRole("button", { name: "Check again" }).click();
+    await expect(panel.getByText("No active Windows audio devices were checked.")).toBeVisible();
+    expect((await devicesHeading.boundingBox())?.y).toBe(withFindings?.y);
+    await page.screenshot({ path: info.outputPath(`${theme}-setup-check-incomplete.png`) });
   });
 }

@@ -7,6 +7,20 @@ import { SetupCheck } from "./SetupCheck";
 import { ThisPcDevices } from "./ThisPcDevices";
 import { VirtualCablePanel } from "./VirtualCablePanel";
 
+export function setupCheckRefreshKey(
+  devices: DeviceListItem[],
+  sessions: Session[],
+  runningSessionIds: readonly string[],
+) {
+  return JSON.stringify([
+    devices
+      .map((device) => [device.id, device.state, "format" in device ? device.format : null])
+      .sort(([a], [b]) => String(a).localeCompare(String(b))),
+    sessions.map((session) => [session.id, session.revision]).sort(([a], [b]) => String(a).localeCompare(String(b))),
+    [...runningSessionIds].sort(),
+  ]);
+}
+
 export function SetupWorkbench({
   section,
   backend,
@@ -17,6 +31,7 @@ export function SetupWorkbench({
   onAddCablePassThrough,
   sessions,
   onActionMessage,
+  runningSessionIds = [],
 }: {
   section: "status" | "virtualCables";
   backend: UiBackend;
@@ -27,6 +42,7 @@ export function SetupWorkbench({
   onAddCablePassThrough?: () => void;
   sessions: Session[];
   onActionMessage?: (text: string) => void;
+  runningSessionIds?: readonly string[];
 }) {
   // Stable across renders so the panel probes the shell once, not per refresh.
   const cableManagementAvailable = useMemo(() => backend.virtualCableManagementAvailable?.bind(backend), [backend]);
@@ -34,16 +50,8 @@ export function SetupWorkbench({
   // The setup check runs again when a device's format or a saved session
   // changes; a primitive key so telemetry refreshes do not restart it.
   const setupCheckKey = useMemo(
-    () =>
-      [
-        ...devices.map((device) =>
-          "format" in device
-            ? `${device.id}:${device.format.channels}:${device.format.sampleRateHz}`
-            : `${device.id}:${device.state}`,
-        ),
-        ...sessions.map((session) => `${session.id}@${session.revision}`),
-      ].join("|"),
-    [devices, sessions],
+    () => setupCheckRefreshKey(devices, sessions, runningSessionIds),
+    [devices, sessions, runningSessionIds],
   );
   return (
     <>

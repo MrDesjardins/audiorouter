@@ -5,6 +5,13 @@ that flags device setups Play will refuse, feedback loops across routes,
 missing devices and cable rates (UI-27). Branch `feature/setup-check`; plan,
 tasks and validation in [setup-check.md](setup-check.md).
 
+Sol review follow-up (2026-11-02): fixed request lifecycle, refresh triggers,
+incomplete-result wording, multi-route loops, diagnostic I/O and finding order.
+Embedded release build is available at
+`src-tauri/target/release/audiorouter-shell.exe`; Status → Check again was
+exercised with a disposable profile and real device inventory, without audio.
+Next: owner tests their saved sessions. No PR has been authorized or opened.
+
 CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
 settings to the generic tool-workflow test. Input, Soundboard and network
 nodes use dedicated editors. Reuse the inspector's exhaustive editor

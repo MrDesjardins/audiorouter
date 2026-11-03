@@ -3045,6 +3045,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const statusWorkbenchContent = (
     <SetupWorkbench
       section="status"
+      runningSessionIds={snapshot?.status.activeSessionIds ?? []}
       backend={backend}
       devices={devices}
       refreshDevices={refreshDevices}
