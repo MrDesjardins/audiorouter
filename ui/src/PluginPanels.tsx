@@ -692,10 +692,12 @@ export function PluginNodeInspector({
                 <span className="plugin-guard-stack">
                   <small {...shownWhen(silenced && retryNote === "ask")}>
                     It is probably not licensed. Sign in to its vendor&apos;s app (UA Connect for UADx plugins), then
-                    press Retry.
+                    press Retry. Retry checks this running plugin for processing; it does not reload it.
                   </small>
                   <small {...shownWhen(silenced && retryNote === "refused")}>
-                    It still passes your voice through. After signing in, press Stop and Play so it loads again.
+                    It still passes your voice through. After signing in, deliberately press Stop and Play to reload the
+                    route's plugins. Stop interrupts this route; Retry only checks the running plugin. Your protected
+                    voice stays muted until recovery succeeds.
                   </small>
                   <small {...shownWhen(silenced && retryNote === "error")} role={retry.error ? "alert" : undefined}>
                     {retry.error}
