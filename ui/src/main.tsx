@@ -17,6 +17,8 @@ if (window.__AUDIO_ROUTER_FRONTEND_PROBE__) {
         request: { jsonrpc: "2.0", id: "shell-probe", method: "system.describe" },
       }),
     )
+    // The one-shot packaged-shell probe records its outcome at the IPC
+    // boundary; it runs before App's diagnostic sink exists.
     .catch(() => undefined);
 }
 

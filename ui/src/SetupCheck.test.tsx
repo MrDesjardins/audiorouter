@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SetupCheckResult } from "@audiorouter/contracts";
 import { SetupCheck, setupCheckSummary } from "./SetupCheck";
-import { setupCheckRefreshKey } from "./SetupWorkbench";
+import { setupCheckRefreshKey } from "./setupCheckRefreshKey";
 import { demoSession } from "./fixtures";
 import type { DeviceListItem } from "@audiorouter/contracts";
 

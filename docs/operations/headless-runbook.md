@@ -210,7 +210,11 @@ audiorouter backup prune --directory C:\path\recovery --json
 ```
 
 The backup and restore commands require absolute paths and refuse existing
-destinations. Restore validates SQLite integrity before writing the new file.
+destinations. Backup opens the source database read-only: it checks it but
+never migrates or changes it, and it refuses a database that does not exist.
+A backup includes imported audio, so it may be up to 612 MiB (100 MiB of
+configuration plus the 512 MiB audio library limit).
+Restore validates SQLite integrity before writing the new file.
 The explicit retention command removes only direct files named
 audiorouter-backup-*.sqlite beyond the newest ten lexically timestamped
 names; pre-migration backups and unrelated files are preserved. It never

@@ -1,3 +1,13 @@
+# Wave Link parity, first round — execution record (2026-10-22)
+
+**Archived 2026-11-01.** The first round (level target zone, hidden devices,
+app picker and groups, Sound Check, Output Switch) is merged and released.
+"Listen to any mix" was not authorized; it and the other candidates remain in
+[Wave Link parity candidates](../future/wave-link-parity.md). The Output Switch
+hardware test is tracked in the [active plan](../active/current.md#open-owner-gates).
+
+---
+
 # Active plan — Wave Link parity, first round (2026-10-22, owner request)
 
 Owner request (2026-10-22): record the Wave Link comparison as a future

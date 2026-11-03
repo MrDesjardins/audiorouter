@@ -16,6 +16,12 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |
+| 2026-11-01 | Maintenance 0.0.13 to 0.0.26 (former `active/current.md`) | Execution history moved verbatim when the active plan became a short current-state document; not all sections are complete, and their open items are listed in the active plan's "Open owner gates" and the code-review fixes plan | [Execution record](2026-11-01-maintenance-0.0.13-to-0.0.26.md) |
+| 2026-11-01 | Soundboard tool and sound library | Delivered and released in 0.0.25/0.0.26 (owner: done); Explorer drop, continuity, fresh install, attended Stream Deck and library listening gates remain open | [Execution record](2026-11-01-soundboard.md) |
+| 2026-11-01 | Output Switch | Merged in PR #61 and released since 0.0.21; owner hardware test remains open | [Implementation record](2026-11-01-output-switch.md) |
+| 2026-11-01 | Wave Link parity, first round | Level target zone, hidden devices, app groups, Sound Check and Output Switch merged; "listen to any mix" not authorized | [Execution record](2026-11-01-wave-link-parity-first-round.md) |
+| 2026-10-31 | Release 0.0.25 preparation | Superseded, not published: the draft release was replaced by 0.0.26, which carries its contents | [Preparation record](2026-10-31-release-0.0.25.md) |
+| 2026-10-28 | Release 0.0.24 | Published unsigned app-only prerelease; clean-machine and hardware gates remain open | [Preparation record](2026-10-28-release-0.0.24.md) |
 | 2026-10-31 | Release 0.0.26 | Published unsigned app-only prerelease; tagged package, native editor/drop and public download verification passed; hardware/install gates remain open | [Execution record](2026-10-31-release-0.0.26.md) |
 | 2026-10-15 | Stream Deck core integration | Core plugin packaged with AudioRouter and confirmed working well by the owner; optional extensions remain separately deferred | [Execution record](2026-10-15-stream-deck-core.md) |
 | 2026-10-15 | Siege footstep and drone EQ | Measured EQ/dynamics chain applied to the owner's session; no product implementation remains | [Session record](2026-10-15-siege-footstep-eq.md) |

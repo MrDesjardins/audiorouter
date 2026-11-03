@@ -1,5 +1,14 @@
 # Active plan — 0.0.26 release and maintenance
 
+## Open owner gates
+
+Earlier review fixes are being conserved with the latest UX in the
+[integration plan](ux-earlier-review-integration.md). The
+[review fixes plan](code-review-fixes.md) retains historical measurements and
+remaining native/plugin qualification. M05 attended accessibility, scaling,
+usability and M08 installer, signing and endurance gates remain open. Parent
+must rebuild and repeat packaged smoke after this source integration.
+
 ## Final consolidation, review and local build — owner request
 
 Owner has finished playing and explicitly requests final review, tonight's
@@ -986,7 +995,7 @@ clips or justified non-audible exceptions.
 
 ## Release 0.0.25 — 2026-10-30, owner request
 
-Prepare the app-only unsigned prerelease containing everything on main, including the Soundboard and the static-runtime installer fix. Scope, tasks, gates and rollback: [release plan](release-0.0.25.md). Next: finish local checks and request PR approval.
+Prepare the app-only unsigned prerelease containing everything on main, including the Soundboard and the static-runtime installer fix. Scope, tasks, gates and rollback: [release plan](../archived/2026-10-31-release-0.0.25.md). Next: finish local checks and request PR approval.
 
 ## Recovery, installer and inventory qualification — 2026-10-28
 
@@ -1048,7 +1057,7 @@ checks; publishing and release qualification are separate. Checks: Windows, node
 
 ## Release 0.0.24 — 2026-10-27, owner request
 
-Prepare the app-only unsigned prerelease after the owner confirmed the long-sleep test passed. Scope, evidence, checks and rollback: [release plan](release-0.0.24.md). Next: validate and review the release-preparation branch; follow the repository PR approval rule.
+Prepare the app-only unsigned prerelease after the owner confirmed the long-sleep test passed. Scope, evidence, checks and rollback: [release plan](../archived/2026-10-28-release-0.0.24.md). Next: validate and review the release-preparation branch; follow the repository PR approval rule.
 
 ## Active task: Dependabot major/minor only (2026-10-26)
 
@@ -1865,7 +1874,7 @@ VST2 and UAD plugins. Started as documentation only; U0 code followed (below).
 The owner authorized a routing node with one input and two exclusive outputs,
 toggled in the app or on Stream Deck. Work is isolated on
 `feature/output-switch`; see the detailed
-[Output Switch plan](output-switch.md) for contracts, decisions, tasks and
+[Output Switch plan](../archived/2026-11-01-output-switch.md) for contracts, decisions, tasks and
 validation. Implementation and automated checks are complete. Local build:
 `C:\code\audiorouter\.worktrees\output-switch\src-tauri\target\debug\audiorouter-shell.exe`
 (worker and CLI sidecars are beside it). Local commit `834a327d` is on the
@@ -1974,7 +1983,7 @@ graph planning/commit path.
   it. Keep CAP-10
   overlap detection on the open list.
 - Next: PR #59 was merged by the owner on 2026-10-22. The owner selected Sound
-  Check (#10), now tracked in [Wave Link parity](wave-link-parity.md). The owner
+  Check (#10), now tracked in [Wave Link parity](../archived/2026-11-01-wave-link-parity-first-round.md). The owner
   also reported occupied Advanced EQ inputs should add a Mixer rather than
   replace the existing microphone; the fix and the updated Sound Check
   comparison row are in PR #60, opened at the owner's explicit request on
@@ -1997,7 +2006,7 @@ approval. PR #59 was eventually reopened and merged after owner testing.
 
 ## Wave Link parity, first round — 2026-10-22, owner request
 
-Tracked in its own plan, [Wave Link parity](wave-link-parity.md): level
+Tracked in its own plan, [Wave Link parity](../archived/2026-11-01-wave-link-parity-first-round.md): level
 target zone on the Meter (UI-21) and hidden devices in pickers (UI-22), both
 UI-only. The candidate list is in
 [Wave Link parity candidates](../future/wave-link-parity.md).
@@ -4731,7 +4740,7 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   and fmt are clean. The tests were not run here (they need Windows), and
   the test binary does not link in the container (`-lSwdevice` is
   missing). The typed method table was not done. Module list in the
-  [review](../future/code-review-2026-10-07.md#p2-1-the-control-plane-is-one-21500-line-file).
+  [review](code-review-2026-10-07.md#p2-1-the-control-plane-is-one-21500-line-file).
   Next action: a Windows CI run of `cargo test -p audiorouter-control`.
 
 - **P2-7 (DSP loops).** Engine block kernels (fixed delay, gain ramp,
@@ -4797,7 +4806,7 @@ Rollback: revert the commit.
   unmaintained rust-unic advisories in `src-tauri` are ignored until
   2027-01-07 (needs a Tauri update checked on Windows). Local: both
   `cargo deny` runs and all three audits pass. Details in the
-  [review](../future/code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
+  [review](code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
   Next action: first CI run of the `supply-chain` job.
 - **P2-8 coverage and soak:** nightly/manual `quality.yml` (Windows):
   `cargo llvm-cov` and Vitest coverage (not gated), a 20-minute engine soak

@@ -203,8 +203,8 @@ describe("session refresh and playback regressions", () => {
     });
     const apps = await screen.findByRole("tab", { name: "Apps" });
     fireEvent.click(apps);
-    expect(screen.getByRole("heading", { name: "Discord" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "OBS Studio" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Discord" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "OBS Studio" })).toBeTruthy();
   });
 
   it("rebinds a stopped native worker to the selected endpoints before Play", async () => {

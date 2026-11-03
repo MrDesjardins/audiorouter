@@ -1,5 +1,13 @@
 import { optionalLocalStorage } from "./presentationStorage";
-import { connectorGeometryReady, type ConnectorRequirement } from "./canvasReadiness";
+import {
+  FLOW_GROUPS,
+  FLOW_GROUP_LABELS,
+  NODE_KIND_FAMILY_LABELS,
+  humanizeNodeKind,
+  nodeFlowGroup,
+  nodeKindFamily,
+} from "./canvasNodeKinds";
+import { CanvasConnectorMeasurements } from "./CanvasConnectorMeasurements";
 import { smartLayout } from "./smartLayout";
 import {
   Background,
@@ -11,8 +19,6 @@ import {
   Position,
   ReactFlow,
   useInternalNode,
-  useReactFlow,
-  useUpdateNodeInternals,
   type Connection,
   type Edge as FlowEdge,
   type EdgeProps,
@@ -37,7 +43,7 @@ import {
   type CSSProperties,
 } from "react";
 import { useLiveDiagnostics, type TelemetryStore } from "./liveTelemetry";
-import type { DiagnosticsSnapshot, Node, NodeKind, Session } from "@audiorouter/contracts";
+import type { DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
 import {
   readLayout,
   writeLayout,
@@ -68,7 +74,7 @@ import {
   type CanvasSnapshot,
 } from "./canvasHistory";
 import { nodePortLabels } from "./graphView";
-import { applyCableAvailability, libraryEntries, type LibraryEntry, type LibraryFlowGroup } from "./library";
+import { applyCableAvailability, libraryEntries, type LibraryEntry } from "./library";
 import { cableName, useVirtualCableStatus } from "./virtualCableStatus";
 import {
   DEFAULT_NETWORK_AUDIO_PORT,
@@ -243,70 +249,6 @@ const NODE_TYPES = { flowNode: FlowNodeRenderer, visualGroup: CanvasGroupRendere
 const ownValue = <T,>(values: Record<string, T>, id: string): T | undefined =>
   Object.hasOwn(values, id) ? values[id] : undefined;
 
-// Card dimensions can arrive before connector bounds on a cold WebView load.
-// A later resize is not guaranteed, leaving saved edges and hit testing inert.
-// Repair only missing bounds, with bounded retries rather than a meter timer.
-function CanvasConnectorMeasurements({
-  geometryKey,
-  sessionId,
-  revision,
-}: {
-  geometryKey: string;
-  sessionId: string;
-  revision: number;
-}) {
-  const updateNodeInternals = useUpdateNodeInternals();
-  const { getInternalNode } = useReactFlow();
-  const [measurement, setMeasurement] = useState<{ key: string; status: "ready" | "exhausted" } | null>(null);
-  useEffect(() => {
-    const expected = JSON.parse(geometryKey) as ConnectorRequirement[];
-    let frame = 0;
-    let attempts = 0;
-    let cancelled = false;
-    let fontsReady = !document.fonts || document.fonts.status === "loaded";
-    const finish = (status: "ready" | "exhausted") =>
-      setMeasurement((current) =>
-        current?.key === geometryKey && current.status === status ? current : { key: geometryKey, status },
-      );
-    const repair = () => {
-      if (cancelled) return;
-      const missing = expected.filter((requirement) => {
-        const node = getInternalNode(requirement.id);
-        return !connectorGeometryReady(node?.measured, node?.internals.handleBounds, requirement);
-      });
-      if (missing.length && attempts++ < 8) {
-        updateNodeInternals(missing.map(({ id }) => id));
-        frame = requestAnimationFrame(repair);
-      } else if (!missing.length && fontsReady) finish("ready");
-      else if (missing.length) finish("exhausted");
-    };
-    frame = requestAnimationFrame(repair);
-    void document.fonts?.ready.then(() => {
-      if (!cancelled) {
-        fontsReady = true;
-        cancelAnimationFrame(frame);
-        attempts = 0;
-        frame = requestAnimationFrame(repair);
-      }
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(frame);
-    };
-  }, [geometryKey, getInternalNode, updateNodeInternals]);
-  const status = measurement?.key === geometryKey ? measurement.status : "waiting";
-  return (
-    <span
-      hidden
-      data-testid="canvas-readiness"
-      data-ready={status === "ready"}
-      data-state={status}
-      data-session-id={sessionId}
-      data-revision={revision}
-    />
-  );
-}
-
 const IDLE_CONNECTION_MODE = "idle" as const;
 const EDGE_SIDES: EdgeSide[] = ["left", "right", "top", "bottom"];
 const edgeSidePosition = (side: EdgeSide) =>
@@ -321,114 +263,6 @@ function edgePoint(node: ReturnType<typeof useInternalNode>, side: EdgeSide, fal
   if (side === "right") return { x: origin.x + width, y: origin.y + height / 2 };
   if (side === "top") return { x: origin.x + width / 2, y: origin.y };
   return { x: origin.x + width / 2, y: origin.y + height };
-}
-
-const NODE_FLOW_GROUPS: Record<NodeKind, LibraryFlowGroup> = {
-  physicalInput: "input",
-  testSignal: "input",
-  audioFile: "input",
-  soundboard: "input",
-  applicationCapture: "input",
-  endpointLoopback: "input",
-  virtualRenderSource: "input",
-  networkReceive: "input",
-  physicalOutput: "output",
-  virtualCaptureSink: "output",
-  networkSend: "output",
-  mixer: "tool",
-  gain: "tool",
-  volume: "tool",
-  bassTreble: "tool",
-  dehum: "tool",
-  declick: "tool",
-  inputSwitch: "tool",
-  outputSwitch: "tool",
-  duck: "tool",
-  denoise: "tool",
-  speechDenoise: "tool",
-  spectralGate: "tool",
-  funVoiceChanger: "tool",
-  firFilter: "tool",
-  timeShift: "tool",
-  mute: "tool",
-  meter: "tool",
-  parametricEq: "tool",
-  compressor: "tool",
-  gate: "tool",
-  limiter: "tool",
-  delay: "tool",
-  graphicEq: "tool",
-  pitch: "tool",
-  recorder: "tool",
-  plugin: "tool",
-};
-
-/** Where a node sits in the source -> tool -> destination signal-flow model,
- * used for the node card's accent color and the drag shelf's grouping. */
-function nodeFlowGroup(kind: NodeKind): LibraryFlowGroup {
-  return NODE_FLOW_GROUPS[kind] ?? "tool";
-}
-
-const FLOW_GROUPS: LibraryFlowGroup[] = ["input", "tool", "output"];
-const FLOW_GROUP_LABELS: Record<LibraryFlowGroup, string> = { input: "Inputs", tool: "Tools", output: "Outputs" };
-
-type NodeKindFamily = "input" | "native" | "vst" | "output";
-const NODE_KIND_FAMILY_LABELS: Record<NodeKindFamily, string> = {
-  input: "Input",
-  native: "Native",
-  vst: "VST",
-  output: "Output",
-};
-
-/** Beyond input/tool/output signal-flow position, a "tool" is either a
- * built-in native processor or an isolated-worker VST plugin; those are
- * visually and operationally very different (a VST loads user-supplied code
- * from disk in its own process), so this is called out as its own family
- * rather than folded into the generic "tool" label. */
-function nodeKindFamily(kind: NodeKind): NodeKindFamily {
-  const group = nodeFlowGroup(kind);
-  if (group === "input") return "input";
-  if (group === "output") return "output";
-  return kind === "plugin" ? "vst" : "native";
-}
-
-const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
-  physicalInput: "Physical Input",
-  physicalOutput: "Physical Output",
-  applicationCapture: "App Capture",
-  endpointLoopback: "Endpoint Loopback",
-  virtualRenderSource: "Cable Input",
-  virtualCaptureSink: "Cable Output",
-  testSignal: "Test Signal",
-  audioFile: "Audio File",
-  soundboard: "Soundboard",
-  parametricEq: "Advanced EQ",
-  graphicEq: "Graphic EQ",
-  delay: "Sync",
-  bassTreble: "Bass & Treble",
-  inputSwitch: "Input Switch",
-  outputSwitch: "Output Switch",
-  duck: "Duck",
-  speechDenoise: "Speech Denoise",
-  spectralGate: "Spectral Gate",
-  funVoiceChanger: "Fun Voice Changer",
-  firFilter: "FIR Filter",
-  timeShift: "Time Shift",
-  networkSend: "Network Send",
-  networkReceive: "Network Receive",
-};
-
-/** A readable node-kind label for the canvas card. A plugin's label names
- * its exact loaded format (VST2/VST3) instead of the generic "Plugin", since
- * that is the single most useful fact distinguishing it from a native tool. */
-function humanizeNodeKind(node: Node): string {
-  if (node.kind === "plugin") {
-    const format = node.parameters.format;
-    return format === "vst3" ? "VST3 Plugin" : format === "vst2" ? "VST2 Plugin" : "VST Plugin";
-  }
-  const known = NODE_KIND_LABELS[node.kind];
-  if (known) return known;
-  return node.kind.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/^./, (char) => char.toUpperCase());
 }
 
 function edgeHandleId(portName: string, side: EdgeSide) {

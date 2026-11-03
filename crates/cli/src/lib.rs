@@ -350,9 +350,8 @@ fn backup_command(args: &[&str]) -> Result<Value, CliError> {
             "--database and --output paths must be absolute".into(),
         ));
     }
-    Storage::open(source_path)
-        .map_err(|error| CliError::Storage(format!("{error:?}")))?
-        .backup_to(destination_path)
+    // Read-only: backing up never migrates or prunes the source.
+    Storage::backup_database(source_path, destination_path)
         .map_err(|error| CliError::Storage(format!("{error:?}")))?;
     Ok(json!({ "source": source, "destination": destination, "created": true }))
 }
@@ -2099,6 +2098,49 @@ fn render_human(command: &str, value: &Value) -> String {
 
 /// Run the local MCP stdio adapter for modern stateless and legacy MCP clients.
 /// stdout is reserved for newline-delimited JSON-RPC; diagnostics go to stderr.
+/// The largest MCP message one stdio line may carry.
+const MAX_MCP_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
+
+/// One newline-delimited MCP message read from stdio.
+#[derive(Debug, PartialEq, Eq)]
+enum McpLine {
+    Text(String),
+    /// Over the limit; the rest of the line was skipped without buffering.
+    TooLong,
+    /// Not UTF-8; answered with a parse error instead of ending the session.
+    InvalidUtf8,
+}
+
+/// Reads the next line, buffering at most `limit` bytes of it (review
+/// 2026-11-01, P3-1: `lines()` buffered a whole line before the size check
+/// and ended the session on invalid UTF-8). None at end of input.
+fn read_mcp_line(
+    input: &mut impl std::io::BufRead,
+    limit: usize,
+) -> std::io::Result<Option<McpLine>> {
+    let mut bytes = Vec::new();
+    let read = std::io::Read::take(&mut *input, limit as u64 + 1).read_until(b'\n', &mut bytes)?;
+    if read == 0 {
+        return Ok(None);
+    }
+    if bytes.last() == Some(&b'\n') {
+        bytes.pop();
+        if bytes.last() == Some(&b'\r') {
+            bytes.pop();
+        }
+    } else if bytes.len() > limit {
+        input.skip_until(b'\n')?;
+        return Ok(Some(McpLine::TooLong));
+    }
+    if bytes.len() > limit {
+        return Ok(Some(McpLine::TooLong));
+    }
+    Ok(Some(match String::from_utf8(bytes) {
+        Ok(text) => McpLine::Text(text),
+        Err(_) => McpLine::InvalidUtf8,
+    }))
+}
+
 pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
     // The OpenAI tunnel runtime uses this credential only to authenticate its
     // control-plane connection. It launches this trusted MCP child with the
@@ -2140,17 +2182,29 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
     let stdin = std::io::stdin();
     let mut stdout = std::io::BufWriter::new(std::io::stdout().lock());
     let mut initialized = false;
-    for line in stdin.lock().lines() {
-        let line = line.map_err(|error| CliError::Io(error.to_string()))?;
+    let mut input = stdin.lock();
+    while let Some(line) = read_mcp_line(&mut input, MAX_MCP_MESSAGE_BYTES)
+        .map_err(|error| CliError::Io(error.to_string()))?
+    {
         // One bad message is answered with a JSON-RPC error; the session
         // stays open for the client's next request.
-        if line.len() > 4 * 1024 * 1024 {
-            write_mcp_message(
-                &mut stdout,
-                &mcp_error(None, -32600, "MCP message exceeds the 4 MiB limit"),
-            )?;
-            continue;
-        }
+        let line = match line {
+            McpLine::Text(line) => line,
+            McpLine::TooLong => {
+                write_mcp_message(
+                    &mut stdout,
+                    &mcp_error(None, -32600, "MCP message exceeds the 4 MiB limit"),
+                )?;
+                continue;
+            }
+            McpLine::InvalidUtf8 => {
+                write_mcp_message(
+                    &mut stdout,
+                    &mcp_error(None, -32700, "parse error: invalid UTF-8"),
+                )?;
+                continue;
+            }
+        };
         let message: Value = match serde_json::from_str(&line) {
             Ok(message) => message,
             Err(_) => {
@@ -3043,7 +3097,7 @@ fn mcp_tool_call(
             );
         }
         "get_recipes" => {
-            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": MCP_RECIPES }], "isError": false } });
+            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}") }], "isError": false } });
         }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
@@ -3290,6 +3344,8 @@ fn mcp_generated_key(tool: &str) -> String {
 
 const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\n8. Play is refused, the sound loops or a device seems wrong: run check_setup first. Each finding names the session, node and device and gives the fix; Windows device settings (channels, rate) are changed by the user in Windows Sound settings, not by you. A 7.1 device feeding a Surround input is correct; do not tell the user to make it stereo.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
 
+const NETWORK_PAIRING_RECIPE: &str = "8. Send encrypted audio between computers: update AudioRouter on both peers together. On the sending PC add_tool kind=networkSend with parameters {host: <receiving PC IP>, port: 47777}; connect its input to the audio to send. On the receiving PC add_tool kind=networkReceive with parameters {sender: <sending PC IP>, port: 47777}; connect it to an output or Mixer. Ask the user to Generate a strong Pairing key in Properties and copy it to both peers with change_settings parameters {pairingKey: <same key>}. Never repeat the key in summaries or logs. With a key, audio is encrypted and authenticated and captured packets cannot play after receiver restart. Blank keys mean unencrypted, unpaired audio. Running-audio edits and Play require Operator/device authority; an Editor can prepare the stopped graph.";
+
 fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": message }] } })
 }
@@ -3297,6 +3353,33 @@ fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A non-UTF-8 line and an oversized line are each one bad message; the
+    /// lines after them still arrive (invalid UTF-8 used to end the MCP
+    /// session, and an oversized line was buffered whole first).
+    #[test]
+    fn mcp_stdio_lines_are_bounded_and_survive_invalid_utf8() {
+        let mut input = Vec::new();
+        input.extend_from_slice(b"{\"a\":1}\r\n");
+        input.extend_from_slice(b"\xff\xfe\n");
+        input.extend_from_slice(&[b'x'; 40]);
+        input.push(b'\n');
+        input.extend_from_slice(b"{\"b\":2}");
+        let mut reader = std::io::BufReader::with_capacity(8, input.as_slice());
+        let mut lines = Vec::new();
+        while let Some(line) = read_mcp_line(&mut reader, 16).unwrap() {
+            lines.push(line);
+        }
+        assert_eq!(
+            lines,
+            vec![
+                McpLine::Text("{\"a\":1}".into()),
+                McpLine::InvalidUtf8,
+                McpLine::TooLong,
+                McpLine::Text("{\"b\":2}".into()),
+            ]
+        );
+    }
 
     thread_local! {
         /// Backend methods `mcp_api_value` was asked to call on this thread.
@@ -4783,6 +4866,20 @@ mod tests {
         let source_arg = source.to_string_lossy().into_owned();
         let backup_arg = backup.to_string_lossy().into_owned();
         let restored_arg = restored.to_string_lossy().into_owned();
+        // A backup reads an existing database; it never creates one.
+        assert!(matches!(
+            run([
+                "backup",
+                "--database",
+                &source_arg,
+                "--output",
+                &backup_arg,
+                "--json",
+            ]),
+            Err(CliError::Storage(_))
+        ));
+        assert!(!source.exists() && !backup.exists());
+        drop(Storage::open(&source).unwrap());
         let created: Value = serde_json::from_str(
             &run([
                 "backup",
@@ -5210,6 +5307,68 @@ mod tests {
         let _ = std::fs::remove_file(database);
         let _ = std::fs::remove_file(candidate_path);
         let _ = std::fs::remove_file(plan_path);
+    }
+
+    #[test]
+    fn default_mcp_tools_configure_encrypted_network_pairing_and_explain_compatibility() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        plane.insert_session(session).unwrap();
+        let grant = audiorouter_control::ClientGrant::with_scopes([
+            PermissionScope::Read,
+            PermissionScope::GraphWrite,
+        ]);
+        let tool = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            let response = mcp_tool_call(
+                plane,
+                "paired-network",
+                &grant,
+                None,
+                &json!({"id":1,"params":{"name":name,"arguments":arguments}}),
+            );
+            assert_eq!(response["result"]["isError"], false, "{response}");
+            response
+        };
+        let recipes = tool(&mut plane, "get_recipes", json!({}));
+        assert!(recipes
+            .to_string()
+            .contains("update AudioRouter on both peers together"));
+        assert!(recipes
+            .to_string()
+            .contains("captured packets cannot play after receiver restart"));
+        tool(
+            &mut plane,
+            "add_tool",
+            json!({
+                "kind":"networkSend", "name":"Encrypted send",
+                "parameters":{"host":"127.0.0.1","port":47777}
+            }),
+        );
+        tool(
+            &mut plane,
+            "change_settings",
+            json!({
+                "node":"Encrypted send", "parameters":{"pairingKey":"NETWORK-PAIRING-TEST-KEY"}
+            }),
+        );
+        let saved = plane
+            .dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(2)),
+                method: "sessions.get".into(),
+                params: Some(json!({"sessionId":"session-fixture"})),
+            })
+            .result
+            .unwrap();
+        let node = saved["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["name"] == "Encrypted send")
+            .unwrap();
+        assert_eq!(node["parameters"]["pairingKey"], "NETWORK-PAIRING-TEST-KEY");
     }
 
     #[test]

@@ -601,6 +601,7 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
+          "options": ["once", "loop", "toggle", "hold"],
           "meaning": "Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
           "increase": "",
           "decrease": "",
@@ -639,7 +640,7 @@
       "sources": [
         "ui/src/SoundboardNodeEditor.tsx",
         "ui/src/SoundboardNodeControls.tsx",
-        "docs/plans/active/soundboard.md"
+        "docs/plans/archived/2026-11-01-soundboard.md"
       ]
     },
     {
@@ -819,7 +820,7 @@
         }
       ],
       "commonMistakes": [
-        "A matching pairing key authenticates packets but leaves samples unencrypted.",
+        "A matching pairing key encrypts and authenticates audio and prevents replay after receiver restart. Update AudioRouter on both computers together.",
         "Host names are unsupported; enter literal IP addresses.",
         "The receiver buffer trades delay for resilience."
       ],
@@ -918,7 +919,7 @@
         }
       ],
       "commonMistakes": [
-        "A matching pairing key authenticates packets but leaves samples unencrypted.",
+        "A matching pairing key encrypts and authenticates audio and prevents replay after receiver restart. Update AudioRouter on both computers together.",
         "Host names are unsupported; enter literal IP addresses.",
         "The receiver buffer trades delay for resilience."
       ],
@@ -953,6 +954,20 @@
           "decrease": "",
           "example": "Scan your installed x64 VST3 directory and add the intended effect.",
           "caution": "Compatibility labels are not a guarantee every plugin works. x64 VST2 remains qualification-gated."
+        },
+        {
+          "key": "passThroughAllowed",
+          "label": "Allow unchanged audio",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "meaning": "Deliberately allow this plugin or its shared VST2 chain to leave protected voice unchanged without the licence guard muting it.",
+          "increase": "",
+          "decrease": "",
+          "example": "Leave this off for an effect that should change your voice. Enable it only deliberately for a meter, analyser or intentionally bypassed plugin.",
+          "caution": "Enabling this weakens voice protection for the plugin or shared chain. A live change reloads the plugin and can cause a short gap."
         },
         {
           "key": "pluginParameter:<parameterId>",

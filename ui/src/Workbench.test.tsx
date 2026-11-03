@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { useState, type ComponentProps } from "react";
 import { Workbench, type WorkbenchTab } from "./Workbench";
@@ -91,7 +91,7 @@ function Harness() {
   return <Workbench {...props} tab={tab} onTab={onTab} />;
 }
 
-it("uses one tab stop, wrapping arrows and Home/End with automatic activation", () => {
+it("uses one tab stop, wrapping arrows and Home/End with automatic activation", async () => {
   render(<Harness />);
   const tabs = screen.getAllByRole("tab");
   const selected = (index: number) => {
@@ -101,15 +101,15 @@ it("uses one tab stop, wrapping arrows and Home/End with automatic activation", 
   };
   tabs[0].focus();
   fireEvent.keyDown(tabs[0], { key: "ArrowLeft" });
-  selected(12);
+  await waitFor(() => selected(12));
   fireEvent.keyDown(tabs[12], { key: "ArrowRight" });
-  selected(0);
+  await waitFor(() => selected(0));
   fireEvent.keyDown(tabs[0], { key: "End" });
-  selected(12);
+  await waitFor(() => selected(12));
   fireEvent.keyDown(tabs[12], { key: "Home" });
-  selected(0);
+  await waitFor(() => selected(0));
   fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
-  selected(1);
+  await waitFor(() => selected(1));
   fireEvent.keyDown(tabs[1], { key: "ArrowRight", ctrlKey: true });
   selected(1);
 });

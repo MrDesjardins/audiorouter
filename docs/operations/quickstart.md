@@ -416,9 +416,11 @@ through firewall* and make sure AudioRouter is allowed on **Private**
 networks, and that your network is set to Private, not Public.
 
 The stream is uncompressed 48 kHz float audio (about 3 Mbit/s for stereo).
-Pairing stops other devices from injecting or replaying audio, but the audio
-is **not encrypted**: anyone on the same network can still listen to it. Use
-it only on a network you trust. The pairing key is saved in the session (and
+Pairing encrypts and authenticates audio and blocks replay after receiver
+restart. Update AudioRouter on both computers together; old paired senders
+are refused. Without a pairing key, anyone on the network can listen or fake
+the sender's address. Use a trusted local network and **Generate** a strong
+key. The pairing key is saved in the session (and
 in an exported session bundle), never in AudioRouter's logs or diagnostics;
 treat a shared bundle like the key itself. On Wi-Fi, raise
 **Buffer (ms)** on the receiver (for example to 80) if you hear gaps; the
