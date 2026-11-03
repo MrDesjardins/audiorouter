@@ -302,6 +302,7 @@ gh api repos/MrDesjardins/audiorouter/releases --jq '.[0:3][]|[.tag_name,([.asse
 | 2026-10-30 | r/vibecoding rules read by the owner (rules 1 and 3 shape the post) | | | | | | |
 | 2026-10-30 | r/vibecoding post (build story; question about signing a kernel driver cheaply) | [post](https://www.reddit.com/r/vibecoding/comments/1xjv4i5/how_i_built_audiorouter_free_open_source_windows/) | | 51 at posting | | v0.0.24: 105 at last check | |
 | +48 h | | | | | | | |
+| 2026-11-01 | r/windowsapps post (owner) | [post](https://www.reddit.com/r/windowsapps/comments/1xlmzzv/audiorouter_free_open_source_visual_audio_routing/) | | 57 on the day | | v0.0.26: 61 | |
 
 ## Success measures
 
@@ -336,7 +337,7 @@ owner's approval.
 | When | What |
 | --- | --- |
 | Fri 2026-10-30 | r/vibecoding (or an alternative), optional dev.to |
-| Sun 2026-11-01 | r/Windows11 Software Showoff Sunday thread (draft in the posts file), simple screenshot reused |
+| Sun 2026-11-01 | **Done differently:** the owner posted to r/windowsapps ([post](https://www.reddit.com/r/windowsapps/comments/1xlmzzv/audiorouter_free_open_source_visual_audio_routing/)). The r/Windows11 Sunday thread (draft in the posts file) moves to a later Sunday, keeping at most two community posts a week |
 | Mon 2026-11-02 | Review 48-hour results; confirm the metrics workflow works; list repeated questions |
 | From Sat 2026-11-08 | r/SideProject with the project story, using what the first three taught; r/Twitch / r/obs after that |
 | After 0.0.25 | Soundboard clip as the news for a creator-focused post |
