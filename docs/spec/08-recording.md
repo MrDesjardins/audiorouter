@@ -19,6 +19,10 @@ Milestone ownership: M04 core recorder/library API; M05 UI; M07 recovery; M08 en
 
 ## State machine
 
+Library renames preserve the file's audio format: WAV, FLAC and MP3 keep
+their original extension (case-insensitive). A rename never converts bytes;
+changing formats requires a separate recording/export conversion.
+
 `idle → armed → recording ↔ paused → stopping → completed`, with `failed` from any active stage. A new start creates a new recording ID/file set. Node configuration and historical recording objects are separate. Stop is idempotent; retrying the same start idempotency key cannot create another file. A timed-out caller queries operation status before retrying with a new key.
 
 Split requests return the old and new recording-part IDs and exact boundary frame. Paused recorders split by closing the old part and preparing the next; the next receives samples only on resume. Stopping a session finalizes all active recorders with individual results. A failed recorder does not stop other recorders or outputs.

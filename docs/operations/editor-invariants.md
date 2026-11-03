@@ -20,6 +20,11 @@ the renderer graph validation or audio authority.
   A gesture freezes ownership and initial geometry. The app-local tool
   clipboard has window lifetime and deliberately survives session switching;
   pasted nodes receive new IDs and omit connections and sidechain references.
+- Switching sessions requires a clean draft: Save or Revert edits first.
+  An active-session change from MCP or another client leaves a dirty editor
+  on its current session with a visible explanation. Confirmed deletion is
+  deliberate discard; deleting the selected session also clears its default
+  API target until another session is selected or created.
 
 ## Commands and restore
 
@@ -75,6 +80,10 @@ Executable coverage:
   [clipboard](../../ui/e2e/canvas-clipboard-regressions.pw.ts): real adapter and
   event interleavings. Three-theme scenarios establish browser appearance;
   packaged WebView2, Narrator and real audio remain distinct evidence.
+- [Draft selection safety](../../ui/e2e/session-draft-safety.pw.ts) and
+  [selection events](../../ui/src/App.sessionSelection.test.tsx): picker and
+  external selection preserve dirty drafts without stopping audio; Save or
+  Revert permits subsequent selection.
 
 The generated geometry suite covers 600 nested gestures under fixed seeds.
 The persistence corpus checks 300 generated records and canonical round-trips.

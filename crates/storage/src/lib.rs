@@ -2176,6 +2176,10 @@ impl Storage {
             "DELETE FROM graph_plans WHERE session_id = ?1",
             params![id.as_str()],
         )?;
+        transaction.execute(
+            "DELETE FROM control_settings WHERE key = 'activeSessionId' AND value = ?1",
+            params![id.as_str()],
+        )?;
         transaction.commit()?;
         Ok(changed != 0)
     }
@@ -2530,11 +2534,21 @@ impl Storage {
                     .and_then(|value| value.to_str())
                     .map(|value| value.to_ascii_lowercase())
                     .as_deref(),
-                Some("wav") | Some("flac")
+                Some("wav") | Some("flac") | Some("mp3")
             )
         {
             return Err(StorageError::InvalidRecording(
-                "rename destination must be an absolute wav/flac path".into(),
+                "rename destination must be an absolute wav/flac/mp3 path".into(),
+            ));
+        }
+        if !source
+            .extension()
+            .and_then(|value| value.to_str())
+            .zip(destination.extension().and_then(|value| value.to_str()))
+            .is_some_and(|(before, after)| before.eq_ignore_ascii_case(after))
+        {
+            return Err(StorageError::InvalidRecording(
+                "renaming does not convert audio; keep the original file extension".into(),
             ));
         }
         let source_metadata = std::fs::symlink_metadata(source)?;
@@ -5590,6 +5604,21 @@ mod tests {
         assert!(storage.load_session(&original.id).unwrap().is_none());
         assert!(storage.load_history(&original.id, 10).unwrap().is_empty());
         assert!(storage.load_graph_plan("plan-delete").unwrap().is_none());
+    }
+
+    #[test]
+    fn deleting_a_session_only_clears_its_own_active_selection() {
+        let storage = Storage::open_memory().unwrap();
+        let original = session();
+        storage.save_session(&original).unwrap();
+        storage.save_active_session_id(&original.id).unwrap();
+        storage.delete_session(&EntityId::new("unrelated")).unwrap();
+        assert_eq!(
+            storage.load_active_session_id().unwrap(),
+            Some(original.id.clone())
+        );
+        storage.delete_session(&original.id).unwrap();
+        assert_eq!(storage.load_active_session_id().unwrap(), None);
     }
 
     #[test]

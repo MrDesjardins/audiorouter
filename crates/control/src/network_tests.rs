@@ -48,6 +48,10 @@ fn live_network_test_guard() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(windows)]
 fn network_tone_through_backend(paired: bool) {
     let _serial = live_network_test_guard();
+    // Match the real transport's service thread. Without this guard the
+    // nominal 1 ms sleeps can round to Windows' 15.6 ms default tick once
+    // unrelated tests release their timer request.
+    let (_scheduling, _) = audiorouter_windows_audio::AudioServiceThreadGuard::enter();
     let root = std::env::temp_dir().join(format!(
         "audiorouter-net-route-{}-{}",
         std::process::id(),
@@ -146,6 +150,11 @@ fn network_tone_through_backend(paired: bool) {
             .map(|session| {
                 let id = session.id.clone();
                 let mut plane = ControlPlane::default();
+                // Production serves native paths on the dedicated audio
+                // thread. Inline-only pumping made this test's recorder and
+                // diagnostic calls stall playout, unlike the desktop backend.
+                plane.mark_audio_service_started();
+                assert!(plane.audio_thread.is_some());
                 plane.insert_session(session).unwrap();
                 plane.configure_recording_root(&root).unwrap();
                 (plane, id)

@@ -407,6 +407,9 @@ impl NetworkSender {
         let handle = std::thread::Builder::new()
             .name("audiorouter-network-send".into())
             .spawn(move || {
+                // Socket delivery feeds the same deadline as the native pump.
+                // Keep encryption/I/O from being starved by ordinary work.
+                let (_scheduling, _) = crate::AudioServiceThreadGuard::enter();
                 let mut secure_key: Option<SecureNetworkKey> = None;
                 let mut freshness = SenderFreshness::default();
                 while thread_shared.running.load(Ordering::Acquire) {
@@ -729,12 +732,23 @@ fn auth_failure_from_code(code: u8) -> Option<NetworkAuthFailure> {
 
 impl ReceiverShared {
     fn push(&self, packet: ReceivePacket) {
+        self.push_observed(packet, || {});
+    }
+
+    /// The observer lets a regression schedule consumption at publication.
+    /// Production supplies an empty closure, compiled away.
+    fn push_observed(&self, packet: ReceivePacket, after_publish: impl FnOnce()) {
         let frames = packet.frames;
+        // Account before publishing: the consumer may drain a packet as soon
+        // as ready.push succeeds. Publishing first allowed its subtraction to
+        // wrap the counter, making playout discard valid buffered audio.
+        self.queued_frames.fetch_add(frames, Ordering::AcqRel);
         match self.ready.push(packet) {
             Ok(()) => {
-                self.queued_frames.fetch_add(frames, Ordering::AcqRel);
+                after_publish();
             }
             Err(packet) => {
+                self.queued_frames.fetch_sub(frames, Ordering::AcqRel);
                 let _ = self.free.push(packet);
                 self.overflows.fetch_add(1, Ordering::Relaxed);
             }
@@ -967,6 +981,7 @@ fn buffer_target_frames(buffer_ms: f64, rate: f64) -> usize {
 /// thread: socket reads, pairing verification and the replay window run
 /// here, before a packet reaches the bounded playout queue.
 fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
+    let (_scheduling, _) = crate::AudioServiceThreadGuard::enter();
     let mut datagram = vec![0_u8; MAX_NETWORK_PACKET_BYTES + 1];
     let mut stream: Option<(u32, u32)> = None; // (stream id, next sequence)
     let mut pairing_key: Option<NetworkPairingKey> = None;
@@ -1367,6 +1382,47 @@ mod tests {
             stream_id: 7,
             sequence,
         }
+    }
+
+    #[test]
+    fn receiving_packet_publication_cannot_wrap_the_playout_frame_count() {
+        let receiver =
+            NetworkReceiver::start("127.0.0.1".parse().unwrap(), free_port(), 40.0).unwrap();
+        let shared = &receiver.shared;
+        let mut packet = shared.free.pop().unwrap();
+        packet.frames = 128;
+        packet.channels = 2;
+        packet.samples[..256].fill(0.25);
+        shared.push_observed(packet, || {
+            let mut playout = receiver.playout.lock().unwrap();
+            assert_eq!(playout.read(shared, 128, 2), 128);
+            assert_eq!(shared.queued_frames.load(Ordering::Acquire), 0);
+        });
+        assert_eq!(shared.queued_frames.load(Ordering::Acquire), 0);
+        assert_eq!(receiver.stats().overflow_packets, 0);
+        for _ in 0..RECEIVE_QUEUE_PACKETS {
+            let mut packet = shared.free.pop().unwrap();
+            packet.frames = 128;
+            packet.channels = 2;
+            shared.push(packet);
+        }
+        let buffered = RECEIVE_QUEUE_PACKETS * 128;
+        assert_eq!(shared.queued_frames.load(Ordering::Acquire), buffered);
+        shared.push_observed(
+            ReceivePacket {
+                samples: vec![0.0; 256].into_boxed_slice(),
+                channels: 2,
+                frames: 128,
+            },
+            || panic!("a rejected packet was published"),
+        );
+        assert_eq!(shared.queued_frames.load(Ordering::Acquire), buffered);
+        assert_eq!(receiver.stats().overflow_packets, 1);
+        let mut playout = receiver.playout.lock().unwrap();
+        for _ in 0..RECEIVE_QUEUE_PACKETS {
+            assert_eq!(playout.read(shared, 128, 2), 128);
+        }
+        assert_eq!(shared.queued_frames.load(Ordering::Acquire), 0);
     }
 
     #[test]

@@ -5372,6 +5372,94 @@ mod tests {
     }
 
     #[test]
+    fn default_mcp_rename_keeps_mp3_audio_and_its_extension() {
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-mcp-rename-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let source = root.join("take.mp3");
+        let destination = root.join("renamed.mp3");
+        std::fs::write(&source, b"audio fixture").unwrap();
+        let storage = audiorouter_storage::Storage::open_memory().unwrap();
+        storage
+            .save_recording(&audiorouter_storage::RecordingRecord {
+                id: "take".into(),
+                session_id: "session".into(),
+                recorder_id: "recorder".into(),
+                path: source.to_string_lossy().into_owned(),
+                format: "mp3".into(),
+                channels: 2,
+                sample_rate: 48_000,
+                frames: 1,
+                file_bytes: 13,
+                start_time: "2026-11-03T00:00:00Z".into(),
+                state: "completed".into(),
+                missing: false,
+                title: None,
+                artist: None,
+                comment: None,
+                dither: false,
+                conversion: "none".into(),
+            })
+            .unwrap();
+        let mut plane = ControlPlane::with_storage("mcp-rename", storage);
+        let grant = audiorouter_control::ClientGrant::with_scopes([
+            audiorouter_domain::PermissionScope::Record,
+        ]);
+        let response = mcp_tool_call(
+            &mut plane,
+            "mp3-test",
+            &grant,
+            None,
+            &json!({ "id": 1, "params": { "name": "rename_recording", "arguments": {
+                "recordingId": "take", "newPath": destination, "idempotencyKey": "rename-mp3"
+            } } }),
+        );
+        assert_ne!(response["result"]["isError"], true, "{response}");
+        assert!(!source.exists());
+        assert_eq!(std::fs::read(&destination).unwrap(), b"audio fixture");
+        std::fs::remove_file(destination).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn default_mcp_tools_recover_after_the_open_session_is_deleted() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        plane.insert_session(session.clone()).unwrap();
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let tool = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            mcp_tool_call(
+                plane,
+                "deleted-session-test",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": name, "arguments": arguments } }),
+            )
+        };
+        let removed = tool(
+            &mut plane,
+            "delete_session",
+            json!({ "sessionId": session.id }),
+        );
+        assert_ne!(removed["result"]["isError"], true, "{removed}");
+        let summary = tool(&mut plane, "get_session_summary", json!({}));
+        assert_eq!(summary["result"]["isError"], true, "{summary}");
+        assert!(summary.to_string().contains("no session is active"));
+        let created = tool(
+            &mut plane,
+            "create_session",
+            json!({ "name": "Replacement" }),
+        );
+        assert_ne!(created["result"]["isError"], true, "{created}");
+        let summary = tool(&mut plane, "get_session_summary", json!({}));
+        assert_ne!(summary["result"]["isError"], true, "{summary}");
+        assert!(summary.to_string().contains("Replacement"));
+    }
+
+    #[test]
     fn assistant_tools_configure_a_route_by_name_without_technical_arguments() {
         let mut plane = ControlPlane::default();
         let session: audiorouter_domain::Session =

@@ -175,6 +175,56 @@ fn the_selected_session_survives_a_backend_restart() {
 }
 
 #[test]
+fn deleting_the_selected_session_clears_the_default_target() {
+    for storage in [None, Some(Storage::open_memory().unwrap())] {
+        let mut plane = storage.map_or_else(ControlPlane::default, |storage| {
+            ControlPlane::with_storage("delete-selection", storage)
+        });
+        let original = session();
+        plane.insert_session(original.clone()).unwrap();
+        let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+            plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            })
+        };
+        assert!(call(
+            &mut plane,
+            "sessions.active.set",
+            json!({ "sessionId": original.id, "idempotencyKey": "select-deleted" }),
+        )
+        .error
+        .is_none());
+        assert!(call(
+            &mut plane,
+            "sessions.delete",
+            json!({ "sessionId": original.id, "idempotencyKey": "delete-selected" }),
+        )
+        .error
+        .is_none());
+        assert_eq!(plane.active_session_id, None);
+        if let Some(storage) = &plane.storage {
+            assert_eq!(storage.load_active_session_id().unwrap(), None);
+        }
+        let summary = call(&mut plane, "sessions.summary", json!({}));
+        assert!(summary
+            .error
+            .unwrap()
+            .message
+            .contains("no session is active"));
+        let mut replacement = original;
+        replacement.id = EntityId::new("replacement");
+        plane.insert_session(replacement.clone()).unwrap();
+        assert_eq!(plane.active_session_id, Some(replacement.id));
+        assert!(call(&mut plane, "sessions.summary", json!({}))
+            .error
+            .is_none());
+    }
+}
+
+#[test]
 fn session_create_and_delete_protect_running_resources() {
     let mut plane = ControlPlane::default();
     let mut created = session();
