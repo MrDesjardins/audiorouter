@@ -2,6 +2,16 @@
 
 ## Open owner gates
 
+PR #107 Windows CI repair on 7c3cac7f: workspace/shell tests passed, then
+`probe-build` reproduced a stale independent WASAPI probe lockfile under
+`--locked`. Refreshed only `tools/m00-wasapi-probe/Cargo.lock` offline: records
+protocol ChaCha20, Windows getrandom, cipher 0.5.2 and non-yanked inout 0.2.5.
+Exact `node tools/quality/verify.mjs --checks probe-build` now passes its locked
+Rust check and compile-only C++ probe acceptance on Windows. No device stream
+opened. Other standalone cable-quality metadata remains locked-compatible and
+does not depend on the changed crates. Failure annotation contained exit code
+only; job logs identify the lock drift. No production build change is needed.
+
 PR #107 main-conflict repair: main `9bf6e72b` is the squash merge of #106.
 Compared `fb38dd96..origin/main`: setup source is identical; only dependency/
 workflow/plan updates differ, already conserved by the previous main merge.
