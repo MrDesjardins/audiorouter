@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { DeviceListItem, DiagnosticsSnapshot, Session } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import type { SetupStep } from "./setup";
+import { SetupCheck } from "./SetupCheck";
 import { ThisPcDevices } from "./ThisPcDevices";
 import { VirtualCablePanel } from "./VirtualCablePanel";
 
@@ -29,6 +30,21 @@ export function SetupWorkbench({
 }) {
   // Stable across renders so the panel probes the shell once, not per refresh.
   const cableManagementAvailable = useMemo(() => backend.virtualCableManagementAvailable?.bind(backend), [backend]);
+  const checkSetup = useMemo(() => backend.checkSetup?.bind(backend), [backend]);
+  // The setup check runs again when a device's format or a saved session
+  // changes; a primitive key so telemetry refreshes do not restart it.
+  const setupCheckKey = useMemo(
+    () =>
+      [
+        ...devices.map((device) =>
+          "format" in device
+            ? `${device.id}:${device.format.channels}:${device.format.sampleRateHz}`
+            : `${device.id}:${device.state}`,
+        ),
+        ...sessions.map((session) => `${session.id}@${session.revision}`),
+      ].join("|"),
+    [devices, sessions],
+  );
   return (
     <>
       {section === "status" ? (
@@ -47,6 +63,7 @@ export function SetupWorkbench({
               ))}
             </ul>
           </section>
+          <SetupCheck connected={backend.connected} checkSetup={checkSetup} refreshKey={setupCheckKey} />
           <ThisPcDevices devices={devices} connected={backend.connected} onRefresh={() => refreshDevices()} />
         </>
       ) : (

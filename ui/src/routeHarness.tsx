@@ -12,6 +12,7 @@ import type {
   DiscoveryDocument,
   DiagnosticsSnapshot,
   PluginScanResult,
+  SetupCheckResult,
 } from "@audiorouter/contracts";
 import "./styles.css";
 
@@ -41,6 +42,8 @@ const injected = globalThis as {
   __routeFixtureSoundboardStatus?: Awaited<ReturnType<NonNullable<UiBackend["soundboardStatus"]>>>;
   /** `soundLibrary.list` answer; library previews return a tiny silent WAV. */
   __routeFixtureSoundLibrary?: Awaited<ReturnType<NonNullable<UiBackend["soundLibraryList"]>>>;
+  /** `system.checkSetup` answer for the Status tab (UI-27). */
+  __routeFixtureSetupCheck?: SetupCheckResult;
   /** When set, audio uploads succeed with this decoded length; each finished upload is recorded. */
   __routeFixtureUploadDurationMs?: number;
 };
@@ -442,6 +445,17 @@ const previewBackend: UiBackend = {
         },
       }
     : {}),
+  async checkSetup() {
+    return structuredClone(
+      injected.__routeFixtureSetupCheck ?? {
+        findings: [],
+        truncated: 0,
+        sessionsChecked: 1,
+        devicesChecked: 2,
+        notChecked: ["Browser fixture: no Windows devices are read."],
+      },
+    );
+  },
   async listApplications() {
     if (injected.__routeFixtureApplications) return structuredClone(injected.__routeFixtureApplications);
     return [

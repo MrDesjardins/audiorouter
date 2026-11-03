@@ -26,6 +26,7 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `system.handshake` | `read` | read-only |
 | `status.get` | `read` | read-only |
 | `system.diagnostics` | `read` | read-only |
+| `system.checkSetup` | `read` | read-only; judges saved sessions against the active devices (UI-27): outputs and Surround inputs Play would refuse, feedback loops (also across sessions), missing devices, cables not at 48 kHz; optional `sessionId`; MCP tool `check_setup` |
 | `diagnostics.getVerbose` | `read` | read-only; whether opt-in verbose logging is on and the seconds left |
 | `diagnostics.setVerbose` | `sessionControl` | mutating; `{enabled}` turns verbose logging on for one hour (it expires by itself) or off; logs only, never audio or the saved graph |
 | `system.quit` | `sessionControl` | external operation; requires an idempotency key; finalizes active recorders before stopping running sessions |

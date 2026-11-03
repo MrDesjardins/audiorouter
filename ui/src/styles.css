@@ -786,6 +786,47 @@ button:disabled {
 .setup-status-list .is-needs-attention .setup-status-dot {
   background: var(--warning, #e5a43b);
 }
+/* Setup check (UI-27): fixed slots so results never move the panel below. */
+.setup-check {
+  display: grid;
+  gap: 0.5rem;
+}
+.setup-check .section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.setup-check p {
+  margin: 0;
+}
+.setup-check-summary {
+  min-height: 1.5em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setup-check-findings {
+  height: 12rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+.setup-check-status {
+  height: 2.8em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.setup-status-list .is-problem .setup-status-dot {
+  background: var(--danger, #ff6b6b);
+}
+.setup-status-list .is-warning .setup-status-dot {
+  background: var(--warning, #e5a43b);
+}
+.setup-status-list .is-tip .setup-status-dot {
+  background: var(--cyan, #25b8df);
+}
 .this-pc-devices {
   display: grid;
   gap: 0.6rem;

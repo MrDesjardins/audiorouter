@@ -781,6 +781,33 @@ export interface StatusSnapshot {
   eventCursor: { backendEpoch: number; latestSequence: number };
 }
 
+/** One `system.checkSetup` finding (UI-27). */
+export interface SetupFinding {
+  code: "outputFormat" | "surroundDevice" | "deviceMissing" | "feedbackLoop" | "crossSessionLoop" | "cableRate";
+  /** problem: Play is refused or audio loops; warning: likely wrong; tip: optional. */
+  severity: "problem" | "warning" | "tip";
+  sessionId: string;
+  sessionName: string;
+  nodeId?: string;
+  nodeName?: string;
+  deviceId?: string;
+  deviceName?: string;
+  /** The other session of a loop across sessions. */
+  otherSessionId?: string;
+  message: string;
+  fix: string;
+}
+
+export interface SetupCheckResult {
+  findings: SetupFinding[];
+  /** Findings beyond the returned 100. */
+  truncated: number;
+  sessionsChecked: number;
+  devicesChecked: number;
+  /** What the check cannot see, in plain words. */
+  notChecked: string[];
+}
+
 export interface DiagnosticsSnapshot {
   build: string;
   backend: "control-plane";
@@ -1366,6 +1393,7 @@ export type ImplementedMethod =
   | "system.handshake"
   | "status.get"
   | "system.diagnostics"
+  | "system.checkSetup"
   | "diagnostics.getVerbose"
   | "diagnostics.setVerbose"
   | "system.quit"
@@ -1506,6 +1534,7 @@ export type MethodParams = {
   "system.handshake": { protocolVersion: { major: number; minor: number } };
   "status.get": undefined;
   "system.diagnostics": undefined;
+  "system.checkSetup": { sessionId?: string | null } | undefined;
   "diagnostics.getVerbose": undefined;
   "diagnostics.setVerbose": { enabled: boolean };
   "system.quit": { idempotencyKey: string };
@@ -1708,6 +1737,7 @@ export type MethodResult = {
   };
   "status.get": StatusSnapshot;
   "system.diagnostics": DiagnosticsSnapshot;
+  "system.checkSetup": SetupCheckResult;
   "diagnostics.getVerbose": VerboseDiagnosticsStatus;
   "diagnostics.setVerbose": VerboseDiagnosticsStatus;
   "system.quit": SystemQuitResult;

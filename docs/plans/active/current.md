@@ -1,5 +1,10 @@
 # Active plan — 0.0.26 release and maintenance
 
+Setup check (2026-11-02, owner request): a backend check and Status-tab list
+that flags device setups Play will refuse, feedback loops across routes,
+missing devices and cable rates (UI-27). Branch `feature/setup-check`; plan,
+tasks and validation in [setup-check.md](setup-check.md).
+
 CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
 settings to the generic tool-workflow test. Input, Soundboard and network
 nodes use dedicated editors. Reuse the inspector's exhaustive editor

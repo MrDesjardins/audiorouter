@@ -2407,6 +2407,7 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "list_presets",
     "get_status",
     "get_virtual_cable_status",
+    "check_setup",
 ];
 
 fn is_default_mcp_tool(name: &str) -> bool {
@@ -2673,6 +2674,7 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "list_presets"
             | "get_status"
             | "get_virtual_cable_status"
+            | "check_setup"
     );
     let destructive = matches!(
         name,
@@ -2732,6 +2734,7 @@ fn mcp_tools() -> Value {
         { "name": "delete_session", "description": "Permanently delete a saved session. Ask the user to confirm the exact session first.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to delete (from list_sessions)." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "list_presets", "description": "List the built-in processing presets with what each one does.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "get_status", "description": "Read whether the backend and audio are available and which sessions are running.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
+        { "name": "check_setup", "description": "Check the saved sessions against this PC's audio devices and list problems with plain fixes: an output device or Surround input that Play would refuse (for example a 7.1 cable used as an output), feedback loops (also between two sessions), devices that are missing or got new IDs, and virtual cables not at 48 kHz. A 7.1 cable feeding a Surround input is correct and is not reported. Read-only; settings inside other apps are not visible.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Only report findings for this session (default: every saved session)." } }, "required": [], "additionalProperties": false } },
         { "name": "get_virtual_cable_status", "description": "Read whether the AudioRouter virtual cable driver is installed, its version and cables (installing it is done in the window).", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "describe_capabilities", "description": "Read AudioRouter capabilities and schemas.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_startup", "description": "Read sign-in startup capability without changing startup.", "inputSchema": { "type": "object", "additionalProperties": false } },
@@ -2876,6 +2879,7 @@ fn mcp_tool_call(
         "list_presets" => ("presets.list", None),
         "get_status" => ("status.get", None),
         "get_virtual_cable_status" => ("virtualCable.status", None),
+        "check_setup" => ("system.checkSetup", Some(arguments)),
         "trigger_sound" => ("soundboard.trigger", Some(mcp_node_params(arguments))),
         "stop_sounds" => ("soundboard.stop", Some(mcp_node_params(arguments))),
         "get_soundboard_status" => ("soundboard.status", Some(mcp_node_params(arguments))),
@@ -3284,7 +3288,7 @@ fn mcp_generated_key(tool: &str) -> String {
     )
 }
 
-const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
+const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\n8. Play is refused, the sound loops or a device seems wrong: run check_setup first. Each finding names the session, node and device and gives the fix; Windows device settings (channels, rate) are changed by the user in Windows Sound settings, not by you. A 7.1 device feeding a Surround input is correct; do not tell the user to make it stereo.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
 
 fn mcp_tool_error(id: Option<Value>, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": message }] } })
@@ -3641,6 +3645,39 @@ mod tests {
         assert!(playing, "the pressed slot plays");
         let stopped = tool(&mut plane, "stop_sounds", json!({ "node": "Party Board" }));
         assert_eq!(stopped["nodeId"], "board", "{stopped}");
+    }
+
+    /// `check_setup` is a read an Observer may run (UI-27); its session
+    /// filter reaches the backend and an unknown session is refused there.
+    #[test]
+    fn check_setup_works_through_mcp_for_an_observer() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let session_id = session.id.as_str().to_owned();
+        plane.insert_session(session).unwrap();
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Observer);
+        let call = |plane: &mut ControlPlane, arguments: Value| {
+            mcp_tool_call(
+                plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": "check_setup", "arguments": arguments } }),
+            )
+        };
+        for arguments in [json!({}), json!({ "sessionId": session_id })] {
+            let response = call(&mut plane, arguments);
+            assert_eq!(response["result"]["isError"], false, "{response}");
+            let result = &response["result"]["structuredContent"]["result"];
+            assert!(result["findings"].is_array(), "{result}");
+            assert!(result["notChecked"].is_array(), "{result}");
+        }
+        let response = call(&mut plane, json!({ "sessionId": "no-such-session" }));
+        assert_eq!(response["result"]["isError"], true, "{response}");
+        assert_eq!(mcp_tool_annotations("check_setup")["readOnlyHint"], true);
     }
 
     /// The other new task tools through the real MCP entry point: reads and
@@ -5623,7 +5660,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 90);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 91);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

@@ -89,55 +89,72 @@ pub(crate) fn reject_endpoint_feedback(
         let Some(capture) = source.parameters.get("endpointId").and_then(Value::as_str) else {
             continue;
         };
-        let mut pending = vec![source.id.clone()];
-        let mut visited = std::collections::HashSet::new();
-        while let Some(id) = pending.pop() {
-            if !visited.insert(id.clone()) {
-                continue;
-            }
-            for edge in session
-                .edges
-                .iter()
-                .filter(|edge| edge.enabled && edge.source_node == id)
-            {
-                let Some(node) = session
-                    .nodes
-                    .iter()
-                    .find(|node| node.id == edge.destination_node)
-                else {
-                    continue;
-                };
-                if node.kind == NodeKind::PhysicalOutput && node.enabled && !node.bypass {
-                    if let Some(render) = node.parameters.get("endpointId").and_then(Value::as_str)
-                    {
-                        if ((source.kind == NodeKind::EndpointLoopback
-                            || node_spatial_headphones(source))
-                            && render == capture)
-                            || returns.iter().any(|(r, c)| r == render && c == capture)
-                        {
-                            return Err(ControlError::InvalidRequest(format!(
-                                "Audio feedback loop: \"{}\" feeds \"{}\", whose output returns to that input. You may keep this selection, but playback is blocked until you choose a different output cable or remove the return connection. Use separate cables for source audio and the mixed/recording feed.", source.name, node.name
-                            )));
-                        }
-                    }
-                }
-                if node.enabled
-                    || node
-                        .ports
-                        .iter()
-                        .any(|port| port.direction == PortDirection::Input)
-                        && node
-                            .ports
-                            .iter()
-                            .any(|port| port.direction == PortDirection::Output)
-                        && !matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch)
+        for node in reachable_outputs(session, &source.id) {
+            if let Some(render) = node.parameters.get("endpointId").and_then(Value::as_str) {
+                if ((source.kind == NodeKind::EndpointLoopback || node_spatial_headphones(source))
+                    && render == capture)
+                    || returns.iter().any(|(r, c)| r == render && c == capture)
                 {
-                    pending.push(node.id.clone());
+                    return Err(ControlError::InvalidRequest(format!(
+                        "Audio feedback loop: \"{}\" feeds \"{}\", whose output returns to that input. You may keep this selection, but playback is blocked until you choose a different output cable or remove the return connection. Use separate cables for source audio and the mixed/recording feed.", source.name, node.name
+                    )));
                 }
             }
         }
     }
     Ok(())
+}
+
+/// The enabled, unbypassed Physical Outputs that audio from `source` reaches
+/// through enabled connections. Disabled pass-through tools keep their dry
+/// path; a disabled Mixer or Input Switch stops it. Shared by the Play
+/// feedback refusal and the setup check (UI-27).
+pub(crate) fn reachable_outputs<'s>(
+    session: &'s Session,
+    source: &EntityId,
+) -> Vec<&'s audiorouter_domain::Node> {
+    let mut outputs: Vec<&audiorouter_domain::Node> = Vec::new();
+    let mut pending = vec![source.clone()];
+    let mut visited = std::collections::HashSet::new();
+    while let Some(id) = pending.pop() {
+        if !visited.insert(id.clone()) {
+            continue;
+        }
+        for edge in session
+            .edges
+            .iter()
+            .filter(|edge| edge.enabled && edge.source_node == id)
+        {
+            let Some(node) = session
+                .nodes
+                .iter()
+                .find(|node| node.id == edge.destination_node)
+            else {
+                continue;
+            };
+            if node.kind == NodeKind::PhysicalOutput
+                && node.enabled
+                && !node.bypass
+                && !outputs.iter().any(|output| output.id == node.id)
+            {
+                outputs.push(node);
+            }
+            if node.enabled
+                || node
+                    .ports
+                    .iter()
+                    .any(|port| port.direction == PortDirection::Input)
+                    && node
+                        .ports
+                        .iter()
+                        .any(|port| port.direction == PortDirection::Output)
+                    && !matches!(node.kind, NodeKind::Mixer | NodeKind::InputSwitch)
+            {
+                pending.push(node.id.clone());
+            }
+        }
+    }
+    outputs
 }
 
 pub(crate) fn graph_diff(before: &Session, after: &Session) -> Vec<Value> {

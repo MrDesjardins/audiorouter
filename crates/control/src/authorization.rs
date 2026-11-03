@@ -201,6 +201,7 @@ pub(crate) fn validate_method_params(
         "system.handshake" => &["protocolVersion"],
         "system.quit" => &["idempotencyKey"],
         "system.osTransition" => &["transition", "idempotencyKey"],
+        "system.checkSetup" => &["sessionId"],
         "clients.authorize" => &["clientId", "role", "idempotencyKey"],
         "clients.revoke" => &["clientId", "idempotencyKey"],
         "operations.get" => &["operationId"],

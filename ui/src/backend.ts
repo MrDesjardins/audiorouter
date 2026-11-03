@@ -49,6 +49,7 @@ import type {
   SessionFileImportResult,
   StartupStatus,
   VirtualCableStatus,
+  SetupCheckResult,
   StartupPlanResult,
   StartupApplyResult,
   OsTransition,
@@ -432,6 +433,8 @@ export interface UiBackend {
   getStartup(): Promise<StartupStatus>;
   /** AudioRouter cable driver status (spec 17 §7.1); read-only. */
   getVirtualCableStatus?(): Promise<VirtualCableStatus>;
+  /** Saved sessions judged against the active devices (UI-27); read-only. */
+  checkSetup?(): Promise<SetupCheckResult>;
   /** Native shell only; requests a UAC prompt for the fixed driver helper. */
   manageVirtualCable?(request: CableManagementRequest): Promise<unknown>;
   /** Native shell only; false when this installation has no cable driver package. */
@@ -738,6 +741,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async getVirtualCableStatus() {
       throw new Error("The backend is disconnected; cable status is unavailable.");
+    },
+    async checkSetup() {
+      throw new Error("The backend is disconnected; the setup check is unavailable.");
     },
     async planStartup() {
       throw new Error("The backend is disconnected; startup planning is unavailable.");
@@ -1253,6 +1259,9 @@ export function createLiveBackend(
     },
     async getVirtualCableStatus() {
       return client.request("virtualCable.status", undefined);
+    },
+    async checkSetup() {
+      return client.request("system.checkSetup", undefined);
     },
     async planStartup(enabled) {
       return client.request("startup.plan", { enabled });
