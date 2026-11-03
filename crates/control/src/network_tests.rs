@@ -34,8 +34,20 @@ fn encrypted_network_send_and_receive_work_through_the_backend_dispatcher() {
     network_tone_through_backend(true);
 }
 
+/// Live network routes measure real-time continuity with their own 1 ms
+/// service loops and socket threads. Run them one at a time: the product
+/// has one backend, and two such loops competing for a small CI runner
+/// starved each other's 40 ms jitter buffer (one underrun, a stepped tone)
+/// while every packet still arrived. Either test passed alone on one core.
+#[cfg(windows)]
+fn live_network_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 #[cfg(windows)]
 fn network_tone_through_backend(paired: bool) {
+    let _serial = live_network_test_guard();
     let root = std::env::temp_dir().join(format!(
         "audiorouter-net-route-{}-{}",
         std::process::id(),
@@ -186,9 +198,20 @@ fn network_tone_through_backend(paired: bool) {
         );
         let path = std::path::PathBuf::from(started["path"].as_str().unwrap());
         service(&mut planes, 3.0);
-        // End the measured audio window before diagnostics pause this test's
-        // control-plane servicing. The socket threads continue independently;
-        // inspecting them must not extend the recorded continuity interval.
+        // Sample the network log at the end of the serviced window, before
+        // the inspection calls below pause this test's service loop. The
+        // summary reads counters only.
+        let summaries = planes
+            .iter()
+            .flat_map(|(plane, id)| {
+                plane.write_network_summaries(
+                    id,
+                    &mut network_log::Sampler::default(),
+                    Instant::now(),
+                )
+            })
+            .collect::<Vec<_>>();
+        // End the recorded window before the diagnostics below.
         let (plane, id) = &mut planes[receiver];
         let stopped = call(
             plane,
@@ -216,16 +239,6 @@ fn network_tone_through_backend(paired: bool) {
         assert_eq!(send["localAddress"], "127.0.0.1", "{send}");
         assert!(send.get("lastErrorCode").is_none(), "{send}");
         // The network log summarizes both sides from the same counters.
-        let summaries = planes
-            .iter()
-            .flat_map(|(plane, id)| {
-                plane.write_network_summaries(
-                    id,
-                    &mut network_log::Sampler::default(),
-                    Instant::now(),
-                )
-            })
-            .collect::<Vec<_>>();
         let summary = |role: &str| {
             summaries
                 .iter()
@@ -260,18 +273,9 @@ fn network_tone_through_backend(paired: bool) {
             receive_summary["lastErrorCode"].is_null(),
             "{receive_summary}"
         );
-        // A new sampler measures cumulative underruns. This later snapshot
-        // may observe an underrun during inspection even when telemetry above
-        // was healthy: verify its actual hint, not an earlier counter sample.
-        let expected_hint = network_log::receive_hint(&network_log::ReceiveSummary {
-            received_packets: receive_summary["receivedPackets"].as_u64().unwrap(),
-            underruns_since_last: receive_summary["underruns"].as_u64().unwrap(),
-            ..Default::default()
-        });
-        assert_eq!(
-            receive_summary["hint"],
-            json!(expected_hint),
-            "{receive_summary}"
+        assert!(
+            receive_summary["hint"].is_null(),
+            "a healthy stream has no hint: {receive_summary}"
         );
         for (plane, id) in planes.iter_mut() {
             call(
@@ -346,6 +350,7 @@ fn network_tone_through_backend(paired: bool) {
 #[cfg(windows)]
 #[test]
 fn network_settings_corrected_while_playing_take_effect_without_restart() {
+    let _serial = live_network_test_guard();
     let send_port = std::net::UdpSocket::bind("127.0.0.1:0")
         .unwrap()
         .local_addr()
