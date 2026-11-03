@@ -34,6 +34,7 @@ import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
 import { SoundboardContext, useSoundboardController } from "./soundboardLive";
 import { assignSoundboardSlotDraft, isSoundboardParameter } from "./soundboard";
 import { useReportUnsaved } from "./unsavedReport";
+import { routePlaybackLabel } from "./routePlaybackLabel";
 import { QuitButton } from "./QuitButton";
 import {
   addSourceToOccupiedOutput,
@@ -468,7 +469,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     backend.connected ? [] : demoSessions,
   );
   const [, setSessionInventoryError] = useState<string | null>(null);
-  const [nativeGenerations, setNativeGenerations] = useState<Record<string, { generation: number; kind: string }>>({});
+  const [nativeGenerations, setNativeGenerations] = useState<
+    Record<string, { generation: number; kind: string; preview?: boolean }>
+  >({});
   const [nativePumpStats, setNativePumpStats] = useState<NativePumpStats | null>(null);
   const eventCursor = useRef({ backendEpoch: 0, sequence: 0 });
   const applicationRefreshGeneration = useRef(0);
@@ -2094,6 +2097,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         ...current,
         [session.id]: {
           generation: result.generation,
+          preview: result.preview ?? Boolean(candidate),
           kind: diagnostics.nativeSessionId === session.id ? (diagnostics.nativeAdapterKind ?? "endpoint") : "endpoint",
         },
       }));
@@ -3302,9 +3306,24 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               </h1>
             </div>
             <div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite">
-              <span className={`audio-run-state${sessionRunning ? " is-running" : ""}`} role="status">
+              <span
+                className={`audio-run-state${sessionRunning ? " is-running" : ""}`}
+                role="status"
+                title={
+                  routeChanged
+                    ? "Draft changes await Save. Running audio can differ from the canvas; only saved changes survive restart or enter an export."
+                    : "The route is saved. Running audio may have source playback stopped; use each source's Play control to start it."
+                }
+              >
                 <span className="audio-state-dot" aria-hidden="true" />
-                {sessionActionBusy ? "Updating audio…" : sessionRunning ? "Audio running" : "Audio stopped"}
+                {routePlaybackLabel({
+                  busy: sessionActionBusy,
+                  running: sessionRunning,
+                  fresh:
+                    backend.connected && !snapshotState.stale && snapshot?.diagnostics.nativeSessionId === session.id,
+                  generation: snapshot?.diagnostics.schedulerTelemetry?.activeGeneration,
+                  started: nativeGenerations[session.id],
+                })}
               </span>
               <span className="status-detail" title={statusSummary}>
                 {connectionLabel}
@@ -3345,8 +3364,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   autoSavePending
                     ? "Parameter changes save automatically after a short pause"
                     : routeChanged
-                      ? "Save the marked changes to this session"
-                      : "All changes saved"
+                      ? "Draft changes await Save; save the marked changes to this session"
+                      : "Saved route: changes survive restart and are included in exports"
                 }
                 data-save-required={routeChanged && !autoSavePending && !graphBusy}
                 onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
@@ -3361,6 +3380,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               <button
                 type="button"
                 className={sessionRunning ? "secondary" : "primary"}
+                title="Header Play starts the route; Stop stops the route. Source Play controls only that source and starts the route first if needed. A draft preview is temporary and does not Save changes."
                 onClick={() => void (sessionRunning ? stopSession() : startSession())}
                 disabled={!backend.connected || sessionActionBusy}
               >
