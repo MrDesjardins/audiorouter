@@ -522,8 +522,11 @@ Logs: [baseline](evidence/2026-11-02-live-continuity/baseline.log),
 closes the 2026-10-07 P2-7 continuity gate. Still open: large-library
 concurrent Play/export/import service timing and the latency-changing
 commercial-plugin run. A side finding, not fixed here: a route whose output
-is a multichannel (8-channel) endpoint cannot start, so the owner's own
-routes to CABLE-B would fail while it stays at 8 channels. The Gate's
+is a multichannel (8-channel) endpoint cannot start. CABLE-B at 7.1 is
+deliberate: Siege renders surround to it and the owner's route
+loopback-captures it with Spatial audio "Surround to headphones", which
+requires 6 or 8 channels. The owner's routes never output to CABLE-B, so
+the refusal affects only this harness's default result cable. The Gate's
 telemetry showed a subnormal `gainReductionDb` (1.7e-43); the silent-tail
 bench found no slowdown from it.
 
