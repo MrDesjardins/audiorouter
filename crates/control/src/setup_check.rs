@@ -459,6 +459,15 @@ impl ControlPlane {
                 return Err(ControlError::InvalidRequest("session not found".into()));
             }
         }
+        // Reading the devices takes about 10 ms (more on the first call in a
+        // process); this thread also services running audio, so read them on
+        // a helper while it keeps pumping. Without a device list nothing can
+        // be judged (every bound device would look missing): say so instead
+        // of failing the whole check.
+        #[cfg(windows)]
+        let devices = self.while_servicing_audio(|| setup_devices().ok());
+        #[cfg(not(windows))]
+        let devices: Option<Vec<DeviceFacts>> = None;
         let sessions = by_id
             .values()
             .map(|session| {
@@ -472,12 +481,6 @@ impl ControlPlane {
         let mut not_checked = vec![
             "Settings inside other apps, such as a game's speaker setup or the devices Discord uses (see the Apps tab).",
         ];
-        // Without a device list nothing can be judged: every bound device
-        // would look missing. Say so instead of failing the whole check.
-        #[cfg(windows)]
-        let devices = setup_devices().ok();
-        #[cfg(not(windows))]
-        let devices: Option<Vec<DeviceFacts>> = None;
         let mut findings = match &devices {
             Some(devices) => check_setup(&sessions, devices),
             None => {

@@ -96,6 +96,12 @@ Rust 1.96.0, Node 22.22.3):
   `siege-in`, the state left by the advice corrected earlier that day. No
   other finding; no false positive on the 7.1 setup.
 
+- Cost: reading the 15 devices took 167 ms on the first call in a process
+  and 9–11 ms after (release build, also on fresh threads), the same as the
+  `devices.list` enumeration. The control thread also services running
+  audio, so the read runs through `while_servicing_audio`; checking the
+  sessions themselves is pure and fast.
+
 Not run: the built desktop app (the owner's release shell is running; one
 shell at a time) and the full Playwright suite. `tools/site/check-tool-guide-
 catalog.mjs` fails on a clean `origin/main` as well (stale

@@ -445,8 +445,8 @@ audio readiness and explains the exact endpoint and authorization steps.
     - A feedback loop inside a session (problem, the Play refusal) or across
       sessions where at least one of them is running (warning: "playing A
       while B plays").
-    - A saved device ID that is not an active device (warning: unplugged,
-      disabled, or a new ID after a driver update).
+    - A saved device ID that is not an active device (problem, Play is
+      refused: unplugged, disabled, or a new ID after a driver update).
     - A virtual cable a session uses that is not at 48 kHz (tip).
   - **Limits:** settings inside other apps are not visible; the result says
     so. Discord's own devices stay on the Apps tab (UI-26). The check is a
