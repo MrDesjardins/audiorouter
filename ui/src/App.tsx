@@ -1,6 +1,5 @@
 import { optionalLocalStorage } from "./presentationStorage";
 import { SessionSwitchDialog } from "./SessionSwitchDialog";
-import { UiOptionsWorkbench } from "./UiOptionsWorkbench";
 import {
   customThemeStyle,
   readCustomThemeLibrary,
@@ -10,15 +9,14 @@ import {
 } from "./customTheme";
 import { UpdatesPanel } from "./UpdateNotice";
 import { setUpdateCheckEnabled } from "./updateCheck";
-import { FirstRunGuide } from "./FirstRunGuide";
 import { useCanvasGroups } from "./CanvasGroups";
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
-import { SignalTimingPanel } from "./SignalTiming";
-import { Workbench, type WorkbenchTab, type McpActivity, type McpSetupInfo, type McpTunnelStatus } from "./Workbench";
-import { RequestBuilder } from "./ApiRequestBuilder";
+import { Workbench, type WorkbenchTab } from "./Workbench";
+import { useWorkbenchStatus } from "./useWorkbenchStatus";
+import { useRecordingActions } from "./useRecordingActions";
 import { VersionLine } from "./UpdateNotice";
 import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
 import {
@@ -114,7 +112,6 @@ import {
   type ThemeMode,
 } from "./preferences";
 import { SidebarResizer } from "./SidebarResizer";
-import { SessionFilePanel } from "./SessionFilePanel";
 import {
   announceDeviceAccessChanged,
   DeviceAccessSetting,
@@ -148,7 +145,6 @@ import { ErrorBoundary, RootRecoveryPanel } from "./ErrorBoundary";
 import { EqBackendContext, PluginParameterContext, defaultBackend } from "./appContext";
 import { findVbCableEndpointPair, readEndpointBindingHint, routeEndpointBinding } from "./endpointBinding";
 
-import { ClientsPanel } from "./AdvancedPanels";
 import { PluginToolsGroup } from "./PluginPanels";
 export { formatRecordingDuration, recorderHasCaptureSource } from "./RecordingPanels";
 export { findVbCableEndpointPair, findVbCableCaptureEndpointId, deviceChoiceLabel } from "./endpointBinding";
@@ -156,11 +152,9 @@ import { useAudioFileStatus } from "./useAudioFileStatus";
 import { WORKSPACE_EVENT_CATEGORIES, useWorkspaceEvents } from "./useWorkspaceEvents";
 import { DIAGNOSTICS_REFRESH_INTERVAL_MS, useDiagnosticsRefresh } from "./useDiagnosticsRefresh";
 import { formatNativePumpSummary, useNativeCounters, type NativePumpStats } from "./useNativeCounters";
-import { ConnectionForm } from "./ConnectionForm";
-import { SetupWorkbench, setupCheckRefreshKey } from "./SetupWorkbench";
+import { setupCheckRefreshKey } from "./setupCheckRefreshKey";
 import { useSetupCheck } from "./useSetupCheck";
-import { AppsPanel } from "./AppsPanel";
-import { DiscordSetup, type DiscordSetupChoice } from "./DiscordSetup";
+import type { DiscordSetupChoice } from "./DiscordSetup";
 import { appendDiscordRoute, discordSetupOptions } from "./discordRoute";
 import { AppStatusStrip } from "./AppStatusStrip";
 import {
@@ -171,16 +165,42 @@ import {
   voiceCableOutputs,
 } from "./appUsage";
 import { APP_USAGE_FOLLOW_UP_MS, useApplicationUsage } from "./useApplicationUsage";
-import { ObsCard, type ObsActions } from "./ObsCard";
+import type { ObsActions } from "./ObsCard";
 import { obsCheck } from "./obsUsage";
 import { useObsStatus } from "./useObsStatus";
-import { DeviceTroubleshooting } from "./DeviceTroubleshooting";
-import { RecordingWorkbench } from "./RecordingWorkbench";
-import { AdvancedWorkbench } from "./AdvancedWorkbench";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { SignalFlowPanel } from "./SignalFlowPanel";
 export { WORKSPACE_EVENT_CATEGORIES, DIAGNOSTICS_REFRESH_INTERVAL_MS, formatNativePumpSummary };
 export { NATIVE_COUNTERS_REFRESH_MS } from "./useNativeCounters";
+
+// These panels mount only when their workbench tab is selected. Keep the
+// editor and playback controls available while the selected panel loads.
+const AdvancedWorkbench = lazy(() =>
+  import("./AdvancedWorkbench").then((module) => ({ default: module.AdvancedWorkbench })),
+);
+const RecordingWorkbench = lazy(() =>
+  import("./RecordingWorkbench").then((module) => ({ default: module.RecordingWorkbench })),
+);
+const SetupWorkbench = lazy(() => import("./SetupWorkbench").then((module) => ({ default: module.SetupWorkbench })));
+const UiOptionsWorkbench = lazy(() =>
+  import("./UiOptionsWorkbench").then((module) => ({ default: module.UiOptionsWorkbench })),
+);
+const ClientsPanel = lazy(() => import("./AdvancedPanels").then((module) => ({ default: module.ClientsPanel })));
+const RequestBuilder = lazy(() => import("./ApiRequestBuilder").then((module) => ({ default: module.RequestBuilder })));
+const SessionFilePanel = lazy(() =>
+  import("./SessionFilePanel").then((module) => ({ default: module.SessionFilePanel })),
+);
+const ConnectionForm = lazy(() => import("./ConnectionForm").then((module) => ({ default: module.ConnectionForm })));
+const DeviceTroubleshooting = lazy(() =>
+  import("./DeviceTroubleshooting").then((module) => ({ default: module.DeviceTroubleshooting })),
+);
+const SignalTimingPanel = lazy(() =>
+  import("./SignalTiming").then((module) => ({ default: module.SignalTimingPanel })),
+);
+const AppsPanel = lazy(() => import("./AppsPanel").then((module) => ({ default: module.AppsPanel })));
+const DiscordSetup = lazy(() => import("./DiscordSetup").then((module) => ({ default: module.DiscordSetup })));
+const ObsCard = lazy(() => import("./ObsCard").then((module) => ({ default: module.ObsCard })));
+const FirstRunGuide = lazy(() => import("./FirstRunGuide").then((module) => ({ default: module.FirstRunGuide })));
 
 /** Root failures outlive AppContent's state, so they go straight to storage for the next window. */
 function recordStoredUiDiagnostic(message: string) {
@@ -269,13 +289,21 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [, setDevicesError] = useState<string | null>(null);
   const [applicationsError, setApplicationsError] = useState<string | null>(null);
   const [recordingsError, setRecordingsError] = useState<string | null>(null);
-  const [previewMessage, setPreviewMessage] = useState<string | null>(null);
-  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
-  const previewRequest = useRef(0);
-  const recoveryRequest = useRef(0);
   const [metadataTitles, setMetadataTitles] = useState<Record<string, string>>({});
   const [metadataArtists, setMetadataArtists] = useState<Record<string, string>>({});
   const [metadataComments, setMetadataComments] = useState<Record<string, string>>({});
+  const {
+    previewMessage,
+    recoveryMessage,
+    recordingMutationBusyState,
+    previewRecording,
+    inspectRecovery,
+    saveRecordingMetadata,
+    removeRecordingEntry,
+    renameRecording,
+    revealRecording,
+    recycleRecording,
+  } = useRecordingActions({ backend, setRecordings, metadataTitles, metadataArtists, metadataComments });
   const [recordingSearch, setRecordingSearch] = useState("");
   const [pendingWarnings, setPendingWarnings] = useState<string[]>([]);
   const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<Set<string>>(() => new Set());
@@ -289,8 +317,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [sessionCrudBusyState, setSessionCrudBusyState] = useState(false);
   const safetyActionBusy = useRef(false);
   const [safetyActionBusyState, setSafetyActionBusyState] = useState(false);
-  const recordingMutationBusy = useRef(false);
-  const [recordingMutationBusyState, setRecordingMutationBusyState] = useState(false);
   const [privacyMuted, setPrivacyMuted] = useState(true);
   const [librarySearch, setLibrarySearch] = useState("");
   const [processors, setProcessors] = useState<ProcessorDescriptor[] | null>(null);
@@ -443,10 +469,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [diagnosticStorage] = useState(browserDiagnosticStorage);
   const uiDiagnosticsRef = useRef<string[]>(readClientDiagnostics(diagnosticStorage));
   const [uiDiagnostics, setUiDiagnostics] = useState<string[]>(uiDiagnosticsRef.current);
-  const [mcpActivity, setMcpActivity] = useState<McpActivity[]>([]);
-  const [mcpSetupInfo, setMcpSetupInfo] = useState<McpSetupInfo | null>(null);
-  const [mcpTunnelStatus, setMcpTunnelStatus] = useState<McpTunnelStatus | null>(null);
-  const [backendActivity, setBackendActivity] = useState<Record<string, unknown>[]>([]);
   const [shortcuts, setShortcuts] = useState<ShortcutBinding>(() =>
     readShortcuts(optionalLocalStorage(), defaultShortcutBinding),
   );
@@ -701,12 +723,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return;
     }
     let active = true;
+    let statusFailed = false;
     const poll = () => {
       getStatus()
-        .then((status) => active && setVirtualCableStatus(status))
+        .then((status) => {
+          if (active) {
+            statusFailed = false;
+            setVirtualCableStatus(status);
+          }
+        })
         // Keep the last answer through a failed poll (UI-17); a backend
         // without the method never answers, so the status stays unknown.
-        .catch(() => undefined);
+        .catch(() => {
+          if (active && !statusFailed) {
+            statusFailed = true;
+            recordUiDiagnostic("Virtual cable status read failed");
+          }
+        });
     };
     poll();
     const timer = window.setInterval(poll, 2000);
@@ -714,7 +747,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       active = false;
       window.clearInterval(timer);
     };
-  }, [backend, backend.connected]);
+  }, [backend, backend.connected, recordUiDiagnostic]);
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
       const rawName = event.error instanceof Error ? event.error.name : "unknown";
@@ -749,63 +782,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   );
   // Failed backend requests, with the correlation ID that finds them in shell.jsonl and backend.jsonl (P2-3).
   useEffect(() => onRpcFailure(recordUiDiagnostic), [recordUiDiagnostic]);
-  useEffect(() => {
-    if ((workbenchTab !== "mcp" && workbenchTab !== "diagnostics") || !window.__TAURI_INTERNALS__?.invoke) return;
-    let active = true;
-    void window.__TAURI_INTERNALS__
-      .invoke("mcp_setup_info")
-      .then((info) => {
-        if (active) setMcpSetupInfo(info as McpSetupInfo);
-      })
-      .catch(() => {
-        if (active) setMcpSetupInfo(null);
-      });
-    const refreshTunnelStatus = () => {
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("mcp_tunnel_status")
-        .then((status) => {
-          if (active) setMcpTunnelStatus(status as McpTunnelStatus);
-        })
-        .catch(() => {
-          if (active) setMcpTunnelStatus(null);
-        });
-    };
-    refreshTunnelStatus();
-    void window.__TAURI_INTERNALS__
-      .invoke("backend_diagnostics_list")
-      .then((items) => {
-        if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]);
-      })
-      .catch(() => {
-        if (active) setBackendActivity([]);
-      });
-    const refreshActivity = () => {
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("mcp_activity_list")
-        .then((items) => {
-          if (active && Array.isArray(items)) setMcpActivity(items as McpActivity[]);
-        })
-        .catch((error: unknown) => {
-          if (active) {
-            const type = error instanceof Error ? error.name.slice(0, 48) : typeof error;
-            recordUiDiagnostic(`MCP activity read failed (${type})`);
-          }
-        });
-      refreshTunnelStatus();
-      void window.__TAURI_INTERNALS__
-        ?.invoke?.("backend_diagnostics_list")
-        .then((items) => {
-          if (active && Array.isArray(items)) setBackendActivity(items as Record<string, unknown>[]);
-        })
-        .catch(() => undefined);
-    };
-    refreshActivity();
-    const timer = window.setInterval(refreshActivity, 2000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [workbenchTab, recordUiDiagnostic]);
+  const { mcpActivity, mcpSetupInfo, mcpTunnelStatus, backendActivity } = useWorkbenchStatus(
+    workbenchTab,
+    recordUiDiagnostic,
+  );
   useEffect(() => {
     writeShortcuts(optionalLocalStorage(), shortcuts);
   }, [shortcuts]);
@@ -877,7 +857,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   const routeChanged = !sameSessionDraft(draft, session);
   // Lets the shell free the WebView on close only when nothing would be lost.
-  useReportUnsaved(routeChanged);
+  useReportUnsaved(routeChanged, recordUiDiagnostic);
   useEffect(() => {
     setAudioSourceStates({});
   }, [session.id]);
@@ -1478,141 +1458,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setGraphBusy(false);
     }
   };
-  const previewRecording = async (recordingId: string) => {
-    const request = ++previewRequest.current;
-    setPreviewMessage("Inspecting recording...");
-    try {
-      const result = await backend.previewRecording(recordingId);
-      if (request === previewRequest.current)
-        setPreviewMessage(`${String(result.preview.status)} recording preview loaded.`);
-    } catch (error) {
-      if (request === previewRequest.current) setPreviewMessage(formatUiError(error, "Recording preview unavailable."));
-    }
-  };
-  const inspectRecovery = async (recordingId: string) => {
-    const request = ++recoveryRequest.current;
-    setRecoveryMessage("Inspecting recorder recovery...");
-    try {
-      const result = await backend.getRecordingRecovery(recordingId);
-      if (request === recoveryRequest.current)
-        setRecoveryMessage(
-          result.status === "missing"
-            ? "No persisted recovery checkpoint is available."
-            : `Recovery checkpoint: ${result.checkpoint.state}.`,
-        );
-    } catch (error) {
-      if (request === recoveryRequest.current)
-        setRecoveryMessage(formatUiError(error, "Recording recovery unavailable."));
-    }
-  };
-  const saveRecordingMetadata = async (recording: import("@audiorouter/contracts").RecordingRow) => {
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      const title = metadataTitles[recording.id]?.trim() ?? recording.title ?? "";
-      const artist = metadataArtists[recording.id]?.trim() ?? recording.artist ?? "";
-      const comment = metadataComments[recording.id]?.trim() ?? recording.comment ?? "";
-      await backend.setRecordingMetadata(recording.id, {
-        title: title || null,
-        artist: artist || null,
-        comment: comment || null,
-        idempotencyKey: uiIdempotencyKey("recording-metadata"),
-      });
-      setRecordings((current) =>
-        current.map((item) =>
-          item.id === recording.id
-            ? { ...item, title: title || null, artist: artist || null, comment: comment || null }
-            : item,
-        ),
-      );
-      setPreviewMessage("Recording metadata saved; the audio file was unchanged.");
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to save recording metadata."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
-  const removeRecordingEntry = async (recordingId: string) => {
-    if (!window.confirm("Remove this library entry? The audio file will be preserved.")) return;
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      await backend.removeRecordingEntry(recordingId, uiIdempotencyKey("recording-entry-remove"));
-      setRecordings((current) => current.filter((item) => item.id !== recordingId));
-      setPreviewMessage("Library entry removed; the audio file was preserved.");
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to remove recording entry."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
-  const renameRecording = async (recordingId: string, newPath: string) => {
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      const result = await backend.renameRecording(recordingId, newPath.trim(), uiIdempotencyKey("recording-rename"));
-      setRecordings((current) =>
-        current.map((item) => (item.id === recordingId ? { ...item, path: result.path, missing: false } : item)),
-      );
-      setPreviewMessage("Recording renamed within the approved directory.");
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to rename recording."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
-  const revealRecording = async (recordingId: string) => {
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      const result = await backend.revealRecording(recordingId);
-      setPreviewMessage(
-        result.revealed
-          ? "Recording revealed by the operating system."
-          : "Recording is missing; no operating-system action was performed.",
-      );
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to reveal recording."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
-  const recycleRecording = async (recordingId: string, confirm: boolean) => {
-    if (!backend.connected || recordingMutationBusy.current) return;
-    recordingMutationBusy.current = true;
-    setRecordingMutationBusyState(true);
-    try {
-      const result = await backend.recycleRecording(
-        recordingId,
-        confirm,
-        confirm ? uiIdempotencyKey("recording-recycle") : undefined,
-      );
-      setPreviewMessage(
-        result.fileAction === "recycled"
-          ? "Recording recycled."
-          : result.fileAction === "recycle"
-            ? "Recycle preview loaded; confirmation is still required."
-            : `Recording was not recycled: ${result.reason}.`,
-      );
-      if (result.fileAction === "recycled")
-        setRecordings((current) =>
-          current.map((item) => (item.id === recordingId ? { ...item, missing: true } : item)),
-        );
-    } catch (error) {
-      setPreviewMessage(formatUiError(error, "Unable to recycle recording."));
-    } finally {
-      recordingMutationBusy.current = false;
-      setRecordingMutationBusyState(false);
-    }
-  };
   const togglePrivacyMute = async () => {
     if (safetyActionBusy.current || !backend.connected) return;
     safetyActionBusy.current = true;
@@ -1718,6 +1563,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         remaining = items;
       } catch {
         // Keep the cached list; the next refresh reports the inventory error.
+        recordUiDiagnostic("Session inventory refresh after deletion failed");
       }
       const fallback = remaining.find((item) => item.id !== session.id);
       if (fallback) await switchSession(fallback.id);

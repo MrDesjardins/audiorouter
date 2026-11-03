@@ -250,16 +250,20 @@ try {
     $metadataJson = $metadata -join [Environment]::NewLine
     $metadataJson | Set-Content -LiteralPath (Join-Path $output "sbom.cargo.json") -Encoding utf8
     $metadataObject = $metadataJson | ConvertFrom-Json
+    $shellMetadata = & cargo metadata --locked --format-version 1 --manifest-path (Join-Path $workspace "src-tauri/Cargo.toml")
+    if ($LASTEXITCODE -ne 0) {
+        throw "Shell cargo metadata failed with exit code $LASTEXITCODE"
+    }
+    $shellMetadataJson = $shellMetadata -join [Environment]::NewLine
+    $shellMetadataJson | Set-Content -LiteralPath (Join-Path $output "sbom.shell.cargo.json") -Encoding utf8
+    $shellMetadataObject = $shellMetadataJson | ConvertFrom-Json
+    . (Join-Path $PSScriptRoot "cargo-notices.ps1")
     $noticeLines = @(
         "AudioRouter dependency notices"
-        "Generated from cargo metadata --locked at release preparation time."
+        "Generated from root and shell cargo metadata --locked at release preparation time."
         ""
     )
-    foreach ($package in @($metadataObject.packages | Sort-Object name, version)) {
-        $license = if ([string]::IsNullOrWhiteSpace($package.license)) { "license metadata unavailable" } else { $package.license }
-        $source = if ([string]::IsNullOrWhiteSpace($package.source)) { "workspace" } else { $package.source }
-        $noticeLines += "- $($package.name) $($package.version) - $license - $source"
-    }
+    $noticeLines += @(Get-CargoPackageNotices -MetadataObjects @($metadataObject, $shellMetadataObject))
     $noticeLines += @(
         ""
         "Bundled data"

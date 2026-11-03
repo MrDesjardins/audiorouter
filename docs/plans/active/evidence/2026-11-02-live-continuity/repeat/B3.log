@@ -1,0 +1,40 @@
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{7ebf5c2d-9a8e-4056-8dc9-277cb59ec3e8}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started: {"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [3.0363ms, 631µs, 134.1µs]
+chain: [Gain]; audio service: {"active":true,"lateGaps":0,"maxGapMicros":3050,"passes":19712}; output underruns: 4
+  "source" timing={"delayMs":19.008914713827327} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5616885601326361,"processingUsMax":2.8} plugin=null network=null processor=null
+  "destination" timing={"delayMs":37.87849528138024} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 2 glitches, 1 silent runs (88 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [2, 0, 0, 0]
+  at    4.158 s residual 0.45x amplitude
+  at    4.159 s residual 0.45x amplitude
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 10 glitches, 4 silent runs (4136 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [8, 0, 2, 0]
+  at    0.219 s residual 0.34x amplitude
+  at    0.243 s residual 0.34x amplitude
+  at    0.621 s residual 0.15x amplitude
+  at    0.648 s residual 0.15x amplitude
+  at    1.138 s residual 0.93x amplitude
+  at    1.173 s residual 0.93x amplitude
+  at    4.372 s residual 0.45x amplitude
+  at    4.374 s residual 0.45x amplitude
+  at   14.335 s residual 1.21x amplitude
+  at   14.397 s residual 0.95x amplitude
+
+thread 'live::live_backend_service_keeps_a_routed_tone_continuous' (71392) panicked at crates\transport\tests\live_audio_continuity.rs:1213:9:
+the harness tone itself was discontinuous; the result is inconclusive
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+live::live_backend_service_keeps_a_routed_tone_continuous --- FAILED
+
+failures:
+
+failures:
+    live::live_backend_service_keeps_a_routed_tone_continuous
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 22.13s
+
+error: test failed, to rerun pass `-p audiorouter-transport --test live_audio_continuity`

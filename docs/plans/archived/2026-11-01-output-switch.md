@@ -1,4 +1,10 @@
-# Output Switch — active implementation plan (2026-10-22)
+# Output Switch — implementation record (2026-10-22)
+
+**Archived 2026-11-01.** Output Switch merged to main in PR #61 and has shipped
+in every release since 0.0.21. The plan below is kept verbatim; its local
+worktree paths and "local-main merge" next steps are history. Still open (not
+waived): the owner's attended hardware test of a real source switching between
+two endpoints, tracked in the [active plan](../active/current.md#open-owner-gates).
 
 ## Objective
 

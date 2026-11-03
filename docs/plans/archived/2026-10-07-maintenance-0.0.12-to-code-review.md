@@ -88,7 +88,7 @@ Stream Deck extension steps discoverable. No backend or app behavior changes.
 ### Code review P0 and P1 fixes (2026-10-07, user request)
 
 The user asked to fix every P0 and P1 item in the
-[code review](../future/code-review-2026-10-07.md). Commits on
+[code review](../active/code-review-2026-10-07.md). Commits on
 `claude/zealous-archimedes-fz1lbv`: `f8440b20` (P0-3, P1-1), `2cae3569`
 (P0-1), `72aa0731` (P0-2), `69ab047c` (P1-3), `0fa970f0` (P1-5),
 `8477b97a` (P1-6), `9b1ac2ea` (P1-2) and `e3621dcc` (P1-4).

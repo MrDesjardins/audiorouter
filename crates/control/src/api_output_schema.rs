@@ -1892,7 +1892,7 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                                 "lastErrorCode": { "type": "integer" },
                                 "paired": { "type": "boolean" },
                                 "authFailures": { "type": "integer", "minimum": 0 },
-                                "authProblem": { "enum": ["wrongKey", "senderNotPaired", "receiverNotPaired"] },
+                                "authProblem": { "enum": ["wrongKey", "senderNotPaired", "receiverNotPaired", "senderOutdated"] },
                                 "replayedPackets": { "type": "integer", "minimum": 0 }
                             },
                             "required": ["direction"],

@@ -206,6 +206,9 @@ describe("VB-Cable endpoint selection", () => {
       />,
     );
     openTab("Advanced");
+    // The first Advanced visit imports its panel before reading startup.
+    // This tests the registration result, not cold module-loading latency.
+    await screen.findByRole("heading", { name: "Advanced controls" }, { timeout: 5000 });
     expect(await screen.findByText("Native registration: registered")).toBeTruthy();
   });
 

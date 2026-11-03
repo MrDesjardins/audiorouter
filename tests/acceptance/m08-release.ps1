@@ -44,6 +44,7 @@ try {
         "AudioRouter_$($manifest.version)_x64-setup.exe",
         "com.mrdesjardins.audiorouter.streamDeckPlugin",
         "sbom.cargo.json",
+        "sbom.shell.cargo.json",
         "sbom.npm.json",
         "sbom.npm.package-lock.json",
         "THIRD-PARTY-NOTICES.txt",

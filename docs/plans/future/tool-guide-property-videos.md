@@ -1,7 +1,7 @@
 # Tool guides built from the real property window
 
 Status: implementation authorized by the owner on 2026-10-29; execution is
-tracked in the [active plan](../active/current.md#owner-revision-after-gate-review-2026-10-29).
+tracked in the [active plan](../archived/2026-11-01-maintenance-0.0.13-to-0.0.26.md#owner-revision-after-gate-review-2026-10-29).
 Keep the stable plan here as the feature contract.
 
 ## Outcome

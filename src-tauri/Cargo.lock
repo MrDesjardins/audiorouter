@@ -161,6 +161,7 @@ dependencies = [
 name = "audiorouter-protocol"
 version = "0.0.26"
 dependencies = [
+ "chacha20",
  "hmac",
  "serde",
  "serde_json",
@@ -236,6 +237,7 @@ dependencies = [
  "audiorouter-engine",
  "audiorouter-protocol",
  "crossbeam-queue",
+ "getrandom 0.4.3",
  "memmap2",
  "serde_json",
  "windows 0.62.2",
@@ -512,6 +514,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06"
 dependencies = [
  "cfg-if",
+ "cipher",
  "cpufeatures 0.3.1",
  "rand_core",
 ]
@@ -526,6 +529,17 @@ dependencies = [
  "num-traits",
  "serde",
  "windows-link 0.2.1",
+]
+
+[[package]]
+name = "cipher"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8cf2a2c93cd704877c0858356ed03480ff301ee950b43f1cbe4573b088bfa6c"
+dependencies = [
+ "block-buffer 0.12.1",
+ "crypto-common 0.2.2",
+ "inout",
 ]
 
 [[package]]
@@ -1836,6 +1850,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a588916bfdfd92e71cacef98a63d9b1f0d74d6599980d11894290e7ddefffcf7"
 dependencies = [
  "cfb",
+]
+
+[[package]]
+name = "inout"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8c0d789294fb457b791f7797a04478704788f30b407e5d0b01deaa846572d9f"
+dependencies = [
+ "hybrid-array",
 ]
 
 [[package]]

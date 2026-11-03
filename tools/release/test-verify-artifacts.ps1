@@ -12,6 +12,7 @@ try {
         foreach ($name in @(
             "AudioRouter_0.1.0_x64-setup.exe",
             "sbom.npm.json",
+            "sbom.shell.cargo.json",
             "sbom.npm.package-lock.json",
             "com.mrdesjardins.audiorouter.streamDeckPlugin",
             "sbom.streamdeck.package-lock.json",
@@ -23,6 +24,7 @@ try {
         )) {
             $path = Join-Path $Directory $name
             [IO.File]::WriteAllBytes($path, [byte[]](9, 8, 7))
+            if ($name -eq "sbom.shell.cargo.json") { [IO.File]::WriteAllText($path, '{}') }
             $entries += [ordered]@{
                 file = $name
                 sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()

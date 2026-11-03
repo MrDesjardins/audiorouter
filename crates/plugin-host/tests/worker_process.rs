@@ -372,6 +372,81 @@ fn shared_vst2_chain_fault_silences_all_members_and_preserves_other_workers() {
     .is_err());
 }
 
+/// Two unity-gain VST2 plugins in one shared chain pass a microphone through
+/// unchanged, as two unlicensed plugins would. The chain is watched as one
+/// unit: it is silenced when any member is on a protected path, Retry keeps
+/// it silent, and lifting the policy on every member lets audio through
+/// (review 2026-11-01, P2-1; before the fix no watch ran for chains).
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires repository VST2 state DLL fixtures"]
+fn shared_vst2_chain_is_silenced_when_it_passes_protected_audio_through() {
+    use audiorouter_engine::RealtimePluginProcessor;
+    let plugins = vec![
+        chain_fixture("audiorouter-vst2-state-fixture.dll"),
+        chain_fixture("audiorouter-vst2-state-fixture.dll"),
+    ];
+    let worker = SupervisedWorkerProcess::spawn_verified_chain(
+        fixture_worker_path(),
+        &plugins,
+        1,
+        48_000,
+        Instant::now(),
+    )
+    .unwrap();
+    let bridges =
+        audiorouter_plugin_host::PluginRuntimeBridge::start_chain(worker, 1, 128, 8, 2).unwrap();
+    for bridge in &bridges {
+        bridge
+            .set_parameters(vec![ParameterEvent {
+                parameter_id: 0,
+                normalized_value: 1.0,
+                sample_offset: 0,
+            }])
+            .unwrap();
+    }
+    // Only the second member is guarded; the whole chain is silenced.
+    bridges[1].set_silence_if_unchanged(true);
+    let mut block = audiorouter_engine::AudioBlock::new(1, 128).unwrap();
+    let mut pump = |count: usize| -> Vec<Vec<f32>> {
+        (0..count)
+            .map(|_| {
+                block.copy_from_interleaved(&vec![0.5; 128]).unwrap();
+                bridges[0].process(&mut block);
+                bridges[1].process(&mut block);
+                let mut output = vec![0.0; 128];
+                block.copy_to_interleaved(&mut output).unwrap();
+                std::thread::sleep(Duration::from_micros(500));
+                output
+            })
+            .collect()
+    };
+    let until = Instant::now() + Duration::from_secs(10);
+    while !bridges[0].silenced_for_unchanged_audio() && Instant::now() < until {
+        pump(1);
+    }
+    assert!(bridges.iter().all(|bridge| bridge.passes_audio_unchanged()));
+    assert!(bridges
+        .iter()
+        .all(|bridge| bridge.silenced_for_unchanged_audio()));
+    pump(16);
+    assert!(pump(64).iter().flatten().all(|sample| *sample == 0.0));
+    assert!(!bridges[0].resume_after_unchanged());
+    // Lifting the policy on one member is not enough while another asks.
+    bridges[0].set_silence_if_unchanged(true);
+    bridges[1].set_silence_if_unchanged(false);
+    assert!(bridges[0].silenced_for_unchanged_audio());
+    bridges[0].set_silence_if_unchanged(false);
+    assert!(!bridges[0].silenced_for_unchanged_audio());
+    assert!(
+        pump(64)
+            .iter()
+            .any(|quantum| quantum.iter().all(|sample| (*sample - 0.5).abs() < 1e-6)),
+        "the unchanged audio must play again"
+    );
+    assert!(bridges.iter().all(|bridge| !bridge.failed()));
+}
+
 #[cfg(feature = "test-fixtures")]
 #[test]
 fn multi_bus_fixture_worker_negotiates_and_echoes_a_complete_bus_set() {

@@ -25,6 +25,17 @@ fn network_log_keeps_only_the_windows_socket_error_code() {
 #[cfg(windows)]
 #[test]
 fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
+    network_tone_through_backend(false);
+}
+
+#[cfg(windows)]
+#[test]
+fn encrypted_network_send_and_receive_work_through_the_backend_dispatcher() {
+    network_tone_through_backend(true);
+}
+
+#[cfg(windows)]
+fn network_tone_through_backend(paired: bool) {
     let root = std::env::temp_dir().join(format!(
         "audiorouter-net-route-{}-{}",
         std::process::id(),
@@ -73,13 +84,13 @@ fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
         "net-send",
         NodeKind::NetworkSend,
         vec![port("in", PortDirection::Input)],
-        json!({ "host": "127.0.0.1", "port": port_number }),
+        json!({ "host": "127.0.0.1", "port": port_number, "pairingKey": if paired { "NETWORK-TEST-PAIRING-KEY" } else { "" } }),
     );
     let receive = node(
         "net-receive",
         NodeKind::NetworkReceive,
         vec![port("out", PortDirection::Output)],
-        json!({ "sender": "127.0.0.1", "port": port_number, "bufferMs": 40.0 }),
+        json!({ "sender": "127.0.0.1", "port": port_number, "bufferMs": 40.0, "pairingKey": if paired { "NETWORK-TEST-PAIRING-KEY" } else { "" } }),
     );
     let rec = node(
         "rec",
@@ -187,6 +198,10 @@ fn network_send_and_receive_carry_a_continuous_tone_through_the_backend() {
         };
         let send = telemetry(&mut planes[sender].0, "net-send");
         let receive = telemetry(&mut planes[receiver].0, "net-receive");
+        assert_eq!(send["paired"], paired, "{send}");
+        assert_eq!(receive["paired"], paired, "{receive}");
+        assert_eq!(receive["authFailures"], 0, "{receive}");
+        assert_eq!(receive["replayedPackets"], 0, "{receive}");
         // The window names the addresses each computer must use.
         assert_eq!(receive["thisAddress"], "127.0.0.1", "{receive}");
         assert_eq!(send["localAddress"], "127.0.0.1", "{send}");

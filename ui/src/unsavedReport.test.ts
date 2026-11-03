@@ -25,3 +25,19 @@ it("reports each change of the unsaved state to the shell, once", () => {
 it("does nothing outside the desktop shell", () => {
   expect(() => renderHook(() => useReportUnsaved(true))).not.toThrow();
 });
+
+it("records a failed report as a UI diagnostic instead of dropping it", async () => {
+  const invoke = vi.fn(() => Promise.reject(new TypeError("bridge closed")));
+  Object.assign(window, { __TAURI_INTERNALS__: { invoke } });
+  const onFailure = vi.fn();
+  renderHook(() => useReportUnsaved(true, onFailure));
+  await vi.waitFor(() => expect(onFailure).toHaveBeenCalledWith("Unsaved-state report failed (TypeError)"));
+
+  const throwing = vi.fn(() => {
+    throw new Error("no bridge");
+  });
+  Object.assign(window, { __TAURI_INTERNALS__: { invoke: throwing } });
+  const onThrow = vi.fn();
+  renderHook(() => useReportUnsaved(false, onThrow));
+  expect(onThrow).toHaveBeenCalledWith("Unsaved-state report failed (Error)");
+});

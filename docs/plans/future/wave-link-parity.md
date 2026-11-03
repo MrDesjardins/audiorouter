@@ -3,7 +3,7 @@
 Recorded 2026-10-22 at the owner's request, after comparing Elgato Wave Link
 3.0–3.2.10 (Windows) with AudioRouter. These are candidates, not authorized
 work, except the items the owner started on 2026-10-22 (marked
-**in progress**; see the [active plan](../active/wave-link-parity.md)).
+**delivered**; see the [first-round record](../archived/2026-11-01-wave-link-parity-first-round.md)).
 The public comparison is in `site/compare.html`.
 
 Sources (checked 2026-10-22): [Wave Link 3.0 software overview](https://www.elgato.com/lm/en/explorer/products/wave/wave-link-3-0-software-overview/),

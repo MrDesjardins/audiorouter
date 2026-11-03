@@ -1,0 +1,17 @@
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{7ebf5c2d-9a8e-4056-8dc9-277cb59ec3e8}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started: {"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [2.4822ms, 1.7873ms, 171.9µs]
+chain: [Gain]; audio service: {"active":true,"lateGaps":0,"maxGapMicros":2489,"passes":19802}; output underruns: 0
+  "source" timing={"delayMs":13.583285852286664} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5799695933105283,"processingUsMax":3.0} plugin=null network=null processor=null
+  "destination" timing={"delayMs":15.473662506861988} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 22.19s
+

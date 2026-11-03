@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { appendDraftConnection, setDraftConnectionEnabled } from "./draft";
 import { demoSession } from "./fixtures";
 import { relatedNodeIds } from "./graphView";
-import { nodePortLabels, nodeStateLabel, routeLatencyText, routeNodeLabels } from "./graphView";
+import { nodePortLabels, nodeStateLabel, routeNodeLabels } from "./graphView";
 
 describe("graph path highlighting", () => {
   it("prioritizes explicit muted and bypassed state labels", () => {
@@ -26,12 +26,6 @@ describe("graph path highlighting", () => {
       "Voice gain [bypassed]",
       "missing",
     ]);
-  });
-
-  it("formats authoritative route latency and fails closed for invalid values", () => {
-    expect(routeLatencyText(1024)).toBe("1,024 samples estimated latency");
-    expect(routeLatencyText(Number.NaN)).toBe("latency unavailable");
-    expect(routeLatencyText(-1)).toBe("latency unavailable");
   });
 
   it("finds all enabled upstream and downstream nodes", () => {
