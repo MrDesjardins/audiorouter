@@ -1,5 +1,22 @@
 # AudioRouter development quickstart
 
+## UX branch behavior (pending packaged qualification)
+
+Switching sessions asks before stopping running routes and explains the effect
+on recordings. Cancel keeps the current session and audio. Status setup findings
+offer Open affected tool; findings in another session use the same switch
+confirmation. Save or discard a draft before following a cross-session finding.
+
+Header Play controls the route; individual source Play controls that source.
+A verified temporary start is labelled Draft preview. Save keeps graph changes;
+Session → Export saved version exports the saved route and excludes unsaved
+edits. Getting started offers goal guidance and separates available devices,
+local meter checks and verification in the receiving app. Workbench tabs support
+Left/Right arrows and Home/End; Tab enters the selected panel.
+
+These changes are on the UX development branch. Their packaged, visual and
+attended audio checks remain open in the active plan.
+
 Use Tools → **Group** to add a named, rounded visual background. Properties
 edits its color, caption font size (18 px by default), and opacity (5% by
 default, with a 1–100% integer slider). Drag its caption or background to move

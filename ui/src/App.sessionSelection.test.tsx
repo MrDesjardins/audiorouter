@@ -162,6 +162,54 @@ describe("startup session selection", () => {
 });
 
 describe("session switch interruption consent", () => {
+  it("keeps a cross-session setup finding behind interruption consent", async () => {
+    const { backend } = await backendWithSavedActiveSession();
+    const snapshot = backend.snapshot;
+    backend.snapshot = vi.fn(async (id?: string) => {
+      const value = await snapshot(id);
+      return { ...value, status: { ...value.status, activeSessionIds: ["main-session"] } };
+    });
+    const stop = vi.fn(backend.stopSession);
+    render(
+      <App
+        backend={{
+          ...backend,
+          stopSession: stop,
+          checkSetup: async () => ({
+            sessionsChecked: 2,
+            devicesChecked: 1,
+            truncated: 0,
+            notChecked: [],
+            findings: [
+              {
+                code: "deviceMissing",
+                severity: "problem",
+                sessionId: "desktop-session",
+                sessionName: "Desktop session",
+                nodeId: demoSession.nodes[1].id,
+                nodeName: "Affected tool",
+                message: "Missing device",
+                fix: "Inspect the tool",
+              },
+            ],
+          }),
+        }}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("tab", { name: "Session" }));
+    await waitFor(() =>
+      expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session"),
+    );
+    fireEvent.click(screen.getByRole("tab", { name: /Status/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }));
+    await screen.findByRole("dialog", { name: "Stop audio and switch session?" });
+    expect(stop).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(stop).not.toHaveBeenCalled();
+    expect(screen.getByRole("tab", { name: /Status/ }).getAttribute("aria-selected")).toBe("true");
+  });
+
   async function fixture() {
     const { backend } = await backendWithSavedActiveSession();
     let running = ["main-session", "desktop-session"];

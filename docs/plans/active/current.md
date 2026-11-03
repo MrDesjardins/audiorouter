@@ -29,6 +29,44 @@ choice is an explicit pre-switch consequence confirmation, retaining the
 existing stop policy; independent running/viewed sessions remain deferred.
 Next action: launch isolated workstreams and collect commits for integration.
 
+Integration progress: created `feature/ux-improvements` from the setup-check
+head without replacing any running artifact. Planning commit `096a1132`;
+onboarding/recovery child `39108ed9` reviewed and integrated as `c920fed7`.
+Parent reran the four focused component files with `--maxWorkers=1
+--no-file-parallelism --no-cache`: 13 tests passed. The child also records
+typecheck/all, format and lint passing. This is an additive guidance prototype;
+template application, theme inspection, attended usability and UX-06 native
+measurements remain open. Other four isolated workstreams are still pending;
+next action is review/integration on their completion notifications.
+
+UX-02 child `47bd90cc` integrated as `6ae1d8a4`; UX-03 child `2aa66f02`
+integrated as `67517f83`. Shared App edits merged cleanly and were inspected.
+Parent `typecheck:all` passed; four focused test files (session selection,
+setup findings, session export, playback label) passed 18 tests with one
+concurrent worker and no cache. Cross-session finding acceptance still depends
+on pending UX-01 confirmation. UX-05 is also pending. Native audio, browser
+themes/geometry and attended gates remain unrun; running app untouched.
+
+Final children integrated: session safety `b04a6b4b` as `7b2bd937`, keyboard
+accessibility `326382d0` as `9831785f`. Combined 9-file focused suite: 40 tests
+passed with one concurrent worker. Full UI typecheck, formatting and zero-warning
+lint passed. Parent retained Audio running/stopped wording with an additional
+verified Draft preview label, updated the export browser scenario and added a
+cross-session setup-action cancellation regression. Final regression results
+follow below. Docs acceptance: 229 files/1,197 links passed.
+No API/backend/storage changes, build, staging, launch, live backend access or
+device change. Deferred: three-theme/200% visual inspection, Narrator, packaged
+export round-trip, recorder finalization/audio continuity, five-participant
+onboarding and UX-06 performance measurements. No release-ready claim.
+Next: after gaming/testing ends, qualify this separate branch in a disposable
+packaged profile; do not replace the running test app.
+
+Final bounded regression run: App session selection (including cross-session
+finding Cancel), playback label and existing App accessibility: 114 tests in
+3 files passed, one concurrent worker. No suite cache. Export browser scenario
+was updated but not executed. Quickstart records the pending-qualification
+behavior. Final source integration commit records these adjustments.
+
 ## UX assessment and proposed improvements — 2026-11-02
 
 Owner requested analysis and a plan, not implementation. The

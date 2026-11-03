@@ -13,6 +13,8 @@ export function routePlaybackLabel({
   started?: { generation: number; preview?: boolean };
 }): string {
   if (busy) return "Updating audio…";
-  if (!running) return "Route stopped";
-  return fresh && started?.preview && generation === started.generation ? "Draft preview" : "Route running";
+  if (!running) return "Audio stopped";
+  return fresh && started?.preview && generation === started.generation
+    ? "Audio running · Draft preview"
+    : "Audio running";
 }
