@@ -101,6 +101,22 @@ CPU-starvation reproduction, followed by the outstanding attended gates.
 
 ## Open owner gates
 
+PR opened for owner review: [#110](https://github.com/MrDesjardins/audiorouter/pull/110),
+source-fix commit `f91b437a4f1eb261da1ef23edf1391dab41f3f71`, branch
+`fix/user-error-review-2026-11-03`. Initial CI/CodeQL checks are running;
+no hosted pass or merge readiness is claimed. Next: owner review and hosted
+check results. No merge or release publication was requested.
+
+Push-time dependency warning inspected: open Dependabot alerts 9/8 concern
+minimatch globparts amplification in the UI/Stream Deck lockfiles (medium),
+7 concerns glib VariantStrIter unsoundness in the shell lockfile (medium),
+and 5 concerns deepmerge prototype poisoning in Stream Deck (low). These
+lockfiles are unchanged by this PR. Their dependency fixes require their own
+compatibility/build validation; they are recorded as unresolved dependency
+work, not dismissed or represented as repaired by the runtime fixes. The
+current PR adds no dependency or advisory suppression. Hosted supply-chain
+checks must independently report their result.
+
 2026-11-03 continuation (owner: "Fix all"): keep the review branch and all
 existing fixes. Investigate remaining reproducible user failures, beginning
 with paired-network starvation (GRAPH-16, SEC-13, NFR-03/04). Reproduce using
