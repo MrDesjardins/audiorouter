@@ -2,6 +2,14 @@
 
 ## Open owner gates
 
+PR #107 main-conflict repair: main `9bf6e72b` is the squash merge of #106.
+Compared `fb38dd96..origin/main`: setup source is identical; only dependency/
+workflow/plan updates differ, already conserved by the previous main merge.
+Resolved nine duplicate conflicts to the combined superset. Staged tree before
+this note was byte-identical to pre-merge HEAD; this is ancestry reconciliation,
+not a behavioral change. UI full typecheck, workspace check and diff whitespace
+checks pass. Retain the existing local build; no source rebuild is necessary.
+
 PR #107 CodeQL alerts 41/42/43 on c4161cae trace only to the new secure-network
 unit fixtures: two literal pairing keys and a constant packet nonce, all under
 cfg(test). Production pairing is caller-owned and network nonces come from
