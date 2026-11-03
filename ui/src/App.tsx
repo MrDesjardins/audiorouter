@@ -1,4 +1,5 @@
 import { optionalLocalStorage } from "./presentationStorage";
+import { SessionSwitchDialog } from "./SessionSwitchDialog";
 import { UiOptionsWorkbench } from "./UiOptionsWorkbench";
 import {
   customThemeStyle,
@@ -453,6 +454,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [connectionSource, setConnectionSource] = useState("");
   const [connectionDestination, setConnectionDestination] = useState("");
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
+  const [sessionSwitchPrompt, setSessionSwitchPrompt] = useState<{
+    names: string[];
+    decide: (confirmed: boolean) => void;
+  } | null>(null);
   const connectionDialogReturnFocus = useRef<HTMLElement | null>(null);
   const connectionDialog = useRef<HTMLElement | null>(null);
   const connectionDialogSource = useRef<HTMLSelectElement | null>(null);
@@ -2240,17 +2245,43 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage("Wait for the current audio action to finish before switching sessions.");
       return { switched: false, stopped: false };
     }
-    const running = snapshot?.status.activeSessionIds ?? [];
+    let running: string[] = [];
+    const stoppedNames: string[] = [];
+    const sessionName = (sessionId: string) =>
+      availableSessions.find((item) => item.id === sessionId)?.name ?? sessionId;
     sessionBusy.current = true;
     setSessionActionBusy(true);
     try {
-      if (backend.connected && running.length > 0) {
-        setActionMessage("Stopping the running session before switching...");
-        for (const runningId of running) await backend.stopSession(runningId, uiIdempotencyKey("session-switch-stop"));
+      if (backend.connected) {
+        running = (await backend.snapshot(session.id)).status.activeSessionIds;
+        while (running.length > 0) {
+          const confirmed = await new Promise<boolean>((resolve) =>
+            setSessionSwitchPrompt({
+              names: running.map(sessionName),
+              decide: (value) => {
+                setSessionSwitchPrompt(null);
+                resolve(value);
+              },
+            }),
+          );
+          if (!confirmed) return { switched: false, stopped: false };
+          const fresh = (await backend.snapshot(session.id)).status.activeSessionIds;
+          if (fresh.length === running.length && fresh.every((value) => running.includes(value))) break;
+          running = fresh;
+          setActionMessage("Running sessions changed. Review the current list before switching.");
+        }
+        if (running.length > 0)
+          setActionMessage("Stopping sessions and finalizing their active recordings before switching...");
+        for (const runningId of running) {
+          await backend.stopSession(runningId, uiIdempotencyKey("session-switch-stop"));
+          stoppedNames.push(sessionName(runningId));
+        }
       }
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to stop the running session, so the session was not switched."));
-      return { switched: false, stopped: false };
+      setActionMessage(
+        `${stoppedNames.length ? `Stop completed for: ${stoppedNames.join(", ")}. ` : ""}Session was not switched. Other sessions or recordings may have changed; check Status and Recordings before retrying. ${formatUiError(error, "Unable to verify or stop running sessions.")}`,
+      );
+      return { switched: false, stopped: stoppedNames.length > 0 };
     } finally {
       sessionBusy.current = false;
       setSessionActionBusy(false);
@@ -2269,7 +2300,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setSelectedSessionId(id);
     if (backend.connected) void snapshotCache.refresh(backend, id).then(setSnapshotState);
     const name = availableSessions.find((item) => item.id === id)?.name ?? "the selected session";
-    if (running.length > 0) setActionMessage(`Stopped the running session. Press Play to start "${name}".`);
+    if (running.length > 0)
+      setActionMessage(
+        `Stopped: ${stoppedNames.join(", ")}. Check Recordings for finalization results. Press Play to start "${name}".`,
+      );
     return { switched: true, stopped: running.length > 0 };
   };
   // The listener below is re-registered only when its dependencies change, so
@@ -3819,6 +3853,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             </main>
           </div>
           <LibraryDragOverlay />
+          {sessionSwitchPrompt && (
+            <SessionSwitchDialog names={sessionSwitchPrompt.names} onDecision={sessionSwitchPrompt.decide} />
+          )}
           {deviceConsent && (
             <DeviceAccessDialog
               busy={deviceConsent.busy}
