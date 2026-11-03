@@ -224,10 +224,18 @@ pub enum SecurePacketError {
 mod tests {
     use super::*;
 
+    // These round-trip tests do not require known-answer key material. Generate
+    // independent fixture secrets; keep randomness out of the production API.
+    fn fresh_key() -> SecureNetworkKey {
+        let mut bytes = [0; 32];
+        getrandom::fill(&mut bytes).expect("test OS randomness");
+        let pairing: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+        SecureNetworkKey::from_pairing_key(&NetworkPairingKey::derive(&pairing).unwrap())
+    }
+
     fn key() -> SecureNetworkKey {
-        SecureNetworkKey::from_pairing_key(
-            &NetworkPairingKey::derive("ABCDEFGHIJKLMNOPQRSTUVWX").unwrap(),
-        )
+        static KEY: std::sync::OnceLock<SecureNetworkKey> = std::sync::OnceLock::new();
+        KEY.get_or_init(fresh_key).clone()
     }
 
     fn sealed() -> Vec<u8> {
@@ -235,8 +243,10 @@ mod tests {
         packet[..4].copy_from_slice(&NETWORK_AUDIO_MAGIC);
         packet[4] = 1;
         packet[20..148].fill(42);
+        let mut nonce = [0; NONCE_BYTES];
+        getrandom::fill(&mut nonce).expect("test OS randomness");
         key()
-            .seal(&mut packet, 148, &[7; CHALLENGE_BYTES], &[8; NONCE_BYTES])
+            .seal(&mut packet, 148, &[7; CHALLENGE_BYTES], &nonce)
             .unwrap();
         packet
     }
@@ -284,9 +294,7 @@ mod tests {
             key().read_probe(&key().probe(&[1; CHALLENGE_BYTES])),
             Some([1; CHALLENGE_BYTES])
         );
-        let wrong = SecureNetworkKey::from_pairing_key(
-            &NetworkPairingKey::derive("wrong-pairing-key").unwrap(),
-        );
+        let wrong = fresh_key();
         assert_eq!(wrong.read_probe(&key().probe(&[1; CHALLENGE_BYTES])), None);
         assert_eq!(wrong.read_response(&response, &[1; CHALLENGE_BYTES]), None);
         assert_eq!(

@@ -15,3 +15,6 @@ hmac = "0.13.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+
+[dev-dependencies]
+getrandom = "0.4"

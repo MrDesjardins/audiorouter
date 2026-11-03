@@ -111,6 +111,7 @@ name = "audiorouter-protocol"
 version = "0.0.26"
 dependencies = [
  "chacha20",
+ "getrandom",
  "hmac",
  "serde",
  "serde_json",

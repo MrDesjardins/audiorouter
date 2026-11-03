@@ -46,6 +46,15 @@ library. This is a local test build, not a published release or installer.
 
 SHA-256:
 
+The original pre-CI-repair build hashes are retained below. The current local
+build was refreshed for `inout 0.2.5` at source `c4161cae` and passed the same
+disposable packaged smoke (`target/ux-inout025-packaged-smoke/result.json`).
+Current hashes: shell `92DBD1FB13F7FBCF00177F8F75B34C7035C19490736246932BB72D24FA13B636`,
+CLI `2626986E9E63632999D8766D18C82E3188E9EECDF8B5904C05F1412FDDA23169`,
+Rust plugin worker `B73EECC958A177832B01E486E936E2C562E1417C78789A9CAF467AD436359B89`.
+Native VST3 worker is unchanged. All matching companions are staged beside
+the executable. PR CI remains required before main integration.
+
 ```text
 audiorouter-shell.exe A511BB7081A0EBA7D9B8DE857246FBFD75223F97A8F56996C9CF12BDF0D81B71
 audiorouter-cli.exe 32D3CAFF8A7BE00031ED0DBF2AF2B83944C2A942C974E06114D91CA4FFFA7E17

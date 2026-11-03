@@ -2,6 +2,16 @@
 
 ## Open owner gates
 
+PR #107 CodeQL alerts 41/42/43 on c4161cae trace only to the new secure-network
+unit fixtures: two literal pairing keys and a constant packet nonce, all under
+cfg(test). Production pairing is caller-owned and network nonces come from
+`random_network_bytes` using getrandom. Replaced these round-trip fixtures with
+OS-generated test keys/nonces through a protocol dev-dependency; shared test
+key uses OnceLock so tamper/open checks still use the same generated secret.
+Production protocol/API and wire format are unchanged. No query suppression or
+alert dismissal. Protocol 25 tests, shell check, both strict Clippy scopes and
+both format checks pass; hosted CodeQL must confirm the three findings clear.
+
 PR #107 first-head CI repair: Website checks found 39 generated tool pages
 missing social metadata; regenerated with `site/generate-social.mjs` and exact
 site profile now passes. Supply-chain check rejected yanked `inout 0.2.3`
