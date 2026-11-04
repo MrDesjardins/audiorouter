@@ -43,7 +43,10 @@ export const test = base.extend<BrowserOptions & { pageErrorGuard: void; bundled
           await route.fulfill({ path: file });
         })();
         pending.add(operation);
-        void operation.finally(() => pending.delete(operation));
+        void operation.then(
+          () => pending.delete(operation),
+          () => pending.delete(operation),
+        );
         return operation;
       };
       await context.route(matches, serveBundledAsset);
