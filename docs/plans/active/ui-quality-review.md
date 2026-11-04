@@ -268,3 +268,58 @@ unchecked icon dictionary with exhaustively covered kind-based rendering and
 consistent SVG strokes, preserving the custom Duck glyph and adjacent labels.
 Capture all library groups before/after and add a regression over every library
 entry. No NodeKind/API/DSP changes are required for that presentation repair.
+
+### Iteration 8 — plugin quarantine status contrast
+
+The plugin quarantine badge on canvas nodes used a hard-coded pale red
+foreground and translucent fill. It failed the review's normal-text contrast
+threshold in the light theme and was too small to be comfortably scanned. The
+badge now uses explicit semantic tokens: deep red text on a pale red surface in
+light mode, the existing warm warning palette in dark mode, and white on black
+in high contrast. Its text size is 0.72rem and the border remains visible as a
+secondary status cue.
+
+Verification: the initial targeted check reproduced the defect before the CSS
+change; the matching post-change browser regression passed dark, light and
+high-contrast. The plugin inspector's existing UI-17 fixed-height tests also
+passed in all three themes. Evidence is under
+`target/ui-quality-review/resume-plugin-before/` and
+`target/ui-quality-review/resume-plugin-after/`, including rendered captures.
+
+### Iteration 9 — library icon completeness
+
+The documented icon audit found that `output-switch` was present in the tool
+library but missing from `TOOL_ICONS`, leaving an empty visual slot. Added the
+same familiar switch glyph used by Input Switch and added a three-theme browser
+regression that checks every rendered built-in tool card has either text or an
+SVG icon. This preserves the existing palette and card layout while removing a
+single-card consistency defect.
+
+Verification: six targeted browser checks passed (plugin quarantine contrast and
+all-card icon coverage in dark, light and high-contrast) in 6.6s. Typecheck,
+zero-warning lint, the four-test `PluginNodeInspector` unit suite, and the
+production UI build passed. The build still reports the existing 524 kB entry
+chunk advisory; it remains a performance follow-up, not waived as a clean-size
+claim. Evidence is under `target/ui-quality-review/iteration-9-after/`.
+
+Current category update: Contrast advances to 9 for the tested plugin-status
+states; Icons advances to 9 for tool-library coverage. Other categories remain
+provisional below 9 until the planned loading/error, input, dropdown, drag/drop,
+motion, narrow-layout, and full screenshot matrix evidence is complete. The
+goal remains active.
+
+### Final review follow-up — bundled fixture route cleanup
+
+Code review found that the compiled-browser fixture's teardown used
+`context.unrouteAll`, which removed routes registered by individual scenarios
+as well as its own bundle route. Cleanup now unregisters only the matching
+fixture handler, waits for that handler's in-flight requests to settle, and
+leaves scenario-owned API/network routes intact. The full UI unit suite passed
+(821 tests), and the focused browser review passed 27/27 on Windows Edge in
+dark, light and high-contrast themes. Typecheck, lint and formatting passed.
+The route cleanup does not change application behavior.
+
+Review limitation: the optional Bugbot reviewer could not start because its
+configured subagent type is unavailable in this environment; the full diff was
+reviewed locally instead. Pull request CI remains the next independent review
+gate.

@@ -23,6 +23,7 @@ const TOOL_ICONS: Record<string, ReactNode> = {
   "fun-voice-changer": "☺",
   "fir-filter": "⧉",
   "input-switch": "⇄",
+  "output-switch": "⇄",
   duck: <DuckGlyph className="tool-card-glyph" />,
   "time-shift": "↺",
   "physical-input": "◉",
