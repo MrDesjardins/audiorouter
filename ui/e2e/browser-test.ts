@@ -1,8 +1,20 @@
-import { expect, test as base } from "@playwright/test";
+import { expect, test as base, type Route } from "@playwright/test";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 export { expect } from "@playwright/test";
 export type { Page, Locator } from "@playwright/test";
+
+async function fulfillBundledAsset(route: Route, response: Parameters<Route["fulfill"]>[0]) {
+  try {
+    await route.fulfill(response);
+  } catch (error) {
+    // A page-level route or browser teardown can claim the request after the
+    // context handler has started reading the fixture. That is an expected
+    // teardown race; do not turn it into a flaky test. Other routing errors
+    // still fail the fixture and remain visible.
+    if (!(error instanceof Error) || !/route is already handled/i.test(error.message)) throw error;
+  }
+}
 
 /** Uncaught application errors fail the scenario even if its UI assertions pass. */
 export type BrowserOptions = { bundledAssets?: string };
@@ -36,11 +48,15 @@ export const test = base.extend<BrowserOptions & { pageErrorGuard: void; bundled
             ))
           ) {
             missing.push(pathname);
-            await route.fulfill({ status: 404, contentType: "text/plain", body: "Missing bundled fixture asset" });
+            await fulfillBundledAsset(route, {
+              status: 404,
+              contentType: "text/plain",
+              body: "Missing bundled fixture asset",
+            });
             return;
           }
           served.push(pathname);
-          await route.fulfill({ path: file });
+          await fulfillBundledAsset(route, { path: file });
         })();
         pending.add(operation);
         void operation.then(

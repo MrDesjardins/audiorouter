@@ -323,3 +323,21 @@ Review limitation: the optional Bugbot reviewer could not start because its
 configured subagent type is unavailable in this environment; the full diff was
 reviewed locally instead. Pull request CI remains the next independent review
 gate.
+
+### PR #112 CI repair — bundled route teardown race
+
+The first PR #112 hosted run reported two flaky UI scenarios and failed the
+quality gate because the bundled-fixture handler attempted `route.fulfill` after
+another page-level route or browser teardown had already claimed the request.
+The failure was in `ui/e2e/browser-test.ts`, not application behavior. The
+bundled responder now treats only Playwright's explicit `Route is already
+handled` teardown error as benign; missing assets and all other routing errors
+still fail the fixture.
+
+Verification on Windows: typecheck, zero-warning lint, the related unit suite,
+and the two original failing scenarios passed. The exact CI-mode six-test
+regression set also passed. A full CI-mode browser run reached 396 passes and
+14 intentional skips; it exposed unrelated timing/artifact flakes, and a
+serial rerun of all five reported cases passed. The previous UI browser failure
+and downstream quality-gate failure are therefore addressed by the route-race
+repair; hosted CI remains the final authority after the push.
