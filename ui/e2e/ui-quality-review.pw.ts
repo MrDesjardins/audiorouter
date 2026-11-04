@@ -1,9 +1,30 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test, expect, type Page } from "./browser-test";
+import type { PluginScanEntry } from "@audiorouter/contracts";
+import { demoSession } from "../src/fixtures";
+import { appendPluginPlaceholderNode } from "../src/draft";
 
 const phase = process.env.UI_REVIEW_PHASE ?? "current";
 const evidence = path.resolve("../target/ui-quality-review", phase);
+const pluginEntry: PluginScanEntry = {
+  path: "C:\\Program Files\\Common Files\\VST3\\uaudio_ua_1176.vst3",
+  identity: {
+    path: "C:\\Program Files\\Common Files\\VST3\\uaudio_ua_1176.vst3",
+    binaryPath: "C:\\Program Files\\Common Files\\VST3\\uaudio_ua_1176.vst3\\Contents\\x86_64-win\\uaudio_ua_1176.vst3",
+    format: "vst3",
+    architecture: "x64",
+    fileBytes: 1024,
+    sha256: "a".repeat(64),
+    vendor: "Universal Audio",
+    version: "1.0.0",
+    classIds: [],
+    compatibility: "supportedVst3X64",
+  },
+  error: null,
+  errorCode: null,
+};
+const quarantinedPluginSession = appendPluginPlaceholderNode(demoSession, pluginEntry);
 
 async function capture(page: Page, name: string) {
   await mkdir(evidence, { recursive: true });
@@ -69,6 +90,74 @@ async function textContrast(page: Page) {
 }
 
 for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`quarantined plugin health remains legible in ${theme}`, async ({ page }) => {
+    await page.addInitScript(
+      ({ theme, session }) => {
+        localStorage.setItem("audiorouter.ui.theme", theme);
+        Object.assign(window, {
+          __routeFixtureSession: session,
+          __routeFixtureRunning: true,
+          __routeFixtureTelemetry: [
+            {
+              nodeId: "plugin-1",
+              kind: "plugin",
+              meter: null,
+              processor: null,
+              plugin: { state: "quarantined", failureCount: 3, outputMisses: 0, inputDrops: 0 },
+            },
+          ],
+        });
+      },
+      { theme, session: quarantinedPluginSession },
+    );
+    await page.goto("/route-harness.html");
+    await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
+    const badge = page.getByTestId("rf__node-plugin-1").getByRole("alert");
+    await expect(badge).toHaveText("Quarantined (3 failures)");
+    await capture(page, `${theme}-plugin-quarantined`);
+    const colors = await badge.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const parse = (value: string) => value.match(/\d+(?:\.\d+)?/g)!.map(Number);
+      const luminance = (color: number[]) =>
+        color.slice(0, 3).reduce((sum, value, index) => {
+          const component = value / 255;
+          return (
+            sum +
+            (component <= 0.04045 ? component / 12.92 : ((component + 0.055) / 1.055) ** 2.4) *
+              [0.2126, 0.7152, 0.0722][index]
+          );
+        }, 0);
+      const foreground = parse(style.color);
+      const background = parse(style.backgroundColor);
+      const ratio = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+      return {
+        color: style.color,
+        background: style.backgroundColor,
+        ratio: (ratio[0] + 0.05) / (ratio[1] + 0.05),
+        fontSize: style.fontSize,
+      };
+    });
+    expect(colors.ratio).toBeGreaterThanOrEqual(4.5);
+    expect(parseFloat(colors.fontSize)).toBeGreaterThanOrEqual(11);
+  });
+
+  test(`every built-in tool card has a visible icon in ${theme}`, async ({ page }) => {
+    await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
+    await page.goto("/route-harness.html");
+    await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
+    const cards = page.locator(".tool-library-entry > .tool-card");
+    const missing = await cards.evaluateAll((elements) =>
+      elements
+        .map((element) => ({
+          label: element.querySelector("strong")?.textContent?.trim() ?? "",
+          icon: element.querySelector<HTMLElement>(".tool-card-icon")?.textContent?.trim() ?? "",
+          svg: Boolean(element.querySelector(".tool-card-icon svg")),
+        }))
+        .filter(({ icon, svg }) => !icon && !svg),
+    );
+    expect(missing).toEqual([]);
+  });
+
   test(`route warning can be dismissed without moving the workspace in ${theme}`, async ({ page }) => {
     await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
     await page.goto("/route-harness.html");

@@ -17,37 +17,43 @@ export const test = base.extend<BrowserOptions & { pageErrorGuard: void; bundled
       }
       const root = path.resolve(bundledAssets);
       const missing: string[] = [];
+      const pending = new Set<Promise<void>>();
       const entries = new Set(["/", "/index.html", "/harness.html", "/route-harness.html", "/backend-harness.html"]);
       // Only compiled fixture assets use this transport. Real HTTP endpoints,
       // file:// guides and the page-level Rust RPC adapter remain untouched.
       const matches = (url: URL) =>
         url.origin === "http://127.0.0.1:4186" && (entries.has(url.pathname) || url.pathname.startsWith("/assets/"));
-      await context.route(matches, async (route) => {
-        const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
-        const file = path.resolve(root, `.${pathname === "/" ? "/index.html" : pathname}`);
-        const inside = file.startsWith(root + path.sep) && !pathname.includes("\\");
-        if (
-          !inside ||
-          !(await stat(file).then(
-            (info) => info.isFile(),
-            () => false,
-          ))
-        ) {
-          missing.push(pathname);
-          await route.fulfill({ status: 404, contentType: "text/plain", body: "Missing bundled fixture asset" });
-          return;
-        }
-        served.push(pathname);
-        await route.fulfill({ path: file });
-      });
+      const serveBundledAsset = (route: Parameters<Parameters<typeof context.route>[1]>[0]) => {
+        const operation = (async () => {
+          const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
+          const file = path.resolve(root, `.${pathname === "/" ? "/index.html" : pathname}`);
+          const inside = file.startsWith(root + path.sep) && !pathname.includes("\\");
+          if (
+            !inside ||
+            !(await stat(file).then(
+              (info) => info.isFile(),
+              () => false,
+            ))
+          ) {
+            missing.push(pathname);
+            await route.fulfill({ status: 404, contentType: "text/plain", body: "Missing bundled fixture asset" });
+            return;
+          }
+          served.push(pathname);
+          await route.fulfill({ path: file });
+        })();
+        pending.add(operation);
+        void operation.finally(() => pending.delete(operation));
+        return operation;
+      };
+      await context.route(matches, serveBundledAsset);
       try {
         await use(served);
       } finally {
-        // A test can end while a lazy chunk it requested is still being
-        // served. A plain unroute hands that request back to Playwright, so the
-        // late fulfill threw "Route is already handled!" and context teardown
-        // timed out; let in-flight handlers finish first.
-        await context.unrouteAll({ behavior: "wait" });
+        // Wait for this fixture's in-flight chunks without removing routes
+        // independently registered by the scenario.
+        await context.unroute(matches, serveBundledAsset);
+        await Promise.allSettled([...pending]);
         if (missing.length || testInfo.status !== testInfo.expectedStatus)
           await testInfo.attach("bundled-fixture-assets", {
             body: JSON.stringify({ served, missing }),

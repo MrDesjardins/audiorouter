@@ -2139,6 +2139,9 @@ button:disabled {
   --accent-text: #006580;
   --focus-ring: #006580;
   --field-border: #7b8ba0;
+  --plugin-alert-text: #a61b14;
+  --plugin-alert-edge: #b42318;
+  --plugin-alert-surface: #fce8e6;
 }
 .theme-high-contrast {
   --ambient-bg: #000000;
@@ -2154,6 +2157,9 @@ button:disabled {
   --accent-text: #7fe7ff;
   --focus-ring: #ffffff;
   --field-border: #ffffff;
+  --plugin-alert-text: #ffffff;
+  --plugin-alert-edge: #ffffff;
+  --plugin-alert-surface: #000000;
 }
 
 body,
@@ -3245,12 +3251,12 @@ button.primary {
 }
 .node-plugin-health-alert {
   padding: 0.2rem 0.4rem;
-  border: 1px solid rgb(255 107 107 / 45%);
+  border: 1px solid var(--plugin-alert-edge, #ff6b6b);
   border-radius: 5px;
-  color: #ffb3b3;
-  font-size: 0.62rem;
+  color: var(--plugin-alert-text, #ffb3b3);
+  font-size: 0.72rem;
   font-weight: 600;
-  background: rgb(255 107 107 / 14%);
+  background: var(--plugin-alert-surface, #352326);
 }
 .plugin-worker-health {
   display: grid;
