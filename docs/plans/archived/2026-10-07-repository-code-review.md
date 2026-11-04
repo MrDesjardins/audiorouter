@@ -1,5 +1,11 @@
 # Repository code review — 2026-10-07
 
+**Archive disposition (2026-11-04):** Review record archived after reconciliation
+against current `main`. P0/P1 and the carried implementation items are complete
+or superseded by the active fixes record. Remaining Windows, hosted-CI and
+physical-audio evidence is retained as qualification scope, not represented as
+completed by this archive.
+
 **Promoted 2026-11-01 (owner: fix all remaining items).** The open items
 below, including network audio encryption, are tracked in the
 [code-review fixes plan](../active/code-review-fixes.md). This file stays as

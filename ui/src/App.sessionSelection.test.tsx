@@ -118,14 +118,16 @@ describe("startup session selection", () => {
     );
     await waitFor(() => expect(backend.snapshot.mock.calls.some(([id]) => id === "main-session")).toBe(true));
     fireEvent.click(screen.getByRole("tab", { name: /Status/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }));
+    // The Status tab loads its panel lazily; a cold import on a busy runner can
+    // take longer than the 1 s default.
+    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }, { timeout: 5000 }));
     await waitFor(() =>
       expect(screen.getByRole("tab", { name: /Properties/ }).getAttribute("aria-selected")).toBe("true"),
     );
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Properties/ })));
     expect(stopSession).not.toHaveBeenCalled();
     expect(screen.getByText(/Opened the affected tool/)).toBeTruthy();
-  });
+  }, 15_000);
   it("opens the saved active session and does not flip between sessions", async () => {
     // A fresh WebView profile (first launch, or cleared data): nothing remembered.
     const { backend, active } = await backendWithSavedActiveSession();
@@ -244,14 +246,16 @@ describe("session switch interruption consent", () => {
       expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session"),
     );
     fireEvent.click(screen.getByRole("tab", { name: /Status/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }));
+    // The Status tab loads its panel lazily; a cold import on a busy runner can
+    // take longer than the 1 s default.
+    fireEvent.click(await screen.findByRole("button", { name: "Open affected tool" }, { timeout: 5000 }));
     await screen.findByRole("dialog", { name: "Stop audio and switch session?" });
     expect(stop).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(stop).not.toHaveBeenCalled();
     expect(screen.getByRole("tab", { name: /Status/ }).getAttribute("aria-selected")).toBe("true");
-  });
+  }, 15_000);
 
   async function fixture() {
     const { backend } = await backendWithSavedActiveSession();

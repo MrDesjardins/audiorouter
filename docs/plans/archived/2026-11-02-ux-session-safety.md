@@ -1,8 +1,12 @@
 # UX-01 session switch safety
 
+**Archive disposition (2026-11-04):** Source slice complete and integrated.
+Attended recorder-finalization, theme, Narrator and packaged gates remain owned
+by the active plan.
+
 Current status (2026-11-02): source integrated as `7b2bd937` in parent
 `bf99cf97`, with combined cancellation regression evidence in
-[current.md](current.md). Restrictions below describe the completed child
+[current.md](../active/current.md). Restrictions below describe the completed child
 assignment. Parent final qualification now owns themed/keyboard/Narrator and
 native recorder-finalization gates; these remain unrun in this slice.
 

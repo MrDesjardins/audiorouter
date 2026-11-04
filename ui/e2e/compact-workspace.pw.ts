@@ -145,10 +145,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       await expect(help).toHaveCount(1);
       await expect(help.locator(".help-icon")).toHaveText("?");
       await expect(help).not.toHaveAttribute("open");
-      await help.locator("summary").focus();
-      await page.keyboard.press("Enter");
+      const summary = help.locator("summary");
+      await summary.click();
+      await expect(help).toHaveAttribute("open", "");
       await expect(help.locator(".help-content")).toBeVisible();
-      await page.keyboard.press("Enter");
+      await summary.click();
       await expect(help).not.toHaveAttribute("open");
     }
     await page.getByRole("tab", { name: "Tools", exact: true }).click();

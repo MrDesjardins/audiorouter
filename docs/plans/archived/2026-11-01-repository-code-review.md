@@ -1,11 +1,17 @@
 # Repository code review — 2026-11-01
 
+**Archive disposition (2026-11-04):** Review record archived after reconciliation
+against `origin/main` `814ad879`. The P2 implementation findings are complete
+or tracked in [the active fixes plan](../active/code-review-fixes.md). Remaining
+large-library service timing and commercial-plugin latency checks are
+qualification gates, not unexecuted review fixes.
+
 **Promoted 2026-11-01 (owner: fix all items).** Decisions, tasks and status
 are in the [code-review fixes plan](../active/code-review-fixes.md). This
 file stays as the review record.
 
 A second repository-wide review, after the
-[2026-10-07 review](code-review-2026-10-07.md). It re-checks that review's
+[2026-10-07 review](2026-10-07-repository-code-review.md). It re-checks that review's
 open items and reads the newest and riskiest code: the plugin latency
 and licence guard (U4/U6) and the HTTP and tunnel entry points. A second
 pass the same day covered storage, transport, recording, the Soundboard,

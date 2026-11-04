@@ -1,8 +1,12 @@
 # UX-03 state clarity — 2026-11-02
 
+**Archive disposition (2026-11-04):** Source slice complete and integrated.
+Native export/concurrent-edit and attended visual qualification remain open in
+the active plan.
+
 Current status: source integrated as `67517f83` in parent `bf99cf97`, followed
 by combined wording/regression adjustments in `cd25f2e5`. The child restrictions
-below are historical. Parent final qualification follows [current.md](current.md);
+below are historical. Parent final qualification follows [current.md](../active/current.md);
 native export round-trip, concurrent edits and attended/visual gates remain open.
 
 Objective: distinguish saved routes, temporary draft playback and edits awaiting

@@ -1,8 +1,12 @@
 # UX-02 setup actions
 
+**Archive disposition (2026-11-04):** Source slice complete and integrated.
+Remaining attended geometry, Narrator/scaling and packaged checks remain open in
+the active plan.
+
 Current status (2026-11-02): integrated as `6ae1d8a4` in parent `bf99cf97`;
 UX-01 is also integrated (`7b2bd937`). Combined cancellation tests are recorded
-in [current.md](current.md). Historical prerequisites/restrictions below applied
+in [current.md](../active/current.md). Historical prerequisites/restrictions below applied
 to the child slice; final parent qualification now owns remaining acceptance.
 
 Objective: open affected tools by stable session/node ID and focus Properties.

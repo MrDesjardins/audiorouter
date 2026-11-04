@@ -283,6 +283,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const hasAuthoritativeSession = useRef(!backend.connected);
   const [draftHistory, setDraftHistory] = useState<DraftHistory>({ past: [], future: [] });
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [dismissedRouteWarning, setDismissedRouteWarning] = useState("");
   const [recordings, setRecordings] = useState<import("@audiorouter/contracts").RecordingRow[]>([]);
   const [recorderFormat, setRecorderFormat] = useState<import("@audiorouter/contracts").RecorderFileFormat>("wavPcm24");
   const [recorderStatuses, setRecorderStatuses] = useState<RecorderStatus[]>([]);
@@ -873,6 +874,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [draft.nodes.length, draft.edges.length, session.revision, recordUiDiagnostic]);
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   const routeChanged = !sameSessionDraft(draft, session);
+  const unfedNodes = unfedRouteNodes(draft);
+  const routeWarningKey = JSON.stringify([draft.id, unfedNodes.map((node) => node.id).sort()]);
   // Lets the shell free the WebView on close only when nothing would be lost.
   useReportUnsaved(routeChanged, recordUiDiagnostic);
   useEffect(() => {
@@ -2886,8 +2889,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   if (backend.connected && !hasSnapshot)
     return (
-      <div className={`app-shell ${themeClassName}`} style={themeStyle}>
-        <main className="panel" aria-label="Loading saved session">
+      <div className={`app-shell app-startup ${themeClassName}`} style={themeStyle}>
+        <main
+          className="panel startup-card"
+          aria-label="Loading saved session"
+          aria-busy={!snapshotState.error || reconnecting}
+        >
+          <p className="eyebrow">Your audio workspace</p>
           <h1>AudioRouter</h1>
           <p role="status">
             {reconnecting
@@ -2895,6 +2903,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               : snapshotState.error
                 ? `Unable to load your saved session: ${snapshotState.error}`
                 : "Loading your saved session…"}
+          </p>
+          <p className="muted">
+            {snapshotState.error
+              ? "Reconnect to try again. Your saved session has not been replaced."
+              : "Your route will appear when the backend responds."}
           </p>
           {snapshotState.error && (
             <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
@@ -3274,6 +3287,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                       : "Saved route: changes survive restart and are included in exports"
                 }
                 data-save-required={routeChanged && !autoSavePending && !graphBusy}
+                aria-busy={graphBusy}
                 onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
                 disabled={
                   !backend.connected ||
@@ -3289,6 +3303,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 title="Header Play starts the route; Stop stops the route. Source Play controls only that source and starts the route first if needed. A draft preview is temporary and does not Save changes."
                 onClick={() => void (sessionRunning ? stopSession() : startSession())}
                 disabled={!backend.connected || sessionActionBusy}
+                aria-busy={sessionActionBusy}
               >
                 {sessionRunning ? "Stop" : "Play"}
               </button>
@@ -3299,14 +3314,21 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             </div>
           </header>
           <aside className="workspace-notifications" aria-label="Notifications">
-            {unfedRouteNodes(draft).length > 0 && (
-              <p className="panel-message is-warning inactive-route-warning" role="status">
-                Warning: no input reaches{" "}
-                {unfedRouteNodes(draft)
-                  .map((node) => node.name)
-                  .join(", ")}
-                . These nodes are ignored during playback; connected routes can still play.
-              </p>
+            {unfedNodes.length > 0 && dismissedRouteWarning !== routeWarningKey && (
+              <div className="panel-message is-warning inactive-route-warning">
+                <p role="status">
+                  Warning: no input reaches {unfedNodes.map((node) => node.name).join(", ")}. These nodes are ignored
+                  during playback; connected routes can still play.
+                </p>
+                <button
+                  type="button"
+                  className="secondary"
+                  aria-label="Dismiss route warning"
+                  onClick={() => setDismissedRouteWarning(routeWarningKey)}
+                >
+                  ×
+                </button>
+              </div>
             )}
             {(() => {
               const text = actionMessage

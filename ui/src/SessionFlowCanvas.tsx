@@ -2197,6 +2197,13 @@ export function SessionFlowCanvas({
     | { kind: "pane"; x: number; y: number; flowPosition: { x: number; y: number } }
     | null
   >(null);
+  const contextMenuOriginRef = useRef<HTMLElement | null>(null);
+  const closeContextMenu = useCallback(() => {
+    const origin = contextMenuOriginRef.current;
+    setContextMenu(null);
+    contextMenuOriginRef.current = null;
+    window.requestAnimationFrame(() => origin?.focus({ preventScroll: true }));
+  }, []);
   // Controlled React Flow nodes must retain measured dimensions across meter
   // updates. Omitting them on every 20 Hz render resets handle bounds and can
   // leave every node hidden until a new ResizeObserver notification arrives.
@@ -2369,6 +2376,7 @@ export function SessionFlowCanvas({
     naturalSizesRef.current = Object.create(null);
     setNodeSizes(readNodeSizes(optionalLocalStorage(), sizesKey));
     setContextMenu(null);
+    contextMenuOriginRef.current = null;
     dragSnapshotRef.current = null;
     beforeGestureRef.current = null;
     setLayoutHistory(emptyCanvasHistory(session.id));
@@ -2419,9 +2427,9 @@ export function SessionFlowCanvas({
       setPositions(next);
       writeLayout(optionalLocalStorage(), layoutKey, next);
       skipNextFitRef.current = position !== undefined;
-      setContextMenu(null);
+      closeContextMenu();
     },
-    [canEdit, canPasteNode, layoutKey, onPasteNode, session.nodes.length],
+    [canEdit, canPasteNode, closeContextMenu, layoutKey, onPasteNode, session.nodes.length],
   );
   useEffect(() => {
     const onClipboardShortcut = (event: KeyboardEvent) => {
@@ -2449,7 +2457,7 @@ export function SessionFlowCanvas({
       }
     };
     const onEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setContextMenu(null);
+      if (event.key === "Escape" && contextMenuOriginRef.current) closeContextMenu();
     };
     window.addEventListener("keydown", onClipboardShortcut);
     window.addEventListener("keydown", onEscape);
@@ -2460,6 +2468,7 @@ export function SessionFlowCanvas({
   }, [
     canEdit,
     canPasteNode,
+    closeContextMenu,
     onCopyNode,
     onPasteNode,
     pasteNode,
@@ -3028,6 +3037,7 @@ export function SessionFlowCanvas({
         <div
           className="session-flow-canvas"
           aria-label="Signal-flow graph"
+          tabIndex={-1}
           data-connection-mode={connectionHandleMode}
           onDragOver={(event) => {
             if (!canEdit) return;
@@ -3246,6 +3256,8 @@ export function SessionFlowCanvas({
             onNodeContextMenu={(event, node) => {
               event.preventDefault();
               if (node.type === "visualGroup") return;
+              contextMenuOriginRef.current =
+                event.target instanceof Element ? event.target.closest<HTMLElement>(".react-flow__node") : null;
               onSelectGroup?.("");
               onSelect(node.id);
               const point = canvasPoint(event.clientX, event.clientY);
@@ -3260,6 +3272,8 @@ export function SessionFlowCanvas({
             }}
             onPaneContextMenu={(event) => {
               event.preventDefault();
+              contextMenuOriginRef.current =
+                event.target instanceof Element ? event.target.closest<HTMLElement>(".session-flow-canvas") : null;
               const point = canvasPoint(event.clientX, event.clientY);
               setContextMenu({
                 kind: "pane",
@@ -3457,7 +3471,7 @@ export function SessionFlowCanvas({
             <Controls showInteractive={false} />
           </ReactFlow>
           {contextMenu && (
-            <div className="canvas-context-backdrop" onPointerDown={() => setContextMenu(null)}>
+            <div className="canvas-context-backdrop" onPointerDown={closeContextMenu}>
               <div
                 className="canvas-context-menu"
                 role="menu"
@@ -3488,7 +3502,7 @@ export function SessionFlowCanvas({
                     autoFocus
                     onClick={() => {
                       onCopyNode?.(contextMenu.nodeId);
-                      setContextMenu(null);
+                      closeContextMenu();
                     }}
                   >
                     Copy tool

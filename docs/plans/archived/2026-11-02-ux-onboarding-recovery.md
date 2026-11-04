@@ -1,8 +1,12 @@
 # UX onboarding and recovery — 2026-11-02
 
+**Archive disposition (2026-11-04):** Additive source prototype complete and
+integrated. Participant, native, performance and attended M05/M08 gates remain
+open; this archive does not claim onboarding completion.
+
 Current status: guidance source integrated as `c920fed7` in parent `bf99cf97`.
 The gaming-time restrictions below record the completed child assignment;
-parent final qualification follows [current.md](current.md). UX-04 remains a
+parent final qualification follows [current.md](../active/current.md). UX-04 remains a
 prototype, and UX-06 measurements and attended M05/M08 acceptance remain open.
 
 ## Objective and requirements

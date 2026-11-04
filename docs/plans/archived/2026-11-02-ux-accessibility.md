@@ -1,9 +1,12 @@
 # UX-05 Workbench accessibility slice
 
+**Archive disposition (2026-11-04):** Source slice complete and integrated.
+Narrator, attended keyboard/scaling, visual and packaged gates remain open.
+
 Current status (2026-11-02): source integrated as `9831785f` in parent
 `bf99cf97`. The gaming-time restrictions below describe the completed child
 assignment; parent qualification now follows the final consolidation request
-in [current.md](current.md). Narrator, attended keyboard/scaling and visual
+in [current.md](../active/current.md). Narrator, attended keyboard/scaling and visual
 gates remain open. This child performs no native build or integration.
 
 ## Objective and authority
