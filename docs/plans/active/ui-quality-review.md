@@ -341,3 +341,17 @@ regression set also passed. A full CI-mode browser run reached 396 passes and
 serial rerun of all five reported cases passed. The previous UI browser failure
 and downstream quality-gate failure are therefore addressed by the route-race
 repair; hosted CI remains the final authority after the push.
+
+### PR #112 CI repair — help disclosure activation
+
+The next hosted run reached 400 browser passes but still marked the Quality
+gate failed because `compact-workspace.pw.ts` was flaky in the shared help
+regression. It used a page-level keyboard Enter after focusing a native
+`details > summary`; Edge sometimes retained focus on the replaced lazy panel,
+so the disclosure stayed closed in dark/high-contrast runs. The test now
+activates the same summary directly and waits for the native `open` attribute
+before checking content visibility, then clicks it again to close it.
+
+Verification: the three-theme CI-mode regression passes dark, light and
+high-contrast in 8.1s, with typecheck and zero-warning lint passing. This is a
+test synchronization repair; no application behavior changes.
