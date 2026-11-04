@@ -562,7 +562,110 @@ including the CLI backup/restore round trip and refusal to overwrite.
 An exploratory control-library backup filter matched zero tests and is not
 entry-point evidence. Next: push and require current-base CI, merge #103,
 then update #104 to the resulting main and require its fresh gate before merge.
+## End-to-end installation investigation — 2026-11-03, owner request
 
+Branch: `investigation/installation-end-to-end` (created from local `main`
+`068b395a`, then fast-forwarded to `origin/main` `814ad879`). Objective: find
+and close the gaps that prevent a user from installing AudioRouter and then
+using its UI, native audio engine and Stream Deck integration as one product.
+This is an investigation branch, not permission to install on the owner's
+machine, publish a release, change Windows audio, or install/remove a driver.
+Requirements: DIST-01–08, UI-01/13, AUTO-01/05, SEC-01/05/11,
+NFR-14–16 and ENG-04/05.
+
+Initial evidence review (2026-11-03; source/config/doc inspection, no installer
+run): M08 defines the required gate. NSIS profiles specify current-user
+installation and a silent WebView2 download bootstrapper; resources include
+the CLI, plugin workers, Stream Deck package and sound library. The UI is
+embedded in the shell, which owns the backend/engine process.
+`prepare-artifacts.ps1` builds UI, CLI, plugin workers and shell, runs Stream
+Deck typecheck/tests/pack, then builds NSIS with static CRT and custom protocol.
+Artifact verification covers provenance, hashes, architecture, notices and
+required payload names. The Stream Deck UI hands its bundled package to
+Windows' file association and asks the user to confirm installation; the
+plugin then requires the user to start the local HTTP API and enter its URL and
+token in action settings.
+
+Prior evidence is useful but not a complete install qualification:
+`2026-10-28-installer-runtime.md` records candidate upgrade/uninstall/reinstall
+with real SQLite session and WAV retention in a test-configured VM under a
+medium token, plus a fresh-profile shell smoke. It explicitly does not prove a
+true standard account, clean machine, missing-WebView2 path, trust prompt,
+normal installed audio route, or attended Stream Deck action. The 2026-10-31
+manual package evidence verifies the extracted 105-sound payload and native UI
+editor/drop smoke, but not installation or live playback. `distribution.md`
+is stale: its opening still says 0.0.17 is latest while current plan records
+0.0.26 published; reconcile before any user-facing installation handoff.
+
+Prerequisites: isolated Windows 11 x64 VM or disposable standard-user account;
+exact candidate installer and matching hash; ability to snapshot/restore VM;
+WebView2 present and absent states; known supported audio endpoint; Stream Deck
+7.1+ installed for attended plugin test; capture OS build, account/token,
+endpoint and Stream Deck versions. No owner profile, audio device, driver,
+startup registration or published release is to be changed during this audit.
+
+Ordered tasks:
+1. Reconcile installer source/config with DIST-01–08 and M08, including both
+   app-only and cable-enabled profiles and clearly separating the optional
+   elevated driver path from the per-user app installation.
+2. Inspect/test actual NSIS payload and installed path resolution for embedded
+   UI, shell/backend engine, CLI, both plugin workers, sound library and Stream
+   Deck package; verify static runtime imports and version/hash agreement.
+3. Run standard-user fresh install, launch/readiness, WebView2 present/missing,
+   endpoint-present/missing first run, upgrade/repair, rollback compatibility,
+   and uninstall/data retention in a disposable Windows environment.
+4. From the installed UI, install the bundled Stream Deck plugin; configure
+   API URL/token and exercise session, play/stop, sound, toggle and meter
+   actions against the installed shell. Verify restart/reconnect and removal.
+5. Exercise a deliberate test-signal route through the installed native engine,
+   confirm output and clean shutdown, then record the full evidence matrix,
+   defects and exact next implementation/qualification task.
+6. Correct stale install-facing documentation and add focused regression
+   coverage for any confirmed packaging/path/lifecycle defects.
+
+Validation matrix: bundle inspection and artifact verifier (portable); exact
+installer lifecycle under standard-user token (Windows isolated environment);
+installed UI and HTTP API first-run flow (Windows); physical endpoint playback
+and Stream Deck hardware/actions (attended Windows); clean-machine/WebView2
+bootstrap and unsigned trust UX (snapshot VM). A build, mock, extracted-file
+inspection, or medium token in an admin-member account is not evidence for the
+standard-user, hardware, or clean-machine gates.
+
+Risks: installation may need WebView2 bootstrap network access; unsigned trust
+prompts may block ordinary users; app-only and cable-enabled package behavior
+can drift; engine startup may be mistaken for actual audio readiness; Stream
+Deck package registration is user-confirmed and its control requires separately
+started HTTP/token setup. Rollback: restore the disposable VM snapshot and
+remove only the investigation's staged artifacts; never uninstall from the
+owner's active profile.
+
+Source audit completion (2026-11-03, branch now at `origin/main`
+`814ad879`): current mainline setup-check work provides `Status → Setup check`
+for saved-route/device mismatches, feedback loops, missing devices and cable
+format guidance. It preserves the last result through failed refreshes, keeps
+the panel geometry stable, and explicitly separates its read-only analysis from
+Play's authoritative route validation. `ApiPanel` exposes local HTTP start,
+URL, token reveal/copy, Swagger and the embedded Stream Deck install action;
+the plugin uses the same REST API and token, with reconnect/backoff polling.
+
+Portable checks on this branch passed: `m08-installer-smoke.ps1` static
+resource/hook checks (NSIS/VM phase skipped because no Microsoft-signed driver
+payload was supplied), `test-verify-artifacts.ps1`, Stream Deck 35 tests,
+Stream Deck TypeScript 7 typecheck, `tests/acceptance/docs.ps1` (237 Markdown
+files/1,365 links), and `git diff --check`. The stale distribution pointer was
+updated to published 0.0.26 and now states its qualification limits.
+
+Evidence boundary: the 0.0.26 record proves clean tagged preparation, static
+runtime imports, payload hashes, 105 sound hashes, packaged-shell startup and
+native UI/drop smoke under a Medium/non-admin token. It explicitly does not
+prove installer execution, clean-machine or true standard-account lifecycle,
+WebView2 absence/bootstrap, Explorer drop, physical playback/continuity, or
+attended Stream Deck installation/actions. No VirtualBox or Hyper-V VM inventory
+is available in this environment, so those gates are blocked rather than
+simulated. Current next action: run the exact 0.0.26 installer matrix in an
+isolated Windows VM or disposable standard-user account, then qualify the
+installed Stream Deck plugin against the installed shell before any release
+claim.
 CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
 settings to the generic tool-workflow test. Input, Soundboard and network
 nodes use dedicated editors. Reuse the inspector's exhaustive editor
