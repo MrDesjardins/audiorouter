@@ -1,5 +1,9 @@
 # Earlier review integration — 2026-11-02
 
+**Archive disposition (2026-11-04):** Integration source work complete. The
+parent rebuild, packaged smoke repeat and attended/native gates remain active in
+the general plan.
+
 ## Objective and authority
 
 Integrate `feature/code-review-fixes-2026-11-01` at `b8cc974f` into the
@@ -8,8 +12,8 @@ and rebuilt native artifacts. Do not access real profiles, devices or audio.
 
 Requirements: M05/M08, UI-17/27, AUTO-18, PLUG-05/07, SEC-13,
 GRAPH-16, STATE-12, ARCH-04 and SND memory limits. Prior decisions and
-qualification are in [review fixes](code-review-fixes.md) and
-[review findings](code-review-2026-11-01.md) after merge.
+qualification are in [review fixes](../active/code-review-fixes.md) and
+[review findings](2026-11-01-repository-code-review.md) after merge.
 
 ## Audit and ordered tasks
 

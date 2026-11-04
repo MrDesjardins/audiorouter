@@ -61,6 +61,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       await expect(tools).toBeFocused();
       await page.keyboard.press("ArrowRight");
       await expect(page.getByRole("tab", { name: "Properties", exact: true })).toBeFocused();
+      await expect(page.getByRole("tab", { name: "Properties", exact: true })).toHaveAttribute("aria-selected", "true");
       const selected = page.getByRole("tab", { selected: true });
       const panelId = await selected.getAttribute("aria-controls");
       await expect(page.locator(`#${panelId}`)).toHaveAttribute(

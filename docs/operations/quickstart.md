@@ -14,6 +14,15 @@ edits. Getting started offers goal guidance and separates available devices,
 local meter checks and verification in the receiving app. Workbench tabs support
 Left/Right arrows and Home/End; Tab enters the selected panel.
 
+The UI quality review branch improves dark/light contrast and keeps workbench
+tab words intact as the panel narrows. If tool search finds no built-in match,
+use **Clear tool search** to restore the library. The floating unfed-route
+warning has **Dismiss route warning**; dismissing it changes no audio or layout,
+and a different affected-node set can show a new warning. Loading and reconnect
+screens retain the saved-session boundary rather than offering a demo graph.
+See the [UI review criteria and evidence](../plans/active/ui-quality-review.md)
+for current coverage and remaining work; the 9/10 goal is still in progress.
+
 These changes are on the UX development branch. Their packaged, visual and
 attended audio checks remain open in the active plan.
 

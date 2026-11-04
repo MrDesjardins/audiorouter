@@ -26,7 +26,7 @@ Sources: [interface requirements](../../spec/09-interface.md),
 [workflows](../../spec/02-workflows.md), [delivery decisions](../../spec/15-delivery.md),
 [M05](../../milestones/M05-visual-editor.md), [M08](../../milestones/M08-release.md),
 [current execution record](../active/current.md), and
-[setup-check implementation and verification](../active/setup-check.md).
+[setup-check implementation and verification](../archived/2026-11-02-setup-check.md).
 The long execution history was sampled; this is not a comprehensive release audit.
 
 Preserve existing backend validation, source meters, templates, node-specific

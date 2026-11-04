@@ -29,6 +29,22 @@ button:focus-visible {
 .app-shell {
   min-height: 100vh;
 }
+.app-shell.app-startup {
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+}
+.app-startup > .startup-card {
+  display: grid;
+  gap: 0.85rem;
+  width: min(100%, 30rem);
+  padding: 1.5rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.startup-card button {
+  justify-self: start;
+}
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -324,7 +340,7 @@ button:disabled {
   font-size: 0.72rem;
 }
 .badge {
-  color: #9ba8bd;
+  color: var(--text-soft);
   font-size: 0.8rem;
 }
 .session-picker {
@@ -492,10 +508,10 @@ button:disabled {
   z-index: 1;
   min-width: 174px;
   padding: 0.35rem;
-  border: 1px solid var(--panel-border, #384458);
+  border: 1px solid var(--ambient-edge);
   border-radius: 9px;
-  background: var(--panel, #1a2130);
-  color: var(--text, #e9edf5);
+  background: var(--ambient-surface);
+  color: var(--text-strong);
   box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
 }
 .canvas-context-menu button {
@@ -1426,6 +1442,25 @@ button:disabled {
 .workbench-page {
   padding: 0.9rem;
 }
+.workbench-loading {
+  min-height: 8rem;
+  color: var(--text-soft);
+}
+.tool-search-empty {
+  display: grid;
+  gap: 0.65rem;
+  margin-block: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--ambient-edge);
+  border-radius: 9px;
+  color: var(--text-soft);
+  background: var(--ambient-surface-hi);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.tool-search-empty button {
+  justify-self: start;
+}
 .log-files-panel,
 .streamdeck-panel {
   display: grid;
@@ -1714,7 +1749,7 @@ button:disabled {
   padding: 0.28rem;
   border-radius: 8px;
   background: color-mix(in srgb, var(--cyan) 18%, var(--ambient-surface));
-  color: var(--cyan);
+  color: var(--accent-text);
 }
 .application-source-action strong,
 .application-source-action small {
@@ -1771,7 +1806,7 @@ button:disabled {
   height: 2.25rem;
   border-radius: 9px;
   background: color-mix(in srgb, var(--cyan) 22%, var(--ambient-surface));
-  color: var(--cyan);
+  color: var(--accent-text);
   font-size: 1.25rem;
 }
 .tool-card strong,
@@ -2065,6 +2100,10 @@ button:disabled {
   --signal-hot: #ffd166;
   --cyan: #25b8df;
   --cyan-deep: #087ea8;
+  /* Text and focus need stronger contrast than decorative accent fills. */
+  --accent-text: #6ad6f0;
+  --focus-ring: #ffd166;
+  --field-border: #8292a6;
   --good: #72e3a2;
   --vst-accent: #c792ea;
   --danger: #ff6b6b;
@@ -2097,6 +2136,9 @@ button:disabled {
   --ambient-vignette: #e2e8f1;
   --text-strong: #172033;
   --text-soft: #4b5b73;
+  --accent-text: #006580;
+  --focus-ring: #006580;
+  --field-border: #7b8ba0;
 }
 .theme-high-contrast {
   --ambient-bg: #000000;
@@ -2109,6 +2151,9 @@ button:disabled {
   --text-strong: #ffffff;
   --text-soft: #ffffff;
   --signal-hot: #ffffff;
+  --accent-text: #7fe7ff;
+  --focus-ring: #ffffff;
+  --field-border: #ffffff;
 }
 
 body,
@@ -2151,7 +2196,7 @@ body,
   letter-spacing: -0.02em;
 }
 .eyebrow {
-  color: var(--cyan-deep);
+  color: var(--accent-text);
 }
 button {
   border-color: var(--ambient-edge);
@@ -2171,7 +2216,7 @@ textarea {
   max-width: 100%;
   min-height: 2.35rem;
   padding: 0.45rem 0.65rem;
-  border: 1px solid var(--ambient-edge);
+  border: 1px solid var(--field-border, var(--ambient-edge));
   border-radius: 9px;
   box-shadow: none;
   background: var(--ambient-surface-hi);
@@ -2190,8 +2235,8 @@ select optgroup {
   background: var(--ambient-surface-hi);
 }
 :is(input, select, textarea):focus-visible {
-  border-color: var(--signal-hot, #ffd166);
-  outline: 2px solid var(--signal-hot, #ffd166);
+  border-color: var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 :is(input, select, textarea):disabled {
@@ -2273,13 +2318,13 @@ input[type="checkbox"]:indeterminate::after {
   background: var(--text-strong, #edf4ff);
 }
 input[type="checkbox"]:focus-visible {
-  outline: 2px solid var(--signal-hot);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 button:hover,
 button:focus-visible {
-  border-color: var(--signal-hot);
-  outline-color: var(--signal-hot);
+  border-color: var(--focus-ring);
+  outline-color: var(--focus-ring);
 }
 button.primary {
   color: #1b2026;
@@ -5393,7 +5438,7 @@ button.primary {
   --node-border: #5d7180;
   --node-strong: #f6f8fb;
   --node-text: #c7d2dc;
-  --node-muted: #93a3b3;
+  --node-muted: #b1c0cf;
   --node-kind: #8bd9eb;
   --node-well: rgb(13 17 21 / 34%);
   --node-well-border: rgb(0 0 0 / 25%);
@@ -5404,8 +5449,8 @@ button.primary {
   --node-border: #97a6b8;
   --node-strong: #142033;
   --node-text: #2e3e55;
-  --node-muted: #56677d;
-  --node-kind: #06789c;
+  --node-muted: #43546b;
+  --node-kind: #05617f;
   --node-well: rgb(20 32 51 / 6%);
   --node-well-border: rgb(20 32 51 / 18%);
   --node-track: rgb(20 32 51 / 16%);
@@ -5424,7 +5469,7 @@ button.primary {
   border-color: rgb(20 32 51 / 22%);
 }
 .theme-light .node-state.is-ready {
-  color: #1d6b43;
+  color: #155a37;
   background: rgb(63 167 105 / 16%);
 }
 .theme-light .node-state.is-bypassed {
@@ -5614,7 +5659,21 @@ button.primary {
   pointer-events: auto;
 }
 .workspace-notifications .inactive-route-warning {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.6rem;
   margin: 0;
+  /* Noninteractive warnings must not intercept canvas/tab gestures beneath
+     the floating notification, especially at enlarged/narrow layouts. */
+  pointer-events: none;
+}
+.inactive-route-warning button {
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.3rem;
+  line-height: 1;
+  pointer-events: auto;
 }
 .global-action-message {
   box-sizing: border-box;
@@ -7330,12 +7389,15 @@ input[type="color"] {
 
 /* Focused app settings share the workbench field and panel styles. */
 .workbench-tabs {
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* Fit whole labels as the panel is resized; never split a word to keep
+     an arbitrary column count. The stable scrollbar gutter keeps this
+     independent of which tab has enough content to scroll. */
+  grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr));
 }
 .workbench-tabs button {
-  padding: 0.35rem 0.15rem;
-  font-size: 0.72rem;
-  line-height: 1.1;
+  padding: 0.35rem 0.2rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
   min-height: 2rem;
 }
 .ui-options {
@@ -7436,7 +7498,7 @@ input[type="color"] {
   font-size: 0.75rem;
 }
 .tool-guide-access a {
-  color: var(--cyan);
+  color: var(--accent-text);
   text-underline-offset: 3px;
 }
 .tool-guide-access small {
@@ -7472,8 +7534,8 @@ input[type="color"] {
   text-decoration: none;
 }
 .tool-guide-access.is-compact a:is(:hover, :focus-visible) {
-  color: var(--cyan);
-  outline: 2px solid var(--cyan);
+  color: var(--accent-text);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 .tool-guide-access.is-compact small {
@@ -7491,6 +7553,11 @@ input[type="color"] {
   color: var(--on-highlight);
   border-color: var(--signal-hot);
   background: linear-gradient(145deg, var(--signal-hot), color-mix(in srgb, var(--signal-hot) 80%, #000));
+}
+.theme-custom {
+  --accent-text: var(--cyan);
+  --focus-ring: var(--signal-hot);
+  --field-border: var(--ambient-edge);
 }
 .theme-custom :is(.session-flow-canvas, .signal-flow-legend) {
   --flow-cold: var(--cyan);
@@ -7526,7 +7593,8 @@ input[type="color"] {
      pixel. Reserve the same full height for one- and two-line captions. */
   height: 2.5rem;
   min-height: 2.5rem;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 /* The selected node's status uses the canvas node-state colours, at a fixed

@@ -1,4 +1,120 @@
-# Active plan — 0.0.26 release and maintenance
+# Active plan — current priorities (2026-11-04)
+
+## Where things stand
+
+PR #110, “Prevent draft loss and fix session, recording and network failures,”
+is merged into `main` at `814ad879` (confirmed locally from `origin/main`).
+The previous PR-open/hosted-check handoff is historical and closed. The local
+checkout is `fix/ci-test-timing-races`, two commits ahead of that main commit;
+those two commits are existing user work and are not part of this documentation
+consolidation.
+
+## Current priorities
+
+- Owner-authorized [UI quality review](ui-quality-review.md): define criteria,
+  capture baseline and iteratively improve all UI categories to evidence-backed
+  9/10 in dark/light, with high-contrast regression checks. Isolated branch and
+  harness only; preserve the documentation consolidation and live owner route.
+
+1. Finish the 2026-11-01/2026-10-07 code-review disposition. The detailed
+   execution record is [code-review fixes](code-review-fixes.md); most source
+   findings are implemented and verified. Reconcile its remaining continuity,
+   live-service timing and commercial-plugin evidence against current hardware
+   availability. Do not touch the owner's active route; the prior continuity
+   attempt was contaminated by it. Review records remain at
+   [2026-11-01](../archived/2026-11-01-repository-code-review.md) and
+   [2026-10-07](../archived/2026-10-07-repository-code-review.md).
+2. Continue the quality roadmap at Q3.2 hosted qualification, then Q4–Q6 in
+   [application quality](application-quality.md). Current-head hosted CI and
+   attended M05/M08, installer, accessibility, usability and endurance evidence
+   remain distinct gates.
+3. Keep owner/hardware-dependent tracks explicit: virtual-cable Stage C and
+   signing decisions in [virtual cable](virtual-cable.md) and
+   [release signing](release-signing-and-publication.md); copied-profile OBS
+   acceptance in [OBS/Discord](obs-discord.md); attended UX and performance
+   checks in the UX evidence plans. Do not represent mocks or portable tests as
+   substitutes for these gates.
+4. Keep code-scanning alert review current in
+   [code scanning remediation](code-scanning-remediation.md); its alert count
+   and locations are dated and must be refreshed from the current CodeQL run.
+
+The [future-plan index](../future/README.md) remains deferred backlog, not an
+implicit implementation queue. Archive completed execution records only after
+their residual gates have a clear owner and remain discoverable from this page.
+
+## Open review-fixes gates
+
+The source work for the two repository reviews is substantially complete.
+Remaining evidence recorded in [code-review-fixes](code-review-fixes.md):
+
+- clean, isolated VB-Cable continuity/service-gap runs without the owner's
+  route active;
+- concurrent large-library Play/export/import service timing;
+- latency-changing commercial-plugin continuity (fixture coverage exists; the
+  owner's UADx sign-out did not produce an unlicensed state);
+- any current-head hosted checks not already superseded by merged PR #110.
+
+These are qualification tasks, not permission to stop or reconfigure a live
+route, install a driver, or alter a user's device. Hardware work requires an
+explicitly safe isolated setup.
+
+## Recently closed
+
+- PR #110 merged to main at `814ad879`; session draft-loss, deletion targeting,
+  recording rename and paired-network starvation fixes are on main.
+- The UX implementation slices and setup-check source integration are complete.
+  Their mock/component/browser evidence is recorded in the linked UX plans;
+  attended Narrator/scaling, first-time-user, native recording/export and
+  UX-06 measurement gates remain open.
+- The combined review-fixes source set, including network v3 and the packaged
+  shell smoke, is recorded in [code-review-fixes](code-review-fixes.md). Review
+  findings are not called fully qualified where the evidence gates above remain.
+
+## Active plan index
+
+These are the only execution plans that remain active after the 2026-11-04
+status reconciliation:
+
+- [Code-review fixes](code-review-fixes.md) — open isolated continuity,
+  service-timing and commercial-plugin qualification.
+- [Application quality](application-quality.md) — Q3.2 hosted qualification,
+  then Q4–Q6 quality and release gates.
+- [Virtual cable](virtual-cable.md) — owner-run VM, signing and Stage C gates.
+- [OBS and Discord](obs-discord.md) — copied-profile and attended acceptance.
+- [Release signing](release-signing-and-publication.md) — parked on owner/provider
+  signing decisions and credentials.
+- [Code-scanning remediation](code-scanning-remediation.md) — current-head
+  CodeQL refresh and individual alert dispositions.
+- [Setup-check owner acceptance](../archived/2026-11-02-setup-check.md) — test
+  the integrated Status check against the owner's saved sessions; its full
+  browser suite and independent Properties-catalog tooling gate remain open.
+- [UI quality review](ui-quality-review.md) — owner-authorized visual quality
+  criteria and isolated evidence harness.
+- [Onboarding and recovery UX](../archived/2026-11-02-ux-onboarding-recovery.md)
+  — UX-04 prototype, UX-06 measurements and attended gates.
+- [Accessibility UX](../archived/2026-11-02-ux-accessibility.md) — Narrator,
+  scaling and attended keyboard/visual gates.
+
+The archived execution slices [setup check](../archived/2026-11-02-setup-check.md),
+[session safety](../archived/2026-11-02-ux-session-safety.md),
+[setup actions](../archived/2026-11-02-ux-setup-actions.md), and
+[state clarity](../archived/2026-11-02-ux-state-clarity.md) retain their
+completed implementation evidence and point back here for remaining
+qualification. Owner testing of setup-check against saved sessions remains
+open. The review records are archived at the dated paths listed above.
+`virtual-cable-agent-handoff.md` remains a compatibility pointer to the active
+driver plan.
+
+## Next action
+
+Continue the open review-fixes gates above, starting with an explicitly isolated
+continuity/service-gap run when the owner confirms the setup is safe. No product
+source changes, driver operations or release publication are implied by this
+documentation reconciliation.
+
+---
+
+# Historical active-plan record — 0.0.26 release and maintenance
 
 ## User-error code review — 2026-11-03 owner request
 
@@ -257,7 +373,7 @@ Earlier review integration is merged with latest browser fixes. Parent full UI
 and disposable native smoke pass. Required PR CI and main merge are next.
 
 Earlier review fixes are being conserved with the latest UX in the
-[integration plan](ux-earlier-review-integration.md). The
+[integration plan](../archived/2026-11-02-earlier-review-integration.md). The
 [review fixes plan](code-review-fixes.md) retains historical measurements and
 remaining native/plugin qualification. M05 attended accessibility, scaling,
 usability and M08 installer, signing and endurance gates remain open. Parent
@@ -340,6 +456,14 @@ console warnings and unrun native/attended gates. Next: parent integration
 and disposable-profile packaged qualification; no native/audio pass is claimed.
 
 ## Parallel UX implementation — 2026-11-02 owner authorization
+
+Archived execution slices: [session safety](../archived/2026-11-02-ux-session-safety.md),
+[setup actions](../archived/2026-11-02-ux-setup-actions.md),
+[state clarity](../archived/2026-11-02-ux-state-clarity.md),
+[onboarding/recovery](../archived/2026-11-02-ux-onboarding-recovery.md),
+[accessibility](../archived/2026-11-02-ux-accessibility.md), and
+[earlier-review integration](../archived/2026-11-02-earlier-review-integration.md).
+Their attended, native, participant and release gates remain open as stated above.
 
 Owner authorized implementing the UX plan using parallel T3 Code workstreams,
 while continuing to play and test the running AudioRouter. This supersedes
@@ -484,7 +608,7 @@ tabbed guide pages and the browser sweep repeated there. Not yet deployed.
 Setup check (2026-11-02, owner request): a backend check and Status-tab list
 that flags device setups Play will refuse, feedback loops across routes,
 missing devices and cable rates (UI-27). Branch `feature/setup-check`; plan,
-tasks and validation in [setup-check.md](setup-check.md).
+tasks and validation in [setup-check execution record](../archived/2026-11-02-setup-check.md).
 
 Sol review follow-up (2026-11-02): fixed request lifecycle, refresh triggers,
 incomplete-result wording, multi-route loops, diagnostic I/O and finding order.
@@ -5111,7 +5235,7 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   and fmt are clean. The tests were not run here (they need Windows), and
   the test binary does not link in the container (`-lSwdevice` is
   missing). The typed method table was not done. Module list in the
-  [review](code-review-2026-10-07.md#p2-1-the-control-plane-is-one-21500-line-file).
+  [review](../archived/2026-10-07-repository-code-review.md#p2-1-the-control-plane-is-one-21500-line-file).
   Next action: a Windows CI run of `cargo test -p audiorouter-control`.
 
 - **P2-7 (DSP loops).** Engine block kernels (fixed delay, gain ramp,
@@ -5177,7 +5301,7 @@ Rollback: revert the commit.
   unmaintained rust-unic advisories in `src-tauri` are ignored until
   2027-01-07 (needs a Tauri update checked on Windows). Local: both
   `cargo deny` runs and all three audits pass. Details in the
-  [review](code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
+  [review](../archived/2026-10-07-repository-code-review.md#p2-4-dependency-and-supply-chain-checks-are-missing).
   Next action: first CI run of the `supply-chain` job.
 - **P2-8 coverage and soak:** nightly/manual `quality.yml` (Windows):
   `cargo llvm-cov` and Vitest coverage (not gated), a 20-minute engine soak

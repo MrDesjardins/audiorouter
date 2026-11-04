@@ -330,6 +330,7 @@ export function Workbench({
   verboseLogging?: VerboseLoggingControl;
 }) {
   const tabsRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const previousTab = useRef(tab);
   const lastFocusedControl = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -498,7 +499,7 @@ export function Workbench({
       )}
       <Suspense
         fallback={
-          <section className="workbench-page" role="status">
+          <section className="workbench-page workbench-loading" role="status" aria-busy="true">
             Loading panel...
           </section>
         }
@@ -508,6 +509,7 @@ export function Workbench({
             <label>
               Find a tool
               <input
+                ref={searchRef}
                 type="search"
                 aria-label="Find a tool"
                 value={librarySearch}
@@ -521,6 +523,21 @@ export function Workbench({
           <section className="workbench-page" role="tabpanel" {...panelProps}>
             <p className="eyebrow">Build a route</p>
             <h2>Add tools</h2>
+            {librarySearch.trim() && tools.length === 0 && (
+              <div className="tool-search-empty">
+                <p role="status">No built-in tools match your search. Try a name such as Gain or Recorder.</p>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    onLibrarySearch("");
+                    searchRef.current?.focus();
+                  }}
+                >
+                  Clear tool search
+                </button>
+              </div>
+            )}
             <div className="tool-library-entry">
               <button type="button" className="tool-card" onClick={onAddGroup}>
                 <span className="tool-card-icon" aria-hidden="true">

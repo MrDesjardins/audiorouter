@@ -2,8 +2,8 @@
 
 Owner request, 2026-11-01: "do the two code review markdown in the future
 folder. Set them in current and tackle all of them." Sources:
-[code review 2026-11-01](code-review-2026-11-01.md) and the items
-still open in [code review 2026-10-07](code-review-2026-10-07.md).
+[code review 2026-11-01](../archived/2026-11-01-repository-code-review.md) and the items
+still open in [code review 2026-10-07](../archived/2026-10-07-repository-code-review.md).
 
 - Branch `feature/code-review-fixes-2026-11-01`, created from
   `review/code-review-2026-11-01` (`9a0c4067`). No pull request without the

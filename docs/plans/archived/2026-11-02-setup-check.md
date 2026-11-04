@@ -1,9 +1,14 @@
-# Setup check (UI-27) — active plan
+# Setup check (UI-27) — execution record
+
+**Archive disposition (2026-11-04):** UI-27 source implementation, dispatcher,
+MCP, browser and disposable-shell checks are complete. Owner testing, the full
+browser suite, the independent Properties catalog gate and live-audio/release
+qualification remain open and are tracked by the active plan.
 
 Current status (2026-11-02 final consolidation): setup-check source and review
 fixes are integrated in parent `bf99cf97`, together with the UX slices. The
 requests, restrictions and next actions below are dated execution checkpoints;
-the latest parent authority and qualification task are in [current.md](current.md).
+the latest parent authority and qualification task are in [current.md](../active/current.md).
 Parent now owns final review, PR/main consolidation and isolated local build.
 This audit child has no PR/push/merge or native-build authority. Earlier smoke
 and browser evidence does not close live-audio or M05/M08 release gates.

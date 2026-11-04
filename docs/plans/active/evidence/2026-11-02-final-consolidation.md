@@ -25,7 +25,7 @@ Windows 11 Home 10.0.26300, Rust 1.96.0 MSVC, Node 22.22.3.
 - Integration worktree full Rust: 1,275 workspace tests and 86 shell tests,
   source/tool combinations, plugin fixtures, both strict Clippy scopes, format,
   guide catalog, release fixtures and MCP parity passed. See
-  [integration evidence](../ux-earlier-review-integration.md) for ignored gates.
+  [integration evidence](../../archived/2026-11-02-earlier-review-integration.md) for ignored gates.
 - Parent rebuilt release CLI, Rust plugin worker, native VST3 worker and
   custom-protocol shell after building production UI. VST3 AGain acceptance
   passed: single-stream, auxiliary bus, async graph staging, restart/quarantine,
