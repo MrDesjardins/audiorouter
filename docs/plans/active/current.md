@@ -655,17 +655,25 @@ Stream Deck TypeScript 7 typecheck, `tests/acceptance/docs.ps1` (237 Markdown
 files/1,365 links), and `git diff --check`. The stale distribution pointer was
 updated to published 0.0.26 and now states its qualification limits.
 
+VirtualBox inventory correction (2026-11-04): VirtualBox 7.2.20 is installed
+at `C:\Program Files\Oracle\VirtualBox`. Registered VMs are
+`AR-Installer-Qualification-20261028` (powered off, Windows 11 x64, 8 GiB, 4
+vCPUs, NAT, installer-test shared folder) and `AR-DriverTest` (powered off,
+test-signing profile, with snapshots). The installer VM has no snapshots; do
+not begin lifecycle testing there until a recoverable baseline exists. The
+driver-test VM has snapshots but is not the app-install qualification VM.
+
 Evidence boundary: the 0.0.26 record proves clean tagged preparation, static
 runtime imports, payload hashes, 105 sound hashes, packaged-shell startup and
 native UI/drop smoke under a Medium/non-admin token. It explicitly does not
 prove installer execution, clean-machine or true standard-account lifecycle,
 WebView2 absence/bootstrap, Explorer drop, physical playback/continuity, or
-attended Stream Deck installation/actions. No VirtualBox or Hyper-V VM inventory
-is available in this environment, so those gates are blocked rather than
-simulated. Current next action: run the exact 0.0.26 installer matrix in an
-isolated Windows VM or disposable standard-user account, then qualify the
-installed Stream Deck plugin against the installed shell before any release
-claim.
+attended Stream Deck installation/actions. VirtualBox is available, but no
+baseline snapshot exists for the installation VM. Current next action: inspect
+and, with the owner's go-ahead, prepare a recoverable Windows baseline for
+`AR-Installer-Qualification-20261028`; then run the exact installer matrix and
+qualify the installed Stream Deck plugin against the installed shell before
+any release claim.
 CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
 settings to the generic tool-workflow test. Input, Soundboard and network
 nodes use dedicated editors. Reuse the inspector's exhaustive editor
