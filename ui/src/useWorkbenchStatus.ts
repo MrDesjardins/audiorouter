@@ -1,10 +1,16 @@
 import { useEffect, useState } from "react";
 import type { McpActivity, McpSetupInfo, McpTunnelStatus, WorkbenchTab } from "./Workbench";
 import { safeErrorName } from "./ErrorBoundary";
+import type { UiBackend } from "./backend";
 
 /** Shell status for the MCP and Logs tabs (moved from AppContent). */
-export function useWorkbenchStatus(tab: WorkbenchTab, recordUiDiagnostic: (message: string) => void) {
+export function useWorkbenchStatus(
+  tab: WorkbenchTab,
+  recordUiDiagnostic: (message: string) => void,
+  backend: UiBackend,
+) {
   const [mcpActivity, setMcpActivity] = useState<McpActivity[]>([]);
+  const [mcpClients, setMcpClients] = useState<Awaited<ReturnType<UiBackend["listClients"]>>>([]);
   const [mcpSetupInfo, setMcpSetupInfo] = useState<McpSetupInfo | null>(null);
   const [mcpTunnelStatus, setMcpTunnelStatus] = useState<McpTunnelStatus | null>(null);
   const [backendActivity, setBackendActivity] = useState<Record<string, unknown>[]>([]);
@@ -17,15 +23,18 @@ export function useWorkbenchStatus(tab: WorkbenchTab, recordUiDiagnostic: (messa
       failed.add(category);
       recordUiDiagnostic(`${category} failed (${safeErrorName(error)})`);
     };
-    void window.__TAURI_INTERNALS__
-      .invoke("mcp_setup_info")
-      .then((info) => {
-        if (active) {
-          failed.delete("MCP setup read");
-          setMcpSetupInfo(info as McpSetupInfo);
-        }
-      })
-      .catch((error: unknown) => reportFailure("MCP setup read", error));
+    const refreshSetupInfo = () => {
+      void window.__TAURI_INTERNALS__
+        ?.invoke?.("mcp_setup_info")
+        .then((info) => {
+          if (active) {
+            failed.delete("MCP setup read");
+            setMcpSetupInfo(info as McpSetupInfo);
+          }
+        })
+        .catch((error: unknown) => reportFailure("MCP setup read", error));
+    };
+    refreshSetupInfo();
     const refreshTunnelStatus = () => {
       void window.__TAURI_INTERNALS__
         ?.invoke?.("mcp_tunnel_status")
@@ -58,6 +67,7 @@ export function useWorkbenchStatus(tab: WorkbenchTab, recordUiDiagnostic: (messa
         })
         .catch((error: unknown) => reportFailure("MCP activity read", error));
       refreshTunnelStatus();
+      refreshSetupInfo();
       void window.__TAURI_INTERNALS__
         ?.invoke?.("backend_diagnostics_list")
         .then((items) => {
@@ -67,6 +77,15 @@ export function useWorkbenchStatus(tab: WorkbenchTab, recordUiDiagnostic: (messa
           }
         })
         .catch((error: unknown) => reportFailure("Backend activity read", error));
+      void backend
+        .listClients()
+        .then((items) => {
+          if (active) {
+            failed.delete("MCP client permissions read");
+            setMcpClients(items);
+          }
+        })
+        .catch((error: unknown) => reportFailure("MCP client permissions read", error));
     };
     refreshActivity();
     const timer = window.setInterval(refreshActivity, 2000);
@@ -74,6 +93,6 @@ export function useWorkbenchStatus(tab: WorkbenchTab, recordUiDiagnostic: (messa
       active = false;
       window.clearInterval(timer);
     };
-  }, [tab, recordUiDiagnostic]);
-  return { mcpActivity, mcpSetupInfo, mcpTunnelStatus, backendActivity };
+  }, [tab, recordUiDiagnostic, backend]);
+  return { mcpActivity, mcpClients, mcpSetupInfo, mcpTunnelStatus, backendActivity };
 }

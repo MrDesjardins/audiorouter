@@ -23,8 +23,10 @@ the assistant should ask when a device name is ambiguous.
 
 ## 1. Connect in AudioRouter
 
-Open AudioRouter's **MCP** tab and connect the saved tunnel. Wait for
-**Tunnel ready**, then choose **Open ChatGPT connector settings**. Keep
+Open AudioRouter's **MCP** tab, choose **ChatGPT** under “Where does your
+assistant run?”, and connect the saved tunnel. The page shows the exact
+`audiorouter-chatgpt` client and its current role. Wait for **Tunnel ready**,
+then choose **Open ChatGPT connector settings**. Keep
 AudioRouter and its tunnel connected while adding or using the plugin.
 
 ![AudioRouter's MCP tab shows the optional ChatGPT OpenAI tunnel ready, the read-only client disclosure, and the Open ChatGPT connector settings button.](../images/chatgpt-mcp-audiorouter-setup.png)

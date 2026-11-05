@@ -393,13 +393,16 @@ export function GraphHistoryPanel({
 
 export const CLIENT_ROLES = ["observer", "editor", "operator"] as const;
 
-export function ClientsPanel({ backend }: { backend: UiBackend }) {
+export function ClientsPanel({ backend, initialClientId }: { backend: UiBackend; initialClientId?: string }) {
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [newClientId, setNewClientId] = useState("");
   const [newClientRole, setNewClientRole] = useState<(typeof CLIENT_ROLES)[number]>("observer");
   const refreshGeneration = useRef(0);
+  useEffect(() => {
+    if (initialClientId) setNewClientId(initialClientId);
+  }, [initialClientId]);
   const refresh = () => {
     const generation = ++refreshGeneration.current;
     void backend
