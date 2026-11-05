@@ -35,8 +35,12 @@ pointer mistakes. Cargo-deny shell policy, both fmt checks, docs and diff
 checks pass. No unrelated crate was upgraded. Third-party warnings and their
 retention rationale are recorded in the evidence. No desktop UI, audio,
 driver or installer behavior changed or was manually exercised.
-Next: commit/push this branch, open the explicitly authorized PR, then require
-hosted CI before merge. No release or alert dismissal is authorized here.
+PR [#115](https://github.com/MrDesjardins/audiorouter/pull/115) is open.
+Merged current main `b489768e` into the branch, preserving both active-plan
+entries. Revalidation: 86 shell tests pass (4 ignored), 72 guard/policy tests
+pass, strict shell Clippy, both format checks, cargo-deny and docs pass.
+Next: require new-head hosted CI before merge. No release or alert dismissal
+is authorized here.
 
 ## Where things stand
 

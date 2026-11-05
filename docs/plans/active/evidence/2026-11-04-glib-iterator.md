@@ -78,4 +78,11 @@ do not claim automatic closure or dismiss it as an upstream upgrade.
 Rollback: revert the PR, restoring the prior registry resolution; no data
 migration. Remove the vendor copy/patch after Tauri's GTK dependency chain
 accepts a fixed GLib release, then regenerate the lockfile and revalidate.
-Next: open the authorized PR and review its CI results before merging.
+PR [#115](https://github.com/MrDesjardins/audiorouter/pull/115) opened.
+GitHub detected an active-plan conflict against newer main `b489768e`;
+merged main and preserved both entries (merge `74f48bb6`). Repeated relevant
+checks on the merged tree: shell 86 passed / 4 ignored; backport/policy/runner
+72 passed; strict shell Clippy, both format checks and cargo-deny passed;
+docs 239 files / 1,409 links passed. Product source and imported vendor source
+were not changed by conflict resolution. Next: require new-head hosted CI
+before merging; no release or advisory dismissal is part of this task.
