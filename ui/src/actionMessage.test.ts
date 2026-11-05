@@ -33,8 +33,8 @@ describe("action message tone", () => {
     for (const message of [
       "Preparing every path of this session...",
       "Starting session...",
-      "Draft updated. Review and plan the changes before committing.",
-      "Application source changed to Discord.exe (PID 36808). Review and plan the changes before committing.",
+      "Draft updated. Review and save the changes when you are ready.",
+      "Application source changed to Discord.exe (PID 36808). Review and save the changes when you are ready.",
       null,
     ]) {
       expect(actionMessageTone(message), String(message)).toBe("info");

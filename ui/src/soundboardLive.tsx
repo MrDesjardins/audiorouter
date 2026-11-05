@@ -124,7 +124,7 @@ export function useSoundboardController({
       assign(nodeId, slot, sound, keepCaption);
       return {
         ok: true,
-        message: `${sound.fileName} is on button ${slot} (${Math.round(sound.durationMs / 1000)} s). Plan and commit the change, then press Play.`,
+        message: `${sound.fileName} is on button ${slot} (${Math.round(sound.durationMs / 1000)} s). Save the change, then press Play.`,
       };
     } catch (error) {
       return { ok: false, message: formatUiError(error, "The sound could not be imported.") };

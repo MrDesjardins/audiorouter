@@ -774,9 +774,8 @@ export function PluginNodeInspector({
       </button>
       <small>
         Execution is bound to this exact binary and fingerprint; a changed file requires rescanning and re-adding it
-        from Plugin scan. Unloading removes this node and its connections from the draft only — Plan and Commit changes
-        to save the removal. While the route plays, Open plugin editor shows the plugin's own window; the controls below
-        work too.
+        from Plugin scan. Unloading removes this node and its connections from the draft only — save changes to keep the
+        removal. While the route plays, Open plugin editor shows the plugin's own window; the controls below work too.
       </small>
     </div>
   );

@@ -631,7 +631,7 @@ export function PresetCatalog({
           ))}
         </ul>
       )}
-      <p className="muted">Presets expand into ordinary draft nodes; all actions remain subject to Plan changes.</p>
+      <p className="muted">Presets expand into ordinary draft nodes; save changes when you are ready to apply them.</p>
     </section>
   );
 }
@@ -752,14 +752,14 @@ export function SessionTransferPanel({
             onClick={() => void commitImport()}
             disabled={!backend.connected || busy}
           >
-            Commit stopped import
+            Save imported session
           </button>
         )}
       </div>
       {plan && (
         <p className="muted" role="status">
-          Validated import: {plan.session.name} · expires in {Math.ceil(plan.expiresInMs / 1000)} seconds. Explicit
-          commit is required.
+          Validated import: {plan.session.name} · expires in {Math.ceil(plan.expiresInMs / 1000)} seconds. Save the
+          imported session when you are ready.
         </p>
       )}
       <PanelMessage message={message} />
