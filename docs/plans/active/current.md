@@ -1,5 +1,43 @@
 # Active plan — 0.0.26 release and maintenance
 
+## Dependabot 7: GLib iterator soundness (2026-11-04)
+
+Objective: backport GHSA-wrw7-89jp-8q8g / RUSTSEC-2024-0429 on branch
+`fix/dependabot-7-glib-iterator` (ENG-02/04/05). Owner explicitly requested
+a new branch and PR. Clean starting tree, main `068b395a`.
+
+Prerequisites/decision: Tauri 2.11.6 resolves GTK 0.18 and GLib 0.18.5 for
+Linux only; Windows target has no GLib dependency. No 0.18.6 exists and
+GLib 0.20 cannot satisfy GTK's 0.18 requirement. Vendor the published 0.18.5
+crate with its MIT license and backport the upstream mutable out-pointer
+fix through a shell-workspace Cargo patch. Do not suppress the advisory or
+change the product's Windows-only scope. Dependabot may still flag the
+unchanged upstream version; do not claim automatic alert closure.
+
+Tasks: copy pristine crate; edit only the vulnerable function and add a
+focused iterator regression; wire the Cargo patch and regenerate only its
+lock entry; add an automated source/resolution guard to dependency checks;
+validate metadata for all targets, Windows shell tests, formatting and docs;
+inspect the complete diff, commit, push and open the authorized PR.
+
+Validation matrix: source guard and lock resolution run on Windows without
+hardware; shell tests require Windows (available). Executing the GLib
+regression requires Linux GLib development libraries (not available here),
+and must not be reported as Windows evidence. No audio/driver/credentials
+needed. Rollback: revert this change; no persisted-data migration. Risk:
+temporary ownership of the backport until Tauri upgrades its GTK stack.
+Results: [backport evidence](evidence/2026-11-04-glib-iterator.md). WSL Ubuntu
+with GLib 2.80 and Rust 1.96.0 reproduced SIGSEGV with the original code;
+restoring the fix passes all 12 optimized iterator tests. Windows shell:
+85 tests pass, 4 explicit fixtures ignored; strict all-feature Clippy passes.
+70 policy/runner/backport checks pass, including rejection of both original
+pointer mistakes. Cargo-deny shell policy, both fmt checks, docs and diff
+checks pass. No unrelated crate was upgraded. Third-party warnings and their
+retention rationale are recorded in the evidence. No desktop UI, audio,
+driver or installer behavior changed or was manually exercised.
+Next: commit/push this branch, open the explicitly authorized PR, then require
+hosted CI before merge. No release or alert dismissal is authorized here.
+
 CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
 settings to the generic tool-workflow test. Input, Soundboard and network
 nodes use dedicated editors. Reuse the inspector's exhaustive editor

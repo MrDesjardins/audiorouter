@@ -17,6 +17,7 @@ export function classifyChanges(files, { full = false } = {}) {
     let known = false;
     const match = (pattern, ...selected) => { if (pattern.test(file)) { known = true; for (const area of selected) flags[area] = true; } };
     match(/^(crates\/|src-tauri\/|tests\/|examples\/|Cargo\.(toml|lock)$)/, 'backend');
+    match(/^vendor\/glib\//, 'backend', 'supply');
     match(/^(contracts\/|tools\/contracts\/)/, 'contracts', 'backend', 'ui', 'streamdeck');
     match(/^ui\//, 'ui');
     match(/^(site\/|tools\/site\/)/, 'site');

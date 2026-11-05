@@ -21,6 +21,7 @@ const fixtures = [
   ['ui lock', ['ui/package-lock.json'], ['ui', 'supply']],
   ['root lock', ['Cargo.lock'], ['backend', 'supply']],
   ['shell lock', ['src-tauri/Cargo.lock'], ['backend', 'release', 'supply']],
+  ['GLib backport', ['vendor/glib/src/variant_iter.rs'], ['backend', 'supply']],
   ['website guide', ['site/tools/group.html'], ['site']],
   ['website styles', ['site/assets/compare.css'], ['site']],
   ['CI change', ['.github/workflows/ci.yml'], []],

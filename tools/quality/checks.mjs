@@ -27,7 +27,7 @@ export const checks = {
   'sdk-provenance': [ps('tests/acceptance/m06-sdk-installer.ps1')],
   'release-tests': ['prepare-artifacts', 'verify-artifacts', 'runbook-command', 'app-only-release'].map(name => ps(`tools/release/test-${name}.ps1`)),
   'release-build': [{ ...ps('tests/acceptance/m08-release.ps1'), args: [...ps('tests/acceptance/m08-release.ps1').args, '-AppOnly'] }],
-  'cargo-deny': [{ ...cargo('deny', '--manifest-path', 'Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }, { ...cargo('deny', '--manifest-path', 'src-tauri/Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }],
+  'cargo-deny': [{ executable: 'node', args: ['--test', 'tools/quality/glib-backport.test.mjs'] }, { ...cargo('deny', '--manifest-path', 'Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }, { ...cargo('deny', '--manifest-path', 'src-tauri/Cargo.toml', 'check', 'advisories', 'licenses', 'sources', 'bans'), windows: false }],
   'npm-audit': ['ui', 'contracts', 'tools/streamdeck'].map(dir => npm(dir, 'audit', '--omit=dev', '--audit-level=high')),
 };
 export const fast = ['docs', 'policy', 'rust-format', 'contract-type', 'ui-format', 'ui-lint', 'ui-type', 'streamdeck-type'];

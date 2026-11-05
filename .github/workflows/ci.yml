@@ -143,6 +143,12 @@ jobs:
       - name: Dependency policy
         run: node tools/quality/verify.mjs --checks cargo-deny,npm-audit
 
+      - name: Install GLib regression prerequisites
+        run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev
+
+      - name: Exercise GLib iterator backport with optimizations
+        run: cargo test --manifest-path vendor/glib/Cargo.toml --locked --release --lib string_iterator_out_pointer_regression
+
       - name: Upload verification results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
