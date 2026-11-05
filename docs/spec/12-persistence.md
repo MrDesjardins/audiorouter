@@ -15,7 +15,7 @@ Milestone ownership: M01 storage/revisions/import schema; M04 recording state; M
 - **STATE-09 — Shutdown.** Closing the window disconnects that client only. Stopping a session fades outputs, releases ownership, and finalizes recorders. Quitting the backend stops all sessions with per-recorder outcomes, bounded to ten seconds; timed-out finalizations are marked recoverable/failed. Endpoint drivers remain installed until an explicit uninstall.
 - **STATE-10 — Recovery.** On backend crash, endpoints go silent, then optional supervisor restart uses the last committed graph and prior startup/recovery policy. Default is to restore previously running non-recording routes after one recoverable crash, preserving privacy mute; after three crashes in ten minutes start in safe mode stopped. Recording never silently resumes into an old file.
 - **STATE-11 — OS transitions.** On lock, keep explicitly running sessions according to saved policy; default permits a live call to continue and retains visible tray status when unlocked. On sign-out stop and release ownership; on sleep suspend streams; on resume re-enumerate and revalidate before continuing. No cross-user automatic microphone substitution.
-- **STATE-12 — Backups and retention.** Keep at least the ten most recent daily configuration backups and pre-migration backup, subject to a documented 100 MiB default configuration backup budget; large referenced plugin assets are deduplicated and counted. Never prune recordings as part of configuration retention. Provide explicit export and restore preview via API.
+- **STATE-12 — Backups and retention.** Keep at least the ten most recent daily configuration backups and pre-migration backup, subject to a documented 100 MiB default configuration backup budget; large referenced plugin assets are deduplicated and counted. Imported audio (Audio File and Soundboard sounds, at most 512 MiB) is stored in the same database, so a backup may hold up to 612 MiB: the configuration budget plus the audio library limit (decision 2026-11-01, below). Never prune recordings as part of configuration retention. Provide explicit export and restore preview via API.
 
 ## Storage settings (2026-10-07)
 
@@ -50,3 +50,34 @@ This illustrates the manifest shape; M01 freezes exact schemas. Binding hints ai
 ## Recovery evidence
 
 Terminate the backend at every journal stage and verify one of two outcomes: the previous committed revision or the new committed revision, never a torn graph. Reissue a previously committed idempotency key and verify no duplicate recording/device/node. Corrupt a copy of the database and demonstrate preservation/restoration. Test old/new schema fixtures, missing plugin assets, settings restored on a new machine, and bundle traversal rejection. Driver state and per-user configuration mismatch must be repairable through an explicit reconciliation plan.
+
+## Decision 2026-11-01: backups include the audio library
+
+Owner decision, 2026-11-01 (code review 2026-11-01, P2-7). Imported audio
+(Audio File and Soundboard sounds) is stored as blobs in the configuration
+database, up to 64 MiB each and 512 MiB in total. The previous 100 MiB backup
+limit therefore refused, after doing all the work, any backup of a database
+holding more than about 100 MiB of sounds, and refused to restore such a
+backup.
+
+- The backup budget is now the 100 MiB configuration budget plus the 512 MiB
+  audio library limit (612 MiB), checked from the page count before copying
+  and again on the written file. Restore accepts the same size.
+- A file backup (`audiorouter backup`) opens its source read-only and never
+  migrates, prunes or creates it.
+- Considered and not chosen: a media-free configuration backup with a
+  separate media export. It keeps backups small but needs a second file
+  format and restore step.
+- Consequence: a backup of a full library takes longer and needs up to
+  612 MiB of free space. Rollback: restore the 100 MiB constant; existing
+  backups stay readable.
+
+## Decision 2026-11-01: one full integrity check per app start
+
+Code review 2026-11-01, P2-9. `PRAGMA integrity_check` reads every page, and
+every database open ran it: at least twice per app start and once per CLI
+command or `mcp serve` launch. The desktop backend now runs the full check
+once per app start (`Storage::open_checked`). Other opens run it only before
+a migration changes the file; a database SQLite cannot read is still
+refused. The shell logs a database it cannot read (`shell.storageFailure`,
+category only) instead of treating it silently as "not in safe mode".

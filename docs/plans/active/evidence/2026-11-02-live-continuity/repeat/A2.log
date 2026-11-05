@@ -1,0 +1,34 @@
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{03498a2a-ef6a-4dd4-b9ba-72e22f567d7a}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started: {"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [2.1668ms, 636.8µs, 234.4µs]
+chain: [Gain]; audio service: {"active":true,"lateGaps":0,"maxGapMicros":2183,"passes":19771}; output underruns: 2
+  "source" timing={"delayMs":11.534580490553772} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5657523809523809,"processingUsMax":4.8} plugin=null network=null processor=null
+  "destination" timing={"delayMs":42.08534082732898} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [0, 0, 0, 0]
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 4 glitches, 2 silent runs (1481 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [4, 0, 0, 0]
+  at    0.070 s residual 0.31x amplitude
+  at    0.081 s residual 0.31x amplitude
+  at    2.102 s residual 0.55x amplitude
+  at    2.123 s residual 0.55x amplitude
+
+thread 'live::live_backend_service_keeps_a_routed_tone_continuous' (52896) panicked at crates\transport\tests\live_audio_continuity.rs:1217:9:
+assertion `left == right` failed: the routed tone has audible discontinuities
+  left: 4
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+live::live_backend_service_keeps_a_routed_tone_continuous --- FAILED
+
+failures:
+
+failures:
+    live::live_backend_service_keeps_a_routed_tone_continuous
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 22.13s
+
+error: test failed, to rerun pass `-p audiorouter-transport --test live_audio_continuity`

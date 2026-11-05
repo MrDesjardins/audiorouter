@@ -1472,13 +1472,46 @@ fn record_backend_failure(database: &std::path::Path) -> Option<usize> {
         .duration_since(std::time::UNIX_EPOCH)
         .ok()?
         .as_secs();
-    let storage = Storage::open(database).ok()?;
-    storage.record_recovery_crash(timestamp).ok()
+    Storage::open(database)
+        .and_then(|storage| storage.record_recovery_crash(timestamp))
+        .inspect_err(|error| log_storage_failure("recordBackendFailure", error))
+        .ok()
 }
 
+/// `None` when the database cannot be read; the failure is logged, since the
+/// caller treats it as "not in safe mode" (review 2026-11-01, P2-9).
 #[cfg(windows)]
 fn recovery_safe_mode(database: &std::path::Path) -> Option<bool> {
-    Storage::open(database).ok()?.recovery_safe_mode().ok()
+    Storage::open(database)
+        .and_then(|storage| storage.recovery_safe_mode())
+        .inspect_err(|error| log_storage_failure("recoverySafeMode", error))
+        .ok()
+}
+
+/// A bounded `shell.jsonl` record of a database read the shell could not
+/// make: the operation and the error category only, never paths or SQLite
+/// text.
+#[cfg(windows)]
+fn log_storage_failure(operation: &'static str, error: &audiorouter_storage::StorageError) {
+    let category = match error {
+        audiorouter_storage::StorageError::CorruptDatabase(_) => "corruptDatabase",
+        audiorouter_storage::StorageError::Sql(_) => "sql",
+        audiorouter_storage::StorageError::Io(_) => "io",
+        _ => "other",
+    };
+    let request = JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(serde_json::json!("storage")),
+        method: "shell.storageFailure".into(),
+        params: None,
+    };
+    log_shell_rpc(
+        &request,
+        &Ok(JsonRpcResponse::success(
+            request.id.clone(),
+            serde_json::json!({"state": format!("{operation}:{category}")}),
+        )),
+    );
 }
 
 fn default_desktop_session() -> Session {
@@ -1633,14 +1666,23 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                 if safe_mode {
                     eprintln!("AudioRouter control backend starting in durable safe mode; routes remain stopped");
                 }
+                // The full page scan runs once per app start; a restart after
+                // a backend failure reopens without it (review 2026-11-01, P2-9).
+                let mut integrity_checked = false;
                 loop {
                     // A panic is a backend failure like any other: count it and
                     // restart, never leave the tray running with no backend.
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<(), String> {
                     // ControlPlane contains COM-backed endpoint state and is
                     // deliberately constructed on the serving thread.
-                    let storage = Storage::open(&database)
-                        .map_err(|error| format!("backend database open failed: {error:?}"))?;
+                    let storage = if integrity_checked {
+                        Storage::open(&database)
+                    } else {
+                        Storage::open_checked(&database)
+                    }
+                    .inspect_err(|error| log_storage_failure("backendOpen", error))
+                    .map_err(|error| format!("backend database open failed: {error:?}"))?;
+                    integrity_checked = true;
                     let sid = audiorouter_transport::current_user_sid().map_err(|error| {
                         format!("current user identity lookup failed: {error:?}")
                     })?;

@@ -129,13 +129,7 @@ impl ControlPlane {
                 continue;
             }
             let (_, format, bytes) = self
-                .storage
-                .as_ref()
-                .ok_or_else(|| {
-                    ControlError::InvalidRequest("audio source storage is unavailable".into())
-                })?
-                .load_audio_media(media_id)
-                .map_err(storage_error)?
+                .with_storage_worker(|storage| storage.load_audio_media(media_id).map_err(storage_error))?
                 .ok_or_else(|| {
                     not_ready(format!(
                         "\"{}\" cannot play: AudioRouter no longer has \"{file_name}\". Choose the file again in its Properties.",
@@ -374,30 +368,25 @@ impl ControlPlane {
                 ControlError::InvalidRequest("audio media ID space exhausted".into())
             })?;
             if self
-                .storage
-                .as_ref()
-                .ok_or_else(|| {
-                    ControlError::InvalidRequest("persistent backend storage is unavailable".into())
+                .with_storage_worker(|storage| {
+                    storage.load_audio_media(&candidate).map_err(storage_error)
                 })?
-                .load_audio_media(&candidate)
-                .map_err(storage_error)?
                 .is_none()
             {
                 break candidate;
             }
         };
-        let storage = self.storage.as_ref().ok_or_else(|| {
-            ControlError::InvalidRequest("audio import requires persistent backend storage".into())
+        self.with_storage_worker(|storage| {
+            storage
+                .store_audio_media(
+                    &media_id,
+                    &upload.file_name,
+                    &upload.format,
+                    &upload.bytes,
+                    None,
+                )
+                .map_err(storage_error)
         })?;
-        storage
-            .store_audio_media(
-                &media_id,
-                &upload.file_name,
-                &upload.format,
-                &upload.bytes,
-                None,
-            )
-            .map_err(storage_error)?;
         let duration_ms =
             (decoded.frames() as u64 * 1000 / u64::from(decoded.sample_rate_hz)).max(1);
         Ok(
@@ -416,11 +405,8 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("recordingId is required".into()))?;
-        let storage = self.storage.as_ref().ok_or_else(|| {
-            ControlError::InvalidRequest(
-                "temporary audio import requires persistent backend storage".into(),
-            )
-        })?;
+        let mut next_audio_media = self.next_audio_media;
+        let result = self.with_storage_worker(|storage| {
         let record = storage
             .get_recording(recording_id)
             .map_err(storage_error)?
@@ -470,25 +456,17 @@ impl ControlPlane {
             ));
         }
         let bytes = std::fs::read(path).map_err(|error| storage_error(StorageError::Io(error)))?;
-        let decoded = self
-            .while_servicing_audio(|| {
-                audiorouter_engine::decode_audio_bytes(
+        let decoded = audiorouter_engine::decode_audio_bytes(
                     bytes.clone(),
                     "wav",
                     audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
                 )
-            })
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("temporary WAV could not be decoded: {error}"))
             })?;
-        let storage = self.storage.as_ref().ok_or_else(|| {
-            ControlError::InvalidRequest(
-                "temporary audio import requires persistent backend storage".into(),
-            )
-        })?;
         let media_id = loop {
-            let candidate = format!("audio-media-{}", self.next_audio_media);
-            self.next_audio_media = self.next_audio_media.checked_add(1).ok_or_else(|| {
+            let candidate = format!("audio-media-{next_audio_media}");
+            next_audio_media = next_audio_media.checked_add(1).ok_or_else(|| {
                 ControlError::InvalidRequest("audio media ID space exhausted".into())
             })?;
             if storage
@@ -518,12 +496,19 @@ impl ControlPlane {
             let _ = storage.delete_audio_media(&media_id);
             return Err(storage_error(error));
         }
-        Ok(
-            json!({ "mediaId": media_id, "fileName": "Temporary voice take.wav", "format": "wav",
+        Ok(json!({
+            "mediaId": media_id,
+            "fileName": "Temporary voice take.wav",
+            "format": "wav",
             "durationMs": (decoded.frames() as u64 * 1000 / u64::from(decoded.sample_rate_hz)).max(1),
-            "channels": decoded.channels, "sampleRateHz": decoded.sample_rate_hz,
-            "expiresAt": expires_at, "sourceRemoved": true }),
-        )
+            "channels": decoded.channels,
+            "sampleRateHz": decoded.sample_rate_hz,
+            "expiresAt": expires_at,
+            "sourceRemoved": true
+        }))
+        });
+        self.next_audio_media = next_audio_media;
+        result
     }
 
     pub(crate) fn dispatch_audio_media_delete(

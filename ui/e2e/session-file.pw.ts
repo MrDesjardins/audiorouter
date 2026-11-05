@@ -16,11 +16,11 @@ test("Session file: save to a file and open it as a new session without replacin
   const panel = page.locator(".session-file");
   await expect(panel.getByRole("heading", { name: "Session file" })).toBeVisible();
   await panel.getByRole("textbox", { name: "Session file path" }).fill(file);
-  await panel.getByRole("button", { name: "Save to file…" }).click();
-  await expect(panel.getByRole("status")).toContainText('Saved "Offline qualification"');
+  await panel.getByRole("button", { name: "Export saved version…" }).click();
+  await expect(panel.getByRole("status")).toContainText('Exported the saved version of "Offline qualification"');
   expect(existsSync(file)).toBe(true);
 
-  await panel.getByRole("button", { name: "Save to file…" }).click();
+  await panel.getByRole("button", { name: "Export saved version…" }).click();
   await expect(panel.getByRole("status")).toContainText("already exists; choose another name");
 
   await panel.getByRole("button", { name: "Open file…" }).click();

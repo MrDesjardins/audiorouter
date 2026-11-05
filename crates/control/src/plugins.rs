@@ -271,10 +271,114 @@ pub(crate) fn start_plugin_bridges(
                     "plugin parameter template rejected: {error:?}"
                 ))
             })?;
+            bridge.set_silence_if_unchanged(plugin_silences_unchanged_audio(session, id));
             started.push((id.clone(), bridge));
         }
     }
     Ok(started)
+}
+
+/// Whether a plugin that passes audio through unchanged is silenced (owner
+/// decision DEC U6, 2026-10-31). An unlicensed plugin (UADx signed out of UA
+/// Connect) returns its input untouched without reporting an error, so on a
+/// path fed by a recording device it would send the dry voice on. The user
+/// can switch this off for a plugin that is meant to be neutral
+/// (`passThroughAllowed`).
+pub(crate) fn plugin_silences_unchanged_audio(session: &Session, node_id: &EntityId) -> bool {
+    let Some(node) = session.nodes.iter().find(|node| &node.id == node_id) else {
+        return false;
+    };
+    if node
+        .parameters
+        .get("passThroughAllowed")
+        .and_then(Value::as_bool)
+        == Some(true)
+    {
+        return false;
+    }
+    let mut pending = vec![node_id.clone()];
+    let mut seen = std::collections::HashSet::new();
+    while let Some(id) = pending.pop() {
+        if !seen.insert(id.clone()) {
+            continue;
+        }
+        for edge in session
+            .edges
+            .iter()
+            .filter(|edge| edge.enabled && edge.destination_node == id)
+        {
+            let Some(source) = session
+                .nodes
+                .iter()
+                .find(|node| node.id == edge.source_node)
+            else {
+                continue;
+            };
+            if records_from_a_device(source.kind) {
+                return true;
+            }
+            pending.push(source.id.clone());
+        }
+    }
+    false
+}
+
+/// The plugin nodes of `session` whose unchanged audio is silenced, computed
+/// before a live commit rewrites the nodes' flags.
+pub(crate) fn plugin_unchanged_guards(session: &Session) -> std::collections::HashSet<EntityId> {
+    session
+        .nodes
+        .iter()
+        .filter(|node| node.kind == NodeKind::Plugin)
+        .filter(|node| plugin_silences_unchanged_audio(session, &node.id))
+        .map(|node| node.id.clone())
+        .collect()
+}
+
+/// Kinds whose audio comes from a recording device (a microphone or line
+/// input). Exhaustive, so a new kind has to be classified here.
+fn records_from_a_device(kind: NodeKind) -> bool {
+    match kind {
+        NodeKind::PhysicalInput => true,
+        // Other computers, apps, playback and generated audio are not a
+        // recording device on this PC.
+        NodeKind::ApplicationCapture
+        | NodeKind::EndpointLoopback
+        | NodeKind::VirtualRenderSource
+        | NodeKind::NetworkReceive
+        | NodeKind::TestSignal
+        | NodeKind::AudioFile
+        | NodeKind::Soundboard => false,
+        NodeKind::PhysicalOutput
+        | NodeKind::VirtualCaptureSink
+        | NodeKind::Mixer
+        | NodeKind::Gain
+        | NodeKind::Mute
+        | NodeKind::Meter
+        | NodeKind::ParametricEq
+        | NodeKind::Compressor
+        | NodeKind::Gate
+        | NodeKind::Limiter
+        | NodeKind::Delay
+        | NodeKind::GraphicEq
+        | NodeKind::Pitch
+        | NodeKind::Recorder
+        | NodeKind::Plugin
+        | NodeKind::Volume
+        | NodeKind::BassTreble
+        | NodeKind::Dehum
+        | NodeKind::Declick
+        | NodeKind::InputSwitch
+        | NodeKind::OutputSwitch
+        | NodeKind::Denoise
+        | NodeKind::SpeechDenoise
+        | NodeKind::FirFilter
+        | NodeKind::SpectralGate
+        | NodeKind::TimeShift
+        | NodeKind::NetworkSend
+        | NodeKind::Duck
+        | NodeKind::FunVoiceChanger => false,
+    }
 }
 
 /// Group only exclusive identity edges; absorbing a branch or matrix would
@@ -428,6 +532,82 @@ mod plugin_chain_group_tests {
             .map(|group| group.into_iter().map(|id| id.as_str().to_owned()).collect())
             .collect()
     }
+    /// DEC U6 (2026-10-31): a recording device anywhere upstream makes a
+    /// plugin's unchanged audio a reason to silence it; app audio does not,
+    /// and the user's `passThroughAllowed` lifts the guard.
+    #[test]
+    fn unchanged_audio_is_silenced_only_downstream_of_a_recording_device() {
+        let mut session = graph();
+        // a → b → c → d, all plugins: no recording device feeds them.
+        assert!(plugin_unchanged_guards(&session).is_empty());
+        let mut source = session.nodes[0].clone();
+        source.id = EntityId::new("mic");
+        source.kind = NodeKind::PhysicalInput;
+        session.nodes.push(source);
+        session.edges.push(Edge {
+            id: EntityId::new("mic-b"),
+            source_node: EntityId::new("mic"),
+            source_port: "out".into(),
+            destination_node: EntityId::new("b"),
+            destination_port: "in".into(),
+            matrix: vec![1.0],
+            enabled: true,
+        });
+        let guarded = |session: &Session| {
+            let mut ids = plugin_unchanged_guards(session)
+                .into_iter()
+                .map(|id| id.as_str().to_owned())
+                .collect::<Vec<_>>();
+            ids.sort();
+            ids
+        };
+        // Downstream of the microphone, not upstream of it.
+        assert_eq!(guarded(&session), ["b", "c", "d"]);
+        // Play prunes inactive upstream nodes before preparing plugins; the
+        // live microphone survives, so the guard does too.
+        let pruned = audiorouter_engine::prune_inactive_upstream(&session).into_owned();
+        assert_eq!(guarded(&pruned), ["b", "c", "d"]);
+        session
+            .nodes
+            .iter_mut()
+            .find(|node| node.id.as_str() == "c")
+            .unwrap()
+            .parameters
+            .insert("passThroughAllowed".into(), json!(true));
+        assert_eq!(guarded(&session), ["b", "d"]);
+        // A disabled connection feeds nothing.
+        session.edges.last_mut().unwrap().enabled = false;
+        assert!(guarded(&session).is_empty());
+        // Application audio is not a recording device.
+        session.edges.last_mut().unwrap().enabled = true;
+        session.nodes.last_mut().unwrap().kind = NodeKind::ApplicationCapture;
+        assert!(guarded(&session).is_empty());
+    }
+
+    /// `plugins.resume` through the dispatcher: an optional session, a node
+    /// named rather than identified, and a plain refusal while nothing plays.
+    #[test]
+    fn plugin_resume_resolves_the_active_session_and_a_node_name() {
+        let mut plane = ControlPlane::default();
+        plane.insert_session(graph()).unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "plugins.resume".into(),
+            params: Some(json!({ "sessionId": "chain", "nodeId": "B" })),
+        });
+        let message = response.error.expect("nothing plays").message;
+        assert!(message.contains("while its route is playing"), "{message}");
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "plugins.resume".into(),
+            params: Some(json!({ "sessionId": "chain", "nodeId": "no such plugin" })),
+        });
+        let message = response.error.expect("unknown node").message;
+        assert!(!message.contains("while its route is playing"), "{message}");
+    }
+
     #[test]
     fn shared_plugin_groups_follow_signal_order_and_keep_boundaries() {
         let mut session = graph();
@@ -757,7 +937,9 @@ impl ControlPlane {
                     )
                 })?;
             // Re-inspect using the path exactly as scanned under its root.
-            let scanned_path = entry.get("path").and_then(Value::as_str).unwrap_or(path);
+            let scanned_path =
+                std::path::PathBuf::from(entry.get("path").and_then(Value::as_str).unwrap_or(path));
+            let configured_root = std::path::PathBuf::from(root);
             let channels = node
                 .ports
                 .iter()
@@ -767,29 +949,43 @@ impl ControlPlane {
             // The node's latest capture (editor close, Save state, Stop) wins;
             // a capture from a different plugin binary is ignored. Otherwise
             // the state saved with the route (or imported with it) applies.
-            let latest_id = self.storage.as_ref().and_then(|storage| {
-                storage
-                    .plugin_node_state(session.id.as_str(), node.id.as_str())
-                    .ok()
-                    .flatten()
-            });
-            let latest = latest_id
-                .as_deref()
-                .and_then(|id| self.load_plugin_state_asset(id, fingerprint).ok());
-            // Slider values the latest capture already contains; see
-            // capture_plugin_state.
-            let captured_sliders = latest
-                .as_ref()
-                .and(latest_id.as_deref())
-                .and_then(|id| self.plugin_slider_snapshot(id));
-            let state = match latest {
-                Some(state) => Some(state),
-                None => node
-                    .parameters
-                    .get("stateId")
-                    .and_then(Value::as_str)
-                    .map(|id| self.load_plugin_state_asset(id, fingerprint))
-                    .transpose()?,
+            let (state, captured_sliders) = if self.storage.is_some() {
+                self.with_storage_worker(|storage| {
+                    let latest_id = storage
+                        .plugin_node_state(session.id.as_str(), node.id.as_str())
+                        .ok()
+                        .flatten();
+                    let latest = latest_id.as_deref().and_then(|id| {
+                        Self::load_plugin_state_asset(storage, id, fingerprint).ok()
+                    });
+                    // Slider values the latest capture already contains; see
+                    // capture_plugin_state.
+                    let captured_sliders = latest
+                        .as_ref()
+                        .and(latest_id.as_deref())
+                        .and_then(|id| Self::plugin_slider_snapshot(storage, id));
+                    let state = match latest {
+                        Some(state) => Some(state),
+                        None => node
+                            .parameters
+                            .get("stateId")
+                            .and_then(Value::as_str)
+                            .map(|id| Self::load_plugin_state_asset(storage, id, fingerprint))
+                            .transpose()?,
+                    };
+                    Ok((state, captured_sliders))
+                })?
+            } else if node
+                .parameters
+                .get("stateId")
+                .and_then(Value::as_str)
+                .is_some()
+            {
+                return Err(ControlError::InvalidRequest(
+                    "plugin state storage is unavailable".into(),
+                ));
+            } else {
+                (None, None)
             };
             let mut parameters =
                 plugin_sliders_to_apply(&node.parameters, captured_sliders.as_ref())
@@ -805,8 +1001,8 @@ impl ControlPlane {
             parameters.sort_by_key(|event| event.parameter_id);
             requests.push(PluginStageRequest {
                 node_id: node.id.clone(),
-                scanned_path: std::path::PathBuf::from(scanned_path),
-                configured_root: std::path::PathBuf::from(root),
+                scanned_path,
+                configured_root,
                 fingerprint: fingerprint.to_owned(),
                 channels,
                 state,
@@ -827,6 +1023,29 @@ impl ControlPlane {
             .into_iter()
             .map(|(id, bridge)| (id, bridge as Arc<dyn RealtimePluginProcessor>))
             .collect())
+    }
+
+    /// `plugins.resume`: the deliberate Retry after a plugin was silenced for
+    /// passing a recording device's audio through unchanged. The target is
+    /// already resolved (`resolve_node_target`).
+    pub(crate) fn dispatch_plugins_resume(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let params =
+            params.ok_or_else(|| ControlError::InvalidRequest("nodeId is required".into()))?;
+        let field = |name: &str| {
+            params
+                .get(name)
+                .and_then(Value::as_str)
+                .map(EntityId::new)
+                .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
+        };
+        let (session_id, node_id) = (field("sessionId")?, field("nodeId")?);
+        let resumed = self
+            .plugin_bridge(&session_id, &node_id)?
+            .resume_after_unchanged();
+        Ok(json!({ "sessionId": session_id, "nodeId": node_id, "resumed": resumed }))
     }
 
     /// The live runtime bridge of a plugin node in a playing route.
@@ -852,8 +1071,11 @@ impl ControlPlane {
 
     /// The slider values saved with a captured state, when it has them
     /// (captures from before 2026-10-22 do not).
-    fn plugin_slider_snapshot(&self, state_id: &str) -> Option<serde_json::Map<String, Value>> {
-        let root = self.storage.as_ref()?.plugin_state_directory()?;
+    fn plugin_slider_snapshot(
+        storage: &Storage,
+        state_id: &str,
+    ) -> Option<serde_json::Map<String, Value>> {
+        let root = storage.plugin_state_directory()?;
         let path = plugin_slider_snapshot_path(&root, state_id);
         // Bounded: at most 256 numeric sliders.
         if std::fs::metadata(&path).ok()?.len() > 64 * 1024 {
@@ -868,13 +1090,10 @@ impl ControlPlane {
     /// Read and verify a stored plugin state for the plugin binary it was
     /// captured from.
     pub(crate) fn load_plugin_state_asset(
-        &self,
+        storage: &Storage,
         state_id: &str,
         plugin_sha256: &str,
     ) -> Result<audiorouter_plugin_host::PluginStateAsset, ControlError> {
-        let storage = self.storage.as_ref().ok_or_else(|| {
-            ControlError::InvalidRequest("plugin state storage is unavailable".into())
-        })?;
         let root = storage.plugin_state_directory().ok_or_else(|| {
             ControlError::InvalidRequest("plugin state storage is unavailable".into())
         })?;

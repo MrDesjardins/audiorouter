@@ -11,7 +11,7 @@ $root = Join-Path ([IO.Path]::GetTempPath()) ('audiorouter-app-only-test-' + [gu
 $verifier = Join-Path $PSScriptRoot 'verify-artifacts.ps1'
 New-Item -ItemType Directory -Path $root | Out-Null
 try {
-    $names = @('AudioRouter_0.0.16_x64-setup.exe', 'sbom.cargo.json', 'sbom.npm.json', 'sbom.npm.package-lock.json',
+    $names = @('AudioRouter_0.0.16_x64-setup.exe', 'sbom.cargo.json', 'sbom.shell.cargo.json', 'sbom.npm.json', 'sbom.npm.package-lock.json',
         'com.mrdesjardins.audiorouter.streamDeckPlugin', 'sbom.streamdeck.json', 'sbom.streamdeck.package-lock.json',
         'THIRD-PARTY-NOTICES.txt', 'tunnel-client-runtime-LICENSE.txt', 'tunnel-client-runtime-NOTICE.txt',
         'tunnel-client-runtime-licenses.txt', 'tunnel-client-runtime.spdx.json')
@@ -32,6 +32,14 @@ try {
     $manifestPath = Join-Path $root 'release-manifest.json'
     $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding utf8
     & $verifier $manifestPath | Out-Null
+    $completeArtifacts = $manifest.artifacts
+    $manifest.artifacts = @($completeArtifacts | Where-Object { $_.file -ne 'sbom.shell.cargo.json' })
+    $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding utf8
+    try {
+        & $verifier $manifestPath | Out-Null
+        throw 'Verifier accepted a release without its shell SBOM entry'
+    } catch { if ($_.Exception.Message -notmatch 'missing required artifact: sbom.shell.cargo.json') { throw } }
+    $manifest.artifacts = $completeArtifacts
     $manifest.includesDriver = $true
     $manifest | ConvertTo-Json -Depth 5 | Set-Content $manifestPath -Encoding utf8
     try {

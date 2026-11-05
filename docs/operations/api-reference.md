@@ -16,9 +16,14 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 136 methods, including backend-owned quit/finalize,
+The current catalog contains 137 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
+
+Network Send/Receive `pairingKey` settings now select encrypted v3 transport;
+update both paired peers together. Receive telemetry can report
+`authProblem: "senderOutdated"` when an older sender cannot use encryption.
+See [network privacy and permissions](privacy-permissions.md#audio-privacy-boundary).
 
 | Method | Permission | Side effect |
 | --- | --- | --- |
@@ -26,6 +31,7 @@ lifecycle, plugin inventory/retry, and startup plan/apply methods.
 | `system.handshake` | `read` | read-only |
 | `status.get` | `read` | read-only |
 | `system.diagnostics` | `read` | read-only |
+| `system.checkSetup` | `read` | read-only; judges saved sessions against the active devices (UI-27): outputs and Surround inputs Play would refuse, feedback loops (also across sessions), missing devices, cables not at 48 kHz; optional `sessionId`; MCP tool `check_setup` |
 | `diagnostics.getVerbose` | `read` | read-only; whether opt-in verbose logging is on and the seconds left |
 | `diagnostics.setVerbose` | `sessionControl` | mutating; `{enabled}` turns verbose logging on for one hour (it expires by itself) or off; logs only, never audio or the saved graph |
 | `system.quit` | `sessionControl` | external operation; requires an idempotency key; finalizes active recorders before stopping running sessions |
@@ -123,6 +129,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.saveState` | `pluginScan` | mutating; captures a playing plugin node's opaque state, stores it under the database's `plugin-states` folder, and returns a `stateId` to set on the node |
 | `plugins.openEditor` | `pluginScan` | external operation; opens a playing VST3 or VST2 plugin's own editor inside a parent window owned by `ownerProcessId` (the desktop shell) |
 | `plugins.closeEditor` | `pluginScan` | external operation; closes the editor and applies its edits to the instance that processes audio |
+| `plugins.resume` | `sessionControl` | mutating; `nodeId` (ID or exact name) selects a plugin in a playing route, `sessionId` defaults to the active session; Retry after the plugin was silenced for passing a recording device's audio through unchanged (`plugin.silencedUnchanged`); `resumed` is false, and the plugin stays silent, while it still passes audio through |
 | `plugins.retry` | `pluginScan` | mutating; requires an idempotency key |
 | `plugins.inspect` | `pluginScan` | read-only |
 | `plugins.parameters` | `pluginScan` | external operation; bounded descriptors from the exact revalidated plugin worker |

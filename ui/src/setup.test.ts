@@ -2,6 +2,31 @@ import { describe, expect, it } from "vitest";
 import { setupChecklist } from "./setup";
 
 describe("guided setup checklist", () => {
+  it("shows a stopped engine neutrally and preserves explanations for active routes", () => {
+    const input = {
+      connected: true,
+      audio: "unavailable",
+      storage: "sqlite",
+      deviceCount: 2,
+      applicationCount: 0,
+      vbCablePairAvailable: true,
+      activeSessionCount: 0,
+      audioReason: "Native adapter is not activated",
+    };
+    expect(setupChecklist(input).find((step) => step.id === "audio")).toMatchObject({
+      state: "idle",
+      detail: "Stopped — press Play to start a configured route",
+    });
+    expect(setupChecklist({ ...input, activeSessionCount: 1 }).find((step) => step.id === "audio")?.detail).toBe(
+      input.audioReason,
+    );
+    expect(
+      setupChecklist({ ...input, audio: "available", activeSessionCount: 1 }).find((step) => step.id === "audio"),
+    ).toMatchObject({ state: "ready", detail: "Running" });
+    expect(setupChecklist({ ...input, connected: false }).find((step) => step.id === "audio")?.state).toBe(
+      "unavailable",
+    );
+  });
   it("reports readiness from authoritative observations", () => {
     const steps = setupChecklist({
       connected: true,

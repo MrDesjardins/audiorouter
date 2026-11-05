@@ -263,6 +263,43 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
         }),
         "status.get" => status_output_schema(),
         "system.diagnostics" => diagnostics_output_schema(),
+        "system.checkSetup" => {
+            let text = json!({ "type": "string", "minLength": 1 });
+            let optional_text = json!({ "type": "string" });
+            json!({
+                "type": "object",
+                "properties": {
+                    "findings": {
+                        "type": "array",
+                        "maxItems": crate::setup_check::MAX_SETUP_FINDINGS,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "code": { "enum": ["outputFormat", "surroundDevice", "deviceMissing", "feedbackLoop", "crossSessionLoop", "cableRate"] },
+                                "severity": { "enum": ["problem", "warning", "tip"] },
+                                "sessionId": text,
+                                "sessionName": optional_text,
+                                "nodeId": text,
+                                "nodeName": optional_text,
+                                "deviceId": text,
+                                "deviceName": optional_text,
+                                "otherSessionId": text,
+                                "message": text,
+                                "fix": text
+                            },
+                            "required": ["code", "severity", "sessionId", "sessionName", "message", "fix"],
+                            "additionalProperties": false
+                        }
+                    },
+                    "truncated": { "type": "integer", "minimum": 0 },
+                    "sessionsChecked": { "type": "integer", "minimum": 0 },
+                    "devicesChecked": { "type": "integer", "minimum": 0 },
+                    "notChecked": { "type": "array", "items": text }
+                },
+                "required": ["findings", "truncated", "sessionsChecked", "devicesChecked", "notChecked"],
+                "additionalProperties": false
+            })
+        }
         "diagnostics.getVerbose" | "diagnostics.setVerbose" => json!({
             "type": "object",
             "properties": {
@@ -944,6 +981,16 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "sizeBytes": { "type": "integer", "minimum": 1 }
             },
             "required": ["sessionId", "nodeId", "stateId", "sizeBytes"],
+            "additionalProperties": false
+        }),
+        "plugins.resume" => json!({
+            "type": "object",
+            "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "resumed": { "type": "boolean" }
+            },
+            "required": ["sessionId", "nodeId", "resumed"],
             "additionalProperties": false
         }),
         "plugins.openEditor" | "plugins.closeEditor" => json!({
@@ -1817,7 +1864,8 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                                 "failureCount": { "type": "integer", "minimum": 0 },
                                 "outputMisses": { "type": "integer", "minimum": 0 },
                                 "inputDrops": { "type": "integer", "minimum": 0 },
-                                "unchangedAudio": { "type": "boolean" }
+                                "unchangedAudio": { "type": "boolean" },
+                                "silencedUnchanged": { "type": "boolean" }
                             },
                             "required": ["state", "failureCount"],
                             "additionalProperties": false
@@ -1844,7 +1892,7 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                                 "lastErrorCode": { "type": "integer" },
                                 "paired": { "type": "boolean" },
                                 "authFailures": { "type": "integer", "minimum": 0 },
-                                "authProblem": { "enum": ["wrongKey", "senderNotPaired", "receiverNotPaired"] },
+                                "authProblem": { "enum": ["wrongKey", "senderNotPaired", "receiverNotPaired", "senderOutdated"] },
                                 "replayedPackets": { "type": "integer", "minimum": 0 }
                             },
                             "required": ["direction"],

@@ -352,9 +352,14 @@ mod tests {
         // A 10 ms polling loop would make about 30 accept calls here.
         std::thread::sleep(Duration::from_millis(300));
         assert_eq!(pool.accept_calls(), 1);
+        let request_started = Instant::now();
         let mut stream = connect(port);
         let mut response = String::new();
         stream.read_to_string(&mut response).unwrap();
+        println!(
+            "idle-to-first-request socket round trip: {:?}",
+            request_started.elapsed()
+        );
         assert!(response.starts_with("HTTP/1.1 200"), "{response}");
         std::thread::sleep(Duration::from_millis(300));
         assert_eq!(pool.accept_calls(), 2);

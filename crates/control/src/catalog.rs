@@ -158,7 +158,12 @@ impl ControlPlane {
                 { "name": "semitones", "type": "number", "unit": "semitones", "minimum": -12.0, "maximum": 12.0, "default": 0.0 },
                 { "name": "cents", "type": "number", "unit": "cents", "minimum": -100.0, "maximum": 100.0, "default": 0.0 }
             ]),
-            audiorouter_domain::NodeKind::Plugin => json!([]),
+            // Plugin settings are per plugin (`plugins.parameters`); this is
+            // AudioRouter's own guard. Its unset value is in `description`, as
+            // `nodes.add` saves every `default`.
+            audiorouter_domain::NodeKind::Plugin => json!([
+                { "name": "passThroughAllowed", "type": "boolean", "description": "Allow this plugin to pass a microphone through unchanged. When off, a plugin fed by a recording device that returns its audio untouched for about 2 seconds (as an unlicensed plugin does) is silenced until plugins.resume. Adjacent VST2 plugins that share one worker are checked and silenced together, so allow pass-through on every one of them. Turn on only for a plugin meant to be neutral. false when unset." }
+            ]),
             audiorouter_domain::NodeKind::Volume => json!([{
                 "name": "percent",
                 "type": "number",
@@ -302,7 +307,7 @@ impl ControlPlane {
         json!({
             "name": "pairingKey", "type": "string", "maxLength": audiorouter_domain::MAX_NETWORK_PAIRING_KEY_CHARS,
             "description": format!(
-                "Shared key typed identically on both computers: blank (not paired) or {}-{} printable ASCII characters without leading or trailing spaces.",
+                "Shared key typed identically on both computers: blank (unencrypted, not paired) or {}-{} printable ASCII characters without leading or trailing spaces. Paired audio is encrypted and authenticated, with fresh receiver challenges preventing replay after restart. Both peers need encrypted transport v3; update both computers together.",
                 audiorouter_domain::MIN_NETWORK_PAIRING_KEY_CHARS,
                 audiorouter_domain::MAX_NETWORK_PAIRING_KEY_CHARS
             )

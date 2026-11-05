@@ -46,6 +46,8 @@ function pairingProblemText(telemetry: NetworkNodeTelemetry): string {
       return `${count} packets had no pairing key`;
     case "receiverNotPaired":
       return `${count} packets had a pairing key`;
+    case "senderOutdated":
+      return `${count} packets used an older AudioRouter`;
     default:
       return `${count} packets had another pairing key`;
   }
@@ -65,6 +67,8 @@ export function pairingAdvice(telemetry: NetworkNodeTelemetry | null | undefined
       return "The sending computer has no pairing key. Copy this key into its Network Send.";
     case "receiverNotPaired":
       return "The sending computer uses a pairing key. Enter the same key here.";
+    case "senderOutdated":
+      return "Update AudioRouter on both computers. This sender does not support encrypted paired audio.";
     default:
       return "The sending computer uses a different pairing key. Enter the same key on both computers.";
   }
@@ -167,8 +171,8 @@ export function NetworkNodeEditor({
           ? "Not paired: anyone on your network can listen to this stream or send audio in its place."
           : "Not paired: anyone on your network can send audio to this input."
         : sending
-          ? "Paired: the other computer plays only audio with this key. The audio is not encrypted."
-          : "Paired: only audio sent with this key is played."));
+          ? "Paired: audio is encrypted, and the other computer plays only audio with this key. Update both computers together."
+          : "Paired: only encrypted audio sent with this key is played. Update both computers together."));
   const status = networkTelemetryText(telemetry);
   const thisPc = sending ? telemetry?.localAddress : telemetry?.thisAddress;
   const addressLabel = sending ? "Receiving computer's IP address" : "Sending computer's IP address";
@@ -352,8 +356,8 @@ export function NetworkNodeEditor({
             ) : (
               "this computer's IP address"
             )}{" "}
-            as the sender and the same port. Both computers must be on the same local network. Audio is sent
-            unencrypted, so use it only on a network you trust.
+            as the sender and the same port. Both computers must be on the same local network. Use the same pairing key
+            on both computers to encrypt the audio. Without a key, audio is unencrypted.
           </>
         ) : (
           <>

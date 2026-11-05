@@ -12,6 +12,7 @@ import type {
   DiscoveryDocument,
   DiagnosticsSnapshot,
   PluginScanResult,
+  SetupCheckResult,
 } from "@audiorouter/contracts";
 import "./styles.css";
 
@@ -20,8 +21,11 @@ let planned: Session | null = null;
 // telemetry recorded from a real run, and start the fixture already playing.
 const injected = globalThis as {
   __routeFixtureSession?: Session;
+  /** Additional saved routes for disposable session-navigation qualification. */
+  __routeFixtureSessions?: Session[];
   __routeFixtureTelemetry?: unknown[];
   __routeFixtureRunning?: boolean;
+  __routeFixtureActiveSessionIds?: string[];
   __routeFixturePrivacyMuted?: boolean;
   __routeFixtureRecordings?: unknown[];
   __routeFixtureProcessors?: DiscoveryDocument["processors"];
@@ -41,6 +45,8 @@ const injected = globalThis as {
   __routeFixtureSoundboardStatus?: Awaited<ReturnType<NonNullable<UiBackend["soundboardStatus"]>>>;
   /** `soundLibrary.list` answer; library previews return a tiny silent WAV. */
   __routeFixtureSoundLibrary?: Awaited<ReturnType<NonNullable<UiBackend["soundLibraryList"]>>>;
+  /** `system.checkSetup` answer for the Status tab (UI-27). */
+  __routeFixtureSetupCheck?: SetupCheckResult;
   /** When set, audio uploads succeed with this decoded length; each finished upload is recorded. */
   __routeFixtureUploadDurationMs?: number;
 };
@@ -262,7 +268,9 @@ const previewBackend: UiBackend = {
       fixtureBackend.listRecordings(sessionId)
     );
   },
-  async snapshot() {
+  async snapshot(sessionId) {
+    const selected = injected.__routeFixtureSessions?.find((session) => session.id === sessionId);
+    if (selected) committed = structuredClone(selected);
     if (injected.__routeFixtureDelayMs)
       await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureDelayMs));
     return structuredClone({
@@ -281,7 +289,7 @@ const previewBackend: UiBackend = {
       diagnostics: diagnostics(),
       status: {
         ...initial.status,
-        activeSessionIds: running ? [committed.id] : [],
+        activeSessionIds: running ? (injected.__routeFixtureActiveSessionIds ?? [committed.id]) : [],
         reason: "Browser fixture: simulated audio; no devices are opened.",
       },
     });
@@ -289,7 +297,7 @@ const previewBackend: UiBackend = {
   async listSessions() {
     if (injected.__routeFixtureDelayMs)
       await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureDelayMs));
-    return [structuredClone(committed)];
+    return structuredClone(injected.__routeFixtureSessions ?? [committed]);
   },
   async processorResponse({ bands, frequenciesHz }) {
     // Browser-only shape fixture for visual interaction; the desktop backend
@@ -423,6 +431,10 @@ const previewBackend: UiBackend = {
     sequence += 1;
     return { sessionId, nodeId, state: sourceStates.get(nodeId) ?? "stopped", loop: false };
   },
+  // The offline harness has no worker to recover, so Retry always stays silenced.
+  async resumePlugin(sessionId: string, nodeId: string) {
+    return { sessionId, nodeId, resumed: false };
+  },
   ...(injected.__routeFixtureSoundboardStatus
     ? {
         async soundboardStatus(sessionId: string, nodeId: string) {
@@ -438,6 +450,17 @@ const previewBackend: UiBackend = {
         },
       }
     : {}),
+  async checkSetup() {
+    return structuredClone(
+      injected.__routeFixtureSetupCheck ?? {
+        findings: [],
+        truncated: 0,
+        sessionsChecked: 1,
+        devicesChecked: 2,
+        notChecked: ["Browser fixture: no Windows devices are read."],
+      },
+    );
+  },
   async listApplications() {
     if (injected.__routeFixtureApplications) return structuredClone(injected.__routeFixtureApplications);
     return [

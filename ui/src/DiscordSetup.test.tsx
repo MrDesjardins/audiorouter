@@ -44,6 +44,9 @@ describe("DiscordSetup", () => {
     expect(screen.getByRole("status").textContent).not.toContain("Gate");
     fireEvent.click(screen.getByRole("button", { name: "Add route" }));
     expect(onAdd).toHaveBeenCalledWith({ microphone: "mic", cable: "cable-a-in", cleanup: false });
+    expect(screen.getByText(/AudioRouter plays into CABLE-A Input \(VB-Audio Virtual Cable A\)/).textContent).toContain(
+      cableOut.name,
+    );
   });
 
   it("shows a refusal in the reserved line and clears it when the choice changes", () => {
@@ -66,6 +69,7 @@ describe("DiscordSetup", () => {
     const { onClose } = setup({ added: cableOut });
     screen.getByText("Step 2 of 2");
     screen.getByText(cableOut.name);
+    expect(screen.getByText(/Ready alone does not prove Discord hears audio/)).toBeTruthy();
     screen.getByRole("button", { name: "Copy device name" });
     fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(onClose).toHaveBeenCalled();

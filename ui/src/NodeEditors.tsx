@@ -757,7 +757,7 @@ export function ApplicationCaptureBinding({
           ? `Application inventory unavailable: ${error}`
           : disabled
             ? "Stop the session to change the application."
-            : "Changing the application keeps this node and its connections. Commit the draft to apply it."}
+            : "Changing the application keeps this node and its connections. Save changes to apply it."}
       </small>
       <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
         Refresh applications

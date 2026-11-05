@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadFamilies, representativeKey } from "./tool-guide-families.mjs";
+import { propertyCoverageStatus } from "./tool-guide-guards.mjs";
 
 const families = loadFamilies();
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -150,7 +151,7 @@ const tools = guideTools.map((tool) => ({
         ? { representativeKey: representativeKey(families[tool.kind], property.key) }
         : {}),
       recordings,
-      status: recordings.length ? "recorded" : (prior?.status ?? "pending"),
+      status: propertyCoverageStatus(prior, recordings),
     };
   }),
 }));

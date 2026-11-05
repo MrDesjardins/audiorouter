@@ -74,7 +74,7 @@ endpoints remain unavailable and must not be represented as healthy zeros.
 
 AudioRouter sends audio over the network only through a **Network Send** node
 that the user added and addressed, and only while its session is prepared.
-The stream is unencrypted and goes to exactly the IP address entered. It is
+The stream goes to exactly the IP address entered. It is
 meant for a trusted local network, such as a gaming PC feeding a streaming PC.
 Privacy mute silences it like any other output. A **Network Receive** node
 listens on its UDP port only while its session is prepared, and plays audio
@@ -82,11 +82,14 @@ only from the sender address entered. Other datagrams are counted and
 ignored, and received data is never treated as anything but audio samples
 (SEC-13).
 
-Give both nodes the same **Pairing key** to authenticate the stream: the
-receiver then plays only packets tagged with that key (HMAC-SHA256) and drops
-replayed ones. Without a key, a device on the same network can fake the
-sender's address and inject audio, which may reach OBS or Discord. Pairing
-does not encrypt: others on the network can still listen. The key is stored
+Give both nodes the same **Pairing key** to encrypt and authenticate the stream
+(XChaCha20 with HMAC-SHA256). Fresh receiver negotiation prevents captured
+audio playing after a receiver restart; no clock synchronization is required.
+Update AudioRouter on both computers together: old paired senders are refused.
+Without a key, others can listen, fake the sender's address and inject audio,
+which may reach OBS or Discord. Encryption still reveals addresses and packet
+timing; use a trusted local network and prefer **Generate** over a weak key.
+The key is stored
 with the session and in exported bundles, and is never written to logs,
 diagnostics or the inspector's change summary.
 

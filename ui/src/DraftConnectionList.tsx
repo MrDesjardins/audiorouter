@@ -68,8 +68,8 @@ export function DraftConnectionList({
       <h3 id="draft-connections-heading">Connections in this draft</h3>
       <p className="muted draft-connections-help">
         These are the audio links you are editing locally. They are not active until you click{" "}
-        <strong>Plan changes</strong> and commit the validated plan. You can keep VoiceMeeter Banana open while
-        exploring; close it only when it owns the exact endpoint AudioRouter needs to claim.
+        <strong>Save changes</strong> and confirm any warnings. You can keep VoiceMeeter Banana open while exploring;
+        close it only when it owns the exact endpoint AudioRouter needs to claim.
       </p>
       {session.edges.length === 0 ? (
         <p className="muted">No draft connections.</p>

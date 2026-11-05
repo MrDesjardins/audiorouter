@@ -1,0 +1,32 @@
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{03498a2a-ef6a-4dd4-b9ba-72e22f567d7a}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started: {"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [3.1531ms, 585.6µs, 117.3µs]
+chain: [Gain]; audio service: {"active":true,"lateGaps":0,"maxGapMicros":3160,"passes":19730}; output underruns: 1
+  "source" timing={"delayMs":12.68729788026725} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5341330286874841,"processingUsMax":13.4} plugin=null network=null processor=null
+  "destination" timing={"delayMs":21.80342108918079} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 0 glitches, 0 silent runs (0 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [0, 0, 0, 0, 0]
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 2 glitches, 1 silent runs (503 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [2, 0, 0, 0, 0]
+  at    2.480 s residual 0.20x amplitude
+  at    2.490 s residual 0.20x amplitude
+
+thread 'live::live_backend_service_keeps_a_routed_tone_continuous' (73752) panicked at crates\transport\tests\live_audio_continuity.rs:1217:9:
+assertion `left == right` failed: the routed tone has audible discontinuities
+  left: 2
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+live::live_backend_service_keeps_a_routed_tone_continuous --- FAILED
+
+failures:
+
+failures:
+    live::live_backend_service_keeps_a_routed_tone_continuous
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 22.14s
+
+error: test failed, to rerun pass `-p audiorouter-transport --test live_audio_continuity`

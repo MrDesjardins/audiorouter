@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DiscoveryDocument } from "@audiorouter/contracts";
 import {
+  pluginNodeParameterError,
   processorAvailabilityText,
   processorLatencyText,
   processorParameterError,
@@ -109,5 +110,33 @@ describe("processor catalog presentation", () => {
     expect(processorParameterError([descriptor], "pitch", "harmonics", 4.1)).toContain("steps of 1");
     const fractional = { ...pitch, parameters: [{ name: "mix", type: "number", minimum: 0, maximum: 1, step: 0.1 }] };
     expect(processorParameterError([fractional], "pitch", "mix", 0.1 + 0.2)).toBeNull();
+  });
+});
+
+describe("pluginNodeParameterError", () => {
+  const plugin = {
+    parameters: [{ parameterId: 3, title: "Gain", defaultValue: 1, minimum: 0, maximum: 1 }],
+  } as unknown as import("@audiorouter/contracts").PluginParametersResult;
+  const catalog: DiscoveryDocument["nodeTypes"] = [
+    {
+      type: "plugin@1",
+      parameters: [{ name: "passThroughAllowed", type: "boolean" }],
+    } as unknown as DiscoveryDocument["nodeTypes"][number],
+  ];
+  const check = (name: string, value: boolean | number | string) =>
+    pluginNodeParameterError(name, value, plugin, () => processorParameterError(null, "plugin", name, value, catalog));
+
+  // Owner report 2026-10-31: ticking "Allow unchanged audio" said "Plugin
+  // parameter value is outside the worker-provided range".
+  it("checks AudioRouter's own plugin settings against the catalog, not the plugin's sliders", () => {
+    expect(check("passThroughAllowed", true)).toBeNull();
+    expect(check("passThroughAllowed", "yes")).toBe("passThroughAllowed must be boolean");
+    expect(check("stateId", "state-1")).toBeNull();
+  });
+
+  it("keeps the plugin's own sliders inside the ranges its worker reported", () => {
+    expect(check("pluginParameter:3", 0.5)).toBeNull();
+    expect(check("pluginParameter:3", 1.5)).toBe("Plugin parameter value is outside the worker-provided range");
+    expect(check("pluginParameter:9", 0.5)).toBe("Plugin parameter value is outside the worker-provided range");
   });
 });

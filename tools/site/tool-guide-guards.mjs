@@ -4,6 +4,17 @@
 // Kinds drawn only by the UI; they have no backend node type or parameters.
 const uiOnlyKinds = new Set(["group"]);
 
+// A silent configuration clip does not become audible evidence merely
+// because a manifest is regenerated. Preserve the reviewed exemption.
+export function propertyCoverageStatus(prior, recordings) {
+  if (prior?.status === "exempted") return "exempted";
+  return recordings.length ? "recorded" : "pending";
+}
+
+export function guideWireType(type) {
+  return ["enum", "selection", "file", "text"].includes(type) ? "string" : type;
+}
+
 // Resolve a tool kind to its catalog node type and parameter schema.
 export function nodeTypeFor(kind, catalog) {
   if (uiOnlyKinds.has(kind)) return { wireType: null, version: 1, parameters: [] };

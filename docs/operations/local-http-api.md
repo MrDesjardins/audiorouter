@@ -67,7 +67,8 @@ AI assistants use the same operations through MCP: `get_recipes`,
 They take names and generate the idempotency key automatically.
 
 `soundboard.trigger`, `soundboard.stop`, `soundboard.status`,
-`audioSources.transport`, `timeShift.transport` and `meters.reset` follow the
+`audioSources.transport`, `timeShift.transport`, `meters.reset` and
+`plugins.resume` follow the
 same rules: leave out `sessionId` to use the open session, and give `nodeId`
 as the node's ID or its exact name. For example, `POST
 /api/v1/soundboard/trigger` with `{"nodeId": "Party Board", "slot": 1}`.

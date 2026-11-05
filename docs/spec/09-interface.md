@@ -177,7 +177,7 @@ while playing follows the same live-apply path as other parameter changes.
 
 **UI-24 - Sound Check.** Audio File Properties may record a voice sample from an already-connected Recorder node while its route is running. Limit the sample to 10 seconds, with a user stop action, and import it only through the existing bounded temporary-WAV path; the resulting media expires after 24 hours unless a saved session plays it (saving a session that references it makes it permanent), and is not added to the recording library. Explain that the Audio File source must be planned and committed before playback. Play uses ordinary backend source transport through the committed downstream graph and its effects. Do not open or select a microphone, capture through browser APIs, or silently alter a running or saved route.
 
-**UI-25 - Soundboard.** The Soundboard tool is a source with no input and up to nine sound slots (SND-01 to SND-20 in `docs/plans/active/soundboard.md` and its linked plans). Each slot is a button on the canvas card, with a Play button, caption (default: the file name), level, play mode and Add, Change and Delete controls in Properties. A sound is either a built-in library sound, stored as a `lib:<id>` reference and chosen in a searchable, category-filtered picker that previews on this computer only, or a file the user imported (WAV or MP3, up to 120 seconds, about 256 MB decoded per board). Built-in sounds are CC0, public domain or original; they are bundled with the program, never downloaded. Triggers go through `soundboard.trigger` and `soundboard.stop` (session-control scope), so the canvas, the API and the Stream Deck Sound action behave the same; the audio callback only reads a bounded lock-free queue, and triggers of one slot closer than 50 ms are ignored and counted. Card rows have a fixed height and playing state changes colour and a transform only (UI-17). In-app global keyboard shortcuts and a ready-made Stream Deck profile are not part of this requirement.
+**UI-25 - Soundboard.** The Soundboard tool is a source with no input and up to nine sound slots (SND-01 to SND-20 in `docs/plans/archived/2026-11-01-soundboard.md` and its linked plans). Each slot is a button on the canvas card, with a Play button, caption (default: the file name), level, play mode and Add, Change and Delete controls in Properties. A sound is either a built-in library sound, stored as a `lib:<id>` reference and chosen in a searchable, category-filtered picker that previews on this computer only, or a file the user imported (WAV or MP3, up to 120 seconds, about 256 MB decoded per board). Built-in sounds are CC0, public domain or original; they are bundled with the program, never downloaded. Triggers go through `soundboard.trigger` and `soundboard.stop` (session-control scope), so the canvas, the API and the Stream Deck Sound action behave the same; the audio callback only reads a bounded lock-free queue, and triggers of one slot closer than 50 ms are ignored and counted. Card rows have a fixed height and playing state changes colour and a transform only (UI-17). In-app global keyboard shortcuts and a ready-made Stream Deck profile are not part of this requirement.
 
 ## Defaults that reduce work
 
@@ -425,6 +425,40 @@ audio readiness and explains the exact endpoint and authorization steps.
       counts remain visible in a fixed four-line note slot; longer notes
       scroll (UI-17). A previous success cannot hide a new rejection.
     - **Top-bar strip:** an OBS chip when the session has a voice cable.
+- **UI-27 — Setup check (owner request 2026-11-02).** The backend
+  (`system.checkSetup`) compares every saved session with the active Windows
+  devices and reports findings; the Status tab lists them and an assistant
+  reads them through the default MCP tool `check_setup`.
+  - **Judge use, not devices.** A device is judged only by how a session
+    uses it: a 7.1 cable is correct for a Physical Input with Surround to
+    headphones and wrong for a Physical Output. A device no session binds is
+    never reported.
+  - **Same rules as Play.** A finding that says Play will be refused uses the
+    predicate that native preparation applies, so the check and the refusal
+    cannot drift.
+  - **Findings:** each names the session, node and device, has a severity
+    (`problem`: Play is refused or audio loops; `warning`: likely wrong;
+    `tip`: optional) and a plain fix.
+    - An output device that is not stereo float at 8–192 kHz (problem).
+    - A Surround input whose device is not a supported 5.1/7.1 float device
+      (problem).
+    - A feedback loop inside a session (problem, the Play refusal) or across
+      sessions where at least one of them is running (warning: "playing A
+      while B plays").
+    - A saved device ID that is not an active device (problem, Play is
+      refused: unplugged, disabled, or a new ID after a driver update).
+    - A virtual cable a session uses that is not at 48 kHz (tip).
+  - **Limits:** settings inside other apps are not visible; the result says
+    so. Discord's own devices stay on the Apps tab (UI-26). The check is a
+    read: it never changes a session, Windows or another app.
+  - **Status tab:** a Setup check list under Readiness with Check again. It
+    runs after the initial connected snapshot and after device, saved-session
+    or running-session changes, including with Status closed; Check again
+    requests a fresh read. A reserved red dot on Status indicates problem
+    findings and has an accessible description. Unsaved
+    drafts are not checked, and Play retains its separate authoritative
+    validation. It keeps the last result
+    through a failed read, and reserves its first lines (UI-17).
 
 While a connected backend's initial snapshot is pending, show loading status
 and withhold the editable graph. Failure offers reconnect rather than editable

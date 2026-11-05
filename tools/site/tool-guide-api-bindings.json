@@ -1,0 +1,12 @@
+{
+  "applicationCapture.executable": { "property": "application", "reason": "The application picker supplies the executable identity." },
+  "applicationCapture.executablePath": { "property": "application", "reason": "The application picker supplies the observed executable path." },
+  "applicationCapture.processId": { "property": "application", "reason": "The application picker supplies the numeric process ID." },
+  "applicationCapture.creationTime100ns": { "property": "application", "reason": "The application picker supplies the observed process creation time." },
+  "applicationCapture.processPolicy": { "apiOnly": true, "reason": "Optional backend rebinding policy; Properties has no separate policy control." },
+  "endpointLoopback.endpointId": { "apiOnly": true, "reason": "Selected while creating the source in Advanced troubleshooting; there is no editable Properties control." },
+  "endpointLoopback.defaultRole": { "apiOnly": true, "reason": "Optional API binding; Properties has no follow-default-role control." },
+  "audioFile.fileName": { "property": "mediaId", "reason": "The file chooser supplies the display filename with the uploaded media ID." },
+  "soundboard.slot<N>FileName": { "property": "slot1MediaId", "reason": "Each sound chooser supplies its filename; button 1 represents the repeated chooser family." },
+  "soundboard.slot<N>Set": { "apiOnly": true, "reason": "Sound sets are configurable by API; the Properties set picker is not implemented (carried owner gate)." }
+}

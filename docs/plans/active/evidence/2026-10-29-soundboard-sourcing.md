@@ -1,6 +1,6 @@
 # Soundboard sound sourcing, first pass (2026-10-29)
 
-Plan: [active Soundboard plan](../soundboard.md), library rules in
+Plan: [Soundboard plan](../../archived/2026-11-01-soundboard.md), library rules in
 [the sound library plan](../../future/soundboard-sound-library.md). Audio files are
 kept outside the repository (`target/sourcing`, git-ignored) until the owner has
 chosen what joins the library.

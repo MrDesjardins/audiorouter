@@ -6,10 +6,26 @@ import {
   selectedKinds,
   exampleNumber,
   exampleOption,
+  propertyCoverageStatus,
+  guideWireType,
 } from "./tool-guide-guards.mjs";
 const read = (name) => JSON.parse(readFileSync(new URL(name, import.meta.url), "utf8"));
 const catalog = read("./tool-guide-catalog.json");
 const manifest = read("./tool-guide-property-manifest.json");
+
+test("selector and file controls carry string identities, while numeric and boolean controls retain their types", () => {
+  for (const type of ["enum", "selection", "file", "text"]) assert.equal(guideWireType(type), "string");
+  assert.equal(guideWireType("number"), "number");
+  assert.equal(guideWireType("boolean"), "boolean");
+});
+
+test("regeneration preserves silent exemptions and does not invent missing evidence", () => {
+  const silent = [{ silent: true, video: "configuration.mp4" }];
+  assert.equal(propertyCoverageStatus({ status: "exempted" }, silent), "exempted");
+  assert.equal(propertyCoverageStatus({ status: "recorded" }, []), "pending");
+  assert.equal(propertyCoverageStatus(undefined, []), "pending");
+  assert.equal(propertyCoverageStatus({ status: "pending" }, [{ video: "effect.mp4" }]), "recorded");
+});
 
 test("every manifest tool resolves to one catalog node type", () => {
   for (const tool of manifest.tools) {

@@ -29,27 +29,91 @@ const recordings = JSON.parse(
   await readFile(resolve(site, "guide-content/recordings.json"), "utf8"),
 );
 const mediaVersion = (path) => esc(path) + "?v=" + createHash("sha256").update(readFileSync(resolve(site, path))).digest("hex").slice(0, 12);
-const recordingSection = (kind) =>
-  '<section class="guide-section" id="in-the-app"><h2>In the app.</h2><p>' +
-  ((recordings[kind] ?? []).some((clip) => clip.property && !clip.silent)
-    ? "These are screen recordings of the real Properties panel. Where a clip has sound, it’s a prepared test signal run through AudioRouter’s own audio engine, not a recording of anyone’s microphone or audio device."
-    : "These are screen recordings of the real Properties panel. They have no sound.") +
-  "</p>" +
-  (recordings[kind] ?? [])
-    .map(
-      (clip) =>
-        '<article class="guide-recording"><div class="guide-recording-copy"><h3>' +
-        esc(clip.title) +
-        '</h3><p>' + esc(clip.description) + '</p></div><video controls preload="none" playsinline width="720" height="1280" poster="../' +
-        mediaVersion(clip.poster) +
-        '" aria-label="' +
-        esc(clip.title) +
-        '"><source src="../' +
-        mediaVersion(clip.video) +
-        '" type="video/mp4"></video></article>',
-    )
-    .join("") +
-  "</section>";
+// Same rule as tools/site/check-tool-guide-videos.mjs: property clips and the
+// demo carry audio unless marked silent; configuration overviews never do.
+const clipHasSound = (clip) =>
+  clip.silent !== true &&
+  (clip.video.endsWith("-demo.mp4") || clip.video.includes("--"));
+const clipId = (clip) =>
+  "clip-" + clip.video.replace(/^.*\//, "").replace(/\.mp4$/, "");
+// One player and a list of clips instead of one <video> per clip: a page
+// downloads a single poster, and no video bytes until the reader presses
+// play. Each list entry links to its MP4, so the page works without script.
+const recordingSection = (kind) => {
+  const clips = recordings[kind] ?? [];
+  if (!clips.length) return "";
+  const first = clips[0];
+  return (
+    '<section class="guide-section" id="in-the-app"><h2>In the app.</h2><p>' +
+    (clips.some((clip) => clip.property && !clip.silent)
+      ? "These are screen recordings of the real Properties panel. Where a clip has sound, it’s a prepared test signal run through AudioRouter’s own audio engine, not a recording of anyone’s microphone or audio device."
+      : "These are screen recordings of the real Properties panel. They have no sound.") +
+    (clips.length > 1 ? " Pick a clip from the list to load it into the player." : "") +
+    '</p><div class="guide-player" data-guide-player><div class="guide-player-screen"><video controls preload="none" playsinline width="720" height="1280" poster="../' +
+    mediaVersion(first.poster) +
+    '" aria-label="' +
+    esc(first.title) +
+    '"><source src="../' +
+    mediaVersion(first.video) +
+    '" type="video/mp4"></video></div><div class="guide-player-side"><div class="guide-player-caption" aria-live="polite"><h3>' +
+    esc(first.title) +
+    "</h3><p>" +
+    esc(first.description) +
+    '</p></div><ol class="guide-clip-list" aria-label="Recordings">' +
+    clips
+      .map(
+        (clip, index) =>
+          '<li><a class="guide-clip" id="' +
+          esc(clipId(clip)) +
+          '" href="../' +
+          mediaVersion(clip.video) +
+          '" data-poster="../' +
+          mediaVersion(clip.poster) +
+          '" data-title="' +
+          esc(clip.title) +
+          '" data-description="' +
+          esc(clip.description) +
+          '"' +
+          (index ? "" : ' aria-current="true"') +
+          '><span class="guide-clip-index">' +
+          String(index + 1).padStart(2, "0") +
+          '</span><span class="guide-clip-title">' +
+          esc(clip.title) +
+          '</span><span class="guide-clip-badge">' +
+          (clipHasSound(clip) ? "Sound" : "Silent") +
+          "</span></a></li>",
+      )
+      .join("") +
+    "</ol></div></div></section>"
+  );
+};
+// Tabs are enhanced by guides.js. Without script, the <noscript> style in the
+// head shows every panel and hides the tab bar.
+const tabButton = (id, label, count) =>
+  '<button type="button" role="tab" id="tab-' +
+  id +
+  '" aria-controls="panel-' +
+  id +
+  '" data-tab="' +
+  id +
+  '" aria-selected="' +
+  (id === "overview") +
+  '"' +
+  (id === "overview" ? "" : ' tabindex="-1"') +
+  ">" +
+  esc(label) +
+  (count ? '<span class="guide-tab-count">' + count + "</span>" : "") +
+  "</button>";
+const panelOpen = (id) =>
+  '<div class="guide-panel" role="tabpanel" id="panel-' +
+  id +
+  '" aria-labelledby="tab-' +
+  id +
+  '"' +
+  (id === "overview" ? "" : " hidden") +
+  ">";
+const noscriptTabs =
+  "<noscript><style>.guide-tabs{display:none}.guide-panel[hidden]{display:block}</style></noscript>";
 for (const tool of tools)
   if (!tutorials[tool.kind]) throw Error("Missing tutorial: " + tool.kind);
 const visualTypes = {
@@ -258,7 +322,7 @@ const doc = (title, description, body, scripts = "") =>
   esc(title) +
   '</title><meta name="description" content="' +
   esc(description) +
-  '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css?v=heading-links-3"><script defer src="../assets/site.js"></script>' +
+  '"><link rel="icon" href="../assets/mark.svg"><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/guides.css?v=tabs-1"><script defer src="../assets/site.js"></script>' +
   scripts +
   '</head><body class="guide-body">' +
   header +
@@ -267,8 +331,9 @@ const doc = (title, description, body, scripts = "") =>
 const value = (v, unit) =>
   esc(typeof v === "object" ? JSON.stringify(v) : v) +
   (unit ? " " + esc(unit) : "");
-function property(p, i) {
+function property(p, i, clips = []) {
   const bounded = Number.isFinite(p.minimum) && Number.isFinite(p.maximum);
+  const clip = clips.find((c) => c.property === p.key);
   return (
     '<article class="guide-property" id="property-' +
     esc(slug(p.key).replace(/[^a-z0-9-]/g, "")) +
@@ -313,6 +378,13 @@ function property(p, i) {
         esc(p.caution) +
         "</p>"
       : "") +
+    (clip
+      ? '<a class="property-watch" href="#' +
+        esc(clipId(clip)) +
+        '"><span aria-hidden="true">▶</span> Watch ' +
+        esc(p.label) +
+        " in the app</a>"
+      : "") +
     "</article>"
   );
 }
@@ -320,6 +392,7 @@ await mkdir(resolve(site, "tools"), { recursive: true });
 for (let i = 0; i < tools.length; i++) {
   const t = tools[i],
     tutorial = tutorials[t.kind],
+    clipCount = (recordings[t.kind] ?? []).length,
     s = slug(t.kind),
     controls =
       t.kind === "graphicEq"
@@ -521,7 +594,15 @@ for (let i = 0; i < tools.length; i++) {
           "</a>",
       )
       .join("") +
-    '<a href="#in-the-app">In the app</a><a href="#examples">Worked examples</a><a href="#avoid">Common mistakes</a></aside><div class="guide-article"><section class="guide-section" id="understand"><div class="eyebrow">01 / Understand</div><h2>How it works.</h2><p class="guide-concept">' +
+    (clipCount ? '<a href="#in-the-app">In the app</a>' : "") +
+    '<a href="#examples">Worked examples</a><a href="#avoid">Common mistakes</a></aside><div class="guide-article"><div class="guide-tabs" role="tablist" aria-label="Guide sections">' +
+    tabButton("overview", "Overview") +
+    tabButton("settings", "Settings", t.properties.length) +
+    (clipCount ? tabButton("videos", "Videos", clipCount) : "") +
+    tabButton("examples", "Examples & fixes") +
+    "</div>" +
+    panelOpen("overview") +
+    '<section class="guide-section" id="understand"><div class="eyebrow">01 / Understand</div><h2>How it works.</h2><p class="guide-concept">' +
     esc(t.concept) +
     '</p><div class="guide-route" aria-label="Example signal path">' +
     tutorial.route
@@ -600,7 +681,9 @@ for (let i = 0; i < tools.length; i++) {
           : stillKinds.has(t.kind)
             ? "This diagram is conceptual and does not move. It is not a DSP measurement or control for your running AudioRouter session."
             : "This animated diagram is conceptual. It is not a DSP measurement or control for your running AudioRouter session.") +
-    '</p></section><section class="guide-section" id="configuration"><div class="eyebrow">03 / Configure</div><h2>Settings.</h2>' +
+    "</p></section></div>" +
+    panelOpen("settings") +
+    '<section class="guide-section" id="configuration"><div class="eyebrow">03 / Configure</div><h2>Settings.</h2>' +
     (t.propertyFamily
       ? "<p>" +
         esc(
@@ -610,7 +693,7 @@ for (let i = 0; i < tools.length; i++) {
         "</p>"
       : "") +
     (t.properties.length
-      ? t.properties.map(property).join("")
+      ? t.properties.map((p, j) => property(p, j, recordings[t.kind])).join("")
       : '<div class="guide-property"><h3>No numeric settings to guess</h3><p>' +
         esc(
           t.kind === "meter"
@@ -620,7 +703,9 @@ for (let i = 0; i < tools.length; i++) {
         "</p></div>") +
     "</section>" +
     extras +
-    recordingSection(t.kind) +
+    "</div>" +
+    (clipCount ? panelOpen("videos") + recordingSection(t.kind) + "</div>" : "") +
+    panelOpen("examples") +
     '<section class="guide-section" id="examples"><div class="eyebrow">04 / Examples</div><h2>Example setups.</h2><div class="guide-recipes">' +
     t.recipes
       .map(
@@ -636,7 +721,7 @@ for (let i = 0; i < tools.length; i++) {
       .join("") +
     '</div><p class="guide-note">These are starting points. Compare at a comfortable monitoring level and adjust for your own source.</p></section><section class="guide-section" id="avoid"><div class="eyebrow">05 / Troubleshooting</div><h2>Common mistakes.</h2><ul class="guide-mistakes">' +
     t.commonMistakes.map((m) => "<li>" + esc(m) + "</li>").join("") +
-    '</ul></section><nav class="guide-next" aria-label="More guides"><a href="' +
+    '</ul></section></div><nav class="guide-next" aria-label="More guides"><a href="' +
     slug(tools[(i + tools.length - 1) % tools.length].kind) +
     '.html">← ' +
     esc(tools[(i + tools.length - 1) % tools.length].title) +
@@ -653,7 +738,8 @@ for (let i = 0; i < tools.length; i++) {
       pageTitle(t),
       t.purpose,
       body,
-      '<script defer src="../assets/guide-animation.js"></script><script defer src="../assets/guide-signal.js"></script><script defer src="../assets/guide-audio.js"></script><script defer src="../assets/guide-playback.js"></script><script defer src="../assets/guides.js?v=heading-links-4"></script>',
+      '<script defer src="../assets/guide-animation.js"></script><script defer src="../assets/guide-signal.js"></script><script defer src="../assets/guide-audio.js"></script><script defer src="../assets/guide-playback.js"></script><script defer src="../assets/guides.js?v=tabs-1"></script>' +
+        noscriptTabs,
     ),
   );
 }
@@ -693,7 +779,7 @@ await writeFile(
       ' visual guides</p></section><section class="guide-index-grid" aria-label="Visual tool guides">' +
       cards +
       '</section><p class="guide-no-results" hidden>No guide matches. Try a tool name or a property such as threshold.</p></main>',
-    '<script defer src="../assets/guides.js?v=heading-links-4"></script>',
+    '<script defer src="../assets/guides.js?v=tabs-1"></script>',
   ),
 );
 await writeFile(

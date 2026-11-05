@@ -49,6 +49,7 @@ import type {
   SessionFileImportResult,
   StartupStatus,
   VirtualCableStatus,
+  SetupCheckResult,
   StartupPlanResult,
   StartupApplyResult,
   OsTransition,
@@ -238,6 +239,8 @@ export interface UiBackend {
   ): Promise<MethodResult["soundboard.trigger"]>;
   soundboardStop?(sessionId: string, nodeId: string, slot?: number): Promise<MethodResult["soundboard.stop"]>;
   soundboardStatus?(sessionId: string, nodeId: string): Promise<MethodResult["soundboard.status"]>;
+  /** Retry a plugin silenced for passing a recording device's audio through unchanged. */
+  resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
   soundLibraryList?(): Promise<MethodResult["soundLibrary.list"]>;
   soundLibraryRead?(id: string): Promise<MethodResult["soundLibrary.read"]>;
   transportTimeShift?(
@@ -430,6 +433,8 @@ export interface UiBackend {
   getStartup(): Promise<StartupStatus>;
   /** AudioRouter cable driver status (spec 17 §7.1); read-only. */
   getVirtualCableStatus?(): Promise<VirtualCableStatus>;
+  /** Saved sessions judged against the active devices (UI-27); read-only. */
+  checkSetup?(): Promise<SetupCheckResult>;
   /** Native shell only; requests a UAC prompt for the fixed driver helper. */
   manageVirtualCable?(request: CableManagementRequest): Promise<unknown>;
   /** Native shell only; false when this installation has no cable driver package. */
@@ -737,6 +742,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     async getVirtualCableStatus() {
       throw new Error("The backend is disconnected; cable status is unavailable.");
     },
+    async checkSetup() {
+      throw new Error("The backend is disconnected; the setup check is unavailable.");
+    },
     async planStartup() {
       throw new Error("The backend is disconnected; startup planning is unavailable.");
     },
@@ -871,6 +879,9 @@ export function createLiveBackend(
     },
     async soundboardStatus(currentSessionId, nodeId) {
       return client.request("soundboard.status", { sessionId: currentSessionId, nodeId });
+    },
+    async resumePlugin(currentSessionId, nodeId) {
+      return client.request("plugins.resume", { sessionId: currentSessionId, nodeId });
     },
     async soundLibraryList() {
       return client.request("soundLibrary.list", undefined);
@@ -1248,6 +1259,9 @@ export function createLiveBackend(
     },
     async getVirtualCableStatus() {
       return client.request("virtualCable.status", undefined);
+    },
+    async checkSetup() {
+      return client.request("system.checkSetup", undefined);
     },
     async planStartup(enabled) {
       return client.request("startup.plan", { enabled });

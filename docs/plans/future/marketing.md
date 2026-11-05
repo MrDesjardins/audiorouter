@@ -269,3 +269,13 @@ It also asks the community whether a cheaper way exists to sign the virtual
 cable driver for public use. Next: answer comments for 3 hours, record 48-hour
 numbers, turn the signing answers into a note in the driver-signing plan, then
 the r/Windows11 Sunday thread on 2026-11-01.
+
+Phase 1 Reddit post 3 (2026-11-01): the owner posted to r/windowsapps,
+<https://www.reddit.com/r/windowsapps/comments/1xlmzzv/audiorouter_free_open_source_visual_audio_routing/>
+(recorded in [marketing-phase1-posts.md](marketing-phase1-posts.md), Post 3).
+On the day: 57 stars (51 on 2026-10-30), v0.0.26 at 61 installer downloads.
+With r/vibecoding this fills the week's two-post limit, so the r/Windows11
+Sunday thread waits for a later Sunday. Next: answer comments for 2–3 hours;
+on Mon 2026-11-02 review the 48-hour results of both recent posts, list
+repeated questions for the FAQ, and confirm the metrics workflow; r/SideProject
+from Sat 2026-11-08 as planned.

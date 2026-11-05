@@ -149,7 +149,7 @@ describe("graph revision conflicts", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Session name" }), {
       target: { value: "My preserved draft" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("Another save changed this route, so your save was not applied.");
@@ -206,6 +206,9 @@ describe("VB-Cable endpoint selection", () => {
       />,
     );
     openTab("Advanced");
+    // The first Advanced visit imports its panel before reading startup.
+    // This tests the registration result, not cold module-loading latency.
+    await screen.findByRole("heading", { name: "Advanced controls" }, { timeout: 5000 });
     expect(await screen.findByText("Native registration: registered")).toBeTruthy();
   });
 
@@ -880,7 +883,7 @@ describe("VB-Cable endpoint selection", () => {
     const gainSlider = await screen.findByRole("slider", { name: "1-Gain slider" });
     fireEvent.change(gainSlider, { target: { value: "0.75" } });
     expect((gainSlider as HTMLInputElement).value).toBe("0.75");
-    expect(await screen.findByText("Draft updated. Review and plan the changes before committing.")).toBeTruthy();
+    expect(await screen.findByText("Draft updated. Review and save the changes when you are ready.")).toBeTruthy();
   });
 
   it("adds a plugin from the canvas shelf picker, selects it, and shows its identity in the inspector", async () => {
@@ -1481,7 +1484,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
     await waitFor(() =>
       expect(
-        screen.getByText("Gain 1 added to the draft. Review and plan the changes before committing."),
+        screen.getByText("Gain 1 added to the draft. Review and save the changes when you are ready."),
       ).toBeTruthy(),
     );
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({
@@ -1504,7 +1507,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
     await waitFor(() =>
       expect(
-        screen.getByText("Test Signal 1 added to the draft. Review and plan the changes before committing."),
+        screen.getByText("Test Signal 1 added to the draft. Review and save the changes when you are ready."),
       ).toBeTruthy(),
     );
   });
@@ -1528,7 +1531,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
     await waitFor(() =>
       expect(
-        screen.getByText(`${insertedName} added to the draft. Review and plan the changes before committing.`),
+        screen.getByText(`${insertedName} added to the draft. Review and save the changes when you are ready.`),
       ).toBeTruthy(),
     );
   });
@@ -1550,7 +1553,7 @@ describe("keyboard connection dialog", () => {
       getData: (type: string) => (type === "application/x-audiorouter-library-kind" ? "gain" : ""),
     };
     fireEvent.drop(canvas, { dataTransfer });
-    expect(screen.queryByText("Gain 1 added to the draft. Review and plan the changes before committing.")).toBeNull();
+    expect(screen.queryByText("Gain 1 added to the draft. Review and save the changes when you are ready.")).toBeNull();
     expect(await screen.findByText("Connect the backend before changing the draft.")).toBeTruthy();
   });
 
@@ -1907,7 +1910,7 @@ describe("keyboard connection dialog", () => {
       target: { value: "voice::in" },
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
-    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(commitGraph).toHaveBeenCalledWith("connection-plan", demoSession.revision, expect.any(String)),
@@ -2188,7 +2191,7 @@ describe("keyboard connection dialog", () => {
     const planGraph = vi.fn(() => result);
     const commitGraph = vi.fn(async () => ({ sessionId: demoSession.id, revision: demoSession.revision + 1 }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), planGraph, commitGraph }} />);
-    const plan = screen.getByRole("button", { name: "Plan changes" });
+    const plan = screen.getByRole("button", { name: "Save changes" });
     fireEvent.click(plan);
     await waitFor(() => expect(planGraph).toHaveBeenCalledTimes(1));
     fireEvent.click(plan);
@@ -2458,7 +2461,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("spinbutton", { name: "Threshold precise value" }), {
       target: { value: "-30" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(commitGraph).toHaveBeenCalledWith("gate-plan", demoSession.revision, expect.any(String)),
@@ -2510,7 +2513,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("spinbutton", { name: "Semitones precise value" }), {
       target: { value: "5" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(commitGraph).toHaveBeenCalledWith("pitch-plan", demoSession.revision, expect.any(String)),
@@ -2561,7 +2564,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("spinbutton", { name: "Ratio precise value" }), {
       target: { value: "6" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(commitGraph).toHaveBeenCalledWith("compressor-plan", demoSession.revision, expect.any(String)),
@@ -2612,7 +2615,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("spinbutton", { name: "Ceiling precise value" }), {
       target: { value: "-3" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Plan changes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
       expect(commitGraph).toHaveBeenCalledWith("limiter-plan", demoSession.revision, expect.any(String)),
@@ -2645,7 +2648,7 @@ describe("keyboard connection dialog", () => {
     openTab("Advanced");
     fireEvent.click(await screen.findByRole("button", { name: "Add EQ to draft" }));
     expect(
-      screen.getByText("Advanced EQ 1 added to the draft. Review and plan the changes before committing."),
+      screen.getByText("Advanced EQ 1 added to the draft. Review and save the changes when you are ready."),
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Advanced EQ 1" })).toBeTruthy();
   });
@@ -2670,7 +2673,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add voice chain to draft" }));
     expect(
       screen.getByText(
-        "Gate 1, Compressor 1, Limiter 1 added to the draft. Review and plan the changes before committing.",
+        "Gate 1, Compressor 1, Limiter 1 added to the draft. Review and save the changes when you are ready.",
       ),
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
@@ -2720,12 +2723,12 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(screen.getByText("Keyboard graph controls"));
     fireEvent.click(screen.getAllByRole("button", { name: /Insert mixer on/ })[0]);
     expect(
-      screen.getByText("Mixer inserted into the draft. Review and plan the changes before committing."),
+      screen.getByText("Mixer inserted into the draft. Review and save the changes when you are ready."),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" }));
     expect(
       screen.getByText(
-        "Mixer removed and its single path reconnected in the draft. Review and plan the changes before committing.",
+        "Mixer removed and its single path reconnected in the draft. Review and save the changes when you are ready.",
       ),
     ).toBeTruthy();
   });
@@ -2746,7 +2749,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.click(screen.getByText("Keyboard graph controls"));
     fireEvent.click(screen.getByRole("button", { name: "Insert Gate" }));
     expect(
-      screen.getByText("Gate 1 inserted into the draft. Review and plan the changes before committing."),
+      screen.getByText("Gate 1 inserted into the draft. Review and save the changes when you are ready."),
     ).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
     for (const label of [
@@ -3028,7 +3031,7 @@ describe("keyboard connection dialog", () => {
     await waitFor(() => expect(planSessionImport).toHaveBeenCalledWith(demoSession));
     expect(await within(transferPanel).findByText(/Validated import: Imported voice setup/)).toBeTruthy();
 
-    fireEvent.click(within(transferPanel).getByRole("button", { name: "Commit stopped import" }));
+    fireEvent.click(within(transferPanel).getByRole("button", { name: "Save imported session" }));
     await waitFor(() => expect(commitSessionImport).toHaveBeenCalledWith("import-plan", expect.any(String)));
     expect(await within(transferPanel).findByText(/Imported stopped session Imported voice setup/)).toBeTruthy();
   });
@@ -3050,8 +3053,8 @@ describe("keyboard connection dialog", () => {
     });
     await waitFor(() => expect(planSessionImport).toHaveBeenCalledTimes(1));
     expect((input as HTMLInputElement).disabled).toBe(true);
-    expect(within(transferPanel).queryByRole("button", { name: "Commit stopped import" })).toBeNull();
+    expect(within(transferPanel).queryByRole("button", { name: "Save imported session" })).toBeNull();
     releasePlan({ planId: "pending-plan", expiresInMs: 300000, session: imported });
-    expect(await within(transferPanel).findByRole("button", { name: "Commit stopped import" })).toBeTruthy();
+    expect(await within(transferPanel).findByRole("button", { name: "Save imported session" })).toBeTruthy();
   });
 });

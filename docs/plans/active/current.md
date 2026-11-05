@@ -1,4 +1,4 @@
-# Active plan — 0.0.26 release and maintenance
+# Active plan — current priorities (2026-11-04)
 
 ## Dependabot 7: GLib iterator soundness (2026-11-04)
 
@@ -38,6 +38,804 @@ driver or installer behavior changed or was manually exercised.
 Next: commit/push this branch, open the explicitly authorized PR, then require
 hosted CI before merge. No release or alert dismissal is authorized here.
 
+## Where things stand
+
+PR #110, “Prevent draft loss and fix session, recording and network failures,”
+is merged into `main` at `814ad879` (confirmed locally from `origin/main`).
+The previous PR-open/hosted-check handoff is historical and closed. The local
+checkout is `fix/ci-test-timing-races`, two commits ahead of that main commit;
+those two commits are existing user work and are not part of this documentation
+consolidation.
+
+## Current priorities
+
+- Owner-authorized [UI quality review](ui-quality-review.md): define criteria,
+  capture baseline and iteratively improve all UI categories to evidence-backed
+  9/10 in dark/light, with high-contrast regression checks. Isolated branch and
+  harness only; preserve the documentation consolidation and live owner route.
+
+1. Finish the 2026-11-01/2026-10-07 code-review disposition. The detailed
+   execution record is [code-review fixes](code-review-fixes.md); most source
+   findings are implemented and verified. Reconcile its remaining continuity,
+   live-service timing and commercial-plugin evidence against current hardware
+   availability. Do not touch the owner's active route; the prior continuity
+   attempt was contaminated by it. Review records remain at
+   [2026-11-01](../archived/2026-11-01-repository-code-review.md) and
+   [2026-10-07](../archived/2026-10-07-repository-code-review.md).
+2. Continue the quality roadmap at Q3.2 hosted qualification, then Q4–Q6 in
+   [application quality](application-quality.md). Current-head hosted CI and
+   attended M05/M08, installer, accessibility, usability and endurance evidence
+   remain distinct gates.
+3. Keep owner/hardware-dependent tracks explicit: virtual-cable Stage C and
+   signing decisions in [virtual cable](virtual-cable.md) and
+   [release signing](release-signing-and-publication.md); copied-profile OBS
+   acceptance in [OBS/Discord](obs-discord.md); attended UX and performance
+   checks in the UX evidence plans. Do not represent mocks or portable tests as
+   substitutes for these gates.
+4. Keep code-scanning alert review current in
+   [code scanning remediation](code-scanning-remediation.md); its alert count
+   and locations are dated and must be refreshed from the current CodeQL run.
+
+The [future-plan index](../future/README.md) remains deferred backlog, not an
+implicit implementation queue. Archive completed execution records only after
+their residual gates have a clear owner and remain discoverable from this page.
+
+## Open review-fixes gates
+
+The source work for the two repository reviews is substantially complete.
+Remaining evidence recorded in [code-review-fixes](code-review-fixes.md):
+
+- clean, isolated VB-Cable continuity/service-gap runs without the owner's
+  route active;
+- concurrent large-library Play/export/import service timing;
+- latency-changing commercial-plugin continuity (fixture coverage exists; the
+  owner's UADx sign-out did not produce an unlicensed state);
+- any current-head hosted checks not already superseded by merged PR #110.
+
+These are qualification tasks, not permission to stop or reconfigure a live
+route, install a driver, or alter a user's device. Hardware work requires an
+explicitly safe isolated setup.
+
+## Recently closed
+
+- PR #110 merged to main at `814ad879`; session draft-loss, deletion targeting,
+  recording rename and paired-network starvation fixes are on main.
+- The UX implementation slices and setup-check source integration are complete.
+  Their mock/component/browser evidence is recorded in the linked UX plans;
+  attended Narrator/scaling, first-time-user, native recording/export and
+  UX-06 measurement gates remain open.
+- The combined review-fixes source set, including network v3 and the packaged
+  shell smoke, is recorded in [code-review-fixes](code-review-fixes.md). Review
+  findings are not called fully qualified where the evidence gates above remain.
+
+## Active plan index
+
+These are the only execution plans that remain active after the 2026-11-04
+status reconciliation:
+
+- [Code-review fixes](code-review-fixes.md) — open isolated continuity,
+  service-timing and commercial-plugin qualification.
+- [Application quality](application-quality.md) — Q3.2 hosted qualification,
+  then Q4–Q6 quality and release gates.
+- [Virtual cable](virtual-cable.md) — owner-run VM, signing and Stage C gates.
+- [OBS and Discord](obs-discord.md) — copied-profile and attended acceptance.
+- [Release signing](release-signing-and-publication.md) — parked on owner/provider
+  signing decisions and credentials.
+- [Code-scanning remediation](code-scanning-remediation.md) — current-head
+  CodeQL refresh and individual alert dispositions.
+- [Setup-check owner acceptance](../archived/2026-11-02-setup-check.md) — test
+  the integrated Status check against the owner's saved sessions; its full
+  browser suite and independent Properties-catalog tooling gate remain open.
+- [UI quality review](ui-quality-review.md) — owner-authorized visual quality
+  criteria and isolated evidence harness.
+- [Onboarding and recovery UX](../archived/2026-11-02-ux-onboarding-recovery.md)
+  — UX-04 prototype, UX-06 measurements and attended gates.
+- [Accessibility UX](../archived/2026-11-02-ux-accessibility.md) — Narrator,
+  scaling and attended keyboard/visual gates.
+
+The archived execution slices [setup check](../archived/2026-11-02-setup-check.md),
+[session safety](../archived/2026-11-02-ux-session-safety.md),
+[setup actions](../archived/2026-11-02-ux-setup-actions.md), and
+[state clarity](../archived/2026-11-02-ux-state-clarity.md) retain their
+completed implementation evidence and point back here for remaining
+qualification. Owner testing of setup-check against saved sessions remains
+open. The review records are archived at the dated paths listed above.
+`virtual-cable-agent-handoff.md` remains a compatibility pointer to the active
+driver plan.
+
+## Next action
+
+Continue the open review-fixes gates above, starting with an explicitly isolated
+continuity/service-gap run when the owner confirms the setup is safe. No product
+source changes, driver operations or release publication are implied by this
+documentation reconciliation.
+
+---
+
+# Historical active-plan record — 0.0.26 release and maintenance
+
+## User-error code review — 2026-11-03 owner request
+
+Objective: review latest main for user-visible failures, prioritize confirmed
+bugs and repair them with regressions. Baseline: `a8051e862ea2940929f44c96f377068abc52200d`,
+branch `fix/user-error-review-2026-11-03`. Existing website edits are preserved
+in the named Git stash `Preserve website CSP work before 2026-11-03 main review`;
+the previous branch and other worktrees are untouched. Owner explicitly
+approved opening this branch's PR on 2026-11-03 after reviewing the local
+results ("Open a pr and I will review"). No merge or publication is authorized.
+
+Scope: STATE-02/04 (session durability/selection), UI-09/17 (recoverable states
+and stable UI), REC-02/10 (recording formats/library), API-03 and AUTO-18
+(shared backend behavior), ENG-02/04.
+Review session CRUD, draft reconciliation, recording/file operations, graph
+mutation, transport/authorization and runtime failure paths. Prioritize data
+loss and unintended audio interruption before misleading status or convenience.
+
+Ordered tasks: trace failures at real entry points; add failing regressions;
+fix the owning layer; immediately compile/typecheck; run relevant full suites,
+format/lint, contract drift and docs checks; inspect complete diff and record
+coverage, remaining risks and exact next action here. Windows/MSVC and local
+Node are available. Use disposable fixtures; no owner profile, live backend,
+audio endpoints, drivers, external credentials or publication are needed.
+Browser evidence covers UI behavior only, not physical audio or attended
+accessibility. Rollback: revert only this review's edits; no migration planned.
+Next: reproduce draft loss during session selection and audit backend CRUD.
+
+Confirmed priorities: P1 unsaved draft loss from the session picker and another
+client's active-session event (two failing UI entry-point regressions before
+repair); P2 deletion leaves the default API/MCP target pointing at a nonexistent
+session (dispatcher regression fails before repair). Guard manual selection
+before any stop call, decline external adoption while dirty, and refresh the
+current session when adoption is declined. Explicit confirmed deletion may
+discard its draft and move to the remaining session. Clear the deleted active
+ID in the same storage transaction, clear runtime selection only after success,
+and emit selection change. No method/schema or NodeKind changes are needed;
+default tools retain the shared dispatcher behavior. Next: finish regression,
+full UI/storage/control/CLI, three-theme browser and strict static checks.
+
+Recording audit: P2 Rename rejects `.mp3` despite the recorder supporting MP3,
+and allows a WAV to be renamed `.flac` without conversion. Extend the existing
+storage rule to all three recording formats and require the source extension
+to remain the same (case-insensitive). Verify real dispatcher rename calls,
+unchanged bytes, conflict rejection and idempotent retry; no format conversion,
+new API or UI control is introduced. Rollback: revert this validation fix.
+
+Verification and handoff (Windows/MSVC, Rust 1.96.0, Node 22.22.3):
+
+- Review covered session CRUD/active selection, draft reconciliation and event
+  adoption, recording rename/metadata/removal, bundle import/export, graph
+  transaction rollback, recovery/privacy boundaries, HTTP/pipe authorization
+  and bounded framing, and network packet authentication. Engine/DSP and
+  native routing were additionally exercised by their existing full suites;
+  this is a risk-based repository review, not a line-by-line soundness proof
+  of every driver, plugin or WASAPI implementation.
+- `cargo test --workspace --locked` passed, including source/tool combinations
+  and 33 deterministic audio scenarios. After the additional rename repair,
+  `cargo test -p audiorouter-storage -p audiorouter-control -p audiorouter-cli
+  --locked` passed: storage 106, control 336 (11 opt-in ignored), CLI 48 plus
+  5 stdio integration tests. The control rename regression was repeated after
+  its test-helper formatting cleanup. Logs: `target/user-error-review-workspace.log`
+  and `target/user-error-review-final-backend.log` (local, not committed).
+- Shell suite passed after final production changes: 86 passed, 4 opt-in
+  ignored. Workspace and shell all-target/all-feature Clippy with `-D warnings`
+  and both format checks passed. A rustfmt closure-layout drift was replaced
+  with a named test helper; the final format checks are clean.
+- Final locked UI install corrected stale Vite 8.3.4 to main's pinned 8.3.5;
+  `npm ci --prefix ui --no-audit --no-fund` changed no manifest/lockfile.
+  Format check, zero-warning lint, all-project typecheck and all 821 tests
+  passed with that install. Log: `target/user-error-review-ui-pinned.log`.
+- Built the disposable backend and compiled UI, then ran installed Edge with
+  `npx playwright test --config=playwright.ci.config.ts session-draft-safety.pw.ts
+  session-workflows.pw.ts --workers=1` from `ui/`: 10 passed, clean exit.
+  Three-theme screenshots were inspected; canvas bounds remain unchanged.
+  Log: `target/user-error-review-browser.log`; screenshots live in the normal
+  `%TEMP%/audiorouter-playwright-results/session-draft-safety.pw.ts-*/` folders.
+  Earlier development assertions passed but launcher teardown stalled and was
+  cancelled; that run is not clean-exit evidence. Restricted compiled-asset
+  cleanup hit EPERM; rebuilding outside that launcher passed. An initial
+  wrong-directory build failed entry resolution and is not passing evidence.
+- Browser warnings: Node inherits conflicting NO_COLOR/FORCE_COLOR; no product
+  diagnostic. Development React Flow attribution warning remains the existing
+  licensing/configuration question; no entitlement or waiver is inferred.
+  Compiled verification passed without changing attribution settings.
+- Contract drift passed (138 methods, 37 kinds, 20 processors, 22 categories);
+  docs passed (237 Markdown files / 1,365 links) and diff whitespace is clean.
+  Dispatcher and default MCP regressions exercise deletion/recovery and MP3
+  rename. Existing grants, API shapes and tool parameter catalogs are unchanged.
+
+Remaining limits: no release EXE build/launch, owner-profile changes, live audio,
+commercial-plugin timing, driver qualification or hosted PR CI in this task.
+Existing CPU-starved encrypted-network continuity and attended M05/M08 gates
+remain open, not waived by these passes. No new tool/Properties controls were
+introduced, so no guide recapture is required. Source fixes remain uncommitted
+on the review branch; no PR, push, release or deployment was performed.
+Next task: review this diff locally, then obtain explicit approval before
+opening a PR. Next technical qualification is the existing isolated network
+CPU-starvation reproduction, followed by the outstanding attended gates.
+
+## Open owner gates
+
+PR opened for owner review: [#110](https://github.com/MrDesjardins/audiorouter/pull/110),
+source-fix commit `f91b437a4f1eb261da1ef23edf1391dab41f3f71`, branch
+`fix/user-error-review-2026-11-03`. Initial CI/CodeQL checks are running;
+no hosted pass or merge readiness is claimed. Next: owner review and hosted
+check results. No merge or release publication was requested.
+
+Push-time dependency warning inspected: open Dependabot alerts 9/8 concern
+minimatch globparts amplification in the UI/Stream Deck lockfiles (medium),
+7 concerns glib VariantStrIter unsoundness in the shell lockfile (medium),
+and 5 concerns deepmerge prototype poisoning in Stream Deck (low). These
+lockfiles are unchanged by this PR. Their dependency fixes require their own
+compatibility/build validation; they are recorded as unresolved dependency
+work, not dismissed or represented as repaired by the runtime fixes. The
+current PR adds no dependency or advisory suppression. Hosted supply-chain
+checks must independently report their result.
+
+2026-11-03 continuation (owner: "Fix all"): keep the review branch and all
+existing fixes. Investigate remaining reproducible user failures, beginning
+with paired-network starvation (GRAPH-16, SEC-13, NFR-03/04). Reproduce using
+only disposable loopback routes with this test process restricted to one CPU;
+do not stop the owner's route or open their devices. Preserve strict packet,
+continuity and hint assertions. Repair the owning layer and add deterministic
+regressions, then repeat native network/control suites and both Clippy/format
+scopes. Also finish available packaged-shell smoke using a disposable profile.
+Hardware/commercial-plugin/driver gates require their actual fixtures and are
+not silently waived. Rollback: revert this continuation's focused edits only.
+
+Continuation findings and experiments: the unchanged full control suite on
+one CPU reproduced paired underruns (`target/review-all-single-cpu-control.log`).
+Separately, a deterministic interleaving consumed a packet immediately after
+publication and wrapped `queued_frames` to 18,446,744,073,709,551,488. Account
+frames before queue publication and roll back a rejected enqueue. The regression
+also fills/drains the complete queue and checks failed publication accounting.
+This is a real concurrency defect, independent of host scheduling.
+
+The old network tests pumped inline and did not acquire the production timer/
+MMCSS guard. Guard-only, counter-only, and I/O-priority-only experiments still
+failed under a saturated single CPU. Recorder-construction offloading did not
+resolve it and was reverted. Tests now assert that the actual dedicated audio
+thread starts, as the transport does, and retain the original continuity,
+packet/error and strict null-hint assertions. Network socket threads join the
+same reversible audio scheduling facility so ordinary CPU work cannot starve
+encryption/socket delivery while the audio pump consumes their buffers.
+With the production thread and I/O scheduling together, three consecutive
+complete one-CPU control runs pass: 336 passed / 11 opt-in ignored each,
+20.32/20.17/20.84 s. Logs: `target/review-all-thread-priority-round-{1,2,3}.log`.
+No buffer setting, packet authentication or acceptance assertion was weakened.
+Scheduling remains best-effort when Windows does not grant MMCSS; this does
+not promise uninterrupted audio under every possible machine stall.
+
+The initial rebuilt desktop smoke passed on a disposable profile, Medium
+integrity/non-admin, cold usable UI 1,167 ms, warm 805 ms, Save 108 ms, two
+graceful exits and no device-access grant. Evidence:
+`target/review-all-packaged-smoke/result.json`. Rebuild and repeat after the
+final network changes before handing over the executable.
+
+Final rebuilt artifact and desktop verification (2026-11-03):
+`cargo build -p audiorouter-cli --release --locked -j 2`,
+`tools/stage-mcp-cli.ps1` and
+`cargo build --manifest-path src-tauri/Cargo.toml --release --locked --features
+custom-protocol -j 2` pass. Source and staged CLI SHA-256 match:
+`71F58438D82F7B6EBBACF511323251C20857F0746A982172DA144CC707EDFD67`.
+Final shell SHA-256:
+`C055EAB1EE3CF57554972E49EC7B5570148ED533E05FF1023BE065FC94FF262D`.
+The shell (08:37:02 local) is newer than production UI (08:26:42).
+Final exact-binary smoke passes at `target/review-all-final-packaged-smoke/result.json`:
+Medium/non-admin, cold usable UI 1,337 ms, warm 719 ms, Save 95 ms, two
+graceful quits; device access stays denied. Matching companions stay beside
+`src-tauri/target/release/audiorouter-shell.exe`; this is a local test build,
+not a published installer. Existing installed user state was not used.
+Final workspace/shell Clippy and both Rust format checks pass; shell suite
+86 passed / 4 opt-in ignored; contracts drift and docs (237 files/1,366 links)
+pass. The full workspace rerun passed, including control 336, native audio
+146 (4 opt-in ignored), all source/tool combinations and 33 deterministic
+audio scenarios; log: `target/review-all-final-workspace.log`.
+No new API or settings surface, guide capture, migration or publication.
+Attended hardware, commercial plugins, endurance and release-signing gates
+remain separate requirements; no remaining reproduced review defect is being
+deferred to them. Changes remain uncommitted on the same review branch.
+PR handoff (2026-11-03): owner explicitly approved opening a PR for these
+reviewed fixes. Inspect the complete diff, repeat required pre-commit
+format/lint checks, commit the exact reviewed files, push this branch and
+open the PR against main for the owner's review. Prior local evidence above
+remains applicable; hosted CI is pending. Do not merge or publish. Preserve
+the unrelated website stash and all other worktrees.
+
+PR #107 network test repair (superseded 0edfca51/6601d820, fixed 0b1505b9):
+the first diagnosis (an underrun only while the test paused servicing for
+diagnostics) was wrong. The next CI run underran inside the recorded window
+(3 and 5 tone steps). Cause: the branch split the tone test into paired and
+unpaired runs that execute concurrently, each with its own 1 ms service loop;
+main has one. Pinned to one core, each test passes alone and all four network
+tests pass serialized; the full suite failed both (24 and 10 steps). Fix: a
+shared lock serializes the live network tests, the summary is sampled at the
+end of the serviced window, and the strict `hint.is_null()` check is restored.
+Historical finding (addressed by the 2026-11-03 continuation above): under one-core full-suite starvation the encrypted
+stream still lost a packet (1,333 sent, 1,332 received) and underran 3–4
+times while unencrypted did not; optimizing chacha20/hmac/sha2 in dev builds
+did not change this. The continuation records the counter race, scheduling
+repair, production-path test correction and repeated one-CPU validation.
+
+PR #107 Edge failures (fixed 9b847cc1): deleting a session left the window on
+it, because `switchSession` read running sessions through a snapshot of the
+deleted session; it now reads them through the target. Ten canvas-layout
+tests still looked for the "Selection layout" region, which became the
+Properties tab panel in the keyboard-accessibility change.
+
+PR #107 Windows CI repair on 7c3cac7f: workspace/shell tests passed, then
+`probe-build` reproduced a stale independent WASAPI probe lockfile under
+`--locked`. Refreshed only `tools/m00-wasapi-probe/Cargo.lock` offline: records
+protocol ChaCha20, Windows getrandom, cipher 0.5.2 and non-yanked inout 0.2.5.
+Exact `node tools/quality/verify.mjs --checks probe-build` now passes its locked
+Rust check and compile-only C++ probe acceptance on Windows. No device stream
+opened. Other standalone cable-quality metadata remains locked-compatible and
+does not depend on the changed crates. Failure annotation contained exit code
+only; job logs identify the lock drift. No production build change is needed.
+
+PR #107 main-conflict repair: main `9bf6e72b` is the squash merge of #106.
+Compared `fb38dd96..origin/main`: setup source is identical; only dependency/
+workflow/plan updates differ, already conserved by the previous main merge.
+Resolved nine duplicate conflicts to the combined superset. Staged tree before
+this note was byte-identical to pre-merge HEAD; this is ancestry reconciliation,
+not a behavioral change. UI full typecheck, workspace check and diff whitespace
+checks pass. Retain the existing local build; no source rebuild is necessary.
+
+PR #107 CodeQL alerts 41/42/43 on c4161cae trace only to the new secure-network
+unit fixtures: two literal pairing keys and a constant packet nonce, all under
+cfg(test). Production pairing is caller-owned and network nonces come from
+`random_network_bytes` using getrandom. Replaced these round-trip fixtures with
+OS-generated test keys/nonces through a protocol dev-dependency; shared test
+key uses OnceLock so tamper/open checks still use the same generated secret.
+Production protocol/API and wire format are unchanged. No query suppression or
+alert dismissal. Protocol 25 tests, shell check, both strict Clippy scopes and
+both format checks pass; hosted CodeQL must confirm the three findings clear.
+
+PR #107 first-head CI repair: Website checks found 39 generated tool pages
+missing social metadata; regenerated with `site/generate-social.mjs` and exact
+site profile now passes. Supply-chain check rejected yanked `inout 0.2.3`
+through ChaCha20; updated only inout to 0.2.5 in both lockfiles. Exact
+`cargo-deny,npm-audit` profile passes without policy changes. Duplicate-version
+warnings reflect incompatible transitive Tauri/Windows dependency requirements;
+retained rather than forcing incompatible versions. Root advisory-not-detected
+warnings arise because shared policy includes five shell-only unic exceptions;
+their existing dated reasons remain required by the shell graph. No new ignore
+was added. Protocol 25 and Windows audio 145 tests pass (opt-in hardware tests
+remain ignored); shell tests and refreshed local artifacts follow. Both failed
+job annotations were read; failure annotations contain only exit code, with
+Ubuntu image migration notices. This repair does not change user settings.
+
+Final consolidated source and local artifact evidence:
+[2026-11-02 final consolidation](evidence/2026-11-02-final-consolidation.md).
+Earlier review integration is merged with latest browser fixes. Parent full UI
+818 tests and compiled Edge 24 scenarios pass; rebuilt shell/CLI/plugin workers
+and disposable native smoke pass. Required PR CI and main merge are next.
+
+Earlier review fixes are being conserved with the latest UX in the
+[integration plan](../archived/2026-11-02-earlier-review-integration.md). The
+[review fixes plan](code-review-fixes.md) retains historical measurements and
+remaining native/plugin qualification. M05 attended accessibility, scaling,
+usability and M08 installer, signing and endurance gates remain open. Parent
+must rebuild and repeat packaged smoke after this source integration.
+
+## Final consolidation, review and local build — owner request
+
+Owner has finished playing and explicitly requests final review, tonight's
+worktree changes in main, plan cleanup, remaining improvements through a PR,
+and a local build for tomorrow. This supersedes the gaming-time build/PR
+restriction recorded below. Preserve user profiles/devices and existing unrelated
+worktree edits. Audit all worktrees, distinguish tonight's work from historical
+branches, review the combined diff, run UI/contracts/docs checks and focused
+three-theme browser qualification, resolve findings, then push/create PR and
+merge only with required checks satisfied. No release publication or driver
+change. Build embedded UI before release shell, stage matching CLI, record
+hashes and timestamps; use a disposable profile for native smoke and never
+force-close an existing owner process. Rollback: retain previous compatible
+build, revert integration commits; no database migration is intended.
+Next: independent final review and worktree audit; parent integrates and builds.
+
+Worktree inventory covered 62 registered checkouts, but parent branch audit
+also found unattached `feature/code-review-fixes-2026-11-01` at `b8cc974f`
+with substantial earlier-today work absent main. A separate isolated integration
+workstream now reconciles it; do not claim all tonight work is in main until
+that result is reviewed. Packaged smoke passed against the current pre-extra-
+integration build (cold 1512 ms, warm 713 ms, Medium/non-admin, two graceful
+quits, device access false). Matching CLI staged with verified hashes. Rebuild
+and repeat smoke after any incoming source changes. Browser qualification still
+pending. User data and devices untouched.
+
+Browser qualification child `0cc0c055` integrated as `f32bab82`: 23 scenarios
+passed across three themes/two viewport sizes. Parent strengthened the actual
+keyboard path to Tab through Properties and reach an external sentinel: six
+theme/viewport cases reported passing, screenshots inspected. The default Vite
+runner then stalled during teardown; cancelled only that owned exec session,
+so these six assertions are passing evidence, not a clean runner exit.
+Parent format/lint/typecheck pass. Remaining integration is earlier code-review
+branch; rebuild and repeat combined qualification after that source merge.
+
+Final review found two P2 issues: forward Tab cycling through Properties and
+applied Save retaining preview provenance. Parent added explicit panel exit,
+cleared preview on applied/restarted activation (not restartRequired), and
+regressions at the keyboard and App save entry points. The full UI first run
+reported 812 passing/2 failing obsolete immediate-switch lifecycle expectations;
+updated them to use Stop and switch. Focused lifecycle/keyboard: 24 passed.
+Final typecheck/lint/format pass. Full UI rerun is in target/ux-final-vitest.log.
+Control/storage/CLI suites passed; shell 85 passed/4 opt-in ignored; both
+Clippy scopes clean; contract drift 138 methods/37 kinds/20 processors/22 events
+passed after the sandbox dependency-download restriction was resolved.
+Embedded release build completed with custom-protocol; matching CLI build and
+disposable packaged smoke pending. Build retains the 644.40 kB main chunk
+advisory; no threshold was raised and it does not establish a timing failure.
+Documentation reconciliation (ENG-04, M05/M08): audit all registered worktrees
+read-only, compare ancestry and patch equivalence against cached origin/main
+and parent baseline `bf99cf97`, then correct only superseded UX execution and
+authorization statements. Preserve historical evidence and every unfulfilled
+native, accessibility, usability and performance gate. Validate with
+`tests/acceptance/docs.ps1` and `git diff --check`; rollback is a revert of this
+documentation-only commit. Inventory and integration disposition:
+[2026-11-02 worktree audit](evidence/2026-11-02-worktree-audit.md).
+Test workstream: `t3/ux-final-qualification` qualifies UX-01–05 / UI-05,
+UI-08–12, UI-17, UI-27 with the disposable in-memory route harness only.
+Ordered work: add saved-session fixture injection; exercise switch Cancel and
+Confirm, finding focus, tab keys/relationships, guide and export wording in
+three themes at 1280×720 and 640×360 CSS pixels (200% viewport equivalent);
+inspect screenshots, fix demonstrated failures, then format/lint/typecheck.
+Evidence and remaining gates go in a dedicated dated evidence record. No
+native backend/profile, production audio, owner-process control, driver or
+device access. Parent owns full unit/native build and integration. Rollback:
+revert this test-only slice; no persisted state or API contract changes.
+
+Browser qualification completed: 23 Edge scenarios pass with one worker,
+including the new two-active-session flow in three themes at 1280×720 and
+640×360. Fixed the reproduced UI-17 fractional tab-height difference (38/39 px)
+by reserving 2.5 rem; existing sidebar-width regressions pass unchanged.
+See [test workstream evidence](evidence/2026-11-02-ux-final-browser.md) for
+commands, inspected screenshots, cleanup workaround, notification overlap,
+console warnings and unrun native/attended gates. Next: parent integration
+and disposable-profile packaged qualification; no native/audio pass is claimed.
+
+## Parallel UX implementation — 2026-11-02 owner authorization
+
+Archived execution slices: [session safety](../archived/2026-11-02-ux-session-safety.md),
+[setup actions](../archived/2026-11-02-ux-setup-actions.md),
+[state clarity](../archived/2026-11-02-ux-state-clarity.md),
+[onboarding/recovery](../archived/2026-11-02-ux-onboarding-recovery.md),
+[accessibility](../archived/2026-11-02-ux-accessibility.md), and
+[earlier-review integration](../archived/2026-11-02-earlier-review-integration.md).
+Their attended, native, participant and release gates remain open as stated above.
+
+Owner authorized implementing the UX plan using parallel T3 Code workstreams,
+while continuing to play and test the running AudioRouter. This supersedes
+the assessment's planning-only status. Scope: UX-01 through UX-06 in the
+[UX plan](../future/ux-improvement-2026-11-02.md), M05/M08 and its mapped IDs.
+
+Historical gaming-time boundary for the isolated implementation workstreams
+(superseded for parent qualification by the final request above): no contact
+with the live backend, no
+AudioRouter launch/stop/restart, audio/device/driver changes, real profile or
+database access, release builds, sidecar staging, installs or replacement of
+the running artifacts. Use isolated T3-managed worktrees. Keep checks light
+and workers bounded; defer native, hardware, performance-load and attended
+checks until gaming/testing ends. No PR was authorized at that stage; the
+current parent scope is recorded above. Children do not push or open PRs.
+
+Ordered tasks: (1) parallel session-switch safety, actionable setup findings,
+state/export clarity, keyboard accessibility, and onboarding/recovery work;
+(2) inspect and integrate isolated commits, resolving shared App/Workbench
+edits; (3) run bounded mock/component checks, typecheck/lint/format and docs;
+(4) record exact remaining native/three-theme/participant gates. Each child
+records its own requirements, implementation decisions, regressions and
+rollback in a uniquely named active evidence file. UX-06 measurement tools
+may be prepared but must not benchmark the owner's running game/audio.
+
+Rollback: revert each isolated slice; avoid storage migrations. Preserve all
+existing draft/live-save and protected microphone semantics. Default UX-01
+choice is an explicit pre-switch consequence confirmation, retaining the
+existing stop policy; independent running/viewed sessions remain deferred.
+Source integration is complete at `bf99cf97`; next action is combined final
+qualification under the current parent scope above.
+
+Integration progress: created `feature/ux-improvements` from the setup-check
+head without replacing any running artifact. Planning commit `096a1132`;
+onboarding/recovery child `39108ed9` reviewed and integrated as `c920fed7`.
+Parent reran the four focused component files with `--maxWorkers=1
+--no-file-parallelism --no-cache`: 13 tests passed. The child also records
+typecheck/all, format and lint passing. This is an additive guidance prototype;
+template application, theme inspection, attended usability and UX-06 native
+measurements remain open. This was the first integration checkpoint; the
+other four slices were subsequently integrated as recorded below.
+
+UX-02 child `47bd90cc` integrated as `6ae1d8a4`; UX-03 child `2aa66f02`
+integrated as `67517f83`. Shared App edits merged cleanly and were inspected.
+Parent `typecheck:all` passed; four focused test files (session selection,
+setup findings, session export, playback label) passed 18 tests with one
+concurrent worker and no cache. At this intermediate checkpoint UX-01 and UX-05
+were pending; both were subsequently integrated below. Native audio, browser
+themes/geometry and attended gates remain unrun; running app untouched.
+
+Final children integrated: session safety `b04a6b4b` as `7b2bd937`, keyboard
+accessibility `326382d0` as `9831785f`. Combined 9-file focused suite: 40 tests
+passed with one concurrent worker. Full UI typecheck, formatting and zero-warning
+lint passed. Parent retained Audio running/stopped wording with an additional
+verified Draft preview label, updated the export browser scenario and added a
+cross-session setup-action cancellation regression. Final regression results
+follow below. Docs acceptance: 229 files/1,197 links passed.
+No API/backend/storage changes, build, staging, launch, live backend access or
+device change. Deferred: three-theme/200% visual inspection, Narrator, packaged
+export round-trip, recorder finalization/audio continuity, five-participant
+onboarding and UX-06 performance measurements. No release-ready claim.
+Next: parent qualifies this combined branch in a disposable packaged profile
+under the final consolidation request; preserve any existing owner process.
+
+Final bounded regression run: App session selection (including cross-session
+finding Cancel), playback label and existing App accessibility: 114 tests in
+3 files passed, one concurrent worker. No suite cache. Export browser scenario
+was updated but not executed. Quickstart records the pending-qualification
+behavior. Final source integration commit records these adjustments.
+
+## UX assessment and proposed improvements — 2026-11-02
+
+The initial owner request was analysis and a plan. The subsequent parallel
+implementation authorization above promoted its bounded slices. The
+[UX improvement plan](../future/ux-improvement-2026-11-02.md) records source
+evidence, prioritized M05/M08 tasks, requirement IDs, prerequisites, acceptance,
+risks and rollback. Highest priorities: session navigation stopping active
+audio, actionable setup findings, and saved/draft/playing/export clarity.
+Working tree was clean at review start on `feature/setup-check`; only planning
+documents changed. No native app, live audio or usability study was run.
+The initial planning request alone did not authorize implementation. UX source
+slices are now integrated; the M05 baseline, native and usability evidence
+remain open. Follow the current consolidation scope above.
+
+Validation: Windows documentation acceptance passed (224 Markdown files,
+1,196 local links); `git diff --check` passed. Product tests were not run
+because this change contains planning documents only.
+
+## Website CSP — 2026-11-02 owner request
+
+Objective: assess the missing audiorouter.org CSP response header and add the
+protection supported by the existing static host. This is website hardening;
+SEC-05 applies to the desktop shell and is not a public-site acceptance claim.
+Live HTTPS HEAD returns 200 from GitHub.com with no CSP header. Pages deployment
+is `.github/workflows/pages.yml`; no custom header service is configured.
+Preserve unrelated network test and active-plan edits.
+
+Tasks: add an early HTML CSP to every generated/published page; allow only local
+scripts, required Google Fonts, GitHub release API and YouTube embeds; retain
+inline styling used by the guides, prohibit inline executable scripts, objects,
+base URLs and forms. Add generation/drift checks to deployment and site checks.
+Verify policy coverage and real browser loading/blocking, including guide media.
+No driver/hardware/credentials are needed for local checks; publication and DNS/
+proxy changes are separate. A literal response header and `frame-ancestors`
+require configurable hosting or a reverse proxy; do not claim a meta tag fixes
+a header scanner. Rollback: revert only the website CSP changes. Next: implement
+and verify the Pages-compatible policy, then report the remaining hosting gate.
+
+Implementation: `site/generate-csp.mjs` inserts policy after charset and before
+resource tags in all 50 HTML pages; Pages runs it after page generation and site
+CI checks drift/tests. `site/README.md` documents header delivery and its limits.
+First Windows Edge sweep found the Download page's GitHub sponsor iframe blocked;
+added only its exact URL to frame-src and repeated the browser sweep. Earlier
+probe failures were test-harness issues (Windows path separator and waiting for
+full media load); repaired the harness to use the native separator and DOM ready.
+Local Node site/docs checks and 68 quality policy/runner tests pass. HTML diff
+comparison confirms the CSP tag is the only change to every existing page.
+External services in the browser sweep are stubbed; real Firefox/media playback,
+external-service integration and production deployment are not qualified here.
+Live DNS uses dns1/dns2.registrar-servers.com and HTTPS serves directly from
+GitHub.com. No configurable header proxy or credentials are available in this
+task. Owner decision (2026-11-02): keep GitHub Pages with HTML CSP for now.
+Defer configurable hosting/proxy and response-header delivery; the missing-header
+scanner finding and lack of `frame-ancestors` protection remain accepted limits
+of this bounded website change. No DNS or hosting migration is authorized.
+The Cloudflare proxy option is planned in
+[Website behind Cloudflare](../future/website-cloudflare.md) (owner request
+2026-11-02; future, not authorized).
+Next task: review and publish the HTML-CSP change through the normal approved
+repository workflow, then verify the live policy and real service playback.
+
+Final local evidence (Windows, Node 22.22.3):
+`node site/check-csp-browser.mjs` passes all 50 pages in headless installed Edge,
+with zero normal-load CSP violations/page errors; injected inline JavaScript and
+an unapproved external fetch are blocked. `node tools/quality/verify.mjs --checks
+site,docs` passes (3 CSP regressions; 38 guides / 1,131 links; 236 Markdown files /
+1,359 links). `node --test tools/quality/verify.test.mjs
+tools/quality/policy.test.mjs` passes 68 tests; `git diff --check` passes.
+Committed on branch `website-csp` (from main after #108); CSP regenerated for the
+tabbed guide pages and the browser sweep repeated there. Not yet deployed.
+
+Setup check (2026-11-02, owner request): a backend check and Status-tab list
+that flags device setups Play will refuse, feedback loops across routes,
+missing devices and cable rates (UI-27). Branch `feature/setup-check`; plan,
+tasks and validation in [setup-check execution record](../archived/2026-11-02-setup-check.md).
+
+Sol review follow-up (2026-11-02): fixed request lifecycle, refresh triggers,
+incomplete-result wording, multi-route loops, diagnostic I/O and finding order.
+Embedded release build is available at
+`src-tauri/target/release/audiorouter-shell.exe`; Status → Check again was
+exercised with a disposable profile and real device inventory, without audio.
+Owner testing passed; PR #106 is authorized for merge after green checks.
+
+## Tool-guide tabs and lazy videos — 2026-11-02, owner request
+
+Objective: shorten the 38 tool-guide pages and stop downloading every video
+poster at load. Branch `feature/site-tool-guide-tabs`; the owner asked for a PR.
+
+- **Tabs.** `site/generate-guides.mjs` groups the sections into Overview,
+  Settings, Videos and Examples & fixes (WAI-ARIA tabs, arrow/Home/End keys).
+  `guides.js` opens the tab that holds any in-page anchor (TOC, hero button,
+  shared `#property-…` links, back/forward), so old deep links keep working.
+  Without script, a `<noscript>` style shows every panel and hides the bar.
+- **One player.** "In the app" is one `preload="none"` player plus a clip
+  list; each entry links to its MP4 (no-script fallback). Choosing a clip swaps
+  poster and source. Each setting card links to its clip (`#clip-…`).
+- **Measured.** Fun Voice Changer requested 37 posters (4.59 MB) on load;
+  now 1 poster and no video. Compressor 7 posters (0.70 MB) → 1.
+
+Validation (Windows, Edge and Firefox, site served on `127.0.0.1:4187`):
+`node site/check-guides.mjs` PASS (38 pages, 1266 links/assets);
+`node tools/site/check-tool-guide-videos.mjs` PASS (150 clips);
+`node tools/site/review-tool-guide-layout.mjs` PASS: phone layout for five
+pages, one poster and no video on load, anchors open their tab, Watch selects
+the clip, keyboard tabs, and tab switches pause the example and recording;
+`node tools/site/firefox-guide-audio.mjs` 0 failures; a JavaScript-off Edge
+load shows all four panels. Screenshots are in `target/tool-guide-layout/`.
+Limitation: the site has one dark theme only, so no theme matrix applies.
+Rollback: revert the branch commit and regenerate the guides.
+
+## Dependabot PRs #103 and #104 — 2026-11-02
+
+Objective (ENG-02/04): merge the ZIP and rusqlite updates into current main
+with passing current-base CI. Preserve the owner's separate setup-check edits.
+Prerequisites: pinned Rust 1.96.0, Windows build tools, GitHub credentials;
+no live audio, driver or hardware activity is required.
+
+PR #103 passed Windows/Edge and supply-chain checks on its original base;
+update it to current main and require a fresh Quality gate. PR #104 fails
+compilation at both storage backup calls: rusqlite 0.41 makes the optional
+progress callback generic, so untyped None no longer infers its type.
+Specify the existing function-pointer callback type without changing behavior.
+The existing online backup and restore round-trip tests cover these calls;
+the compiler itself reproduces the dependency compatibility regression.
+
+Tasks: update bases; reproduce and fix compilation; run storage tests and
+Rust formatting/Clippy; inspect the diff and every hosted check annotation;
+push the scoped fix; require current-base Windows/Edge CI before merging
+each PR sequentially. Ubuntu image migration notices are informational and
+require no dependency change. Rollback: revert the relevant merge; no storage
+schema migration is introduced.
+
+Local evidence (Windows, Rust 1.96.0): `cargo test -p audiorouter-storage
+--locked` passes 99 tests, including live backup and restore round trips.
+Both workspace and shell strict Clippy commands and both rustfmt checks pass.
+Shell Clippy initially failed because this fresh checkout lacked `ui/dist`;
+locked `npm ci` and the real UI typecheck/production build repaired that
+prerequisite, then shell Clippy passed. Documentation validation passes
+(222 files, 1,185 links); `git diff --check` is clean.
+
+UI build reports a 629 kB application chunk; leave splitting to a separate
+UI performance change because this repair changes no UI. npm audit reports
+11 moderate development-tool findings rooted in minimatch
+GHSA-g3hv-75wg-m249 through ESLint/typescript-eslint; production audit
+(`npm --prefix ui audit --omit=dev`) reports zero vulnerabilities. npm's
+suggested fixes include incompatible major downgrades; retain locked UI
+dependencies in this Rust-only update and track tooling remediation separately.
+`cargo test -p audiorouter-cli --lib backup --locked` passes both tests,
+including the CLI backup/restore round trip and refusal to overwrite.
+An exploratory control-library backup filter matched zero tests and is not
+entry-point evidence. Next: push and require current-base CI, merge #103,
+then update #104 to the resulting main and require its fresh gate before merge.
+## End-to-end installation investigation — 2026-11-03, owner request
+
+Branch: `investigation/installation-end-to-end` (created from local `main`
+`068b395a`, then fast-forwarded to `origin/main` `814ad879`). Objective: find
+and close the gaps that prevent a user from installing AudioRouter and then
+using its UI, native audio engine and Stream Deck integration as one product.
+This is an investigation branch, not permission to install on the owner's
+machine, publish a release, change Windows audio, or install/remove a driver.
+Requirements: DIST-01–08, UI-01/13, AUTO-01/05, SEC-01/05/11,
+NFR-14–16 and ENG-04/05.
+
+Initial evidence review (2026-11-03; source/config/doc inspection, no installer
+run): M08 defines the required gate. NSIS profiles specify current-user
+installation and a silent WebView2 download bootstrapper; resources include
+the CLI, plugin workers, Stream Deck package and sound library. The UI is
+embedded in the shell, which owns the backend/engine process.
+`prepare-artifacts.ps1` builds UI, CLI, plugin workers and shell, runs Stream
+Deck typecheck/tests/pack, then builds NSIS with static CRT and custom protocol.
+Artifact verification covers provenance, hashes, architecture, notices and
+required payload names. The Stream Deck UI hands its bundled package to
+Windows' file association and asks the user to confirm installation; the
+plugin then requires the user to start the local HTTP API and enter its URL and
+token in action settings.
+
+Prior evidence is useful but not a complete install qualification:
+`2026-10-28-installer-runtime.md` records candidate upgrade/uninstall/reinstall
+with real SQLite session and WAV retention in a test-configured VM under a
+medium token, plus a fresh-profile shell smoke. It explicitly does not prove a
+true standard account, clean machine, missing-WebView2 path, trust prompt,
+normal installed audio route, or attended Stream Deck action. The 2026-10-31
+manual package evidence verifies the extracted 105-sound payload and native UI
+editor/drop smoke, but not installation or live playback. `distribution.md`
+is stale: its opening still says 0.0.17 is latest while current plan records
+0.0.26 published; reconcile before any user-facing installation handoff.
+
+Prerequisites: isolated Windows 11 x64 VM or disposable standard-user account;
+exact candidate installer and matching hash; ability to snapshot/restore VM;
+WebView2 present and absent states; known supported audio endpoint; Stream Deck
+7.1+ installed for attended plugin test; capture OS build, account/token,
+endpoint and Stream Deck versions. No owner profile, audio device, driver,
+startup registration or published release is to be changed during this audit.
+
+Ordered tasks:
+1. Reconcile installer source/config with DIST-01–08 and M08, including both
+   app-only and cable-enabled profiles and clearly separating the optional
+   elevated driver path from the per-user app installation.
+2. Inspect/test actual NSIS payload and installed path resolution for embedded
+   UI, shell/backend engine, CLI, both plugin workers, sound library and Stream
+   Deck package; verify static runtime imports and version/hash agreement.
+3. Run standard-user fresh install, launch/readiness, WebView2 present/missing,
+   endpoint-present/missing first run, upgrade/repair, rollback compatibility,
+   and uninstall/data retention in a disposable Windows environment.
+4. From the installed UI, install the bundled Stream Deck plugin; configure
+   API URL/token and exercise session, play/stop, sound, toggle and meter
+   actions against the installed shell. Verify restart/reconnect and removal.
+5. Exercise a deliberate test-signal route through the installed native engine,
+   confirm output and clean shutdown, then record the full evidence matrix,
+   defects and exact next implementation/qualification task.
+6. Correct stale install-facing documentation and add focused regression
+   coverage for any confirmed packaging/path/lifecycle defects.
+
+Validation matrix: bundle inspection and artifact verifier (portable); exact
+installer lifecycle under standard-user token (Windows isolated environment);
+installed UI and HTTP API first-run flow (Windows); physical endpoint playback
+and Stream Deck hardware/actions (attended Windows); clean-machine/WebView2
+bootstrap and unsigned trust UX (snapshot VM). A build, mock, extracted-file
+inspection, or medium token in an admin-member account is not evidence for the
+standard-user, hardware, or clean-machine gates.
+
+Risks: installation may need WebView2 bootstrap network access; unsigned trust
+prompts may block ordinary users; app-only and cable-enabled package behavior
+can drift; engine startup may be mistaken for actual audio readiness; Stream
+Deck package registration is user-confirmed and its control requires separately
+started HTTP/token setup. Rollback: restore the disposable VM snapshot and
+remove only the investigation's staged artifacts; never uninstall from the
+owner's active profile.
+
+Source audit completion (2026-11-03, branch now at `origin/main`
+`814ad879`): current mainline setup-check work provides `Status → Setup check`
+for saved-route/device mismatches, feedback loops, missing devices and cable
+format guidance. It preserves the last result through failed refreshes, keeps
+the panel geometry stable, and explicitly separates its read-only analysis from
+Play's authoritative route validation. `ApiPanel` exposes local HTTP start,
+URL, token reveal/copy, Swagger and the embedded Stream Deck install action;
+the plugin uses the same REST API and token, with reconnect/backoff polling.
+
+Portable checks on this branch passed: `m08-installer-smoke.ps1` static
+resource/hook checks (NSIS/VM phase skipped because no Microsoft-signed driver
+payload was supplied), `test-verify-artifacts.ps1`, Stream Deck 35 tests,
+Stream Deck TypeScript 7 typecheck, `tests/acceptance/docs.ps1` (237 Markdown
+files/1,365 links), and `git diff --check`. The stale distribution pointer was
+updated to published 0.0.26 and now states its qualification limits.
+
+VirtualBox inventory correction (2026-11-04): VirtualBox 7.2.20 is installed
+at `C:\Program Files\Oracle\VirtualBox`. Registered VMs are
+`AR-Installer-Qualification-20261028` (powered off, Windows 11 x64, 8 GiB, 4
+vCPUs, NAT, installer-test shared folder) and `AR-DriverTest` (powered off,
+test-signing profile, with snapshots). The installer VM has no snapshots; do
+not begin lifecycle testing there until a recoverable baseline exists. The
+driver-test VM has snapshots but is not the app-install qualification VM.
+
+Evidence boundary: the 0.0.26 record proves clean tagged preparation, static
+runtime imports, payload hashes, 105 sound hashes, packaged-shell startup and
+native UI/drop smoke under a Medium/non-admin token. It explicitly does not
+prove installer execution, clean-machine or true standard-account lifecycle,
+WebView2 absence/bootstrap, Explorer drop, physical playback/continuity, or
+attended Stream Deck installation/actions. VirtualBox is available, but no
+baseline snapshot exists for the installation VM. Current next action: inspect
+and, with the owner's go-ahead, prepare a recoverable Windows baseline for
+`AR-Installer-Qualification-20261028`; then run the exact installer matrix and
+qualify the installed Stream Deck plugin against the installed shell before
+any release claim.
 CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
 settings to the generic tool-workflow test. Input, Soundboard and network
 nodes use dedicated editors. Reuse the inspector's exhaustive editor
@@ -45,6 +843,224 @@ classification in the workflow; retain dedicated network edits and durable
 reload assertions. Validate UI typecheck, lint and focused Playwright.
 No hardware or driver is needed. Rollback: revert this test/export change.
 Hosted CI remains required; GitHub access is restricted locally.
+
+## Project size charts — 2026-11-01, owner request
+
+Objective: show the project's growth in the README. Branch
+`feature/code-stats`. No requirement ID (developer documentation); no
+Windows, hardware or driver prerequisite.
+
+Decisions: count non-blank lines per area (front end `ui/`; back end Rust
+crates, shell, contracts and acceptance scripts; audio driver `drivers/`,
+`crates/driver-helper` and M03 acceptance scripts; Markdown split
+specs-and-plans versus other), with Rust `#[cfg(test)]` items counted as
+tests. Owner revision (same day): tooling is its own area (`tools/`,
+`.github/workflows`, `.githooks`) and part of the totals; the areas chart
+shows three product panels above tooling and Markdown, and the charts stay
+under "For developers". `site/` and `examples/` are not counted; the
+generated API reference is excluded. `tools/metrics/code-size.mjs` reads git objects, one
+sample per UTC day (last first-parent commit on `main`), so it back-fills
+history from 2026-09-05 and is incremental afterwards; `RULES_VERSION` forces
+a recount when the area rules change. `main` refuses bot pushes (GH013, see
+`marketing-metrics.yml`), so the daily `code-size.yml` writes the CSV and two
+SVGs to its own `code-stats-data` branch, and the README embeds them through
+`raw.githubusercontent.com`.
+
+Validation: `node --test tools/metrics/code-size.test.mjs` (area table,
+inline-test lexer, CSV, charts; part of the `policy` check); inline-test
+counts matched an independent count for the three largest Rust files; the
+workflow's shell steps ran twice against a local bare origin (orphan
+creation, then "already current"); both SVGs inspected in headless Edge.
+Not run: the workflow on GitHub (scheduled and dispatched runs need it on
+`main`). Until the first run, or a manual push of the seeded branch, the
+README images are missing. After the first run, confirm GitHub renders the
+SVGs from the data branch.
+
+Rollback: delete `code-size.yml`, `tools/metrics/`, the README section and
+the `code-stats-data` branch.
+
+## UAD U4 and U6: live plugin latency and silent licence failures — 2026-10-31, owner request
+
+Objective: finish the remaining parts of U4 and U6 in the
+[UAD plan](../future/uad-plugin-support.md). Branch
+`feature/uad-latency-licence` (from main `068b395a`). U5 (VST3 editors, the
+16-process job limit while an editor is open) was already done, decided and
+owner-tested on 2026-10-22. Requirements: PLUG-03, PLUG-05 (changed), AUTO-18,
+UI-17, and the protected-voice rule in AGENTS.md. No PR until the owner
+approves one.
+
+Decisions (owner, 2026-10-31):
+- **DEC U4 / plan decision 2: accept a reported latency change while
+  playing.** The VST3 worker answers `restartComponent(kLatencyChanged)` by
+  re-activating the component on its UI thread between quanta, and the bridge
+  re-reads each plugin's delay about every half second off the audio thread.
+  The displayed stage and path delay follow. PLUG-05 now treats only an
+  unreported change as unsupported. Parallel Mixer branches are still not
+  delay-matched (future work).
+- **DEC U6: silence a plugin that passes recording-device audio through
+  unchanged.** A recording device (a `PhysicalInput` capture endpoint)
+  upstream of a single plugin makes its path protected. When the existing
+  ~2 s `UnchangedAudioWatch` verdict fires there, the plugin's output becomes
+  silence and stays silent until a deliberate Retry. The first ~2 s of dry
+  audio before the verdict is a known, accepted leak. A per-node
+  `passThroughAllowed` switch (default off) turns the guard off for a plugin
+  that really is neutral. Other paths keep the hint only.
+
+Design:
+- Worker (`tools/m06-vst3-worker/main.cpp`): `restartComponent` records
+  `kLatencyChanged` in an atomic. The pipe thread answers `Latency` from a
+  cached value with no UI-thread round trip (so polling can't stall audio
+  while an editor is busy). When a restart is pending, or after any other UI
+  request (state, editor), the request goes to the UI thread, which
+  re-activates if pending and refreshes the cache. The VST2 worker already
+  reads `initialDelay` on each request.
+- Bridge (`crates/plugin-host`): poll every member's latency every 0.5 s of
+  processed audio, between frames. Add a `silence_unchanged` policy flag, a
+  latch that clears the output once the verdict fires, a hidden recovery
+  watch that keeps observing the plugin's real output while latched, and
+  `resume_after_unchanged()` (unlatches only if the plugin has changed loud
+  audio since; otherwise it reports "still passing through").
+- Control: compute the protected flag from the session (recording device
+  upstream, `passThroughAllowed` not set). New node-targeted method
+  `plugins.resumeAfterLicence` (optional `sessionId`, `nodeId` as ID or exact
+  name, `SessionControl`), with a default MCP tool, contracts, schemas and
+  docs per AUTO-18. Telemetry `plugin.silencedUnchanged`.
+- UI: the reserved hint slot shows "Silenced: this plugin passed your voice
+  through unchanged…" with Retry when latched; a `passThroughAllowed` switch
+  in the plugin inspector. No layout shift.
+
+Tasks:
+1. Worker latency restart and cached answers.
+2. Bridge latency polling; regression with the `latency` fixture mode.
+3. Bridge silence latch and resume; unit tests with the unchanged watch, and a
+   bridge test with the AGain fixture at unity (passes audio unchanged).
+4. Control protected flag, parameter, catalog, method, MCP tool, contracts,
+   dispatcher test.
+5. UI hint, Retry and switch; tests; three-theme screenshots.
+6. Spec PLUG-05, UAD plan, API reference, guide.
+
+Validation (pending the owner's go-ahead to build; the owner asked for no
+builds while the app is in use, 2026-10-31): fmt and Clippy for the workspace
+and shell, plugin-host and control tests, the native VST3 worker build plus
+AGain acceptance, `every_api_method_is_reached_by_a_default_mcp_tool_or_excluded`,
+contract drift, UI tests, lint, typecheck, `plugin-inspector.pw.ts` in three
+themes. Attended and not reproducible here: UA Connect signed out → Play a
+mic → UADx route → silence after ~2 s → sign in → Retry. Not available: a
+UADx plugin that changes latency on demand, so the live path is checked only
+with the fixture.
+
+Rollback: revert the branch. `passThroughAllowed` is an optional node
+setting that older builds reject on validation, and storage validates every
+session document it lists (`deserialize_validated_session` inside
+`list_sessions_after`, collected with `?`), so one saved route with the key
+stops an older build from listing any session. Turning the switch off
+removes the key (`onRemove`), so turn it off and commit before downgrading;
+history revisions that contain it can still fail to load there (recorded in
+the guide). The same risk applies to every node setting added since a
+build, so it is not new, but this one is user-set.
+
+Status (2026-10-31): all six tasks written and validated (below);
+the attended owner test is next. Files: `tools/m06-vst3-worker/main.cpp`
+(latency cache and re-activation); `crates/plugin-host` (bridge polling,
+latch, `resume_after_unchanged`, `reported_latency_samples`, fixture mode
+`latency-steps`, three bridge tests in `tests/worker_process.rs`);
+`crates/domain` (`passThroughAllowed`, `plugins.resume`); `crates/control`
+(`plugin_silences_unchanged_audio`, exhaustive `records_from_a_device`,
+guards in both live-commit paths, telemetry, dispatcher, schemas,
+authorization, catalog, two tests in `plugins.rs`); `crates/cli`
+(`resume_plugin`, by-name MCP test); contracts; UI (`PluginPanels.tsx`
+notes, Retry, switch; `PropertiesPanel.tsx`; `backend.ts`; route harness;
+`PluginNodeInspector.test.tsx`; `plugin-inspector.pw.ts` silenced case);
+spec PLUG-05, AUTO-15; API reference; local HTTP API page; plugin guide;
+UAD plan. Known limits: "recording device" is any `PhysicalInput`,
+including a virtual cable's output, so in the owner's three-cable setup
+Discord and game paths are guarded too (wider than "microphone paths";
+needs the owner's confirmation); plugins in a shared VST2 chain are not
+watched (`UnchangedAudioWatch` runs only for a single plugin); the first
+~2 s before the verdict pass dry; the upstream walk follows every input, so a
+microphone keying a Duck also guards a plugin after that Duck; Retry cannot
+restart the worker, so a plugin that only re-licenses on load needs Stop and
+Play; parallel branches are not delay-matched. Toggling the switch while
+playing is a parameter change, so the commit re-prepares the plugin (a
+reload with a short gap); read from `graph.rs` flags-only logic, not run.
+
+Validation (2026-10-31, Windows 11 Home, pinned 1.96.0, owner go-ahead):
+- `cargo fmt` (workspace, shell) `--check` clean; workspace and shell Clippy
+  `-D warnings` clean.
+- `cargo test --workspace --locked --no-fail-fast`: 1232 passed, 0 failed
+  (`target/uad-u4u6-workspace-tests.log`). plugin-host with
+  `test-fixtures`: all pass; the four bridge tests passed 8 runs in a row
+  after the silence test was changed to check a window of quanta (a late
+  worker quantum is also silent, so one checked quantum was flaky, 1 in 5).
+  First compile found `API_METHODS` length 136 → 137; MCP tool counts
+  89 → 90 updated in `lib.rs` and `mcp_stdio.rs`.
+- Shell `http_api` tests: 10 passed.
+- `tests/acceptance/m06-vst3-worker.ps1` (AGain, rebuilt worker): passed.
+  Release worker built to `target/uad-u4u6/`; opt-in
+  `native_vst3_fixture_signal_report` through it: UADx 1176 86, Pure Plate 31,
+  610-A 86 samples reported, mono, processed; `native_vst3_editor_opens_in_a_pumping_parent`
+  with the 1176: passed.
+- UI: 780 tests, typecheck, typecheck:all, lint, format:check pass;
+  `plugin-inspector.pw.ts` 6 passed (dark, light, high contrast), screenshots
+  inspected in `target/uad-u4u6-screens/`. The heading now says "Silenced"
+  instead of "Running" while latched. Contract drift: 137 methods pass;
+  docs validation passes; `site/assets/api-methods.json` regenerated (guide
+  page rewrites were meta-only and discarded).
+- Test build staged in `target/local-test-uad-u4u6/` (shell, CLI, both
+  workers rebuilt 23:24 after `ui/dist` 23:20; the rest copied from
+  `local-test-0.0.26-tagged`). Not launched: the owner's 0.0.26 test shell
+  is running and only one shell may run.
+
+Attended attempt (2026-10-31, owner, `local-test-uad-u4u6`): signing out of
+UA Connect (`signed out` 23:27:23 in `UA Connect.log`) does not unlicense a
+UADx plugin. The 1176 worker started at 23:27:27 logged
+`DiskPluginLicenseStateChanged … license valid: [true], license full:
+[true]` (`UAPW_uaudio_ua_1176_10_31_26_23_27_27.txt`), kept processing, and
+was correctly not silenced. A sign-out is therefore not a test case; an
+unlicensed state needs a deactivated licence or an unowned title. Pending:
+AGain at its default (unity) gain on a microphone path as the end-to-end
+check of the guard, then an unlicensed UADx if one can be arranged.
+Defect found in the attended AGain test (2026-10-31, owner): ticking "Allow
+unchanged audio" said "Draft rejected: Plugin parameter value is outside the
+worker-provided range". `changeNodeParameterOn` (`App.tsx`) treated every
+setting on a plugin node as a `pluginParameter:<id>` slider; `stateId` from
+"Save plugin settings" went through the same check (not reproduced in the
+app). Fix: `pluginNodeParameterError` (`processorCatalog.ts`) checks only
+`pluginParameter:` names against the worker ranges and the rest against the
+catalog; regression in `processorCatalog.test.ts`. UI 782 tests, typecheck,
+lint and format pass; rebuilt as `target/local-test-uad-u4u6-2/` (shell
+23:35:55 after `ui/dist` 23:35:26).
+Attended AGain check (2026-10-31, owner, `local-test-uad-u4u6-2`): muted
+after ~2 s at unity gain, Retry refused while unchanged, Allow applied;
+"looks all good". Backend log for that shell (pid 21020, from 23:36:31): no
+`outcome":"error"`, `plugins.resume` ok twice, `graph.commit` ok,
+`pumpErrors` 0. The two errors after 23:20 came from earlier processes: a
+single `graph.commit` `permissionDenied` from short-lived pid 19152, and
+`soundboard.status` `-32602` right after `session.stop` (pid 3328), which
+0.0.25 also logs (pid 46256), so it is not from this change. The 60/97
+`pumpErrors` and the high `lateGaps` belong to the owner's earlier long-running
+shells (pids 52024, 71644).
+
+UX defect (2026-10-31, owner): "Allow unchanged audio" was hard to notice
+because the red Retry area drew the eye and the switch sat below it, outside
+the alert. Redesign: one **Voice protection** card above the worker health
+box holds every unchanged-audio state (On, passes through unchanged, off for
+this plugin, muted, still muted). When muted it alone turns red and shows two
+numbered steps: 1 "Expected an effect?" with Retry beside it, 2 "Meant to
+leave your voice unchanged?" with the switch itself. The worker health box is
+no longer an alert for a mute. Every status shares one grid cell and step 1
+lives inside the muted status, so the card keeps one size (UI-17). A first
+version leaked the hidden step text over the hint (an explicit `visible`
+child overrides a hidden parent); jsdom and Playwright now assert it stays
+hidden. Light theme uses a darker red for the muted title. Checks:
+`PluginNodeInspector.test.tsx` 4, `plugin-inspector.pw.ts` 6 (dark, light,
+high contrast; clicking Allow in the muted card must not give "Draft
+rejected"), screenshots inspected in `target/uad-u4u6-screens4/`.
+
+Not run: an unlicensed UADx end to end (a sign-out does not unlicense it); a
+plugin that changes latency on demand (only the fixture covers the live
+re-read); a sine-continuity run with the plugin worker. Next action: commit on
+this branch and ask the owner for PR approval.
 
 ## REST and MCP parity after the Soundboard — 2026-10-31, owner request
 
@@ -623,7 +1639,7 @@ clips or justified non-audible exceptions.
 
 ## Release 0.0.25 — 2026-10-30, owner request
 
-Prepare the app-only unsigned prerelease containing everything on main, including the Soundboard and the static-runtime installer fix. Scope, tasks, gates and rollback: [release plan](release-0.0.25.md). Next: finish local checks and request PR approval.
+Prepare the app-only unsigned prerelease containing everything on main, including the Soundboard and the static-runtime installer fix. Scope, tasks, gates and rollback: [release plan](../archived/2026-10-31-release-0.0.25.md). Next: finish local checks and request PR approval.
 
 ## Recovery, installer and inventory qualification — 2026-10-28
 
@@ -685,7 +1701,7 @@ checks; publishing and release qualification are separate. Checks: Windows, node
 
 ## Release 0.0.24 — 2026-10-27, owner request
 
-Prepare the app-only unsigned prerelease after the owner confirmed the long-sleep test passed. Scope, evidence, checks and rollback: [release plan](release-0.0.24.md). Next: validate and review the release-preparation branch; follow the repository PR approval rule.
+Prepare the app-only unsigned prerelease after the owner confirmed the long-sleep test passed. Scope, evidence, checks and rollback: [release plan](../archived/2026-10-28-release-0.0.24.md). Next: validate and review the release-preparation branch; follow the repository PR approval rule.
 
 ## Active task: Dependabot major/minor only (2026-10-26)
 
@@ -1502,7 +2518,7 @@ VST2 and UAD plugins. Started as documentation only; U0 code followed (below).
 The owner authorized a routing node with one input and two exclusive outputs,
 toggled in the app or on Stream Deck. Work is isolated on
 `feature/output-switch`; see the detailed
-[Output Switch plan](output-switch.md) for contracts, decisions, tasks and
+[Output Switch plan](../archived/2026-11-01-output-switch.md) for contracts, decisions, tasks and
 validation. Implementation and automated checks are complete. Local build:
 `C:\code\audiorouter\.worktrees\output-switch\src-tauri\target\debug\audiorouter-shell.exe`
 (worker and CLI sidecars are beside it). Local commit `834a327d` is on the
@@ -1611,7 +2627,7 @@ graph planning/commit path.
   it. Keep CAP-10
   overlap detection on the open list.
 - Next: PR #59 was merged by the owner on 2026-10-22. The owner selected Sound
-  Check (#10), now tracked in [Wave Link parity](wave-link-parity.md). The owner
+  Check (#10), now tracked in [Wave Link parity](../archived/2026-11-01-wave-link-parity-first-round.md). The owner
   also reported occupied Advanced EQ inputs should add a Mixer rather than
   replace the existing microphone; the fix and the updated Sound Check
   comparison row are in PR #60, opened at the owner's explicit request on
@@ -1634,7 +2650,7 @@ approval. PR #59 was eventually reopened and merged after owner testing.
 
 ## Wave Link parity, first round — 2026-10-22, owner request
 
-Tracked in its own plan, [Wave Link parity](wave-link-parity.md): level
+Tracked in its own plan, [Wave Link parity](../archived/2026-11-01-wave-link-parity-first-round.md): level
 target zone on the Meter (UI-21) and hidden devices in pickers (UI-22), both
 UI-only. The candidate list is in
 [Wave Link parity candidates](../future/wave-link-parity.md).
@@ -4368,7 +5384,7 @@ costs and phases in the [driver track](../future/M03-driver-signing.md).
   and fmt are clean. The tests were not run here (they need Windows), and
   the test binary does not link in the container (`-lSwdevice` is
   missing). The typed method table was not done. Module list in the
-  [review](../future/code-review-2026-10-07.md#p2-1-the-control-plane-is-one-21500-line-file).
+  [review](../archived/2026-10-07-repository-code-review.md#p2-1-the-control-plane-is-one-21500-line-file).
   Next action: a Windows CI run of `cargo test -p audiorouter-control`.
 
 - **P2-7 (DSP loops).** Engine block kernels (fixed delay, gain ramp,
@@ -4434,7 +5450,7 @@ Rollback: revert the commit.
   unmaintained rust-unic advisories in `src-tauri` are ignored until
   2027-01-07 (needs a Tauri update checked on Windows). Local: both
   `cargo deny` runs and all three audits pass. Details in the
-  [review](../future/code-review-2026-10-07.md#p2-4-dependency-and-supply-chain-checks-are-missing).
+  [review](../archived/2026-10-07-repository-code-review.md#p2-4-dependency-and-supply-chain-checks-are-missing).
   Next action: first CI run of the `supply-chain` job.
 - **P2-8 coverage and soak:** nightly/manual `quality.yml` (Windows):
   `cargo llvm-cov` and Vitest coverage (not gated), a 20-minute engine soak

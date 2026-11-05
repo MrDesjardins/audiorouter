@@ -61,7 +61,11 @@ export function DiscordSetup({
               In Discord, open User Settings › Voice &amp; Video and set Input Device to <strong>{added.name}</strong>.
               <CopyName name={added.name} />
             </li>
-            <li>Join a voice channel. The Discord card below turns Ready when Discord hears your processed voice.</li>
+            <li>Local signal is not yet verified: make sound and check fresh route meters after Play.</li>
+            <li>
+              Receiving-app audio is not yet verified: open Discord and use its microphone test. The card below checks
+              device selection; Ready alone does not prove Discord hears audio.
+            </li>
           </ol>
           <div className="obs-actions">
             <button type="button" className="secondary" onClick={onClose}>
@@ -73,7 +77,7 @@ export function DiscordSetup({
         <>
           <p className="muted">
             Discord needs a virtual cable: AudioRouter plays your voice into one end, and Discord records the other. No
-            VB-Cable is installed yet.
+            active paired cable is available. Check Virtual Cables for missing, disabled or disconnected endpoints.
           </p>
           <div className="obs-actions">
             <button type="button" className="primary" onClick={onOpenVirtualCables}>
@@ -107,6 +111,11 @@ export function DiscordSetup({
               ))}
             </select>
           </label>
+          <p className="muted">
+            {chosenCable
+              ? `AudioRouter plays into ${chosenCable.input.name} (playback end). In Discord choose ${chosenCable.output.name} (recording end). Device availability does not verify signal.`
+              : "Choose an available paired cable before continuing."}
+          </p>
           <label className="discord-setup-field">
             <span>Voice cable</span>
             <select

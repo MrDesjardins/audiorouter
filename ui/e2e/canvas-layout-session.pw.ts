@@ -24,7 +24,7 @@ test("group settings, tool sizes and layout stay in their own session", async ({
   await expect
     .poll(() => page.getByTestId("rf__node-voice").evaluate((element) => (element as HTMLElement).offsetWidth))
     .toBe(540);
-  await expect(page.getByRole("region", { name: "Selection layout" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /items selected$/ })).toHaveCount(0);
 });
 
 test("wide media tools share sizes without clipping and connectors follow tool resizing", async ({ page }) => {

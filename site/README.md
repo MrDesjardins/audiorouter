@@ -10,6 +10,11 @@ metadata is `guide-content/recordings.json`; videos/posters are in
 `assets/tool-guides/`. The exhaustive property inventory is tracked separately
 in `tools/site/tool-guide-property-manifest.json` and is not yet complete.
 
+Each tool page groups its sections into tabs (Overview, Settings, Videos,
+Examples & fixes). The Videos tab has one player and a clip list, so a page
+loads a single poster and no video until a reader picks a clip. `guides.js`
+opens the right tab for any `#anchor`; without script every section shows.
+
 Rebuild on Windows with Edge, ffmpeg and the pinned Rust toolchain installed:
 
 1. From the repository root, run `node tools/site/render-tool-guide-fixtures.mjs`.
@@ -40,6 +45,30 @@ plugin configuration overviews silent, and qualify every audible change with
 the production renderer. Site deployment remains the normal human merge step.
 
 ## Publish
+
+### Content Security Policy
+
+GitHub Pages does not provide custom response-header configuration. Every HTML
+page instead includes an early, enforced CSP meta tag. Run
+`node site/generate-csp.mjs` after regenerating pages; `--check` detects drift.
+Deployment applies it after the other generators, and website CI checks it.
+The policy permits local scripts, styles and media, Google Fonts, the GitHub
+release API, YouTube embeds and the GitHub sponsor button. Inline JavaScript, eval, object embeds, base
+URLs and form submissions are blocked. Inline CSS remains allowed because the
+guides use style attributes and dynamic styles; this is not a strict style CSP.
+
+This does **not** add an HTTP `Content-Security-Policy` header or clear a scanner
+that specifically checks response headers. Fully addressing that finding needs
+a configurable host or an HTTPS reverse proxy in front of Pages. At that layer,
+send the policy exported by `generate-csp.mjs` plus `frame-ancestors 'none'` as
+the response header on all HTML responses (including error pages). That directive
+cannot work in a meta tag. Hosting/DNS changes need an owner decision and access
+to that service; adding `_headers` to Pages would have no effect. The
+step-by-step plan for putting Cloudflare in front of GitHub Pages (DNS move,
+headers, caching, purge on deploy, rollback) is
+[Website behind Cloudflare](../docs/plans/future/website-cloudflare.md).
+After deployment, verify `curl.exe -I https://audiorouter.org/` and nested guide
+URLs, then exercise downloads, releases, fonts, YouTube and guide playback.
 
 The `pages.yml` workflow deploys the contents of this folder to GitHub Pages
 after changes reach `main`, and supports manual runs. In the repository, open

@@ -4,7 +4,9 @@
 //! shows the median time per quantum and its share of the 2.67 ms quantum
 //! budget. A tool that uses more than a few percent alone, or a route that
 //! nears the budget, will crackle on slower machines. Optional filter:
-//! `cargo bench -p audiorouter-engine --bench realtime -- Denoise`.
+//! `cargo bench -p audiorouter-engine --bench realtime -- Denoise`. The
+//! "(silent tail)" line is the same tool in silence after a loud tone; a tail
+//! much slower than the voice line means subnormal values in its state.
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
@@ -163,6 +165,53 @@ fn measure(set: &CompiledPathSet) -> Duration {
     samples[samples.len() / 2]
 }
 
+/// Silent quanta after the loud tone: about 16 s, long enough for decaying
+/// filter and delay state to reach subnormal values if it is `f32`.
+const SILENT_QUANTA: usize = 6_000;
+
+/// Median time per quantum over the last thousand quanta of silence that
+/// follows a loud tone. Subnormal values in decaying state slow the
+/// arithmetic many times, and no thread sets flush-to-zero, so a tool whose
+/// tail is much slower than its voice time needs a flush (review 2026-11-01,
+/// P3-1).
+fn measure_silent_tail(set: &CompiledPathSet) -> Duration {
+    let path = &set.paths()[0];
+    let loud = (0..64)
+        .map(|quantum| {
+            let mut block = voice_block(quantum);
+            for channel in 0..2 {
+                for sample in block.channel_mut(channel).unwrap() {
+                    *sample *= 5.0;
+                }
+            }
+            vec![block]
+        })
+        .collect::<Vec<_>>();
+    let silence = vec![AudioBlock::new(2, FRAMES).unwrap()];
+    let mut scratch = AudioBlock::new(path.mixer_channels(), FRAMES).unwrap();
+    let mut output = AudioBlock::new(2, FRAMES).unwrap();
+    for quantum in 0..WARM_UP_QUANTA {
+        path.process(
+            &loud[quantum % loud.len()],
+            &mut scratch,
+            &mut [&mut output],
+        )
+        .unwrap();
+    }
+    let mut samples = Vec::with_capacity(1_000);
+    for quantum in 0..SILENT_QUANTA {
+        let start = Instant::now();
+        path.process(black_box(&silence), &mut scratch, &mut [&mut output])
+            .unwrap();
+        if quantum >= SILENT_QUANTA - 1_000 {
+            samples.push(start.elapsed());
+        }
+        black_box(&output);
+    }
+    samples.sort_unstable();
+    samples[samples.len() / 2]
+}
+
 fn report(name: &str, median: Duration) {
     let budget = Duration::from_secs_f64(FRAMES as f64 / SAMPLE_RATE);
     println!(
@@ -184,7 +233,12 @@ fn main() {
     for &kind in TOOLS {
         let name = format!("{kind:?}");
         if wanted(&name) {
-            report(&name, measure(&chain_route(&name, &[kind])));
+            let route = chain_route(&name, &[kind]);
+            report(&name, measure(&route));
+            report(
+                &format!("{name} (silent tail)"),
+                measure_silent_tail(&route),
+            );
         }
     }
     // 32 tools in one route: every tool twice, cycling.

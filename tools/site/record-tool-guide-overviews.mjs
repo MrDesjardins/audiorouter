@@ -555,6 +555,25 @@ for (const { tool, render } of selected) {
             );
         }
         if (frame === (family ? 76 : 60)) await inspector.evaluate((e) => (e.scrollTop = 0));
+      } else if (["networkSend", "networkReceive"].includes(tool.kind)) {
+        // Public example only: never capture a real user's pairing key.
+        if (frame === 24) {
+          const key = inspector.getByLabel("Pairing key", { exact: true });
+          await key.scrollIntoViewIfNeeded();
+          await key.fill("EXAMPLE-ONLY-PAIRING-KEY");
+        }
+        if (frame === 48)
+          await inspector.getByTestId("network-pairing-note").scrollIntoViewIfNeeded();
+        if (frame === 76) await inspector.evaluate((e) => (e.scrollTop = 0));
+      } else if (tool.kind === "plugin") {
+        if (frame === 24) {
+          const allowed = inspector.getByRole("checkbox", { name: "Allow unchanged audio", exact: true });
+          await allowed.scrollIntoViewIfNeeded();
+          await allowed.check();
+        }
+        if (frame === 60)
+          await inspector.getByRole("checkbox", { name: "Allow unchanged audio", exact: true }).uncheck();
+        if (frame === 76) await inspector.evaluate((e) => (e.scrollTop = 0));
       } else if (tool.kind === "applicationCapture") {
         if (frame === 22) {
           await page.getByRole("button", { name: /Choose an application source/ }).click();

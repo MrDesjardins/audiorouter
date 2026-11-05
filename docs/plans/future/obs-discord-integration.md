@@ -161,7 +161,7 @@ recorded previous values.
 
 Owner decision 2026-10-24: after 0.0.22, not before it. Started
 2026-10-24 on `feature/apps-inventory-thread`; see
-[the active plan](../active/current.md#application-inventory-thread-2026-10-24-owner-request).
+[the active plan](../archived/2026-11-01-maintenance-0.0.13-to-0.0.26.md#application-inventory-thread-2026-10-24-owner-request).
 
 `apps.list` enumerates processes and their audio sessions synchronously on
 the backend's control thread (`dispatch_apps_list` in

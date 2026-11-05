@@ -73,6 +73,18 @@ flair, keep "open source" in the title and put the GitHub link first.
 >
 > I'd love feedback on what's confusing when you first open it.
 
+## Post 3: r/windowsapps (2026-11-01)
+
+Status: posted by the owner on 2026-11-01,
+<https://www.reddit.com/r/windowsapps/comments/1xlmzzv/audiorouter_free_open_source_visual_audio_routing/>.
+This is the third community post in 12 days (r/software 2026-10-21,
+r/vibecoding 2026-10-30), so it fills this week's two-post limit with the
+r/vibecoding post. Reddit blocks automated reading, so the post text, comments
+and votes were not recorded here; the owner adds them, or pastes them for an
+agent to record. Next: answer comments for the first 2–3 hours, then record
+48-hour numbers (stars, `reddit.com` referrers, v0.0.24+ downloads) in the
+[results table](marketing-vibecoding-2026-10-30.md#evidence-fill-in).
+
 ## Next: r/Windows11 Sunday thread
 
 Status: not posted. The owner confirmed that r/Windows11 only allows this

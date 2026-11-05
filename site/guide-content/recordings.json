@@ -1143,7 +1143,7 @@
       "title": "Every setting",
       "video": "assets/tool-guides/networkSend-overview.mp4",
       "poster": "assets/tool-guides/networkSend-overview.jpg",
-      "description": "A silent tour of the Network Send Properties panel. It scrolls through every setting, then returns to the top."
+      "description": "A silent tour of the Network Send Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
     }
   ],
   "networkReceive": [
@@ -1151,7 +1151,7 @@
       "title": "Every setting",
       "video": "assets/tool-guides/networkReceive-overview.mp4",
       "poster": "assets/tool-guides/networkReceive-overview.jpg",
-      "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+      "description": "A silent tour of the Network Receive Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
     }
   ],
   "plugin": [
@@ -1159,7 +1159,7 @@
       "title": "Every setting",
       "video": "assets/tool-guides/plugin-overview.mp4",
       "poster": "assets/tool-guides/plugin-overview.jpg",
-      "description": "A silent tour of the VST Plugin Properties panel. It scrolls through every setting, then returns to the top."
+      "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
     }
   ],
   "group": [

@@ -1,5 +1,31 @@
 # AudioRouter development quickstart
 
+## UX branch behavior (pending packaged qualification)
+
+Switching sessions asks before stopping running routes and explains the effect
+on recordings. Cancel keeps the current session and audio. Status setup findings
+offer Open affected tool; findings in another session use the same switch
+confirmation. Save or discard a draft before following a cross-session finding.
+
+Header Play controls the route; individual source Play controls that source.
+A verified temporary start is labelled Draft preview. Save keeps graph changes;
+Session → Export saved version exports the saved route and excludes unsaved
+edits. Getting started offers goal guidance and separates available devices,
+local meter checks and verification in the receiving app. Workbench tabs support
+Left/Right arrows and Home/End; Tab enters the selected panel.
+
+The UI quality review branch improves dark/light contrast and keeps workbench
+tab words intact as the panel narrows. If tool search finds no built-in match,
+use **Clear tool search** to restore the library. The floating unfed-route
+warning has **Dismiss route warning**; dismissing it changes no audio or layout,
+and a different affected-node set can show a new warning. Loading and reconnect
+screens retain the saved-session boundary rather than offering a demo graph.
+See the [UI review criteria and evidence](../plans/active/ui-quality-review.md)
+for current coverage and remaining work; the 9/10 goal is still in progress.
+
+These changes are on the UX development branch. Their packaged, visual and
+attended audio checks remain open in the active plan.
+
 Use Tools → **Group** to add a named, rounded visual background. Properties
 edits its color, caption font size (18 px by default), and opacity (5% by
 default, with a 1–100% integer slider). Drag its caption or background to move
@@ -399,9 +425,11 @@ through firewall* and make sure AudioRouter is allowed on **Private**
 networks, and that your network is set to Private, not Public.
 
 The stream is uncompressed 48 kHz float audio (about 3 Mbit/s for stereo).
-Pairing stops other devices from injecting or replaying audio, but the audio
-is **not encrypted**: anyone on the same network can still listen to it. Use
-it only on a network you trust. The pairing key is saved in the session (and
+Pairing encrypts and authenticates audio and blocks replay after receiver
+restart. Update AudioRouter on both computers together; old paired senders
+are refused. Without a pairing key, anyone on the network can listen or fake
+the sender's address. Use a trusted local network and **Generate** a strong
+key. The pairing key is saved in the session (and
 in an exported session bundle), never in AudioRouter's logs or diagnostics;
 treat a shared bundle like the key itself. On Wi-Fi, raise
 **Buffer (ms)** on the receiver (for example to 80) if you hear gaps; the
@@ -808,6 +836,33 @@ device from the **Loopback** entries of the capture list, and press Play. Each
 speaker is placed around your head with a measured dummy head (MIT KEMAR); the
 rest of the route stays stereo. A 2-channel device is refused with a message
 naming the node. Changing the mode while playing needs Stop and Play.
+
+## Checking your setup
+
+**Status → Setup check** compares every saved session with the audio devices
+Windows offers right now and lists what does not fit, each with a fix:
+
+- **Problem:** Play will be refused or the audio loops. An output device that
+  is not stereo (a cable set to 7.1 is fine for a Surround input but not as an
+  output), a Surround input on a device that is not 5.1/7.1, a device that is
+  unplugged or got a new ID after a driver update, or a route whose output
+  returns to its own input.
+- **Warning:** two sessions that would send audio into each other, for example
+  one plays into CABLE-B while the other records CABLE-B and plays back into
+  the cable the first one records.
+- **Tip:** a virtual cable not at 48 kHz.
+
+A device is judged by how your sessions use it, so the same 7.1 cable can be
+correct in one place and wrong in another. The check runs after connection
+and after devices, saved sessions or playing sessions change, even with Status closed;
+**Check again** runs it now. It checks saved routes, not unsaved drafts.
+A red dot on Status indicates problem findings. A stopped audio engine is
+shown as **Stopped**, which is normal before Play. The check adds no new Play
+blocker: Play separately validates the route it starts. It reads
+only: change the device in Windows Sound settings or in the node's
+Properties. It cannot see settings inside other apps (a game's speaker setup;
+Discord's devices are on the **Apps** tab). Assistants use the `check_setup`
+MCP tool and scripts call `system.checkSetup`.
 
 ## Properties status and timing
 

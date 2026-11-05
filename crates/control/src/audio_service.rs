@@ -89,6 +89,26 @@ impl AudioServiceStats {
 }
 
 impl ControlPlane {
+    /// Keep the original connection available to service passes while bulk
+    /// SQLite work uses its own connection on a scoped helper. Opening that
+    /// connection is itself part of the background work.
+    pub(crate) fn with_storage_worker<T: Send>(
+        &mut self,
+        work: impl FnOnce(&Storage) -> Result<T, ControlError> + Send,
+    ) -> Result<T, ControlError> {
+        let target = self
+            .storage
+            .as_ref()
+            .ok_or_else(|| {
+                ControlError::InvalidRequest("persistent backend storage is unavailable".into())
+            })?
+            .worker_target();
+        self.while_servicing_audio(move || {
+            let storage = target.open().map_err(storage_error)?;
+            work(&storage)
+        })
+    }
+
     /// Run self-contained work (it must not borrow the plane) on a helper
     /// thread while this thread keeps servicing running native audio every
     /// [`AUDIO_SERVICE_PASS_DURING_WORK`]. Use it for long, pure work inside a

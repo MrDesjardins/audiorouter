@@ -1,3 +1,24 @@
+# Soundboard tool and sound library — execution record (2026-10-29 to 2026-10-31)
+
+**Archived 2026-11-01 (owner: "sound board is done").** The tool, its API,
+MCP, Stream Deck Sound key, the 105-sound bundled library, the picker, file
+drops and the guide pages shipped in the published
+[v0.0.26 prerelease](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.26)
+([release record](2026-10-31-release-0.0.26.md)). The plan below is kept
+verbatim; its evidence files stay in `../active/evidence/`.
+
+Known limitations still open (not waived; tracked in the
+[active plan](../active/current.md#open-owner-gates)): native Explorer drop
+into the installed exe, the live audio continuity run with a Soundboard,
+a fresh-install run of the installer, an attended Stream Deck test of the
+Sound key modes, and a listening review of every library sound. A set
+picker is not built: set-only slots play, but sets are assigned through
+saved graphs or the API. Rollback: revert the Soundboard commits; no
+migration. Review follow-ups for the Soundboard (P2-8, per-session memory
+budget) are in the [code-review plan](../active/code-review-fixes.md).
+
+---
+
 # Active plan: Soundboard tool and sound library (2026-10-29)
 
 Owner request, 2026-10-29: build a Soundboard tool (nine sounds, canvas buttons,
@@ -539,7 +560,7 @@ Windows validation (Rust 1.96.0, Node 22.22.3):
   Vite server gives a clean exit. Final run took 17.5 s. Three themes each
   retain 24 bounds samples covering idle, playback/progress, overlapping sounds,
   drop highlight and return to idle, with no moved bounds. JSON and inspected
-  screenshots are in [soundboard-followups](evidence/soundboard-followups/).
+  screenshots are in [soundboard-followups](../active/evidence/soundboard-followups/).
   NO_COLOR/FORCE_COLOR and React Flow attribution notices were emitted by the
   harness; no attribution or terminal-colour settings were changed.
 
@@ -570,7 +591,7 @@ Passing: family/guard tests (16), property coverage (251 rows: 206 recorded,
 guide links/allowlists, social generation check and docs validation (218 files /
 1164 links before this final note). Firefox real pointer-click playback passes
 all five Soundboard clips, with nonzero measured output for the audible demo;
-see [results](evidence/soundboard-followups/firefox.json). Restricted Firefox
+see [results](../active/evidence/soundboard-followups/firefox.json). Restricted Firefox
 discarded the browsing context; outside that sandbox it passed once the static
 server on 4187 was started. `GUIDE_FIREFOX_PORT=9348` isolates its BiDi port
 from concurrent guide work. No firewall or installed browser setting changed.

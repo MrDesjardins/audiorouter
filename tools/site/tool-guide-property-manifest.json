@@ -12,7 +12,7 @@
   ],
   "nodeKindCount": 37,
   "guideKindCount": 38,
-  "propertyCount": 251,
+  "propertyCount": 252,
   "tools": [
     {
       "kind": "gain",
@@ -6595,7 +6595,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot1Mode",
@@ -6619,7 +6624,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot2Mode",
@@ -6652,7 +6662,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot3Mode",
@@ -6685,7 +6700,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot4Mode",
@@ -6718,7 +6738,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot5Mode",
@@ -6751,7 +6776,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot6Mode",
@@ -6784,7 +6814,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot7Mode",
@@ -6817,7 +6852,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot8Mode",
@@ -6850,7 +6890,12 @@
           "minimum": null,
           "maximum": null,
           "default": "once",
-          "options": null,
+          "options": [
+            "once",
+            "loop",
+            "toggle",
+            "hold"
+          ],
           "dynamic": false,
           "nonAudibleReason": null,
           "recordingId": "soundboard--slot9Mode",
@@ -7005,7 +7050,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/networkSend-overview.mp4",
               "poster": "assets/tool-guides/networkSend-overview.jpg",
-              "description": "A silent tour of the Network Send Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Network Send Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
             }
           ],
           "status": "exempted"
@@ -7027,7 +7072,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/networkSend-overview.mp4",
               "poster": "assets/tool-guides/networkSend-overview.jpg",
-              "description": "A silent tour of the Network Send Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Network Send Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
             }
           ],
           "status": "exempted"
@@ -7049,7 +7094,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/networkSend-overview.mp4",
               "poster": "assets/tool-guides/networkSend-overview.jpg",
-              "description": "A silent tour of the Network Send Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Network Send Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
             }
           ],
           "status": "exempted"
@@ -7080,7 +7125,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/networkReceive-overview.mp4",
               "poster": "assets/tool-guides/networkReceive-overview.jpg",
-              "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Network Receive Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
             }
           ],
           "status": "exempted"
@@ -7102,7 +7147,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/networkReceive-overview.mp4",
               "poster": "assets/tool-guides/networkReceive-overview.jpg",
-              "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Network Receive Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
             }
           ],
           "status": "exempted"
@@ -7124,7 +7169,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/networkReceive-overview.mp4",
               "poster": "assets/tool-guides/networkReceive-overview.jpg",
-              "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Network Receive Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
             }
           ],
           "status": "exempted"
@@ -7146,7 +7191,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/networkReceive-overview.mp4",
               "poster": "assets/tool-guides/networkReceive-overview.jpg",
-              "description": "A silent tour of the Network Receive Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Network Receive Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream."
             }
           ],
           "status": "exempted"
@@ -7177,7 +7222,29 @@
               "title": "Every setting",
               "video": "assets/tool-guides/plugin-overview.mp4",
               "poster": "assets/tool-guides/plugin-overview.jpg",
-              "description": "A silent tour of the VST Plugin Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "passThroughAllowed",
+          "label": "Allow unchanged audio",
+          "type": "boolean",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": false,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Allow unchanged audio works with a plugin installed on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "plugin--passThroughAllowed",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/plugin-overview.mp4",
+              "poster": "assets/tool-guides/plugin-overview.jpg",
+              "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
             }
           ],
           "status": "exempted"
@@ -7199,7 +7266,7 @@
               "title": "Every setting",
               "video": "assets/tool-guides/plugin-overview.mp4",
               "poster": "assets/tool-guides/plugin-overview.jpg",
-              "description": "A silent tour of the VST Plugin Properties panel. It scrolls through every setting, then returns to the top."
+              "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
             }
           ],
           "status": "exempted"

@@ -38,9 +38,8 @@ export default defineConfig({
         // chunk. This makes the packaged shell's startup payload explicit
         // and prevents a single entry chunk from crossing the warning
         // threshold as the editor grows.
-        // React is its own chunk for the same reason. The rarely used panels
-        // (API, MCP, Logs) total about 10 kB, so lazy-loading them would not
-        // shrink startup: the shell loads every chunk from local disk anyway.
+        // React is its own chunk for the same reason. Workbench panels use
+        // dynamic imports; shared editor code stays in the application chunk.
         // Vite 8 (Rolldown) accepts only the function form.
         manualChunks(id: string) {
           if (/[\\/]node_modules[\\/]@xyflow[\\/]/.test(id)) return "xyflow-vendor";

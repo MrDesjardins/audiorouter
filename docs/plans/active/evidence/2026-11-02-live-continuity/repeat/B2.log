@@ -1,0 +1,32 @@
+
+running 1 test
+tone render buffer: 2400 frames
+prepared: {"branchNodeIds":["destination"],"generation":1,"pathCount":1,"renderEndpointIds":["{0.0.0.00000000}.{7ebf5c2d-9a8e-4056-8dc9-277cb59ec3e8}"],"sessionId":"continuity","sourceNodeIds":["source"],"state":"configured-stopped"}
+started: {"generation":1,"preview":false,"runtime":"native","savedRevision":0,"sessionId":"continuity","state":"running"}
+service phase maxima (wait, dispatch, pump): [3.166ms, 753.8µs, 159.7µs]
+chain: [Gain]; audio service: {"active":true,"lateGaps":0,"maxGapMicros":3176,"passes":19704}; output underruns: 1
+  "source" timing={"delayMs":12.355084200562697} plugin=null network=null processor=null
+  "tool-0" timing={"delayMs":0.0,"processingUsAvg":0.5916095455699416,"processingUsMax":101.7} plugin=null network=null processor=null
+  "destination" timing={"delayMs":22.610291554161133} plugin=null network=null processor=null
+reference (CABLE Output): 20.0 s analysed, peak 0.0500, 2 glitches, 1 silent runs (550 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [2, 0, 0, 0]
+  at    1.770 s residual 0.74x amplitude
+  at    1.781 s residual 0.74x amplitude
+routed result (CABLE-B Output): 20.0 s analysed, peak 0.0500, 2 glitches, 1 silent runs (550 samples), 0 WASAPI discontinuity flags
+  glitches per 5 s: [2, 0, 0, 0, 0]
+  at    1.898 s residual 0.74x amplitude
+  at    1.909 s residual 0.74x amplitude
+
+thread 'live::live_backend_service_keeps_a_routed_tone_continuous' (77748) panicked at crates\transport\tests\live_audio_continuity.rs:1213:9:
+the harness tone itself was discontinuous; the result is inconclusive
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+live::live_backend_service_keeps_a_routed_tone_continuous --- FAILED
+
+failures:
+
+failures:
+    live::live_backend_service_keeps_a_routed_tone_continuous
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 22.14s
+
+error: test failed, to rerun pass `-p audiorouter-transport --test live_audio_continuity`

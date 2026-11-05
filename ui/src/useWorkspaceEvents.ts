@@ -58,7 +58,7 @@ export function useWorkspaceEvents({
   eventCursor: RefObject<{ backendEpoch: number; sequence: number }>;
   setSnapshotState: Dispatch<SetStateAction<UiSnapshotState>>;
   /** Adopts an active-session change made elsewhere (MCP, Stream Deck). */
-  followBackendActiveSession: (sessionId: string) => void;
+  followBackendActiveSession: (sessionId: string) => boolean;
   setActionMessage: Dispatch<SetStateAction<string | null>>;
   refreshApplications: () => void;
   refreshDevices: (options?: { announce?: boolean }) => void;
@@ -105,7 +105,9 @@ export function useWorkspaceEvents({
         const selectionChangedEvent = result.events.find((event) => event.category === "session.selectionChanged");
         const activeSession =
           selectionChangedEvent && backend.getActiveSession ? await backend.getActiveSession() : null;
-        if (activeSession?.sessionId) follow(activeSession.sessionId);
+        if (!active) return;
+        const adoptedSessionId =
+          activeSession?.sessionId && follow(activeSession.sessionId) ? activeSession.sessionId : session.id;
         const bridgeEvent = result.events.find(
           (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
         );
@@ -122,7 +124,7 @@ export function useWorkspaceEvents({
           );
         }
         if (result.resyncRequired || result.events.length > 0) {
-          const nextState = await snapshotCache.refresh(backend, activeSession?.sessionId ?? session.id);
+          const nextState = await snapshotCache.refresh(backend, adoptedSessionId);
           if (active) {
             updateSnapshot(nextState);
             refreshInventories();

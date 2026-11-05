@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Setup check.** Status lists device setups Play would refuse (a non-stereo
+  output, a Surround input on a stereo device, a missing device), feedback
+  loops inside one session or between two, and cables not at 48 kHz, each with
+  a fix. Also available as `system.checkSetup` and the MCP tool `check_setup`.
+
 ## 0.0.26 — 2026-10-31 (unsigned experimental preview)
 
 - Soundboard source meters and connection animation follow playback; random sets

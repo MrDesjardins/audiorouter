@@ -134,7 +134,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const offsets = [await top(below)];
     await editor.getByRole("button", { name: "Generate" }).click();
     await expect(key).toHaveValue(/^[A-HJ-NP-Z2-9]{24}$/);
-    await expect(note).toHaveText("Paired: only audio sent with this key is played.");
+    await expect(note).toHaveText(
+      "Paired: only encrypted audio sent with this key is played. Update both computers together.",
+    );
     offsets.push(await top(below));
     await editor.screenshot({ path: testInfo.outputPath(`network-pairing-paired-${theme}.png`) });
     await key.fill("short");
@@ -161,7 +163,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       "Not paired: anyone on your network can listen to this stream or send audio in its place.",
     );
     await send.getByRole("button", { name: "Generate" }).click();
-    await expect(send.getByTestId("network-pairing-note")).toContainText("The audio is not encrypted");
+    await expect(send.getByTestId("network-pairing-note")).toContainText("audio is encrypted");
     await send.screenshot({ path: testInfo.outputPath(`network-pairing-send-${theme}.png`) });
   });
 }

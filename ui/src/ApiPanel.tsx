@@ -87,7 +87,7 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
     }
   };
   return (
-    <section className="workbench-page" role="tabpanel" aria-label="API">
+    <section className="workbench-page" aria-label="API">
       <p className="eyebrow">Local HTTP control</p>
       <h2>API</h2>
       <p className="muted">

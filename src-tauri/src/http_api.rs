@@ -253,6 +253,14 @@ fn fail(stream: &mut TcpStream, status: u16, message: &str) -> std::io::Result<(
     );
     Ok(())
 }
+/// The length of the request head including its blank line, once it has
+/// arrived.
+fn header_end(bytes: &[u8]) -> Option<usize> {
+    bytes
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .map(|start| start + 4)
+}
 fn token_matches(actual: &str, token: &str) -> bool {
     let expected = format!("Bearer {token}");
     actual.len() == expected.len()
@@ -279,15 +287,28 @@ fn handle(
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
     let started = Instant::now();
+    // Read in chunks (it was one system call per byte). Whatever arrives
+    // after the blank line is the start of the body.
     let mut bytes = Vec::with_capacity(1024);
-    while !bytes.ends_with(b"\r\n\r\n") {
+    let mut chunk = [0u8; 4096];
+    let header_end = loop {
+        if let Some(end) = header_end(&bytes) {
+            break end;
+        }
         if bytes.len() >= MAX_HEADERS || started.elapsed() > Duration::from_secs(2) {
             return fail(stream, 400, "Request headers too large or too slow");
         }
-        let mut byte = [0];
-        stream.read_exact(&mut byte)?;
-        bytes.push(byte[0]);
+        let room = (MAX_HEADERS - bytes.len()).min(chunk.len());
+        let count = stream.read(&mut chunk[..room])?;
+        if count == 0 {
+            return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        bytes.extend_from_slice(&chunk[..count]);
+    };
+    if header_end > MAX_HEADERS {
+        return fail(stream, 400, "Request headers too large or too slow");
     }
+    let buffered_body = bytes.split_off(header_end);
     let Ok(headers) = std::str::from_utf8(&bytes) else {
         return fail(stream, 400, "Invalid HTTP headers");
     };
@@ -414,7 +435,8 @@ fn handle(
             stream.flush()?;
         }
         let mut body = vec![0u8; length];
-        let mut offset = 0;
+        let mut offset = buffered_body.len().min(length);
+        body[..offset].copy_from_slice(&buffered_body[..offset]);
         while offset < length {
             if started.elapsed() > Duration::from_secs(2) {
                 return fail(stream, 400, "Request body deadline exceeded");
@@ -743,6 +765,40 @@ mod tests {
         .err()
         .unwrap()
         .contains("Choose another port"));
+    }
+    /// Headers are read in chunks (they were read one byte per system call):
+    /// a head split across packets, with the blank line itself split, still
+    /// parses; body bytes that arrive with the head are kept; a head over
+    /// the limit is refused (review 2026-11-01, P3-1).
+    #[test]
+    fn http_reads_headers_in_chunks_and_keeps_buffered_body_bytes() {
+        let (api, _) = fixture();
+        let body = json!({}).to_string();
+        let request = format!("POST /api/v1/sessions/summary HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", api.port, api.token, body.len());
+        let split = request.find("\r\n\r\n").unwrap() + 2;
+        let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, api.port)).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        stream.set_nodelay(true).unwrap();
+        for part in [&request[..20], &request[20..split], &request[split..]] {
+            stream.write_all(part.as_bytes()).unwrap();
+            stream.flush().unwrap();
+            std::thread::sleep(Duration::from_millis(30));
+        }
+        let mut result = String::new();
+        stream.read_to_string(&mut result).unwrap();
+        assert!(result.starts_with("HTTP/1.1 200"), "{result}");
+        assert!(result.contains("desktop-session"), "{result}");
+
+        let oversized = format!(
+            "GET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nX-Padding: {}\r\n\r\n",
+            api.port,
+            "a".repeat(MAX_HEADERS)
+        );
+        assert!(exchange(api.port, &oversized).starts_with("HTTP/1.1 400"));
+        assert_eq!(header_end(b"GET / HTTP/1.1\r\n\r\nbody"), Some(18));
+        assert_eq!(header_end(b"GET / HTTP/1.1\r\n\r"), None);
     }
 
     #[test]

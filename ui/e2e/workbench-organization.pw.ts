@@ -1,6 +1,40 @@
 import { test, expect } from "./browser-test";
 import { DEFAULT_CUSTOM_THEME } from "../src/customTheme";
 import { openAppSettings } from "./workbench";
+
+test("a delayed settings panel leaves playback and the canvas in place", async ({ page }) => {
+  let release!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let requested!: () => void;
+  const loading = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  await page.route(/\/(?:src\/AdvancedWorkbench\.tsx(?:\?|$)|assets\/AdvancedWorkbench-[^/]+\.js$)/, async (route) => {
+    requested();
+    await ready;
+    await route.fallback();
+  });
+  try {
+    await page.goto("/route-harness.html");
+    await expect(page.getByRole("tab", { name: "Tools", exact: true })).toHaveAttribute("aria-selected", "true");
+    const canvas = page.locator("#signal-flow-panel");
+    const before = await canvas.boundingBox();
+    await page.getByRole("tab", { name: "Advanced", exact: true }).click();
+    await loading;
+    await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+    await expect(page.getByRole("tablist", { name: "Right sidebar" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Tools", exact: true })).toHaveAttribute("aria-selected", "true");
+    expect(await canvas.boundingBox()).toEqual(before);
+    release();
+    await expect(page.getByRole("heading", { name: "Advanced controls", exact: true })).toBeVisible();
+    expect(await canvas.boundingBox()).toEqual(before);
+  } finally {
+    release();
+  }
+});
+
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`focused settings and guided assistant setup in ${theme}`, async ({ page }, info) => {
     await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);

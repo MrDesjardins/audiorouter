@@ -4,7 +4,7 @@
 //! produces identity evidence for a later disposable worker boundary.
 
 use crossbeam_queue::ArrayQueue;
-use memmap2::{MmapMut, MmapOptions};
+use memmap2::{MmapOptions, MmapRaw};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
@@ -4066,6 +4066,15 @@ impl SupervisedWorkerProcess {
 
 const MAX_PLUGIN_PIPELINE_SLOTS: usize = 8;
 
+/// How often the runtime thread re-reads each plugin's delay: every half
+/// second of audio at the worker's rate. One short worker exchange between
+/// frames; the VST3 worker answers it without waiting for its UI thread.
+fn plugin_latency_poll_frames(sample_rate_hz: u32) -> usize {
+    usize::try_from(sample_rate_hz / 2)
+        .unwrap_or(usize::MAX)
+        .max(1)
+}
+
 struct PluginQuantum {
     block: audiorouter_engine::AudioBlock,
 }
@@ -4093,9 +4102,18 @@ pub struct PluginRuntimeBridge {
     /// Each member plugin's own reported delay, in samples, read when the
     /// bridge starts and again after its editor closes.
     plugin_latency: Arc<Vec<AtomicU32>>,
-    /// Set once a single plugin has returned loud input unchanged for a
+    /// Set once the plugin, or a shared VST2 chain as a whole (its input
+    /// against its final output), has returned loud input unchanged for a
     /// couple of seconds and has never changed it (see [`UnchangedAudioWatch`]).
     unchanged_audio: Arc<AtomicBool>,
+    /// Control-plane policy, one flag per member: on a protected path
+    /// (recording device upstream, pass-through not allowed by the user) the
+    /// unchanged verdict silences the plugin instead of only flagging it. A
+    /// chain is silenced as a whole when any member asks for it.
+    silence_unchanged: Arc<Vec<AtomicBool>>,
+    /// Latched by the runtime thread when that policy fires; cleared only by
+    /// [`PluginRuntimeBridge::resume_after_unchanged`] or by lifting the policy.
+    silenced_unchanged: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
     /// Frames per pipeline quantum, for reporting pipeline delay.
     quantum_frames: usize,
@@ -4147,13 +4165,15 @@ impl UnchangedAudioWatch {
     const LOUD: f32 = 0.005;
     /// Below the smallest change a real effect makes, above float noise.
     const SAME: f32 = 1.0e-6;
-    const WINDOW_FRAMES: u32 = 96_000;
+    /// Seconds of loud, unchanged audio before the verdict.
+    const WINDOW_SECONDS: u32 = 2;
 
-    fn new(quantum_frames: usize) -> Self {
+    fn new(quantum_frames: usize, sample_rate_hz: u32) -> Self {
         let quantum_frames = u32::try_from(quantum_frames.max(1)).unwrap_or(u32::MAX);
+        let window_frames = sample_rate_hz.saturating_mul(Self::WINDOW_SECONDS);
         Self {
             unchanged_loud_quanta: 0,
-            required_quanta: (Self::WINDOW_FRAMES / quantum_frames).max(1),
+            required_quanta: (window_frames / quantum_frames).max(1),
             done: false,
         }
     }
@@ -4279,6 +4299,8 @@ impl PluginRuntimeBridge {
                 requests: Arc::clone(&head.requests),
                 plugin_latency: Arc::clone(&head.plugin_latency),
                 unchanged_audio: Arc::clone(&head.unchanged_audio),
+                silence_unchanged: Arc::clone(&head.silence_unchanged),
+                silenced_unchanged: Arc::clone(&head.silenced_unchanged),
                 worker: None,
                 quantum_frames: frames,
                 instance_index,
@@ -4341,6 +4363,15 @@ impl PluginRuntimeBridge {
         let thread_plugin_latency = Arc::clone(&plugin_latency);
         let unchanged_audio = Arc::new(AtomicBool::new(false));
         let thread_unchanged_audio = Arc::clone(&unchanged_audio);
+        let silence_unchanged = Arc::new(
+            (0..members)
+                .map(|_| AtomicBool::new(false))
+                .collect::<Vec<_>>(),
+        );
+        let thread_silence_unchanged = Arc::clone(&silence_unchanged);
+        let sample_rate_hz = worker.sample_rate_hz;
+        let silenced_unchanged = Arc::new(AtomicBool::new(false));
+        let thread_silenced_unchanged = Arc::clone(&silenced_unchanged);
         let requests = Arc::new(Mutex::new(std::collections::VecDeque::<(
             usize,
             BridgeRequest,
@@ -4360,13 +4391,19 @@ impl PluginRuntimeBridge {
                 let _scheduling = ProAudioThread::enter();
                 let mut sequence = 1_u64;
                 let mut samples = vec![0.0_f32; channels * frames];
-                // Single plugins only: a chain's members cannot be told apart.
-                let mut unchanged_watch = (members == 1).then(|| UnchangedAudioWatch::new(frames));
+                // A chain is watched as one unit, its input against its final
+                // output: its members cannot be told apart, and an unlicensed
+                // member that passes audio through must not send the dry voice
+                // on behind a working one (review 2026-11-01, P2-1).
+                let mut unchanged_watch = UnchangedAudioWatch::new(frames, sample_rate_hz);
+                let latency_poll_frames = plugin_latency_poll_frames(sample_rate_hz);
                 let mut input_copy = vec![0.0_f32; channels * frames];
                 // Slider values last delivered to each member. Sending them
                 // again every quantum would undo edits made in the plugin's
                 // own window, so only a changed slider list is sent.
                 let mut sent_parameters: Vec<Vec<ParameterEvent>> = vec![Vec::new(); members];
+                // Frames processed since the plugins' delay was last read.
+                let mut frames_since_latency = 0_usize;
                 while thread_running.load(Ordering::Acquire) {
                     // Serve control requests between frames; the worker
                     // protocol is strictly request/response, so they cannot
@@ -4460,9 +4497,7 @@ impl PluginRuntimeBridge {
                             *sample = 0.0;
                         }
                     }
-                    if unchanged_watch.is_some() {
-                        input_copy.copy_from_slice(&samples);
-                    }
+                    input_copy.copy_from_slice(&samples);
                     let deadline_tick = worker_clock_tick().saturating_add(1_000_000);
                     let frame =
                         match WorkerFrame::new(sequence, deadline_tick, channels as u16, samples) {
@@ -4488,6 +4523,9 @@ impl PluginRuntimeBridge {
                         .collect();
                     let parameters =
                         changed_parameters(&template, &mut sent_parameters, &active_now);
+                    // A bypassed plugin passes audio unchanged on purpose; a
+                    // chain is processing while any member is.
+                    let processing = active_now.iter().any(|active| *active);
                     let mut should_stop = false;
                     let result = if members > 1 {
                         worker.process_chain_with_active(
@@ -4511,18 +4549,29 @@ impl PluginRuntimeBridge {
                                 && result.frame_count() == frames
                                 && quantum.block.copy_from_interleaved(&result.samples).is_ok() =>
                         {
-                            if let Err(quantum) = thread_output.push(quantum) {
-                                let _ = thread_free.push(quantum);
-                            }
-                            // A bypassed plugin passes audio unchanged on purpose.
-                            if let Some(watch) = unchanged_watch
-                                .as_mut()
-                                .filter(|_| thread_active[0].load(Ordering::Acquire))
-                            {
-                                if let Some(unchanged) = watch.observe(&input_copy, &result.samples)
+                            if processing {
+                                if let Some(unchanged) =
+                                    unchanged_watch.observe(&input_copy, &result.samples)
                                 {
                                     thread_unchanged_audio.store(unchanged, Ordering::Release);
+                                    // Protected path: an unlicensed plugin
+                                    // would send the dry voice on. The watch
+                                    // keeps observing the real output, so a
+                                    // later Retry can see whether it recovered.
+                                    if unchanged
+                                        && thread_silence_unchanged
+                                            .iter()
+                                            .any(|flag| flag.load(Ordering::Acquire))
+                                    {
+                                        thread_silenced_unchanged.store(true, Ordering::Release);
+                                    }
                                 }
+                            }
+                            if processing && thread_silenced_unchanged.load(Ordering::Acquire) {
+                                quantum.block.clear();
+                            }
+                            if let Err(quantum) = thread_output.push(quantum) {
+                                let _ = thread_free.push(quantum);
                             }
                             samples = result.samples;
                         }
@@ -4553,6 +4602,33 @@ impl PluginRuntimeBridge {
                     if should_stop {
                         break;
                     }
+                    // A plugin may change its delay while it runs (lookahead
+                    // or oversampling switched in its window). Re-read it
+                    // between frames; the engine reads the atomics, so the
+                    // shown stage and path delay follow (PLUG-05).
+                    frames_since_latency = frames_since_latency.saturating_add(frames);
+                    if frames_since_latency >= latency_poll_frames {
+                        frames_since_latency = 0;
+                        let now = Instant::now();
+                        for (index, slot) in thread_plugin_latency.iter().enumerate() {
+                            if members > 1 && worker.select_instance(index, now).is_err() {
+                                break;
+                            }
+                            if let Ok(samples) = worker.plugin_latency_samples(now) {
+                                slot.store(samples, Ordering::Release);
+                            }
+                        }
+                        thread_health_state
+                            .store(encode_worker_state(worker.state()), Ordering::Release);
+                        if worker.state() != WorkerState::Running {
+                            thread_failed.store(true, Ordering::Release);
+                            if let Some(diagnostic) = worker.failure_diagnostic() {
+                                thread_health_failure_count
+                                    .store(diagnostic.failure_count, Ordering::Release);
+                            }
+                            break;
+                        }
+                    }
                 }
             })
             .map_err(|_| PluginRuntimeBridgeError::ThreadStart)?;
@@ -4571,6 +4647,8 @@ impl PluginRuntimeBridge {
             requests,
             plugin_latency,
             unchanged_audio,
+            silence_unchanged,
+            silenced_unchanged,
             worker: Some(worker_thread),
             quantum_frames: frames,
             instance_index: 0,
@@ -4593,6 +4671,52 @@ impl PluginRuntimeBridge {
     /// without reporting an error, so the UI only suggests checking.
     pub fn passes_audio_unchanged(&self) -> bool {
         self.unchanged_audio.load(Ordering::Acquire)
+    }
+
+    /// Protected-path policy (control plane), for this member: when set, the
+    /// unchanged verdict silences the plugin (a shared chain as a whole)
+    /// until a deliberate resume. Lifting it on the last member that asked
+    /// for it (the user allowed pass-through) also lifts a latched silence.
+    pub fn set_silence_if_unchanged(&self, silence: bool) {
+        if let Some(flag) = self.silence_unchanged.get(self.instance_index) {
+            flag.store(silence, Ordering::Release);
+        }
+        if !self
+            .silence_unchanged
+            .iter()
+            .any(|flag| flag.load(Ordering::Acquire))
+        {
+            self.silenced_unchanged.store(false, Ordering::Release);
+        }
+    }
+
+    /// True while this plugin's output is silenced because it passed
+    /// protected audio through unchanged.
+    pub fn silenced_for_unchanged_audio(&self) -> bool {
+        self.silenced_unchanged.load(Ordering::Acquire)
+    }
+
+    /// Deliberate recovery (Retry). Lets audio through again only when the
+    /// plugin has changed loud audio since it was silenced, so a plugin that
+    /// is still unlicensed never sends the dry voice on. Returns whether the
+    /// plugin now plays.
+    pub fn resume_after_unchanged(&self) -> bool {
+        if !self.silenced_unchanged.load(Ordering::Acquire) {
+            return true;
+        }
+        if self.unchanged_audio.load(Ordering::Acquire) {
+            return false;
+        }
+        self.silenced_unchanged.store(false, Ordering::Release);
+        true
+    }
+
+    /// The delay the plugin itself reports, in samples, without the
+    /// pipeline quanta the engine-facing `latency_samples` adds.
+    pub fn reported_latency_samples(&self) -> u32 {
+        self.plugin_latency
+            .get(self.instance_index)
+            .map_or(0, |samples| samples.load(Ordering::Acquire))
     }
 
     /// Bounded callback counters; output misses include startup warm-up.
@@ -4928,7 +5052,7 @@ impl WorkerProcess {
     ) -> Result<Self, WorkerProcessError> {
         if !matches!(
             mode,
-            "crash" | "hang" | "invalid-output" | "descriptors" | "latency"
+            "crash" | "hang" | "invalid-output" | "descriptors" | "latency" | "latency-steps"
         ) {
             return Err(WorkerProcessError::Protocol(
                 "invalid worker fixture mode".into(),
@@ -6347,10 +6471,51 @@ pub struct SharedAudioMetadata {
 /// File-backed shared memory for one bounded audio slot. The file is an
 /// explicit caller-owned IPC endpoint; this type never chooses a machine-wide
 /// name and never touches audio or plugin state.
+///
+/// The paired process writes the same bytes while this one reads them, so
+/// the mapping is never borrowed as a Rust slice (review 2026-11-01, P2-3):
+/// it is an [`MmapRaw`] reached only through raw pointers. The state word is
+/// atomic; header and samples are copied in atomic, aligned 4-byte words
+/// inside a seqlock. The writer makes the state odd, fences (`Release`),
+/// writes and publishes the next even value (`Release`); the reader loads
+/// the state (`Acquire`), copies, fences (`Acquire`) and compares the state
+/// again, so a copy that overlapped a write is reported as `TornRead`.
 pub struct SharedAudioRegion {
     file: fs::File,
-    map: MmapMut,
+    map: MmapRaw,
     layout: SharedAudioLayout,
+}
+
+/// Stores the 4 little-endian `bytes` at `base + offset`.
+///
+/// # Safety
+/// `base + offset .. base + offset + 4` must lie inside a live mapping and
+/// `offset` must be a multiple of 4 (the mapping is page-aligned).
+unsafe fn store_shared_word(base: *mut u8, offset: usize, bytes: [u8; 4]) {
+    // SAFETY: in bounds and 4-byte aligned per this function's contract.
+    // All concurrent payload accesses use AtomicU32; the reference cannot
+    // outlive this call or the caller-owned mapping.
+    unsafe {
+        std::sync::atomic::AtomicU32::from_ptr(base.add(offset).cast()).store(
+            u32::from_ne_bytes(bytes),
+            std::sync::atomic::Ordering::Relaxed,
+        )
+    }
+}
+
+/// Loads the 4 bytes at `base + offset`, as stored by [`store_shared_word`].
+///
+/// # Safety
+/// As for [`store_shared_word`].
+unsafe fn load_shared_word(base: *const u8, offset: usize) -> [u8; 4] {
+    // SAFETY: in bounds and 4-byte aligned per this function's contract; the
+    // atomic load may observe a concurrent write, which the seqlock check
+    // then reports as a torn read. All writers use the same atomic width.
+    unsafe {
+        std::sync::atomic::AtomicU32::from_ptr(base.add(offset).cast_mut().cast())
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .to_ne_bytes()
+    }
 }
 
 impl SharedAudioRegion {
@@ -6382,7 +6547,9 @@ impl SharedAudioRegion {
         // caller-owned IPC endpoint whose only other user is the paired worker,
         // which maps the same length and never resizes it. `Self` keeps `file`
         // alive with the map.
-        let map = unsafe { MmapOptions::new().len(layout.buffer_len()).map_mut(&file) }
+        let map = MmapOptions::new()
+            .len(layout.buffer_len())
+            .map_raw(&file)
             .map_err(|error| SharedAudioError::Io(error.to_string()))?;
         Ok(Self { file, map, layout })
     }
@@ -6411,82 +6578,145 @@ impl SharedAudioRegion {
         // SAFETY: as in `create`: the existing file was checked to be at least
         // `buffer_len()` bytes, only that length is mapped, and the IPC protocol
         // never truncates or resizes the slot while either side maps it.
-        let map = unsafe { MmapOptions::new().len(layout.buffer_len()).map_mut(&file) }
+        let map = MmapOptions::new()
+            .len(layout.buffer_len())
+            .map_raw(&file)
             .map_err(|error| SharedAudioError::Io(error.to_string()))?;
         Ok(Self { file, map, layout })
     }
 
     pub fn write(&mut self, frame: &WorkerFrame) -> Result<(), SharedAudioError> {
-        let state = self.state() as *const std::sync::atomic::AtomicU64;
-        // SAFETY: `state` points to the 8-byte-aligned seqlock word inside this live
-        // mapping (see `state`), which stays mapped while `self` is borrowed.
-        let current = unsafe { (*state).load(std::sync::atomic::Ordering::Acquire) };
+        use std::sync::atomic::{fence, Ordering};
+        // Checked before the state word changes, so a bad frame never makes
+        // readers see a write in progress.
+        let frame_count = self.layout.validate(frame)?;
+        let state = self.state();
+        let current = state.load(Ordering::Acquire);
         if current & 1 != 0 {
             return Err(SharedAudioError::Busy);
         }
-        // SAFETY: same live, aligned state word as above.
-        unsafe {
-            (*state).compare_exchange(
+        state
+            .compare_exchange(
                 current,
                 current.saturating_add(1),
-                std::sync::atomic::Ordering::Acquire,
-                std::sync::atomic::Ordering::Relaxed,
+                Ordering::Acquire,
+                Ordering::Relaxed,
             )
-        }
-        .map_err(|_| SharedAudioError::Busy)?;
+            .map_err(|_| SharedAudioError::Busy)?;
+        // Keeps every payload store after the odd state becomes visible.
+        fence(Ordering::Release);
+        let base = self.map.as_mut_ptr();
         if current != 0 {
-            let previous = u64::from_le_bytes(self.map[12..20].try_into().unwrap());
+            // SAFETY: offsets 12 and 16 are 4-byte aligned and inside the header
+            // of this live mapping of `buffer_len()` bytes.
+            let previous = unsafe {
+                let low = load_shared_word(base, 12);
+                let high = load_shared_word(base, 16);
+                u64::from_le_bytes([
+                    low[0], low[1], low[2], low[3], high[0], high[1], high[2], high[3],
+                ])
+            };
             if frame.sequence <= previous {
-                // SAFETY: same live, aligned state word; restores the value this writer
-                // replaced so readers see the previous frame again.
-                unsafe { (*state).store(current, std::sync::atomic::Ordering::Release) };
+                // Restores the value this writer replaced, so readers see the
+                // previous frame again.
+                state.store(current, Ordering::Release);
                 return Err(SharedAudioError::SequenceRegression);
             }
         }
-        if let Err(error) = self.layout.write(&mut self.map, frame) {
-            // SAFETY: same live, aligned state word; restores the previous value.
-            unsafe { (*state).store(current, std::sync::atomic::Ordering::Release) };
-            return Err(error);
-        }
-        // SAFETY: same live, aligned state word; the even value publishes the frame.
-        unsafe {
-            (*state).store(
-                current.saturating_add(2),
-                std::sync::atomic::Ordering::Release,
-            )
+        let version_channels = {
+            let version = 1u16.to_le_bytes();
+            let channels = self.layout.channels.to_le_bytes();
+            [version[0], version[1], channels[0], channels[1]]
         };
+        let sequence = frame.sequence.to_le_bytes();
+        let deadline = frame.deadline_tick.to_le_bytes();
+        let header: [[u8; 4]; SHARED_AUDIO_STATE_OFFSET / 4] = [
+            *b"ARSH",
+            version_channels,
+            (frame_count as u32).to_le_bytes(),
+            sequence[..4].try_into().unwrap(),
+            sequence[4..].try_into().unwrap(),
+            deadline[..4].try_into().unwrap(),
+            deadline[4..].try_into().unwrap(),
+            [0; 4],
+        ];
+        let payload_words = (self.layout.buffer_len() - SHARED_AUDIO_HEADER_BYTES) / 4;
+        // SAFETY: every offset below is a multiple of 4 inside the header
+        // (0..32) or the payload (40..buffer_len()) of this live mapping, which
+        // is exactly `buffer_len()` bytes; the state word (32..40) is not
+        // touched. `validate` bounded the sample count by the payload size.
+        unsafe {
+            for (index, word) in header.into_iter().enumerate() {
+                store_shared_word(base, index * 4, word);
+            }
+            for index in 0..payload_words {
+                let word = frame
+                    .samples
+                    .get(index)
+                    .map_or([0; 4], |sample| sample.to_le_bytes());
+                store_shared_word(base, SHARED_AUDIO_HEADER_BYTES + index * 4, word);
+            }
+        }
+        // The even value publishes the frame.
+        state.store(current.saturating_add(2), Ordering::Release);
         Ok(())
     }
 
     pub fn read(&self) -> Result<WorkerFrame, SharedAudioError> {
-        let state = self.state();
-        let before = state.load(std::sync::atomic::Ordering::Acquire);
-        if before == 0 {
-            return Err(SharedAudioError::Empty);
-        }
-        if before & 1 != 0 {
-            return Err(SharedAudioError::Busy);
-        }
-        let frame = self.layout.read(&self.map)?;
-        if state.load(std::sync::atomic::Ordering::Acquire) != before {
-            return Err(SharedAudioError::TornRead);
-        }
-        Ok(frame)
+        let mut samples = vec![0.0; MAX_WORKER_FRAMES * self.layout.channels as usize];
+        let metadata = self.read_into(&mut samples)?;
+        samples.truncate(metadata.frames * self.layout.channels as usize);
+        WorkerFrame::new(
+            metadata.sequence,
+            metadata.deadline_tick,
+            self.layout.channels,
+            samples,
+        )
+        .map_err(SharedAudioError::InvalidFrame)
     }
 
     pub fn read_into(&self, samples: &mut [f32]) -> Result<SharedAudioMetadata, SharedAudioError> {
+        use std::sync::atomic::{fence, Ordering};
         let state = self.state();
-        let before = state.load(std::sync::atomic::Ordering::Acquire);
+        let before = state.load(Ordering::Acquire);
         if before == 0 {
             return Err(SharedAudioError::Empty);
         }
         if before & 1 != 0 {
             return Err(SharedAudioError::Busy);
         }
-        let metadata = self.layout.read_into(&self.map, samples)?;
-        if state.load(std::sync::atomic::Ordering::Acquire) != before {
+        // A copy that overlapped a write is torn, whatever else it shows.
+        let unchanged = || {
+            fence(Ordering::Acquire);
+            state.load(Ordering::Relaxed) == before
+        };
+        let base = self.map.as_ptr();
+        let mut header = [0u8; SHARED_AUDIO_STATE_OFFSET];
+        for (index, word) in header.chunks_exact_mut(4).enumerate() {
+            // SAFETY: offsets 0..32 in steps of 4 are aligned and inside the
+            // header of this live mapping of `buffer_len()` bytes.
+            word.copy_from_slice(&unsafe { load_shared_word(base, index * 4) });
+        }
+        let metadata = match self.layout.header_metadata(&header) {
+            Ok(metadata) => metadata,
+            Err(_) if !unchanged() => return Err(SharedAudioError::TornRead),
+            Err(error) => return Err(error),
+        };
+        let sample_count = metadata.frames * self.layout.channels as usize;
+        if samples.len() < sample_count {
+            return Err(SharedAudioError::BufferTooSmall);
+        }
+        for (index, destination) in samples[..sample_count].iter_mut().enumerate() {
+            // SAFETY: `header_metadata` bounded `frames` by MAX_WORKER_FRAMES, so
+            // every sample offset is 4-byte aligned and inside the payload of
+            // this live mapping.
+            let word = unsafe { load_shared_word(base, SHARED_AUDIO_HEADER_BYTES + index * 4) };
+            *destination = f32::from_le_bytes(word);
+        }
+        if !unchanged() {
             return Err(SharedAudioError::TornRead);
         }
+        check_finite(&samples[..sample_count])?;
         Ok(metadata)
     }
 
@@ -6505,16 +6735,16 @@ impl SharedAudioRegion {
     }
 
     fn state(&self) -> &std::sync::atomic::AtomicU64 {
-        // The mapping starts page-aligned and the state offset is 8-byte
-        // aligned. The region is created/opened at the exact layout length.
-        // SAFETY: the mapping is page-aligned and exactly `buffer_len()` bytes, which
-        // is at least SHARED_AUDIO_HEADER_BYTES (40), so offset 32..40 is in bounds
+        // SAFETY: the mapping is page-aligned and exactly `buffer_len()` bytes,
+        // at least SHARED_AUDIO_HEADER_BYTES (40), so offset 32..40 is in bounds
         // and 8-byte aligned for an AtomicU64. The returned reference borrows
-        // `self`, so it cannot outlive the mapping. The other process accesses this
-        // word only atomically.
+        // `self`, so it cannot outlive the mapping, and these bytes are never
+        // reached through a non-atomic access: the payload copies skip them
+        // and the other process uses the word only atomically.
         unsafe {
-            &*(self.map.as_ptr().add(SHARED_AUDIO_STATE_OFFSET)
-                as *const std::sync::atomic::AtomicU64)
+            std::sync::atomic::AtomicU64::from_ptr(
+                self.map.as_mut_ptr().add(SHARED_AUDIO_STATE_OFFSET).cast(),
+            )
         }
     }
 }
@@ -6884,17 +7114,7 @@ impl SharedAudioLayout {
         if destination.len() < self.buffer_len() {
             return Err(SharedAudioError::BufferTooSmall);
         }
-        WorkerFrame::new(
-            frame.sequence,
-            frame.deadline_tick,
-            frame.channels,
-            frame.samples.clone(),
-        )
-        .map_err(SharedAudioError::InvalidFrame)?;
-        if frame.channels != self.channels {
-            return Err(SharedAudioError::InvalidChannels);
-        }
-        let frame_count = frame.frame_count();
+        let frame_count = self.validate(frame)?;
         destination[..SHARED_AUDIO_STATE_OFFSET].fill(0);
         destination[SHARED_AUDIO_HEADER_BYTES..self.buffer_len()].fill(0);
         destination[..4].copy_from_slice(b"ARSH");
@@ -6910,34 +7130,69 @@ impl SharedAudioLayout {
         Ok(())
     }
 
+    /// The frame count of `frame` once it is a valid frame for this layout
+    /// (its fields are public, so it may not have come from
+    /// [`WorkerFrame::new`]). Checks without copying the samples.
+    fn validate(&self, frame: &WorkerFrame) -> Result<usize, SharedAudioError> {
+        let invalid = SharedAudioError::InvalidFrame;
+        if !matches!(frame.channels, 1 | 2) {
+            return Err(invalid(WorkerFrameError::InvalidChannels));
+        }
+        let channels = frame.channels as usize;
+        if frame.samples.is_empty() || frame.samples.len() > MAX_WORKER_FRAMES * channels {
+            return Err(invalid(WorkerFrameError::InvalidFrameCount));
+        }
+        if frame.samples.len() % channels != 0 {
+            return Err(invalid(WorkerFrameError::WrongSampleCount));
+        }
+        check_finite(&frame.samples)?;
+        if frame.channels != self.channels {
+            return Err(SharedAudioError::InvalidChannels);
+        }
+        Ok(frame.frame_count())
+    }
+
+    /// The frame described by a slot's header (its first
+    /// `SHARED_AUDIO_STATE_OFFSET` bytes), validated against this layout.
+    fn header_metadata(&self, header: &[u8]) -> Result<SharedAudioMetadata, SharedAudioError> {
+        if header.len() < SHARED_AUDIO_STATE_OFFSET {
+            return Err(SharedAudioError::BufferTooSmall);
+        }
+        if &header[..4] != b"ARSH" {
+            return Err(SharedAudioError::InvalidMagic);
+        }
+        if u16::from_le_bytes(header[4..6].try_into().unwrap()) != 1 {
+            return Err(SharedAudioError::InvalidVersion);
+        }
+        if u16::from_le_bytes(header[6..8].try_into().unwrap()) != self.channels {
+            return Err(SharedAudioError::InvalidChannels);
+        }
+        let frames = u32::from_le_bytes(header[8..12].try_into().unwrap()) as usize;
+        if frames == 0 || frames > MAX_WORKER_FRAMES {
+            return Err(SharedAudioError::InvalidFrameCount);
+        }
+        Ok(SharedAudioMetadata {
+            sequence: u64::from_le_bytes(header[12..20].try_into().unwrap()),
+            deadline_tick: u64::from_le_bytes(header[20..28].try_into().unwrap()),
+            channels: self.channels,
+            frames,
+        })
+    }
+
     pub fn read(&self, source: &[u8]) -> Result<WorkerFrame, SharedAudioError> {
         if source.len() < self.buffer_len() {
             return Err(SharedAudioError::BufferTooSmall);
         }
-        if &source[..4] != b"ARSH" {
-            return Err(SharedAudioError::InvalidMagic);
-        }
-        if u16::from_le_bytes(source[4..6].try_into().unwrap()) != 1 {
-            return Err(SharedAudioError::InvalidVersion);
-        }
-        if u16::from_le_bytes(source[6..8].try_into().unwrap()) != self.channels {
-            return Err(SharedAudioError::InvalidChannels);
-        }
-        let frame_count = u32::from_le_bytes(source[8..12].try_into().unwrap()) as usize;
-        if frame_count == 0 || frame_count > MAX_WORKER_FRAMES {
-            return Err(SharedAudioError::InvalidFrameCount);
-        }
-        let sample_count = frame_count * self.channels as usize;
-        let sequence = u64::from_le_bytes(source[12..20].try_into().unwrap());
-        let deadline_tick = u64::from_le_bytes(source[20..28].try_into().unwrap());
-        let samples = (0..sample_count)
-            .map(|index| {
-                let offset = SHARED_AUDIO_HEADER_BYTES + index * 4;
-                f32::from_le_bytes(source[offset..offset + 4].try_into().unwrap())
-            })
-            .collect::<Vec<_>>();
-        WorkerFrame::new(sequence, deadline_tick, self.channels, samples)
-            .map_err(SharedAudioError::InvalidFrame)
+        let metadata = self.header_metadata(source)?;
+        let mut samples = vec![0.0; metadata.frames * self.channels as usize];
+        self.read_into(source, &mut samples)?;
+        WorkerFrame::new(
+            metadata.sequence,
+            metadata.deadline_tick,
+            self.channels,
+            samples,
+        )
+        .map_err(SharedAudioError::InvalidFrame)
     }
 
     pub fn read_into(
@@ -6948,38 +7203,27 @@ impl SharedAudioLayout {
         if source.len() < self.buffer_len() {
             return Err(SharedAudioError::BufferTooSmall);
         }
-        if &source[..4] != b"ARSH" {
-            return Err(SharedAudioError::InvalidMagic);
-        }
-        if u16::from_le_bytes(source[4..6].try_into().unwrap()) != 1 {
-            return Err(SharedAudioError::InvalidVersion);
-        }
-        if u16::from_le_bytes(source[6..8].try_into().unwrap()) != self.channels {
-            return Err(SharedAudioError::InvalidChannels);
-        }
-        let frames = u32::from_le_bytes(source[8..12].try_into().unwrap()) as usize;
-        if frames == 0 || frames > MAX_WORKER_FRAMES {
-            return Err(SharedAudioError::InvalidFrameCount);
-        }
-        let sample_count = frames * self.channels as usize;
+        let metadata = self.header_metadata(source)?;
+        let sample_count = metadata.frames * self.channels as usize;
         if samples.len() < sample_count {
             return Err(SharedAudioError::BufferTooSmall);
         }
         for (index, destination) in samples[..sample_count].iter_mut().enumerate() {
             let offset = SHARED_AUDIO_HEADER_BYTES + index * 4;
             *destination = f32::from_le_bytes(source[offset..offset + 4].try_into().unwrap());
-            if !destination.is_finite() {
-                return Err(SharedAudioError::InvalidFrame(
-                    WorkerFrameError::NonFiniteSample,
-                ));
-            }
         }
-        Ok(SharedAudioMetadata {
-            sequence: u64::from_le_bytes(source[12..20].try_into().unwrap()),
-            deadline_tick: u64::from_le_bytes(source[20..28].try_into().unwrap()),
-            channels: self.channels,
-            frames,
-        })
+        check_finite(&samples[..sample_count])?;
+        Ok(metadata)
+    }
+}
+
+fn check_finite(samples: &[f32]) -> Result<(), SharedAudioError> {
+    if samples.iter().all(|sample| sample.is_finite()) {
+        Ok(())
+    } else {
+        Err(SharedAudioError::InvalidFrame(
+            WorkerFrameError::NonFiniteSample,
+        ))
     }
 }
 
@@ -7025,6 +7269,35 @@ impl Default for WorkerFrameGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The VST3 worker (C++) must give up on a stuck plugin UI thread before
+    /// this host gives up on the worker, and it must answer the 0.5 s latency
+    /// poll without waiting for that thread (review 2026-11-01, P2-2).
+    #[test]
+    fn vst3_worker_ui_timeout_is_shorter_than_the_host_timeout() {
+        let source = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/m06-vst3-worker/main.cpp"
+        ))
+        .unwrap();
+        let ui_timeout_ms: u64 = source
+            .lines()
+            .find_map(|line| {
+                line.trim()
+                    .strip_prefix("constexpr UINT kUiRequestTimeoutMs = ")
+            })
+            .and_then(|value| value.trim_end_matches(';').trim().parse().ok())
+            .expect("kUiRequestTimeoutMs is declared as a literal");
+        assert!(
+            u128::from(ui_timeout_ms) < WORKER_RESPONSE_TIMEOUT.as_millis(),
+            "worker UI timeout {ui_timeout_ms} ms must be below the host's {:?}",
+            WORKER_RESPONSE_TIMEOUT
+        );
+        // A latency restart is posted to the UI thread, and no request
+        // invalidates the cache the poll is answered from.
+        assert!(source.contains("PostMessageW(g_ui_window, kLatencyRestartMessage"));
+        assert!(!source.contains("g_latency_cached.store(false"));
+    }
 
     #[test]
     fn chain_protocol_bounds_members_parameters_and_instance_selection() {
@@ -7460,8 +7733,8 @@ mod tests {
         let quiet = vec![0.001_f32; 4];
         let changed = vec![0.2_f32, -0.2, 0.08, -0.08];
 
-        // A 96 000-frame window of 32 000-frame quanta: three loud quanta.
-        let mut passthrough = UnchangedAudioWatch::new(32_000);
+        // Two seconds at 48 kHz in 32 000-frame quanta: three loud quanta.
+        let mut passthrough = UnchangedAudioWatch::new(32_000, 48_000);
         assert_eq!(passthrough.observe(&quiet, &quiet), None);
         assert_eq!(passthrough.observe(&loud, &loud), None);
         assert_eq!(passthrough.observe(&loud, &loud), None);
@@ -7473,13 +7746,24 @@ mod tests {
 
         // Silence alone never counts, and an effect that changes the audio
         // once is trusted from then on.
-        let mut effect = UnchangedAudioWatch::new(32_000);
+        let mut effect = UnchangedAudioWatch::new(32_000, 48_000);
         for _ in 0..10 {
             assert_eq!(effect.observe(&quiet, &quiet), None);
         }
         assert_eq!(effect.observe(&loud, &changed), Some(false));
         for _ in 0..10 {
             assert_eq!(effect.observe(&loud, &loud), None);
+        }
+    }
+
+    /// The watch window and the latency poll are times, not 48 kHz frame
+    /// counts (review 2026-11-01, P3).
+    #[test]
+    fn guard_window_and_latency_poll_follow_the_sample_rate() {
+        for rate in [44_100_u32, 48_000, 96_000] {
+            let watch = UnchangedAudioWatch::new(128, rate);
+            assert_eq!(watch.required_quanta, rate * 2 / 128);
+            assert_eq!(plugin_latency_poll_frames(rate), rate as usize / 2);
         }
     }
 
@@ -8737,6 +9021,71 @@ mod tests {
         ));
         drop(reader);
         fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn shared_audio_region_keeps_the_previous_frame_after_invalid_write() {
+        let layout = SharedAudioLayout::new(1).unwrap();
+        let path = temp_root().join("invalid-write-slot");
+        let mut writer = SharedAudioRegion::create(&path, layout).unwrap();
+        let frame = WorkerFrame::new(1, 90, 1, vec![0.125; 128]).unwrap();
+        writer.write(&frame).unwrap();
+        let mut invalid = frame.clone();
+        invalid.sequence = 2;
+        invalid.samples[0] = f32::NAN;
+        assert!(matches!(
+            writer.write(&invalid),
+            Err(SharedAudioError::InvalidFrame(_))
+        ));
+        assert_eq!(writer.read().unwrap(), frame);
+        drop(writer);
+        fs::remove_file(&path).unwrap();
+        fs::remove_dir(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn shared_audio_region_concurrent_reads_never_accept_mixed_frames() {
+        let layout = SharedAudioLayout::new(2).unwrap();
+        let path = temp_root().join("concurrent-slot");
+        let mut writer = SharedAudioRegion::create(&path, layout).unwrap();
+        let reader = SharedAudioRegion::open(&path, layout).unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let writer_barrier = barrier.clone();
+        let thread = std::thread::spawn(move || {
+            writer_barrier.wait();
+            for sequence in 1..=10_000 {
+                let frame = WorkerFrame::new(
+                    sequence,
+                    sequence * 2,
+                    2,
+                    vec![sequence as f32; MAX_WORKER_FRAMES * 2],
+                )
+                .unwrap();
+                writer.write(&frame).unwrap();
+            }
+        });
+        barrier.wait();
+        let mut samples = vec![0.0; MAX_WORKER_FRAMES * 2];
+        for _ in 0..10_000 {
+            match reader.read_into(&mut samples) {
+                Ok(metadata) => {
+                    assert_eq!(metadata.deadline_tick, metadata.sequence * 2);
+                    assert_eq!(metadata.frames, MAX_WORKER_FRAMES);
+                    assert!(samples
+                        .iter()
+                        .all(|sample| *sample == metadata.sequence as f32));
+                }
+                Err(
+                    SharedAudioError::Empty | SharedAudioError::Busy | SharedAudioError::TornRead,
+                ) => {}
+                Err(error) => panic!("unexpected shared slot error: {error:?}"),
+            }
+        }
+        thread.join().unwrap();
+        assert_eq!(reader.read().unwrap().sequence, 10_000);
+        drop(reader);
+        fs::remove_file(&path).unwrap();
+        fs::remove_dir(path.parent().unwrap()).unwrap();
     }
 
     #[test]

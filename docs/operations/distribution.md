@@ -1,13 +1,13 @@
-The latest release is [0.0.17](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.17),
-an unsigned experimental app-only prerelease. Download `AudioRouter_0.0.17_x64-setup.exe`
-from its assets. It was built from a clean tag, passed the exact-package
-fresh-install check, and its public downloads were verified. See the
-[0.0.17 execution record](../plans/active/evidence/2026-10-16-release-0.0.17.md), the
-[release notes](release-notes.md) and the evidence files under
-`docs/plans/active/evidence/` (for example
-[0.0.7](../plans/active/evidence/2026-10-03-release-0.0.7.md)). Signing,
-clean-machine install/upgrade/uninstall and missing-WebView2 checks remain
-open.
+The latest published release is [0.0.26](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.26),
+an unsigned experimental app-only prerelease. Download
+`AudioRouter_0.0.26_x64-setup.exe` from its assets. The candidate was built
+from the tagged source, its release payload and public downloads were hash
+verified, and the bundled sound library, UI shell and companion artifacts were
+inspected. See the [0.0.26 execution record](../plans/active/evidence/2026-10-31-release-0.0.26.md),
+the [release notes](release-notes.md) and the evidence files under
+`docs/plans/active/evidence/`. Signing, clean-machine install/upgrade/uninstall,
+missing-WebView2, installed playback and attended Stream Deck checks remain
+open; this is not yet a fully M08-qualified consumer release.
 
 The next managed-cable installer flow is under WP-11. Its release preparer now
 requires a Microsoft-signed driver payload, verifies its catalog, bundles the
@@ -36,7 +36,7 @@ The release page carries only:
 | `AudioRouter_<version>_x64-setup.exe` | everyone |
 | `com.mrdesjardins.audiorouter.streamDeckPlugin` | a Stream Deck on another PC that controls AudioRouter over the network (the same file is inside the installer) |
 | `SHA256SUMS.txt`, `release-manifest.json` | verifying downloads and provenance |
-| `sbom.cargo.json`, `sbom.npm.json`, `sbom.npm.package-lock.json`, `sbom.streamdeck.json`, `sbom.streamdeck.package-lock.json`, `THIRD-PARTY-NOTICES.txt` | license and supply-chain review |
+| `sbom.cargo.json`, `sbom.shell.cargo.json`, `sbom.npm.json`, `sbom.npm.package-lock.json`, `sbom.streamdeck.json`, `sbom.streamdeck.package-lock.json`, `THIRD-PARTY-NOTICES.txt` | license and supply-chain review; Cargo notices combine root and shell dependencies |
 | `tunnel-client-runtime-LICENSE.txt`, `tunnel-client-runtime-NOTICE.txt`, `tunnel-client-runtime-licenses.txt`, `tunnel-client-runtime.spdx.json` (from 0.0.16) | bundled optional runtime licensing and supply-chain review |
 
 Up to 0.0.13 the page also listed `audiorouter-shell.exe`,

@@ -139,7 +139,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       .getByTestId(`rf__node-${outer.id}`)
       .locator(".canvas-group-caption")
       .click({ modifiers: ["Control"] });
-    const inspector = page.getByRole("region", { name: "Selection layout" });
+    const inspector = page.getByRole("tabpanel", { name: "Properties" });
     await expect(inspector.getByRole("heading")).toHaveText("3 items selected");
     await inspector.getByRole("button", { name: "Largest width", exact: true }).click();
     await inspector.getByRole("button", { name: "Largest height", exact: true }).click();
@@ -193,7 +193,7 @@ test("five tools align and distribute equal edge gaps without changing audio", a
       .getByTestId(`rf__node-gain-${index}`)
       .locator(".flow-node-title")
       .click(index ? { modifiers: ["Control"] } : {});
-  const inspector = page.getByRole("region", { name: "Selection layout" });
+  const inspector = page.getByRole("tabpanel", { name: "Properties" });
   await expect(inspector.getByRole("heading")).toHaveText("5 items selected");
   await inspector.getByRole("button", { name: "Align top", exact: true }).click();
   await inspector.getByRole("button", { name: "Space horizontally", exact: true }).click();
@@ -239,9 +239,7 @@ test("dragging a selected carrying group and child moves the child only once", a
     .getByTestId("rf__node-" + outer.id)
     .locator(".canvas-group-caption")
     .click({ modifiers: ["Control"] });
-  await expect(page.getByRole("region", { name: "Selection layout" }).getByRole("heading")).toHaveText(
-    "2 items selected",
-  );
+  await expect(page.getByRole("tabpanel", { name: "Properties" }).getByRole("heading")).toHaveText("2 items selected");
   const before = await geometry(page);
   await dragGroup(page, outer.id, 50, 30);
   const after = await geometry(page);
@@ -258,7 +256,7 @@ test("alignment and size matching preserve a selected locked group", async ({ pa
     .locator(".canvas-group-caption")
     .click({ modifiers: ["Control"] });
   const before = await geometry(page);
-  const inspector = page.getByRole("region", { name: "Selection layout" });
+  const inspector = page.getByRole("tabpanel", { name: "Properties" });
   await inspector.getByRole("button", { name: "Align left", exact: true }).click();
   await inspector.getByRole("button", { name: "Largest width", exact: true }).click();
   const after = await geometry(page);
@@ -277,9 +275,7 @@ test("Shift marquee selects tools and keyboard movement can be undone", async ({
   await page.mouse.move(last.x + last.width + 10, last.y + last.height + 10, { steps: 10 });
   await page.mouse.up();
   await page.keyboard.up("Shift");
-  await expect(page.getByRole("region", { name: "Selection layout" }).getByRole("heading")).toHaveText(
-    "5 items selected",
-  );
+  await expect(page.getByRole("tabpanel", { name: "Properties" }).getByRole("heading")).toHaveText("5 items selected");
   await page.locator(".react-flow__pane").click({ position: { x: 10, y: 10 } });
   await page.getByTestId("rf__node-gain-0").locator(".flow-node-title").click();
   const before = await geometry(page);
@@ -302,7 +298,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       .getByTestId("rf__node-" + inner.id)
       .locator(".canvas-group-caption")
       .click({ modifiers: ["Control"] });
-    const panel = page.getByRole("region", { name: "Selection layout" });
+    const panel = page.getByRole("tabpanel", { name: "Properties" });
     const lock = panel.getByRole("checkbox", { name: "Lock position and size", exact: true });
     const carry = panel.getByRole("checkbox", { name: "Move contents with group", exact: true });
     await expect(lock).toBeVisible();

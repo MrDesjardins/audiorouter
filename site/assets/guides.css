@@ -710,34 +710,202 @@
 @media (hover: none) {
   .guide-heading-link { opacity: 1; }
 }
-.guide-recording {
+/* Section tabs. The bar sticks under the site header (76 px + border). */
+.guide-tabs {
+  position: sticky;
+  top: 77px;
+  z-index: 6;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-top: 8px;
+  padding: 10px 0 0;
+  background: #0d1017f2;
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--edge);
+}
+.guide-tabs::-webkit-scrollbar {
+  display: none;
+}
+.guide-tabs [role="tab"] {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: #a6b6c9;
+  font: 700 14px var(--sans);
+  cursor: pointer;
+}
+.guide-tabs [role="tab"]:hover {
+  color: #fff;
+}
+.guide-tabs [role="tab"][aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--mint);
+}
+.guide-tabs [role="tab"]:focus-visible {
+  outline-offset: -3px;
+}
+.guide-tab-count {
+  min-width: 2.2em;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: #1d2634;
+  color: var(--muted);
+  font: 11px var(--mono);
+  text-align: center;
+}
+[aria-selected="true"] > .guide-tab-count {
+  background: #203a38;
+  color: var(--mint);
+}
+.guide-panel[hidden] {
+  display: none;
+}
+.guide-panel > .guide-section:first-child {
+  border-top: 0;
+}
+/* Anchors land below the header and the tab bar. */
+.guide-panel [id] {
+  scroll-margin-top: 64px;
+}
+/* The table of contents lists property links only while Settings is open. */
+.guide-layout[data-active-tab]:not([data-active-tab="settings"]) .toc-property {
+  display: none;
+}
+.property-watch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* One player plus a clip list: one poster per page, video on demand. */
+.guide-player {
+  --player-width: 300px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  grid-template-columns: var(--player-width) minmax(0, 1fr);
+  gap: 28px;
   align-items: start;
-  gap: 1.5rem;
-  margin-block: 2rem;
+  margin-top: 28px;
 }
-.guide-recording-copy {
-  min-width: 0;
-}
-.guide-recording-copy h3 {
-  margin-top: 0;
-}
-.guide-recording video {
+.guide-player-screen video {
   display: block;
-  width: min(100%, 360px);
+  width: 100%;
   height: auto;
   aspect-ratio: 9 / 16;
   background: #101721;
   border-radius: 12px;
 }
-
-@media (max-width: 640px) {
-  .guide-recording {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.guide-player-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  max-height: calc(var(--player-width) * 16 / 9);
+}
+.guide-player-caption {
+  flex: none;
+  padding: 16px 18px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.guide-player-caption h3 {
+  margin: 0 0 6px;
+}
+.guide-player-caption p {
+  margin: 0;
+  color: #c3cfdd;
+  font-size: 14px;
+}
+.guide-clip-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+.guide-clip {
+  display: grid;
+  grid-template-columns: 2.2em minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #c9d4e2;
+  font-size: 14px;
+}
+.guide-clip:hover {
+  background: #151c27;
+  color: #fff;
+}
+.guide-clip[aria-current] {
+  border-color: #2f5a52;
+  background: #142220;
+  color: var(--text);
+}
+.guide-clip:focus-visible {
+  outline-offset: -3px;
+}
+.guide-clip-index {
+  color: #7d8999;
+  font: 11px var(--mono);
+}
+.guide-clip[aria-current] .guide-clip-index {
+  color: var(--mint);
+}
+.guide-clip-badge {
+  color: #7d8999;
+  font: 10px var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
 }
 
-#in-the-app {
-  scroll-margin-top: 90px;
+@media (max-width: 720px) {
+  /* The tabs replace the inline contents list on small screens. */
+  .guide-layout[data-active-tab] .guide-toc {
+    display: none;
+  }
+  .guide-tabs [role="tab"] {
+    padding-inline: 12px;
+    font-size: 13px;
+  }
+  .guide-player {
+    grid-template-columns: minmax(0, 1fr);
+    --player-width: min(100%, 300px);
+  }
+  .guide-player-screen {
+    width: min(100%, 300px);
+    margin-inline: auto;
+  }
+  .guide-player-side {
+    max-height: none;
+  }
+}
+@media (max-width: 620px) {
+  .guide-tabs {
+    top: 66px;
+    gap: 0;
+  }
+  .guide-tabs [role="tab"] {
+    padding-inline: 9px;
+  }
+  /* Counts stay in the clip list and settings; the four labels must fit. */
+  .guide-tab-count {
+    display: none;
+  }
 }

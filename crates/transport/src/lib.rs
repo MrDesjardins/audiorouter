@@ -900,7 +900,8 @@ mod windows_pipe {
     };
     use windows::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
-        WaitNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+        PeekNamedPipe, WaitNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
+        PIPE_TYPE_BYTE, PIPE_WAIT,
     };
     use windows::Win32::System::Threading::{
         CreateMutexW, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -1149,8 +1150,15 @@ mod windows_pipe {
     }
 
     fn read_frame(handle: HANDLE) -> Result<Vec<u8>, TransportError> {
+        read_frame_with(handle, read_exact)
+    }
+
+    fn read_frame_with(
+        handle: HANDLE,
+        mut read: impl FnMut(HANDLE, &mut [u8]) -> Result<(), TransportError>,
+    ) -> Result<Vec<u8>, TransportError> {
         let mut header = [0u8; 4];
-        read_exact(handle, &mut header)?;
+        read(handle, &mut header)?;
         let length = u32::from_le_bytes(header) as usize;
         if length > MAX_FRAME_BYTES {
             return Err(TransportError::Protocol("frame exceeds maximum".into()));
@@ -1158,8 +1166,57 @@ mod windows_pipe {
         let mut frame = Vec::with_capacity(4 + length);
         frame.extend_from_slice(&header);
         frame.resize(4 + length, 0);
-        read_exact(handle, &mut frame[4..])?;
+        read(handle, &mut frame[4..])?;
         Ok(frame)
+    }
+
+    /// Longest a one-request connection may take to deliver its frame.
+    /// Clients write the whole frame right after connecting; a stalled
+    /// same-user client used to hold its pipe instance (with four of them,
+    /// every instance) until it disconnected (review 2026-11-01, P3-1).
+    pub(crate) const PIPE_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
+    /// How long a reader yields before it sleeps between empty checks, so a
+    /// request written just after the connection is read without a sleep's
+    /// delay.
+    const PIPE_YIELD_WINDOW: std::time::Duration = std::time::Duration::from_millis(2);
+
+    /// [`read_exact`] that fails at `deadline`. Synchronous pipes have no read
+    /// timeout, so it reads only bytes the pipe already holds
+    /// (`PeekNamedPipe`), never blocking in `ReadFile`.
+    fn read_exact_by(
+        handle: HANDLE,
+        mut output: &mut [u8],
+        deadline: std::time::Instant,
+    ) -> Result<(), TransportError> {
+        let mut empty_since = None;
+        while !output.is_empty() {
+            let mut available = 0_u32;
+            // SAFETY: `handle` is a valid connected pipe handle owned by the caller.
+            // No buffer is passed, so nothing is copied; the call writes one u32
+            // into the live local `available`.
+            unsafe { PeekNamedPipe(handle, None, 0, None, Some(&mut available), None) }
+                .map_err(win_error)?;
+            if available == 0 {
+                let now = std::time::Instant::now();
+                if now >= deadline {
+                    return Err(TransportError::Protocol(
+                        "request frame did not arrive in time".into(),
+                    ));
+                }
+                if now.duration_since(*empty_since.get_or_insert(now)) < PIPE_YIELD_WINDOW {
+                    std::thread::yield_now();
+                } else {
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                continue;
+            }
+            empty_since = None;
+            let take = output.len().min(available as usize);
+            // The pipe holds at least `take` bytes, so this read cannot block.
+            read_exact(handle, &mut output[..take])?;
+            output = &mut output[take..];
+        }
+        Ok(())
     }
 
     /// Pipe instances one server may hold open at once. The production backend
@@ -1251,7 +1308,10 @@ mod windows_pipe {
         F: FnOnce(u32, &[u8]) -> Result<Option<Vec<u8>>, TransportError>,
     {
         let (handle, client_process_id) = accept_client(name)?;
-        let request = read_frame(handle.0)?;
+        let deadline = std::time::Instant::now() + PIPE_REQUEST_DEADLINE;
+        let request = read_frame_with(handle.0, |handle, output| {
+            read_exact_by(handle, output, deadline)
+        })?;
         if let Some(response) = handler(client_process_id, &request)? {
             write_all(handle.0, &response)?;
             // SAFETY: `handle.0` is the valid connected pipe handle owned by `handle`.
@@ -1580,7 +1640,9 @@ pub const AUDIO_SERVICE_INTERVAL: std::time::Duration = std::time::Duration::fro
 /// One received control frame handed from the pipe I/O thread to the thread
 /// that owns the control plane.
 struct ControlFrame {
-    client_pid: u32,
+    /// The client's user SID, resolved on the I/O thread so the control
+    /// thread does no token lookup per request (review 2026-11-01, P3-1).
+    client_id: String,
     frame: Vec<u8>,
     reply: std::sync::mpsc::SyncSender<Result<Option<Vec<u8>>, TransportError>>,
 }
@@ -1713,9 +1775,10 @@ fn spawn_control_io(
                             stop.store(true, Ordering::Release);
                             TransportError::Protocol("control plane stopped".into())
                         };
+                        let client_id = client_user_sid(client_pid)?;
                         frames
                             .send(ControlFrame {
-                                client_pid,
+                                client_id,
                                 frame: frame.to_vec(),
                                 reply,
                             })
@@ -1791,7 +1854,7 @@ fn serve_control_plane_frames(
                 wait = wait_start.map(|start| start.elapsed()).unwrap_or_default();
                 let dispatch_start = std::time::Instant::now();
                 let result =
-                    dispatch_control_frame(plane, grant, request.client_pid, &request.frame);
+                    dispatch_control_frame(plane, grant, &request.client_id, &request.frame);
                 let _ = request.reply.send(result);
                 dispatch = dispatch_start.elapsed();
                 health.request(&request.frame, dispatch);
@@ -1828,13 +1891,12 @@ fn serve_control_plane_frames(
 fn dispatch_control_frame(
     plane: &mut audiorouter_control::ControlPlane,
     grant: &audiorouter_control::ClientGrant,
-    client_pid: u32,
+    client_id: &str,
     frame: &[u8],
 ) -> Result<Option<Vec<u8>>, TransportError> {
-    let client_id = client_user_sid(client_pid)?;
     let started = std::time::Instant::now();
     let responses = plane
-        .dispatch_frame_authorized_for_client(frame, &client_id, grant)
+        .dispatch_frame_authorized_for_client(frame, client_id, grant)
         .map_err(|error| TransportError::Protocol(error.to_string()))?;
     // Only the window state and a duration are read here; the logger thread
     // does all parsing and file I/O.
@@ -2358,6 +2420,64 @@ mod tests {
         assert!(result.is_err());
         let server_result = server.join().unwrap();
         assert!(matches!(server_result, Err(TransportError::Protocol(_))));
+    }
+
+    /// A frame written in pieces still arrives; a client that stops after
+    /// part of a frame is dropped at the deadline instead of holding the pipe
+    /// instance until it disconnects (review 2026-11-01, P3-1).
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_drops_a_stalled_client_at_the_request_deadline() {
+        use std::io::Write;
+        let name = format!(r"\\.\pipe\audiorouter-stall-test-{}", std::process::id());
+        let open = |name: &str| loop {
+            match std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(name)
+            {
+                Ok(pipe) => break pipe,
+                Err(_) => std::thread::sleep(std::time::Duration::from_millis(5)),
+            }
+        };
+        let request =
+            encode_frame(&serde_json::json!({"jsonrpc":"2.0","id":1,"method":"status.get"}))
+                .unwrap();
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || serve_once(&server_name, echo_handler));
+        let mut pipe = open(&name);
+        for part in request.chunks(5) {
+            pipe.write_all(part).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        // The server flushes its reply, which waits for this read.
+        let mut header = [0u8; 4];
+        std::io::Read::read_exact(&mut pipe, &mut header).unwrap();
+        let mut reply = vec![0u8; u32::from_le_bytes(header) as usize];
+        std::io::Read::read_exact(&mut pipe, &mut reply).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&reply).unwrap(),
+            serde_json::json!({"ok": true})
+        );
+        server.join().unwrap().unwrap();
+        drop(pipe);
+
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            let started = std::time::Instant::now();
+            (serve_once(&server_name, echo_handler), started.elapsed())
+        });
+        let mut pipe = open(&name);
+        pipe.write_all(&request[..6]).unwrap();
+        let (result, elapsed) = server.join().unwrap();
+        assert!(result.is_err(), "a stalled request fails");
+        assert!(
+            elapsed >= windows_pipe::PIPE_REQUEST_DEADLINE
+                && elapsed
+                    < windows_pipe::PIPE_REQUEST_DEADLINE + std::time::Duration::from_secs(2),
+            "dropped at the deadline: {elapsed:?}"
+        );
+        drop(pipe);
     }
 
     #[cfg(windows)]

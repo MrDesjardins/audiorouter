@@ -1,5 +1,5 @@
 {
-  "backendMethods": 121,
+  "backendMethods": 123,
   "operations": [
     {
       "method": "POST",
@@ -124,6 +124,13 @@
       "method": "POST",
       "path": "/api/v1/system/diagnostics",
       "operation": "system.diagnostics",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/system/checkSetup",
+      "operation": "system.checkSetup",
       "permission": "Read",
       "effect": "ReadOnly"
     },
@@ -595,6 +602,13 @@
       "operation": "plugins.closeEditor",
       "permission": "PluginScan",
       "effect": "ExternalOperation"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/resume",
+      "operation": "plugins.resume",
+      "permission": "SessionControl",
+      "effect": "Mutating"
     },
     {
       "method": "POST",

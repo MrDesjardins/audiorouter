@@ -1,4 +1,5 @@
 import type { DeviceListItem } from "@audiorouter/contracts";
+import { GoalSetupGuide } from "./GoalSetupGuide";
 
 export function FirstRunGuide({
   devices,
@@ -23,6 +24,7 @@ export function FirstRunGuide({
     <section className="panel setup-panel first-run-guide" aria-labelledby="first-run-guide-heading">
       <p className="eyebrow">Getting started</p>
       <h3 id="first-run-guide-heading">Set up a route on this PC</h3>
+      <GoalSetupGuide connected={connected} onOpenTools={onOpenTools} onSetUpDiscord={onSetUpDiscord} />
       {!connected ? (
         <p className="muted" role="status">
           Connect to AudioRouter to check available devices.

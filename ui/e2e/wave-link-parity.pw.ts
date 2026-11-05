@@ -1,7 +1,7 @@
 import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
-// Wave Link parity, first round (docs/plans/active/wave-link-parity.md):
+// Wave Link parity, first round (docs/plans/archived/2026-11-01-wave-link-parity-first-round.md):
 // the Meter's voice target zone (UI-21) and devices hidden from pickers
 // (UI-22), each combined with the existing Meter, Status and Properties.
 

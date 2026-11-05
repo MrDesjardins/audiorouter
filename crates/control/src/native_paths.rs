@@ -406,22 +406,19 @@ impl ControlPlane {
                 (NodeKind::PhysicalInput, NativeMultiInputSourceBinding::Physical(endpoint))
                     if node_spatial_headphones(node) =>
                 {
-                    if !endpoint.is_ieee_float32()
-                        || !multi_path_rate_supported(endpoint.sample_rate_hz)
-                        || channels != 2
-                    {
+                    let refusal = surround_capture_refusal(
+                        endpoint.is_ieee_float32(),
+                        endpoint.channels,
+                        endpoint.channel_mask,
+                        endpoint.sample_rate_hz,
+                    );
+                    if refusal == Some(SurroundRefusal::Format) || channels != 2 {
                         return Err(ControlError::InvalidRequest(format!(
                             "{}: surround to headphones needs a float capture device at 8–192 kHz",
                             node.name
                         )));
                     }
-                    if !matches!(endpoint.channels, 6 | 8)
-                        || audiorouter_dsp::binaural::BinauralRenderer::new(
-                            usize::from(endpoint.channels),
-                            endpoint.channel_mask,
-                        )
-                        .is_err()
-                    {
+                    if refusal == Some(SurroundRefusal::Layout) {
                         return Err(ControlError::InvalidRequest(format!(
                             "{}: surround to headphones needs a 5.1 or 7.1 device, but the selected device has {} channel(s). Set the game's playback device to 7.1 in Windows Sound settings (Configure speakers), or turn surround off for this input",
                             node.name, endpoint.channels

@@ -116,7 +116,7 @@ lists the proposed work to support every UAD product family.
 
 ## Plans versus specifications
 
-- [Active](plans/active/current.md): execution state, evidence, and next steps. Start here when resuming work.
+- [Active](plans/active/current.md): current priorities, open gates and links to active execution plans. Start here when resuming work.
 - [Archived](plans/archived/README.md): completed or superseded execution plans, including what actually happened.
 - [Future](plans/future/README.md): deliberately deferred features and conditions for reconsidering them.
 - [Milestones](spec/15-delivery.md#milestone-sequence): stable implementation contracts. They do not move when execution plans are archived.

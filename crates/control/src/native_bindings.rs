@@ -118,10 +118,11 @@ impl ControlPlane {
                         "output fan-out endpoint is not an active exact inventory match".into(),
                     )
                 })?;
-            if !endpoint.is_ieee_float32()
-                || endpoint.channels != 2
-                || !multi_path_rate_supported(endpoint.sample_rate_hz)
-            {
+            if !output_format_supported(
+                endpoint.is_ieee_float32(),
+                endpoint.channels,
+                endpoint.sample_rate_hz,
+            ) {
                 return Err(ControlError::InvalidRequest(
                     "output fan-out endpoints must be stereo IEEE float32 at 8–192 kHz".into(),
                 ));

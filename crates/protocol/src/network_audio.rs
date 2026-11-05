@@ -2,6 +2,9 @@
 //! (GRAPH-16, SEC-13): the header constants, pairing-key authentication and
 //! the replay window. The socket code lives in `audiorouter-windows-audio`;
 //! everything here is pure and tested on every platform.
+//! Paired runtime transport uses encrypted v3 in [`secure`]. The v2 codec
+//! below remains for compatibility parsing and downgrade-rejection fixtures;
+//! its existence does not authorize a live paired receiver to accept v2.
 //!
 //! A datagram is a 20-byte header, `frames * channels` float32 samples and,
 //! when the two computers share a pairing key, a 16-byte tag:
@@ -26,6 +29,9 @@
 
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
+
+#[path = "network_secure.rs"]
+pub mod secure;
 
 pub const NETWORK_AUDIO_MAGIC: [u8; 4] = *b"ARNA";
 /// Unauthenticated datagrams (no pairing key on either computer).
@@ -60,6 +66,20 @@ impl std::fmt::Debug for NetworkPairingKey {
 }
 
 impl NetworkPairingKey {
+    /// Compare derived keys without retaining or logging the original text.
+    /// Used to keep live freshness state when unrelated graph edits reapply
+    /// the same setting. Full HMAC verification is constant time.
+    pub fn same_key(&self, other: &Self) -> bool {
+        const CONTEXT: &[u8] = b"AudioRouter pairing key equality";
+        let mut other_mac = other.mac.clone();
+        other_mac.update(CONTEXT);
+        let mut this_mac = self.mac.clone();
+        this_mac.update(CONTEXT);
+        this_mac
+            .verify_slice(&other_mac.finalize().into_bytes())
+            .is_ok()
+    }
+
     /// Derive the packet key from a pairing key: HMAC-SHA256 keyed with the
     /// pairing key over a fixed context string. Returns `None` for a blank
     /// key (the node is not paired). The backend validates the key's length
@@ -108,6 +128,8 @@ pub enum NetworkAuthFailure {
     SenderNotPaired,
     /// The sender has a pairing key; this receiver has none.
     ReceiverNotPaired,
+    /// The sender predates encrypted v3 transport. Both peers must update.
+    SenderOutdated,
 }
 
 impl NetworkAuthFailure {
@@ -116,6 +138,7 @@ impl NetworkAuthFailure {
             Self::WrongKey => "wrongKey",
             Self::SenderNotPaired => "senderNotPaired",
             Self::ReceiverNotPaired => "receiverNotPaired",
+            Self::SenderOutdated => "senderOutdated",
         }
     }
 }
