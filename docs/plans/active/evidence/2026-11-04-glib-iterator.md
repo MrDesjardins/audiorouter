@@ -1,88 +1,53 @@
-# Dependabot 7: GLib iterator backport
+# Dependabot 7: Windows applicability
 
-Requirements: ENG-02, ENG-04, ENG-05. Base: main `068b395a`.
-Branch: `fix/dependabot-7-glib-iterator`. Owner requested a branch and PR.
-
-## Cause and bounded repair
+Requirements: ENG-02/04/05. Branch: `fix/dependabot-7-glib-iterator`.
+PR: [#115](https://github.com/MrDesjardins/audiorouter/pull/115).
 
 [Dependabot 7](https://github.com/MrDesjardins/audiorouter/security/dependabot/7)
 reports [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html).
-The GLib 0.18.5 string iterator writes through an immutable reference passed
-to variadic C FFI. Optimized compilation can discard that write, leaving a
-null pointer for CStr::from_ptr.
+The vulnerable GLib string iterator passes an immutable reference as a
+mutable C out-argument. Fixed GLib >=0.20 cannot satisfy GTK's 0.18 requirement.
 
-`cargo tree --manifest-path src-tauri/Cargo.toml --target all -i glib --locked`
-shows Tauri 2.11.6 / GTK 0.18.2 requiring GLib 0.18.5. The corresponding
-Windows-target command prints no GLib consumers. Registry lookup confirms
-there is no 0.18.6 release; the advisory's fixed >=0.20 cannot satisfy GTK's
-0.18 requirement. This change backports
-[upstream PR 1343](https://github.com/gtk-rs/gtk-rs-core/pull/1343).
+## Owner decision
 
-Vendor provenance: published crates.io package checksum
-`233daaf6e83ae6a12a52055f568f9d7cf4671dabb78ff9560ab6da230ce00ee5`,
-upstream commit `42b9caf98e03ded086362d9653ca58fe94dc8658`. Hash comparison
-against the cached published package finds changes only in Cargo.toml
-(standalone workspace) and src/variant_iter.rs (fix, safety comment, test).
-MIT license/copyright retained; cache marker omitted; PATCH.md and a locked
-standalone test dependency graph added. The application lockfile changes
-only the GLib source/checksum to use the local Cargo patch.
+The owner rejected importing approximately 55,000 lines of third-party code.
+The vendor copy, Cargo patch and backport-specific CI/tests are removed.
+Manifests, lockfiles, product source and CI match main. This PR records
+applicability only; the upstream vulnerability remains unresolved.
 
-## Reproducible validation (2026-11-04)
+Cargo.lock includes dependencies across targets. Tauri uses WebView2 on
+Windows; GLib belongs to its Linux GTK stack. The supported Windows app
+does not compile or load GLib. Cargo's normal crates.io resolution suffices;
+no local vendor copy or manually loaded GLib library is needed.
 
-Windows host, pinned Rust 1.96.0:
+## Validation
 
-- `cargo test --manifest-path src-tauri/Cargo.toml --locked`: 85 passed,
-  4 ignored explicit attended/isolated fixtures.
-- `cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features --locked -- -D warnings`: passed.
-- `cargo fmt --all` and `cargo fmt --manifest-path src-tauri/Cargo.toml`,
-  followed by both corresponding `-- --check` commands: passed, no unrelated
-  formatting changes. Edited vendor Rust file formatted separately.
-- `node --test tools/quality/glib-backport.test.mjs tools/quality/policy.test.mjs tools/quality/verify.test.mjs`:
-  70 passed. Guard checks all-target metadata resolves the single GLib
-  package to vendor/glib and rejects the original immutable pointer code.
-- `cargo deny --manifest-path src-tauri/Cargo.toml check advisories licenses sources bans`:
-  exit 0; all four policies pass. Duplicate-version warnings remain under
-  the explicit `multiple-versions = "warn"` policy; this change introduces
-  no additional package versions. Do not relax or suppress the advisory.
-- `node tools/docs/validate.mjs`: passed (223 Markdown files, 1,181 links).
-- `git diff --check`: passed for authored changes. The staged import reports
-  one blank line at EOF in vendor/glib/LICENSE:18; retained byte-for-byte
-  from the published package with the rest of the third-party license.
-
-WSL Ubuntu, pinned Rust 1.96.0, GLib 2.80.0 (installed libglib2.0-dev):
+Pinned Rust 1.96.0, Windows host:
 
 ```sh
-CARGO_TARGET_DIR=/tmp/audiorouter-glib-backport-target cargo test --manifest-path vendor/glib/Cargo.toml --locked --release --lib variant_iter::tests
+cargo tree --manifest-path src-tauri/Cargo.toml --locked --target all -i glib
+cargo tree --manifest-path src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc -i glib
+cargo check --manifest-path src-tauri/Cargo.toml --locked
+node tools/docs/validate.mjs
 ```
 
-All 12 iterator tests pass. Temporarily reverting the two pointer edits
-and running the focused `string_iterator_out_pointer_regression` produces
-SIGSEGV (signal 11); restoring the fix passes again. This is real optimized
-GLib execution on Linux, separate from the Windows shell evidence.
+Initial inspection: all-target graph contains Tauri 2.11.6 / GTK 0.18.2 /
+GLib 0.18.5; Windows graph contains no GLib consumers. The withdrawn
+backport experiment reproduced SIGSEGV in optimized WSL execution with
+the original code and passed with the upstream fix. This is historical
+evidence, not a fixed dependency in the final PR.
 
-The imported crate emits 34 compiler warnings: unnecessary parentheses and
-hidden elided lifetimes. Retained to keep the vendored source auditable
-against the published package; unrelated third-party modernization is not
-part of this soundness fix. Strict Windows product Clippy remains clean.
-Raw local WSL logs: /tmp/audiorouter-glib-{original,fixed}.txt. CI repeats
-the focused optimized regression with the standalone lockfile.
+After removal: Windows-target inspection again found no GLib consumers;
+the locked shell `cargo check` passed, documentation validation passed
+(239 files / 1,408 links before adding the active-plan link), and the final
+diff contains documentation only. No vendor files remain in the PR diff.
 
-## Limits, rollback, next action
+## Limits and next action
 
-No GUI/audio/driver/installer acceptance was run; this changes no Windows
-runtime dependency, API, control or session format. Hosted CI remains
-required before merge. This is a source backport retaining upstream version
-0.18.5, so version-based Dependabot scanning may still report the advisory;
-do not claim automatic closure or dismiss it as an upstream upgrade.
-
-Rollback: revert the PR, restoring the prior registry resolution; no data
-migration. Remove the vendor copy/patch after Tauri's GTK dependency chain
-accepts a fixed GLib release, then regenerate the lockfile and revalidate.
-PR [#115](https://github.com/MrDesjardins/audiorouter/pull/115) opened.
-GitHub detected an active-plan conflict against newer main `b489768e`;
-merged main and preserved both entries (merge `74f48bb6`). Repeated relevant
-checks on the merged tree: shell 86 passed / 4 ignored; backport/policy/runner
-72 passed; strict shell Clippy, both format checks and cargo-deny passed;
-docs 239 files / 1,409 links passed. Product source and imported vendor source
-were not changed by conflict resolution. Next: require new-head hosted CI
-before merging; no release or advisory dismissal is part of this task.
+Dependabot can keep reporting the vulnerable version in Cargo.lock. No
+advisory suppression or alert dismissal was made. A future Linux build
+needs a compatible upstream GTK/Tauri upgrade or an explicitly approved
+alternative fix. No GUI/audio/driver/installer evidence is claimed.
+Rollback: revert these documentation-only changes; no data migration.
+Next: review this Windows-applicability disposition and track the upstream
+dependency upgrade.

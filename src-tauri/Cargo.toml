@@ -47,7 +47,3 @@ audiorouter-control = { path = "../crates/control" }
 audiorouter-engine = { path = "../crates/engine" }
 
 [workspace]
-
-[patch.crates-io]
-# GTK still requires 0.18; local upstream soundness backport (see PATCH.md).
-glib = { path = "../vendor/glib" }
