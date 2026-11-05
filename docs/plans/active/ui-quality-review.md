@@ -355,3 +355,80 @@ before checking content visibility, then clicks it again to close it.
 Verification: the three-theme CI-mode regression passes dark, light and
 high-contrast in 8.1s, with typecheck and zero-warning lint passing. This is a
 test synchronization repair; no application behavior changes.
+
+### Iteration 10 — Save vocabulary and action clarity
+
+The category audit confirmed a user-facing clarity defect: the top bar used
+Save while secondary copy told users to Plan and Commit. That split vocabulary
+made the same workflow sound like two different actions. The visible UI now
+uses Save consistently for graph changes, imported sessions, Audio File and
+Soundboard guidance, application selection, plugin removal, connection edits,
+and draft status messages. Backend method names and the plan/commit protocol are
+unchanged; only user-facing wording and the import action label changed.
+
+Verification: the focused unit suites passed **108 tests**; typecheck and
+zero-warning lint passed. The fresh compiled-browser three-theme Save-language
+regression passed **3/3**. The combined UI-quality and session workflow suite
+passed **37/37**. The full set covered dark, light, high-contrast, 1280×720,
+1440×1000, keyboard focus, loading/search, menu focus, plugin status, tool-card
+icons, draft save wording, and stopped-session import. Evidence is under
+`target/ui-quality-review/iteration-10/`. The production build passed with the
+existing 524.30 kB entry-chunk advisory; it remains a performance follow-up.
+
+Category update: Clarity advances from 7 to **8 for the exercised workbench
+and draft-save surfaces**; Consistency advances from 8 to **9 for the exercised
+Save vocabulary and import/draft surfaces**. Neither category is final overall:
+the remaining 9/10 audit still needs narrow/200% scaling, full error/reconnect,
+input/disabled/native-dropdown, drag-cancel/invalid-target, motion-state and
+attended accessibility evidence.
+
+## Current-head category audit — 2026-11-04
+
+PR #112 is merged at `e59a1e2c`; its hosted Windows build, Edge browser suite,
+and Quality gate all passed. The next review branch starts from that current
+`origin/main` so the score audit does not rely on a pre-merge checkout.
+
+The 14-category evidence status is:
+
+1. **Contrast — 8, with a scoped 9 for plugin-status badges.** Solid text,
+   links, node metadata and quarantine badges have measured theme regressions;
+   gradients, status graphics and all meaningful boundaries are not fully
+   pixel-audited.
+2. **Typography/size — 7.** Tab words and badge size are covered, but tiny
+   canvas metadata, help text, long-name wrapping and 200% scaling need a
+   dedicated matrix.
+3. **Clarity — 8 for exercised workbench and draft-save surfaces.** Loading,
+   search, error and save explanations are clearer; reconnect/retained-draft
+   recovery and attended first-use evidence remain.
+4. **Consistency — 9 for exercised Save vocabulary/import/draft surfaces.** The
+   tested secondary panels now use the top-bar Save vocabulary; action/status
+   icon inventory, custom themes and untested panels remain.
+5. **Spacing/alignment — 8.** Desktop, narrow warning, inspector and dynamic
+   slots have evidence; long-name and full 640×360 state coverage remains.
+6. **Navigation — 8.** Tabs and keyboard focus are covered; focus restoration,
+   narrow access and the complete dialog path remain open.
+7. **Errors/recovery — 8.** Node-not-ready, plugin recovery and search/loading
+   states are covered; backend reconnect and retained-draft failure paths need
+   matching theme evidence.
+8. **Inputs — 8.** Bounds, precise numeric entry and global field styling are
+   covered; disabled/read-only/native-option and focus-state inventory remains.
+9. **Buttons — 8.** Save hierarchy and disabled/busy states are covered;
+   compact target, pressed and action-label consistency remain.
+10. **Loading/progress — 8.** Startup busy and lazy-panel slots are covered;
+    failure/retry and slow-action geometry need a complete matrix.
+11. **Menus/dropdowns — 8.** Context-menu theme/focus behavior is covered;
+    native dropdown keyboard, long option and screen-edge evidence remains.
+12. **Icons — 9 for tool-library coverage, 7 overall.** Every tool card now
+    has an icon, but action/status icon inventory and target consistency remain.
+13. **Drag/drop — 8.** Tool/plugin placement passes in themes; cancellation,
+    invalid-target feedback and keyboard equivalence remain.
+14. **Motion — 8.** Existing reduced-motion and telemetry design are covered;
+    active/stale/idle and reduced-motion captures need a unified matrix.
+
+Ordered next work: (1) audit action labels, status icons, disabled/pressed
+   states and native dropdowns; (2) add narrow/200% and reduced-motion state
+   captures; (3) qualify reconnect, retained-draft and drag-cancellation
+   recovery; (4) arrange attended scaling/Narrator evidence; (5) only then
+   reassess each score against the 9/10 definition. Unknown evidence remains
+   below 9 rather than being averaged away. Rollback is limited to the review
+   copy/test/plan edits.

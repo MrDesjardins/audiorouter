@@ -1317,13 +1317,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return;
     }
     recordDraftChange(setNodeDraftParameter(draftRef.current, nodeId, name, value), nodeId + ":" + name);
-    setActionMessage("Draft updated. Review and plan the changes before committing.");
+    setActionMessage("Draft updated. Review and save the changes when you are ready.");
   };
   const changeNodeParameter = (name: string, value: boolean | number | string) =>
     changeNodeParameterOn(selectedNode.id, name, value);
   const resetNodeParameters = () => {
     recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id));
-    setActionMessage("Processor parameters reset in the draft. Review and plan the changes before committing.");
+    setActionMessage("Processor parameters reset in the draft. Review and save the changes when you are ready.");
   };
   const changeSessionName = (name: string) => {
     try {
@@ -1382,7 +1382,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const operation = uiIdempotencyKey("graph-commit");
       const plan = await backend.planGraph(draft);
       if (currentSessionIdRef.current !== draft.id || !sameSessionDraft(draftRef.current, draft)) {
-        setActionMessage("The draft changed during review. Plan changes again before committing.");
+        setActionMessage("The draft changed during review. Review and save the changes again.");
         return;
       }
       if (plan.baseRevision !== draft.revision)
@@ -2229,7 +2229,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const inserted = next.nodes[next.nodes.length - 1];
     recordDraftChange(next);
     setSelectedNodeId(inserted.id);
-    setActionMessage(`${inserted.name} added to the draft. Review and plan the changes before committing.`);
+    setActionMessage(`${inserted.name} added to the draft. Review and save the changes when you are ready.`);
     return inserted.id;
   };
   const addEndpointLoopback = (endpointId: string) => {
@@ -2243,7 +2243,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
       setActionMessage(
-        `${inserted?.name ?? "Endpoint loopback"} added to the stopped draft. Review and plan the changes before committing.`,
+        `${inserted?.name ?? "Endpoint loopback"} added to the stopped draft. Review and save the changes when you are ready.`,
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add endpoint loopback."));
@@ -2260,7 +2260,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
       setActionMessage(
-        `${inserted?.name ?? "Virtual bus node"} added to the stopped draft. Review and plan the changes before committing.`,
+        `${inserted?.name ?? "Virtual bus node"} added to the stopped draft. Review and save the changes when you are ready.`,
       );
       return inserted?.id;
     } catch (error) {
@@ -2345,7 +2345,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setSelectedNodeIds([inserted.id]);
         }
         setActionMessage(
-          `${inserted?.name ?? "Plugin"}: inserted a stopped plugin placeholder into the connection. Bind a worker before activation, then Plan changes.`,
+          `${inserted?.name ?? "Plugin"}: inserted a stopped plugin placeholder into the connection. Bind a worker before activation, then save changes.`,
         );
       } else {
         const next = appendPluginPlaceholderNode(draft, entry);
@@ -2356,7 +2356,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setSelectedNodeIds([inserted.id]);
         }
         setActionMessage(
-          `${inserted?.name ?? "Plugin"}: added a stopped plugin placeholder to the draft. Bind a worker before activation, then Plan changes.`,
+          `${inserted?.name ?? "Plugin"}: added a stopped plugin placeholder to the draft. Bind a worker before activation, then save changes.`,
         );
       }
       closePluginPicker();
@@ -2476,7 +2476,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
       setActionMessage(
-        `${inserted?.name ?? kind} inserted into the draft. Review and plan the changes before committing.`,
+        `${inserted?.name ?? kind} inserted into the draft. Review and save the changes when you are ready.`,
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to insert processor."));
@@ -2493,7 +2493,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
       setActionMessage(
-        `${inserted?.name ?? "EQ preset"} added to the draft. Review and plan the changes before committing.`,
+        `${inserted?.name ?? "EQ preset"} added to the draft. Review and save the changes when you are ready.`,
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add preset."));
@@ -2510,7 +2510,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       if (added[0]) setSelectedNodeId(added[0].id);
       setActionMessage(
-        `${added.map((node) => node.name).join(", ")} added to the draft. Review and plan the changes before committing.`,
+        `${added.map((node) => node.name).join(", ")} added to the draft. Review and save the changes when you are ready.`,
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add voice preset."));
@@ -2712,7 +2712,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!added) throw new Error("Application capture node was not created");
       recordDraftChange(next);
       setSelectedNodeId(added.id);
-      setActionMessage("Added an application-capture source; review identity and plan the graph before committing.");
+      setActionMessage(
+        "Added an application-capture source; review its identity and save the graph when you are ready.",
+      );
       closeApplicationPicker();
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Could not add application capture.");
@@ -2756,7 +2758,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     try {
       recordDraftChange(rebindApplicationCaptureNode(draftRef.current, nodeId, application));
       setActionMessage(
-        `Application source changed to ${application.executable} (PID ${application.processId}). Review and plan the changes before committing.`,
+        `Application source changed to ${application.executable} (PID ${application.processId}). Review and save the changes when you are ready.`,
       );
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Could not change the application source.");
@@ -2775,10 +2777,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       else recordDraftChange(removeDraftConnection(draft, edgeId));
       setActionMessage(
         topologyAction?.kind === "insertMixer"
-          ? "Mixer inserted into the draft. Review and plan the changes before committing."
+          ? "Mixer inserted into the draft. Review and save the changes when you are ready."
           : topologyAction?.kind === "removeMixer"
-            ? "Mixer removed and its single path reconnected in the draft. Review and plan the changes before committing."
-            : "Connection removed from the draft. Review and plan the changes before committing.",
+            ? "Mixer removed and its single path reconnected in the draft. Review and save the changes when you are ready."
+            : "Connection removed from the draft. Review and save the changes when you are ready.",
       );
     } catch (error) {
       setActionMessage(
@@ -2801,7 +2803,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     try {
       recordDraftChange(setDraftConnectionEnabled(draft, edgeId, enabled));
       setActionMessage(
-        `Connection ${enabled ? "enabled" : "disabled"} in the draft. Review and plan the changes before committing.`,
+        `Connection ${enabled ? "enabled" : "disabled"} in the draft. Review and save the changes when you are ready.`,
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to change connection state."));
@@ -2836,7 +2838,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setSelectedNodeId(next.nodes[0]?.id ?? "");
         setSelectedNodeIds(next.nodes[0] ? [next.nodes[0].id] : []);
       }
-      setActionMessage(`${node.name} unloaded from the draft. Review and plan the changes before committing.`);
+      setActionMessage(`${node.name} unloaded from the draft. Review and save the changes when you are ready.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to unload plugin."));
     }
@@ -2848,7 +2850,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       setSelectedNodeId(copy.id);
       setActionMessage(
-        `${copy.name} added to the draft without connections. Review and plan the changes before committing.`,
+        `${copy.name} added to the draft without connections. Review and save the changes when you are ready.`,
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to duplicate node."));
@@ -2879,7 +2881,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       selectNodeProperties(inserted.id);
       setActionMessage(
-        `${inserted.name} pasted into the draft without connections. Review and plan the changes before committing.`,
+        `${inserted.name} pasted into the draft without connections. Review and save the changes when you are ready.`,
       );
       return inserted.id;
     } catch (error) {
@@ -3475,7 +3477,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     onClick={() => void planChanges()}
                     disabled={!backend.connected || graphBusy}
                   >
-                    Plan changes
+                    Save changes
                   </button>
                 </div>
               </section>

@@ -638,7 +638,7 @@ export function PropertiesPanel({
           </button>
           <p className="muted">
             {backend.connected
-              ? "Plan changes reviews the draft; Commit changes saves it. Privacy mute is an immediate safety latch."
+              ? "Save changes checks the draft before saving it. Privacy mute is an immediate safety latch."
               : "Controls are disabled while disconnected. Selection is local presentation state only."}
           </p>
         </div>

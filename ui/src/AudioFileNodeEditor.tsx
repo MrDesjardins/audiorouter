@@ -71,7 +71,7 @@ export function AudioFileNodeEditor({
         onChange("fileName", media.fileName);
       }
       setMessage(
-        `Sound Check ready · ${Math.round(media.durationMs / 1000)} sec · expires in 24 hours. Plan and commit this Audio File source before replaying it through the effects.`,
+        `Sound Check ready · ${Math.round(media.durationMs / 1000)} sec · expires in 24 hours. Save this Audio File source before replaying it through the effects.`,
       );
       activeTakeId.current = null;
       setTakeState("idle");
@@ -134,7 +134,7 @@ export function AudioFileNodeEditor({
       onChange("mediaId", media.mediaId);
       onChange("fileName", media.fileName);
       setMessage(
-        `${media.fileName} · ${Math.round(media.durationMs / 1000)} sec · ${media.channels} channel${media.channels === 1 ? "" : "s"}. Plan and commit this Audio File source before replaying it through the effects.`,
+        `${media.fileName} · ${Math.round(media.durationMs / 1000)} sec · ${media.channels} channel${media.channels === 1 ? "" : "s"}. Save this Audio File source before replaying it through the effects.`,
       );
     } catch (error) {
       setMessage(formatUiError(error, "Audio import failed."));
@@ -194,9 +194,8 @@ export function AudioFileNodeEditor({
         )}
         <small>
           Connect the voice source through this Recorder node and start the prepared session. Recording stops after 10
-          seconds or when you stop it. The sample expires after 24 hours. Plan and commit this Audio File source, then
-          use Play to hear it through the effects in the connected route. This control does not select or open a
-          microphone.
+          seconds or when you stop it. The sample expires after 24 hours. Save this Audio File source, then use Play to
+          hear it through the effects in the connected route. This control does not select or open a microphone.
         </small>
       </section>
       <div className="audio-file-inspector-transport" aria-label="Audio file playback controls">

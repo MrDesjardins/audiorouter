@@ -196,7 +196,7 @@ export function SoundboardNodeEditor({
     const slot = targetSlot();
     if (slot === null) return;
     controller.assign(node.id, slot, { mediaId: sound.id, fileName: sound.title }, picking !== "new");
-    setMessage(`${sound.title} is on button ${slot}. Plan and commit the change, then press Play.`);
+    setMessage(`${sound.title} is on button ${slot}. Save the change, then press Play.`);
     setPicking(null);
   };
   const chooseFile = async (file: File) => {
