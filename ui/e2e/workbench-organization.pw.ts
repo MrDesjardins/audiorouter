@@ -61,7 +61,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByText("No completed recording files yet.", { exact: true })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath(theme + "-recordings.png") });
     await page.getByRole("tab", { name: "MCP", exact: true }).click();
-    await page.getByText("Connect a local assistant", { exact: true }).click();
+    await page.getByRole("button", { name: "On this PC", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Choose your assistant" })).toBeVisible();
     await page.getByLabel("Local assistant").selectOption("claude");
     await expect(page.getByRole("heading", { name: "Run this in PowerShell" })).toBeVisible();
