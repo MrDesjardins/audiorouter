@@ -98,9 +98,7 @@ describe("Audio File Sound Check", () => {
     expect(onChange).toHaveBeenCalledWith("mediaId", "temporary-media");
     expect(onChange).toHaveBeenCalledWith("fileName", "voice.wav");
     expect(screen.getByText(/Sound Check ready · 10 sec · expires in 24 hours/)).toBeTruthy();
-    expect(
-      screen.getByText(/Plan and commit this Audio File source before replaying it through the effects/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Save this Audio File source before replaying it through the effects/)).toBeTruthy();
   });
 
   it("keeps Loop editable while the session is running", () => {

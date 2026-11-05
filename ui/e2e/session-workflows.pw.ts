@@ -185,7 +185,7 @@ test("session export and validated import roundtrip through the UI without start
   });
   await expect(panel).toContainText("Validated import: Portable studio");
   expect((await backend.call("sessions.list")).items).toHaveLength(1);
-  await panel.getByRole("button", { name: "Commit stopped import", exact: true }).click();
+  await panel.getByRole("button", { name: "Save imported session", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Portable studio", exact: true })).toBeVisible();
   await expect(page.locator(".audio-run-state")).toContainText("Audio stopped");
   expect((await backend.call("status.get")).activeSessionCount).toBe(0);

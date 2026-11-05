@@ -90,6 +90,24 @@ async function textContrast(page: Page) {
 }
 
 for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`save language is consistent across the workbench in ${theme}`, async ({ page }) => {
+    await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
+    await page.goto("/route-harness.html");
+    await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
+    await expect(page.locator(".topbar").getByRole("button", { name: "Save", exact: true })).toBeVisible();
+    const forbidden = page
+      .locator(".main-content :visible")
+      .getByText(/Plan changes|Commit changes|Plan and commit|Review and plan the changes/i);
+    await expect(forbidden).toHaveCount(0);
+    await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
+    await page.getByRole("tab", { name: "Properties", exact: true }).click();
+    await expect(page.locator(".main-content > .inspector")).toContainText("Save changes checks the draft");
+    await expect(
+      page.locator(".main-content > .inspector").getByText(/Plan changes|Commit changes|Plan and commit/i),
+    ).toHaveCount(0);
+    await capture(page, `${theme}-save-language`);
+  });
+
   test(`quarantined plugin health remains legible in ${theme}`, async ({ page }) => {
     await page.addInitScript(
       ({ theme, session }) => {
