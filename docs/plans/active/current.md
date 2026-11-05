@@ -800,6 +800,129 @@ and, with the owner's go-ahead, prepare a recoverable Windows baseline for
 `AR-Installer-Qualification-20261028`; then run the exact installer matrix and
 qualify the installed Stream Deck plugin against the installed shell before
 any release claim.
+
+P0 VM preparation and execution (2026-11-04/05): while powered off, created
+snapshot `p0-baseline-20261104-pre-install`
+(`ba8bd527-b6f5-4712-a7e5-ba91a8615b5c`). Installed Guest Additions 7.2.20
+from the already attached ISO; verified host properties, guest IP
+`10.0.2.15`, Windows 11 Home build `10.0.26300.9457`, and logged-on `artest`.
+The owner created `arstandard` as a non-admin and supplied a temporary password
+through the private secret flow. Guest-control authentication then passed and
+`whoami /groups` confirmed Medium integrity and membership in Users, not
+Administrators. Candidate installer SHA-256 was verified both on the host and
+in the guest as
+`073b782acd31421c28373c52c3b425d6a2e51505aea6b0f5dfe0bc4792f665da`.
+
+Fresh install: exact 0.0.26 NSIS installer ran as `arstandard`, silently, exit
+0. HKCU uninstall registration reports 0.0.26 at
+`%LOCALAPPDATA%\AudioRouter`; shell, CLI, VST2 worker, VST3 worker, Stream Deck
+package, tunnel runtime and bundled 105-sound library are present. No
+AudioRouter media driver was installed. Device inventory found only the VM's
+High Definition Audio microphone and speakers. Windows endpoints/defaults
+were not modified by installer execution. First-run `nativePaths.prepare`
+was correctly denied with `permissionDenied: DeviceAdministration`; after the
+owner approved the app's device-access consent in the VM, exact endpoint
+preparation and session start succeeded.
+
+Native lifecycle: shell log records successful instance readiness, session and
+device reads, `devices.setAccess`, exact endpoint preparation, and
+`session.start`. Read-only status showed durable SQLite, one running session,
+no safe mode/crashes. Stop returned stopped, then Start returned running at
+generation 2; diagnostics reported 59,547 processed quanta, zero deadline
+misses, input/output overruns/underruns, xruns, and repaired samples. Meter RMS
+and current peaks remained -120 dBFS, with only a prior held peak near -88 dBFS.
+The VM had no intentional test signal or playback stimulus installed, so this
+proves native prepare/start/stop/restart and clean engine counters, not audible
+signal/output quality. Physical playback continuity remains open.
+
+Repair/lifecycle: a same-version `/repair` invocation hung waiting on UI and
+was terminated without changing installed registration/files; a silent same-
+version reinstall then exited 0. The database contained the seeded
+`desktop-session` before uninstall. Uninstall exited 0; afterward uninstall
+registration and app binaries were removed while `state.sqlite` and `logs/`
+remained. Reinstall exited 0, restored 0.0.26 registration and all four main
+executables, and the CLI read the same `desktop-session` at revision 2. This
+qualifies app-data retention and reinstall; the uninstall/reinstall was done
+inside the disposable snapshot-backed VM. The repair GUI hang is a confirmed
+finding to investigate separately; it is not counted as a repair pass.
+
+Not run: WebView2-missing/bootstrap, upgrade from an older installed version,
+rollback/downgrade compatibility, actual audible Test Signal, Explorer file
+drop, and Stream Deck plugin install/actions/reconnect. Setup Check is absent
+from the 0.0.26 API (`system.checkSetup` returned method-not-found), expected
+for this release baseline. Before cleanup, the VM was powered off and restored
+to `p0-baseline-20261104-pre-install`; it is now powered off with no VM running.
+Evidence: host share
+`target/installer-share/p0-20261104/AudioRouter_0.0.26_x64-setup.exe`, shell
+log `target/vm-p0-shell.jsonl`, backend status/meter snapshots
+`target/vm-p0-runtime.jsonl`, and registration/lifecycle transcripts in ignored
+`target/` output. No credentials are included. Next: build a stimulus/test
+recording harness or use an attended test tone to qualify audible output, then
+test WebView2-missing, older-version upgrade/downgrade and Stream Deck in this
+VM; keep those results separate from the completed fresh standard-user install
+and data-retention evidence.
+
+P0 qualification completed in VirtualBox on 2026-11-04/05. Guest Additions
+7.2.20 were installed; a temporary password was entered through the private
+secret flow and used only for this disposable VM. The owner created
+`arstandard`; `whoami /groups` confirmed `BUILTIN\Users` and Medium integrity,
+with no Administrators group. Windows guest was Home 10.0.26300.9457. The 0.0.26
+installer hash matched inside the guest.
+
+Fresh install: `AudioRouter_0.0.26_x64-setup.exe` ran as `arstandard`, exit 0,
+without elevation. HKCU uninstall registration reports version 0.0.26 under
+`%LOCALAPPDATA%\AudioRouter`. Shell, CLI, both plugin workers, Stream Deck
+package, tunnel runtime and 105-sound library were present. Only VM microphone
+and speakers were enumerated; no AudioRouter media driver/device appeared.
+Installer execution did not change Windows device defaults. Shell startup
+reached the real durable SQLite backend; `shell.instanceCheck`, session and
+device reads succeeded. The seeded `desktop-session` and exact endpoint IDs
+were present.
+
+First-run device consent behaved correctly: before consent,
+`nativePaths.prepare` returned `permissionDenied: DeviceAdministration`. The
+owner approved the AudioRouter device-access prompt in the VM; afterward exact
+endpoint preparation succeeded and native audio started. An existing session
+was already playing when the owner handed over the VM. While it ran, status
+reported one active session and audio available. Diagnostics reported 59,547
+processed quanta, zero deadline misses, input/output underruns/overruns, xruns
+or repaired samples. Meter RMS/current peaks remained -120 dBFS because the VM
+had no intentional playback stimulus. A controlled Stop returned stopped;
+Start returned running at generation 2, with counters still clean. This proves
+native start/stop/restart and stream servicing, not audible signal or playback
+quality. WebView2 was present; absent/bootstrap was not tested.
+
+Lifecycle: same-version `/repair` hung waiting for UI; it did not replace the
+version or companions and was terminated. This is a defect/limitation, not a
+repair pass. Silent same-version reinstall then exited 0. Before uninstall,
+CLI read the seeded session (revision 2). Silent uninstall exited 0; app
+registration and binaries were removed while `state.sqlite` and logs remained.
+Silent reinstall exited 0, restored 0.0.26 registration and all four main
+executables; CLI still read the same session and bindings at revision 2. The
+desktop shell relaunched and the backend reported the session stopped and
+audio unavailable until deliberate preparation/start. This verifies fresh
+install, reinstall and default data retention on a true standard-user account;
+no prior-version upgrade/downgrade rollback was tested.
+
+After evidence collection, the shell tree was stopped and VM
+`AR-Installer-Qualification-20261028` was restored to snapshot
+`p0-baseline-20261104-pre-install` (`ba8bd527-b6f5-4712-a7e5-ba91a8615b5c`).
+It is powered off. No VM remains running. Evidence artifacts are local/ignored:
+installer under
+`quality-recovery-install-inventory/target/installer-share/p0-20261104/`,
+guest shell/backend JSONL copies under `%LOCALAPPDATA%/Temp/opencode/`, and
+VirtualBox logs under the VM directory. The temporary account password is not
+recorded in repository files or logs.
+
+Remaining P0 gaps: audible test signal/loopback proof (meters showed silence),
+WebView2 absent/bootstrap, prior-version upgrade and downgrade rollback,
+Stream Deck installation/actions/reconnect, Explorer drop, and unsigned trust
+prompt behavior. `system.checkSetup` is absent from the 0.0.26 API and returned
+method-not-found; this newer feature is not required to claim 0.0.26's current
+behavior, but update the plan before testing a newer candidate. Next: decide
+whether to investigate the `/repair` hang in a separate focused task, then add
+a controlled VM playback stimulus and run the remaining installer gates on a
+current release candidate.
 CI browser repair (2026-10-31): AUTO-18 catalog expansion exposed API-only
 settings to the generic tool-workflow test. Input, Soundboard and network
 nodes use dedicated editors. Reuse the inspector's exhaustive editor
