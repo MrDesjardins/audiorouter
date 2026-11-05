@@ -2,6 +2,17 @@
 
 ## Where things stand
 
+Dependabot 7 (ENG-02/04/05), owner correction: removed the rejected 55k-line
+GLib vendor import, Cargo patch and supporting checks from PR
+[#115](https://github.com/MrDesjardins/audiorouter/pull/115). Normal crates.io
+resolution is restored. Windows-target dependency inspection confirms GLib
+is absent; `cargo check --manifest-path src-tauri/Cargo.toml --locked` passes.
+Docs validation passes. No hardware or driver is needed. The PR now records
+[Windows applicability](evidence/2026-11-04-glib-iterator.md), with no runtime
+changes. The upstream issue and Dependabot alert remain unresolved. Next:
+review this disposition and track a compatible Tauri/GTK upgrade. Rollback:
+revert the documentation change; no data migration.
+
 PR #110, “Prevent draft loss and fix session, recording and network failures,”
 is merged into `main` at `814ad879` (confirmed locally from `origin/main`).
 The previous PR-open/hosted-check handoff is historical and closed. The local
