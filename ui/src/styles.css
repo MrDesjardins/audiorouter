@@ -3884,6 +3884,49 @@ button.primary {
   display: grid;
   gap: 0.25rem;
 }
+.mcp-path-picker {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--ambient-edge);
+  border-radius: 8px;
+  background: var(--ambient-surface);
+}
+.mcp-path-picker h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.mcp-path-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.mcp-path-options button[aria-pressed="true"] {
+  border-color: var(--accent, var(--cyan));
+  color: var(--text-strong);
+}
+.mcp-path-note {
+  min-height: 2.8em;
+  margin: 0;
+  line-height: 1.4;
+}
+.mcp-client-access {
+  min-height: 6rem;
+  padding: 0.65rem;
+  border: 1px solid var(--ambient-edge);
+  border-radius: 8px;
+  background: var(--ambient-surface);
+}
+.mcp-client-access p {
+  margin: 0.35rem 0 0;
+  line-height: 1.4;
+}
+.mcp-local-check {
+  min-height: 3.2em;
+  margin: 0;
+  line-height: 1.45;
+}
 .mcp-chatgpt-card {
   display: grid;
   gap: 0.7rem;

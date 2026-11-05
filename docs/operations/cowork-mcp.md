@@ -9,7 +9,9 @@ and [Cowork architecture overview](https://support.claude.com/en/articles/144792
 
 ## Setup
 
-1. Keep AudioRouter running and open its **MCP** tab.
+1. Keep AudioRouter running and open its **MCP** tab. Choose **Local Cowork**
+   under “Where does your assistant run?”; the page shows the exact
+   `audiorouter-cowork-local` client and its current role before you export.
 2. Under **Cowork**, click **Export Cowork plugin**. The app checks its installed
    MCP command, enables read-only access for `audiorouter-cowork-local`, and
    saves a uniquely named `AudioRouter-Cowork-….zip` in Downloads. The full
@@ -19,8 +21,9 @@ and [Cowork architecture overview](https://support.claude.com/en/articles/144792
    remote connector URL or a Desktop chat configuration entry.
 4. Ask: **“Use AudioRouter to list my sessions. Do not change anything.”**
    Check AudioRouter's MCP activity for the matching client and successful call.
-5. To permit edits, expand **Client permissions** in AudioRouter's MCP tab and
-   choose the role for `audiorouter-cowork-local`:
+5. To permit edits, use the **Set client permissions** link or expand **Client
+   permissions** in AudioRouter's MCP tab and choose the role for
+   `audiorouter-cowork-local`:
    - **Editor** builds and changes sessions: add, connect and set tools, fill
      Soundboard slots, undo, duplicate and delete sessions.
    - **Operator** can also control audio that is already playing: press and
