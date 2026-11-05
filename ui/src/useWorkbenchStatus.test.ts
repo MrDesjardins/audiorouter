@@ -18,8 +18,11 @@ it("records one safe category per failure run and retains the last status", asyn
     return Promise.resolve(command === "mcp_tunnel_status" ? tunnel : []);
   });
   Object.assign(window, { __TAURI_INTERNALS__: { invoke } });
+  const backend = {
+    listClients: () => (fail ? Promise.reject(new TypeError("private client data")) : Promise.resolve([])),
+  };
   const diagnostic = vi.fn();
-  const { result, unmount } = renderHook(() => useWorkbenchStatus("mcp", diagnostic));
+  const { result, unmount } = renderHook(() => useWorkbenchStatus("mcp", diagnostic, backend as never));
   await act(async () => {});
   expect(result.current.mcpTunnelStatus).toEqual(tunnel);
   fail = true;
@@ -30,7 +33,9 @@ it("records one safe category per failure run and retains the last status", asyn
   expect(diagnostic.mock.calls).toEqual([
     ["MCP activity read failed (TypeError)"],
     ["MCP tunnel status read failed (TypeError)"],
+    ["MCP setup read failed (TypeError)"],
     ["Backend activity read failed (TypeError)"],
+    ["MCP client permissions read failed (TypeError)"],
   ]);
   fail = false;
   await act(async () => {
@@ -40,20 +45,21 @@ it("records one safe category per failure run and retains the last status", asyn
   await act(async () => {
     await vi.advanceTimersByTimeAsync(2000);
   });
-  expect(diagnostic).toHaveBeenCalledTimes(6);
+  expect(diagnostic).toHaveBeenCalledTimes(10);
   unmount();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(4000);
   });
-  expect(diagnostic).toHaveBeenCalledTimes(6);
+  expect(diagnostic).toHaveBeenCalledTimes(10);
 });
 
 it("reports every initial failure without leaking an unsafe error name", async () => {
   const error = new Error("private path and credentials");
   error.name = "C:/private/secret";
   Object.assign(window, { __TAURI_INTERNALS__: { invoke: () => Promise.reject(error) } });
+  const backend = { listClients: () => Promise.reject(error) };
   const diagnostic = vi.fn();
-  renderHook(() => useWorkbenchStatus("diagnostics", diagnostic));
+  renderHook(() => useWorkbenchStatus("diagnostics", diagnostic, backend as never));
   await act(async () => {});
   expect(new Set(diagnostic.mock.calls.map(([message]) => message))).toEqual(
     new Set([
@@ -61,9 +67,10 @@ it("reports every initial failure without leaking an unsafe error name", async (
       "MCP tunnel status read failed (Error)",
       "Backend activity read failed (Error)",
       "MCP activity read failed (Error)",
+      "MCP client permissions read failed (Error)",
     ]),
   );
-  expect(diagnostic).toHaveBeenCalledTimes(4);
+  expect(diagnostic).toHaveBeenCalledTimes(5);
 });
 
 it("ignores rejections after switching away", async () => {
@@ -72,8 +79,9 @@ it("ignores rejections after switching away", async () => {
     reject = rejectPromise;
   });
   Object.assign(window, { __TAURI_INTERNALS__: { invoke: () => pending } });
+  const backend = { listClients: () => pending as Promise<never[]> };
   const diagnostic = vi.fn();
-  const { rerender } = renderHook(({ tab }) => useWorkbenchStatus(tab, diagnostic), {
+  const { rerender } = renderHook(({ tab }) => useWorkbenchStatus(tab, diagnostic, backend as never), {
     initialProps: { tab: "mcp" as "mcp" | "tools" },
   });
   rerender({ tab: "tools" });

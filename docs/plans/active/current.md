@@ -90,6 +90,8 @@ status reconciliation:
   browser suite and independent Properties-catalog tooling gate remain open.
 - [UI quality review](ui-quality-review.md) — owner-authorized visual quality
   criteria and isolated evidence harness.
+- [MCP setup and connection UX](mcp-setup-ux.md) — guided local/Cowork/ChatGPT
+  setup, exact-client role clarity, and privacy-safe connection diagnostics.
 - [Onboarding and recovery UX](../archived/2026-11-02-ux-onboarding-recovery.md)
   — UX-04 prototype, UX-06 measurements and attended gates.
 - [Accessibility UX](../archived/2026-11-02-ux-accessibility.md) — Narrator,

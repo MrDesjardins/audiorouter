@@ -895,6 +895,15 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
       __mcpCliAvailable: boolean;
     };
     state.__mcpCliAvailable = true;
+    (
+      window as typeof window & {
+        __routeFixtureMcpClients: { clientId: string; role: string; revoked: boolean }[];
+      }
+    ).__routeFixtureMcpClients = [
+      { clientId: "audiorouter-local", role: "observer", revoked: false },
+      { clientId: "audiorouter-cowork-local", role: "editor", revoked: false },
+      { clientId: "audiorouter-chatgpt", role: "operator", revoked: false },
+    ];
     state.__mcpTunnelFixture = {
       status: "disconnected",
       configured: true,
@@ -978,15 +987,34 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await page.getByRole("tab", { name: "MCP" }).click();
   await expect(page.getByRole("heading", { name: "MCP connections" })).toBeVisible();
   expect(await page.locator(".right-workbench").evaluate((element) => element.scrollTop)).toBe(0);
-  await expect(page.locator(".mcp-chatgpt-card .mcp-status")).toHaveText("Disconnected");
-  await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Open ChatGPT connector settings" })).toHaveCount(0);
+  await expect(page.getByText(/Use the local stdio command/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "ChatGPT · OpenAI tunnel" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Cowork" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Local Cowork" }).click();
   await expect(page.getByRole("heading", { name: "Cowork" })).toBeVisible();
   await expect(page.getByText(/For local Cowork on this PC, export the plugin/)).toBeVisible();
+  await expect(page.getByText("audiorouter-cowork-local: not authorized")).toBeVisible();
+  await page.getByRole("button", { name: "Set client permissions" }).click();
+  await expect(page.getByLabel("New client ID")).toHaveValue("audiorouter-cowork-local");
+  await page.getByRole("button", { name: "ChatGPT" }).click();
+  await expect(page.getByText("audiorouter-chatgpt: not authorized")).toBeVisible();
+  await page.getByRole("button", { name: "Set client permissions" }).click();
+  await expect(page.getByLabel("New client ID")).toHaveValue("audiorouter-chatgpt");
+  await page.getByRole("button", { name: "Local Cowork" }).click();
   const cowork = page.locator(".mcp-remote-info");
   const coworkHeight = await cowork.evaluate((element) => element.getBoundingClientRect().height);
   await expect(page.getByRole("button", { name: "Export Cowork plugin" })).toBeDisabled();
   expect(await cowork.evaluate((element) => element.getBoundingClientRect().height)).toBe(coworkHeight);
+  for (const theme of ["dark", "light", "high-contrast"]) {
+    await setColorTheme(page, theme);
+    await expect(cowork).toBeVisible();
+    await cowork.screenshot({ path: testInfo.outputPath(`cowork-${theme}.png`) });
+    expect(await cowork.evaluate((element) => element.getBoundingClientRect().height)).toBe(coworkHeight);
+  }
+  await page.getByRole("button", { name: "ChatGPT" }).click();
+  await expect(page.locator(".mcp-chatgpt-card .mcp-status")).toHaveText("Disconnected");
+  await expect(page.getByRole("button", { name: "Connect", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open ChatGPT connector settings" })).toHaveCount(0);
   const card = page.locator(".mcp-chatgpt-card");
   const originalBounds = await card.evaluate((element) => {
     const { width, height } = element.getBoundingClientRect();
@@ -1001,25 +1029,15 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
       return { width, height };
     });
     expect(bounds).toEqual(originalBounds);
-    await cowork.screenshot({ path: testInfo.outputPath(`cowork-${theme}.png`) });
   }
-  await page.getByText("Connect a local assistant").click();
+  await page.getByRole("button", { name: "On this PC" }).click();
   await expect(page.getByLabel("Assistant client ID")).toBeVisible();
   await expect(page.locator(".mcp-command").first()).toContainText("mcp_servers.audiorouter");
   await page.getByRole("button", { name: "Copy Codex config" }).click();
   await expect(page.getByRole("status").filter({ hasText: /Copied|Clipboard unavailable/ })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("workspace-mcp.png"), fullPage: false });
-  await page.evaluate(() => {
-    const state = window as typeof window & { __mcpTunnelFixture: { status: string } };
-    state.__mcpTunnelFixture.status = "connected";
-  });
-  await expect(page.getByRole("button", { name: "Open ChatGPT connector settings" })).toBeVisible({ timeout: 5000 });
-  await expect(page.getByRole("button", { name: "Disconnect", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
-  await page.locator(".right-workbench").evaluate((element) => {
-    element.scrollTop = 0;
-  });
-  await page.screenshot({ path: testInfo.outputPath("mcp-connected.png") });
+  await page.getByRole("button", { name: "ChatGPT" }).click();
+  await expect(page.getByText("audiorouter-chatgpt: not authorized")).toBeVisible();
   expect(await card.evaluate((element) => element.getBoundingClientRect().height)).toBe(originalBounds.height);
   await page.evaluate(() => {
     const state = window as typeof window & { __mcpCliAvailable: boolean };
@@ -1027,7 +1045,8 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   });
   await page.getByRole("tab", { name: "Logs" }).click();
   await page.getByRole("tab", { name: "MCP" }).click();
-  await page.getByText("Connect a local assistant").click();
+  await page.getByRole("button", { name: "On this PC" }).click();
+  await expect(page.getByLabel("Assistant client ID")).toBeVisible();
   await expect(
     page.getByText(
       "The local MCP command is missing. Repair or update your AudioRouter installation before continuing.",

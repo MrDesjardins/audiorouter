@@ -37,6 +37,16 @@ for (const initial of ["new", "editor", "revoked"] as const) {
     }, initial);
     await page.goto("/route-harness.html");
     await page.getByRole("tab", { name: "MCP" }).click();
+    await page.getByRole("button", { name: "Local Cowork" }).click();
+    await expect(
+      page.getByText(
+        initial === "new"
+          ? "audiorouter-cowork-local: not authorized"
+          : initial === "revoked"
+            ? "audiorouter-cowork-local: revoked"
+            : "audiorouter-cowork-local: editor",
+      ),
+    ).toBeVisible();
     const card = page.locator(".mcp-remote-info");
     const button = card.getByRole("button", { name: "Export Cowork plugin" });
     const height = await card.evaluate((element) => element.getBoundingClientRect().height);

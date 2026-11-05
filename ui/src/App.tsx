@@ -793,9 +793,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   );
   // Failed backend requests, with the correlation ID that finds them in shell.jsonl and backend.jsonl (P2-3).
   useEffect(() => onRpcFailure(recordUiDiagnostic), [recordUiDiagnostic]);
-  const { mcpActivity, mcpSetupInfo, mcpTunnelStatus, backendActivity } = useWorkbenchStatus(
+  const { mcpActivity, mcpClients, mcpSetupInfo, mcpTunnelStatus, backendActivity } = useWorkbenchStatus(
     workbenchTab,
     recordUiDiagnostic,
+    backend,
   );
   useEffect(() => {
     writeShortcuts(optionalLocalStorage(), shortcuts);
@@ -3674,6 +3675,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   verboseLogging={verboseLogging}
                   backendActivity={backendActivity}
                   mcpActivity={mcpActivity}
+                  mcpClients={mcpClients}
                   mcpSetupInfo={mcpSetupInfo}
                   mcpTunnelStatus={mcpTunnelStatus}
                   onOpenMcpSetupPage={(page) =>
@@ -3727,7 +3729,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                       ? invoke("mcp_tunnel_forget").then(() => undefined)
                       : Promise.reject(new Error("ChatGPT tunnel setup is available in the AudioRouter app."));
                   }}
-                  clientsPanel={<ClientsPanel backend={backend} />}
+                  clientsPanel={(initialClientId) => (
+                    <ClientsPanel backend={backend} initialClientId={initialClientId} />
+                  )}
                   statusContent={statusWorkbenchContent}
                   statusHasProblem={
                     setupCheck.result?.findings.some((finding) => finding.severity === "problem") ?? false

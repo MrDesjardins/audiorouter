@@ -70,6 +70,7 @@ const props: ComponentProps<typeof Workbench> = {
   diagnostics: [],
   backendActivity: [],
   mcpActivity: [],
+  mcpClients: [],
   mcpSetupInfo: null,
   mcpTunnelStatus: null,
   onOpenMcpSetupPage: vi.fn(),
@@ -77,7 +78,7 @@ const props: ComponentProps<typeof Workbench> = {
   onMcpTunnelConnect: vi.fn(),
   onMcpTunnelDisconnect: vi.fn(),
   onMcpTunnelForget: vi.fn(),
-  clientsPanel: null,
+  clientsPanel: () => null,
   statusContent: <button>Retry check</button>,
   virtualCablesContent: null,
   appsContent: null,
@@ -144,4 +145,85 @@ it("does not steal external focus when selection changes", () => {
     </>,
   );
   expect(document.activeElement).toBe(outside);
+});
+
+it("guides the selected local MCP client and explains its current role", async () => {
+  const view = render(
+    <Workbench
+      {...props}
+      tab="mcp"
+      connected
+      mcpSetupInfo={{
+        cliPath: "C:\\AudioRouter\\audiorouter-cli.exe",
+        cliAvailable: true,
+        databasePath: "C:\\AudioRouter\\main.sqlite",
+        pipeName: "\\\\.\\pipe\\audiorouter-control",
+        transport: "local named pipe",
+      }}
+      mcpClients={[
+        { clientId: "audiorouter-local", role: "editor", revoked: false },
+        { clientId: "audiorouter-chatgpt", role: "operator", revoked: false },
+      ]}
+    />,
+  );
+
+  expect(screen.getByRole("heading", { name: "MCP connections" })).toBeTruthy();
+  expect(screen.getByText("audiorouter-local: editor")).toBeTruthy();
+  expect(screen.getByText(/create and change saved sessions/)).toBeTruthy();
+  expect(screen.getByText(/cannot receive device administration or press Play/)).toBeTruthy();
+  expect(screen.getByText(/Ready for a read-only test/)).toBeTruthy();
+
+  fireEvent.click(screen.getByRole("button", { name: "ChatGPT" }));
+  expect(screen.queryByText("Connect a local assistant")).toBeNull();
+  expect(screen.getByRole("heading", { name: "ChatGPT · OpenAI tunnel" })).toBeTruthy();
+  expect(screen.getByText("audiorouter-chatgpt: operator")).toBeTruthy();
+
+  view.rerender(
+    <Workbench
+      {...props}
+      tab="mcp"
+      connected
+      mcpSetupInfo={{
+        cliPath: "C:\\AudioRouter\\audiorouter-cli.exe",
+        cliAvailable: true,
+        databasePath: "C:\\AudioRouter\\main.sqlite",
+        pipeName: "\\\\.\\pipe\\audiorouter-control",
+        transport: "local named pipe",
+      }}
+      mcpClients={[{ clientId: "audiorouter-local", role: "observer", revoked: true }]}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "On this PC" }));
+  expect(screen.getByText("audiorouter-local: revoked")).toBeTruthy();
+  expect(screen.getByText(/Review Client permissions/)).toBeTruthy();
+});
+
+it("gives a next step for a redacted permission denial", () => {
+  render(
+    <Workbench
+      {...props}
+      tab="mcp"
+      connected
+      mcpSetupInfo={{
+        cliPath: "C:\\AudioRouter\\audiorouter-cli.exe",
+        cliAvailable: true,
+        databasePath: "C:\\AudioRouter\\main.sqlite",
+        pipeName: "\\\\.\\pipe\\audiorouter-control",
+        transport: "local named pipe",
+      }}
+      mcpClients={[{ clientId: "audiorouter-local", role: "observer", revoked: false }]}
+      mcpActivity={[
+        {
+          timeUnixMs: Date.now(),
+          clientId: "audiorouter-local",
+          tool: "create_session",
+          argumentFields: ["name"],
+          outcome: "error",
+          errorKind: "permissionDenied",
+        },
+      ]}
+    />,
+  );
+  expect(screen.getByText(/lacks permission for that action/)).toBeTruthy();
+  expect(screen.getByText(/Audio and argument values are excluded/)).toBeTruthy();
 });

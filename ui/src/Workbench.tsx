@@ -7,6 +7,7 @@ import { TextField } from "./TextField";
 import { HelpDisclosure } from "./HelpDisclosure";
 import { DuckGlyph } from "./DuckGlyph";
 import type { Session } from "@audiorouter/contracts";
+import type { ClientRow } from "./backend";
 import { lazy, startTransition, Suspense, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 const ApiPanel = lazy(() => import("./ApiPanel").then((module) => ({ default: module.ApiPanel })));
@@ -227,6 +228,40 @@ export type McpTunnelStatus = {
   runtimeAvailable: boolean;
 };
 
+function clientRoleGuidance(role: ClientRow["role"] | null) {
+  switch (role) {
+    case "observer":
+      return "Read-only: the assistant can inspect sessions, devices, and route status.";
+    case "editor":
+      return "Can also create and change saved sessions and routes.";
+    case "operator":
+      return "Can also control audio that is already playing, including mute and Stop.";
+    default:
+      return "Authorize this exact client as Observer to allow read-only access. Change its role only when you need additional actions.";
+  }
+}
+
+function mcpFailureGuidance(errorKind: string | null | undefined) {
+  switch (errorKind) {
+    case "permissionDenied":
+      return "The client lacks permission for that action. Check its role under Client permissions; a role change is always your choice.";
+    case "unavailable":
+      return "AudioRouter or a required local service was unavailable. Reconnect AudioRouter, then try the read-only session check again.";
+    case "revisionConflict":
+      return "The session changed during the request. Ask the assistant to reread the session and review the new change before trying again.";
+    case "invalidParams":
+      return "The request did not match the tool's required inputs. Ask the assistant to read the tool description and retry with the listed fields.";
+    case "notFound":
+      return "The requested session or item was not found. Refresh the session list and select an existing item.";
+    case "rateLimited":
+      return "Too many requests arrived at once. Wait briefly, then retry once.";
+    case "unsupported":
+      return "This action is not available in the current AudioRouter setup. Review the tool result and available capabilities.";
+    default:
+      return "See the activity entry for the tool and outcome. Argument values are intentionally not stored.";
+  }
+}
+
 export function Workbench({
   onAddGroup,
   tab,
@@ -252,6 +287,7 @@ export function Workbench({
   diagnostics,
   backendActivity,
   mcpActivity,
+  mcpClients,
   mcpSetupInfo,
   mcpTunnelStatus,
   onOpenMcpSetupPage,
@@ -308,6 +344,7 @@ export function Workbench({
   diagnostics: string[];
   backendActivity: Record<string, unknown>[];
   mcpActivity: McpActivity[];
+  mcpClients: ClientRow[];
   mcpSetupInfo: McpSetupInfo | null;
   mcpTunnelStatus: McpTunnelStatus | null;
   onOpenMcpSetupPage: (page: "tunnels" | "apiKeys" | "chatgptConnectors") => Promise<void>;
@@ -316,7 +353,7 @@ export function Workbench({
   onMcpTunnelDisconnect: () => Promise<void>;
   onMcpTunnelForget: () => Promise<void>;
   onExportCoworkPlugin?: () => Promise<string>;
-  clientsPanel: ReactNode;
+  clientsPanel: (initialClientId?: string) => ReactNode;
   statusContent: ReactNode;
   statusHasProblem?: boolean;
   virtualCablesContent: ReactNode;
@@ -364,6 +401,7 @@ export function Workbench({
     };
   }, []);
   const [localAssistant, setLocalAssistant] = useState("codex");
+  const [mcpConnectionPath, setMcpConnectionPath] = useState<"local" | "cowork" | "chatgpt">("local");
   const [mcpClientId, setMcpClientId] = useState("audiorouter-local");
   const [copyMessage, setCopyMessage] = useState("");
   const [coworkBusy, setCoworkBusy] = useState(false);
@@ -389,6 +427,32 @@ export function Workbench({
   const psQuoted = (value: string) => `'${value.replaceAll("'", "''")}'`;
   const codexConfig = `[mcp_servers.audiorouter]\ncommand = ${quoted(cli)}\nargs = ["mcp", "serve", "--client-id", ${quoted(mcpClientId)}, "--database", ${quoted(db)}, "--pipe", ${quoted(pipe)}]`;
   const claudeCommand = `claude mcp add --scope user audiorouter -- ${psQuoted(cli)} mcp serve --client-id ${psQuoted(mcpClientId)} --database ${psQuoted(db)} --pipe ${psQuoted(pipe)}`;
+  const localClient = mcpClients.find((client) => client.clientId === mcpClientId);
+  const localClientActivity = mcpActivity.find((entry) => entry.clientId === mcpClientId);
+  const localClientRole = localClient && !localClient.revoked ? localClient.role : null;
+  const selectedMcpClientId =
+    mcpConnectionPath === "chatgpt"
+      ? "audiorouter-chatgpt"
+      : mcpConnectionPath === "cowork"
+        ? "audiorouter-cowork-local"
+        : mcpClientId;
+  const selectedMcpClient = mcpClients.find((client) => client.clientId === selectedMcpClientId);
+  const selectedMcpClientRole = selectedMcpClient && !selectedMcpClient.revoked ? selectedMcpClient.role : null;
+  const localCheckText = !mcpSetupInfo
+    ? "Checking the installed MCP command and local client access…"
+    : !mcpSetupInfo.cliAvailable
+      ? "The installed MCP command is missing. Repair or update AudioRouter before connecting an assistant."
+      : !connected
+        ? "AudioRouter is not connected to its backend. Reconnect the app before testing MCP."
+        : !localClientRole
+          ? localClient?.revoked
+            ? "This client is revoked. Review Client permissions before reconnecting it."
+            : "This client is not authorized yet. Authorize it as Observer to allow read-only access."
+          : localClientActivity?.outcome === "error"
+            ? mcpFailureGuidance(localClientActivity.errorKind)
+            : localClientActivity?.outcome === "ok"
+              ? "A local MCP request succeeded. This confirms local access, not that an external connector is enabled."
+              : "Ready for a read-only test. Ask the assistant to list AudioRouter sessions, then check Recent MCP activity.";
   const copy = (value: string) => {
     if (!navigator.clipboard) {
       setCopyMessage("Clipboard unavailable. Select the text and copy it.");
@@ -759,427 +823,498 @@ export function Workbench({
               </p>
             </header>
 
-            <section className="mcp-chatgpt-card" aria-labelledby="mcp-chatgpt-title">
-              <div className="mcp-card-heading">
-                <div>
-                  <h3 id="mcp-chatgpt-title">ChatGPT · OpenAI tunnel</h3>
-                  <p className="muted mcp-tunnel-description">
-                    {mcpTunnelStatus?.status === "connected"
-                      ? "The AudioRouter tunnel is ready. Finish adding it in ChatGPT connector settings."
-                      : mcpTunnelStatus?.status === "connecting"
-                        ? "Starting the secure connection…"
-                        : mcpTunnelStatus?.status === "actionNeeded"
-                          ? "The tunnel stopped. Check the tunnel ID, key access, and internet connection."
-                          : mcpTunnelStatus?.status === "needsSetup"
-                            ? "Your tunnel ID is saved. Add its restricted runtime key to connect."
-                            : mcpTunnelStatus?.status === "disconnected"
-                              ? "Your OpenAI tunnel is set up and ready to connect."
-                              : mcpTunnelStatus?.status === "notConfigured"
-                                ? "Connect an existing OpenAI tunnel to AudioRouter."
-                                : "Checking the local tunnel…"}
-                  </p>
-                </div>
-                <span className={`mcp-status mcp-status-${mcpTunnelStatus?.status ?? "checking"}`}>
-                  {mcpTunnelStatus?.status === "connected"
-                    ? "Tunnel ready"
-                    : mcpTunnelStatus?.status === "connecting"
-                      ? "Connecting"
-                      : mcpTunnelStatus?.status === "actionNeeded"
-                        ? "Action needed"
-                        : mcpTunnelStatus?.status === "needsSetup"
-                          ? "Needs setup"
-                          : mcpTunnelStatus?.status === "disconnected"
-                            ? "Disconnected"
-                            : mcpTunnelStatus?.status === "notConfigured"
-                              ? "Not connected"
-                              : "Checking"}
-                </span>
+            <section className="mcp-path-picker" aria-labelledby="mcp-path-heading">
+              <h3 id="mcp-path-heading">Where does your assistant run?</h3>
+              <div className="mcp-path-options" role="group" aria-label="Assistant connection type">
+                <button
+                  type="button"
+                  aria-pressed={mcpConnectionPath === "local"}
+                  className={mcpConnectionPath === "local" ? "active" : "secondary"}
+                  onClick={() => setMcpConnectionPath("local")}
+                >
+                  On this PC
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={mcpConnectionPath === "cowork"}
+                  className={mcpConnectionPath === "cowork" ? "active" : "secondary"}
+                  onClick={() => setMcpConnectionPath("cowork")}
+                >
+                  Local Cowork
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={mcpConnectionPath === "chatgpt"}
+                  className={mcpConnectionPath === "chatgpt" ? "active" : "secondary"}
+                  onClick={() => setMcpConnectionPath("chatgpt")}
+                >
+                  ChatGPT
+                </button>
               </div>
-              <p>
-                ChatGPT uses the separate <code>audiorouter-chatgpt</code> client with read-only access. To let it
-                create or edit sessions, grant Editor under Client permissions; grant Operator to also let it press
-                Soundboard sounds and control audio that is playing. You still press Play here. Audio stays on this PC;
-                only MCP requests and results cross the encrypted tunnel.
+              <p className="muted mcp-path-note" aria-live="polite">
+                {mcpConnectionPath === "local"
+                  ? "Use the local stdio command for Codex, Claude Code, or another assistant running on this PC."
+                  : mcpConnectionPath === "cowork"
+                    ? "Local Cowork uses an exported plugin on this PC. Cloud Cowork cannot use the local command; remote access is not available yet."
+                    : "ChatGPT uses the optional OpenAI Secure MCP Tunnel below. It is separate from standard local MCP."}
               </p>
-              {mcpTunnelStatus && !mcpTunnelStatus.runtimeAvailable && (
-                <p className="mcp-tunnel-error" role="status">
-                  The OpenAI tunnel runtime is missing from this AudioRouter installation. Update or reinstall
-                  AudioRouter, then try again.
+              <div className="mcp-client-access" role="status" aria-live="polite">
+                <strong>
+                  {selectedMcpClientRole
+                    ? `${selectedMcpClientId}: ${selectedMcpClientRole}`
+                    : selectedMcpClient?.revoked
+                      ? `${selectedMcpClientId}: revoked`
+                      : `${selectedMcpClientId || "Client ID required"}: not authorized`}
+                </strong>
+                <p>{clientRoleGuidance(selectedMcpClientRole)}</p>
+                <p className="muted">
+                  MCP clients cannot receive device administration or press Play to open audio devices.
                 </p>
-              )}
-              {!mcpTunnelStatus && (
-                <p className="mcp-tunnel-message" role="status" aria-live="polite">
-                  Checking this PC for the optional OpenAI tunnel…
-                </p>
-              )}
-              {mcpTunnelStatus?.runtimeAvailable &&
-                (!mcpTunnelStatus.configured || mcpTunnelStatus.status === "needsSetup" || showTunnelSetup) && (
-                  <div className="mcp-tunnel-setup">
-                    <p className="muted">
-                      <strong>1.</strong> Create or choose an OpenAI tunnel. <strong>2.</strong> Create a restricted
-                      runtime key with <strong>Tunnels Read + Use</strong>. <strong>3.</strong> Enter both below. The
-                      key is encrypted for your Windows account and is never saved in ChatGPT.
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={(event) => {
+                    const panel = event.currentTarget
+                      .closest(".workbench-page")
+                      ?.querySelector<HTMLDetailsElement>("[data-client-permissions]");
+                    if (panel) {
+                      panel.open = true;
+                      panel.scrollIntoView({ block: "start", behavior: "smooth" });
+                      panel.querySelector("summary")?.focus();
+                    }
+                  }}
+                >
+                  Set client permissions
+                </button>
+              </div>
+            </section>
+
+            {mcpConnectionPath === "chatgpt" && (
+              <section className="mcp-chatgpt-card" aria-labelledby="mcp-chatgpt-title">
+                <div className="mcp-card-heading">
+                  <div>
+                    <h3 id="mcp-chatgpt-title">ChatGPT · OpenAI tunnel</h3>
+                    <p className="muted mcp-tunnel-description">
+                      {mcpTunnelStatus?.status === "connected"
+                        ? "The AudioRouter tunnel is ready. Finish adding it in ChatGPT connector settings."
+                        : mcpTunnelStatus?.status === "connecting"
+                          ? "Starting the secure connection…"
+                          : mcpTunnelStatus?.status === "actionNeeded"
+                            ? "The tunnel stopped. Check the tunnel ID, key access, and internet connection."
+                            : mcpTunnelStatus?.status === "needsSetup"
+                              ? "Your tunnel ID is saved. Add its restricted runtime key to connect."
+                              : mcpTunnelStatus?.status === "disconnected"
+                                ? "Your OpenAI tunnel is set up and ready to connect."
+                                : mcpTunnelStatus?.status === "notConfigured"
+                                  ? "Connect an existing OpenAI tunnel to AudioRouter."
+                                  : "Checking the local tunnel…"}
                     </p>
-                    <button type="button" className="mcp-chatgpt-open" onClick={() => openMcpSetupPage("tunnels")}>
-                      Open OpenAI tunnel settings
-                    </button>
-                    <button type="button" className="mcp-chatgpt-open" onClick={() => openMcpSetupPage("apiKeys")}>
-                      Create restricted runtime key
-                    </button>
-                    <label>
-                      Tunnel ID
-                      <input
-                        aria-label="OpenAI tunnel ID"
-                        autoComplete="off"
-                        value={tunnelIdInput || mcpTunnelStatus?.tunnelId || ""}
-                        onChange={(event) => setTunnelIdInput(event.target.value.trim())}
-                        placeholder="tunnel_…"
-                        disabled={tunnelBusy}
-                      />
-                    </label>
-                    <label>
-                      Restricted runtime key
-                      <input
-                        aria-label="OpenAI restricted runtime key"
-                        type="password"
-                        autoComplete="new-password"
-                        value={runtimeKeyInput}
-                        onChange={(event) => setRuntimeKeyInput(event.target.value)}
-                        placeholder="Paste the key once"
-                        disabled={tunnelBusy}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      disabled={
-                        tunnelBusy ||
-                        !(tunnelIdInput.trim() || mcpTunnelStatus?.tunnelId?.trim()) ||
-                        !runtimeKeyInput ||
-                        !mcpTunnelStatus?.runtimeAvailable
-                      }
-                      onClick={() => {
-                        const tunnelId = tunnelIdInput.trim() || mcpTunnelStatus?.tunnelId?.trim() || "";
-                        const runtimeKey = runtimeKeyInput;
-                        setRuntimeKeyInput("");
-                        setTunnelMessage("");
-                        setTunnelBusy(true);
-                        void onMcpTunnelConfigure(tunnelId, runtimeKey)
-                          .then(() => {
-                            setTunnelIdInput("");
-                            setShowTunnelSetup(false);
-                            return onMcpTunnelConnect();
-                          })
-                          .then(() => setTunnelMessage("Secure tunnel starting."))
-                          .catch((error: unknown) =>
-                            setTunnelMessage(error instanceof Error ? error.message : "Could not connect the tunnel."),
-                          )
-                          .finally(() => setTunnelBusy(false));
-                      }}
-                    >
-                      {tunnelBusy ? "Connecting…" : "Save securely and connect"}
-                    </button>
                   </div>
+                  <span className={`mcp-status mcp-status-${mcpTunnelStatus?.status ?? "checking"}`}>
+                    {mcpTunnelStatus?.status === "connected"
+                      ? "Tunnel ready"
+                      : mcpTunnelStatus?.status === "connecting"
+                        ? "Connecting"
+                        : mcpTunnelStatus?.status === "actionNeeded"
+                          ? "Action needed"
+                          : mcpTunnelStatus?.status === "needsSetup"
+                            ? "Needs setup"
+                            : mcpTunnelStatus?.status === "disconnected"
+                              ? "Disconnected"
+                              : mcpTunnelStatus?.status === "notConfigured"
+                                ? "Not connected"
+                                : "Checking"}
+                  </span>
+                </div>
+                <p>
+                  ChatGPT uses the separate <code>audiorouter-chatgpt</code> client with read-only access. To let it
+                  create or edit sessions, grant Editor under Client permissions; grant Operator to also let it press
+                  Soundboard sounds and control audio that is playing. You still press Play here. Audio stays on this
+                  PC; only MCP requests and results cross the encrypted tunnel.
+                </p>
+                {mcpTunnelStatus && !mcpTunnelStatus.runtimeAvailable && (
+                  <p className="mcp-tunnel-error" role="status">
+                    The OpenAI tunnel runtime is missing from this AudioRouter installation. Update or reinstall
+                    AudioRouter, then try again.
+                  </p>
                 )}
-              {mcpTunnelStatus?.configured &&
-                mcpTunnelStatus.runtimeAvailable &&
-                mcpTunnelStatus.status !== "needsSetup" &&
-                !showTunnelSetup && (
-                  <div className="mcp-tunnel-actions">
-                    <div className="mcp-tunnel-primary-action">
-                      {mcpTunnelStatus.status === "connected" || mcpTunnelStatus.status === "connecting" ? (
+                {!mcpTunnelStatus && (
+                  <p className="mcp-tunnel-message" role="status" aria-live="polite">
+                    Checking this PC for the optional OpenAI tunnel…
+                  </p>
+                )}
+                {mcpTunnelStatus?.runtimeAvailable &&
+                  (!mcpTunnelStatus.configured || mcpTunnelStatus.status === "needsSetup" || showTunnelSetup) && (
+                    <div className="mcp-tunnel-setup">
+                      <p className="muted">
+                        <strong>1.</strong> Create or choose an OpenAI tunnel. <strong>2.</strong> Create a restricted
+                        runtime key with <strong>Tunnels Read + Use</strong>. <strong>3.</strong> Enter both below. The
+                        key is encrypted for your Windows account and is never saved in ChatGPT.
+                      </p>
+                      <button type="button" className="mcp-chatgpt-open" onClick={() => openMcpSetupPage("tunnels")}>
+                        Open OpenAI tunnel settings
+                      </button>
+                      <button type="button" className="mcp-chatgpt-open" onClick={() => openMcpSetupPage("apiKeys")}>
+                        Create restricted runtime key
+                      </button>
+                      <label>
+                        Tunnel ID
+                        <input
+                          aria-label="OpenAI tunnel ID"
+                          autoComplete="off"
+                          value={tunnelIdInput || mcpTunnelStatus?.tunnelId || ""}
+                          onChange={(event) => setTunnelIdInput(event.target.value.trim())}
+                          placeholder="tunnel_…"
+                          disabled={tunnelBusy}
+                        />
+                      </label>
+                      <label>
+                        Restricted runtime key
+                        <input
+                          aria-label="OpenAI restricted runtime key"
+                          type="password"
+                          autoComplete="new-password"
+                          value={runtimeKeyInput}
+                          onChange={(event) => setRuntimeKeyInput(event.target.value)}
+                          placeholder="Paste the key once"
+                          disabled={tunnelBusy}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        disabled={
+                          tunnelBusy ||
+                          !(tunnelIdInput.trim() || mcpTunnelStatus?.tunnelId?.trim()) ||
+                          !runtimeKeyInput ||
+                          !mcpTunnelStatus?.runtimeAvailable
+                        }
+                        onClick={() => {
+                          const tunnelId = tunnelIdInput.trim() || mcpTunnelStatus?.tunnelId?.trim() || "";
+                          const runtimeKey = runtimeKeyInput;
+                          setRuntimeKeyInput("");
+                          setTunnelMessage("");
+                          setTunnelBusy(true);
+                          void onMcpTunnelConfigure(tunnelId, runtimeKey)
+                            .then(() => {
+                              setTunnelIdInput("");
+                              setShowTunnelSetup(false);
+                              return onMcpTunnelConnect();
+                            })
+                            .then(() => setTunnelMessage("Secure tunnel starting."))
+                            .catch((error: unknown) =>
+                              setTunnelMessage(
+                                error instanceof Error ? error.message : "Could not connect the tunnel.",
+                              ),
+                            )
+                            .finally(() => setTunnelBusy(false));
+                        }}
+                      >
+                        {tunnelBusy ? "Connecting…" : "Save securely and connect"}
+                      </button>
+                    </div>
+                  )}
+                {mcpTunnelStatus?.configured &&
+                  mcpTunnelStatus.runtimeAvailable &&
+                  mcpTunnelStatus.status !== "needsSetup" &&
+                  !showTunnelSetup && (
+                    <div className="mcp-tunnel-actions">
+                      <div className="mcp-tunnel-primary-action">
+                        {mcpTunnelStatus.status === "connected" || mcpTunnelStatus.status === "connecting" ? (
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={tunnelBusy}
+                            onClick={() => {
+                              setTunnelBusy(true);
+                              void onMcpTunnelDisconnect()
+                                .then(() => setTunnelMessage("The local tunnel has stopped."))
+                                .catch(() => setTunnelMessage("Could not stop the local tunnel."))
+                                .finally(() => setTunnelBusy(false));
+                            }}
+                          >
+                            Disconnect
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={tunnelBusy || !mcpTunnelStatus.runtimeAvailable}
+                            onClick={() => {
+                              setTunnelBusy(true);
+                              setTunnelMessage("");
+                              void onMcpTunnelConnect()
+                                .then(() => setTunnelMessage("Secure tunnel starting."))
+                                .catch((error: unknown) =>
+                                  setTunnelMessage(
+                                    error instanceof Error ? error.message : "Could not connect the tunnel.",
+                                  ),
+                                )
+                                .finally(() => setTunnelBusy(false));
+                            }}
+                          >
+                            {tunnelBusy
+                              ? "Connecting…"
+                              : mcpTunnelStatus.status === "actionNeeded"
+                                ? "Retry connection"
+                                : "Connect"}
+                          </button>
+                        )}
+                      </div>
+                      <div className="mcp-tunnel-handoff-slot">
+                        {mcpTunnelStatus.status === "connected" && (
+                          <>
+                            <button
+                              type="button"
+                              className="mcp-chatgpt-open"
+                              onClick={() => openMcpSetupPage("chatgptConnectors")}
+                            >
+                              Open ChatGPT connector settings
+                            </button>
+                            <p className="muted mcp-tunnel-chat-guidance">
+                              Next: add this tunnel as a connector, then enable AudioRouter from the add-tools menu in a
+                              conversation.
+                            </p>
+                          </>
+                        )}
+                        {mcpTunnelStatus.status !== "connected" && (
+                          <p className="muted mcp-tunnel-chat-guidance">
+                            {mcpTunnelStatus.status === "actionNeeded"
+                              ? "Retry the tunnel connection. ChatGPT setup appears here after it connects."
+                              : mcpTunnelStatus.status === "connecting"
+                                ? "When the tunnel connects, add it in ChatGPT and enable it from the conversation's add-tools menu."
+                                : "After connecting, add this tunnel in ChatGPT, then enable it from the conversation's add-tools menu."}
+                          </p>
+                        )}
+                      </div>
+                      <div className="mcp-tunnel-management-actions">
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={tunnelBusy}
+                          onClick={() => setShowTunnelSetup(true)}
+                        >
+                          Update tunnel details
+                        </button>
                         <button
                           type="button"
                           className="secondary"
                           disabled={tunnelBusy}
                           onClick={() => {
                             setTunnelBusy(true);
-                            void onMcpTunnelDisconnect()
-                              .then(() => setTunnelMessage("The local tunnel has stopped."))
-                              .catch(() => setTunnelMessage("Could not stop the local tunnel."))
-                              .finally(() => setTunnelBusy(false));
-                          }}
-                        >
-                          Disconnect
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={tunnelBusy || !mcpTunnelStatus.runtimeAvailable}
-                          onClick={() => {
-                            setTunnelBusy(true);
-                            setTunnelMessage("");
-                            void onMcpTunnelConnect()
-                              .then(() => setTunnelMessage("Secure tunnel starting."))
-                              .catch((error: unknown) =>
+                            void onMcpTunnelForget()
+                              .then(() => {
+                                setShowTunnelSetup(false);
+                                setTunnelIdInput("");
                                 setTunnelMessage(
-                                  error instanceof Error ? error.message : "Could not connect the tunnel.",
-                                ),
-                              )
+                                  "Saved details removed from this PC. The OpenAI tunnel and key still exist.",
+                                );
+                              })
+                              .catch(() => setTunnelMessage("Could not remove the saved tunnel details."))
                               .finally(() => setTunnelBusy(false));
                           }}
                         >
-                          {tunnelBusy
-                            ? "Connecting…"
-                            : mcpTunnelStatus.status === "actionNeeded"
-                              ? "Retry connection"
-                              : "Connect"}
+                          Forget saved details
                         </button>
-                      )}
+                      </div>
                     </div>
-                    <div className="mcp-tunnel-handoff-slot">
-                      {mcpTunnelStatus.status === "connected" && (
-                        <>
-                          <button
-                            type="button"
-                            className="mcp-chatgpt-open"
-                            onClick={() => openMcpSetupPage("chatgptConnectors")}
-                          >
-                            Open ChatGPT connector settings
-                          </button>
-                          <p className="muted mcp-tunnel-chat-guidance">
-                            Next: add this tunnel as a connector, then enable AudioRouter from the add-tools menu in a
-                            conversation.
-                          </p>
-                        </>
-                      )}
-                      {mcpTunnelStatus.status !== "connected" && (
-                        <p className="muted mcp-tunnel-chat-guidance">
-                          {mcpTunnelStatus.status === "actionNeeded"
-                            ? "Retry the tunnel connection. ChatGPT setup appears here after it connects."
-                            : mcpTunnelStatus.status === "connecting"
-                              ? "When the tunnel connects, add it in ChatGPT and enable it from the conversation's add-tools menu."
-                              : "After connecting, add this tunnel in ChatGPT, then enable it from the conversation's add-tools menu."}
-                        </p>
-                      )}
-                    </div>
-                    <div className="mcp-tunnel-management-actions">
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={tunnelBusy}
-                        onClick={() => setShowTunnelSetup(true)}
-                      >
-                        Update tunnel details
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={tunnelBusy}
-                        onClick={() => {
-                          setTunnelBusy(true);
-                          void onMcpTunnelForget()
-                            .then(() => {
-                              setShowTunnelSetup(false);
-                              setTunnelIdInput("");
-                              setTunnelMessage(
-                                "Saved details removed from this PC. The OpenAI tunnel and key still exist.",
-                              );
-                            })
-                            .catch(() => setTunnelMessage("Could not remove the saved tunnel details."))
-                            .finally(() => setTunnelBusy(false));
-                        }}
-                      >
-                        Forget saved details
-                      </button>
-                    </div>
-                  </div>
-                )}
-              <p className="mcp-tunnel-message" role="status" aria-live="polite">
-                {tunnelMessage || " "}
-              </p>
-            </section>
+                  )}
+                <p className="mcp-tunnel-message" role="status" aria-live="polite">
+                  {tunnelMessage || " "}
+                </p>
+              </section>
+            )}
 
-            <section className="mcp-remote-info" aria-labelledby="mcp-cowork-title">
-              <div className="mcp-card-heading">
-                <h3 id="mcp-cowork-title">Cowork</h3>
-                <span className="mcp-status">Local plugin</span>
-              </div>
-              <p className="muted">
-                For local Cowork on this PC, export the plugin, then upload it in Cowork → Customize → Plugins. Keep
-                AudioRouter running. Export enables read-only access; choose Editor in Client permissions to allow
-                edits. Cloud Cowork tasks need a remote connection, which is not available yet.
-              </p>
-              <div className="mcp-cowork-action">
-                {mcpSetupInfo?.cliAvailable && mcpSetupInfo.coworkPluginAvailable && onExportCoworkPlugin ? (
-                  <button
-                    type="button"
-                    disabled={!connected || coworkBusy}
-                    onClick={() => {
-                      setCoworkBusy(true);
-                      setCoworkMessage("Checking the local MCP connection…");
-                      void onExportCoworkPlugin()
-                        .then((path) =>
-                          setCoworkMessage(`Saved to ${path}. Upload this ZIP in Cowork → Customize → Plugins.`),
-                        )
-                        .catch((error: unknown) =>
-                          setCoworkMessage(error instanceof Error ? error.message : String(error)),
-                        )
-                        .finally(() => setCoworkBusy(false));
-                    }}
-                  >
-                    Export Cowork plugin
-                  </button>
-                ) : (
-                  <p className="muted">
-                    Open the current AudioRouter desktop app with its installed MCP command to export.
-                  </p>
-                )}
-              </div>
-              <p className="mcp-cowork-message" role="status" aria-live="polite">
-                {coworkMessage || "The plugin is for this PC and does not include audio or credentials."}
-              </p>
-            </section>
-
-            <details className="mcp-secondary-section local-assistant-setup">
-              <summary>Connect a local assistant</summary>
-              <p>
-                For Codex, Claude Code, or another assistant running on this PC. Your assistant launches AudioRouter’s
-                local MCP command; keep AudioRouter open while using it.
-              </p>
-              <ol className="setup-instructions">
-                <li>
-                  <h3>Choose your assistant</h3>
-                  <label>
-                    Assistant
-                    <select
-                      aria-label="Local assistant"
-                      value={localAssistant}
-                      onChange={(event) => setLocalAssistant(event.target.value)}
+            {mcpConnectionPath === "cowork" && (
+              <section className="mcp-remote-info" aria-labelledby="mcp-cowork-title">
+                <div className="mcp-card-heading">
+                  <h3 id="mcp-cowork-title">Cowork</h3>
+                  <span className="mcp-status">Local plugin</span>
+                </div>
+                <p className="muted">
+                  For local Cowork on this PC, export the plugin, then upload it in Cowork → Customize → Plugins. Keep
+                  AudioRouter running. Export enables read-only access; choose Editor in Client permissions to allow
+                  edits. Cloud Cowork tasks need a remote connection, which is not available yet.
+                </p>
+                <div className="mcp-cowork-action">
+                  {mcpSetupInfo?.cliAvailable && mcpSetupInfo.coworkPluginAvailable && onExportCoworkPlugin ? (
+                    <button
+                      type="button"
+                      disabled={!connected || coworkBusy}
+                      onClick={() => {
+                        setCoworkBusy(true);
+                        setCoworkMessage("Checking the local MCP connection…");
+                        void onExportCoworkPlugin()
+                          .then((path) =>
+                            setCoworkMessage(`Saved to ${path}. Upload this ZIP in Cowork → Customize → Plugins.`),
+                          )
+                          .catch((error: unknown) =>
+                            setCoworkMessage(error instanceof Error ? error.message : String(error)),
+                          )
+                          .finally(() => setCoworkBusy(false));
+                      }}
                     >
-                      <option value="codex">Codex</option>
-                      <option value="claude">Claude Code</option>
-                      <option value="other">Another MCP app</option>
-                    </select>
-                  </label>
-                </li>
-                <li>
-                  <h3>Name this connection and grant access</h3>
-                  <p>This name identifies permissions in AudioRouter. It is not your assistant account.</p>
-                  <label>
-                    Connection name
-                    <input
-                      aria-label="Assistant client ID"
-                      value={mcpClientId}
-                      maxLength={128}
-                      onChange={(event) => setMcpClientId(event.target.value.trim())}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={(event) => {
-                      const panel = event.currentTarget
-                        .closest(".workbench-page")
-                        ?.querySelector<HTMLDetailsElement>("[data-client-permissions]");
-                      if (panel) {
-                        panel.open = true;
-                        panel.scrollIntoView({ block: "start", behavior: "smooth" });
-                        panel.querySelector("summary")?.focus();
-                      }
-                    }}
-                  >
-                    Set client permissions
-                  </button>
-                  <p className="muted">
-                    Use this exact connection name below. Start with observer access; allow edits only when you need
-                    them.
-                  </p>
-                </li>
-                <li>
-                  <h3>
-                    {localAssistant === "codex"
-                      ? "Add this to your Codex configuration"
-                      : localAssistant === "claude"
-                        ? "Run this in PowerShell"
-                        : "Add a command connection in your MCP app"}
-                  </h3>
-                  {mcpSetupInfo?.cliAvailable ? (
-                    <>
-                      {localAssistant === "codex" ? (
-                        <>
-                          <p>Paste this block into your Codex config.toml, then reload its MCP connections.</p>
-                          <pre className="mcp-command">{codexConfig}</pre>
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={!mcpClientId}
-                            onClick={() => copy(codexConfig)}
-                          >
-                            Copy Codex config
-                          </button>
-                        </>
-                      ) : localAssistant === "claude" ? (
-                        <>
-                          <p>Run this once, then restart Claude Code or reconnect its MCP server.</p>
-                          <pre className="mcp-command">{claudeCommand}</pre>
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={!mcpClientId}
-                            onClick={() => copy(claudeCommand)}
-                          >
-                            Copy Claude command
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <p>
-                            Choose the standard command / stdio transport. Enter the executable and arguments
-                            separately.
-                          </p>
-                          <label>
-                            Executable
-                            <input readOnly value={cli} />
-                          </label>
-                          <label>
-                            Arguments
-                            <textarea
-                              readOnly
-                              value={JSON.stringify([
-                                "mcp",
-                                "serve",
-                                "--client-id",
-                                mcpClientId,
-                                "--database",
-                                db,
-                                "--pipe",
-                                pipe,
-                              ])}
-                            />
-                          </label>
-                          <p className="muted">
-                            The app starts this command for you. Do not paste it into a web address field.
-                          </p>
-                        </>
-                      )}
-                    </>
+                      Export Cowork plugin
+                    </button>
                   ) : (
-                    <p className="mcp-tunnel-message" role="status">
-                      {mcpSetupInfo
-                        ? "The local MCP command is missing. Repair or update your AudioRouter installation before continuing."
-                        : "Checking the installed local MCP command…"}
+                    <p className="muted">
+                      Open the current AudioRouter desktop app with its installed MCP command to export.
                     </p>
                   )}
-                </li>
-                <li>
-                  <h3>Confirm the connection</h3>
-                  <p>
-                    Ask your assistant to list AudioRouter sessions. Check Recent MCP activity below for the request and
-                    its outcome. If access is denied, match the connection name in Client permissions.
-                  </p>
-                </li>
-              </ol>
-              <p className="mcp-copy-message" role="status">
-                {copyMessage || "Copy a setup above when you are ready."}
-              </p>
-            </details>
+                </div>
+                <p className="mcp-cowork-message" role="status" aria-live="polite">
+                  {coworkMessage || "The plugin is for this PC and does not include audio or credentials."}
+                </p>
+              </section>
+            )}
 
-            <details className="mcp-secondary-section" data-client-permissions>
+            {mcpConnectionPath === "local" && (
+              <details className="mcp-secondary-section local-assistant-setup" open>
+                <summary>Connect a local assistant</summary>
+                <p>
+                  For Codex, Claude Code, or another assistant running on this PC. Your assistant launches AudioRouter’s
+                  local MCP command; keep AudioRouter open while using it.
+                </p>
+                <ol className="setup-instructions">
+                  <li>
+                    <h3>Choose your assistant</h3>
+                    <label>
+                      Assistant
+                      <select
+                        aria-label="Local assistant"
+                        value={localAssistant}
+                        onChange={(event) => setLocalAssistant(event.target.value)}
+                      >
+                        <option value="codex">Codex</option>
+                        <option value="claude">Claude Code</option>
+                        <option value="other">Another MCP app</option>
+                      </select>
+                    </label>
+                  </li>
+                  <li>
+                    <h3>Name this connection and grant access</h3>
+                    <p>This name identifies permissions in AudioRouter. It is not your assistant account.</p>
+                    <label>
+                      Connection name
+                      <input
+                        aria-label="Assistant client ID"
+                        value={mcpClientId}
+                        maxLength={128}
+                        onChange={(event) => setMcpClientId(event.target.value.trim())}
+                      />
+                    </label>
+                    <p className="muted">
+                      Use this exact connection name below. Start with observer access; allow edits only when you need
+                      them.
+                    </p>
+                  </li>
+                  <li>
+                    <h3>Check local access</h3>
+                    <p className="mcp-local-check" role="status" aria-live="polite">
+                      {localCheckText}
+                    </p>
+                  </li>
+                  <li>
+                    <h3>
+                      {localAssistant === "codex"
+                        ? "Add this to your Codex configuration"
+                        : localAssistant === "claude"
+                          ? "Run this in PowerShell"
+                          : "Add a command connection in your MCP app"}
+                    </h3>
+                    {mcpSetupInfo?.cliAvailable ? (
+                      <>
+                        {localAssistant === "codex" ? (
+                          <>
+                            <p>Paste this block into your Codex config.toml, then reload its MCP connections.</p>
+                            <pre className="mcp-command">{codexConfig}</pre>
+                            <button
+                              type="button"
+                              className="secondary"
+                              disabled={!mcpClientId}
+                              onClick={() => copy(codexConfig)}
+                            >
+                              Copy Codex config
+                            </button>
+                          </>
+                        ) : localAssistant === "claude" ? (
+                          <>
+                            <p>Run this once, then restart Claude Code or reconnect its MCP server.</p>
+                            <pre className="mcp-command">{claudeCommand}</pre>
+                            <button
+                              type="button"
+                              className="secondary"
+                              disabled={!mcpClientId}
+                              onClick={() => copy(claudeCommand)}
+                            >
+                              Copy Claude command
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p>
+                              Choose the standard command / stdio transport. Enter the executable and arguments
+                              separately.
+                            </p>
+                            <label>
+                              Executable
+                              <input readOnly value={cli} />
+                            </label>
+                            <label>
+                              Arguments
+                              <textarea
+                                readOnly
+                                value={JSON.stringify([
+                                  "mcp",
+                                  "serve",
+                                  "--client-id",
+                                  mcpClientId,
+                                  "--database",
+                                  db,
+                                  "--pipe",
+                                  pipe,
+                                ])}
+                              />
+                            </label>
+                            <p className="muted">
+                              The app starts this command for you. Do not paste it into a web address field.
+                            </p>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <p className="mcp-tunnel-message" role="status">
+                        {mcpSetupInfo
+                          ? "The local MCP command is missing. Repair or update your AudioRouter installation before continuing."
+                          : "Checking the installed local MCP command…"}
+                      </p>
+                    )}
+                  </li>
+                  <li>
+                    <h3>Confirm the connection</h3>
+                    <p>
+                      Ask your assistant to list AudioRouter sessions. Check Recent MCP activity below for the request
+                      and its outcome. This check confirms a request reached AudioRouter; it cannot confirm an external
+                      app's connector approval or whether the assistant has enabled the connection in its conversation.
+                    </p>
+                  </li>
+                </ol>
+                <p className="mcp-copy-message" role="status">
+                  {copyMessage || "Copy a setup above when you are ready."}
+                </p>
+              </details>
+            )}
+
+            <details
+              className="mcp-secondary-section"
+              data-client-permissions
+              open={mcpConnectionPath === "local" && !localClientRole}
+            >
               <summary>Client permissions</summary>
               <p className="muted">
-                Start with observer access. Grant write access only for actions you want assistants to perform.
+                Observer reads; Editor creates or changes sessions; Operator also controls audio that is already
+                playing. These roles do not grant device administration, microphone consent, recording access, or
+                permission to press Play.
               </p>
-              {clientsPanel}
+              {clientsPanel(selectedMcpClientId)}
             </details>
 
             <details className="mcp-secondary-section">
