@@ -1266,7 +1266,7 @@ real microphone. SVG chart labels are not covered by the text-size figure, becau
 | 13 | Drag/drop | 7 | 8 | Snap, guides, map, arrow keys | Not used on the owner's real route (F23) |
 | 14 | Motion | 8 | 8 | Unchanged | No attended check on a live route |
 
-Total 99 to 109 of 140 (average 7.1 to 7.8). Lowest score 6 to 7; ten categories at 8. None reaches 9, and the rubric
+Total 99 to 108 of 140 (average 7.1 to 7.7). Lowest score 6 to 7; ten categories at 8. None reaches 9, and the rubric
 does not let an average stand in for that. No 10 can be awarded: all four external gates in Round 20 remain unmet.
 
 ### Findings retested
