@@ -1,6 +1,9 @@
+import { useComparing } from "./compareHold";
+import { PropertySection } from "./PropertySection";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
 import { Handle, type HandleSpec } from "./SvgHandle";
+import { SliderField } from "./Slider";
 import { nextFallingLevel, nextPeakHold, suggestGateThreshold, type LevelSample, type PeakHold } from "./dynamics";
 import { useLastStatistics } from "./DynamicsEditor";
 
@@ -250,6 +253,7 @@ export function DuckEditor({
   const sx = (ms: number) => L + (ms / sketch.totalMs) * (R - L);
   const sy = (gainDb: number) => 20 + clamp(-gainDb / Math.max(settings.amountDb, 1), 0, 1) * 52;
   const suggestion = statistics ? suggestGateThreshold(statistics) : null;
+  const comparing = useComparing(node.id);
   let status: string;
   let pill: { text: string; tone: "good" | "idle" | "work" } = { text: "Not playing", tone: "idle" };
   if (!node.enabled) {
@@ -258,6 +262,9 @@ export function DuckEditor({
   } else if (node.bypass) {
     status = "Bypassed: the audio passes unchanged.";
     pill = { text: "Bypassed", tone: "idle" };
+  } else if (comparing) {
+    status = "Comparing: this tool is out of the route while you hold.";
+    pill = { text: "Comparing", tone: "idle" };
   } else if (roundMode) {
     status = roundFeedStatus(gameRound, running);
     if (running && reduction > 0.5) pill = { text: `Ducking −${reduction.toFixed(1)} dB`, tone: "work" };
@@ -463,28 +470,20 @@ export function DuckEditor({
           />
         )}
       </svg>
-      <label className="param-row duck-amount">
-        <span className="param-caption">
-          <span>Turn down by</span>
-          <b aria-hidden="true">−{settings.amountDb} dB</b>
-        </span>
-        <input
-          type="range"
-          aria-label="Duck amount"
-          aria-valuetext={`−${settings.amountDb} dB`}
-          min={0}
-          max={40}
-          step={1}
-          value={settings.amountDb}
-          disabled={disabled}
-          onChange={(event) => onChange("amountDb", Number(event.target.value))}
-        />
-        <span className="duck-amount-scale" aria-hidden="true">
-          <span>0 dB</span>
-          <span>−20</span>
-          <span>−40 dB</span>
-        </span>
-      </label>
+      <SliderField
+        className="duck-amount"
+        label="Turn down by"
+        name="Duck amount"
+        valueText={`−${settings.amountDb} dB`}
+        value={settings.amountDb}
+        min={0}
+        max={40}
+        step={1}
+        unit="dB"
+        defaultValue={6}
+        disabled={disabled}
+        onChange={(value) => onChange("amountDb", value)}
+      />
       {!roundMode && (
         <div className="dynamics-suggestion">
           {/* Always rendered at a reserved size so the panel never jumps when a measurement arrives or lapses. */}
@@ -511,8 +510,7 @@ export function DuckEditor({
       )}
       <p className="muted dynamics-status">{status}</p>
       {!roundMode && (
-        <details className="dynamics-sketch-details" open>
-          <summary>How one sentence is ducked</summary>
+        <PropertySection kind="duck" title="How one sentence is ducked">
           <svg
             className="dynamics-graph dynamics-sketch"
             viewBox="0 0 380 100"
@@ -557,7 +555,7 @@ export function DuckEditor({
           <small className="muted">
             The line shows this audio's level change: 0 is unchanged, the bottom is fully ducked.
           </small>
-        </details>
+        </PropertySection>
       )}
     </section>
   );

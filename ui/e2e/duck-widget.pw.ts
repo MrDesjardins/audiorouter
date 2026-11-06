@@ -54,7 +54,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await widget.locator(".flow-node-title").click();
     const slider = page.getByLabel("Duck live view").getByRole("slider", { name: "Duck amount" });
     await expect(slider).toHaveValue("18");
-    await expect(page.getByLabel("Duck live view")).toContainText("Turn down by−18 dB");
+    await expect(slider).toHaveAttribute("aria-valuetext", "−18 dB");
+    await expect(page.getByLabel("Duck live view")).toContainText("Turn down by");
+    await expect(page.getByRole("spinbutton", { name: "Duck amount precise value", exact: true })).toHaveValue("18");
     await page
       .getByLabel("Duck live view")
       .locator(".duck-amount")

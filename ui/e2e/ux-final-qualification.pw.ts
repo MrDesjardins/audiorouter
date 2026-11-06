@@ -1,6 +1,6 @@
 import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
-import { openAppSettings } from "./workbench";
+import { openDeviceAccessSettings } from "./workbench";
 
 // Only the in-memory route harness is used; no native transport or profile.
 for (const theme of ["dark", "light", "high-contrast"]) {
@@ -56,7 +56,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       expect(new Set(heights).size).toBe(1);
       await tools.focus();
       await tools.press("End");
-      await expect(page.getByRole("tab", { name: "Logs", exact: true })).toBeFocused();
+      await expect(page.getByRole("tab", { name: "Recording", exact: true })).toBeFocused();
       await page.keyboard.press("Home");
       await expect(tools).toBeFocused();
       await page.keyboard.press("ArrowRight");
@@ -115,7 +115,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       expect(await calls()).toEqual([]);
       await page.getByRole("button", { name: "Dismiss message", exact: true }).click();
 
-      await openAppSettings(page);
+      await openDeviceAccessSettings(page);
       await page.getByText("Choose a setup goal", { exact: true }).click();
       await page.getByLabel("What do you want to do?").selectOption("recording");
       await expect(page.getByText("Recording verification, not yet verified:", { exact: true })).toBeVisible();

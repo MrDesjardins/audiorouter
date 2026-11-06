@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "./browser-test";
+import { fitCanvas } from "./workbench";
 import type { Session } from "../../contracts/src/index";
 
 // A two-path route shaped like a real streaming setup: a mono microphone
@@ -90,6 +91,7 @@ async function openPlaying(page: Page) {
   );
   await page.goto("/route-harness.html");
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
+  await fitCanvas(page);
 }
 
 test("every line of a two-path route is drawn while playing", async ({ page }) => {
@@ -101,7 +103,8 @@ test("every line of a two-path route is drawn while playing", async ({ page }) =
 
 test("a removed line can be dragged back while playing", async ({ page }) => {
   await openPlaying(page);
-  await page.getByRole("button", { name: "Remove connection game-in-eq" }).click({ force: true });
+  await page.getByRole("button", { name: "Remove connection game-in-eq" }).focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByTestId("rf__edge-game-in-eq")).toHaveCount(0);
   const from = await page.getByTestId("rf__node-game").locator(".react-flow__handle.source").nth(1).boundingBox();
   const to = await page.getByTestId("rf__node-game-eq").locator(".react-flow__handle.target").nth(3).boundingBox();

@@ -1,4 +1,4 @@
-import { openAppSettings, stereoDemoSession } from "./workbench";
+import { openDeviceAccessSettings, stereoDemoSession } from "./workbench";
 import { test, expect } from "./browser-test";
 import { openConnectionForm, openDeviceTroubleshooting } from "./workbench";
 
@@ -48,7 +48,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(dialog).toHaveCount(0);
 
     // Setup shows the choice and can withdraw it.
-    await openAppSettings(page);
+    await openDeviceAccessSettings(page);
     const setting = page.getByRole("group", { name: "Audio device access" });
     await expect(setting).toContainText("may open the audio devices");
     await expect(setting.getByRole("button", { name: "Withdraw access" })).toBeVisible();

@@ -1,4 +1,4 @@
-import { optionalLocalStorage } from "./presentationStorage";
+import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 import {
   FLOW_GROUPS,
   FLOW_GROUP_LABELS,
@@ -8,6 +8,7 @@ import {
   nodeKindFamily,
 } from "./canvasNodeKinds";
 import { CanvasConnectorMeasurements } from "./CanvasConnectorMeasurements";
+import { CanvasContextMenu } from "./CanvasContextMenu";
 import { smartLayout } from "./smartLayout";
 import {
   Background,
@@ -21,6 +22,9 @@ import {
   useInternalNode,
   type Connection,
   type Edge as FlowEdge,
+  MiniMap,
+  Panel,
+  ViewportPortal,
   type EdgeProps,
   type Node as FlowNode,
   type NodeProps,
@@ -60,6 +64,7 @@ import {
   canvasOwners,
   layoutCanvasItems,
   moveCanvasItems,
+  resizeGroupsTogether,
   movementLocked,
   type CanvasRect,
   type LayoutAction,
@@ -93,7 +98,8 @@ import { CanvasGroupRenderer, type CanvasGroup } from "./CanvasGroups";
 import { FlowActiveLayers, FlowArrow, FlowComets, FlowMotionProvider } from "./flowLine";
 import type { FlowAnimationMode } from "./preferences";
 import { RecordButton } from "./RecorderControls";
-import { appendLibraryNode as appendPreviewNode, appendPluginPlaceholderNode } from "./draft";
+import { appendLibraryNode as appendPreviewNode, appendPluginPlaceholderNode, unfedRouteNodes } from "./draft";
+import { nodeAttention, PRIVACY_MUTED_KINDS } from "./nodeAttention";
 import {
   draggedLibraryKind,
   draggedPluginEntry,
@@ -113,13 +119,50 @@ const DRAGGABLE_KINDS = [
 const DROP_PREVIEW_ID = "__drop-preview";
 /** Where the pointer holds the preview card (its title area). */
 const DROP_GRAB_OFFSET = { x: 90, y: 28 };
+/** Cards land on the canvas dots; the arrow keys move a selected card by the same step. */
+const CANVAS_GRID = 24;
+const CANVAS_SNAP: [number, number] = [CANVAS_GRID, CANVAS_GRID];
+/**
+ * The smallest card text is 11 px at 100 %, so automatic fits stop here and a large route is
+ * panned or reached from the map (F20). The fit button and Arrange still show everything.
+ */
+const READABLE_ZOOM = 1;
+
+/** Everything when it fits. A route too large opens at readable zoom where its signal begins (F20). */
+function openRouteView<N extends FlowNode, E extends FlowEdge>(flow: ReactFlowInstance<N, E>, duration: number) {
+  const canvas = document.querySelector<HTMLElement>(".session-flow-canvas");
+  const bounds = flow.getNodesBounds(flow.getNodes());
+  if (
+    !canvas ||
+    (bounds.width * (1 + FIT_PADDING) <= canvas.clientWidth && bounds.height * (1 + FIT_PADDING) <= canvas.clientHeight)
+  ) {
+    void flow.fitView({ padding: FIT_PADDING, minZoom: READABLE_ZOOM, duration });
+    return;
+  }
+  const gutter = 32;
+  const top = Math.max(gutter, (canvas.clientHeight - bounds.height * READABLE_ZOOM) / 2);
+  void flow.setViewport(
+    { x: gutter - bounds.x * READABLE_ZOOM, y: top - bounds.y * READABLE_ZOOM, zoom: READABLE_ZOOM },
+    { duration },
+  );
+}
+const FIT_PADDING = 0.2;
+const MINIMAP_KEY = "audiorouter.ui.canvas-minimap";
 import { nextPeakHold, type PeakHold } from "./dynamics";
 import { DuckGlyph } from "./DuckGlyph";
+import { Icon, libraryEntryIcon, NODE_KIND_ICONS } from "./icons";
+import { canvasGuides, guideLabel, NO_GUIDES, type CanvasGuides } from "./canvasGuides";
+import { sliderFill } from "./Slider";
 import { SoundboardNodeControls } from "./SoundboardNodeControls";
 import type { NodeDeviceUsers } from "./appUsage";
 
 export const LIBRARY_DROP_SOURCE = "__audiorouter_library_drop__";
 export { LIBRARY_DROP_MIME } from "./libraryDrag";
+
+export type CanvasLayoutHistoryControls = {
+  restore: (direction: "undo" | "redo") => void;
+  rememberPanelWidth: (before: number, after: number) => void;
+};
 
 type SessionFlowCanvasProps = {
   groups?: CanvasGroup[];
@@ -138,6 +181,17 @@ type SessionFlowCanvasProps = {
   onSelectMany?: (ids: string[]) => void;
   onSelectItems?: (ids: string[]) => void;
   layoutActionsRef?: RefObject<((action: LayoutAction) => void) | null>;
+  /** A route just made from a goal: arrange it once on opening, at a readable zoom. */
+  arrangeSessionId?: string | null;
+  onArranged?: () => void;
+  /** Lets the window's Undo, Redo and shortcuts reach the layout history. */
+  layoutHistoryRef?: RefObject<CanvasLayoutHistoryControls | null>;
+  /** Reported on every change to the layout history. */
+  onLayoutHistory?: (state: { canUndo: boolean; canRedo: boolean }) => void;
+  /** One layout history step happened: a new edit, or a restore from any control. */
+  onLayoutHistoryStep?: (step: "edit" | "undo" | "redo") => void;
+  panelWidth?: number;
+  onPanelWidth?: (width: number) => void;
   onLayoutSelection?: (sessionId: string, items: CanvasRect[]) => void;
   onLayoutMessage?: (message: string) => void;
   onCopyNode?: (nodeId: string) => void;
@@ -158,8 +212,11 @@ type SessionFlowCanvasProps = {
   diagnostics?: DiagnosticsSnapshot | null;
   /** Live meter telemetry for `diagnostics`; read only by the views that show it. */
   telemetryStore?: TelemetryStore;
-  /** UI Options → Animated connections; comets move only when this allows. */
+  /** Settings → Appearance → Animated connections; comets move only when this allows. */
   flowAnimation?: FlowAnimationMode;
+  /** Extra buttons in the canvas toolbar, and the panel they open over the canvas. */
+  toolbarActions?: ReactNode;
+  canvasOverlay?: ReactNode;
   sessionRunning?: boolean;
   sessionActionBusy?: boolean;
   testSignalPlaybackReady?: boolean;
@@ -251,6 +308,14 @@ const ownValue = <T,>(values: Record<string, T>, id: string): T | undefined =>
 
 const IDLE_CONNECTION_MODE = "idle" as const;
 const EDGE_SIDES: EdgeSide[] = ["left", "right", "top", "bottom"];
+
+/** About the width of a connection's action bar, in canvas units. */
+const EDGE_BAR_ROOM = 100;
+
+/** Cards this close leave the bar no gap to sit in, so it would cover their controls. */
+export function edgeBarWouldCoverCards(source: { x: number }, target: { x: number }) {
+  return Math.abs(target.x - source.x) < EDGE_BAR_ROOM;
+}
 const edgeSidePosition = (side: EdgeSide) =>
   side === "left" ? Position.Left : side === "right" ? Position.Right : side === "top" ? Position.Top : Position.Bottom;
 
@@ -307,8 +372,9 @@ export function deletedNodeIds(nodes: Pick<FlowNode, "id">[]): string[] {
 function positionFor(index: number) {
   const columns = 4;
   return {
-    x: (index % columns) * 280,
-    y: Math.floor(index / columns) * 230,
+    // Multiples of the 24 px snap grid, clear of the widest and tallest card at 14 px text.
+    x: (index % columns) * 336,
+    y: Math.floor(index / columns) * 264,
   };
 }
 
@@ -325,6 +391,17 @@ function AudioEdgeActions({
   selected,
 }: EdgeProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const edgeActionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const dismiss = (event: Event) => {
+      if (event.target instanceof globalThis.Node && !edgeActionsRef.current?.contains(event.target))
+        setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    return () => document.removeEventListener("pointerdown", dismiss);
+  }, [menuOpen]);
   const [hovered, setHovered] = useState(false);
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
@@ -416,11 +493,17 @@ function AudioEdgeActions({
           Connection {id}: {edgeData?.signalLabel ?? "configured"}
         </span>
         <div
-          className={`edge-action-bar nodrag nopan${selected || hovered || menuOpen ? " is-emphasized" : ""}`}
+          ref={edgeActionsRef}
+          className={`edge-action-bar nodrag nopan${selected || hovered || menuOpen ? " is-emphasized" : ""}${
+            edgeBarWouldCoverCards(sourcePoint, targetPoint) ? " is-tight" : ""
+          }`}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
           style={{ transform: `translate(-50%, calc(-100% - 9px)) translate(${labelX}px, ${labelY}px)` }}
           onPointerDown={(event) => event.stopPropagation()}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false);
+          }}
         >
           <button
             type="button"
@@ -434,7 +517,7 @@ function AudioEdgeActions({
             }
             onClick={() => edgeData?.onToggle?.(id, !edgeData.enabled)}
           >
-            {edgeData?.enabled ? "⏸" : "▶"}
+            <Icon name={edgeData?.enabled ? "pause" : "play"} />
           </button>
           <button
             type="button"
@@ -444,20 +527,54 @@ function AudioEdgeActions({
             title="Remove this connection from the route. Use Undo in Session to restore it."
             onClick={() => edgeData?.onRemove?.(id)}
           >
-            ×
+            <Icon name="x" />
           </button>
           <button
             type="button"
             className="edge-action-icon"
             disabled={!edgeData?.canEdit}
             aria-label={`Add processor to connection ${id}`}
+            ref={menuTriggerRef}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
             title="Add a tool between these two nodes."
             onClick={() => setMenuOpen((open) => !open)}
           >
-            ＋
+            <Icon name="plus" />
           </button>
           {menuOpen && (
-            <div className="edge-insert-menu" role="menu" aria-label={`Configure connection ${id}`}>
+            <div
+              className="edge-insert-menu"
+              role="menu"
+              aria-label={`Configure connection ${id}`}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setMenuOpen(false);
+                  menuTriggerRef.current?.focus({ preventScroll: true });
+                  return;
+                }
+                const items = [
+                  ...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)'),
+                ];
+                const index = items.indexOf(document.activeElement as HTMLButtonElement);
+                const next =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? items.length - 1
+                      : event.key === "ArrowDown"
+                        ? (index + 1) % items.length
+                        : event.key === "ArrowUp"
+                          ? (index + items.length - 1) % items.length
+                          : null;
+                if (next === null) return;
+                event.preventDefault();
+                event.stopPropagation();
+                items[next]?.focus();
+              }}
+            >
               <div className="edge-side-picker">
                 <strong>Source side</strong>
                 {EDGE_SIDES.map((side) => (
@@ -466,6 +583,9 @@ function AudioEdgeActions({
                     type="button"
                     className={sourceSide === side ? "is-selected" : ""}
                     role="menuitem"
+                    tabIndex={-1}
+                    autoFocus={side === EDGE_SIDES[0]}
+                    aria-current={sourceSide === side ? true : undefined}
                     onClick={() => edgeData?.onSetSide?.(id, "source", side)}
                   >
                     {side}
@@ -480,6 +600,8 @@ function AudioEdgeActions({
                     type="button"
                     className={targetSide === side ? "is-selected" : ""}
                     role="menuitem"
+                    tabIndex={-1}
+                    aria-current={targetSide === side ? true : undefined}
                     onClick={() => edgeData?.onSetSide?.(id, "target", side)}
                   >
                     {side}
@@ -493,6 +615,7 @@ function AudioEdgeActions({
                     key={processor.kind}
                     type="button"
                     role="menuitem"
+                    tabIndex={-1}
                     onClick={() => {
                       edgeData?.onInsert?.(id, processor.kind);
                       setMenuOpen(false);
@@ -504,6 +627,7 @@ function AudioEdgeActions({
                 <button
                   type="button"
                   role="menuitem"
+                  tabIndex={-1}
                   onClick={() => {
                     edgeData?.onOpenPluginPicker?.(id);
                     setMenuOpen(false);
@@ -860,8 +984,7 @@ function hasOnlyCaptureSources(session: Session, nodeId: string): boolean {
     const node = session.nodes.find((item) => item.id === id);
     if (!node?.enabled) continue;
     if (node.kind === "testSignal" || node.kind === "audioFile" || node.kind === "soundboard") return false;
-    if (["physicalInput", "applicationCapture", "endpointLoopback", "virtualRenderSource"].includes(node.kind))
-      foundCapture = true;
+    if (PRIVACY_MUTED_KINDS.includes(node.kind)) foundCapture = true;
     for (const edge of session.edges) if (edge.enabled && edge.destinationNode === id) pending.push(edge.sourceNode);
   }
   return foundCapture;
@@ -966,7 +1089,7 @@ function MiniEq({
       <svg
         className="nodrag nopan"
         viewBox="0 0 200 88"
-        role="img"
+        role="group"
         aria-label="Parametric EQ curve"
         onPointerMove={(event) => {
           if (dragBandIndex !== null && bands[dragBandIndex]) updateBand(bands[dragBandIndex], event);
@@ -1025,6 +1148,7 @@ function MiniEq({
               }
             }}
             onPointerDown={(event) => {
+              if (event.button !== 0) return;
               event.preventDefault();
               event.stopPropagation();
               setDragBandIndex(bands.findIndex((candidate) => candidate.index === band.index));
@@ -1083,7 +1207,8 @@ function MiniFader({
   onChange?: (value: number) => void;
   ariaLabel: string;
 }) {
-  const percent = clamp(((value - min) / (max - min)) * 100, 0, 100);
+  const fill = sliderFill(value, min, max);
+  const at = clamp((value - min) / (max - min), 0, 1);
   const setFromClientX = (clientX: number, bounds: DOMRect) => {
     if (!onChange) return;
     const ratio = clamp((clientX - bounds.left) / bounds.width, 0, 1);
@@ -1102,7 +1227,7 @@ function MiniFader({
         aria-valuenow={value}
         aria-valuetext={formatValue(value)}
         onPointerDown={(event) => {
-          if (!onChange) return;
+          if (!onChange || event.button !== 0) return;
           event.preventDefault();
           event.stopPropagation();
           setFromClientX(event.clientX, event.currentTarget.getBoundingClientRect());
@@ -1130,7 +1255,11 @@ function MiniFader({
           }
         }}
       >
-        <div className="node-fader-fill" style={{ width: `${percent}%` }} />
+        <div
+          className="node-fader-fill"
+          style={{ left: `${fill.from * 100}%`, width: `${(fill.to - fill.from) * 100}%` }}
+        />
+        <div className="node-fader-thumb" style={{ left: `${at * 100}%` }} />
       </div>
       <div className="node-fader-readout">
         <span>{label}</span>
@@ -1318,7 +1447,7 @@ function MixerVisual({
         }
       >
         <span className="node-mixer-icon" aria-hidden="true">
-          Σ
+          <Icon name={NODE_KIND_ICONS.mixer} />
         </span>
         <span>
           {inputCount === 0 ? "No inputs connected" : `Summing ${inputCount} input${inputCount === 1 ? "" : "s"}`}
@@ -1470,13 +1599,17 @@ function basename(path: string) {
 export function nodeHeaderState(
   node: Node,
   applicationCaptureState: DiagnosticsSnapshot["applicationCaptureStates"][number] | null,
+  context: { unfed: boolean; privacyMuted: boolean } = { unfed: false, privacyMuted: false },
 ): { label: string; tone: "ready" | "bypassed" | "disabled" | "attention" } {
   if (node.bypass) return { label: "bypass", tone: "bypassed" };
   if (!node.enabled) return { label: "off", tone: "disabled" };
-  if (node.kind !== "applicationCapture") return { label: "ready", tone: "ready" };
+  const attention = nodeAttention(node, context);
+  if (node.kind !== "applicationCapture") {
+    return attention ? { label: attention, tone: "attention" } : { label: "ready", tone: "ready" };
+  }
   switch (applicationCaptureState?.state) {
     case "connected":
-      return { label: "live", tone: "ready" };
+      return attention ? { label: attention, tone: "attention" } : { label: "live", tone: "ready" };
     case "reconnecting":
       return { label: "reconnecting", tone: "bypassed" };
     case "configured-stopped":
@@ -1555,7 +1688,7 @@ function EndpointLoopbackVisual({ node, telemetry }: { node: Node; telemetry: Re
     <div className="node-endpoint-loopback-wrap">
       <div className="node-endpoint-loopback" title={endpointId}>
         <span className="node-endpoint-loopback-icon" aria-hidden="true">
-          ↺
+          <Icon name={NODE_KIND_ICONS.endpointLoopback} />
         </span>
         <span>{shortId}</span>
       </div>
@@ -1567,13 +1700,12 @@ function EndpointLoopbackVisual({ node, telemetry }: { node: Node; telemetry: Re
 /** A cable source/destination shows which AudioRouter cable it uses. */
 function VirtualBusVisual({ node, telemetry }: { node: Node; telemetry: ReturnType<typeof nodeTelemetryFor> }) {
   const busId = String(node.parameters.busId ?? "Unbound");
-  const isSource = node.kind === "virtualRenderSource";
   const cableStatus = useVirtualCableStatus();
   return (
     <div className="node-virtual-bus-wrap">
       <div className="node-virtual-bus" title={busId}>
         <span className="node-virtual-bus-icon" aria-hidden="true">
-          {isSource ? "↦" : "↤"}
+          <Icon name={NODE_KIND_ICONS[node.kind]} />
         </span>
         <span>{cableName(cableStatus, busId)}</span>
       </div>
@@ -1880,7 +2012,7 @@ function NodeVisual({
             title={paused ? "Resume" : "Pause"}
             onClick={() => act(paused ? "resume" : "pause")}
           >
-            {paused ? "▶" : "⏸"}
+            <Icon name={paused ? "play" : "pause"} />
           </button>
           <button
             type="button"
@@ -2134,6 +2266,8 @@ function NodeVisual({
 export function SessionFlowCanvas({
   telemetryStore,
   flowAnimation = "on",
+  toolbarActions,
+  canvasOverlay,
   onToggleRecording,
   recordingBusyNodeId = null,
   groups = [],
@@ -2152,6 +2286,13 @@ export function SessionFlowCanvas({
   onSelectMany,
   onSelectItems,
   layoutActionsRef,
+  arrangeSessionId = null,
+  onArranged,
+  layoutHistoryRef,
+  onLayoutHistory,
+  onLayoutHistoryStep,
+  panelWidth,
+  onPanelWidth,
   onLayoutSelection,
   onLayoutMessage,
   onCopyNode,
@@ -2192,6 +2333,16 @@ export function SessionFlowCanvas({
   const [nodeSizes, setNodeSizes] = useState<NodeLayoutSizes>(() => readNodeSizes(optionalLocalStorage(), sizesKey));
   const naturalSizesRef = useRef<Record<string, { width: number; height: number }>>(Object.create(null));
   const [dropPreview, setDropPreview] = useState<{ kind: string; position: { x: number; y: number } } | null>(null);
+  useEffect(() => {
+    // A drag begun in Tools ends on its source, outside this canvas. Native
+    // Escape cancellation therefore never reaches the canvas's onDragEnd.
+    const finish = () => {
+      setDropPreview(null);
+      setLibraryDragOverCanvas(false);
+    };
+    document.addEventListener("dragend", finish);
+    return () => document.removeEventListener("dragend", finish);
+  }, []);
   const [contextMenu, setContextMenu] = useState<
     | { kind: "node"; nodeId: string; x: number; y: number; flowPosition: { x: number; y: number } }
     | { kind: "pane"; x: number; y: number; flowPosition: { x: number; y: number } }
@@ -2235,14 +2386,25 @@ export function SessionFlowCanvas({
     rawTargetHandle?: string | null;
   } | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
+  const [guides, setGuides] = useState<CanvasGuides>(NO_GUIDES);
+  const [minimapOpen, setMinimapOpen] = useState(
+    () => readPresentationJson(optionalLocalStorage(), MINIMAP_KEY) !== false,
+  );
+  const toggleMinimap = (open: boolean) => {
+    setMinimapOpen(open);
+    writePresentationJson(optionalLocalStorage(), MINIMAP_KEY, open);
+  };
   const initialFitDoneRef = useRef(false);
   const skipNextFitRef = useRef(false);
+  const knownNodeCountRef = useRef(session.nodes.length);
+  const knownRouteRef = useRef(session.id);
   const dragSnapshotRef = useRef<{
     sessionId: string;
     items: CanvasRect[];
     targets: Map<string, { x: number; y: number }>;
   } | null>(null);
   const resizingGroupRef = useRef<string | null>(null);
+  const resizeStartRef = useRef<CanvasRect[] | null>(null);
   const geometryItems = useMemo<CanvasRect[]>(
     () => [
       ...groups.map((group) => ({
@@ -2282,13 +2444,22 @@ export function SessionFlowCanvas({
     sizes: { ...nodeSizes },
     sides: { ...edgeSidesRef.current },
     edgeIds: session.edges.map((edge) => edge.id),
+    panelWidth,
   });
   const rememberLayout = (before: CanvasSnapshot, after = captureLayout()) => {
     if (!canvasLayoutChanged(before, after)) return false;
     setLayoutHistory((history) => recordCanvasHistory(history, before, after));
     setArrangeUndo(null);
+    onLayoutHistoryStep?.("edit");
     return true;
   };
+  // Layout history is rebuilt per session, so the window's buttons must follow its real state.
+  const reportLayoutHistory = useEffectEvent((canUndo: boolean, canRedo: boolean) =>
+    onLayoutHistory?.({ canUndo, canRedo }),
+  );
+  const layoutCanUndo = layoutHistory.past.length > 0;
+  const layoutCanRedo = layoutHistory.future.length > 0;
+  useEffect(() => reportLayoutHistory(layoutCanUndo, layoutCanRedo), [layoutCanUndo, layoutCanRedo]);
   const rememberGesture = () => {
     const before = beforeGestureRef.current;
     beforeGestureRef.current = null;
@@ -2358,12 +2529,22 @@ export function SessionFlowCanvas({
     setArrangeUndo(null);
     setLayoutHistory(result.history);
     commitGeometry(result.snapshot.items, true);
-    const { sizes, sides } = result.snapshot;
+    const { sizes, sides, panelWidth: restoredWidth } = result.snapshot;
     setNodeSizes(sizes);
     writeNodeSizes(optionalLocalStorage(), sizesKey, sizes);
     replaceEdgeSides(sides);
+    if (restoredWidth !== undefined && restoredWidth !== panelWidth) onPanelWidth?.(restoredWidth);
+    onLayoutHistoryStep?.(direction);
     onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
   };
+  if (layoutHistoryRef)
+    layoutHistoryRef.current = {
+      restore: restoreLayout,
+      rememberPanelWidth: (before, after) => {
+        const current = captureLayout();
+        rememberLayout({ ...current, panelWidth: before }, { ...current, panelWidth: after });
+      },
+    };
   // Read when the layout resets for another session; a node count change alone does not reset it.
   const sessionNodeCount = useEffectEvent(() => session.nodes.length);
   useEffect(() => {
@@ -2409,13 +2590,18 @@ export function SessionFlowCanvas({
         const bounds = canvas?.getBoundingClientRect();
         if (contextPoint && flow && bounds) {
           const zoom = flow.getZoom();
+          // Keep the new node inside the canvas, using the size cards really render at: a fixed
+          // estimate left a pasted card past the edge whenever card contents grew.
+          const cards = [...(canvas?.querySelectorAll<HTMLElement>(".react-flow__node") ?? [])];
+          const cardWidth = Math.max(250, ...cards.map((card) => card.offsetWidth));
+          const cardHeight = Math.max(174, ...cards.map((card) => card.offsetHeight));
           const screenX = Math.max(
             bounds.left + 8,
-            Math.min(bounds.left + contextPoint.x - 110 * zoom, bounds.right - 250 * zoom - 8),
+            Math.min(bounds.left + contextPoint.x - 110 * zoom, bounds.right - cardWidth * zoom - 8),
           );
           const screenY = Math.max(
             bounds.top + 8,
-            Math.min(bounds.top + contextPoint.y - 45 * zoom, bounds.bottom - 174 * zoom - 8),
+            Math.min(bounds.top + contextPoint.y - 45 * zoom, bounds.bottom - cardHeight * zoom - 8),
           );
           pastePosition = flow.screenToFlowPosition({ x: screenX, y: screenY });
         }
@@ -2485,6 +2671,7 @@ export function SessionFlowCanvas({
     if (remember) rememberLayout(captureLayout(), { ...captureLayout(), sides: next });
     replaceEdgeSides(next);
   };
+  const newestNodeId = session.nodes.at(-1)?.id;
   useEffect(() => {
     if (session.nodes.length === 0) return;
     // Fit after additions/removals too; otherwise library-added nodes can land
@@ -2494,14 +2681,37 @@ export function SessionFlowCanvas({
       skipNextFitRef.current = false;
       return;
     }
-    const frame = globalThis.requestAnimationFrame(() =>
-      flowInstanceRef.current?.fitView({
-        padding: 0.2,
-        duration: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 180,
-      }),
-    );
+    // Opening another route is not a new card; the view is set when it is measured.
+    const sameRoute = knownRouteRef.current === session.id;
+    knownRouteRef.current = session.id;
+    const grew = sameRoute && session.nodes.length > knownNodeCountRef.current;
+    knownNodeCountRef.current = session.nodes.length;
+    const newest = grew ? newestNodeId : undefined;
+    const frame = globalThis.requestAnimationFrame(() => {
+      const flow = flowInstanceRef.current;
+      if (!flow) return;
+      const duration = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 180;
+      // A route too large for readable text stays readable, so show the card just added.
+      const canvas = document.querySelector<HTMLElement>(".session-flow-canvas");
+      const bounds = flow.getNodesBounds(flow.getNodes());
+      const fits =
+        !canvas ||
+        (bounds.width * (1 + FIT_PADDING) <= canvas.clientWidth &&
+          bounds.height * (1 + FIT_PADDING) <= canvas.clientHeight);
+      if (newest && !fits) {
+        void flow.fitView({
+          nodes: [{ id: newest }],
+          padding: FIT_PADDING,
+          minZoom: READABLE_ZOOM,
+          maxZoom: READABLE_ZOOM,
+          duration,
+        });
+      } else {
+        openRouteView(flow, duration);
+      }
+    });
     return () => globalThis.cancelAnimationFrame(frame);
-  }, [session.nodes.length]);
+  }, [session.id, session.nodes.length, newestNodeId]);
   useEffect(() => {
     const canvas = document.querySelector<HTMLElement>(".session-flow-canvas");
     if (!canvas || session.nodes.length === 0 || typeof ResizeObserver === "undefined") return;
@@ -2514,12 +2724,10 @@ export function SessionFlowCanvas({
       width = nextWidth;
       height = nextHeight;
       if (!changedEnough) return;
-      globalThis.requestAnimationFrame(() =>
-        flowInstanceRef.current?.fitView({
-          padding: 0.2,
-          duration: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180,
-        }),
-      );
+      globalThis.requestAnimationFrame(() => {
+        const flow = flowInstanceRef.current;
+        if (flow) openRouteView(flow, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 180);
+      });
     });
     observer.observe(canvas);
     return () => observer.disconnect();
@@ -2547,24 +2755,49 @@ export function SessionFlowCanvas({
   };
   // Fit after React Flow has the new positions (two frames after render).
   const [fitRequest, setFitRequest] = useState(0);
+  const fitReadable = useRef(false);
   const cableStatus = useVirtualCableStatus();
   useEffect(() => {
     if (!fitRequest) return;
     let second = 0;
     const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() =>
-        flowInstanceRef.current?.fitView({
-          padding: 0.12,
-          duration: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 220,
-        }),
-      );
+      second = requestAnimationFrame(() => {
+        const flow = flowInstanceRef.current;
+        const duration = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 220;
+        if (flow && fitReadable.current) openRouteView(flow, duration);
+        else void flow?.fitView({ padding: 0.12, duration });
+      });
     });
     return () => {
       cancelAnimationFrame(first);
       cancelAnimationFrame(second);
     };
   }, [fitRequest]);
+  const arrangeNewRoute = useEffectEvent(() => {
+    fitReadable.current = true;
+    applyArrangement(smartLayout(session, measured), {});
+    onArranged?.();
+  });
+  const allMeasured = session.nodes.every((node) => measured[node.id]);
+  const arrangeNow = arrangeSessionId === session.id && session.nodes.length > 0 && allMeasured;
+  useEffect(() => {
+    if (arrangeNow) arrangeNewRoute();
+  }, [arrangeNow]);
+  // Real card sizes are only known now, so this is when a route's first view is right.
+  const openedRouteRef = useRef<string | null>(null);
+  const sessionId = session.id;
+  const measuredRoute = session.nodes.length > 0 && allMeasured;
+  useEffect(() => {
+    if (!measuredRoute || openedRouteRef.current === sessionId) return;
+    openedRouteRef.current = sessionId;
+    const frame = requestAnimationFrame(() => {
+      const flow = flowInstanceRef.current;
+      if (flow) openRouteView(flow, 0);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [measuredRoute, sessionId]);
   const tidyLayout = () => {
+    fitReadable.current = false;
     const before = captureLayout();
     const next = smartLayout(session, measured);
     if (rememberLayout(before, arrangedCanvasSnapshot(before, next, {}))) setArrangeUndo({ layoutKey });
@@ -2634,7 +2867,7 @@ export function SessionFlowCanvas({
         }}
       >
         <span className="canvas-library-item-icon" aria-hidden="true">
-          {entry.label.charAt(0)}
+          <Icon name={libraryEntryIcon(entry)} size={14} />
         </span>
         <span>{entry.label}</span>
       </button>
@@ -2697,11 +2930,15 @@ export function SessionFlowCanvas({
             id: DROP_PREVIEW_ID,
           }
         : null;
+  const unfedNodeIds = useMemo(() => new Set(unfedRouteNodes(session).map((node) => node.id)), [session]);
   const nodes: FlowNode[] = (previewNode ? [...session.nodes, previewNode] : session.nodes).map((node, index) => {
     const layoutSize = ownValue(nodeSizes, node.id);
     const applicationCaptureState =
       diagnostics?.applicationCaptureStates.find((item) => item.nodeId === node.id) ?? null;
-    const headerState = nodeHeaderState(node, applicationCaptureState);
+    const headerState = nodeHeaderState(node, applicationCaptureState, {
+      unfed: unfedNodeIds.has(node.id),
+      privacyMuted: diagnostics?.privacyMute.muted ?? false,
+    });
     const recorderStatus =
       node.kind === "recorder" ? (recorderStatuses.find((status) => status.nodeId === node.id) ?? null) : null;
     const mixerInputCount =
@@ -2743,6 +2980,7 @@ export function SessionFlowCanvas({
                       id={handleId}
                       position={edgeSidePosition(side)}
                       style={side === "left" || side === "right" ? { top: offset } : { left: offset }}
+                      role="img"
                       aria-label={
                         side === "left"
                           ? `${node.name} ${port.name} input`
@@ -2802,13 +3040,16 @@ export function SessionFlowCanvas({
               <span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>
                 {NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}
               </span>
-              <span className="node-kind">{humanizeNodeKind(node)}</span>
+              <span className="node-kind">
+                <Icon name={NODE_KIND_ICONS[node.kind]} size={14} className="node-kind-icon" />
+                {humanizeNodeKind(node)}
+              </span>
               <span className={`node-state is-${headerState.tone}`} title={applicationCaptureState?.detail}>
                 {headerState.label}
               </span>
             </div>
             <div className="flow-node-title">
-              <strong>{node.name}</strong>
+              <strong title={node.name}>{node.name}</strong>
               {canEdit && (
                 <button
                   type="button"
@@ -2824,7 +3065,7 @@ export function SessionFlowCanvas({
                       );
                   }}
                 >
-                  ×
+                  <Icon name="x" />
                 </button>
               )}
             </div>
@@ -2884,6 +3125,7 @@ export function SessionFlowCanvas({
                       id={handleId}
                       position={edgeSidePosition(side)}
                       style={side === "left" || side === "right" ? { top: offset } : { left: offset }}
+                      role="img"
                       aria-label={
                         side === "right"
                           ? `${node.name} ${port.name} output`
@@ -2998,7 +3240,7 @@ export function SessionFlowCanvas({
   return (
     <LiveCanvasProvider store={telemetryStore} diagnostics={diagnostics ?? null}>
       <FlowMotionProvider mode={flowAnimation}>
-        <div className="canvas-layout-actions" aria-label="Canvas layout actions">
+        <div className="canvas-layout-actions" role="group" aria-label="Canvas layout actions">
           <span className="muted" role="status" aria-live="polite">
             {selectedNodeIds.length + selectedGroupIds.length} item
             {selectedNodeIds.length + selectedGroupIds.length === 1 ? "" : "s"} selected
@@ -3032,7 +3274,18 @@ export function SessionFlowCanvas({
               Undo arrange
             </button>
           )}
+          {toolbarActions}
+          <button
+            type="button"
+            className="secondary"
+            aria-pressed={minimapOpen}
+            title="Show a small map of the whole route"
+            onClick={() => toggleMinimap(!minimapOpen)}
+          >
+            Map
+          </button>
         </div>
+        {canvasOverlay}
         <SignalFlowLegend />
         <div
           className="session-flow-canvas"
@@ -3122,7 +3375,7 @@ export function SessionFlowCanvas({
                       onClick={() => onOpenApplicationPicker?.()}
                     >
                       <span className="canvas-library-item-icon" aria-hidden="true">
-                        A
+                        <Icon name={NODE_KIND_ICONS.applicationCapture} size={14} />
                       </span>
                       <span>Application</span>
                     </button>
@@ -3135,7 +3388,7 @@ export function SessionFlowCanvas({
                       onClick={() => onOpenPluginPicker?.()}
                     >
                       <span className="canvas-library-item-icon" aria-hidden="true">
-                        P
+                        <Icon name={NODE_KIND_ICONS.plugin} size={14} />
                       </span>
                       <span>Plugin (VST2/VST3)</span>
                     </button>
@@ -3160,10 +3413,12 @@ export function SessionFlowCanvas({
                   movementBlocked: movementLocked(group.id, geometryItems, geometryOwners),
                   onResizeStart: () => {
                     resizingGroupRef.current = group.id;
+                    resizeStartRef.current = geometryItems.map((item) => ({ ...item }));
                     beforeGestureRef.current = captureLayout();
                   },
                   onResizeEnd: () => {
                     resizingGroupRef.current = null;
+                    resizeStartRef.current = null;
                     rememberGesture();
                   },
                 },
@@ -3205,10 +3460,14 @@ export function SessionFlowCanvas({
               if (moved.size || resized.size) {
                 const drag = dragSnapshotRef.current;
                 if (resizingGroupRef.current || resized.size) {
+                  const items = geometryItems.map((item) =>
+                    item.locked ? item : { ...item, ...moved.get(item.id), ...resized.get(item.id) },
+                  );
+                  const activeGroup = resizingGroupRef.current;
                   commitGeometry(
-                    geometryItems.map((item) =>
-                      item.locked ? item : { ...item, ...moved.get(item.id), ...resized.get(item.id) },
-                    ),
+                    activeGroup && resizeStartRef.current && selectedGroupIds.includes(activeGroup)
+                      ? resizeGroupsTogether(items, resizeStartRef.current, activeGroup, selectedGroupIds)
+                      : items,
                   );
                 } else if (drag?.sessionId === session.id) {
                   for (const [id, point] of moved) drag.targets.set(id, point);
@@ -3237,12 +3496,14 @@ export function SessionFlowCanvas({
               flowInstanceRef.current = instance;
               if (session.nodes.length > 0 && !initialFitDoneRef.current) {
                 initialFitDoneRef.current = true;
-                globalThis.requestAnimationFrame(() => instance.fitView({ padding: 0.2 }));
+                globalThis.requestAnimationFrame(() => openRouteView(instance, 0));
               }
             }}
             nodesConnectable={canEdit}
             deleteKeyCode={["Backspace", "Delete"]}
             nodesDraggable
+            snapToGrid
+            snapGrid={CANVAS_SNAP}
             selectionOnDrag
             multiSelectionKeyCode={["Control", "Meta", "Shift"]}
             onNodeClick={(event, node) => {
@@ -3444,7 +3705,31 @@ export function SessionFlowCanvas({
                 targets: new Map(),
               };
             }}
+            onNodeDrag={(_event, node, dragged) => {
+              const single = dragged.length === 1 && node.type !== "visualGroup";
+              const size = geometryItems.find((item) => item.id === node.id);
+              const next =
+                single && size
+                  ? canvasGuides(
+                      {
+                        id: node.id,
+                        name: "",
+                        x: node.position.x,
+                        y: node.position.y,
+                        width: size.width,
+                        height: size.height,
+                      },
+                      session.nodes.flatMap((other) => {
+                        const rect = geometryItems.find((item) => item.id === other.id);
+                        return rect ? [{ ...rect, name: other.name }] : [];
+                      }),
+                    )
+                  : NO_GUIDES;
+              // A drag fires for every pointer move; only a changed result re-renders the canvas.
+              setGuides((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+            }}
             onNodeDragStop={() => {
+              setGuides(NO_GUIDES);
               rememberGesture();
               dragSnapshotRef.current = null;
               writeLayout(optionalLocalStorage(), layoutKey, positionsRef.current);
@@ -3469,57 +3754,95 @@ export function SessionFlowCanvas({
             />
             <Background gap={24} size={1} color="#2e4057" />
             <Controls showInteractive={false} />
+            {minimapOpen && (
+              <>
+                <MiniMap
+                  position="top-right"
+                  ariaLabel="Map of the route"
+                  pannable
+                  zoomable
+                  className="canvas-minimap"
+                  nodeBorderRadius={6}
+                  nodeColor={(item) => {
+                    if (item.type === "visualGroup") return "transparent";
+                    if (item.dragging) return "var(--signal)";
+                    const kind = session.nodes.find((candidate) => candidate.id === item.id)?.kind;
+                    if (!kind) return "var(--text-soft)";
+                    const family = nodeFlowGroup(kind);
+                    return family === "input"
+                      ? "var(--cyan)"
+                      : family === "output"
+                        ? "var(--good)"
+                        : "var(--text-soft)";
+                  }}
+                  onClick={(_event, position) => {
+                    const flow = flowInstanceRef.current;
+                    flow?.setCenter(position.x, position.y, { zoom: flow.getZoom() });
+                  }}
+                />
+                <Panel position="top-right" className="canvas-minimap-close-panel">
+                  <button
+                    type="button"
+                    className="canvas-minimap-close"
+                    aria-label="Close the map"
+                    title="Close the map"
+                    onClick={() => toggleMinimap(false)}
+                  >
+                    <Icon name="x" size={14} />
+                  </button>
+                </Panel>
+              </>
+            )}
+            <ViewportPortal>
+              {guides.lines.map((line) => (
+                <div
+                  key={`${line.axis}${line.at}`}
+                  className={`canvas-guide is-${line.axis}`}
+                  style={
+                    line.axis === "x"
+                      ? { left: line.at, top: line.from, height: line.to - line.from }
+                      : { top: line.at, left: line.from, width: line.to - line.from }
+                  }
+                />
+              ))}
+            </ViewportPortal>
+            {guides.names.length > 0 && (
+              <Panel position="top-center" className="canvas-guide-label">
+                <span role="status">{guideLabel(guides.names)}</span>
+              </Panel>
+            )}
           </ReactFlow>
           {contextMenu && (
-            <div className="canvas-context-backdrop" onPointerDown={closeContextMenu}>
-              <div
-                className="canvas-context-menu"
-                role="menu"
-                aria-label={contextMenu.kind === "node" ? "Tool actions" : "Canvas actions"}
-                style={{
-                  left: Math.max(
-                    8,
-                    Math.min(
-                      contextMenu.x,
-                      (document.querySelector<HTMLElement>(".session-flow-canvas")?.clientWidth ?? 0) - 190,
-                    ),
-                  ),
-                  top: Math.max(
-                    8,
-                    Math.min(
-                      contextMenu.y,
-                      (document.querySelector<HTMLElement>(".session-flow-canvas")?.clientHeight ?? 0) - 64,
-                    ),
-                  ),
-                }}
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-              >
-                {contextMenu.kind === "node" ? (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    autoFocus
-                    onClick={() => {
-                      onCopyNode?.(contextMenu.nodeId);
-                      closeContextMenu();
-                    }}
-                  >
-                    Copy tool
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    autoFocus
-                    disabled={!canEdit || !canPasteNode}
-                    onClick={() => pasteNode(contextMenu.flowPosition, contextMenu)}
-                  >
-                    Paste tool
-                  </button>
-                )}
-              </div>
-            </div>
+            <CanvasContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              label={contextMenu.kind === "node" ? "Tool actions" : "Canvas actions"}
+              onClose={closeContextMenu}
+            >
+              {contextMenu.kind === "node" ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  autoFocus
+                  onClick={() => {
+                    onCopyNode?.(contextMenu.nodeId);
+                    closeContextMenu();
+                  }}
+                >
+                  Copy tool
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  autoFocus
+                  disabled={!canEdit || !canPasteNode}
+                  onClick={() => pasteNode(contextMenu.flowPosition, contextMenu)}
+                >
+                  Paste tool
+                </button>
+              )}
+            </CanvasContextMenu>
           )}
         </div>
       </FlowMotionProvider>

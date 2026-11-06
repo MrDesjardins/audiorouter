@@ -126,6 +126,57 @@ async function setStatus(page: Page, slots: SlotStatus[]) {
   }, slots);
 }
 
+for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`soundboard slider caption stays close to its track in ${theme}`, async ({ page }, testInfo) => {
+    const { editor } = await openBoard(page, theme, threeSounds);
+    const slider = editor.getByRole("slider").first();
+    for (const viewport of [
+      { width: 1280, height: 720 },
+      { width: 640, height: 360 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await slider.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`${theme}-${viewport.width}-slider-spacing.png`) });
+      const spacing = await slider.evaluate((element) => {
+        const caption = element
+          .closest(".slider-field")!
+          .querySelector(".slider-field-caption")!
+          .getBoundingClientRect();
+        const track = element.getBoundingClientRect();
+        return { gap: track.top - caption.bottom, captionHeight: caption.height, trackHeight: track.height };
+      });
+      expect(spacing.gap).toBeGreaterThanOrEqual(0);
+      expect(spacing.gap).toBeLessThanOrEqual(8);
+      expect(spacing.captionHeight).toBeLessThanOrEqual(32);
+      expect(spacing.trackHeight).toBeGreaterThanOrEqual(24);
+      const row = editor.locator(".soundboard-slot").first();
+      const originalHeight = (await row.boundingBox())!.height;
+      await slider.focus();
+      await page.keyboard.press("End");
+      await expect(slider).toHaveValue("6");
+      await expect(slider).toHaveAttribute("aria-valuetext", "6 dB");
+      expect((await row.boundingBox())!.height).toBe(originalHeight);
+      await page.keyboard.press("Home");
+      await expect(slider).toHaveValue("-24");
+      await expect(slider).toHaveAttribute("aria-valuetext", "-24 dB");
+      expect((await row.boundingBox())!.height).toBe(originalHeight);
+      const precise = row.getByRole("spinbutton", { name: "Level for sound 1 precise value" });
+      await precise.fill("-12");
+      await expect(slider).toHaveValue("-12");
+      await precise.fill("-99");
+      await expect(precise).toHaveAttribute("aria-invalid", "true");
+      await expect(slider).toHaveValue("-12");
+      const reset = row.getByRole("button", { name: "Reset level for sound 1 to 0 dB" });
+      await reset.click();
+      await expect(slider).toHaveValue("0");
+      await expect(precise).toHaveValue("0");
+      await expect(reset).toHaveCount(0);
+      await expect(slider).toBeFocused();
+      expect((await row.boundingBox())!.height).toBe(originalHeight);
+    }
+  });
+}
+
 /** Bounds of the card, its buttons, and every editor control and status line, rounded to 0.1 px. */
 async function layout(page: Page) {
   return page.evaluate(() => {

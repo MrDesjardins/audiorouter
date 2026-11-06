@@ -7,27 +7,46 @@ const KEYBOARD_STEP = 24;
  * Drag handle on the left edge of the right sidebar. Dragging left widens
  * the sidebar (for example for Advanced EQ bands); arrow keys resize it in
  * steps, Home/End jump to the limits and double-click restores the default.
- * The new width is reported continuously and persisted by the caller.
+ * The new width is reported continuously and persisted by the caller;
+ * `onResized` reports each finished change once, for undo.
  */
-export function SidebarResizer({ width, onWidth }: { width: number; onWidth: (width: number) => void }) {
-  const drag = useRef<{ startX: number; startWidth: number } | null>(null);
+export function SidebarResizer({
+  width,
+  onWidth,
+  onResized,
+}: {
+  width: number;
+  onWidth: (width: number) => void;
+  onResized?: (before: number, after: number) => void;
+}) {
+  const drag = useRef<{ startX: number; startWidth: number; lastWidth: number } | null>(null);
+  const change = (next: number) => {
+    if (next === width) return;
+    onWidth(next);
+    onResized?.(width, next);
+  };
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
-    drag.current = { startX: event.clientX, startWidth: width };
+    drag.current = { startX: event.clientX, startWidth: width, lastWidth: width };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return;
     // The sidebar is on the right: moving the handle left makes it wider.
     const viewportLimit = typeof window === "undefined" ? MAX_SIDEBAR_WIDTH : window.innerWidth * 0.7;
-    onWidth(
-      Math.min(viewportLimit, clampSidebarWidth(drag.current.startWidth + (drag.current.startX - event.clientX))),
+    const next = Math.min(
+      viewportLimit,
+      clampSidebarWidth(drag.current.startWidth + (drag.current.startX - event.clientX)),
     );
+    drag.current.lastWidth = next;
+    onWidth(next);
   };
   const onPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const finished = drag.current;
     drag.current = null;
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
+    if (finished && finished.lastWidth !== finished.startWidth) onResized?.(finished.startWidth, finished.lastWidth);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const next =
@@ -42,7 +61,7 @@ export function SidebarResizer({ width, onWidth }: { width: number; onWidth: (wi
               : null;
     if (next === null) return;
     event.preventDefault();
-    onWidth(clampSidebarWidth(next));
+    change(clampSidebarWidth(next));
   };
   return (
     <div
@@ -60,7 +79,7 @@ export function SidebarResizer({ width, onWidth }: { width: number; onWidth: (wi
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onKeyDown={onKeyDown}
-      onDoubleClick={() => onWidth(DEFAULT_SIDEBAR_WIDTH)}
+      onDoubleClick={() => change(DEFAULT_SIDEBAR_WIDTH)}
     />
   );
 }

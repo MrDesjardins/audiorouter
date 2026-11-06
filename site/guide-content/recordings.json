@@ -8,6 +8,14 @@
       "property": "gainDb"
     },
     {
+      "title": "Gain",
+      "video": "assets/tool-guides/gain--gainDb.mp4",
+      "poster": "assets/tool-guides/gain--gainDb.jpg",
+      "description": "Gain moves from 0 dB to −12 dB about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Gain. More negative values make it quieter.",
+      "property": "gainDb",
+      "silent": false
+    },
+    {
       "title": "Every setting",
       "video": "assets/tool-guides/gain-overview.mp4",
       "poster": "assets/tool-guides/gain-overview.jpg",
@@ -23,6 +31,14 @@
       "property": "percent"
     },
     {
+      "title": "Volume",
+      "video": "assets/tool-guides/volume--percent.mp4",
+      "poster": "assets/tool-guides/volume--percent.jpg",
+      "description": "Volume moves from 100% to 0% about three seconds in, while a 220 Hz tone that jumps between quiet and loud plays through the Volume. 0% silences this output.",
+      "property": "percent",
+      "silent": false
+    },
+    {
       "title": "Every setting",
       "video": "assets/tool-guides/volume-overview.mp4",
       "poster": "assets/tool-guides/volume-overview.jpg",
@@ -36,6 +52,14 @@
       "poster": "assets/tool-guides/bassTreble-demo.jpg",
       "description": "Bass moves from 0 dB to −12 dB about three seconds in, while steady pink noise plays through the Bass & Treble. Cuts low frequencies.",
       "property": "bassDb"
+    },
+    {
+      "title": "Bass",
+      "video": "assets/tool-guides/bassTreble--bassDb.mp4",
+      "poster": "assets/tool-guides/bassTreble--bassDb.jpg",
+      "description": "Bass moves from 0 dB to −12 dB about three seconds in, while steady pink noise plays through the Bass & Treble. Cuts low frequencies.",
+      "property": "bassDb",
+      "silent": false
     },
     {
       "title": "Treble",
@@ -117,6 +141,14 @@
       "property": "band5Db"
     },
     {
+      "title": "1 kHz",
+      "video": "assets/tool-guides/graphicEq--band5Db.mp4",
+      "poster": "assets/tool-guides/graphicEq--band5Db.jpg",
+      "description": "1 kHz moves from 0 dB to 12 dB about three seconds in, while steady pink noise plays through the Graphic EQ. Add a little if the midrange feels distant after level matching.",
+      "property": "band5Db",
+      "silent": false
+    },
+    {
       "title": "2 kHz",
       "video": "assets/tool-guides/graphicEq--band6Db.mp4",
       "poster": "assets/tool-guides/graphicEq--band6Db.jpg",
@@ -180,6 +212,14 @@
       "property": "band0FrequencyHz"
     },
     {
+      "title": "Frequency · band 1",
+      "video": "assets/tool-guides/parametricEq--band0FrequencyHz.mp4",
+      "poster": "assets/tool-guides/parametricEq--band0FrequencyHz.jpg",
+      "description": "Frequency · band 1 moves from 1,000 Hz to 20 Hz about three seconds in, while steady pink noise plays through the Advanced EQ. Moves it toward lower-pitched content.",
+      "property": "band0FrequencyHz",
+      "silent": false
+    },
+    {
       "title": "Q · band 1",
       "video": "assets/tool-guides/parametricEq--band0Q.mp4",
       "poster": "assets/tool-guides/parametricEq--band0Q.jpg",
@@ -217,6 +257,14 @@
       "poster": "assets/tool-guides/compressor-demo.jpg",
       "description": "Threshold moves from −18 dBFS to −60 dBFS about three seconds in, while a short, buzzy test voice plays through the Compressor. Lower values compress more of the signal.",
       "property": "thresholdDb"
+    },
+    {
+      "title": "Threshold",
+      "video": "assets/tool-guides/compressor--thresholdDb.mp4",
+      "poster": "assets/tool-guides/compressor--thresholdDb.jpg",
+      "description": "Threshold moves from −35 dBFS to −60 dBFS about three seconds in, while a short, buzzy test voice plays through the Compressor. Lower values compress more of the signal.",
+      "property": "thresholdDb",
+      "silent": false
     },
     {
       "title": "Ratio",
@@ -272,6 +320,14 @@
       "poster": "assets/tool-guides/gate-demo.jpg",
       "description": "Threshold moves from −45 dBFS to −80 dBFS about three seconds in, while a short, buzzy test voice plays through the Gate / Expander. Opens for quieter sound and potentially room noise.",
       "property": "thresholdDb"
+    },
+    {
+      "title": "Threshold",
+      "video": "assets/tool-guides/gate--thresholdDb.mp4",
+      "poster": "assets/tool-guides/gate--thresholdDb.jpg",
+      "description": "Threshold moves from −35 dBFS to −80 dBFS about three seconds in, while a buzzy test voice over background hiss plays through the Gate / Expander. Opens for quieter sound and potentially room noise.",
+      "property": "thresholdDb",
+      "silent": false
     },
     {
       "title": "Range",
@@ -337,6 +393,14 @@
       "property": "ceilingDb"
     },
     {
+      "title": "Ceiling",
+      "video": "assets/tool-guides/limiter--ceilingDb.mp4",
+      "poster": "assets/tool-guides/limiter--ceilingDb.jpg",
+      "description": "Ceiling moves from −10 dBFS to −12 dBFS about three seconds in, while a simple drum loop plays through the Limiter. Leaves more headroom.",
+      "property": "ceilingDb",
+      "silent": false
+    },
+    {
       "title": "Look-ahead",
       "video": "assets/tool-guides/limiter--lookaheadMs.mp4",
       "poster": "assets/tool-guides/limiter--lookaheadMs.jpg",
@@ -368,6 +432,14 @@
       "property": "delayMs"
     },
     {
+      "title": "Delay",
+      "video": "assets/tool-guides/delay--delayMs.mp4",
+      "poster": "assets/tool-guides/delay--delayMs.jpg",
+      "description": "Delay moves from 0 ms to 1,000 ms about three seconds in, while a simple drum loop plays through the Sync (delay). Moves sound later.",
+      "property": "delayMs",
+      "silent": false
+    },
+    {
       "title": "Every setting",
       "video": "assets/tool-guides/delay-overview.mp4",
       "poster": "assets/tool-guides/delay-overview.jpg",
@@ -381,6 +453,14 @@
       "poster": "assets/tool-guides/pitch-demo.jpg",
       "description": "Semitones moves from 0 to −12 about three seconds in, while a tone that steps up from 220 Hz to 1,760 Hz plays through the Pitch. Lowers pitch.",
       "property": "semitones"
+    },
+    {
+      "title": "Semitones",
+      "video": "assets/tool-guides/pitch--semitones.mp4",
+      "poster": "assets/tool-guides/pitch--semitones.jpg",
+      "description": "Semitones moves from 0 to −12 about three seconds in, while a tone that steps up from 220 Hz to 1,760 Hz plays through the Pitch. Lowers pitch.",
+      "property": "semitones",
+      "silent": false
     },
     {
       "title": "Fine tune",
@@ -404,6 +484,14 @@
       "poster": "assets/tool-guides/dehum-demo.jpg",
       "description": "Mains frequency moves from 60 Hz to 45 Hz about three seconds in, while a test voice over 50 Hz mains hum plays through the Dehum. Moves the series lower.",
       "property": "frequencyHz"
+    },
+    {
+      "title": "Mains frequency",
+      "video": "assets/tool-guides/dehum--frequencyHz.mp4",
+      "poster": "assets/tool-guides/dehum--frequencyHz.jpg",
+      "description": "Mains frequency moves from 60 Hz to 45 Hz about three seconds in, while a test voice over 50 Hz mains hum plays through the Dehum. Moves the series lower.",
+      "property": "frequencyHz",
+      "silent": false
     },
     {
       "title": "Amount",
@@ -437,6 +525,14 @@
       "property": "thresholdPercent"
     },
     {
+      "title": "Threshold",
+      "video": "assets/tool-guides/declick--thresholdPercent.mp4",
+      "poster": "assets/tool-guides/declick--thresholdPercent.jpg",
+      "description": "Threshold moves from 50% to 0% about three seconds in, while quiet hiss with sharp clicks plays through the Declick. Detects more subtle clicks.",
+      "property": "thresholdPercent",
+      "silent": false
+    },
+    {
       "title": "Every setting",
       "video": "assets/tool-guides/declick-overview.mp4",
       "poster": "assets/tool-guides/declick-overview.jpg",
@@ -450,6 +546,14 @@
       "poster": "assets/tool-guides/denoise-demo.jpg",
       "description": "Reduction moves from 70% to 0% about three seconds in, while a buzzy test voice over background hiss plays through the Denoise. Retains more original sound.",
       "property": "reductionPercent"
+    },
+    {
+      "title": "Reduction",
+      "video": "assets/tool-guides/denoise--reductionPercent.mp4",
+      "poster": "assets/tool-guides/denoise--reductionPercent.jpg",
+      "description": "Reduction moves from 70% to 0% about three seconds in, while a buzzy test voice over background hiss plays through the Denoise. Retains more original sound.",
+      "property": "reductionPercent",
+      "silent": false
     },
     {
       "title": "Noise left in",
@@ -483,6 +587,14 @@
       "property": "strengthPercent"
     },
     {
+      "title": "Strength",
+      "video": "assets/tool-guides/speechDenoise--strengthPercent.mp4",
+      "poster": "assets/tool-guides/speechDenoise--strengthPercent.jpg",
+      "description": "Strength moves from 70% to 0% about three seconds in, while a buzzy test voice over background hiss plays through the Speech Denoise. Retains more of the original signal.",
+      "property": "strengthPercent",
+      "silent": false
+    },
+    {
       "title": "Every setting",
       "video": "assets/tool-guides/speechDenoise-overview.mp4",
       "poster": "assets/tool-guides/speechDenoise-overview.jpg",
@@ -496,6 +608,14 @@
       "poster": "assets/tool-guides/spectralGate-demo.jpg",
       "description": "Threshold above noise moves from 3 dB to −20 dB about three seconds in, while a buzzy test voice over background hiss plays through the Spectral Gate. Lets more frequency regions pass.",
       "property": "thresholdDb"
+    },
+    {
+      "title": "Threshold above noise",
+      "video": "assets/tool-guides/spectralGate--thresholdDb.mp4",
+      "poster": "assets/tool-guides/spectralGate--thresholdDb.jpg",
+      "description": "Threshold above noise moves from 3 dB to −20 dB about three seconds in, while a buzzy test voice over background hiss plays through the Spectral Gate. Lets more frequency regions pass.",
+      "property": "thresholdDb",
+      "silent": false
     },
     {
       "title": "Reduction",
@@ -1111,7 +1231,7 @@
       "title": "When pressed · button 1",
       "video": "assets/tool-guides/soundboard--slot1Mode.mp4",
       "poster": "assets/tool-guides/soundboard--slot1Mode.jpg",
-      "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+      "description": "When pressed · button 1 is set to Toggle about three seconds in. The change has no sound of its own, so this clip is silent. Play once (a second press restarts it), Loop, Toggle on/off, or Play while held. For Play while held, keep the mouse button, Space or Enter down; release it to stop. Moving focus away also releases a held sound.",
       "property": "slot1Mode",
       "silent": true
     },

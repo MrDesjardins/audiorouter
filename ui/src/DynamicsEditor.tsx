@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useComparing } from "./compareHold";
 import { Handle, type HandleSpec } from "./SvgHandle";
+import { PropertySection } from "./PropertySection";
 import type { DiagnosticsSnapshot, Node } from "@audiorouter/contracts";
 import {
   compressorOutputDb,
   compressorSettings,
+  dynamicsControlSplit,
+  dynamicsTimingSummary,
   gateOutputDb,
   gateSettings,
   levelStatistics,
@@ -63,6 +67,8 @@ function useHistory(
   }, [kind, telemetry, channels, active]);
   return history;
 }
+
+const QUIET_VOICE_ADVICE = " Your voice is quiet: turn the microphone up, or add a Gain before this tool.";
 
 /**
  * Level statistics that keep the last good measurement while readings
@@ -585,6 +591,8 @@ export function DynamicsEditor({
   running,
   disabled,
   onChange,
+  mainControls,
+  timingControls,
 }: {
   kind: DynamicsKind;
   node: Node;
@@ -593,6 +601,10 @@ export function DynamicsEditor({
   running: boolean;
   disabled: boolean;
   onChange: Change;
+  /** The settings people change most, right under the curve. */
+  mainControls?: ReactNode;
+  /** The rest, in a section that shows their values while closed. */
+  timingControls?: ReactNode;
 }) {
   const active = running && node.enabled && !node.bypass;
   const hasLevels = Boolean(telemetry?.inputLevelDb?.length);
@@ -605,6 +617,7 @@ export function DynamicsEditor({
   const reduction = latest ? latest.reductionDb : null;
   const trail = history.slice(-20, -1);
   const axes = AXES[kind];
+  const comparing = useComparing(node.id);
   let status: string;
   let pill: { text: string; tone: "good" | "idle" | "work" } = { text: "Not playing", tone: "idle" };
   // The pill names why there is no live reading, not just "Not playing".
@@ -614,6 +627,9 @@ export function DynamicsEditor({
   } else if (node.bypass) {
     status = "Bypassed: sound passes unchanged. Turn Bypass off to hear and see the effect.";
     pill = { text: "Bypassed", tone: "idle" };
+  } else if (comparing) {
+    status = "Comparing: this tool is out of the route while you hold.";
+    pill = { text: "Comparing", tone: "idle" };
   } else if (!running) status = "Press Play, then talk: the moving dot shows where your voice sits on the curve.";
   else if (!telemetry) {
     status =
@@ -670,7 +686,7 @@ export function DynamicsEditor({
       <div className="dynamics-heading">
         <div>
           <strong>Live response</strong>
-          <small>Drag the round handles or the orange line. Exact values are below.</small>
+          <small>Drag the round handles. Exact values are below.</small>
         </div>
         <span className={`dynamics-pill is-${pill.tone}`} role="status">
           {pill.text}
@@ -712,52 +728,28 @@ export function DynamicsEditor({
           />
         </div>
       </div>
-      <LevelHistory
-        kind={kind}
-        node={node}
-        history={active ? history : []}
-        now={now}
-        statistics={statistics}
-        disabled={disabled}
-        onChange={onChange}
-      />
-      <div className="dynamics-legend" aria-hidden="true">
-        <span>
-          <i className="dynamics-key is-input" />
-          In
-        </span>
-        <span>
-          <i className="dynamics-key is-output" />
-          Out
-        </span>
-        <span>
-          <i className="dynamics-key is-threshold" />
-          {kind === "limiter" ? "Ceiling" : "Threshold"}
-        </span>
-        {kind === "gate" && (
-          <span>
-            <i className="dynamics-key is-close" />
-            Closes below
-          </span>
-        )}
-      </div>
+      {mainControls && <div className="dynamics-main-controls">{mainControls}</div>}
       {currentThreshold !== null && (
         <div className="dynamics-suggestion">
-          {/* Always rendered at a reserved size so the panel never jumps when a measurement arrives or lapses. */}
-          {suggestion && statistics ? (
-            <span>
-              Last 8 s: room noise ≈ {db(statistics.noiseDb, 0)} dB, voice ≈ {db(statistics.voiceDb, 0)} dB. Suggested
-              threshold {db(suggestion.value, 0)} dB ({suggestion.why}).
-              {"quiet" in suggestion &&
-                suggestion.quiet &&
-                " Your voice is quiet, so the threshold is low too: turning the microphone up (Windows input level, or a Gain before this tool) works better."}
-            </span>
-          ) : (
-            <span className="muted">
-              Suggested threshold: press Play and talk normally for a few seconds, with short pauses, to measure your
-              voice and room noise.
-            </span>
-          )}
+          {/* An invisible copy of the longest text shares the grid cell, so the slot is the right height at any panel
+              width and the panel never jumps when a measurement arrives, lapses or turns into the quiet-voice advice. */}
+          <div
+            className="dynamics-suggestion-text"
+            data-reserve={`Last 8 s: room noise ≈ −100 dB, voice ≈ −100 dB. Suggested threshold −100 dB (about 10 dB off your loud words at 10.0:1; raise Ratio for more).${kind === "compressor" ? QUIET_VOICE_ADVICE : ""}`}
+          >
+            {suggestion && statistics ? (
+              <span>
+                Last 8 s: room noise ≈ {db(statistics.noiseDb, 0)} dB, voice ≈ {db(statistics.voiceDb, 0)} dB. Suggested
+                threshold {db(suggestion.value, 0)} dB ({suggestion.why}).
+                {"quiet" in suggestion && suggestion.quiet && QUIET_VOICE_ADVICE}
+              </span>
+            ) : (
+              <span className="muted">
+                Suggested threshold: press Play and talk normally for a few seconds, with short pauses, to measure your
+                voice and room noise.
+              </span>
+            )}
+          </div>
           <button
             type="button"
             className="secondary"
@@ -769,14 +761,53 @@ export function DynamicsEditor({
         </div>
       )}
       <p className="muted dynamics-status">{status}</p>
-      <details className="dynamics-sketch-details" open>
-        <summary>How one word is shaped by Attack{kind === "gate" ? ", Hold" : ""} and Release</summary>
+      {timingControls && (
+        <PropertySection
+          kind={kind}
+          title={dynamicsControlSplit(kind).title}
+          summary={dynamicsTimingSummary(kind, node)}
+        >
+          {timingControls}
+        </PropertySection>
+      )}
+      <PropertySection kind={kind} title="Last 8 seconds">
+        <LevelHistory
+          kind={kind}
+          node={node}
+          history={active ? history : []}
+          now={now}
+          statistics={statistics}
+          disabled={disabled}
+          onChange={onChange}
+        />
+        <div className="dynamics-legend" aria-hidden="true">
+          <span>
+            <i className="dynamics-key is-input" />
+            In
+          </span>
+          <span>
+            <i className="dynamics-key is-output" />
+            Out
+          </span>
+          <span>
+            <i className="dynamics-key is-threshold" />
+            {kind === "limiter" ? "Ceiling" : "Threshold"}
+          </span>
+          {kind === "gate" && (
+            <span>
+              <i className="dynamics-key is-close" />
+              Closes below
+            </span>
+          )}
+        </div>
+      </PropertySection>
+      <PropertySection kind={kind} title="How one word is shaped">
         <ResponseSketchView kind={kind} node={node} />
         <small className="muted">
           The line shows how far the tool turns the sound down over time (0 = unchanged). It updates as you change the
           timing values.
         </small>
-      </details>
+      </PropertySection>
     </section>
   );
 }

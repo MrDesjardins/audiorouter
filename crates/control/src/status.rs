@@ -185,7 +185,9 @@ impl ControlPlane {
                 }
             }
             let mut session = if flags_only {
-                self.adapt_native_paths_session(self.get_session(session_id)?.clone())?
+                self.adapt_native_paths_session(
+                    self.with_comparison(self.get_session(session_id)?.clone()),
+                )?
             } else {
                 self.native_paths_session(session_id)?
             };

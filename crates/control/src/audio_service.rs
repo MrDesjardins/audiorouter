@@ -123,6 +123,7 @@ impl ControlPlane {
     }
 
     pub fn service_running_native_audio(&mut self, now: std::time::Instant) -> usize {
+        self.expire_comparison(now);
         #[cfg(windows)]
         self.service_sleep_route_recovery(now);
         self.audio_service.recorder_drain_micros = 0;

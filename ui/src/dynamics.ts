@@ -272,3 +272,43 @@ export function nextFallingLevel(
   if (!previous || valueDb >= previous.db) return { db: valueDb, at: now };
   return { db: Math.max(valueDb, previous.db - (fallDbPerSecond * Math.max(0, now - previous.at)) / 1000), at: now };
 }
+
+/** Which settings sit under the curve, and which in the closed section. */
+const CONTROL_SPLIT: Record<DynamicsKind, { main: readonly string[]; timing: readonly string[]; title: string }> = {
+  compressor: {
+    main: ["thresholdDb", "ratio", "makeupDb"],
+    timing: ["attackMs", "releaseMs", "kneeDb"],
+    title: "Timing and knee",
+  },
+  gate: {
+    main: ["thresholdDb", "rangeDb"],
+    timing: ["attackMs", "holdMs", "releaseMs", "hysteresisDb", "ratio"],
+    title: "Timing and closing",
+  },
+  limiter: { main: ["ceilingDb"], timing: ["lookaheadMs", "releaseMs"], title: "Timing" },
+};
+
+const NO_SPLIT = { main: [], timing: [], title: "" };
+
+export function dynamicsControlSplit(kind: string): {
+  main: readonly string[];
+  timing: readonly string[];
+  title: string;
+} {
+  return kind === "compressor" || kind === "gate" || kind === "limiter" ? CONTROL_SPLIT[kind] : NO_SPLIT;
+}
+
+/** The closed section's values, for example "10 ms · 150 ms · 6 dB". */
+export function dynamicsTimingSummary(kind: DynamicsKind, node: Node): string {
+  const number = (value: number) => String(Math.round(value * 10) / 10);
+  if (kind === "compressor") {
+    const { attackMs, releaseMs, kneeDb } = compressorSettings(node);
+    return `${number(attackMs)} ms · ${number(releaseMs)} ms · ${number(kneeDb)} dB`;
+  }
+  if (kind === "gate") {
+    const { attackMs, holdMs, releaseMs } = gateSettings(node);
+    return `${number(attackMs)} ms · ${number(holdMs)} ms · ${number(releaseMs)} ms`;
+  }
+  const { lookaheadMs, releaseMs } = limiterSettings(node);
+  return `${number(lookaheadMs)} ms · ${number(releaseMs)} ms`;
+}

@@ -1,3 +1,4 @@
+import { openSection, openSettings } from "./workbench";
 import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 import { appendLibraryNode } from "../src/draft";
@@ -22,10 +23,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     for (const kind of ["compressor", "parametricEq", "meter", "gate", "parametricEq", "compressor", "meter"]) {
       await page.getByTestId(`rf__node-${kind}-1`).locator(".flow-node-title").click();
       const inspector = page.locator(".panel.inspector");
+      await expect(inspector.locator("#inspector-heading")).toBeVisible();
+      await openSection(inspector, "Technical details");
       await expect(inspector.getByLabel("Node ID", { exact: true })).toHaveText(`${kind}-1`);
       const dynamics = kind === "compressor" || kind === "gate";
       await expect(inspector.locator(".dynamics-editor")).toHaveCount(dynamics ? 1 : 0);
-      await expect(inspector.getByText(/How one word is shaped by Attack/)).toHaveCount(dynamics ? 1 : 0);
+      await expect(inspector.getByText(/How one word is shaped/)).toHaveCount(dynamics ? 1 : 0);
       if (!dynamics) await expect(inspector.getByRole("slider", { name: /attack|release/i })).toHaveCount(0);
       await page.waitForTimeout(150);
       await expect(inspector.getByLabel("Node ID", { exact: true })).toHaveText(`${kind}-1`);
@@ -61,7 +64,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     );
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/route-harness.html");
-    await page.getByRole("tab", { name: "API", exact: true }).click();
+    await openSettings(page, "API");
     const token = page.getByLabel("API bearer token", { exact: true });
     await expect(token).toHaveValue("a".repeat(64));
     await page.getByRole("button", { name: "Copy API token", exact: true }).click();
@@ -91,6 +94,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/route-harness.html");
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
+    await openSection(page.locator(".panel.inspector"), "Technical details");
     const nodeId = page.getByLabel("Node ID", { exact: true });
     await nodeId.scrollIntoViewIfNeeded();
     await expect(nodeId).toHaveText("voice");
@@ -112,7 +116,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const box = (await sessionId.boundingBox())!;
     expect(box.x + box.width).toBeLessThanOrEqual(1280);
     await page.screenshot({ path: info.outputPath(`${theme}-session-id.png`) });
-    await page.getByRole("tab", { name: "API", exact: true }).click();
+    await openSettings(page, "API");
     await page.screenshot({ path: info.outputPath(`${theme}-token-controls.png`) });
   });
   test(`logs folder controls in ${theme}`, async ({ page }, info) => {
@@ -138,7 +142,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     );
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/route-harness.html");
-    await page.getByRole("tab", { name: "Logs", exact: true }).click();
+    await openSettings(page, "Logs and support");
     const panel = page.getByRole("region", { name: "Send logs for support" });
     await expect(panel.getByLabel("Logs folder", { exact: true })).toHaveValue(
       "C:/Users/Example/AppData/Local/AudioRouter/logs",
@@ -201,8 +205,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       expect(box.x + box.width).toBeLessThanOrEqual(1280);
       await page.screenshot({ path: info.outputPath(`${theme}-${kind}.png`) });
     }
-    await page.getByRole("tab", { name: "Advanced", exact: true }).click();
-    await page.getByText("Keyboard graph controls", { exact: true }).click();
+    await page.getByRole("button", { name: "Route list", exact: true }).click();
     await expect(page.getByLabel("Graph nodes and connections")).toBeVisible();
     await expect(page.locator(".session-flow-canvas")).toBeVisible();
   });

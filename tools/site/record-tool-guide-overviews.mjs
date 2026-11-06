@@ -335,13 +335,21 @@ for (const { tool, render } of selected) {
       },
       { session, tool, telemetry, voicePresets, audible, parameterSchema, version },
     );
+    // Every Tools group open, so the recorder can reach any tool in the shelf.
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        "audiorouter.ui.tools-open-groups",
+        JSON.stringify(["input", "output", "clean", "level", "tone", "routing", "canvas", "plugins", "setup"]),
+      );
+    });
     await page.goto("http://127.0.0.1:4186/route-harness.html");
     if (tool.kind !== "group")
       await page.getByRole("button", { name: "Fit View" }).click();
     if (tool.kind === "group")
       await page
         .getByRole("button", {
-          name: "Group A named visual background; no audio routing",
+          name: "Group",
+          exact: true,
         })
         .click();
     else
@@ -379,13 +387,14 @@ for (const { tool, render } of selected) {
     await page.setViewportSize({ width: 480, height: 854 });
     if (tool.kind === "applicationCapture" && !demo) {
       await page.addStyleTag({ content: ".main-content>.right-workbench{display:block!important;width:100%!important;height:100vh!important;overflow:auto!important}.right-workbench .workbench-page{display:block!important}" });
-      await page.getByRole("button", { name: /Choose an application source/ }).scrollIntoViewIfNeeded();
+      await page.locator(".tool-card").filter({ hasText: "Application source" }).first().scrollIntoViewIfNeeded();
     }
     await inspector.evaluate((e) => (e.scrollTop = 0));
-    if (properties)
-      await inspector.locator("details").evaluateAll((elements) => {
-        for (const element of elements) element.open = true;
-      });
+    // Properties sections start closed; a guide shows the settings it talks about.
+    // Help stays closed so the live visual keeps its place at the top.
+    await inspector.locator("details.property-section").evaluateAll((elements) => {
+      for (const element of elements) element.open = true;
+    });
     let control;
     // A family's shared clip drives the panel through tool-guide-family-actions.
     const family = demo && render.family ? familyActions[tool.kind] : null;
@@ -549,12 +558,22 @@ for (const { tool, render } of selected) {
           if (!actionButton)
             await control.evaluate((element) => element.blur());
           eventAtSeconds = (performance.now() - start) / 1000;
-          if (Math.abs(eventAtSeconds - 3.2) > 1 / 15)
+          // A real click takes up to about 90 ms; the change stays within two video frames of the audio.
+          if (Math.abs(eventAtSeconds - 3.2) > 0.1)
             throw new Error(
               `Parameter action missed its video frame: ${eventAtSeconds}`,
             );
         }
         if (frame === (family ? 76 : 60)) await inspector.evaluate((e) => (e.scrollTop = 0));
+      } else if (tool.kind === "soundboard" && !config) {
+        // Configuration-only: show exact entry and the visible reset without
+        // pretending that this silent tour demonstrates the audible effect.
+        const precise = inspector.getByRole("spinbutton", { name: "Level for sound 1 precise value", exact: true });
+        if (frame === 18) { await precise.scrollIntoViewIfNeeded(); await precise.fill("-12"); await precise.blur(); }
+        if (frame === 55) await inspector.getByRole("button", { name: "Reset Level for sound 1 to 0 dB", exact: true }).click();
+        if (frame === 65 && await precise.inputValue() !== "0") throw new Error("Soundboard Reset did not restore 0 dB");
+        if (frame === 76) await inspector.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+        if (frame === 94) await inspector.evaluate((element) => { element.scrollTop = 0; });
       } else if (["networkSend", "networkReceive"].includes(tool.kind)) {
         // Public example only: never capture a real user's pairing key.
         if (frame === 24) {
@@ -576,7 +595,7 @@ for (const { tool, render } of selected) {
         if (frame === 76) await inspector.evaluate((e) => (e.scrollTop = 0));
       } else if (tool.kind === "applicationCapture") {
         if (frame === 22) {
-          await page.getByRole("button", { name: /Choose an application source/ }).click();
+          await page.locator(".tool-card").filter({ hasText: "Application source" }).first().click();
           const dialog = page.getByRole("dialog", { name: "Add an application capture source", includeHidden: true });
           await dialog.waitFor({ state: "attached" });
           await dialog.evaluate(element => document.body.appendChild(element.closest(".dialog-backdrop")));

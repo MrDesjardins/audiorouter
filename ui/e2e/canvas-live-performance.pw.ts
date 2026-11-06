@@ -1,3 +1,4 @@
+import { openSettings } from "./workbench";
 import { test, expect, type Page } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
@@ -132,7 +133,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const comets = page.locator(".react-flow .flow-comet");
     await expect.poll(() => active.count()).toBeGreaterThan(0);
     await expect.poll(() => comets.count()).toBeGreaterThan(0);
-    await page.getByRole("tab", { name: "UI Options" }).click();
+    await openSettings(page, "Appearance");
     const panel = page.locator(".flow-animation-panel");
     const choice = panel.getByLabel("Travelling lights on connections");
     // Default: only while AudioRouter is the active window.
@@ -161,7 +162,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     // The choice is remembered (a non-default one, so the check means something).
     await choice.selectOption("off");
     await page.reload();
-    await page.getByRole("tab", { name: "UI Options" }).click();
+    await openSettings(page, "Appearance");
     await expect(page.locator(".flow-animation-panel").getByLabel("Travelling lights on connections")).toHaveValue(
       "off",
     );

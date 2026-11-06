@@ -1,4 +1,5 @@
 import type { DeviceListItem } from "@audiorouter/contracts";
+import { SliderField } from "./Slider";
 
 type SpatialMode = "off" | "headphones" | "speakers";
 
@@ -57,24 +58,21 @@ export function SpatialAudioField({
         </select>
       </label>
       {selected !== "off" && (
-        <label className="param-row spatial-room">
-          <span className="param-caption">
-            <span>Room</span>
-            <b aria-hidden="true">{room === 0 ? "Off" : `${room} %`}</b>
-          </span>
-          <input
-            type="range"
-            aria-label="Room"
-            aria-valuetext={room === 0 ? "Off" : `${room} percent`}
-            min={0}
-            max={100}
-            step={1}
-            value={room}
-            disabled={disabled}
-            onChange={(event) => onChange("spatialRoomPercent", Number(event.target.value))}
-          />
-          <small>Adds a small room around the virtual speakers; higher sounds further away.</small>
-        </label>
+        <SliderField
+          className="spatial-room"
+          label="Room"
+          name="Room"
+          valueText={room === 0 ? "Off" : `${room} percent`}
+          value={room}
+          min={0}
+          max={100}
+          step={1}
+          unit="%"
+          defaultValue={0}
+          disabled={disabled}
+          help={<small>Adds a small room around the virtual speakers; higher sounds further away.</small>}
+          onChange={(value) => onChange("spatialRoomPercent", value)}
+        />
       )}
       <small>
         {guidance}

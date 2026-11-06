@@ -45,6 +45,9 @@ fn a_fresh_install_keeps_device_and_folder_consent_exclusive_to_its_window() {
     let app = Kill(
         std::process::Command::new(&exe)
             .env("AUDIOROUTER_DATABASE", folder.join("state.sqlite"))
+            // A fresh profile too: without this the window reads and rewrites the
+            // real install's remembered route and first-run state.
+            .env("WEBVIEW2_USER_DATA_FOLDER", folder.join("webview"))
             .env_remove("AUDIOROUTER_CONTROL_PIPE")
             .env_remove("AUDIOROUTER_ALLOW_DEVICE_ADMIN")
             .spawn()

@@ -31,6 +31,19 @@ Vite chunk size and shared-policy advisory warnings are explicitly recorded in
 the evidence. The complete security-only diff was inspected. Next after the
 approved push/PR creation: hosted checks and owner review; no merge or release.
 
+Release 0.0.27 was published on 2026-11-05 as an unsigned Windows 11 x64 app-only
+experimental prerelease, from
+[`v0.0.27`](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.27).
+Its version bump, notes and evidence live on `origin/release/0.0.27` and are not
+on `main`; that integration needs its own owner-approved PR. Until then `main`
+still says 0.0.26 and its release notes hold 0.0.27's text under "Unreleased".
+
+Local test build, 2026-11-04 (M08 build artifact; ENG-02/04): release shell with
+`custom-protocol`, VST2/VST3 workers and staged MCP CLI from `0a5d7677`. Exact-binary
+packaged smoke passed as Medium/non-admin (cold UI 1,666 ms, warm 799 ms, save 65 ms,
+two graceful exits, no uncaught UI errors). No live audio, hardware, full test suite
+or installer qualification was run. Evidence: `target/local-main-build-2026-11-04/`.
+
 Dependabot 7 (ENG-02/04/05), owner correction: removed the rejected 55k-line
 GLib vendor import, Cargo patch and supporting checks from PR
 [#115](https://github.com/MrDesjardins/audiorouter/pull/115). Normal crates.io
@@ -55,6 +68,9 @@ consolidation.
   capture baseline and iteratively improve all UI categories to evidence-backed
   9/10 in dark/light, with high-contrast regression checks. Isolated branch and
   harness only; preserve the documentation consolidation and live owner route.
+  Round 21 (the 13 approved mockup changes) is on branch `improve/ui-round-21`,
+  stacked on PR #117 and opened with the owner's approval on 2026-11-06. Progress,
+  defects and the remaining owner decision are in that file.
 
 1. Finish the 2026-11-01/2026-10-07 code-review disposition. The detailed
    execution record is [code-review fixes](code-review-fixes.md); most source

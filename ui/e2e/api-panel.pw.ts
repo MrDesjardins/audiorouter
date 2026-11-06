@@ -1,4 +1,4 @@
-import { setColorTheme } from "./workbench";
+import { setColorTheme, openSettings } from "./workbench";
 import { test, expect } from "./browser-test";
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`API listener controls and address in ${theme}`, async ({ page }, testInfo) => {
@@ -33,7 +33,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     });
     await page.goto("/route-harness.html");
     await setColorTheme(page, theme);
-    await page.getByRole("tab", { name: "API", exact: true }).click();
+    await openSettings(page, "API");
     await page.getByLabel("API port").fill("17894");
     await page.getByRole("button", { name: "Start API" }).click();
     await expect(page.getByLabel("API URL")).toHaveValue("http://127.0.0.1:17894");

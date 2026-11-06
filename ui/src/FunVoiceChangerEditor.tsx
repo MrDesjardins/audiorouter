@@ -1,3 +1,4 @@
+import { PropertySection } from "./PropertySection";
 import type { DiagnosticsSnapshot, DiscoveryDocument, Node } from "@audiorouter/contracts";
 import { ProcessorParameterEditor } from "./NodeEditors";
 import type { ProcessorDescriptor } from "./processorCatalog";
@@ -148,6 +149,7 @@ export function FunVoiceChangerEditor({
             connected={connected}
             onChange={onChange}
             only={basic}
+            compact
           />
         </div>
       ) : (
@@ -155,8 +157,7 @@ export function FunVoiceChangerEditor({
       )}
       <div className="voice-changer-sections">
         {VOICE_CHANGER_SECTIONS.map((section) => (
-          <details key={section.title} open={presetId === "custom"}>
-            <summary>{section.title}</summary>
+          <PropertySection key={section.title} kind={node.kind} title={section.title}>
             <ProcessorParameterEditor
               node={node}
               processors={processors}
@@ -164,8 +165,9 @@ export function FunVoiceChangerEditor({
               connected={connected}
               onChange={onChange}
               only={section.parameters}
+              compact
             />
-          </details>
+          </PropertySection>
         ))}
       </div>
       <small className="muted">

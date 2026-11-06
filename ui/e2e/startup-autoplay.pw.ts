@@ -1,3 +1,4 @@
+import { openSettings } from "./workbench";
 import { test, expect } from "./browser-test";
 
 // Advanced → "When AudioRouter starts": sign-in startup and autoplay together,
@@ -32,9 +33,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       });
     }, theme);
     await page.goto("/route-harness.html");
-    await page.getByRole("tab", { name: "Advanced" }).click();
-    const group = page.locator("details.startup-group");
-    await group.locator("summary").click();
+    await openSettings(page, "When AudioRouter starts");
+    const group = page.locator(".startup-group");
     await expect(group.getByRole("heading", { name: "Start at sign-in" })).toBeVisible();
     const autoplay = group.getByLabel("Play the selected session automatically");
     await expect(autoplay).toBeEnabled();

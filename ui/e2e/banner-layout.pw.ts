@@ -1,4 +1,4 @@
-import { setColorTheme } from "./workbench";
+import { setColorTheme, openStatusView, fitCanvas } from "./workbench";
 import { expect, test, type Page } from "./browser-test";
 import type { Session } from "../../contracts/src/index";
 
@@ -47,6 +47,7 @@ const session: Session = {
 };
 
 async function connect(page: Page, sender: string, receiver: string) {
+  await fitCanvas(page);
   const output = page.getByTestId(`rf__node-${sender}`).locator('.source[data-debug-side="right"]');
   await output.hover(); // Wait for React Flow's post-Undo layout to settle.
   const start = await output.boundingBox();
@@ -129,7 +130,7 @@ test("long Timing content scrolls in the sidebar without pushing the canvas down
   await page.goto("/route-harness.html");
   const panel = page.locator("#signal-flow-panel");
   const before = (await panel.boundingBox())!;
-  await page.getByRole("tab", { name: "Timing", exact: true }).click();
+  await openStatusView(page, "Timing");
   await expect(page.getByRole("region", { name: "Signal timing", exact: true })).toBeVisible();
   const after = (await panel.boundingBox())!;
   expect(Math.abs(after.y - before.y)).toBeLessThan(1);
@@ -194,7 +195,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await connect(page, "eq", "mixer");
     await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(2);
     const beforeTiming = (await canvas.boundingBox())!;
-    await page.getByRole("tab", { name: "Timing", exact: true }).click();
+    await openStatusView(page, "Timing");
     expect(Math.abs((await canvas.boundingBox())!.y - beforeTiming.y)).toBeLessThan(1);
     await expect(canvas).toBeInViewport();
     await page.screenshot({ path: testInfo.outputPath(`timing-${theme}.png`) });

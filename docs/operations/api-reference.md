@@ -16,7 +16,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 139 methods, including backend-owned quit/finalize,
+The current catalog contains 147 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -156,6 +156,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `processors.response` | `read` | read-only |
 | `routes.inspect` | `read` | read-only |
 | `graph.history` | `read` | read-only |
+| `graph.versions` | `read` | read-only; saved versions with counts, time and who saved |
+| `graph.restorePlan` | `graphWrite` | plan-only; commit makes a new saved version |
 | `graph.undoPlan` | `graphWrite` | plan-only |
 | `events.subscribe` | `read` | read-only; replays by cursor with optional session and bounded category filters |
 | `sessions.get` | `read` | read-only |
@@ -169,6 +171,12 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `sessions.active.get` | `read` | read-only; returns the UI's selected editing session or `null` |
 | `sessions.active.set` | `sessionControl` | mutating; requires an idempotency key; selects an existing editing session without starting audio |
 | `sessions.create` | `graphWrite` | mutating; requires an idempotency key |
+| `sessions.goals` | `read` | read-only; what each goal adds and what is left to choose |
+| `sessions.createFromGoal` | `graphWrite` | mutating; requires an idempotency key; makes a stopped session with no device bound; optional `name` and `application` |
+| `toolPresets.list` | `read` | read-only; optional `kind` |
+| `toolPresets.save` | `graphWrite` | mutating; requires an idempotency key; a named set of one tool's settings, on this PC; the same name replaces |
+| `toolPresets.delete` | `graphWrite` | mutating; requires an idempotency key |
+| `nodes.compare` | `sessionControl` | runtime only, never saved; leaves tools out of a running route for at most 30 s; an empty `nodes` list ends it; not offered to MCP |
 | `sessions.duplicate` | `graphWrite` | mutating; requires an idempotency key |
 | `meters.reset` | `sessionControl` | runtime statistics only; `nodeId` (ID or exact name) selects a prepared Meter, `sessionId` defaults to the active session; clears held peaks and clipping counters without changing sound or saving |
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |

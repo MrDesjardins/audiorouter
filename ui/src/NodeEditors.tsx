@@ -5,11 +5,12 @@ import { formatUiError, type ApplicationRow, type UiBackend } from "./backend";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { applicationCaptureChoices, applicationChoiceKey, mixerInputs, mixerInputVolumeKey } from "./draft";
 import { audioUploadProblem, uploadAudioMedia } from "./audioUpload";
-import { formatParameterValue, optionLabel, parameterText } from "./parameterText";
+import { optionLabel, parameterText } from "./parameterText";
 import { LiveLevelBar } from "./ToolVisuals";
 import { type ProcessorDescriptor } from "./processorCatalog";
 import { networkTelemetryText } from "./NetworkNodeEditor";
 import { NumberField } from "./NumberField";
+import { SliderField } from "./Slider";
 import { AdvancedEqEditor } from "./AdvancedEqEditor";
 import { EqBackendContext, PluginParameterContext } from "./appContext";
 import { deviceChoiceLabel, sortDevicesAlphabetically } from "./endpointBinding";
@@ -76,6 +77,7 @@ export function ProcessorParameterEditor({
   connected,
   onChange,
   only,
+  compact = false,
 }: {
   node: Node;
   processors: ProcessorDescriptor[] | null;
@@ -86,6 +88,8 @@ export function ProcessorParameterEditor({
   onChange: (name: string, value: boolean | number | string) => void;
   /** Render only these parameters, in this order (a tool editor's section). */
   only?: readonly string[];
+  /** One row per slider; the explanation moves to the tooltip and the screen-reader description. */
+  compact?: boolean;
 }) {
   const eqBackend = useContext(EqBackendContext);
   const pluginContext = useContext(PluginParameterContext);
@@ -124,29 +128,20 @@ export function ProcessorParameterEditor({
               ? (node.parameters[name] as number)
               : parameter.defaultValue;
           return (
-            <label key={name}>
-              <span>{parameter.title}</span>
-              <input
-                type="range"
-                aria-label={`${parameter.title} slider`}
-                value={value}
-                min={parameter.minimum}
-                max={parameter.maximum}
-                step={0.001}
-                disabled={!connected}
-                onChange={(event) => onChange(name, Number(event.target.value))}
-              />
-              <NumberField
-                aria-label={`${parameter.title} precise value`}
-                value={value}
-                min={parameter.minimum}
-                max={parameter.maximum}
-                step={0.001}
-                disabled={!connected}
-                onValue={(next) => onChange(name, next)}
-              />
-              <small>normalized parameter {parameter.parameterId}</small>
-            </label>
+            <SliderField
+              key={name}
+              label={parameter.title}
+              name={parameter.title}
+              sliderName={`${parameter.title} slider`}
+              value={value}
+              min={parameter.minimum}
+              max={parameter.maximum}
+              step={0.001}
+              defaultValue={parameter.defaultValue}
+              disabled={!connected}
+              help={<small className="parameter-help">Normalized parameter {parameter.parameterId}</small>}
+              onChange={(next) => onChange(name, next)}
+            />
           );
         })}
       </>
@@ -233,52 +228,43 @@ export function ProcessorParameterEditor({
           Number.isFinite(parameter.minimum) &&
           Number.isFinite(parameter.maximum) &&
           parameter.minimum! < parameter.maximum!;
-        const sliderValue = hasRange
-          ? Math.min(parameter.maximum!, Math.max(parameter.minimum!, numericValue))
-          : numericValue;
-        // Caption with a readable value, then the slider for quick changes and
-        // the exact field for experts. Double-click the slider for the default.
+        if (hasRange)
+          return (
+            <SliderField
+              key={parameter.name}
+              label={label}
+              name={label}
+              sliderName={`${label} slider`}
+              value={numericValue}
+              min={parameter.minimum!}
+              max={parameter.maximum!}
+              step={step}
+              unit={parameter.unit}
+              defaultValue={typeof parameter.default === "number" ? parameter.default : undefined}
+              disabled={!connected}
+              help={compact ? undefined : helpText}
+              showScale={!compact}
+              className={compact ? "is-compact" : undefined}
+              description={compact ? help : undefined}
+              onChange={(next) => onChange(parameter.name, next)}
+            />
+          );
         return (
-          <label key={parameter.name} className="param-row">
-            <span className="param-caption">
-              <span>
-                {label}
-                {parameter.unit ? ` (${parameter.unit})` : ""}
-              </span>
-              <b aria-hidden="true">{formatParameterValue(numericValue, parameter.unit, step)}</b>
+          <label key={parameter.name}>
+            <span>
+              {label}
+              {parameter.unit ? ` (${parameter.unit})` : ""}
             </span>
             {helpText}
-            <span className={`param-control${hasRange ? "" : " is-field-only"}`}>
-              {hasRange && (
-                <input
-                  type="range"
-                  aria-label={`${label} slider`}
-                  title={
-                    typeof parameter.default === "number"
-                      ? `Double-click to restore the default (${formatParameterValue(parameter.default, parameter.unit, step)})`
-                      : undefined
-                  }
-                  value={sliderValue}
-                  min={parameter.minimum}
-                  max={parameter.maximum}
-                  step={step}
-                  disabled={!connected}
-                  onChange={(event) => onChange(parameter.name, Number(event.target.value))}
-                  onDoubleClick={() => {
-                    if (typeof parameter.default === "number" && connected) onChange(parameter.name, parameter.default);
-                  }}
-                />
-              )}
-              <NumberField
-                aria-label={`${label} precise value`}
-                value={numericValue}
-                min={parameter.minimum}
-                max={parameter.maximum}
-                step={step}
-                disabled={!connected}
-                onValue={(next) => onChange(parameter.name, next)}
-              />
-            </span>
+            <NumberField
+              aria-label={`${label} precise value`}
+              value={numericValue}
+              min={parameter.minimum}
+              max={parameter.maximum}
+              step={step}
+              disabled={!connected}
+              onValue={(next) => onChange(parameter.name, next)}
+            />
           </label>
         );
       })}
@@ -651,23 +637,20 @@ export function MixerInputsEditor({
         <small>Connect sources to this Mixer to set their volumes.</small>
       ) : (
         inputs.map((input) => (
-          <label key={input.edgeId} className="mixer-input-volume">
-            <span>
-              {input.upstream.name}
-              {input.enabled ? "" : " (off)"}
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              value={input.percent}
-              disabled={disabled}
-              aria-label={`Volume for ${input.upstream.name}`}
-              onChange={(event) => onChange(mixerInputVolumeKey(input.upstream.id), Number(event.target.value))}
-            />
-            <output>{Math.round(input.percent)} %</output>
-          </label>
+          <SliderField
+            key={input.edgeId}
+            label={`${input.upstream.name}${input.enabled ? "" : " (off)"}`}
+            name={`Volume for ${input.upstream.name}`}
+            value={input.percent}
+            min={0}
+            max={100}
+            step={1}
+            unit="%"
+            defaultValue={100}
+            disabled={disabled}
+            showScale={false}
+            onChange={(next) => onChange(mixerInputVolumeKey(input.upstream.id), next)}
+          />
         ))
       )}
       <small>0–100 % per input. For a boost above 100 %, put a Volume tool between the source and the Mixer.</small>

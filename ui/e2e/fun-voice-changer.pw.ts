@@ -148,8 +148,8 @@ test("editing a preset marks it edited without moving the panel, and Reset resto
   await editor.getByRole("button", { name: "Reset to preset" }).click();
   await expect(editor.locator(".voice-changer-edited")).toHaveClass(/is-hidden/);
   await expect(editor.locator(".voice-changer-basic").getByLabel("Ring frequency precise value")).toHaveValue("50");
-  // Custom: every section opens.
+  // Custom: nine closed sections, opened one at a time.
   await editor.getByLabel("Voice preset").selectOption("custom");
-  await expect(editor.locator(".voice-changer-sections details[open]")).toHaveCount(9);
+  await expect(editor.locator(".voice-changer-sections details")).toHaveCount(9);
   await expect(editor).toContainText("Custom starts with every effect off");
 });

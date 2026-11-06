@@ -2,6 +2,7 @@ import { useContext } from "react";
 import type { Session } from "@audiorouter/contracts";
 import { BackendConnectionContext } from "./backendConnectionContext";
 import { insertMixerActionId, PROCESSOR_ACTIONS, removeMixerActionId } from "./DraftConnectionList";
+import { humanizeNodeKind } from "./canvasNodeKinds";
 import { nodePortLabels, nodeStateLabel } from "./graphView";
 
 export function GraphList({
@@ -41,7 +42,7 @@ export function GraphList({
             >
               {node.name}{" "}
               <small>
-                {node.kind}, {nodeStateLabel(node)}
+                {humanizeNodeKind(node)}, {nodeStateLabel(node)}
               </small>
               <span className="list-port-summary">{nodePortLabels(node).join(" · ")}</span>
             </button>

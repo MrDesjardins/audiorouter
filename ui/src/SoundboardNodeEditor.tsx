@@ -1,8 +1,9 @@
 // Properties editor of a Soundboard node: nine sound slots with add, change, delete and play.
-import { useContext, useState, type ReactNode } from "react";
+import { useContext, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import type { Node } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import { PanelMessage } from "./PanelMessage";
+import { SliderField } from "./Slider";
 import { SoundLibraryPicker } from "./SoundLibraryPicker";
 import {
   MAX_CAPTION_LENGTH,
@@ -41,6 +42,16 @@ export function SoundPlayButton({
 }) {
   const controller = useContext(SoundboardContext);
   const hold = mode === "hold";
+  const heldKey = useRef<string | null>(null);
+  const heldPointer = useRef(false);
+  const release = () => {
+    if (heldKey.current === null && !heldPointer.current) return;
+    heldKey.current = null;
+    heldPointer.current = false;
+    controller.trigger(nodeId, slot, "release");
+  };
+  const releaseOnUnmount = useEffectEvent(release);
+  useEffect(() => () => releaseOnUnmount(), []);
   return (
     <button
       type="button"
@@ -48,15 +59,42 @@ export function SoundPlayButton({
       aria-label={label}
       disabled={disabled}
       onClick={hold ? undefined : () => controller.trigger(nodeId, slot)}
-      onPointerDown={hold ? () => controller.trigger(nodeId, slot, "press") : undefined}
-      onPointerUp={hold ? () => controller.trigger(nodeId, slot, "release") : undefined}
-      onPointerLeave={
+      onKeyDown={
         hold
           ? (event) => {
-              if (event.buttons > 0) controller.trigger(nodeId, slot, "release");
+              if (event.key !== " " && event.key !== "Enter") return;
+              event.preventDefault();
+              event.stopPropagation();
+              if (event.repeat || heldKey.current !== null) return;
+              heldKey.current = event.key;
+              controller.trigger(nodeId, slot, "press");
             }
           : undefined
       }
+      onKeyUp={(event) => {
+        if (heldKey.current !== event.key) return;
+        event.preventDefault();
+        event.stopPropagation();
+        release();
+      }}
+      onBlur={release}
+      onPointerCancel={release}
+      onPointerDown={
+        hold
+          ? (event) => {
+              if (event.button === 0) {
+                heldPointer.current = true;
+                controller.trigger(nodeId, slot, "press");
+              }
+            }
+          : undefined
+      }
+      onPointerUp={(event) => {
+        if (event.button === 0) release();
+      }}
+      onPointerLeave={(event) => {
+        if ((event.buttons & 1) !== 0) release();
+      }}
     >
       {children}
     </button>
@@ -107,19 +145,18 @@ function SoundboardSlotRow({
           onChange={(event) => onChange(slotParameter(slot.slot, "Caption"), event.target.value)}
         />
       </label>
-      <label>
-        Level ({slot.gainDb > 0 ? "+" : ""}
-        {slot.gainDb} dB)
-        <input
-          type="range"
-          min={-24}
-          max={6}
-          step={1}
-          value={slot.gainDb}
-          disabled={disabled}
-          onChange={(event) => onChange(slotParameter(slot.slot, "GainDb"), Number(event.target.value))}
-        />
-      </label>
+      <SliderField
+        label="Level"
+        name={`Level for sound ${slot.slot}`}
+        value={slot.gainDb}
+        min={-24}
+        max={6}
+        step={1}
+        unit="dB"
+        defaultValue={0}
+        disabled={disabled}
+        onChange={(value) => onChange(slotParameter(slot.slot, "GainDb"), value)}
+      />
       <label>
         When pressed
         <select

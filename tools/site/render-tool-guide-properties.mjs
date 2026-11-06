@@ -40,6 +40,13 @@ for (const tool of inventory.tools) {
   if (tool.capture !== "production-dsp") continue;
   for (const property of tool.properties) {
     if (
+      // GUIDE_ALL=1 renders every published clip again, after the panel itself changed.
+      !(
+        process.env.GUIDE_ALL === "1" &&
+        existsSync(
+          resolve(root, "site/assets/tool-guides", `${tool.kind}--${property.key.replace(/[^a-zA-Z0-9]+/g, "-")}.mp4`),
+        )
+      ) &&
       property.status !== "pending" &&
       !(tool.kind === "soundboard" && property.key === "slot1Mode")
     )

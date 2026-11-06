@@ -1,4 +1,5 @@
 import { test, expect } from "./browser-test";
+import { fitCanvas } from "./workbench";
 import { demoSession } from "../src/fixtures";
 
 // The user's route: Microphone → Meter → { "Hear my voice", Recorder }.
@@ -56,6 +57,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       { session, theme },
     );
     await page.goto("/route-harness.html");
+    await fitCanvas(page);
     const recorder = page.getByTestId("rf__node-rec");
     await expect(recorder).toBeVisible();
     await recorder.getByRole("button", { name: "Record Podcast recorder" }).click();
@@ -91,6 +93,7 @@ test("a take that lost audio says so at Stop and keeps the file", async ({ page 
     { session },
   );
   await page.goto("/route-harness.html");
+  await fitCanvas(page);
   const recorder = page.getByTestId("rf__node-rec");
   await recorder.getByRole("button", { name: "Record Podcast recorder" }).click();
   await recorder.getByRole("button", { name: "Stop recording Podcast recorder" }).click();
@@ -118,6 +121,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       { session, theme },
     );
     await page.goto("/route-harness.html");
+    await fitCanvas(page);
     const recorder = page.getByTestId("rf__node-rec");
     await expect(recorder).toBeVisible();
     // Pressing Record first explains exactly where to choose the folder.

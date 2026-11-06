@@ -193,6 +193,14 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "sessions.active.set" => "Select an existing editing session and notify connected desktop clients; this does not start audio.",
         "sessions.create" => "Create a validated stopped session resource.",
         "sessions.duplicate" => "Clone a session into a new stopped resource.",
+        "graph.versions" => "List a session's saved versions with when each was saved and by which client.",
+        "graph.restorePlan" => "Plan going back to a saved version. Committing it makes a new version, so later ones are kept.",
+        "nodes.compare" => "While a route plays, hear it without the listed tools until released. Nothing is saved, and a hold ends by itself after 30 seconds. An empty list releases.",
+        "toolPresets.list" => "List the named settings a person saved for each kind of tool.",
+        "toolPresets.save" => "Save settings for a kind of tool under a name. Saving a name again replaces it. Apply one with nodes.set.",
+        "toolPresets.delete" => "Delete a named tool preset.",
+        "sessions.goals" => "List the starting routes a session can be made from, in plain words.",
+        "sessions.createFromGoal" => "Make a new stopped session from a goal. It chooses no devices, starts no audio and arms no recorder, and returns what the person must still choose.",
         "sessions.delete" => "Delete a stopped session resource and its history.",
         "graph.plan" => "Validate and preview a graph candidate without mutation.",
         "graph.commit" => "Commit an unexpired graph plan with idempotent mutation.",
@@ -886,6 +894,62 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
                 "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
             }),
             &["session", "idempotencyKey"],
+        ),
+        "graph.versions" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
+            &["sessionId"],
+        ),
+        "graph.restorePlan" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "baseRevision": { "type": "integer", "minimum": 0 },
+                "revision": { "type": "integer", "minimum": 0, "description": "A revision from graph.versions." }
+            }),
+            &["sessionId", "baseRevision", "revision"],
+        ),
+        "nodes.compare" => object_schema(
+            json!({
+                "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "nodes": { "type": "array", "maxItems": audiorouter_domain::MAX_NODES_PER_SESSION, "items": { "type": "string", "minLength": 1 }, "description": "Tools to leave out, by ID or exact name. An empty list releases the hold." },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["nodes", "idempotencyKey"],
+        ),
+        "toolPresets.list" => object_schema(
+            json!({ "kind": { "type": "string", "minLength": 1, "description": "Only presets for this kind of tool." } }),
+            &[],
+        ),
+        "toolPresets.save" => object_schema(
+            json!({
+                "kind": { "type": "string", "minLength": 1 },
+                "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+                "parameters": { "type": "object" },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["kind", "name", "parameters", "idempotencyKey"],
+        ),
+        "toolPresets.delete" => object_schema(
+            json!({ "id": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+            &["id", "idempotencyKey"],
+        ),
+        "sessions.goals" => object_schema(json!({}), &[]),
+        "sessions.createFromGoal" => object_schema(
+            json!({
+                "goal": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "A goal ID from sessions.goals." },
+                "name": { "type": "string", "maxLength": 256, "description": "Session name. Defaults to the goal's title." },
+                "application": {
+                    "type": ["object", "null"],
+                    "description": "The app for the goal's application source, from applications.list. Without it that source is left out and listed in stillToChoose.",
+                    "properties": {
+                        "executable": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_APPLICATION_EXECUTABLE_BYTES },
+                        "executablePath": { "type": "string", "maxLength": audiorouter_domain::MAX_APPLICATION_PATH_BYTES }
+                    },
+                    "required": ["executable"],
+                    "additionalProperties": false
+                },
+                "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES }
+            }),
+            &["goal", "idempotencyKey"],
         ),
         "sessions.duplicate" => object_schema(
             json!({

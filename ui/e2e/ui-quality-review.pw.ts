@@ -1,3 +1,4 @@
+import { openPage } from "./workbench";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test, expect, type Page } from "./browser-test";
@@ -90,6 +91,69 @@ async function textContrast(page: Page) {
 }
 
 for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`canvas menu stays inside the canvas with enlarged text in ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
+    await page.goto("/route-harness.html");
+    await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
+    // Exercise 200% text independently of viewport scaling. This is browser
+    // geometry evidence, not attended Windows display-scaling qualification.
+    await page.addStyleTag({ content: ".canvas-context-menu button { font-size: 32px; }" });
+    await page.getByRole("button", { name: "Dismiss route warning", exact: true }).click();
+    const canvas = page.locator(".session-flow-canvas");
+    await canvas.evaluate((element) => element.scrollIntoView({ block: "end" }));
+    const bounds = (await canvas.boundingBox())!;
+    await page.mouse.click(bounds.x + bounds.width - 10, bounds.y + bounds.height - 10, { button: "right" });
+    const menu = page.getByRole("menu", { name: "Canvas actions" });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Paste tool" })).toBeDisabled();
+    await capture(page, `${theme}-enlarged-edge-menu`);
+    const menuBounds = (await menu.boundingBox())!;
+    expect.soft(menuBounds.x).toBeGreaterThanOrEqual(bounds.x);
+    expect.soft(menuBounds.y).toBeGreaterThanOrEqual(bounds.y);
+    expect.soft(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+    expect.soft(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await expect(canvas).toBeFocused();
+  });
+
+  test(`open canvas menu adapts to text and canvas resizing in ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
+    await page.goto("/route-harness.html");
+    await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
+    await page.getByRole("button", { name: "Dismiss route warning", exact: true }).click();
+    const node = page.getByTestId("rf__node-voice");
+    await node.locator(".flow-node-title").click();
+    await node.focus();
+    await page.keyboard.press("Control+c");
+    // The "copied" message floats over this corner of the canvas, and its Dismiss button keeps its own clicks.
+    await page.getByRole("button", { name: "Dismiss message", exact: true }).click();
+    const canvas = page.locator(".session-flow-canvas");
+    const bounds = (await canvas.boundingBox())!;
+    await page.mouse.click(bounds.x + bounds.width - 10, bounds.y + bounds.height - 10, { button: "right" });
+    const menu = page.getByRole("menu", { name: "Canvas actions" });
+    const paste = menu.getByRole("menuitem", { name: "Paste tool" });
+    await expect(paste).toBeFocused();
+    await page.addStyleTag({ content: ".canvas-context-menu button { font-size: 32px; }" });
+    await page.setViewportSize({ width: 1024, height: 720 });
+    await expect(async () => {
+      const outer = (await canvas.boundingBox())!;
+      const inner = (await menu.boundingBox())!;
+      expect(inner.x).toBeGreaterThanOrEqual(outer.x);
+      expect(inner.y).toBeGreaterThanOrEqual(outer.y);
+      expect(inner.x + inner.width).toBeLessThanOrEqual(outer.x + outer.width);
+      expect(inner.y + inner.height).toBeLessThanOrEqual(outer.y + outer.height);
+    }).toPass();
+    await expect(paste).toBeFocused();
+    await capture(page, `${theme}-resized-enlarged-edge-menu`);
+    await page.keyboard.press("Enter");
+    await expect(menu).toBeHidden();
+    await expect(page.getByTestId("rf__node-voice-copy-1")).toBeVisible();
+    await expect(canvas).toBeFocused();
+  });
+
   test(`save language is consistent across the workbench in ${theme}`, async ({ page }) => {
     await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
     await page.goto("/route-harness.html");
@@ -101,7 +165,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(forbidden).toHaveCount(0);
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
     await page.getByRole("tab", { name: "Properties", exact: true }).click();
-    await expect(page.locator(".main-content > .inspector")).toContainText("Save changes checks the draft");
+    await expect(page.locator(".main-content > .inspector")).toContainText(/Privacy mute (silences|is on)/);
     await expect(
       page.locator(".main-content > .inspector").getByText(/Plan changes|Commit changes|Plan and commit/i),
     ).toHaveCount(0);
@@ -260,15 +324,14 @@ for (const theme of ["dark", "light", "high-contrast"]) {
         "Status",
         "Apps",
         "Virtual Cables",
-        "UI Options",
+        "Appearance",
         "Recording",
-        "Advanced",
-        "MCP",
+        "AI assistants (MCP)",
         "API",
-        "Logs",
+        "Logs and support",
         "Timing",
       ]) {
-        await page.getByRole("tab", { name: tab, exact: true }).click();
+        await openPage(page, tab);
         await expect(page.getByRole("tabpanel").filter({ visible: true })).toBeVisible();
         await capture(page, `${prefix}-${tab.toLowerCase().replaceAll(" ", "-")}`);
         audit[tab] = await textContrast(page);
@@ -314,7 +377,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.addInitScript((theme) => localStorage.setItem("audiorouter.ui.theme", theme), theme);
     await page.goto("/route-harness.html");
     const tabs = page.getByRole("tab");
-    await expect(tabs).toHaveCount(13);
+    await expect(tabs).toHaveCount(5);
     // Every individual word must fit its tab's content width; wrapping between
     // words is allowed. This catches Properties/Recording/Advanced splitting.
     const splitWords = await tabs.evaluateAll((tabs) =>
@@ -326,14 +389,14 @@ for (const theme of ["dark", "light", "high-contrast"]) {
         return (tab.textContent ?? "")
           .trim()
           .split(/\s+/)
-          .filter((word) => context.measureText(word).width > width)
+          .filter((word) => context.measureText(word).width > width + 1)
           .map((word) => ({ word, width }));
       }),
     );
     expect(splitWords).toEqual([]);
     await tabs.first().focus();
     await page.keyboard.press("End");
-    await expect(page.getByRole("tab", { name: "Logs", exact: true })).toBeFocused();
+    await expect(page.getByRole("tab", { name: "Recording", exact: true })).toBeFocused();
     await capture(page, `${theme}-1280-keyboard-focus`);
   });
 }

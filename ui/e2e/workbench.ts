@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type { Session } from "@audiorouter/contracts";
 import { demoSession } from "../src/fixtures";
 
@@ -16,25 +16,91 @@ export const stereoDemoSession: Session = {
   })),
 };
 
-async function openAdvancedGroup(page: Page, selector: string) {
-  await page.getByRole("tab", { name: "Advanced", exact: true }).click();
-  const group = page.locator(selector);
-  if (!(await group.evaluate((element) => (element as HTMLDetailsElement).open)))
-    await group.locator("> summary").click();
+/** The gear opens Settings; the pages are tabs in its side list. */
+export async function openSettings(page: Page, pageName: string) {
+  const pages = page.getByRole("tablist", { name: "Settings pages" });
+  if (!(await pages.isVisible())) await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await pages.getByRole("tab", { name: pageName, exact: true }).click();
 }
 
-/** Advanced → Connect nodes without dragging (the keyboard connection form). */
-export const openConnectionForm = (page: Page) => openAdvancedGroup(page, "details.connection-form-group");
+/** Leave Settings for the tab that was open before it. */
+export async function backToRoute(page: Page) {
+  await page.getByRole("button", { name: "Back to the route" }).click();
+  await page.getByRole("tablist", { name: "Right sidebar" }).waitFor();
+}
 
-/** Advanced → Troubleshooting: manual device binding. */
-export const openDeviceTroubleshooting = (page: Page) => openAdvancedGroup(page, "details.device-troubleshooting");
+const leaveSettings = async (page: Page) => {
+  if (await page.getByRole("tablist", { name: "Settings pages" }).isVisible()) await backToRoute(page);
+};
 
-/** Change appearance in UI Options, then return to the current tab. */
+/** Status has Readiness, Apps and Timing views. */
+export async function openStatusView(page: Page, view: "Readiness" | "Apps" | "Timing") {
+  await page.getByRole("tablist", { name: "Right sidebar" }).getByRole("tab", { name: "Status" }).click();
+  await page.getByRole("tablist", { name: "Status views" }).getByRole("tab", { name: view, exact: true }).click();
+}
+
+/** Canvas toolbar → Connect (the keyboard connection form). Leaves it open if it already is. */
+export async function openConnectionForm(page: Page) {
+  await leaveSettings(page);
+  const button = page
+    .getByRole("group", { name: "Canvas layout actions" })
+    .getByRole("button", { name: "Connect", exact: true });
+  if ((await button.getAttribute("aria-pressed")) !== "true") await button.click();
+}
+
+/** Status → Troubleshoot and recover → Manual device binding. */
+export async function openDeviceTroubleshooting(page: Page) {
+  await openStatusView(page, "Readiness");
+  for (const selector of ["details.troubleshoot-group", "details.device-troubleshooting"]) {
+    const group = page.locator(selector);
+    if (!(await group.evaluate((element) => (element as HTMLDetailsElement).open)))
+      await group.locator("> summary").click();
+  }
+}
+
+/** Change appearance in Settings, then return to the current tab. */
 export async function setColorTheme(page: Page, theme: string) {
-  const selected = await page.getByRole("tab", { selected: true }).innerText();
-  await page.getByRole("tab", { name: "UI Options", exact: true }).click();
+  const pages = page.getByRole("tablist", { name: "Settings pages" });
+  const current = (await pages.isVisible()) ? await pages.getByRole("tab", { selected: true }).innerText() : null;
+  await openSettings(page, "Appearance");
   await page.getByRole("combobox", { name: "Color theme" }).selectOption(theme);
-  if (selected !== "UI Options") await page.getByRole("tab", { name: selected, exact: true }).click();
+  if (current) await pages.getByRole("tab", { name: current, exact: true }).click();
+  else await backToRoute(page);
 }
-export const openAppSettings = (page: Page) =>
-  openAdvancedGroup(page, "details.advanced-group:has(> summary:text-is('Device access and version checks'))");
+
+export const openDeviceAccessSettings = (page: Page) => openSettings(page, "Device access");
+export const openVersionSettings = (page: Page) => openSettings(page, "New versions");
+
+const STATUS_VIEWS = new Set(["Readiness", "Apps", "Timing"]);
+const DAILY_TABS = new Set(["Tools", "Properties", "Status", "Session", "Recording"]);
+
+/** Go to any page by its visible name, wherever it lives. */
+export async function openPage(page: Page, name: string) {
+  if (STATUS_VIEWS.has(name)) {
+    await leaveSettings(page);
+    return openStatusView(page, name as "Readiness" | "Apps" | "Timing");
+  }
+  if (!DAILY_TABS.has(name)) return openSettings(page, name);
+  await leaveSettings(page);
+  await page.getByRole("tablist", { name: "Right sidebar" }).getByRole("tab", { name, exact: true }).click();
+}
+
+/** Open one section of Properties if it is closed. Each tool type remembers its own. */
+export async function openSection(scope: Page | Locator, title: string) {
+  const section = scope.locator(`.property-section:has(> summary:has-text("${title}"))`);
+  if ((await section.getAttribute("open")) === null) await section.locator("> summary").click();
+  await section.locator(".property-section-body").waitFor();
+}
+
+/** Open every closed section of Properties. */
+export async function openAllSections(scope: Locator) {
+  const closed = scope.locator(".property-section:not([open]) > summary");
+  while (await closed.count()) await closed.first().click();
+}
+
+/** A large route opens at a readable zoom and may run past the view; the fit button shows it all. */
+export async function fitCanvas(page: Page) {
+  await page.locator(".react-flow__controls-fitview").click();
+  // The view eases into place.
+  await page.waitForTimeout(300);
+}

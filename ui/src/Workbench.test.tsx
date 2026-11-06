@@ -59,8 +59,6 @@ const props: ComponentProps<typeof Workbench> = {
   onNewSession: vi.fn(),
   onDuplicate: vi.fn(),
   onDelete: vi.fn(),
-  onUndo: vi.fn(),
-  onRedo: vi.fn(),
   onDiscard: vi.fn(),
   sessions: [],
   selectedSessionId: "",
@@ -84,7 +82,7 @@ const props: ComponentProps<typeof Workbench> = {
   appsContent: null,
   uiOptionsContent: null,
   recordingContent: null,
-  advancedContent: null,
+  settingsContent: {},
 };
 
 function Harness() {
@@ -102,12 +100,12 @@ it("uses one tab stop, wrapping arrows and Home/End with automatic activation", 
   };
   tabs[0].focus();
   fireEvent.keyDown(tabs[0], { key: "ArrowLeft" });
-  await waitFor(() => selected(12));
-  fireEvent.keyDown(tabs[12], { key: "ArrowRight" });
+  await waitFor(() => selected(4));
+  fireEvent.keyDown(tabs[4], { key: "ArrowRight" });
   await waitFor(() => selected(0));
   fireEvent.keyDown(tabs[0], { key: "End" });
-  await waitFor(() => selected(12));
-  fireEvent.keyDown(tabs[12], { key: "Home" });
+  await waitFor(() => selected(4));
+  fireEvent.keyDown(tabs[4], { key: "Home" });
   await waitFor(() => selected(0));
   fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
   await waitFor(() => selected(1));
@@ -118,9 +116,9 @@ it("uses one tab stop, wrapping arrows and Home/End with automatic activation", 
 it("associates active panels and keeps focus on tabs and surviving controls across errors", () => {
   const view = render(<Workbench {...props} tab="status" />);
   const status = screen.getByRole("tab", { name: "Status" });
-  const panel = screen.getByRole("tabpanel", { name: "Status" });
+  const panel = screen.getByRole("tabpanel", { name: "Readiness" });
   expect(status.getAttribute("aria-controls")).toBe(panel.id);
-  expect(panel.getAttribute("aria-labelledby")).toBe(status.id);
+  expect(panel.getAttribute("aria-labelledby")).toBe(screen.getByRole("tab", { name: "Readiness" }).id);
   const retry = screen.getByRole("button", { name: "Retry check" });
   retry.focus();
   view.rerender(<Workbench {...props} tab="status" statusHasProblem />);

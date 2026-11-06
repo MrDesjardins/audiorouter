@@ -2419,6 +2419,13 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "list_sessions",
     "open_session",
     "create_session",
+    "list_goals",
+    "list_saved_versions",
+    "go_back_to_version",
+    "list_my_presets",
+    "save_my_preset",
+    "delete_my_preset",
+    "start_from_goal",
     "get_session_summary",
     "get_session",
     "list_tool_kinds",
@@ -2732,6 +2739,9 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "list_sounds"
             | "get_soundboard_status"
             | "list_presets"
+            | "list_goals"
+            | "list_saved_versions"
+            | "list_my_presets"
             | "get_status"
             | "get_virtual_cable_status"
             | "check_setup"
@@ -2754,6 +2764,8 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "trigger_sound"
             | "control_time_shift"
             | "undo_last_change"
+            | "start_from_goal"
+            | "go_back_to_version"
             | "duplicate_session"
     );
     json!({
@@ -2790,6 +2802,13 @@ fn mcp_tools() -> Value {
         { "name": "reset_meter", "description": "Clear the held peak and clipping count of a Meter node while audio plays.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Meter node name or ID." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "resume_plugin", "description": "Retry a plugin that AudioRouter silenced because it passed the microphone through unchanged (get_levels shows plugin.silencedUnchanged), usually because it is not licensed or signed in. Ask the user to sign in to the plugin's licence app first. Returns resumed=false and keeps it silent while the plugin still passes audio through; then the user must stop and play the route.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Plugin node name or ID." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "undo_last_change", "description": "Undo the most recent saved change to the session (a tool added, removed, connected or changed), like Undo in the window. Applied live and saved.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": [], "additionalProperties": false } },
+        { "name": "list_saved_versions", "description": "List a session's saved versions: when each was saved, how many tools it has, and which client saved it (null when not known; never guess a person).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session; defaults to the open one." } }, "required": [], "additionalProperties": false } },
+        { "name": "go_back_to_version", "description": "Return a session to a saved version from list_saved_versions. It saves a new version, so later ones are kept. If the route is playing, the sound changes at once; tell the user first.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session; defaults to the open one." }, "revision": { "type": "integer", "minimum": 0 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["revision"], "additionalProperties": false } },
+        { "name": "list_my_presets", "description": "List the named settings the user saved for each kind of tool. Apply one by passing its parameters to change_settings.", "inputSchema": { "type": "object", "properties": { "kind": { "type": "string", "minLength": 1, "description": "Only this kind of tool, for example compressor." } }, "required": [], "additionalProperties": false } },
+        { "name": "save_my_preset", "description": "Save settings for a kind of tool under a name. Saving a name again replaces it. Devices and files are not part of a preset.", "inputSchema": { "type": "object", "properties": { "kind": { "type": "string", "minLength": 1 }, "name": { "type": "string", "minLength": 1, "maxLength": 64 }, "parameters": { "type": "object" }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["kind", "name", "parameters"], "additionalProperties": false } },
+        { "name": "delete_my_preset", "description": "Delete a saved preset by its ID from list_my_presets.", "inputSchema": { "type": "object", "properties": { "id": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["id"], "additionalProperties": false } },
+        { "name": "list_goals", "description": "List the starting routes for what the user wants to do (clean up a mic, game and voice for Discord, record a podcast, record one app, talk to a guest without echo, or empty). Read this before building such a route by hand.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
+        { "name": "start_from_goal", "description": "Make a new stopped session from a goal in list_goals and open it. It chooses no devices, starts no audio and arms no recorder; the result says what the user must still choose. Do not pick a microphone without asking the user.", "inputSchema": { "type": "object", "properties": { "goal": { "type": "string", "minLength": 1, "description": "Goal ID from list_goals." }, "name": { "type": "string", "maxLength": 256, "description": "Session name; defaults to the goal's title." }, "application": { "type": "object", "description": "The app for the goal's application source, from list_applications. Leave it out if the user has not chosen one.", "properties": { "executable": { "type": "string", "minLength": 1 }, "executablePath": { "type": "string" } }, "required": ["executable"], "additionalProperties": false }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["goal"], "additionalProperties": false } },
         { "name": "duplicate_session", "description": "Copy a saved session under a new name; the copy is not opened.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to copy (from list_sessions)." }, "name": { "type": "string", "minLength": 1, "maxLength": 120, "description": "Optional name of the copy." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "delete_session", "description": "Permanently delete a saved session. Ask the user to confirm the exact session first.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Session to delete (from list_sessions)." }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; a unique key is generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "list_presets", "description": "List the built-in processing presets with what each one does.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
@@ -2971,7 +2990,7 @@ fn mcp_tool_call(
             })),
         ),
         "undo_last_change" => {
-            return mcp_undo_last_change(plane, client_id, grant, pipe_name, id, &arguments);
+            return mcp_undo_last_change(plane, client_id, grant, pipe_name, id, &arguments, None);
         }
         "get_session" => ("sessions.get", Some(arguments)),
         "export_session" => ("sessions.export", Some(arguments)),
@@ -3064,6 +3083,106 @@ fn mcp_tool_call(
                 "system.osTransition",
                 Some(params),
             );
+        }
+        "list_goals" => ("sessions.goals", Some(json!({}))),
+        "list_saved_versions" => {
+            let session_id = arguments["sessionId"]
+                .as_str()
+                .map(str::to_owned)
+                .or_else(|| {
+                    mcp_api_value(
+                        plane,
+                        client_id,
+                        grant,
+                        pipe_name,
+                        id.clone(),
+                        "sessions.active.get",
+                        Some(json!({})),
+                    )
+                    .ok()
+                    .and_then(|active| active["result"]["sessionId"].as_str().map(str::to_owned))
+                });
+            let Some(session_id) = session_id else {
+                return mcp_tool_error(id, "no session is open; pass sessionId");
+            };
+            ("graph.versions", Some(json!({ "sessionId": session_id })))
+        }
+        "go_back_to_version" => {
+            let Some(revision) = arguments["revision"].as_u64() else {
+                return mcp_tool_error(id, "revision is required; see list_saved_versions");
+            };
+            return mcp_undo_last_change(
+                plane,
+                client_id,
+                grant,
+                pipe_name,
+                id,
+                &arguments,
+                Some(revision),
+            );
+        }
+        "list_my_presets" => (
+            "toolPresets.list",
+            Some(
+                arguments["kind"]
+                    .as_str()
+                    .map_or_else(|| json!({}), |kind| json!({ "kind": kind })),
+            ),
+        ),
+        "save_my_preset" => (
+            "toolPresets.save",
+            Some(json!({
+                "kind": arguments["kind"],
+                "name": arguments["name"],
+                "parameters": arguments["parameters"],
+                "idempotencyKey": mcp_key_or_generated(&arguments, "save_my_preset"),
+            })),
+        ),
+        "delete_my_preset" => (
+            "toolPresets.delete",
+            Some(json!({
+                "id": arguments["id"],
+                "idempotencyKey": mcp_key_or_generated(&arguments, "delete_my_preset"),
+            })),
+        ),
+        "start_from_goal" => {
+            let key = arguments["idempotencyKey"]
+                .as_str()
+                .filter(|key| !key.is_empty())
+                .map_or_else(|| mcp_generated_key("start_from_goal"), str::to_owned);
+            let mut params = json!({ "goal": arguments["goal"], "idempotencyKey": key });
+            for name in ["name", "application"] {
+                if arguments.get(name).is_some_and(|value| !value.is_null()) {
+                    params[name] = arguments[name].clone();
+                }
+            }
+            let created = mcp_dispatch_tool(
+                plane,
+                client_id,
+                grant,
+                pipe_name,
+                id.clone(),
+                "sessions.createFromGoal",
+                Some(params),
+            );
+            if created["result"]["isError"] == true {
+                return created;
+            }
+            let session_id =
+                created["result"]["structuredContent"]["result"]["session"]["id"].clone();
+            let opened = mcp_dispatch_tool(
+                plane,
+                client_id,
+                grant,
+                pipe_name,
+                id,
+                "sessions.active.set",
+                Some(json!({ "sessionId": session_id, "idempotencyKey": format!("{key}-open") })),
+            );
+            if opened["result"]["isError"] == true {
+                return opened;
+            }
+            return created;
         }
         "create_session" => {
             let name = arguments["name"]
@@ -3285,6 +3404,7 @@ fn mcp_undo_last_change(
     pipe_name: Option<&str>,
     id: Option<Value>,
     arguments: &Value,
+    restore: Option<u64>,
 ) -> Value {
     let mut step = |method: &str, params: Value| -> Result<Value, Value> {
         let payload = mcp_api_value(
@@ -3315,10 +3435,16 @@ fn mcp_undo_last_change(
             .as_u64()
             .or_else(|| session["result"]["session"]["revision"].as_u64())
             .ok_or_else(|| mcp_tool_error(id.clone(), "the session revision is unavailable"))?;
-        let plan = step(
-            "graph.undoPlan",
-            json!({ "sessionId": session_id, "baseRevision": revision }),
-        )?;
+        let plan = match restore {
+            Some(target) => step(
+                "graph.restorePlan",
+                json!({ "sessionId": session_id, "baseRevision": revision, "revision": target }),
+            )?,
+            None => step(
+                "graph.undoPlan",
+                json!({ "sessionId": session_id, "baseRevision": revision }),
+            )?,
+        };
         let plan_id = plan["result"]["planId"]
             .as_str()
             .ok_or_else(|| mcp_tool_error(id.clone(), "the backend returned no undo plan"))?
@@ -3350,7 +3476,7 @@ fn mcp_generated_key(tool: &str) -> String {
     )
 }
 
-const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\n8. Play is refused, the sound loops or a device seems wrong: run check_setup first. Each finding names the session, node and device and gives the fix; Windows device settings (channels, rate) are changed by the user in Windows Sound settings, not by you. A 7.1 device feeding a Surround input is correct; do not tell the user to make it stereo.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
+const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to a Physical output whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\n8. Play is refused, the sound loops or a device seems wrong: run check_setup first. Each finding names the session, node and device and gives the fix; Windows device settings (channels, rate) are changed by the user in Windows Sound settings, not by you. A 7.1 device feeding a Surround input is correct; do not tell the user to make it stereo.\n9. Start from what the user wants: list_goals shows ready routes; start_from_goal goal=clean-mic makes a stopped session with those tools connected. Then ask which microphone and output to use and set them with change_settings parameters {endpointId: ...}; never choose a microphone yourself.\n10. Keep settings the user likes: save_my_preset kind=compressor name=\"Steady voice\" parameters={...}; apply later by passing a preset's parameters from list_my_presets to change_settings.\n11. See or return to an earlier setup: list_saved_versions, then go_back_to_version revision=N. Later versions are kept. Say which client saved a version only as reported; never guess a person.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
 
 const NETWORK_PAIRING_RECIPE: &str = "8. Send encrypted audio between computers: update AudioRouter on both peers together. On the sending PC add_tool kind=networkSend with parameters {host: <receiving PC IP>, port: 47777}; connect its input to the audio to send. On the receiving PC add_tool kind=networkReceive with parameters {sender: <sending PC IP>, port: 47777}; connect it to an output or Mixer. Ask the user to Generate a strong Pairing key in Properties and copy it to both peers with change_settings parameters {pairingKey: <same key>}. Never repeat the key in summaries or logs. With a key, audio is encrypted and authenticated and captured packets cannot play after receiver restart. Blank keys mean unencrypted, unpaired audio. Running-audio edits and Play require Operator/device authority; an Editor can prepare the stopped graph.";
 
@@ -3404,6 +3530,7 @@ mod tests {
         ("applications.list", ALIAS),
         ("session.start", ALIAS),
         ("session.stop", ALIAS),
+        ("nodes.compare", "a press and hold for the person listening; an assistant can neither hold it nor hear the result, and uses toggle_setting on bypass instead"),
         ("nodes.types", "superseded for assistants by list_tool_kinds (nodes.catalog) and the audiorouter://nodes resource"),
         // Window-only consent, folders and integrations (refused to MCP and
         // HTTP grants; see DESKTOP_ONLY_METHODS and devices.setAccess).
@@ -5636,6 +5763,119 @@ mod tests {
         }
     }
 
+    /// An assistant reaches goals, presets and saved versions with default tools,
+    /// and an Observer may read them but not change anything.
+    #[test]
+    fn goals_presets_and_saved_versions_work_through_default_tools() {
+        fn call(
+            plane: &mut ControlPlane,
+            grant: &audiorouter_control::ClientGrant,
+            name: &str,
+            arguments: Value,
+        ) -> Value {
+            assert!(is_default_mcp_tool(name), "{name} must be a default tool");
+            mcp_tool_call(
+                plane,
+                "mcp-test",
+                grant,
+                None,
+                &json!({ "id": 1, "params": { "name": name, "arguments": arguments } }),
+            )
+        }
+        fn payload(response: &Value) -> Value {
+            assert_eq!(response["result"]["isError"], false, "{response}");
+            response["result"]["structuredContent"]["result"].clone()
+        }
+        let mut plane = ControlPlane::default();
+        let editor =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let observer = audiorouter_control::ClientGrant::read_only();
+
+        let goals = payload(&call(&mut plane, &observer, "list_goals", json!({})));
+        assert!(goals["goals"].as_array().unwrap().len() >= 6);
+        let refused = call(
+            &mut plane,
+            &observer,
+            "start_from_goal",
+            json!({ "goal": "clean-mic" }),
+        );
+        assert!(refused["result"]["structuredContent"]["error"].is_object());
+
+        let made = payload(&call(
+            &mut plane,
+            &editor,
+            "start_from_goal",
+            json!({ "goal": "clean-mic" }),
+        ));
+        assert_eq!(made["state"], "stopped");
+        assert!(made["stillToChoose"]
+            .to_string()
+            .contains("your microphone"));
+        let id = made["session"]["id"].as_str().unwrap().to_owned();
+        let active = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.active.get".into(),
+            params: None,
+        });
+        assert_eq!(
+            active.result.unwrap()["sessionId"],
+            id.as_str(),
+            "the new session is opened"
+        );
+
+        let saved = payload(&call(
+            &mut plane,
+            &editor,
+            "save_my_preset",
+            json!({ "kind": "gain", "name": "Quiet", "parameters": { "gainDb": -6.0 } }),
+        ));
+        let preset = saved["preset"]["id"].clone();
+        let listed = payload(&call(
+            &mut plane,
+            &observer,
+            "list_my_presets",
+            json!({ "kind": "gain" }),
+        ));
+        assert_eq!(listed["items"][0]["name"], "Quiet");
+        let deleted = payload(&call(
+            &mut plane,
+            &editor,
+            "delete_my_preset",
+            json!({ "id": preset }),
+        ));
+        assert_eq!(deleted["deleted"], true);
+
+        let versions = payload(&call(
+            &mut plane,
+            &observer,
+            "list_saved_versions",
+            json!({}),
+        ));
+        assert!(versions["items"].is_array());
+        let added = call(
+            &mut plane,
+            &editor,
+            "add_tool",
+            json!({ "kind": "meter", "name": "Level" }),
+        );
+        assert_eq!(added["result"]["isError"], false, "{added}");
+        let versions = payload(&call(
+            &mut plane,
+            &observer,
+            "list_saved_versions",
+            json!({}),
+        ));
+        let first = versions["items"].as_array().unwrap().last().unwrap()["revision"].clone();
+        let back = call(
+            &mut plane,
+            &editor,
+            "go_back_to_version",
+            json!({ "revision": first }),
+        );
+        assert_eq!(back["result"]["isError"], false, "{back}");
+    }
+
     #[test]
     fn mcp_tools_use_the_authorized_control_dispatcher() {
         let mut plane = ControlPlane::default();
@@ -5916,7 +6156,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 91);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 98);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

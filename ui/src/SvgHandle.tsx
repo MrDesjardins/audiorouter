@@ -89,7 +89,7 @@ export function Handle({
       aria-valuenow={spec.value}
       aria-valuetext={`${spec.value.toFixed(spec.step < 1 ? 1 : 0)} ${spec.unit}`.trim()}
       onPointerDown={(event) => {
-        if (disabled) return;
+        if (disabled || event.button !== 0) return;
         event.currentTarget.setPointerCapture?.(event.pointerId);
         setDragging(true);
       }}

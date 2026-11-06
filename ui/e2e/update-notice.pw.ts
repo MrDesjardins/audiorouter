@@ -1,4 +1,4 @@
-import { openAppSettings } from "./workbench";
+import { openVersionSettings } from "./workbench";
 import { readFileSync } from "node:fs";
 import { test, expect } from "./browser-test";
 
@@ -42,7 +42,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await (await popup).close();
 
     // Advanced → turning the check off removes the notice.
-    await openAppSettings(page);
+    await openVersionSettings(page);
     const panel = page.getByRole("region", { name: "New versions" });
     await expect(panel).toContainText(`You have AudioRouter ${version}. Version 9.9.9 is available.`);
     await panel.scrollIntoViewIfNeeded();

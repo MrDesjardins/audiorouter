@@ -85,6 +85,22 @@ export const test = base.extend<BrowserOptions & { pageErrorGuard: void; bundled
   ],
   pageErrorGuard: [
     async ({ page }, use, testInfo) => {
+      // Scenarios add tools by name, so every Tools group starts open. tools-list.pw.ts
+      // removes this and covers the real first-run state.
+      await page.addInitScript(() => {
+        try {
+          // The goal dialog and tour have their own first-run test.
+          if (localStorage.getItem("audiorouter.ui.first-run-done") === null)
+            localStorage.setItem("audiorouter.ui.first-run-done", "true");
+          if (localStorage.getItem("audiorouter.ui.tools-open-groups") === null)
+            localStorage.setItem(
+              "audiorouter.ui.tools-open-groups",
+              JSON.stringify(["input", "output", "clean", "level", "tone", "routing", "canvas", "plugins", "setup"]),
+            );
+        } catch {
+          /* A scenario may deny storage on purpose. */
+        }
+      });
       const errors: string[] = [];
       const collect = (error: Error) => errors.push(error.message);
       page.on("pageerror", collect);

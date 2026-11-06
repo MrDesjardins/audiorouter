@@ -139,20 +139,20 @@ export function RecorderActions({
     <section className="panel recorder-actions" aria-labelledby="recorder-actions-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Frame boundary control</p>
+          <p className="eyebrow">Manual recording</p>
           <h2 id="recorder-actions-heading">Recorder</h2>
         </div>
-        <span className="badge">{state}</span>
+        <span className="badge recorder-state">{state}</span>
       </div>
       <label>
-        Graph recorder node
+        Recorder tool on the canvas
         <select
-          aria-label="Graph recorder node"
+          aria-label="Recorder tool on the canvas"
           value={selectedRecorderNodeId}
           disabled={!connected || recorderNodeIds.length === 0}
           onChange={(event) => onSelectNode(event.target.value)}
         >
-          <option value="">Session recorder (no graph node)</option>
+          <option value="">None: record the whole session</option>
           {recorderNodeIds.map((id) => (
             <option key={id} value={id}>
               {id}
@@ -162,7 +162,7 @@ export function RecorderActions({
         </select>
       </label>
       <fieldset disabled={!connected}>
-        <legend>Create unarmed recorder</legend>
+        <legend>Set up a recorder (does not start recording)</legend>
         <label>
           Recorder ID
           <input aria-label="Recorder ID" value={recorderId} onChange={(event) => setRecorderId(event.target.value)} />
@@ -178,11 +178,11 @@ export function RecorderActions({
               if (next === "wavFloat32" || next === "mp3") setDither(false);
             }}
           >
-            <option value="wavPcm24">WAV PCM24</option>
-            <option value="wavPcm16">WAV PCM16</option>
-            <option value="wavFloat32">WAV Float32</option>
-            <option value="flac16">FLAC 16</option>
-            <option value="flac24">FLAC 24</option>
+            <option value="wavPcm24">WAV, 24-bit</option>
+            <option value="wavPcm16">WAV, 16-bit</option>
+            <option value="wavFloat32">WAV, 32-bit float</option>
+            <option value="flac16">FLAC, 16-bit</option>
+            <option value="flac24">FLAC, 24-bit</option>
             <option value="mp3">MP3 192 kbps</option>
           </select>
         </label>

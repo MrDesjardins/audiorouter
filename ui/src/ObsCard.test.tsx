@@ -100,7 +100,7 @@ describe("ObsCard", () => {
     render(<ObsCard check={twoProblems} status={status()} actions={actions()} />);
     expect(screen.getByText("Voice · Discord")).toBeTruthy();
     expect(screen.getByText(/on the stream twice/)).toBeTruthy();
-    expect(document.querySelector(".app-state-badge.is-check")?.textContent).toBe("! Check");
+    expect(document.querySelector(".app-state-badge.is-check")?.textContent?.trim()).toBe("Check");
   });
 
   it("changes only the ticked settings, through a preview", async () => {

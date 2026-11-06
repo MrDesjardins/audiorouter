@@ -8,6 +8,7 @@ import { demoSession } from "./fixtures";
 import {
   AudioFileNodeControls,
   SIGNAL_FLOW_LEGEND,
+  edgeBarWouldCoverCards,
   nodeHeaderState,
   deletedConnectionIds,
   deletedNodeIds,
@@ -625,7 +626,7 @@ describe("canvas library drop positions", () => {
 
     fireEvent.click(getByRole("button", { name: "Gate" }));
 
-    expect(onAddLibraryNode).toHaveBeenCalledWith("gate", { x: 840, y: 0 });
+    expect(onAddLibraryNode).toHaveBeenCalledWith("gate", { x: 1008, y: 0 });
   });
 
   it("offers device nodes and distinguishes deferred managed virtual buses", () => {
@@ -778,8 +779,8 @@ describe("canvas library drop positions", () => {
     fireEvent.click(shelf.getByRole("button", { name: "Gain" }));
 
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toEqual({
-      "gain-1": { x: 840, y: 0 },
-      "gain-2": { x: 0, y: 230 },
+      "gain-1": { x: 1008, y: 0 },
+      "gain-2": { x: 0, y: 264 },
     });
   });
 
@@ -871,6 +872,26 @@ describe("node header state", () => {
     expect(nodeHeaderState(appNode, null)).toEqual({ label: "not prepared", tone: "attention" });
     expect(nodeHeaderState(appNode, capture("app-closed"))).toEqual({ label: "app closed", tone: "attention" });
     expect(nodeHeaderState(appNode, capture("connected"))).toEqual({ label: "live", tone: "ready" });
+  });
+
+  it("names what is wrong instead of calling a card ready", () => {
+    const input = { ...appNode, kind: "physicalInput" as const, parameters: {} };
+    expect(nodeHeaderState(input, null)).toEqual({ label: "no device", tone: "attention" });
+    const chosen = { ...input, parameters: { endpointId: "mic" } };
+    expect(nodeHeaderState(chosen, null, { unfed: false, privacyMuted: true })).toEqual({
+      label: "muted",
+      tone: "attention",
+    });
+    expect(nodeHeaderState({ ...appNode, kind: "gain" }, null, { unfed: true, privacyMuted: false })).toEqual({
+      label: "no input",
+      tone: "attention",
+    });
+  });
+
+  it("hides the connection bar only when two cards leave it no room", () => {
+    expect(edgeBarWouldCoverCards({ x: 100 }, { x: 180 })).toBe(true);
+    expect(edgeBarWouldCoverCards({ x: 180 }, { x: 100 })).toBe(true);
+    expect(edgeBarWouldCoverCards({ x: 100 }, { x: 400 })).toBe(false);
   });
 
   it("keeps the generic chip for other nodes and respects bypass and disabled", () => {

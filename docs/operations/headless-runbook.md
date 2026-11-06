@@ -235,7 +235,7 @@ An enrolled local client can launch:
 audiorouter mcp serve --client-id enrolled-client --database C:\path\audiorouter.sqlite
 ```
 
-Use `--pipe \\.\pipe\audiorouter-control` when the desktop app is running (its MCP tab shows the exact command). Without `--pipe`, `mcp serve` refuses to start on the app's own database while the app is running, so two control planes never edit the same data. MCP stdout is reserved for newline-delimited JSON-RPC; diagnostics belong on stderr. A malformed line is answered with a JSON-RPC parse error (`-32700`) and the session continues.
+Use `--pipe \\.\pipe\audiorouter-control` when the desktop app is running (its Settings → AI assistants (MCP) page shows the exact command). Without `--pipe`, `mcp serve` refuses to start on the app's own database while the app is running, so two control planes never edit the same data. MCP stdout is reserved for newline-delimited JSON-RPC; diagnostics belong on stderr. A malformed line is answered with a JSON-RPC parse error (`-32700`) and the session continues.
 
 The adapter supports modern stateless MCP (`2026-07-28`, including
 `server/discover` and per-request protocol metadata) and legacy
@@ -256,7 +256,7 @@ See the [worked ChatGPT example](chatgpt-mcp-example.md) for illustrated
 AudioRouter and ChatGPT setup steps, followed by a real session-list request
 and radio voice route creation with the conversation and app result screenshots.
 
-In the MCP tab, enter an existing OpenAI tunnel ID and a restricted runtime
+On the Settings → AI assistants (MCP) page, enter an existing OpenAI tunnel ID and a restricted runtime
 key with **Tunnels Read + Use**, then choose **Save securely and connect**.
 AudioRouter stores the tunnel settings and runtime key together in a
 current-user DPAPI-protected file and starts the bundled OpenAI runtime only

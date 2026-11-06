@@ -149,6 +149,32 @@ describe("startup session selection", () => {
     expect(backend.setActiveSession.mock.calls.length).toBeLessThanOrEqual(1);
   }, 10_000);
 
+  it("opens the active route when the remembered one no longer exists", async () => {
+    window.localStorage.setItem("audiorouter.ui.last-session", "removed-session");
+    const { backend, active } = await backendWithSavedActiveSession();
+    const answer = backend.snapshot.getMockImplementation()!;
+    backend.snapshot.mockImplementation((sessionId = "desktop-session") =>
+      sessionId === "removed-session" ? Promise.reject(new Error("session not found")) : answer(sessionId),
+    );
+    render(<App backend={backend} />);
+    expect(
+      await screen.findByText(/no longer saved, so AudioRouter opened Main session/, {}, { timeout: 5000 }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/Unable to load your saved session/)).toBeNull();
+    expect(active()).toBe("main-session");
+    await waitFor(() => expect(window.localStorage.getItem("audiorouter.ui.last-session")).toBe("main-session"));
+  }, 10_000);
+
+  it("keeps offering Reconnect when the remembered route still exists but will not load", async () => {
+    window.localStorage.setItem("audiorouter.ui.last-session", "desktop-session");
+    const { backend } = await backendWithSavedActiveSession();
+    backend.snapshot.mockImplementation(() => Promise.reject(new Error("backend busy")));
+    render(<App backend={backend} />);
+    expect(await screen.findByText(/Unable to load your saved session/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeTruthy();
+    expect(window.localStorage.getItem("audiorouter.ui.last-session")).toBe("desktop-session");
+  }, 10_000);
+
   it("keeps a remembered session and makes it active once", async () => {
     window.localStorage.setItem("audiorouter.ui.last-session", "desktop-session");
     const { backend, active } = await backendWithSavedActiveSession();

@@ -1,5 +1,5 @@
 {
-  "backendMethods": 117,
+  "backendMethods": 125,
   "operations": [
     {
       "method": "POST",
@@ -761,6 +761,62 @@
       "method": "POST",
       "path": "/api/v1/sessions/create",
       "operation": "sessions.create",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/graph/versions",
+      "operation": "graph.versions",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/graph/restorePlan",
+      "operation": "graph.restorePlan",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/nodes/compare",
+      "operation": "nodes.compare",
+      "permission": "SessionControl",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/toolPresets/list",
+      "operation": "toolPresets.list",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/toolPresets/save",
+      "operation": "toolPresets.save",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/toolPresets/delete",
+      "operation": "toolPresets.delete",
+      "permission": "GraphWrite",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/goals",
+      "operation": "sessions.goals",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sessions/createFromGoal",
+      "operation": "sessions.createFromGoal",
       "permission": "GraphWrite",
       "effect": "Mutating"
     },

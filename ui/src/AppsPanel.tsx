@@ -7,6 +7,7 @@ import {
   type AppCheckRow,
   type AppCheckState,
 } from "./appUsage";
+import { Icon, type IconName } from "./icons";
 
 const STATE_WORD: Record<AppCheckState, string> = {
   ready: "Ready",
@@ -14,8 +15,13 @@ const STATE_WORD: Record<AppCheckState, string> = {
   notRunning: "Not running",
   unknown: "Waiting",
 };
-const STATE_ICON: Record<AppCheckState, string> = { ready: "✓", check: "!", notRunning: "–", unknown: "…" };
-const ROW_ICON: Record<AppCheckRow["state"], string> = { ready: "✓", check: "!", info: "i" };
+const STATE_ICON: Record<AppCheckState, IconName> = {
+  ready: "check",
+  check: "triangle-alert",
+  notRunning: "minus",
+  unknown: "ellipsis",
+};
+const ROW_ICON: Record<AppCheckRow["state"], IconName> = { ready: "check", check: "triangle-alert", info: "info" };
 
 /** The Discord menu path for each row, used by "Show me how". */
 const DISCORD_STEPS: Record<AppCheckRow["id"], string> = {
@@ -26,7 +32,7 @@ const DISCORD_STEPS: Record<AppCheckRow["id"], string> = {
 export function AppStateBadge({ state }: { state: AppCheckState }) {
   return (
     <span className={`app-state-badge is-${state}`}>
-      <span aria-hidden="true">{STATE_ICON[state]}</span> {STATE_WORD[state]}
+      <Icon name={STATE_ICON[state]} size={14} /> {STATE_WORD[state]}
     </span>
   );
 }
@@ -77,7 +83,7 @@ function CheckRow({
   return (
     <li className={`app-check-row is-${row.state}`}>
       <span className="app-check-icon" aria-hidden="true">
-        {ROW_ICON[row.state]}
+        <Icon name={ROW_ICON[row.state]} size={14} />
       </span>
       <span className="app-check-body">
         <span className="app-check-line">

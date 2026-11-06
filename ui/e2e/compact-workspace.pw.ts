@@ -1,3 +1,4 @@
+import { openPage } from "./workbench";
 import { expect, test } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 import { appendDraftConnection } from "../src/draft";
@@ -133,14 +134,13 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       "Session",
       "Status",
       "Virtual Cables",
-      "UI Options",
+      "Appearance",
       "Recording",
-      "Advanced",
-      "MCP",
+      "AI assistants (MCP)",
       "API",
-      "Logs",
+      "Logs and support",
     ]) {
-      await page.getByRole("tab", { name: tab, exact: true }).click();
+      await openPage(page, tab);
       const help = page.locator(".help-disclosure:visible");
       await expect(help).toHaveCount(1);
       await expect(help.locator(".help-icon")).toHaveText("?");
@@ -152,7 +152,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       await summary.click();
       await expect(help).not.toHaveAttribute("open");
     }
-    await page.getByRole("tab", { name: "Tools", exact: true }).click();
+    await openPage(page, "Tools");
     await page.getByText("How to build a route", { exact: true }).click();
     await page.screenshot({ path: info.outputPath(`${theme}-route-help.png`) });
   });

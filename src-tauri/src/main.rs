@@ -453,6 +453,34 @@ fn release_page_url(tag: &str) -> Option<String> {
     valid.then(|| format!("https://github.com/MrDesjardins/audiorouter/releases/tag/{tag}"))
 }
 
+/// Opens the Windows Sound settings page. The address is fixed, so nothing a
+/// page sends can choose what opens.
+#[tauri::command]
+fn open_sound_settings() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows::core::w;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        // SAFETY: both strings are NUL-terminated literals that live for the
+        // whole call, and no argument comes from the caller.
+        let result = unsafe {
+            ShellExecuteW(
+                None,
+                w!("open"),
+                w!("ms-settings:sound"),
+                None,
+                None,
+                SW_SHOWNORMAL,
+            )
+        };
+        if result.0 as isize <= 32 {
+            return Err("Cannot open Windows Sound settings.".into());
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn open_release_page(tag: String) -> Result<(), String> {
     let url = release_page_url(&tag).ok_or("Not an AudioRouter release tag")?;
@@ -2123,6 +2151,7 @@ fn main() {
             http_api_control,
             http_api_addresses,
             open_release_page,
+            open_sound_settings,
             open_tool_guide,
             open_plugin_editor,
             choose_session_file,

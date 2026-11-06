@@ -5,6 +5,7 @@ import {
   layoutCanvasItems,
   moveCanvasItems,
   movementLocked,
+  resizeGroupsTogether,
   type CanvasRect,
   type LayoutAction,
 } from "./canvasGeometry";
@@ -173,4 +174,44 @@ it("distributes unequal heights vertically using edge gaps", () => {
   const result = layoutCanvasItems(items, ["c", "a", "b"], "distribute-vertical").items;
   expect(result.map((item) => item.y)).toEqual([0, 300, 700]);
   expect(result.map((item) => item.x)).toEqual([0, 30, 60]);
+});
+
+describe("resizing selected groups together", () => {
+  const group = (id: string, x: number, y: number, width = 400, height = 300, extra: Partial<CanvasRect> = {}) => ({
+    ...rect(id, x, y, width, height),
+    group: true,
+    ...extra,
+  });
+  const start = [group("a", 0, 0), group("b", 1000, 500, 300, 200), rect("tool", 50, 50)];
+  const moved = (active: Partial<CanvasRect>) =>
+    start.map((item) => (item.id === "a" ? { ...item, ...active } : { ...item }));
+
+  it("moves the same edge by the same distance", () => {
+    const right = resizeGroupsTogether(moved({ width: 460 }), start, "a", ["a", "b"]);
+    expect(right.find((item) => item.id === "b")).toMatchObject({ x: 1000, y: 500, width: 360, height: 200 });
+    const left = resizeGroupsTogether(moved({ x: -40, width: 440 }), start, "a", ["a", "b"]);
+    expect(left.find((item) => item.id === "b")).toMatchObject({ x: 960, width: 340 });
+    const top = resizeGroupsTogether(moved({ y: 30, height: 270 }), start, "a", ["a", "b"]);
+    expect(top.find((item) => item.id === "b")).toMatchObject({ y: 530, height: 170 });
+  });
+
+  it("stops a smaller group at its minimum with its other edge in place", () => {
+    const next = resizeGroupsTogether(moved({ x: 250, width: 150 }), start, "a", ["a", "b"]);
+    // b would be 50 wide; it stops at the 180 minimum and its right edge stays at 1300.
+    expect(next.find((item) => item.id === "b")).toMatchObject({ x: 1120, width: 180 });
+  });
+
+  it("leaves locked groups, unselected groups and tools alone", () => {
+    const withLocked = [
+      group("a", 0, 0),
+      group("b", 900, 0, 300, 200, { locked: true }),
+      group("c", 0, 900),
+      rect("tool", 50, 50),
+    ];
+    const items = withLocked.map((item) => (item.id === "a" ? { ...item, width: 500 } : item));
+    const next = resizeGroupsTogether(items, withLocked, "a", ["a", "b", "tool"]);
+    expect(next.find((item) => item.id === "b")?.width).toBe(300);
+    expect(next.find((item) => item.id === "c")?.width).toBe(400);
+    expect(next.find((item) => item.id === "tool")?.width).toBe(200);
+  });
 });

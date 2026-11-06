@@ -938,7 +938,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 139] = [
+pub const API_METHODS: [ApiMethodSpec; 147] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1607,6 +1607,46 @@ pub const API_METHODS: [ApiMethodSpec; 139] = [
     },
     ApiMethodSpec {
         name: "sessions.create",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "graph.versions",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "graph.restorePlan",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "nodes.compare",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "toolPresets.list",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "toolPresets.save",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "toolPresets.delete",
+        permission: PermissionScope::GraphWrite,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
+        name: "sessions.goals",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "sessions.createFromGoal",
         permission: PermissionScope::GraphWrite,
         side_effect: SideEffectClass::Mutating,
     },

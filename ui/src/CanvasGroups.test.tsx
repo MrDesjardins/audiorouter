@@ -26,10 +26,10 @@ function Fixture({ session = "one" }: { session?: string }) {
 test("groups persist presentation edits independently by session with 5% default opacity", async () => {
   const view = render(<Fixture />);
   fireEvent.click(screen.getByText("Add group"));
-  expect((screen.getByLabelText("Group opacity") as HTMLInputElement).value).toBe("5");
+  expect((screen.getByRole("slider", { name: "Group opacity" }) as HTMLInputElement).value).toBe("5");
   fireEvent.change(screen.getByLabelText("Group name"), { target: { value: "Game" } });
   fireEvent.change(screen.getByLabelText("Group background color"), { target: { value: "#ee8822" } });
-  fireEvent.change(screen.getByLabelText("Group opacity"), { target: { value: "40" } });
+  fireEvent.change(screen.getByRole("slider", { name: "Group opacity" }), { target: { value: "40" } });
   expect(readGroups("audiorouter.ui.groups.one")[0]).toMatchObject({ name: "Game", color: "#ee8822", opacity: 40 });
   await act(async () => view.rerender(<Fixture session="two" />));
   expect(screen.getByRole("status").textContent).toBe("0");
