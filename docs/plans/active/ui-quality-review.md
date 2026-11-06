@@ -1232,4 +1232,76 @@ would have opened and played the wrong route. Restored through the app's own `lo
 confirmed in the LevelDB log; the owner's `state.sqlite` was not touched (last written 2026-11-05 20:13). Prevention:
 `fresh_install_shell` now sets `WEBVIEW2_USER_DATA_FOLDER`, and the lesson is in `AGENTS.md`.
 
-Next action: owner reviews the build and decides on commit and PR. No PR without the owner's approval.
+The owner approved a PR on 2026-11-06: [#118](https://github.com/MrDesjardins/audiorouter/pull/118), branch
+`improve/ui-round-21`, stacked on #117. CI then found a check not run in this round: the regenerated guide pages had
+stale social metadata and CSP hashes. Regenerated, and `verify.mjs --checks site` now passes.
+
+## Round 22 — re-rating after Round 21 (owner request, 2026-11-06)
+
+**Method.** Same rubric and method as Round 20, on the code of #118: route harness in Edge at 1440×1000 and 640×360;
+all 5 daily tabs, 2 Status views and 15 Settings pages (22 screens) in three themes; axe-core 4 from a scratch folder;
+control and type inventory; Properties for 33 tools; keyboard walk; 11 shortcuts on a route with an unsaved change.
+Screenshots and JSON: `target/ui-quality-review/round-22/` (not committed).
+
+**Limits.** This agent graded its own fresh work. Harness audio is simulated. No Narrator, Windows scaling, custom
+themes or first-time user, so no score rests on them. The real exe was exercised in Round 21 with a silent cable and no
+real microphone. SVG chart labels are not covered by the text-size figure, because computed size ignores SVG scaling.
+
+### Scores
+
+| # | Category | Round 20 | Now | Main reason | Still holding it back |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Contrast | 8 | 8 | axe clean on all 22 screens in 3 themes | Selected switch text 1.24:1 (N1); graphics not pixel-audited (F21) |
+| 2 | Typography/size | 7 | 8 | Nothing under 11 px, canvas included; 20 sizes down to 6 | Windows scaling; chart labels unmeasured |
+| 3 | Clarity | 6 | 7 | True chips, goals, mic test | NATIVE and PHYSICAL pills, port lines, "draft" (F7, F8) |
+| 4 | Consistency | 7 | 7 | One Undo, one icon set | Native dialogs (F6), one tool with several names (F7), 273 colours (F19) |
+| 5 | Spacing/alignment | 7 | 7 | Connection bar no longer covers cards (F9) | Message covers tabs when narrow (F10); tight tab labels |
+| 6 | Navigation | 6 | 8 | 13 tabs to 5 plus Settings; Ctrl+K; canvas in 10 Tab stops, was 85 | Narrator; no direct route switcher (F3) |
+| 7 | Errors/recovery | 7 | 8 | Errors offer the fix; missing route recovers | Quit loses unsaved edits (F4); live device loss untested |
+| 8 | Inputs | 7 | 7 | Compact sliders, 24 px toggles | Browser prompt for New session (F6); most toggles lack On/Off (F16) |
+| 9 | Buttons | 7 | 8 | Ranked Play, Save, Stop; 17 heights down to 12 | 2 targets under 24 px |
+| 10 | Loading/progress | 8 | 8 | No new defect | Slow-action matrix incomplete |
+| 11 | Menus/dropdowns | 8 | 8 | Palette added | Native lists; browser menu on panels (F27) |
+| 12 | Icons | 6 | 8 | One drawn set, compile-checked per tool kind | No separate check of icon meaning with users |
+| 13 | Drag/drop | 7 | 8 | Snap, guides, map, arrow keys | Not used on the owner's real route (F23) |
+| 14 | Motion | 8 | 8 | Unchanged | No attended check on a live route |
+
+Total 99 to 109 of 140 (average 7.1 to 7.8). Lowest score 6 to 7; ten categories at 8. None reaches 9, and the rubric
+does not let an average stand in for that. No 10 can be awarded: all four external gates in Round 20 remain unmet.
+
+### Findings retested
+
+- **Done (11):** F1, F5, F9, F11, F12, F14, F17, F18, F22, F25 (first screen 1060 px, all open 2305 px, was 4226 px), F26
+  (no `aria-prohibited-attr` or `nested-interactive` left).
+- **Partly (10):**
+  - F2, F3: limited by owner decisions.
+  - F7: "added to the draft" is still visible.
+  - F13: Esc and arrow keys work. Ctrl+S, Ctrl+A, Ctrl+D, F2, F1, `?` and Ctrl+0/+/− still do nothing, and there is no skip link.
+  - F15: reworded only.
+  - F16: height only.
+  - F19: heights and type sizes fell, but colours (273 distinct in `styles.css`) and `!important` (49) did not.
+  - F20: chart labels unmeasured.
+  - F23: real route not used.
+  - F24: 9 of 33 tools fit without scrolling in an 831 px panel, against 5 of 33 in 747 px; the median is 1013 px. Round 21's
+    "14 fit" no longer holds after Compare and presets joined the panel. Closed sections do keep the main controls near the top.
+- **Open (6):** F4, F6 (5 native dialogs), F8, F10 (seen covering the tabs at 640×360), F21, F27 (browser menu on the top bar,
+  panels and tabs in the harness; text selectable).
+
+### New or newly explained
+
+- **N1.** Selected Input Switch and Output Switch buttons: `small` text at 1.24:1 on the amber fill, because
+  `.flow-node-content small` overrides the button's dark text. Round 20's axe data has the same count on these tools, so
+  this is not new; Round 20 had put such flags down to stacked cards.
+- **N2.** "Review before saving" covers the right-side tabs while its message points to Session. Seen in the exe; this
+  audit's probe did not open it, so there is no new measurement.
+
+### Next, by expected gain
+
+1. Decide and fix F4 (unsaved edits at quit), the most serious open defect.
+2. F7 and F8 (plain words on cards and messages), for Clarity and Consistency.
+3. F6 (app dialogs), for Consistency and Inputs.
+4. F10, N1, N2 and F16: small fixes for Spacing, Contrast and Inputs.
+5. The rest of F13, then F19 and F24.
+6. The four external gates, which every 9 and 10 depends on.
+
+Next action: owner reviews #118 and the #117 order, and chooses from the list above.
