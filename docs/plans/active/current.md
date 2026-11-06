@@ -1,38 +1,17 @@
 # Active plan — current priorities (2026-11-04)
 
-## Release 0.0.27 — 2026-11-05 owner request
+## Release 0.0.27 — published 2026-11-05
 
-Objective: publish the owner-tested main snapshot `0a5d7677` as the next
-unsigned Windows 11 x64 app-only experimental prerelease. The owner confirmed
-the local build works and explicitly requested a new release. Scope: DIST-01–08,
-ENG-01/02/04/05; merged UI-27, AUTO-18, STATE-02/04, REC-02/10 and plugin/network
-fixes. No PR, driver delivery, signing purchase or changes to the owner's live
-route. Preserve the existing local-build evidence above/below.
-
-Prerequisites: Windows, Rust 1.96.0, Node 22.22.3, native SDK, verified tunnel
-runtime and GitHub authentication. Main CI 41965008269 and nightly 42014592489
-passed on the tested source. Owner playback approval supplements those checks;
-it does not close every hardware, accessibility or M08 gate.
-
-Tasks: bump first-party versions/locks; write release notes; run format, docs,
-contracts, UI and packaging checks; inspect the complete diff; commit/tag on
-`release/0.0.27`; prepare clean tagged app-only assets; verify checksums and
-provenance; exercise the packaged shell in an isolated standard-user profile;
-upload a draft, download/reverify, then publish under this explicit request.
-Record exact commands/results in dated release evidence. Archive this execution
-after publication and retain a pointer here. Rollback: keep 0.0.26 and separate
-configuration/recording backups; published assets remain immutable. No intended
-storage migration. Next: prepare version metadata and notes.
-
-Preparation: isolated checkout `C:/code/audiorouter-release-027` excludes concurrent
-UI-review changes. Locked npm installs, 823 UI tests, UI format/lint, contracts
-typecheck/drift (138 methods, 37 kinds, 20 processors, 22 event categories), both
-Rust format commands/checks, docs (241 files/1,411 links), four packaging-script
-regression suites and diff whitespace passed on Windows. Main's latest CI was
-documentation-only with product jobs skipped; nightly coverage/soak/startup
-passed, so run fresh workspace tests and packaged-shell checks for this release.
-Read all main check annotations: Ubuntu runner migration notices only. Existing
-VM `/repair` UI wait is disclosed; reinstall success is not a repair pass.
+Published the owner-tested main snapshot as an unsigned Windows 11 x64 app-only
+experimental prerelease. Tag source `0f5283eba94f69c613d821592979cc1885d63816`;
+[release](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.27),
+[execution record](../archived/2026-11-05-release-0.0.27.md),
+[evidence](evidence/2026-11-05-release-0.0.27.md). Fresh Rust/UI/contracts,
+packaging, extracted native UI and draft/public download checks passed. The
+owner's running instance and concurrent UI-review work were preserved. No PR
+opened. Next: owner installation/playback and remaining M08 qualification;
+metadata integration into main requires a future owner-approved PR. Retain
+0.0.26 and compatible backups for rollback; full M08 remains open.
 
 ## Local test build — 2026-11-04 owner request
 

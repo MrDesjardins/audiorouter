@@ -1,9 +1,9 @@
-The latest published release is [0.0.26](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.26),
+The latest published release is [0.0.27](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.27),
 an unsigned experimental app-only prerelease. Download
-`AudioRouter_0.0.26_x64-setup.exe` from its assets. The candidate was built
+`AudioRouter_0.0.27_x64-setup.exe` from its assets. The candidate was built
 from the tagged source, its release payload and public downloads were hash
 verified, and the bundled sound library, UI shell and companion artifacts were
-inspected. See the [0.0.26 execution record](../plans/active/evidence/2026-10-31-release-0.0.26.md),
+inspected. See the [0.0.27 execution record](../plans/active/evidence/2026-11-05-release-0.0.27.md),
 the [release notes](release-notes.md) and the evidence files under
 `docs/plans/active/evidence/`. Signing, clean-machine install/upgrade/uninstall,
 missing-WebView2, installed playback and attended Stream Deck checks remain
