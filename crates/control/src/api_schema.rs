@@ -183,7 +183,8 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "processors.response" => "Evaluate a bounded parametric-EQ magnitude response using the DSP coefficient path.",
         "sessions.get" => "Return one session resource by opaque identifier.",
         "sessions.export" => "Export one persisted canonical session document without changing state.",
-        "sessions.exportFile" => "Write the saved session, with its imported audio and plugin states, to a new .audiorouter file.",
+        "sessions.exportFile" => "Export to the exact local destination approved by the desktop Save dialog in the last five minutes; consumes that approval. Desktop only.",
+        "sessions.approveExport" => "Approve one local export destination and optional replacement after the native Save dialog. Desktop only; not available to HTTP or MCP clients.",
         "sessions.importFile" => "Import a .audiorouter session file as a new stopped session.",
         "sessions.importPlan" => "Validate a stopped session import without persisting it.",
         "sessions.importCommit" => "Commit a previously validated stopped session import.",
@@ -815,6 +816,10 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         "sessions.export" => object_schema(
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
             &["sessionId"],
+        ),
+        "sessions.approveExport" => object_schema(
+            json!({ "path": { "type": "string", "minLength": 1, "maxLength": 1024 }, "replace": { "type": "boolean" } }),
+            &["path"],
         ),
         "sessions.exportFile" => object_schema(
             json!({

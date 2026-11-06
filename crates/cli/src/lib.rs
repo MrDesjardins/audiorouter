@@ -2172,7 +2172,7 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
     let storage =
         Storage::open(database_path).map_err(|error| CliError::Storage(format!("{error:?}")))?;
     let mut plane = ControlPlane::with_storage("mcp", storage);
-    let grant = plane
+    let _initial_grant = plane
         .grant_for_client(&client_id)
         .map_err(|error| CliError::Storage(format!("{error:?}")))?
         .ok_or_else(|| {
@@ -2236,6 +2236,12 @@ pub fn run_mcp_stdio(args: &[String]) -> Result<(), CliError> {
         let modern_version = modern_meta
             .and_then(|meta| meta.get("io.modelcontextprotocol/protocolVersion"))
             .and_then(Value::as_str);
+        // Revocation and role changes must take effect in a live sidecar,
+        // including the standalone (no-pipe) mode.
+        let grant = plane
+            .grant_for_client(&client_id)
+            .map_err(|_| CliError::Storage("client enrollment unavailable".into()))?
+            .unwrap_or_default();
         let modern_valid = if modern_request {
             match modern_version {
                 Some("2026-07-28") => modern_meta
@@ -3212,6 +3218,8 @@ fn mcp_api_value(
             ),
         )
         .map_err(|error| format!("cannot encode backend request: {error}"))?;
+        let frame = audiorouter_transport::enrolled_client_frame(client_id, &frame)
+            .map_err(|_| "cannot authenticate backend client".to_owned())?;
         let response = audiorouter_transport::round_trip(pipe_name, &frame)
             .map_err(|error| format!("backend pipe request failed: {error}"))?;
         return audiorouter_protocol::decode_frame::<Value>(&response)
@@ -3425,6 +3433,7 @@ mod tests {
         ("audioMedia.delete", MEDIA),
         ("soundLibrary.read", "returns a sound's audio as base64 for the picker preview; an assistant uses list_sounds ids"),
         ("sessions.exportFile", FILES),
+        ("sessions.approveExport", FILES),
         ("sessions.importFile", FILES),
         ("events.subscribe", "a replayed event stream for UI clients; assistants read get_session_summary and get_levels"),
         ("system.handshake", "protocol negotiation done by the MCP server itself, not a user action"),

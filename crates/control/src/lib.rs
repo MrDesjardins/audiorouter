@@ -382,6 +382,7 @@ pub struct ControlPlane {
     next_startup_plan: u64,
     session_import_plans: HashMap<EntityId, (Session, Instant)>,
     next_session_import_plan: u64,
+    session_export_approvals: HashMap<std::path::PathBuf, sessions::ExportApproval>,
     active_idempotency_scope: Option<String>,
     /// Authority for nested device preparation in a graph edit. None denotes
     /// a trusted internal call; adapter dispatch always supplies the grant.
@@ -558,6 +559,7 @@ impl ControlPlane {
             next_startup_plan: 1,
             session_import_plans: HashMap::new(),
             next_session_import_plan: 1,
+            session_export_approvals: HashMap::new(),
             active_idempotency_scope: None,
             active_device_restart_allowed: None,
             endpoint_monitor: None,

@@ -428,12 +428,14 @@ fn built_in_roles_are_deny_by_default_for_sensitive_scopes() {
     // Changing OBS is for the person at the desktop, never an enrolled
     // client (MCP, CLI, Stream Deck).
     assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::IntegrationWrite));
+    assert!(ClientGrant::for_desktop_shell().allows(PermissionScope::FileExport));
     for role in [
         ClientRole::Observer,
         ClientRole::Editor,
         ClientRole::Operator,
     ] {
         assert!(!ClientGrant::for_role(role).allows(PermissionScope::IntegrationWrite));
+        assert!(!ClientGrant::for_role(role).allows(PermissionScope::FileExport));
     }
 }
 

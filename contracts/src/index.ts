@@ -650,7 +650,8 @@ export type PermissionScope =
   | "record"
   | "startupWrite"
   | "deviceAdministration"
-  | "integrationWrite";
+  | "integrationWrite"
+  | "fileExport";
 
 export type SideEffectClass =
   | "readOnly"
@@ -1512,6 +1513,7 @@ export type ImplementedMethod =
   | "sessions.get"
   | "sessions.export"
   | "sessions.exportFile"
+  | "sessions.approveExport"
   | "sessions.importFile"
   | "sessions.importPlan"
   | "sessions.importCommit"
@@ -1699,6 +1701,7 @@ export type MethodParams = {
   "sessions.get": { sessionId: EntityId };
   "sessions.export": { sessionId: EntityId };
   "sessions.exportFile": { sessionId: EntityId; path: string; replace?: boolean };
+  "sessions.approveExport": { path: string; replace?: boolean };
   "sessions.importFile": { path: string };
   "sessions.importPlan": { session: Session };
   "sessions.importCommit": { planId: EntityId; idempotencyKey: string };
@@ -1873,6 +1876,7 @@ export type MethodResult = {
   "sessions.get": Session;
   "sessions.export": Session;
   "sessions.exportFile": SessionFileExportResult;
+  "sessions.approveExport": { approved: true; expiresInMs: 300000 };
   "sessions.importFile": SessionFileImportResult;
   "sessions.importPlan": { planId: EntityId; expiresInMs: number; session: Session };
   "sessions.importCommit": { session: Session; state: "stopped"; imported: true };

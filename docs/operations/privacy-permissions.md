@@ -31,6 +31,11 @@ The important scopes are deliberately separate:
 
 - `config.read` — inspect capabilities, sessions, routes, and diagnostics.
 - `graph.write` — plan and commit configuration graph changes.
+- `fileExport` — save a session bundle to the exact local file chosen in the
+  desktop Save dialog. Approval lasts five minutes and is used once; replacing
+  an existing file needs the dialog's overwrite confirmation. MCP roles and
+  HTTP clients cannot approve or write session files. Network shares and linked
+  folders are refused; scripts can still read session JSON with `sessions.export`.
 - `session.control` — start and stop an approved session.
 - `audio.capture` — authorize capture-related operations and privacy mute.
 - `recording.write` / `recording.manage` — create or manage recording output
@@ -57,6 +62,14 @@ local-shell grant nor gain from your answer. The developer variable
 A generic read grant cannot elevate itself to another scope. Revoked or
 unknown clients are denied before method dispatch. Imported bundles do not
 install drivers, execute plugins, arm recorders, or register startup.
+
+Use matching app and MCP sidecar builds. Each forwarded MCP request authenticates
+the sidecar's configured client identity and uses the backend's current grant;
+revocation takes effect without restarting the sidecar. Client credentials are
+stored with current-user DPAPI under `AudioRouter/pipe-clients`, never in tool
+arguments or support bundles. Raw external pipe connections are read-only.
+Windows user/logon checks run in both directions before application payloads.
+This does not isolate the app from malicious code already running as your user.
 
 API discovery serializes the conceptual `startup.write` scope as
 `startupWrite`. The portable control plane stores the desired preference and

@@ -418,6 +418,11 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
             })
         }
         "sessions.get" | "sessions.export" => session_item_schema(),
+        "sessions.approveExport" => json!({
+            "type": "object",
+            "properties": { "approved": { "const": true }, "expiresInMs": { "const": 300000 } },
+            "required": ["approved", "expiresInMs"], "additionalProperties": false
+        }),
         "sessions.exportFile" => json!({
             "type": "object",
             "properties": {

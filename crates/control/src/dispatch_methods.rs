@@ -97,6 +97,7 @@ method_table! {
         "sessions.get" => dispatch_session_get,
         "sessions.export" => dispatch_session_export,
         "sessions.exportFile" => dispatch_session_export_file,
+        "sessions.approveExport" => dispatch_session_export_approval,
         "sessions.importFile" => dispatch_session_import_file,
         "sessions.importPlan" => dispatch_session_import_plan,
         "sessions.importCommit" => dispatch_session_import_commit,

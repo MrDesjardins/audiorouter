@@ -2,6 +2,35 @@
 
 ## Where things stand
 
+Owner-approved security-only PR preparation (2026-11-05): isolate all three
+review repairs and the development dependency advisory from concurrent UI work.
+Branch `fix/security-boundaries` is based on `origin/main` at `0a5d7677` in
+`C:\code\audiorouter-security-fixes`; the original checkout and its index remain
+untouched. The owner explicitly authorized opening this PR. Requirements:
+SEC-01–04/09/12/14, HTTP-01/03/06, AUTO-18, ENG-02/04. Scope, decisions,
+rollback, Windows results and remaining gates are recorded in the
+[security review](evidence/2026-11-05-security-review.md) and
+[repair evidence](evidence/2026-11-05-security-fixes.md).
+
+Ordered work: copy only security-owned paths (the active plan is curated,
+not copied from the mixed checkout); validate the isolated branch including
+UI checks; inspect the complete staged diff; commit, push and open the approved
+PR. No source UI, visual guides, unrelated release metadata or UI-plan work
+belongs in this PR. Validation includes real rebuilt MCP/pipe regressions,
+control/CLI/transport/shell tests, formatting, strict Clippy, contract drift,
+UI typecheck/lint/tests/build, docs and advisory checks. No hardware/driver or
+external runtime credentials are required. Cross-account/logon and attended
+packaged/native-dialog qualification remain open. No merge or release is
+authorized. Rollback is a scoped revert; retain the matching app/sidecar rule.
+Isolated validation passed: all-files UI typecheck, lint, 823 tests and normal
+build; control/CLI/transport plus real stdio/security integration tests; 87 shell
+tests; both strict Clippy runs; formatting, contracts, docs and audits. The two
+old pipe stdio fixtures now use their enrolled database in the backend. No UI
+source/e2e changes are included. Existing unchanged-main startup mock stderr,
+Vite chunk size and shared-policy advisory warnings are explicitly recorded in
+the evidence. The complete security-only diff was inspected. Next after the
+approved push/PR creation: hosted checks and owner review; no merge or release.
+
 Dependabot 7 (ENG-02/04/05), owner correction: removed the rejected 55k-line
 GLib vendor import, Cargo patch and supporting checks from PR
 [#115](https://github.com/MrDesjardins/audiorouter/pull/115). Normal crates.io

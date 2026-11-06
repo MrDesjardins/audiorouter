@@ -535,11 +535,16 @@ fn assert_pipe_proxy(client_id: &str) {
     );
     let backend = std::thread::spawn({
         let pipe_name = pipe_name.clone();
+        let database = database.clone();
         move || {
+            // The backend, not the sidecar's startup grant, is authoritative.
+            // Use the enrolled database rather than an unenrolled memory plane.
+            let plane =
+                ControlPlane::with_storage("mcp-pipe-backend", Storage::open(database).unwrap());
             audiorouter_transport::serve_control_connections_as_role(
                 &pipe_name,
                 1,
-                ControlPlane::new("mcp-pipe-backend"),
+                plane,
                 ClientRole::Observer,
             )
             .unwrap();

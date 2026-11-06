@@ -4,6 +4,208 @@ use super::*;
 use crate::test_support::*;
 
 #[test]
+fn export_requires_desktop_authority_and_one_exact_local_approval() {
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "audiorouter-export-security-{}-{suffix}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let mut plane = ControlPlane::with_storage(
+        "export-security",
+        Storage::open(root.join("db.sqlite")).unwrap(),
+    );
+    plane.create_session(session()).unwrap();
+    let desktop = ClientGrant::for_desktop_shell();
+    let editor = ClientGrant::for_role(ClientRole::Editor);
+    let call = |plane: &mut ControlPlane, grant: &ClientGrant, method: &str, params: Value| {
+        plane.dispatch_authorized_for_client(
+            JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            },
+            "export-test",
+            grant,
+        )
+    };
+    let path = root.join("approved.audiorouter");
+    let outside = root.join("outside.audiorouter");
+    for method in ["sessions.approveExport", "sessions.exportFile"] {
+        let params = if method == "sessions.exportFile" {
+            json!({"sessionId":"session","path":path})
+        } else {
+            json!({"path":path})
+        };
+        let denied = call(&mut plane, &editor, method, params);
+        assert_eq!(
+            denied.error.unwrap().data.unwrap()["code"],
+            "permissionDenied"
+        );
+    }
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.exportFile",
+        json!({"sessionId":"session","path":path})
+    )
+    .error
+    .is_some());
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.approveExport",
+        json!({"path":path})
+    )
+    .error
+    .is_none());
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.exportFile",
+        json!({"sessionId":"session","path":outside})
+    )
+    .error
+    .is_some());
+    assert!(!outside.exists());
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.exportFile",
+        json!({"sessionId":"session","path":path})
+    )
+    .error
+    .is_none());
+    assert!(path.is_file());
+    assert!(
+        call(
+            &mut plane,
+            &desktop,
+            "sessions.exportFile",
+            json!({"sessionId":"session","path":path,"replace":true})
+        )
+        .error
+        .is_some(),
+        "approval is consumed"
+    );
+    assert!(
+        call(
+            &mut plane,
+            &desktop,
+            "sessions.approveExport",
+            json!({"path":path})
+        )
+        .error
+        .is_some(),
+        "existing files require replacement consent"
+    );
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.approveExport",
+        json!({"path":path,"replace":true})
+    )
+    .error
+    .is_none());
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.exportFile",
+        json!({"sessionId":"session","path":path,"replace":true})
+    )
+    .error
+    .is_none());
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.approveExport",
+        json!({"path":path,"replace":true})
+    )
+    .error
+    .is_none());
+    std::fs::write(&path, b"changed after consent").unwrap();
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.exportFile",
+        json!({"sessionId":"session","path":path,"replace":true})
+    )
+    .error
+    .is_some());
+    assert_eq!(std::fs::read(&path).unwrap(), b"changed after consent");
+    assert!(call(
+        &mut plane,
+        &desktop,
+        "sessions.approveExport",
+        json!({"path":outside})
+    )
+    .error
+    .is_none());
+    for approval in plane.session_export_approvals.values_mut() {
+        approval.created -= Duration::from_secs(301);
+    }
+    assert!(
+        call(
+            &mut plane,
+            &desktop,
+            "sessions.exportFile",
+            json!({"sessionId":"session","path":outside})
+        )
+        .error
+        .is_some(),
+        "expired approvals fail closed"
+    );
+    for hostile in [
+        r"\\example.invalid\share\private.audiorouter",
+        r"\\?\UNC\example.invalid\share\private.audiorouter",
+        r"\\.\C:\private.audiorouter",
+    ] {
+        assert!(call(
+            &mut plane,
+            &desktop,
+            "sessions.approveExport",
+            json!({"path":hostile})
+        )
+        .error
+        .is_some());
+    }
+    #[cfg(windows)]
+    {
+        let real = root.join("real");
+        let link = root.join("redirect");
+        std::fs::create_dir(&real).unwrap();
+        let junction = std::process::Command::new("cmd.exe")
+            .args(["/c", "mklink", "/J"])
+            .arg(&link)
+            .arg(&real)
+            .output()
+            .unwrap();
+        assert!(
+            junction.status.success(),
+            "cannot create isolated reparse fixture"
+        );
+        assert!(call(
+            &mut plane,
+            &desktop,
+            "sessions.approveExport",
+            json!({"path":link.join("escape.audiorouter")})
+        )
+        .error
+        .is_some());
+        assert!(!real.join("escape.audiorouter").exists());
+        std::fs::remove_dir(&link).unwrap();
+        assert!(
+            real.is_dir(),
+            "removing the fixture junction must preserve its target"
+        );
+    }
+}
+
+#[test]
 fn sessions_list_supports_stable_cursor_pages() {
     let mut plane = ControlPlane::default();
     for id in ["a", "b", "c"] {
@@ -44,6 +246,15 @@ fn session_file_export_imports_on_another_database_without_replacing_sessions() 
     std::fs::create_dir_all(root.join("a")).unwrap();
     std::fs::create_dir_all(root.join("b")).unwrap();
     let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+        // Model the trusted native Save dialog's separate approval, while
+        // preserving export/import behavior assertions below.
+        if method == "sessions.exportFile" {
+            let _ = plane.dispatch(JsonRpcRequest {
+                jsonrpc: "2.0".into(), id: Some(json!("approval")),
+                method: "sessions.approveExport".into(),
+                params: Some(json!({ "path": params["path"], "replace": params.get("replace").and_then(Value::as_bool).unwrap_or(false) })),
+            });
+        }
         plane.dispatch(JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id: Some(json!(1)),
@@ -66,10 +277,7 @@ fn session_file_export_imports_on_another_database_without_replacing_sessions() 
         "sessions.exportFile",
         json!({ "sessionId": "session", "path": file }),
     );
-    assert!(
-        refused.error.unwrap().message.contains("already exists"),
-        "never overwrites unasked"
-    );
+    assert!(refused.error.is_some(), "never overwrites unasked");
     let before = std::fs::metadata(&file).unwrap().len();
     let replaced = call(
         &mut source,

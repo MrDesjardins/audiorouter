@@ -148,6 +148,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-11-05 — Test authorization through the forwarding adapter.**
+  Evidence: [security repair](docs/plans/active/evidence/2026-11-05-security-fixes.md),
+  `real_mcp_pipe_preserves_roles_and_live_revocation`. Scope: adapters forwarding
+  to an existing backend. Consequence: backend grant unit tests passed while an
+  Observer's real MCP pipe request inherited the desktop grant. Preserve an
+  authenticated client identity, resolve its current grant in the backend, and
+  exercise denied roles and live revocation through the actual adapter entry point.
+
 - **2026-11-03 — Account queued frames before publishing audio.**
   Evidence: `receiving_packet_publication_cannot_wrap_the_playout_frame_count`
   in `crates/windows-audio/src/network_audio.rs` and the

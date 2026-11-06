@@ -142,6 +142,8 @@ fn host_allowed(host: Option<&str>, origin: Option<&str>, hosts: &[String]) -> b
 /// person confirmed, DEC-22). Reading OBS (`obs.status`, `obs.refresh`) stays
 /// available.
 pub const DESKTOP_ONLY_METHODS: &[&str] = &[
+    "sessions.approveExport",
+    "sessions.exportFile",
     "recordings.setRoot",
     "devices.setAccess",
     "obs.connect",
@@ -677,6 +679,14 @@ mod tests {
         assert_eq!(status, 200, "{access}");
         // A token holder cannot connect to or change OBS (DEC-22).
         for (path, body) in [
+            (
+                "/api/v1/sessions/approveExport",
+                json!({"path":"C:\\Temp\\private.audiorouter","replace":true}),
+            ),
+            (
+                "/api/v1/sessions/exportFile",
+                json!({"sessionId":"desktop-session","path":"C:\\Temp\\private.audiorouter","replace":true}),
+            ),
             (
                 "/api/v1/obs/connect",
                 json!({"idempotencyKey":"deck-obs-1"}),

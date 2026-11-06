@@ -19,6 +19,9 @@
     "e2e:development": "cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && playwright test --config=playwright.config.ts",
     "e2e:production-canvas": "cargo build --manifest-path ../Cargo.toml -p audiorouter-control --example e2e_backend --locked && vite build --config vite.canvas-production.config.ts --configLoader runner && playwright test --config=playwright.production.config.ts"
   },
+  "overrides": {
+    "minimatch": "11.0.1"
+  },
   "dependencies": {
     "@audiorouter/contracts": "file:../contracts",
     "@tauri-apps/api": "2.12.4",

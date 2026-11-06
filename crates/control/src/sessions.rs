@@ -2,6 +2,106 @@
 
 use super::*;
 
+pub(crate) struct ExportApproval {
+    pub(super) created: Instant,
+    replace: bool,
+    existing: Option<(u64, std::time::SystemTime)>,
+}
+
+/// Validate before any filesystem access: UNC/device paths must not cause an
+/// implicit network connection. Reject traversal and reparse ancestors too.
+fn local_export_path(params: Option<&Value>) -> Result<std::path::PathBuf, ControlError> {
+    let path = session_file_path(params)?;
+    let text = path.to_string_lossy();
+    if text.starts_with("\\\\")
+        || text.starts_with("//")
+        || path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err(ControlError::InvalidRequest(
+            "Choose a local export file, without links or network paths.".into(),
+        ));
+    }
+    #[cfg(windows)]
+    {
+        use windows::Win32::Storage::FileSystem::GetDriveTypeW;
+        let Some(std::path::Component::Prefix(prefix)) = path.components().next() else {
+            return Err(ControlError::InvalidRequest(
+                "Choose a local drive for export.".into(),
+            ));
+        };
+        let std::path::Prefix::Disk(letter) = prefix.kind() else {
+            return Err(ControlError::InvalidRequest(
+                "Choose a local drive for export.".into(),
+            ));
+        };
+        let root = [u16::from(letter), u16::from(b':'), u16::from(b'\\'), 0];
+        // SAFETY: the stack buffer is a NUL-terminated drive root and stays
+        // live throughout this metadata-only call; no pointers are retained.
+        let drive_type = unsafe { GetDriveTypeW(windows::core::PCWSTR(root.as_ptr())) };
+        if !matches!(drive_type, 2 | 3 | 6) {
+            return Err(ControlError::InvalidRequest(
+                "Export requires a local writable drive, not a mapped network share.".into(),
+            ));
+        }
+    }
+    for ancestor in path.ancestors() {
+        match std::fs::symlink_metadata(ancestor) {
+            Ok(metadata) => {
+                #[cfg(windows)]
+                let redirected = {
+                    use std::os::windows::fs::MetadataExt;
+                    metadata.file_attributes() & 0x400 != 0
+                };
+                #[cfg(not(windows))]
+                let redirected = metadata.file_type().is_symlink();
+                if redirected {
+                    return Err(ControlError::InvalidRequest(
+                        "Export files cannot use links or redirected folders.".into(),
+                    ));
+                }
+            }
+            Err(error) if ancestor == path && error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => {
+                return Err(ControlError::InvalidRequest(
+                    "Cannot inspect the export destination.".into(),
+                ))
+            }
+        }
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| ControlError::InvalidRequest("Export folder is required.".into()))?;
+    let canonical = parent
+        .canonicalize()
+        .map_err(|_| ControlError::InvalidRequest("Export folder is unavailable.".into()))?;
+    Ok(canonical.join(
+        path.file_name()
+            .ok_or_else(|| ControlError::InvalidRequest("Export filename is required.".into()))?,
+    ))
+}
+
+fn export_fingerprint(
+    path: &std::path::Path,
+) -> Result<Option<(u64, std::time::SystemTime)>, ControlError> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => Ok(Some((
+            metadata.len(),
+            metadata.modified().map_err(|_| {
+                ControlError::InvalidRequest("Cannot inspect the export file.".into())
+            })?,
+        ))),
+        Ok(_) => Err(ControlError::InvalidRequest(
+            "Only a regular session file can be replaced.".into(),
+        )),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(_) => Err(ControlError::InvalidRequest(
+            "Cannot inspect the export file.".into(),
+        )),
+    }
+}
+
 pub(crate) fn session_runtime_label(native_attached: bool) -> &'static str {
     if native_attached {
         "native"
@@ -933,14 +1033,46 @@ impl ControlPlane {
             .map_err(|error| ControlError::Json(error.to_string()))
     }
 
+    pub(crate) fn dispatch_session_export_approval(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let path = local_export_path(params.as_ref())?;
+        let replace = params
+            .as_ref()
+            .and_then(|params| params.get("replace"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let existing = export_fingerprint(&path)?;
+        if existing.is_some() && !replace {
+            return Err(ControlError::InvalidRequest(
+                "Confirm replacement in the Save dialog.".into(),
+            ));
+        }
+        self.session_export_approvals
+            .retain(|_, approval| approval.created.elapsed() < Duration::from_secs(300));
+        if self.session_export_approvals.len() >= 16 {
+            self.session_export_approvals.clear();
+        }
+        self.session_export_approvals.insert(
+            path,
+            ExportApproval {
+                created: Instant::now(),
+                replace,
+                existing,
+            },
+        );
+        Ok(json!({ "approved": true, "expiresInMs": 300000 }))
+    }
+
     /// Write the saved session, with the imported audio and plugin states it
-    /// references, to one `.audiorouter` file (never overwriting).
+    /// references, to one explicitly approved `.audiorouter` file.
     pub(crate) fn dispatch_session_export_file(
         &mut self,
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
         let id = session_id_from_params(params.clone())?;
-        let path = session_file_path(params.as_ref())?;
+        let path = local_export_path(params.as_ref())?;
         self.ensure_session_loaded(&id)?;
         let revision = self.get_session(&id)?.revision;
         let replace = params
@@ -948,6 +1080,19 @@ impl ControlPlane {
             .and_then(|params| params.get("replace"))
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        let approval = self.session_export_approvals.remove(&path).ok_or_else(|| {
+            ControlError::InvalidRequest(
+                "Choose this export destination in the Save dialog first.".into(),
+            )
+        })?;
+        if approval.created.elapsed() >= Duration::from_secs(300)
+            || (replace && !approval.replace)
+            || export_fingerprint(&path)? != approval.existing
+        {
+            return Err(ControlError::InvalidRequest(
+                "Export approval expired or the destination changed; choose it again.".into(),
+            ));
+        }
         let existing = std::fs::symlink_metadata(&path).ok();
         if let Some(metadata) = &existing {
             if !replace {
@@ -970,9 +1115,21 @@ impl ControlPlane {
         let bytes = self.while_servicing_audio(|| -> Result<u64, ControlError> {
             if replacing {
                 // Write beside the file first so a failed export keeps the old one.
-                let staged = path.with_extension(format!("audiorouter.{}.tmp", std::process::id()));
-                let _ = std::fs::remove_file(&staged);
+                let staged = path.with_extension(format!(
+                    "audiorouter.{}.{}.tmp",
+                    std::process::id(),
+                    audiorouter_protocol::diagnostics::new_correlation_id()
+                ));
                 prepared.write(&staged).map_err(storage_error)?;
+                // Recheck after the potentially slow ZIP preparation. An
+                // unrelated backup created/changed meanwhile is not consented.
+                if !matches!(export_fingerprint(&path), Ok(current) if current == approval.existing)
+                {
+                    let _ = std::fs::remove_file(&staged);
+                    return Err(ControlError::InvalidRequest(
+                        "Export destination changed; choose it again.".into(),
+                    ));
+                }
                 std::fs::rename(&staged, &path).map_err(|error| {
                     let _ = std::fs::remove_file(&staged);
                     ControlError::InvalidRequest(format!(
@@ -985,7 +1142,7 @@ impl ControlPlane {
             Ok(std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0))
         })?;
         Ok(
-            json!({ "sessionId": id, "path": path.to_string_lossy(), "revision": revision, "bytes": bytes }),
+            json!({ "sessionId": id, "path": display_path(&path), "revision": revision, "bytes": bytes }),
         )
     }
 

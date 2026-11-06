@@ -28,6 +28,25 @@ OS-visible virtual capture devices are available according to Windows/app microp
 
 ## Authorization UX
 
+Security repair (2026-11-05): pipe-connected MCP requests carry a current-user
+DPAPI-protected credential for the adapter's configured enrollment identity.
+The backend resolves the current grant on every request, so role changes and
+revocation affect running sidecars. Only requests originating in the hosting
+desktop process may use its desktop grant; raw external pipe callers are
+read-only. Pipe peers must share the Windows user and logon; clients check
+the server before sending payloads, and a reserved first instance prevents
+pipe-name squatting between requests. Same-user malicious code remains outside
+this boundary, including code able to recover the user's DPAPI credentials.
+
+`fileExport` is a separate desktop-only scope, never included in built-in MCP
+roles. The native Save dialog calls `sessions.approveExport` after destination
+and overwrite consent. That approves exactly one local `.audiorouter` path for
+five minutes and is consumed by `sessions.exportFile`. Network/device paths,
+mapped network drives, traversal and reparse ancestors are refused. A changed
+destination requires new consent. Neither approval nor export is forwarded by
+HTTP; scripts may read the session JSON through `sessions.export`. Approval
+is temporary and is lost on backend restart.
+
 The optional [localhost HTTP adapter](16-local-http-api.md) uses a bearer token
 saved encrypted with current-user Windows DPAPI and the existing desktop grant.
 It is retained until explicit regeneration; the listener stays stopped at launch.

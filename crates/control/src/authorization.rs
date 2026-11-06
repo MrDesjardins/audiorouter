@@ -123,6 +123,7 @@ impl ClientGrant {
             PermissionScope::StartupWrite,
             PermissionScope::PluginScan,
             PermissionScope::IntegrationWrite,
+            PermissionScope::FileExport,
         ]);
         // Opening audio devices on Play needs the user's one-time consent
         // in the app (devices.setAccess), persisted in the database.
@@ -170,6 +171,7 @@ pub(crate) fn validate_method_params(
         "meters.reset" => &["sessionId", "nodeId"],
         "sessions.get" | "sessions.export" => &["sessionId"],
         "sessions.exportFile" => &["sessionId", "path", "replace"],
+        "sessions.approveExport" => &["path", "replace"],
         "sessions.importFile" => &["path"],
         "sessions.importPlan" => &["session"],
         "sessions.importCommit" => &["planId", "idempotencyKey"],
@@ -503,13 +505,12 @@ impl ControlPlane {
 
     pub fn grant_for_client(&self, client_id: &str) -> Result<Option<ClientGrant>, ControlError> {
         let enrollment = self.enrollments.get(client_id).copied();
-        let enrollment = match (enrollment, &self.storage) {
-            (Some(value), _) => Some(value),
-            (None, Some(storage)) => storage
+        let enrollment = match &self.storage {
+            Some(storage) => storage
                 .load_client_enrollment(client_id)
                 .map_err(storage_error)?
                 .and_then(|(role, revoked)| role_from_name(&role).map(|role| (role, revoked))),
-            (None, None) => None,
+            None => enrollment,
         };
         Ok(enrollment
             .filter(|(_, revoked)| !revoked)

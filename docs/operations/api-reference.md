@@ -16,7 +16,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 137 methods, including backend-owned quit/finalize,
+The current catalog contains 139 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -160,7 +160,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `events.subscribe` | `read` | read-only; replays by cursor with optional session and bounded category filters |
 | `sessions.get` | `read` | read-only |
 | `sessions.export` | `read` | read-only |
-| `sessions.exportFile` | `graphWrite` | external operation; writes the saved session plus referenced imported audio and plugin states to an absolute `.audiorouter` path; an existing file is refused unless `replace` is true (the desktop Save dialog confirms first), and is then replaced only after the new file is complete |
+| `sessions.approveExport` | `fileExport` | plan only; desktop Save-dialog approval of one exact local `.audiorouter` destination and optional replacement for five minutes; unavailable to HTTP and MCP |
+| `sessions.exportFile` | `fileExport` | external operation; desktop only; consumes the exact Save-dialog approval and writes saved nodes, imported audio and plugin states; a changed destination needs new consent; refuses network and reparse paths |
 | `sessions.importFile` | `graphWrite` | mutating; imports a `.audiorouter` file as a new stopped session (a used session ID gets `-imported-N` and an "(imported)" name) and restores missing audio and plugin states |
 | `sessions.importPlan` | `graphWrite` | plan-only |
 | `sessions.importCommit` | `graphWrite` | mutating; requires an idempotency key |
