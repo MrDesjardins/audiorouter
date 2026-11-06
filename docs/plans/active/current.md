@@ -1,5 +1,70 @@
 # Active plan — current priorities (2026-11-04)
 
+## Release 0.0.27 — 2026-11-05 owner request
+
+Objective: publish the owner-tested main snapshot `0a5d7677` as the next
+unsigned Windows 11 x64 app-only experimental prerelease. The owner confirmed
+the local build works and explicitly requested a new release. Scope: DIST-01–08,
+ENG-01/02/04/05; merged UI-27, AUTO-18, STATE-02/04, REC-02/10 and plugin/network
+fixes. No PR, driver delivery, signing purchase or changes to the owner's live
+route. Preserve the existing local-build evidence above/below.
+
+Prerequisites: Windows, Rust 1.96.0, Node 22.22.3, native SDK, verified tunnel
+runtime and GitHub authentication. Main CI 41965008269 and nightly 42014592489
+passed on the tested source. Owner playback approval supplements those checks;
+it does not close every hardware, accessibility or M08 gate.
+
+Tasks: bump first-party versions/locks; write release notes; run format, docs,
+contracts, UI and packaging checks; inspect the complete diff; commit/tag on
+`release/0.0.27`; prepare clean tagged app-only assets; verify checksums and
+provenance; exercise the packaged shell in an isolated standard-user profile;
+upload a draft, download/reverify, then publish under this explicit request.
+Record exact commands/results in dated release evidence. Archive this execution
+after publication and retain a pointer here. Rollback: keep 0.0.26 and separate
+configuration/recording backups; published assets remain immutable. No intended
+storage migration. Next: prepare version metadata and notes.
+
+Preparation: isolated checkout `C:/code/audiorouter-release-027` excludes concurrent
+UI-review changes. Locked npm installs, 823 UI tests, UI format/lint, contracts
+typecheck/drift (138 methods, 37 kinds, 20 processors, 22 event categories), both
+Rust format commands/checks, docs (241 files/1,411 links), four packaging-script
+regression suites and diff whitespace passed on Windows. Main's latest CI was
+documentation-only with product jobs skipped; nightly coverage/soak/startup
+passed, so run fresh workspace tests and packaged-shell checks for this release.
+Read all main check annotations: Ubuntu runner migration notices only. Existing
+VM `/repair` UI wait is disclosed; reinstall success is not a repair pass.
+
+## Local test build — 2026-11-04 owner request
+
+Objective: fast-forward main and provide a locally testable Windows executable
+with current embedded UI and matching plugin/MCP companions (M08 build artifact;
+ENG-02/04). Clean main fast-forwarded to
+`0a5d7677c20167b740d70b7fc08f597b5cfc8a1e`. No implementation, installer,
+driver changes or publication are requested. Windows and the local toolchain
+are available; no hardware or credentials are needed for build/startup checks.
+
+Tasks: locked UI install and production build; release shell with
+`custom-protocol`; VST2/VST3 workers and staged MCP CLI; exact-binary isolated
+packaged smoke; verify artifact timestamps and hashes. Preserve any running
+owner instance. Validation covers build/startup/save/restart only, not live
+audio, hardware, signing or release qualification. Evidence goes under
+`target/local-main-build-2026-11-04/`. Rollback: use the prior installed build;
+no user data migration or machine configuration is part of this task.
+Result (Windows 11 Home, Node 22.22.3): locked UI install/typecheck/build,
+release shell, VST2/VST3 workers and staged MCP CLI all passed. Vite reported
+a >500 kB chunk warning; no bundle change was made for this build-only task.
+The shell is newer than `ui/dist/index.html`. Staged/source CLI SHA-256 matches
+`54B6E730BD539777A4E779340C23B16A910879BCAC6A6A069E6EF205BB7DF152`.
+Exact-binary packaged smoke passed as Medium/non-admin: cold UI 1,666 ms,
+warm 799 ms, save 65 ms, two graceful exits, no uncaught UI errors; device
+access remained denied. Evidence: `target/local-main-build-2026-11-04/result.json`.
+Shell SHA-256: `464151C3116E0B8CEB59E0CB33EA92F74A195F69D818926CF7ABAAFAAF93EC73`.
+Docs validation passed (240 files/1,410 links); diff whitespace passed.
+No live audio, hardware, full test suite or installer qualification was run.
+Next: owner tests `C:\code\audiorouter\src-tauri\target\release\audiorouter-shell.exe`;
+keep its companion executables beside it. This plan record is the only source
+tree edit; no commit or PR is requested.
+
 ## Where things stand
 
 Dependabot 7 (ENG-02/04/05), owner correction: removed the rejected 55k-line

@@ -1,11 +1,23 @@
 # AudioRouter release notes
 
-## Unreleased
+## 0.0.27 — 2026-11-05 (unsigned experimental preview)
 
 - **Setup check.** Status lists device setups Play would refuse (a non-stereo
   output, a Surround input on a stereo device, a missing device), feedback
   loops inside one session or between two, and cables not at 48 kHz, each with
   a fix. Also available as `system.checkSetup` and the MCP tool `check_setup`.
+
+- Unsaved session edits survive session-switch requests and external selection
+  events. Deleting a session clears its active API/MCP target.
+- Recording rename supports MP3 and preserves the actual format. Network queue
+  accounting, paired playback and plugin latency/failure handling are improved.
+- Save controls, contrast, icons and MCP setup/permission guidance are clearer;
+  default MCP tools cover the public API.
+
+Windows 11 x64, unsigned app-only experimental prerelease. No driver or intended
+format migration. Back up configuration/recordings, close the app before upgrade
+and retain 0.0.26 for rollback. Full hardware, accessibility and M08 qualification
+remain open. See the [full notes](../plans/active/evidence/2026-11-05-release-0.0.27-notes.md).
 
 ## 0.0.26 — 2026-10-31 (unsigned experimental preview)
 
