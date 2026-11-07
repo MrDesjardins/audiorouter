@@ -54,6 +54,22 @@ remain as recorded above. No packaged exe or real audio was run for these
 UI-only repairs. Next: new-head #120 CI, then merge #117 -> #118 -> #120 only
 after each head's checks and annotations are reviewed.
 
+#120 older-head Edge run 42331127485: card-width.pw.ts failed on both attempts
+(255.359375 px with icon, allowed 253.6875 px). Reproduced on e3086a0b locally.
+Explicit grid tracks did not change the width: the root card sizes to its
+contents. The compact kind label saves almost enough space for the icon,
+but its 4 px gap exceeds the old width. Reduce that gap to 2 px, retaining
+the icon size and regression tolerance. Validate card width, delete alignment
+and canvas layout in three themes. Requirement UI-17; rollback the gap rule.
+Windows validation: the original failing card-width test now passes unchanged;
+14/14 Edge tests pass (card width, canvas layout/history, and three-theme delete
+alignment). Reviewed refreshed three-theme screenshots. Lint and formatting
+pass; no new TypeScript or Rust behavior. Quality gate on the older run merely
+aggregates the Windows and browser failures. Next: push this gap repair and
+require the new-head hosted run. #117's transient crates.io download failure
+can be retried only after its workflow finishes (GitHub rejected an active-run
+job retry with HTTP 403); keep its watch active for completion.
+
 ## Where things stand
 
 Owner-approved security-only PR preparation (2026-11-05): isolate all three
