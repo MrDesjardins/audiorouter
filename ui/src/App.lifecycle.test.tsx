@@ -204,7 +204,8 @@ describe("session refresh and playback regressions", () => {
       resolve(initial);
     });
     fireEvent.click(await screen.findByRole("tab", { name: "Status" }));
-    fireEvent.click(await screen.findByRole("tab", { name: "Apps" }));
+    // Status loads lazily; a cold worker must finish that transition first.
+    fireEvent.click(await screen.findByRole("tab", { name: "Apps" }, { timeout: 5000 }));
     expect(await screen.findByRole("heading", { name: "Discord" })).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "OBS Studio" })).toBeTruthy();
   });

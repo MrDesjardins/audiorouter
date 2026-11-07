@@ -4129,16 +4129,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   recordingContent={recordingWorkbenchContent}
                   settingsContent={settingsWorkbenchContent}
                   savedVersionsContent={
-                    <ChangeHistory
-                      backend={backend}
-                      session={session}
-                      past={draftHistory.past}
-                      current={draft}
-                      routeChanged={routeChanged}
-                      running={sessionRunning}
-                      onUndoSteps={undoDraftSteps}
-                      onReverted={refreshAfterPanelAction}
-                    />
+                    <Suspense fallback={<p role="status">Loading change history...</p>}>
+                      <ChangeHistory
+                        backend={backend}
+                        session={session}
+                        past={draftHistory.past}
+                        current={draft}
+                        routeChanged={routeChanged}
+                        running={sessionRunning}
+                        onUndoSteps={undoDraftSteps}
+                        onReverted={refreshAfterPanelAction}
+                      />
+                    </Suspense>
                   }
                 />
               </ErrorBoundary>
