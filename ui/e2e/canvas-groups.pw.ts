@@ -1,4 +1,4 @@
-import { setColorTheme } from "./workbench";
+import { setColorTheme, openSettings } from "./workbench";
 import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 
@@ -36,11 +36,11 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await setColorTheme(page, theme);
     const nodes = await page.locator(".react-flow__node-flowNode").count();
     const edges = await page.locator(".react-flow__edge").count();
-    await page.getByRole("button", { name: "Group A named visual background; no audio routing" }).click();
-    await expect(page.getByLabel("Group opacity")).toHaveValue("5");
+    await page.getByRole("button", { name: "Group", exact: true }).click();
+    await expect(page.getByRole("slider", { name: "Group opacity" })).toHaveValue("5");
     await page.getByLabel("Group name").fill("Game");
     await page.getByLabel("Group background color").fill("#ee8822");
-    await page.getByLabel("Group opacity").fill("35");
+    await page.getByRole("slider", { name: "Group opacity" }).fill("35");
     const group = page.locator(".visual-group-node");
     await expect(group).toHaveCount(1);
     await expect(group.locator(".canvas-group-caption")).toHaveText("Game");
@@ -65,7 +65,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.screenshot({ path: testInfo.outputPath(`2026-09-29-groups-${theme}.png`) });
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
     await expect(page.getByRole("button", { name: "Rename Voice gain", exact: true })).toBeVisible();
-    await page.getByRole("tab", { name: "API", exact: true }).click();
+    await openSettings(page, "API");
     await expect(page.getByLabel("API port")).toHaveValue("17891");
     await expect(page.getByRole("button", { name: "Start API" })).toBeDisabled();
     await page.screenshot({ path: testInfo.outputPath(`2026-09-29-api-${theme}.png`) });

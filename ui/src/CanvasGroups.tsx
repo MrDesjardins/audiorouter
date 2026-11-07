@@ -1,8 +1,9 @@
 import { returnToPropertiesTab } from "./workbenchPanel";
 import { ToolGuideLink } from "./ToolGuideLink";
-import { useEffect, useState } from "react";
-import { NodeResizer, type NodeProps } from "@xyflow/react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { NodeResizer, useStore, type NodeProps } from "@xyflow/react";
 import { NumberField } from "./NumberField";
+import { SliderField } from "./Slider";
 import { TextField } from "./TextField";
 import { HelpDisclosure } from "./HelpDisclosure";
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
@@ -168,15 +169,20 @@ export function useCanvasGroups(sessionId: string) {
 }
 export function CanvasGroupRenderer({ data, selected }: NodeProps) {
   const group = data.group as CanvasGroup;
+  // Lets the side grab zones keep one screen size at any zoom; re-renders only when the zoom changes.
+  const zoom = useStore((state) => state.transform[2]);
   return (
     <div
       className={`canvas-group${group.locked ? " is-locked" : ""}`}
       aria-label={`Group ${group.name}`}
-      style={{
-        backgroundColor: `${group.color}${Math.round(group.opacity * 2.55)
-          .toString(16)
-          .padStart(2, "0")}`,
-      }}
+      style={
+        {
+          "--group-zoom": zoom,
+          backgroundColor: `${group.color}${Math.round(group.opacity * 2.55)
+            .toString(16)
+            .padStart(2, "0")}`,
+        } as CSSProperties
+      }
     >
       <NodeResizer
         isVisible={selected && !group.locked}
@@ -239,7 +245,7 @@ export function CanvasGroupInspector({
         <p className="muted">
           {group.locked
             ? "Locked: the group cannot be moved, resized or deleted from the canvas. Unlock it to change its place or size."
-            : "Drag the caption or background to move the group; resize its border."}{" "}
+            : "Drag the caption or background to move the group. Drag any side or corner to resize it. With several groups selected (Ctrl+click), they all resize by the same amount."}{" "}
           This group only organizes the canvas; audio connections stay unchanged.
         </p>
       </HelpDisclosure>
@@ -297,19 +303,17 @@ export function CanvasGroupInspector({
             onValue={(fontSize) => onChange({ fontSize })}
           />
         </label>
-        <label>
-          Opacity (%)
-          <input
-            aria-label="Group opacity"
-            type="range"
-            min={1}
-            max={100}
-            step={1}
-            value={group.opacity}
-            onChange={(event) => onChange({ opacity: Number(event.target.value) })}
-          />
-          <output>{group.opacity}%</output>
-        </label>
+        <SliderField
+          label="Opacity"
+          name="Group opacity"
+          value={group.opacity}
+          min={1}
+          max={100}
+          step={1}
+          unit="%"
+          defaultValue={5}
+          onChange={(opacity) => onChange({ opacity })}
+        />
       </div>
       <button type="button" className="danger" onClick={onRemove}>
         Delete group

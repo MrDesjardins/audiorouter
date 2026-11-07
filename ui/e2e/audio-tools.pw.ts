@@ -1,5 +1,6 @@
 import { expect, test } from "./browser-test";
-import { openConnectionForm, openDeviceTroubleshooting, setColorTheme } from "./workbench";
+import { fitCanvas } from "./workbench";
+import { openConnectionForm, openDeviceTroubleshooting, setColorTheme, openSettings, openPage } from "./workbench";
 
 test("top-bar audio status stays visible without privacy mute or Route status in all themes", async ({
   page,
@@ -13,7 +14,7 @@ test("top-bar audio status stays visible without privacy mute or Route status in
   await expect(page.getByRole("region", { name: "Compact route status" })).toHaveCount(0);
   const topBarHeight = (await page.locator(".topbar").boundingBox())?.height;
   await page.getByRole("tab", { name: "Tools" }).click();
-  await page.getByRole("tab", { name: "Logs" }).click();
+  await openSettings(page, "Logs and support");
   await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
   await expect(page.locator(".compact-status-panel")).toHaveCount(0);
   expect(Math.abs((await page.locator(".topbar").boundingBox())!.height - topBarHeight!)).toBeLessThan(1);
@@ -255,6 +256,7 @@ test("EQ can fan out through Mixer and that Mixer can take over the same physica
       .click();
   }
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
+  await fitCanvas(page);
   const node = (name: string) => page.locator(".react-flow__node").filter({ hasText: name }).last();
   const canvas = page.locator(".session-flow-canvas");
   const canvasBox = await canvas.boundingBox();
@@ -320,6 +322,7 @@ test("a processing output can feed more than one destination", async ({ page }) 
       .click();
   }
   await page.addStyleTag({ content: ".canvas-library { display: none !important; }" });
+  await fitCanvas(page);
   const node = (name: string) => page.locator(".react-flow__node").filter({ hasText: name }).last();
   const canvas = page.locator(".session-flow-canvas");
   const canvasBox = await canvas.boundingBox();
@@ -351,10 +354,12 @@ test("a processing output can feed more than one destination", async ({ page }) 
   const gain = node("Gain 1");
   const firstOutput = node("Physical output 1");
   const secondOutput = node("Physical output 2");
+  // Wide spacing: a card can land a few pixels short of the pointer under load, and touching cards put
+  // the output and input dots on the same spot, leaving nothing to drag between them.
   await moveNode(input, canvasBox.x + 80, 0.5);
-  await moveNode(gain, canvasBox.x + 340, 0.5);
-  await moveNode(firstOutput, canvasBox.x + 650, 0.25);
-  await moveNode(secondOutput, canvasBox.x + 650, 0.75);
+  await moveNode(gain, canvasBox.x + 420, 0.5);
+  await moveNode(firstOutput, canvasBox.x + 740, 0.25);
+  await moveNode(secondOutput, canvasBox.x + 740, 0.75);
   await connect(input, gain);
   await connect(gain, firstOutput);
   await connect(gain, secondOutput);
@@ -427,6 +432,8 @@ test("every built-in modifier exposes working enable and bypass draft controls",
       .filter({ has: page.getByText(label, { exact: true }) })
       .click();
   }
+  await fitCanvas(page);
+  await page.getByRole("button", { name: "Close the map" }).click();
   const inspector = page.locator(".main-content > .inspector");
   for (const [, kind] of modifiers) {
     const node = page.getByTestId(`rf__node-${kind}-1`);
@@ -458,8 +465,7 @@ test("adding tools stays on Tools, and Delete can be undone before saving", asyn
   await gain.click();
   await gain.press("Delete");
   await expect(gain).toHaveCount(0);
-  await page.getByRole("tab", { name: "Session" }).click();
-  await page.locator(".right-workbench").getByRole("button", { name: "Undo", exact: true }).click();
+  await page.locator(".topbar").getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
 });
 
@@ -491,7 +497,7 @@ test("Audio File imports WAV media through the upload contract and exposes loop 
     .first()
     .click();
   await openConnectionForm(page);
-  const setup = page.locator(".right-workbench");
+  const setup = page.locator(".canvas-keyboard-panel");
   await setup.getByLabel("Source output port").selectOption({ label: "Audio file 1 · out · 2ch" });
   await setup.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await setup.getByRole("button", { name: "Add connection", exact: true }).click();
@@ -592,7 +598,7 @@ test("the workspace plans and commits a connected multi-input processing route",
     await addTool(name);
   }
   await page.getByRole("tab", { name: "Tools" }).click();
-  await page.getByRole("button", { name: "Choose an application source" }).click();
+  await page.locator(".tool-card").filter({ hasText: "Application source" }).click();
   await page.getByRole("button", { name: "Add running app" }).click();
   await expect(page.getByTestId("rf__node-application-capture-1")).toBeVisible();
   await openDeviceTroubleshooting(page);
@@ -646,7 +652,7 @@ test("a simple Test Signal to Physical Output route can be planned and committed
   await addTool("Test Signal");
   await addTool("Output device");
   await openConnectionForm(page);
-  const setup = page.locator(".right-workbench");
+  const setup = page.locator(".canvas-keyboard-panel");
   await setup.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await setup.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await setup.getByRole("button", { name: "Add connection", exact: true }).click();
@@ -666,15 +672,15 @@ test("an unsaved Test Signal route can be auditioned without changing the saved 
       .click();
   }
   await openConnectionForm(page);
-  const sidebar = page.locator(".right-workbench");
+  const sidebar = page.locator(".canvas-keyboard-panel");
   await sidebar.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await sidebar.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await sidebar.getByRole("button", { name: "Add connection", exact: true }).click();
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
-  await expect(page.locator(".global-action-message")).toContainText(/Select the speaker or headphone device/);
+  await expect(page.locator(".global-action-message")).toContainText(/Choose the speaker or headphones/);
   await openDeviceTroubleshooting(page);
-  await sidebar.getByLabel("Native capture endpoint").selectOption("capture-preview");
-  await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
+  await page.locator(".right-workbench").getByLabel("Native capture endpoint").selectOption("capture-preview");
+  await page.locator(".right-workbench").getByLabel("Native render endpoint").selectOption("render-preview");
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
   await page.getByRole("tab", { name: "Session" }).click();
@@ -697,7 +703,7 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
       .click();
   }
   await openConnectionForm(page);
-  const sidebar = page.locator(".right-workbench");
+  const sidebar = page.locator(".canvas-keyboard-panel");
   await sidebar.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await sidebar.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await sidebar.getByRole("button", { name: "Add connection", exact: true }).click();
@@ -708,16 +714,17 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
     .locator(".react-flow__node")
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-id")));
   expect(ids).toHaveLength(5);
+  await fitCanvas(page);
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
-  await expect(page.locator(".global-action-message")).toContainText(/Select the speaker or headphone device/);
+  await expect(page.locator(".global-action-message")).toContainText(/Choose the speaker or headphones/);
   await expect(page.getByRole("tab", { name: "Session" })).toHaveAttribute("aria-selected", "true");
   await openDeviceTroubleshooting(page);
   await page.screenshot({
     path: `${process.env.TEMP}/audiorouter-designer-review/playback-setup-guidance.png`,
     fullPage: false,
   });
-  await sidebar.getByLabel("Native capture endpoint").selectOption("capture-preview");
-  await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
+  await page.locator(".right-workbench").getByLabel("Native capture endpoint").selectOption("capture-preview");
+  await page.locator(".right-workbench").getByLabel("Native render endpoint").selectOption("render-preview");
   await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
   await expect(page.getByRole("button", { name: "Stop Test Signal", exact: true })).toBeEnabled();
@@ -768,13 +775,13 @@ test("top Play runs the canvas route without starting the Test Signal tone", asy
       .click();
   }
   await openConnectionForm(page);
-  const sidebar = page.locator(".right-workbench");
+  const sidebar = page.locator(".canvas-keyboard-panel");
   await sidebar.getByLabel("Source output port").selectOption({ label: "Test Signal 1 · out · 2ch" });
   await sidebar.getByLabel("Destination input port").selectOption({ label: "Physical output 1 · in · 2ch" });
   await sidebar.getByRole("button", { name: "Add connection", exact: true }).click();
   await openDeviceTroubleshooting(page);
-  await sidebar.getByLabel("Native capture endpoint").selectOption("capture-preview");
-  await sidebar.getByLabel("Native render endpoint").selectOption("render-preview");
+  await page.locator(".right-workbench").getByLabel("Native capture endpoint").selectOption("capture-preview");
+  await page.locator(".right-workbench").getByLabel("Native render endpoint").selectOption("render-preview");
   await page.locator(".topbar").getByRole("button", { name: "Play", exact: true }).click();
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
   await expect(page.locator(".react-flow__edges .flow-edge-active")).toHaveCount(0);
@@ -807,7 +814,7 @@ test("device tools accept installed virtual endpoints while managed-driver tools
   await page.getByRole("tab", { name: "Tools" }).click();
   await expect(tools.getByRole("button", { name: /^Cable input/ })).toBeDisabled();
   await expect(tools.getByRole("button", { name: /^Cable output/ })).toBeDisabled();
-  await expect(tools.getByRole("button", { name: /^Cable input/ })).toHaveAttribute("title", /Input device/);
+  await expect(tools.getByRole("button", { name: /^Cable input/ })).toHaveAttribute("aria-description", /Input device/);
   const setup = async (source: string, destination: string) => {
     await openConnectionForm(page);
     const editor = page.locator(".workbench-connection-editor");
@@ -934,7 +941,7 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   await expect(page.locator(".topbar h1")).toBeVisible();
   await expect(page.getByLabel("Sessions")).toBeHidden();
   await expect(page.getByRole("tab", { name: "Tools" })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("heading", { name: "Add tools" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Common tools" })).toBeVisible();
   await page.screenshot({
     path: `${process.env.TEMP}/audiorouter-designer-review/workspace-tools.png`,
     fullPage: false,
@@ -968,23 +975,14 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   for (const [tab, heading] of [
     ["Status", "Status"],
     ["Virtual Cables", "Virtual Cables"],
-    ["UI Options", "UI Options"],
+    ["Appearance", "Appearance"],
     ["Recording", "Recording"],
-    ["Advanced", "Advanced controls"],
   ]) {
-    await page.getByRole("tab", { name: tab }).click();
+    await openPage(page, tab);
     await expect(page.getByRole("heading", { name: heading }).first()).toBeVisible();
-    if (tab === "Advanced") {
-      await page.locator(".right-workbench").getByText("Keyboard shortcuts", { exact: true }).click();
-      await expect(page.locator(".right-workbench").getByLabel("Start or stop session shortcut")).toBeVisible();
-      await page.locator(".right-workbench").getByText("Built-in processors and presets", { exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Built-in processors" })).toBeVisible();
-      await page.locator(".right-workbench").getByText("JSON graph transfer (for scripts)", { exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Session transfer" })).toBeVisible();
-    }
     await page.screenshot({ path: `${shotBase}/workspace-${tab.toLowerCase()}.png`, fullPage: false });
   }
-  await page.getByRole("tab", { name: "MCP" }).click();
+  await openSettings(page, "AI assistants (MCP)");
   await expect(page.getByRole("heading", { name: "MCP connections" })).toBeVisible();
   expect(await page.locator(".right-workbench").evaluate((element) => element.scrollTop)).toBe(0);
   await expect(page.getByText(/Use the local stdio command/)).toBeVisible();
@@ -1043,8 +1041,8 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
     const state = window as typeof window & { __mcpCliAvailable: boolean };
     state.__mcpCliAvailable = false;
   });
-  await page.getByRole("tab", { name: "Logs" }).click();
-  await page.getByRole("tab", { name: "MCP" }).click();
+  await openSettings(page, "Logs and support");
+  await openSettings(page, "AI assistants (MCP)");
   await page.getByRole("button", { name: "On this PC" }).click();
   await expect(page.getByLabel("Assistant client ID")).toBeVisible();
   await expect(
@@ -1054,7 +1052,7 @@ test("desktop workspace keeps task-focused tabs, MCP setup, and diagnostics reac
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Copy Codex config" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Export Cowork plugin" })).toHaveCount(0);
-  await page.getByRole("tab", { name: "Logs" }).click();
+  await openSettings(page, "Logs and support");
   await expect(page.getByRole("heading", { name: "Client diagnostics" })).toBeVisible();
   await setColorTheme(page, "dark");
   await page.screenshot({ path: `${shotBase}/workspace-dark.png`, fullPage: false });
@@ -1094,11 +1092,11 @@ test("the MCP activity stream displays redacted incoming bridge events", async (
     });
   });
   await page.goto("/route-harness.html");
-  await page.getByRole("tab", { name: "MCP" }).click();
+  await openSettings(page, "AI assistants (MCP)");
   await expect(page.getByLabel("MCP tool activity")).toContainText("routes.inspect");
   await expect(page.getByLabel("MCP tool activity")).toContainText("sessionId, destinationNode");
   await expect(page.getByLabel("MCP tool activity")).not.toContainText("argument values");
-  await page.getByRole("tab", { name: "Logs" }).click();
+  await openSettings(page, "Logs and support");
   await expect(page.locator(".right-workbench")).toContainText("Graph checkpoint:");
   await expect(page.getByLabel("Backend RPC activity")).toContainText("graph.commit");
   await expect(page.getByLabel("Backend RPC activity")).toContainText("permissionDenied");

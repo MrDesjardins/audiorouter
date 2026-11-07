@@ -1,4 +1,4 @@
-import { setColorTheme } from "./workbench";
+import { setColorTheme, openSettings } from "./workbench";
 import { expect, test } from "./browser-test";
 
 for (const initial of ["new", "editor", "revoked"] as const) {
@@ -36,7 +36,7 @@ for (const initial of ["new", "editor", "revoked"] as const) {
       });
     }, initial);
     await page.goto("/route-harness.html");
-    await page.getByRole("tab", { name: "MCP" }).click();
+    await openSettings(page, "AI assistants (MCP)");
     await page.getByRole("button", { name: "Local Cowork" }).click();
     await expect(
       page.getByText(

@@ -116,7 +116,7 @@ fn assert_stdio_client(client_id: &str) {
     );
     assert_eq!(
         modern_tools["result"]["tools"].as_array().unwrap().len(),
-        91
+        98
     );
     assert_eq!(modern_tools["result"]["resultType"], "complete");
     assert_eq!(modern_tools["result"]["cacheScope"], "public");
@@ -300,7 +300,7 @@ fn assert_stdio_client(client_id: &str) {
         &mut output,
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": { "_meta": { "example.com/trace": "legacy-list" } } }),
     );
-    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 91);
+    assert_eq!(tools["result"]["tools"].as_array().unwrap().len(), 98);
 
     // A malformed line gets a JSON-RPC parse error and the session continues.
     writeln!(input, "{{ not json").unwrap();
@@ -535,16 +535,14 @@ fn assert_pipe_proxy(client_id: &str) {
     );
     let backend = std::thread::spawn({
         let pipe_name = pipe_name.clone();
+        // The backend resolves the client's own grant, so it serves the database
+        // the client is enrolled in, as a real backend does.
         let database = database.clone();
         move || {
-            // The backend, not the sidecar's startup grant, is authoritative.
-            // Use the enrolled database rather than an unenrolled memory plane.
-            let plane =
-                ControlPlane::with_storage("mcp-pipe-backend", Storage::open(database).unwrap());
             audiorouter_transport::serve_control_connections_as_role(
                 &pipe_name,
                 1,
-                plane,
+                ControlPlane::with_storage("mcp-pipe-backend", Storage::open(&database).unwrap()),
                 ClientRole::Observer,
             )
             .unwrap();
@@ -597,7 +595,7 @@ fn assert_pipe_proxy(client_id: &str) {
             "params": { "name": "get_startup", "arguments": {} }
         }),
     );
-    assert_eq!(startup["result"]["isError"], false);
+    assert_eq!(startup["result"]["isError"], false, "{startup}");
     assert_eq!(
         startup["result"]["structuredContent"]["result"]["enabled"],
         false

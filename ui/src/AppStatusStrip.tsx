@@ -1,5 +1,6 @@
 import type { AppCheck } from "./appUsage";
 import { KNOWN_APPS } from "./appUsage";
+import { Icon, type IconName } from "./icons";
 
 const WORD: Record<AppCheck["state"], string> = {
   ready: "ready",
@@ -7,7 +8,12 @@ const WORD: Record<AppCheck["state"], string> = {
   notRunning: "not running",
   unknown: "waiting",
 };
-const ICON: Record<AppCheck["state"], string> = { ready: "✓", check: "!", notRunning: "–", unknown: "…" };
+const ICON: Record<AppCheck["state"], IconName> = {
+  ready: "check",
+  check: "triangle-alert",
+  notRunning: "minus",
+  unknown: "ellipsis",
+};
 
 /**
  * Glanceable app status beside "Audio running". Each chip has a fixed width
@@ -31,7 +37,7 @@ export function AppStatusStrip({ checks, onOpen }: { checks: AppCheck[]; onOpen:
           >
             <span className="app-status-name">{label}</span>
             <span className="app-status-icon" aria-hidden="true">
-              {ICON[check.state]}
+              <Icon name={ICON[check.state]} size={14} />
             </span>
           </button>
         );

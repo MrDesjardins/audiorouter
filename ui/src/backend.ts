@@ -415,6 +415,20 @@ export interface UiBackend {
     nodeId?: string,
   ): Promise<RecorderLifecycleResult>;
   createSession(session: Session, idempotencyKey?: string): Promise<SessionCreateResult>;
+  listSessionGoals?(): Promise<MethodResult["sessions.goals"]>;
+  createSessionFromGoal?(
+    params: MethodParams["sessions.createFromGoal"],
+  ): Promise<MethodResult["sessions.createFromGoal"]>;
+  listSavedVersions?(sessionId: string): Promise<MethodResult["graph.versions"]>;
+  restoreVersionPlan?(
+    sessionId: string,
+    baseRevision: number,
+    revision: number,
+  ): Promise<MethodResult["graph.restorePlan"]>;
+  compareNodes?(params: MethodParams["nodes.compare"]): Promise<MethodResult["nodes.compare"]>;
+  listToolPresets?(kind: string): Promise<MethodResult["toolPresets.list"]>;
+  saveToolPreset?(params: MethodParams["toolPresets.save"]): Promise<MethodResult["toolPresets.save"]>;
+  deleteToolPreset?(params: MethodParams["toolPresets.delete"]): Promise<MethodResult["toolPresets.delete"]>;
   duplicateSession(
     sourceSessionId: string,
     sessionId: string,
@@ -1198,6 +1212,30 @@ export function createLiveBackend(
         ...(nodeId === undefined ? {} : { nodeId }),
         ...(idempotencyKey === undefined ? {} : { idempotencyKey }),
       });
+    },
+    async listSessionGoals() {
+      return client.request("sessions.goals", undefined);
+    },
+    async createSessionFromGoal(params) {
+      return client.request("sessions.createFromGoal", params);
+    },
+    async listSavedVersions(sessionId) {
+      return client.request("graph.versions", { sessionId });
+    },
+    async restoreVersionPlan(sessionId, baseRevision, revision) {
+      return client.request("graph.restorePlan", { sessionId, baseRevision, revision });
+    },
+    async compareNodes(params) {
+      return client.request("nodes.compare", params);
+    },
+    async listToolPresets(kind) {
+      return client.request("toolPresets.list", { kind });
+    },
+    async saveToolPreset(params) {
+      return client.request("toolPresets.save", params);
+    },
+    async deleteToolPreset(params) {
+      return client.request("toolPresets.delete", params);
     },
     async createSession(session, idempotencyKey) {
       return client.request("sessions.create", {

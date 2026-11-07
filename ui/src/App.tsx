@@ -1,4 +1,5 @@
-import { optionalLocalStorage } from "./presentationStorage";
+import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
+import { Icon } from "./icons";
 import { SessionSwitchDialog } from "./SessionSwitchDialog";
 import {
   customThemeStyle,
@@ -22,9 +23,13 @@ import {
   type CSSProperties,
 } from "react";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
+import { emptyEditOrder, nextEditKind, recordEdit, recordRestore } from "./editOrder";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
-import { LIBRARY_DROP_SOURCE, SessionFlowCanvas } from "./SessionFlowCanvas";
-import { Workbench, type WorkbenchTab } from "./Workbench";
+import { LIBRARY_DROP_SOURCE, SessionFlowCanvas, type CanvasLayoutHistoryControls } from "./SessionFlowCanvas";
+import { SETTINGS_PAGES, tabPlace, Workbench, type WorkbenchTab } from "./Workbench";
+import type { PaletteItem } from "./paletteItems";
+import { libraryEntryIcon, NODE_KIND_ICONS } from "./icons";
+import { humanizeNodeKind } from "./canvasNodeKinds";
 import { useWorkbenchStatus } from "./useWorkbenchStatus";
 import { useRecordingActions } from "./useRecordingActions";
 import { VersionLine } from "./UpdateNotice";
@@ -97,8 +102,9 @@ import {
   redoDraft as redoDraftHistory,
   undoDraft as undoDraftHistory,
   type DraftHistory,
+  type HistoryTransition,
 } from "./history";
-import { applyCableAvailability, filterLibraryEntries, libraryEntries } from "./library";
+import { applyCableAvailability, filterLibraryEntries, libraryEntries, toolDescription } from "./library";
 import {
   cableEndpointName,
   cableName,
@@ -142,12 +148,16 @@ import { uiIdempotencyKey } from "./idempotency";
 import { pluginNodeParameterError, processorParameterError, type ProcessorDescriptor } from "./processorCatalog";
 import { mergeSessionInventory, reconcileSessionDraft, sameSessionDraft } from "./sessionInventory";
 import { unsavedNodeIds } from "./nodeSaveState";
+import { PRIVACY_MUTED_KINDS } from "./nodeAttention";
 import type { Connection } from "@xyflow/react";
 import { decodeTopologyAction } from "./DraftConnectionList";
 import { BackendConnectionContext } from "./backendConnectionContext";
 import {
   appendClientDiagnostic,
   browserDiagnosticStorage,
+  describePromiseRejection,
+  describeWindowError,
+  isNewUiErrorRow,
   onRpcFailure,
   readClientDiagnostics,
 } from "./clientDiagnostics";
@@ -185,8 +195,28 @@ export { NATIVE_COUNTERS_REFRESH_MS } from "./useNativeCounters";
 
 // These panels mount only when their workbench tab is selected. Keep the
 // editor and playback controls available while the selected panel loads.
-const AdvancedWorkbench = lazy(() =>
-  import("./AdvancedWorkbench").then((module) => ({ default: module.AdvancedWorkbench })),
+const StartupSettings = lazy(() =>
+  import("./SettingsSections").then((module) => ({ default: module.StartupSettings })),
+);
+const ShortcutSettings = lazy(() =>
+  import("./SettingsSections").then((module) => ({ default: module.ShortcutSettings })),
+);
+const TroubleshootPanel = lazy(() =>
+  import("./SettingsSections").then((module) => ({ default: module.TroubleshootPanel })),
+);
+const CanvasKeyboardPanel = lazy(() =>
+  import("./SettingsSections").then((module) => ({ default: module.CanvasKeyboardPanel })),
+);
+const ProcessorCatalog = lazy(() =>
+  import("./AdvancedPanels").then((module) => ({ default: module.ProcessorCatalog })),
+);
+const PresetCatalog = lazy(() => import("./AdvancedPanels").then((module) => ({ default: module.PresetCatalog })));
+const SessionTransferPanel = lazy(() =>
+  import("./AdvancedPanels").then((module) => ({ default: module.SessionTransferPanel })),
+);
+const PluginScanPanel = lazy(() => import("./PluginPanels").then((module) => ({ default: module.PluginScanPanel })));
+const ApplicationIdentityPanel = lazy(() =>
+  import("./ApplicationIdentityPanel").then((module) => ({ default: module.ApplicationIdentityPanel })),
 );
 const RecordingWorkbench = lazy(() =>
   import("./RecordingWorkbench").then((module) => ({ default: module.RecordingWorkbench })),
@@ -210,6 +240,11 @@ const SignalTimingPanel = lazy(() =>
 const AppsPanel = lazy(() => import("./AppsPanel").then((module) => ({ default: module.AppsPanel })));
 const DiscordSetup = lazy(() => import("./DiscordSetup").then((module) => ({ default: module.DiscordSetup })));
 const ObsCard = lazy(() => import("./ObsCard").then((module) => ({ default: module.ObsCard })));
+const GoalDialog = lazy(() => import("./GoalDialog").then((module) => ({ default: module.GoalDialog })));
+const FirstMinuteTour = lazy(() => import("./FirstMinuteTour").then((module) => ({ default: module.FirstMinuteTour })));
+const CommandPalette = lazy(() => import("./CommandPalette").then((module) => ({ default: module.CommandPalette })));
+const ChangeHistory = lazy(() => import("./ChangeHistory").then((module) => ({ default: module.ChangeHistory })));
+const MicTest = lazy(() => import("./MicTest").then((module) => ({ default: module.MicTest })));
 const FirstRunGuide = lazy(() => import("./FirstRunGuide").then((module) => ({ default: module.FirstRunGuide })));
 
 /** Root failures outlive AppContent's state, so they go straight to storage for the next window. */
@@ -230,6 +265,10 @@ function keepSelectedSession(current: string, items: { id: string }[], connected
   if (connected && current === demoSession.id) return current;
   return items[0]?.id ?? current;
 }
+
+const FIRST_RUN_KEY = "audiorouter.ui.first-run-done";
+const readFirstRunDone = () => readPresentationJson(optionalLocalStorage(), FIRST_RUN_KEY) === true;
+const writeFirstRunDone = () => writePresentationJson(optionalLocalStorage(), FIRST_RUN_KEY, true);
 
 export function App({ backend }: { backend?: UiBackend } = {}) {
   const resolvedBackend = backend ?? defaultBackend;
@@ -259,6 +298,14 @@ export function App({ backend }: { backend?: UiBackend } = {}) {
 function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) {
   const [snapshotCache] = useState(() => new SnapshotCache());
   const [snapshotState, setSnapshotState] = useState(snapshotCache.current());
+  const staleSnapshot = snapshotState.stale && snapshotState.snapshot !== null;
+  const backendReady = backend.connected && !staleSnapshot;
+  // Keep refresh and emergency safety actions on the original transport.
+  // Editors must not mutate a route whose last snapshot could not be refreshed.
+  const editorBackend = useMemo(
+    () => (staleSnapshot ? { ...backend, connected: false } : backend),
+    [backend, staleSnapshot],
+  );
   const [rememberedSessionId] = useState(() => readLastSession(browserDiagnosticStorage()));
   const [selectedSessionId, setSelectedSessionId] = useState(rememberedSessionId ?? demoSession.id);
   // The backend's active session as last read or written, and this window's
@@ -282,6 +329,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const authoritativeSession = useRef(demoSession);
   const hasAuthoritativeSession = useRef(!backend.connected);
   const [draftHistory, setDraftHistory] = useState<DraftHistory>({ past: [], future: [] });
+  const [goalDialogOpen, setGoalDialogOpen] = useState(false);
+  const [arrangeSessionId, setArrangeSessionId] = useState<string | null>(null);
+  const [tourOpen, setTourOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [dismissedRouteWarning, setDismissedRouteWarning] = useState("");
   const [recordings, setRecordings] = useState<import("@audiorouter/contracts").RecordingRow[]>([]);
@@ -363,6 +414,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const groupState = useCanvasGroups(selectedSessionId);
   const selectedGroup = groupState.groups.find((group) => group.id === groupState.selectedGroupId);
   const canvasLayoutActions = useRef<((action: LayoutAction) => void) | null>(null);
+  const canvasLayoutHistory = useRef<CanvasLayoutHistoryControls | null>(null);
+  const [layoutHistoryState, setLayoutHistoryState] = useState({ canUndo: false, canRedo: false });
+  const editOrderRef = useRef(emptyEditOrder());
   const [canvasLayoutSelection, setCanvasLayoutSelection] = useState<{ sessionId: string; items: CanvasRect[] }>({
     sessionId: "",
     items: [],
@@ -484,6 +538,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     readShortcuts(optionalLocalStorage(), defaultShortcutBinding),
   );
   const [shortcutMessage, setShortcutMessage] = useState<string | null>(null);
+  const [canvasKeyboardPanel, setCanvasKeyboardPanel] = useState<"routeList" | "connect" | null>(null);
   const [connectionSource, setConnectionSource] = useState("");
   const [connectionDestination, setConnectionDestination] = useState("");
   const [connectionDialogOpen, setConnectionDialogOpen] = useState(false);
@@ -519,8 +574,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const sessionRefreshGeneration = useRef(0);
   const recordingRefreshGeneration = useRef(0);
   const recorderRefreshGeneration = useRef(0);
+  // Startup decides which route opens; a route list arriving first must not pick one.
+  const startupSettled = useRef(false);
   useEffect(() => {
     let mounted = true;
+    let replacedRememberedSession = false;
     void (async () => {
       // With nothing remembered (first launch, cleared WebView data), open
       // the session the backend has active instead of the shell's default:
@@ -534,11 +592,29 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               () => null,
             );
       if (backendActive) backendActiveSessionRef.current = backendActive;
-      return snapshotCache.refresh(backend, rememberedSessionId ?? backendActive ?? undefined);
+      const first = await snapshotCache.refresh(backend, rememberedSessionId ?? backendActive ?? undefined);
+      if (!first.error || !rememberedSessionId) return first;
+      // The remembered route may be gone (removed by a script, or an older database
+      // restored). Only the list can say so; any other failure keeps it and offers Reconnect.
+      const listed = await backend.listSessions().catch(() => null);
+      if (!listed || listed.some((item) => item.id === rememberedSessionId)) return first;
+      const active = await backend.getActiveSession?.().then(
+        (result) => result.sessionId,
+        () => null,
+      );
+      const next = listed.some((item) => item.id === active) ? active! : listed[0]?.id;
+      replacedRememberedSession = true;
+      return snapshotCache.refresh(backend, next);
     })().then((nextState) => {
       if (mounted) {
+        startupSettled.current = true;
         setSnapshotState(nextState);
-        if (nextState.snapshot && !rememberedSessionId)
+        if (nextState.snapshot && replacedRememberedSession) {
+          setSelectedSessionId(nextState.snapshot.session.id);
+          setActionMessage(
+            `The route you last had open is no longer saved, so AudioRouter opened ${nextState.snapshot.session.name}.`,
+          );
+        } else if (nextState.snapshot && !rememberedSessionId)
           setSelectedSessionId((current) => (current === demoSession.id ? nextState.snapshot!.session.id : current));
         if (nextState.snapshot)
           eventCursor.current = {
@@ -605,7 +681,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         if (generation !== sessionRefreshGeneration.current) return;
         setListedSessions(items);
         setSessionInventoryError(null);
-        setSelectedSessionId((current) => keepSelectedSession(current, items, backend.connected));
+        setSelectedSessionId((current) =>
+          startupSettled.current ? keepSelectedSession(current, items, backend.connected) : current,
+        );
       })
       .catch((error) => {
         if (generation !== sessionRefreshGeneration.current) return;
@@ -698,7 +776,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!backend.connected) {
         setActionMessage("Reconnect failed: the AudioRouter backend is not running. Restart AudioRouter.");
       } else if (nextState.error) {
-        setActionMessage(`Reconnect failed: ${nextState.error}`);
+        setActionMessage(
+          `Reconnect failed: ${nextState.error}. Your draft is kept. Reconnect before saving or starting audio.`,
+        );
       } else {
         setActionMessage("Reconnected. Sessions, devices and audio status are up to date.");
       }
@@ -761,17 +841,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [backend, backend.connected, recordUiDiagnostic]);
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
-      const rawName = event.error instanceof Error ? event.error.name : "unknown";
-      const name = /^[A-Za-z][A-Za-z0-9_.-]{0,47}$/.test(rawName) ? rawName : "Error";
-      const rawScript = event.filename.split(/[?#]/, 1)[0].split(/[\\/]/).pop() ?? "";
-      const script = rawScript.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 64);
-      const location = script ? ` at ${script}:${event.lineno}:${event.colno}` : "";
-      recordUiDiagnostic(`UI error (${name})${location}`);
+      const row = describeWindowError(event);
+      if (row && isNewUiErrorRow(row)) recordUiDiagnostic(row);
     };
     const onReject = (event: PromiseRejectionEvent) => {
-      const rawType = event.reason instanceof Error ? event.reason.name : typeof event.reason;
-      const reasonType = /^[A-Za-z][A-Za-z0-9_.-]{0,47}$/.test(rawType) ? rawType : "Error";
-      recordUiDiagnostic(`Unhandled promise rejection (${reasonType})`);
+      const row = describePromiseRejection(event.reason);
+      if (isNewUiErrorRow(row)) recordUiDiagnostic(row);
     };
     window.addEventListener("error", onError);
     window.addEventListener("unhandledrejection", onReject);
@@ -812,6 +887,24 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (backendPrivacyMuted !== undefined) setPrivacyMuted(backendPrivacyMuted);
   }, [backendPrivacyMuted]);
   const availableSessions = mergeSessionInventory(listedSessions, snapshot?.session ?? null, createdSessions);
+  // A fresh install holds only the untouched starter session, or nothing yet.
+  const looksLikeFirstRun =
+    backend.connected &&
+    snapshot !== null &&
+    listedSessions.every((item) => item.id === "desktop-session" && item.revision === 0);
+  useEffect(() => {
+    if (looksLikeFirstRun && readFirstRunDone() === false) setGoalDialogOpen(true);
+  }, [looksLikeFirstRun]);
+  useEffect(() => {
+    const onPaletteKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onPaletteKey);
+    return () => window.removeEventListener("keydown", onPaletteKey);
+  }, []);
   const checkSetupCall = useMemo(() => backend.checkSetup?.bind(backend), [backend]);
   const setupCheckKey = setupCheckRefreshKey(devices, availableSessions, snapshot?.status.activeSessionIds ?? []);
   const setupCheck = useSetupCheck({
@@ -826,9 +919,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   useEffect(() => {
     if (!backend.connected || !backend.setActiveSession || !sessionIsAvailable) return;
     // Until the first snapshot picks the session, the selection is the demo
-    // placeholder and `session` falls back to the first listed one; writing
-    // that would overwrite the backend's saved active session.
-    if (selectedSessionId === demoSession.id) return;
+    // placeholder or a remembered route not yet confirmed, and `session` falls back
+    // to the first listed one; writing that would overwrite the backend's saved
+    // active session.
+    if (selectedSessionId === demoSession.id || selectedSessionId !== session.id) return;
     // Each write emits `session.selectionChanged`, which this window also
     // follows; writing a value the backend already has started a loop that
     // flipped between two sessions at startup.
@@ -875,6 +969,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [draft.nodes.length, draft.edges.length, session.revision, recordUiDiagnostic]);
   const sessionRunning = snapshot?.status.activeSessionIds.includes(session.id) ?? false;
   const routeChanged = !sameSessionDraft(draft, session);
+  const routeMicMuted =
+    sessionRunning &&
+    privacyMuted &&
+    draft.nodes.some((node) => node.enabled && !node.bypass && PRIVACY_MUTED_KINDS.includes(node.kind));
   const unfedNodes = unfedRouteNodes(draft);
   const routeWarningKey = JSON.stringify([draft.id, unfedNodes.map((node) => node.id).sort()]);
   // Lets the shell free the WebView on close only when nothing would be lost.
@@ -895,7 +993,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setAudioSourceStates,
     recordUiDiagnostic,
   });
-  const testSignalPlaybackReady = backend.connected && sameSessionDraft(draft, session);
+  const testSignalPlaybackReady = backendReady && sameSessionDraft(draft, session);
   const testSignalEndpointPrepared =
     snapshot?.diagnostics.nativeSessionId === session.id &&
     snapshot.diagnostics.nativeAdapter === "configured-stopped" &&
@@ -1031,7 +1129,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         if (active) {
           setListedSessions(items);
           setSessionInventoryError(null);
-          setSelectedSessionId((current) => keepSelectedSession(current, items, backend.connected));
+          setSelectedSessionId((current) =>
+            startupSettled.current ? keepSelectedSession(current, items, backend.connected) : current,
+          );
         }
       })
       .catch((error) => {
@@ -1203,6 +1303,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const now = Date.now();
     const coalesce = group && editGroup.current?.key === group && now - editGroup.current.time < 750;
     editGroup.current = group ? { key: group, time: now } : null;
+    if (!coalesce) editOrderRef.current = recordEdit(editOrderRef.current, "route");
     draftRef.current = next;
     setDraftHistory((history) =>
       coalesce && history.past.length > 0 ? { ...history, future: [] } : recordDraft(history, previous, next),
@@ -1213,15 +1314,21 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setPendingOperation(null);
     setPendingGraphPlan(null);
   };
-  const restoreDraftHistory = (direction: "undo" | "redo") => {
+  const restoreDraftHistory = (direction: "undo" | "redo", steps = 1) => {
     if (!backend.connected || graphBusy || sessionActionBusy) return;
     editGroup.current = null;
     const current = draftRef.current;
-    const transition =
-      direction === "undo" ? undoDraftHistory(draftHistory, current) : redoDraftHistory(draftHistory, current);
+    let transition: HistoryTransition = { current, history: draftHistory };
+    for (let step = 0; step < steps; step += 1) {
+      transition =
+        direction === "undo"
+          ? undoDraftHistory(transition.history, transition.current)
+          : redoDraftHistory(transition.history, transition.current);
+    }
     if (transition.current === current) return;
     // History restores content; all subsequent commits use today's revision.
     const restored = { ...transition.current, revision: current.revision };
+    editOrderRef.current = recordRestore(editOrderRef.current, "route", direction);
     setDraftHistory(transition.history);
     draftRef.current = restored;
     setDraft(restored);
@@ -1232,8 +1339,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setActionMessage(direction === "undo" ? "Undid the last change." : "Redid the change.");
   };
   const undoDraft = () => restoreDraftHistory("undo");
+  const undoDraftSteps = (steps: number) => restoreDraftHistory("undo", steps);
   const redoDraft = () => restoreDraftHistory("redo");
-  const onHistoryShortcut = useEffectEvent((direction: "undo" | "redo") => restoreDraftHistory(direction));
+  const routeHistoryReady = backend.connected && !graphBusy && !sessionActionBusy;
+  const canRestoreEdit = {
+    undo: (routeHistoryReady && draftHistory.past.length > 0) || layoutHistoryState.canUndo,
+    redo: (routeHistoryReady && draftHistory.future.length > 0) || layoutHistoryState.canRedo,
+  };
+  /** The window's Undo and Redo, and their shortcuts: the newest change of either kind goes first. */
+  const restoreNewestEdit = (direction: "undo" | "redo") => {
+    const kind = nextEditKind(editOrderRef.current, direction, {
+      route: routeHistoryReady && (direction === "undo" ? draftHistory.past : draftHistory.future).length > 0,
+      layout: direction === "undo" ? layoutHistoryState.canUndo : layoutHistoryState.canRedo,
+    });
+    if (kind === "route") restoreDraftHistory(direction);
+    else if (kind === "layout") canvasLayoutHistory.current?.restore(direction);
+  };
+  const onHistoryShortcut = useEffectEvent(restoreNewestEdit);
   useEffect(() => {
     const onHistoryKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || !(event.ctrlKey || event.metaKey)) return;
@@ -1253,7 +1375,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     return () => window.removeEventListener("keydown", onHistoryKey);
   }, []);
   const changeNodeFlag = async (flag: "enabled" | "bypass", value: boolean) => {
-    if (sessionBusy.current || nodeFlagBusy.current || graphBusy || !backend.connected) return;
+    if (sessionBusy.current || nodeFlagBusy.current || graphBusy || !backendReady) return;
     const next = setNodeDraftFlag(draftRef.current, selectedNode.id, flag, value);
     const wasRunning = sessionRunning;
     if (!wasRunning) {
@@ -1295,6 +1417,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     }
   };
   const changeNodeParameterOn = (nodeId: string, name: string, value: boolean | number | string) => {
+    if (staleSnapshot) return;
     const targetNode = draftRef.current.nodes.find((candidate) => candidate.id === nodeId);
     if (!targetNode) return;
     const error =
@@ -1318,7 +1441,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       return;
     }
     recordDraftChange(setNodeDraftParameter(draftRef.current, nodeId, name, value), nodeId + ":" + name);
-    setActionMessage("Draft updated. Review and save the changes when you are ready.");
+    // No notification per edit: a slider drag would announce and redraw one on every step, and
+    // the enabled Save button and the node's "Save required" mark already say it needs saving.
+    setActionMessage(null);
   };
   const changeNodeParameter = (name: string, value: boolean | number | string) =>
     changeNodeParameterOn(selectedNode.id, name, value);
@@ -1376,7 +1501,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     await refresh();
   };
   const planChanges = async () => {
-    if (graphBusy || !backend.connected) return;
+    if (graphBusy || !backendReady) return;
     setGraphBusy(true);
     setActionMessage("Checking route before saving...");
     try {
@@ -1422,20 +1547,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const lastAutoSaveDraft = useRef<string | null>(null);
   const autoSavePending =
     sessionRunning &&
-    backend.connected &&
+    backendReady &&
     !pendingGraphPlan &&
     isParameterOnlyChange(session, draft) &&
     (graphBusy || lastAutoSaveDraft.current !== JSON.stringify(draft));
   const planChangesRef = useRef(planChanges);
   planChangesRef.current = planChanges;
   useEffect(() => {
-    if (
-      !sessionRunning ||
-      graphBusy ||
-      !backend.connected ||
-      pendingGraphPlan ||
-      !isParameterOnlyChange(session, draft)
-    )
+    if (!sessionRunning || graphBusy || !backendReady || pendingGraphPlan || !isParameterOnlyChange(session, draft))
       return;
     const key = JSON.stringify(draft);
     if (lastAutoSaveDraft.current === key) return;
@@ -1444,11 +1563,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       void planChangesRef.current();
     }, 400);
     return () => window.clearTimeout(timer);
-  }, [draft, session, sessionRunning, graphBusy, backend.connected, pendingGraphPlan]);
+  }, [draft, session, sessionRunning, graphBusy, backendReady, pendingGraphPlan]);
   const commitAcknowledgedPlan = async () => {
     if (
       graphBusy ||
-      !backend.connected ||
+      !backendReady ||
       !pendingOperation ||
       !pendingGraphPlan ||
       acknowledgedWarnings.size !== pendingWarnings.length
@@ -1643,6 +1762,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const node = draft.nodes.find((candidate) => candidate.id === nodeId);
       if (node && JSON.stringify(node.parameters) === issue.parameters) visibleNodeIssues[nodeId] = issue.message;
     }
+  const firstIssueNode = draft.nodes.find((node) => Object.hasOwn(visibleNodeIssues, node.id));
   // Mark the nodes that stopped Play before it reached the backend (a device
   // not chosen yet); the mark clears when the node changes.
   const flagNodes = (nodes: Node[], message: string) =>
@@ -1653,7 +1773,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       ),
     });
   const startSession = async (): Promise<boolean> => {
-    if (sessionBusy.current || !backend.connected) return false;
+    if (sessionBusy.current || !backendReady) return false;
     if (graphBusy) {
       setActionMessage("Wait for the current route check to finish before starting audio.");
       return false;
@@ -1692,7 +1812,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         if (generatedOnly && unboundDeviceNodes(draftRef.current).length > 0) {
           flagNodes(unboundDeviceNodes(draftRef.current), "Choose a device");
           setActionMessage(
-            "No audio started. Select the speaker or headphone device in the Output Device node's Properties, then press Play.",
+            "No audio started. Choose the speaker or headphones for your output in Properties, then press Play.",
           );
           return false;
         }
@@ -1758,10 +1878,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         }
         const endpoints = routeEndpointBinding(draftRef.current, session.id);
         if (!endpoints.renderEndpointId || (microphones.length === 1 && !endpoints.captureEndpointId)) {
+          flagNodes(unboundDeviceNodes(draftRef.current), "Choose a device");
           setActionMessage(
             !endpoints.renderEndpointId
-              ? "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play."
-              : "No audio started. Select the input device in Physical Input Properties, then press Play.",
+              ? "No audio started. Choose the speaker or headphones for your output in Properties, then press Play."
+              : "No audio started. Choose the device for your input in Properties, then press Play.",
           );
           return false;
         }
@@ -1821,8 +1942,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           .join(", ");
         setActionMessage(
           others
-            ? `No audio started. Play can capture ${executable} only when it is the route's only enabled source. Turn off or remove the other sources (${others}), save, then press Play. Mixing an application with other sources is available only from Many-input routing in Full workspace, without automatic reconnect.`
-            : `No audio started. Select a specific running ${executable} in the node's Properties, save, then press Play.`,
+            ? `No audio started. Play can capture ${executable} only when it is the route's only enabled source. Turn off or remove the other sources (${others}), or connect them all to a Mixer, save, then press Play.`
+            : `No audio started. Select a specific running ${executable} in the card's Properties, save, then press Play.`,
         );
         recordUiDiagnostic("Session start blocked: application capture mixed with other sources");
         return false;
@@ -1843,7 +1964,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             "Choose a device",
           );
           setActionMessage(
-            "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play.",
+            "No audio started. Choose the speaker or headphones for your output in Properties, then press Play.",
           );
           return false;
         }
@@ -1893,7 +2014,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           );
           setActionMessage(
             !binding.renderEndpointId
-              ? "No audio started. Select the speaker or headphone device in Physical Output Properties, then press Play."
+              ? "No audio started. Choose the speaker or headphones for your output in Properties, then press Play."
               : "No audio started. This route also needs an input device: add an Input Device node, choose its device in Properties and connect it, or choose one in Advanced → Troubleshooting. Then press Play.",
           );
           recordUiDiagnostic("Session start blocked: exact endpoint selection is incomplete");
@@ -1901,7 +2022,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         }
         if (!backend.prepareNativeEndpoint) {
           setActionMessage(
-            "No audio started. This backend cannot prepare the selected audio devices. See Advanced → Troubleshooting for details.",
+            "No audio started. This backend cannot prepare the selected audio devices. See Status → Troubleshoot and recover for details.",
           );
           return false;
         }
@@ -2045,7 +2166,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     return () => window.clearInterval(timer);
   }, [sessionRunning, timeShiftNodeIds]);
   const transportAudioSource = async (nodeId: string, action: "play" | "pause" | "stop" | "status") => {
-    if (!backend.connected) return;
+    if (!backend.connected || (staleSnapshot && action === "play")) return;
     try {
       if (action === "play" && !sessionRunning && !(await startSession())) return;
       if (currentSessionIdRef.current !== session.id) return;
@@ -2060,7 +2181,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const startSessionRef = useRef(startSession);
   startSessionRef.current = startSession;
   const soundboard = useSoundboardController({
-    backend,
+    backend: editorBackend,
     session,
     sessionRunning,
     startSession,
@@ -2380,7 +2501,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const next = appendDraftConnection(current, sourceNode, sourcePort, destinationNode, destinationPort);
       const added = next.edges.find((edge) => !current.edges.some((existing) => existing.id === edge.id));
       recordDraftChange(next);
-      setActionMessage("Connection added to the draft. Save route when you are ready.");
+      setActionMessage("Connection added to the draft. Save when you are ready.");
       return added?.id ?? null;
     } catch (error) {
       const occupied =
@@ -2543,7 +2664,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         const next = removeDraftNode(draft, nodeId);
         recordDraftChange(next);
         setSelectedNodeId(next.nodes[0]?.id ?? "");
-        setActionMessage("Node removed. Choose Undo in Session to bring it back, or Save route to keep the change.");
+        setActionMessage("Node removed. Choose Undo at the top to bring it back, or Save to keep the change.");
       } catch (error) {
         setActionMessage(formatUiError(error, "Unable to remove node."));
       }
@@ -2819,7 +2940,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const next = removeDraftNode(draft, selectedNode.id);
       recordDraftChange(next);
       setSelectedNodeId(next.nodes[0]?.id ?? "");
-      setActionMessage("Node removed. Choose Undo in Session to bring it back, or Save route to keep the change.");
+      setActionMessage("Node removed. Choose Undo at the top to bring it back, or Save to keep the change.");
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to remove node."));
     }
@@ -2920,10 +3041,65 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         </main>
       </div>
     );
+  const connectionWorkbenchContent = (
+    <ConnectionForm
+      backend={editorBackend}
+      connectionSource={connectionSource}
+      setConnectionSource={setConnectionSource}
+      outputPorts={outputPorts}
+      encodePort={encodePort}
+      connectionDestination={connectionDestination}
+      setConnectionDestination={setConnectionDestination}
+      inputPorts={inputPorts}
+      addConnection={addConnection}
+    />
+  );
+  const canvasToolbarActions = (
+    <>
+      <button
+        type="button"
+        className="secondary"
+        aria-pressed={canvasKeyboardPanel === "routeList"}
+        title="See the route as a list you can edit from the keyboard"
+        onClick={() => setCanvasKeyboardPanel((current) => (current === "routeList" ? null : "routeList"))}
+      >
+        Route list
+      </button>
+      <button
+        type="button"
+        className="secondary"
+        aria-pressed={canvasKeyboardPanel === "connect"}
+        title="Connect two tools without dragging"
+        onClick={() => setCanvasKeyboardPanel((current) => (current === "connect" ? null : "connect"))}
+      >
+        Connect
+      </button>
+    </>
+  );
+  const canvasOverlay = canvasKeyboardPanel && (
+    <Suspense fallback={null}>
+      <CanvasKeyboardPanel
+        mode={canvasKeyboardPanel}
+        onClose={() => setCanvasKeyboardPanel(null)}
+        draft={draft}
+        selectedNode={selectedNode}
+        selectNodeProperties={selectNodeProperties}
+        removeConnection={removeConnection}
+        toggleConnection={toggleConnection}
+        insertProcessor={insertProcessor}
+        openPluginPicker={openPluginPicker}
+        connectionContent={connectionWorkbenchContent}
+      />
+    </Suspense>
+  );
   // Built once per App render, outside the per-tick telemetry render prop:
   // meter ticks reach the canvas only through its telemetry store.
   const flowCanvas = (
     <SessionFlowCanvas
+      arrangeSessionId={arrangeSessionId}
+      onArranged={() => setArrangeSessionId(null)}
+      toolbarActions={canvasToolbarActions}
+      canvasOverlay={canvasOverlay}
       nodeIssues={visibleNodeIssues}
       groups={groupState.groups}
       selectedGroupId={groupState.selectedGroupId}
@@ -2952,6 +3128,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         if (ids.length) setWorkbenchTab("properties");
       }}
       layoutActionsRef={canvasLayoutActions}
+      layoutHistoryRef={canvasLayoutHistory}
+      onLayoutHistory={setLayoutHistoryState}
+      onLayoutHistoryStep={(step) => {
+        editOrderRef.current =
+          step === "edit"
+            ? recordEdit(editOrderRef.current, "layout")
+            : recordRestore(editOrderRef.current, "layout", step);
+      }}
+      panelWidth={sidebarWidth}
+      onPanelWidth={changeSidebarWidth}
       onLayoutSelection={updateCanvasLayoutSelection}
       onLayoutMessage={setActionMessage}
       onCopyNode={copyNodeToClipboard}
@@ -2989,21 +3175,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       onOpenPluginPicker={openPluginPicker}
       onOpenApplicationPicker={openApplicationPicker}
       onConnectionRejected={setActionMessage}
-      canEdit={backend.connected}
+      canEdit={backendReady}
       deviceUsers={backend.connected ? deviceUsers : undefined}
-    />
-  );
-  const connectionWorkbenchContent = (
-    <ConnectionForm
-      backend={backend}
-      connectionSource={connectionSource}
-      setConnectionSource={setConnectionSource}
-      outputPorts={outputPorts}
-      encodePort={encodePort}
-      connectionDestination={connectionDestination}
-      setConnectionDestination={setConnectionDestination}
-      inputPorts={inputPorts}
-      addConnection={addConnection}
     />
   );
   const statusWorkbenchContent = (
@@ -3157,59 +3330,220 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recoveryMessage={recoveryMessage}
     />
   );
-  const advancedWorkbenchContent = (
-    <AdvancedWorkbench
-      appSettingsContent={
-        <>
-          <DeviceAccessSetting backend={backend} />
-          <UpdatesPanel
-            enabled={updateChecks}
-            onChange={(enabled) => {
-              setUpdateCheckEnabled(enabled);
-              setUpdateChecks(enabled);
-            }}
-            update={availableUpdate}
-          />
-          <FirstRunGuide
-            devices={devices}
-            connected={backend.connected}
-            onRefresh={() => refreshDevices()}
-            onOpenTools={() => setWorkbenchTab("tools")}
-            onSetUpDiscord={openDiscordSetup}
-          />
-        </>
-      }
-      backend={backend}
-      draft={draft}
-      selectedNode={selectedNode}
-      selectNodeProperties={selectNodeProperties}
-      removeConnection={removeConnection}
-      toggleConnection={toggleConnection}
-      insertProcessor={insertProcessor}
-      openPluginPicker={openPluginPicker}
-      connectionWorkbenchContent={connectionWorkbenchContent}
-      devicesWorkbenchContent={devicesWorkbenchContent}
-      shortcuts={shortcuts}
-      captureShortcut={captureShortcut}
-      shortcutMessage={shortcutMessage}
-      addPluginToDraft={addPluginToDraft}
-      processors={processors}
-      processorError={processorError}
-      presets={presets}
-      presetError={presetError}
-      session={session}
-      setCreatedSessions={setCreatedSessions}
-      setSelectedSessionId={(value) => void switchSession(typeof value === "function" ? value(session.id) : value)}
-      refresh={async () => {
-        await refresh();
-      }}
-      applications={applications}
-      snapshot={snapshot}
-      clearRecoverySafeMode={clearRecoverySafeMode}
-      safetyActionBusyState={safetyActionBusyState}
-    />
+  const finishGoal = (result: import("@audiorouter/contracts").SessionFromGoalResult) => {
+    setGoalDialogOpen(false);
+    const firstRun = readFirstRunDone() === false;
+    writeFirstRunDone();
+    setCreatedSessions((current) => [...current, result.session]);
+    setArrangeSessionId(result.session.id);
+    const choose = result.stillToChoose.length > 0 ? ` Still to choose: ${result.stillToChoose.join(", ")}.` : "";
+    void switchSession(result.session.id).then(({ switched }) => {
+      if (switched) setActionMessage(`Made ${result.session.name}. Nothing plays until you press Play.${choose}`);
+    });
+    if (firstRun) setTourOpen(true);
+  };
+  const closeGoalDialog = () => {
+    setGoalDialogOpen(false);
+    writeFirstRunDone();
+  };
+  const paletteItems = (): PaletteItem[] => {
+    const ready = backend.connected;
+    const items: PaletteItem[] = [
+      {
+        id: "play",
+        group: "Actions",
+        icon: sessionRunning ? "square" : "play",
+        title: sessionRunning ? "Stop" : "Play",
+        detail: sessionRunning ? "Stop this route" : "Start this route",
+        disabled: !ready,
+        run: () => void (sessionRunning ? stopSession() : startSession()),
+      },
+      {
+        id: "privacy",
+        group: "Actions",
+        icon: "mic-off",
+        title: "Privacy mute",
+        detail: privacyMuted ? "Turn off" : "Turn on",
+        keywords: "silence microphone",
+        disabled: !ready,
+        run: () => void togglePrivacyMute(),
+      },
+      {
+        id: "goal",
+        group: "Actions",
+        icon: "square-dashed",
+        title: "Start from a goal",
+        detail: "New route for what you want to do",
+        keywords: "template new session",
+        disabled: !ready,
+        run: () => setGoalDialogOpen(true),
+      },
+      {
+        id: "tour",
+        group: "Actions",
+        icon: "circle-help",
+        title: "Take the tour",
+        detail: "Three short steps",
+        keywords: "help",
+        run: () => setTourOpen(true),
+      },
+      {
+        id: "history",
+        group: "Actions",
+        icon: "undo-2",
+        title: "Change history",
+        detail: "See changes and saved versions",
+        keywords: "versions undo",
+        run: () => setWorkbenchTab("session"),
+      },
+    ];
+    for (const entry of libraryEntries) {
+      const kind = entry.kind;
+      if (!kind || entry.unavailableReason) continue;
+      items.push({
+        id: `tool-${entry.id}`,
+        group: "Tools",
+        icon: libraryEntryIcon(entry),
+        title: `Add ${entry.label}`,
+        detail: toolDescription(kind) ?? entry.category,
+        keywords: `${entry.category} ${entry.note ?? ""}`,
+        disabled: !ready,
+        run: () => addLibraryNode(kind),
+      });
+    }
+    for (const [page, title] of SETTINGS_PAGES) {
+      items.push({
+        id: `settings-${page}`,
+        group: "Settings",
+        icon: "settings",
+        title,
+        detail: "Open in Settings",
+        run: () => setWorkbenchTab(page),
+      });
+    }
+    for (const node of draft.nodes) {
+      items.push({
+        id: `card-${node.id}`,
+        group: "On this route",
+        icon: NODE_KIND_ICONS[node.kind],
+        title: node.name,
+        detail: `${humanizeNodeKind(node)}: go to it`,
+        run: () => {
+          selectNodeProperties(node.id);
+          setWorkbenchTab("properties");
+        },
+      });
+    }
+    for (const item of availableSessions) {
+      if (item.id === session.id) continue;
+      items.push({
+        id: `session-${item.id}`,
+        group: "Sessions",
+        icon: "folder",
+        title: item.name,
+        detail: "Switch session",
+        disabled: !ready,
+        run: () => void switchSession(item.id),
+      });
+    }
+    return items;
+  };
+  const refreshAfterPanelAction = async () => {
+    await refresh();
+  };
+  const settingsWorkbenchContent = {
+    plugins: <PluginScanPanel backend={backend} onAddPlaceholder={addPluginToDraft} />,
+    help: (
+      <section className="panel help-page" aria-labelledby="help-page-heading">
+        <h2 id="help-page-heading">Help</h2>
+        <p className="muted">Press Ctrl+K anywhere to find a tool, setting, card or session.</p>
+        <div className="actions">
+          <button type="button" className="secondary" onClick={() => setTourOpen(true)}>
+            Take the tour
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!backend.connected}
+            onClick={() => setGoalDialogOpen(true)}
+          >
+            Start from a goal
+          </button>
+        </div>
+      </section>
+    ),
+    deviceAccess: (
+      <>
+        <DeviceAccessSetting backend={backend} />
+        <FirstRunGuide
+          devices={devices}
+          connected={backend.connected}
+          onRefresh={() => refreshDevices()}
+          onOpenTools={() => setWorkbenchTab("tools")}
+          onSetUpDiscord={openDiscordSetup}
+        />
+      </>
+    ),
+    startup: <StartupSettings backend={backend} />,
+    shortcuts: (
+      <ShortcutSettings shortcuts={shortcuts} captureShortcut={captureShortcut} shortcutMessage={shortcutMessage} />
+    ),
+    versions: (
+      <UpdatesPanel
+        enabled={updateChecks}
+        onChange={(enabled) => {
+          setUpdateCheckEnabled(enabled);
+          setUpdateChecks(enabled);
+        }}
+        update={availableUpdate}
+      />
+    ),
+    clients: <ClientsPanel backend={backend} />,
+    sessionJson: (
+      <SessionTransferPanel
+        backend={backend}
+        session={session}
+        onImported={(imported) => {
+          setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]);
+          void switchSession(imported.id);
+          void refresh();
+        }}
+      />
+    ),
+    catalog: (
+      <>
+        <ProcessorCatalog processors={processors} error={processorError} node={selectedNode} backend={backend} />
+        <PresetCatalog presets={presets} error={presetError} />
+      </>
+    ),
+    identity: <ApplicationIdentityPanel applications={applications} />,
+  };
+  const statusWithTroubleshooting = (
+    <>
+      <Suspense fallback={null}>
+        <LiveTelemetry store={telemetryStore} diagnostics={snapshot?.diagnostics ?? null}>
+          {(liveDiagnostics) => (
+            <MicTest
+              session={session}
+              diagnostics={liveDiagnostics}
+              running={sessionRunning}
+              privacyMuted={privacyMuted}
+            />
+          )}
+        </LiveTelemetry>
+      </Suspense>
+      {statusWorkbenchContent}
+      <TroubleshootPanel
+        backend={backend}
+        devicesContent={devicesWorkbenchContent}
+        refresh={refreshAfterPanelAction}
+        snapshot={snapshot}
+        clearRecoverySafeMode={clearRecoverySafeMode}
+        safetyActionBusyState={safetyActionBusyState}
+      />
+    </>
   );
-  return (
+  const renderedWorkspace = (
     <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}>
       <SoundboardContext.Provider value={soundboard}>
         <div className={`app-shell ${themeClassName}`} style={themeStyle}>
@@ -3220,7 +3554,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 <button
                   type="button"
                   className="header-session-name"
-                  title="Open Session"
+                  title="Open the Session tab to switch or manage sessions"
                   onClick={() => setWorkbenchTab("session")}
                 >
                   {draft.name || "Routing workspace"}
@@ -3228,24 +3562,42 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               </h1>
             </div>
             <div className={`status-cluster ${backend.connected ? "connected" : "disconnected"}`} aria-live="polite">
+              {/* Only when the connection needs it. It sits first: the cluster is right-aligned,
+                  so its arrival moves nothing else (UI-17). */}
+              {(!backend.connected || staleSnapshot || reconnecting) && (
+                <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
+                  Reconnect
+                </button>
+              )}
               <span
-                className={`audio-run-state${sessionRunning ? " is-running" : ""}`}
+                className={`audio-run-state${sessionRunning && !staleSnapshot ? " is-running" : ""}${
+                  routeMicMuted && !staleSnapshot ? " is-mic-muted" : ""
+                }`}
                 role="status"
                 title={
-                  routeChanged
-                    ? "Draft changes await Save. Running audio can differ from the canvas; only saved changes survive restart or enter an export."
-                    : "The route is saved. Running audio may have source playback stopped; use each source's Play control to start it."
+                  routeMicMuted && !staleSnapshot
+                    ? "Privacy mute is on, so your microphone and captured apps are silent. Turn it off in a tool's Properties."
+                    : staleSnapshot
+                      ? "Connection lost. Showing the last snapshot and your retained draft. Reconnect before saving or starting audio."
+                      : routeChanged
+                        ? "Draft changes await Save. Running audio can differ from the canvas; only saved changes survive restart or enter an export."
+                        : "The route is saved. Running audio may have source playback stopped; use each source's Play control to start it."
                 }
               >
                 <span className="audio-state-dot" aria-hidden="true" />
-                {routePlaybackLabel({
-                  busy: sessionActionBusy,
-                  running: sessionRunning,
-                  fresh:
-                    backend.connected && !snapshotState.stale && snapshot?.diagnostics.nativeSessionId === session.id,
-                  generation: snapshot?.diagnostics.schedulerTelemetry?.activeGeneration,
-                  started: nativeGenerations[session.id],
-                })}
+                {staleSnapshot
+                  ? "Status unavailable"
+                  : routePlaybackLabel({
+                      busy: sessionActionBusy,
+                      running: sessionRunning,
+                      fresh:
+                        backend.connected &&
+                        !snapshotState.stale &&
+                        snapshot?.diagnostics.nativeSessionId === session.id,
+                      generation: snapshot?.diagnostics.schedulerTelemetry?.activeGeneration,
+                      started: nativeGenerations[session.id],
+                      micMuted: routeMicMuted,
+                    })}
               </span>
               <span className="status-detail" title={statusSummary}>
                 {connectionLabel}
@@ -3257,8 +3609,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   className="secondary"
                   aria-label="Undo"
                   title="Undo (Ctrl+Z)"
-                  onClick={undoDraft}
-                  disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.past.length === 0}
+                  onClick={() => restoreNewestEdit("undo")}
+                  disabled={!canRestoreEdit.undo}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12" />
@@ -3270,8 +3622,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   className="secondary"
                   aria-label="Redo"
                   title="Redo (Ctrl+Y)"
-                  onClick={redoDraft}
-                  disabled={!backend.connected || graphBusy || sessionActionBusy || draftHistory.future.length === 0}
+                  onClick={() => restoreNewestEdit("redo")}
+                  disabled={!canRestoreEdit.redo}
                 >
                   <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="m15 4 5 5-5 5m5-5H10a6 6 0 0 0 0 12" />
@@ -3281,7 +3633,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               </span>
               <button
                 type="button"
-                className={routeChanged ? "primary" : "secondary"}
+                className={routeChanged ? "secondary save-pending" : "secondary"}
                 title={
                   autoSavePending
                     ? "Parameter changes save automatically after a short pause"
@@ -3293,7 +3645,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 aria-busy={graphBusy}
                 onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
                 disabled={
-                  !backend.connected ||
+                  !backendReady ||
                   graphBusy ||
                   (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged)
                 }
@@ -3302,37 +3654,40 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               </button>
               <button
                 type="button"
-                className={sessionRunning ? "secondary" : "primary"}
+                className={sessionRunning ? "play-stop stop-audio" : "play-stop primary"}
                 title="Header Play starts the route; Stop stops the route. Source Play controls only that source and starts the route first if needed. A draft preview is temporary and does not Save changes."
                 onClick={() => void (sessionRunning ? stopSession() : startSession())}
-                disabled={!backend.connected || sessionActionBusy}
+                disabled={!backend.connected || sessionActionBusy || (!sessionRunning && staleSnapshot)}
                 aria-busy={sessionActionBusy}
               >
-                {sessionRunning ? "Stop" : "Play"}
-              </button>
-              <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
-                Reconnect
+                <span data-tour="play">{sessionRunning ? "Stop" : "Play"}</span>
               </button>
               <QuitButton onMessage={setActionMessage} />
             </div>
           </header>
-          <aside className="workspace-notifications" aria-label="Notifications">
-            {unfedNodes.length > 0 && dismissedRouteWarning !== routeWarningKey && (
-              <div className="panel-message is-warning inactive-route-warning">
-                <p role="status">
-                  Warning: no input reaches {unfedNodes.map((node) => node.name).join(", ")}. These nodes are ignored
-                  during playback; connected routes can still play.
-                </p>
-                <button
-                  type="button"
-                  className="secondary"
-                  aria-label="Dismiss route warning"
-                  onClick={() => setDismissedRouteWarning(routeWarningKey)}
-                >
-                  ×
-                </button>
-              </div>
-            )}
+          <aside
+            className="workspace-notifications"
+            aria-label="Notifications"
+            style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+          >
+            {unfedNodes.length > 0 &&
+              dismissedRouteWarning !== routeWarningKey &&
+              tabPlace(workbenchTab) !== "settings" && (
+                <div className="panel-message is-warning inactive-route-warning">
+                  <p role="status">
+                    No input reaches {unfedNodes.map((node) => node.name).join(", ")} yet, so they stay silent. Connect
+                    a source to hear them.
+                  </p>
+                  <button
+                    type="button"
+                    className="secondary"
+                    aria-label="Dismiss route warning"
+                    onClick={() => setDismissedRouteWarning(routeWarningKey)}
+                  >
+                    <Icon name="x" />
+                  </button>
+                </div>
+              )}
             {(() => {
               const text = actionMessage
                 ? actionMessage
@@ -3348,14 +3703,30 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   aria-live={tone === "error" ? "assertive" : "polite"}
                 >
                   <span className="global-action-message-icon" aria-hidden="true">
-                    {tone === "error" ? "!" : tone === "warning" ? "!" : tone === "success" ? "✓" : "i"}
+                    <Icon
+                      name={
+                        tone === "error"
+                          ? "circle-alert"
+                          : tone === "warning"
+                            ? "triangle-alert"
+                            : tone === "success"
+                              ? "circle-check"
+                              : "info"
+                      }
+                      size={18}
+                    />
                   </span>
                   <span className="global-action-message-text" title={text}>
                     {text}
                   </span>
-                  {backend.connected && actionMessage?.includes("Troubleshooting") && workbenchTab !== "advanced" && (
-                    <button type="button" className="secondary" onClick={() => setWorkbenchTab("advanced")}>
-                      Open Advanced
+                  {backend.connected && actionMessage?.startsWith("No audio started") && firstIssueNode && (
+                    <button type="button" className="secondary" onClick={() => selectNodeProperties(firstIssueNode.id)}>
+                      Go to {firstIssueNode.name}
+                    </button>
+                  )}
+                  {backend.connected && actionMessage?.includes("Troubleshoot") && workbenchTab !== "status" && (
+                    <button type="button" className="secondary" onClick={() => setWorkbenchTab("status")}>
+                      Open Status
                     </button>
                   )}
                   {backend.connected && actionMessage?.includes("Open Session") && workbenchTab !== "session" && (
@@ -3373,7 +3744,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                         setActionMessage(null);
                       }}
                     >
-                      ×
+                      <Icon name="x" />
                     </button>
                   )}
                 </div>
@@ -3403,8 +3774,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             </section>
           )}
           <div className="workspace-grid">
-            <main className="main-content" style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}>
-              <SidebarResizer width={sidebarWidth} onWidth={changeSidebarWidth} />
+            <main
+              className={`main-content${tabPlace(workbenchTab) === "settings" ? " settings-open" : ""}`}
+              style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+            >
+              <SidebarResizer
+                width={sidebarWidth}
+                onWidth={changeSidebarWidth}
+                onResized={(before, after) => canvasLayoutHistory.current?.rememberPanelWidth(before, after)}
+              />
               <section className="workspace-title">
                 <div>
                   <label className="session-name">
@@ -3487,7 +3865,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   {(liveDiagnostics) => (
                     <SignalFlowPanel
                       flowCanvas={flowCanvas}
-                      backend={backend}
+                      backend={editorBackend}
                       connectionSource={connectionSource}
                       setConnectionSource={setConnectionSource}
                       outputPorts={outputPorts}
@@ -3536,7 +3914,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                       selectedGroup={selectedGroup}
                       groupState={groupState}
                       selectedNode={selectedNode}
-                      backend={backend}
+                      backend={editorBackend}
                       sessionRunning={sessionRunning}
                       liveDiagnostics={liveDiagnostics}
                       session={session}
@@ -3594,7 +3972,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     // must not wait for this lazily loaded section.
                     <Suspense fallback={<p role="status">Loading session file tools...</p>}>
                       <SessionFilePanel
-                        backend={backend}
+                        backend={editorBackend}
                         session={session}
                         unsaved={routeChanged}
                         onImported={(imported) => {
@@ -3609,8 +3987,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   }
                   pluginsContent={
                     <PluginToolsGroup
-                      backend={backend}
-                      connected={backend.connected}
+                      backend={editorBackend}
+                      connected={backendReady}
                       search={librarySearch}
                       refreshKey={pluginPickerOpen}
                       onAdd={addPluginToDraft}
@@ -3618,7 +3996,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     />
                   }
                   tools={visibleLibraryEntries}
-                  connected={backend.connected}
+                  connected={backendReady}
                   onAdd={addLibraryNode}
                   onAddCable={(direction) =>
                     addVirtualBusNode(defaultCable(getVirtualCableStatus(), direction), direction)
@@ -3629,8 +4007,6 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   onNewSession={() => void createSession()}
                   onDuplicate={() => void duplicateSession()}
                   onDelete={() => void deleteSession()}
-                  onUndo={undoDraft}
-                  onRedo={redoDraft}
                   onDiscard={() => {
                     setDraft(session);
                     setDraftHistory({ past: [], future: [] });
@@ -3732,7 +4108,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   clientsPanel={(initialClientId) => (
                     <ClientsPanel backend={backend} initialClientId={initialClientId} />
                   )}
-                  statusContent={statusWorkbenchContent}
+                  statusContent={statusWithTroubleshooting}
                   statusHasProblem={
                     setupCheck.result?.findings.some((finding) => finding.severity === "problem") ?? false
                   }
@@ -3751,12 +4127,41 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     </LiveTelemetry>
                   }
                   recordingContent={recordingWorkbenchContent}
-                  advancedContent={advancedWorkbenchContent}
+                  settingsContent={settingsWorkbenchContent}
+                  savedVersionsContent={
+                    <Suspense fallback={<p role="status">Loading change history...</p>}>
+                      <ChangeHistory
+                        backend={backend}
+                        session={session}
+                        past={draftHistory.past}
+                        current={draft}
+                        routeChanged={routeChanged}
+                        running={sessionRunning}
+                        onUndoSteps={undoDraftSteps}
+                        onReverted={refreshAfterPanelAction}
+                      />
+                    </Suspense>
+                  }
                 />
               </ErrorBoundary>
             </main>
           </div>
           <LibraryDragOverlay />
+          {goalDialogOpen && (
+            <Suspense fallback={null}>
+              <GoalDialog backend={backend} onCreated={finishGoal} onClose={closeGoalDialog} />
+            </Suspense>
+          )}
+          {tourOpen && (
+            <Suspense fallback={null}>
+              <FirstMinuteTour onOpenTools={() => setWorkbenchTab("tools")} onClose={() => setTourOpen(false)} />
+            </Suspense>
+          )}
+          {paletteOpen && (
+            <Suspense fallback={null}>
+              <CommandPalette items={paletteItems()} onClose={() => setPaletteOpen(false)} />
+            </Suspense>
+          )}
           {sessionSwitchPrompt && (
             <SessionSwitchDialog names={sessionSwitchPrompt.names} onDecision={sessionSwitchPrompt.decide} />
           )}
@@ -3771,5 +4176,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         </div>
       </SoundboardContext.Provider>
     </PluginParameterContext.Provider>
+  );
+  return (
+    <BackendConnectionContext.Provider value={backendReady}>{renderedWorkspace}</BackendConnectionContext.Provider>
   );
 }

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- **Start from a goal.** A new install asks what you want to do and builds a
+  stopped route you can change: clean up a mic, game and voice for Discord,
+  record a podcast, record one app, or talk to a guest without echo. Nothing
+  plays until you press Play, and a short tour shows the three steps. Scripts
+  and assistants can use the same goals (`sessions.goals`, `list_goals`).
+- **Mic test.** Status listens for 5 seconds and says whether your voice is in
+  the zone, too quiet, too loud, or missing. It reads levels only.
+- **Compare by ear.** Hold a button in Properties to hear the route without a
+  tool or its chain. Anyone hearing the route, on Discord or a stream, hears it too, and the panel says so. Let go and it
+  comes back; nothing is saved.
+- **My presets.** Save a tool's settings under a name and reuse them.
+- **Find anything.** Ctrl+K finds actions, tools, settings, cards and sessions.
+- **Change history.** Session lists what changed since the last save and every
+  saved version, with Go back here. Going back keeps the later versions.
+- **A tidier window.** Five daily tabs and a gear for Settings; the Advanced tab
+  is gone. Tools are grouped and Properties sections show their values when
+  closed. Text is larger, and a big route opens readable at its start, with a
+  map. Cards snap to a grid and show alignment guides.
+
 - **Setup check.** Status lists device setups Play would refuse (a non-stereo
   output, a Surround input on a stereo device, a missing device), feedback
   loops inside one session or between two, and cables not at 48 kHz, each with

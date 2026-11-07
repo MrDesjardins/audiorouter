@@ -98,7 +98,7 @@ function addGain() {
   fireEvent.click(screen.getByRole("tab", { name: "Tools" }));
   // jsdom 30 treats the card's <strong>/<small> as inline (no stylesheet),
   // so the computed name has no space between the title and the help text.
-  fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain\s*Make the sound/ }));
+  fireEvent.click(sessionPanel().getByRole("button", { name: /^Gain$/ }));
 }
 // The top bar's Play (the removed hidden lifecycle panel had the same handler).
 function start() {
@@ -141,6 +141,8 @@ describe("session refresh and playback regressions", () => {
       nativeAdapter: running ? ("running" as const) : ("configured-stopped" as const),
       nativeAdapterKind: "endpoint" as const,
       schedulerTelemetry: telemetry(),
+      // The demo data starts muted, and the mute note outranks the preview note.
+      privacyMute: { muted: false, persistence: "memory" as const },
     });
     backend.snapshot = vi.fn(async () => {
       const value = await snapshot();
@@ -197,12 +199,13 @@ describe("session refresh and playback regressions", () => {
       }),
     );
     render(<App backend={backend} />);
-    expect(screen.queryByRole("tab", { name: "Apps" })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Status" })).toBeNull();
     await act(async () => {
       resolve(initial);
     });
-    const apps = await screen.findByRole("tab", { name: "Apps" });
-    fireEvent.click(apps);
+    fireEvent.click(await screen.findByRole("tab", { name: "Status" }));
+    // Status loads lazily; a cold worker must finish that transition first.
+    fireEvent.click(await screen.findByRole("tab", { name: "Apps" }, { timeout: 5000 }));
     expect(await screen.findByRole("heading", { name: "Discord" })).toBeTruthy();
     expect(await screen.findByRole("heading", { name: "OBS Studio" })).toBeTruthy();
   });
@@ -474,7 +477,7 @@ describe("session refresh and playback regressions", () => {
     await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
-    await messageBar().findByText(/No audio started. Select the speaker or headphone device/);
+    await messageBar().findByText(/No audio started. Choose the speaker or headphones/);
     expect(screen.getByRole("tab", { name: "Tools" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByRole("tab", { name: "Devices" })).toBeNull();
     expect(backend.startSession).not.toHaveBeenCalled();
@@ -626,27 +629,48 @@ describe("switching sessions", () => {
 
 describe("Reconnect", () => {
   it("shows that it is reconnecting and reports the result", async () => {
-    const { backend } = await fixture();
+    const { backend, refresh } = await fixture();
     await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
+    const working = backend.snapshot.getMockImplementation()!;
+    const reconnect = await loseConnection(backend, refresh);
+    backend.snapshot.mockImplementation(working);
     const calls = backend.snapshot.mock.calls.length;
-    fireEvent.click(
-      within(document.querySelector(".topbar") as HTMLElement).getByRole("button", { name: "Reconnect" }),
-    );
+    fireEvent.click(reconnect);
     await messageBar().findByText(/Reconnected\. Sessions, devices and audio status are up to date\./);
     expect(backend.snapshot.mock.calls.length).toBeGreaterThan(calls);
-  });
+    expect(reconnectButtons()).toHaveLength(0);
+  }, 20000);
 
   it("reports a failed reconnect instead of doing nothing visible", async () => {
+    const { backend, refresh } = await fixture();
+    await renderReady(<App backend={backend} />);
+    await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
+    const reconnect = await loseConnection(backend, refresh);
+    fireEvent.click(reconnect);
+    await messageBar().findByText(/Reconnect failed/, undefined, { timeout: 15000 });
+  }, 20000);
+
+  it("does not offer Reconnect while the connection is healthy", async () => {
     const { backend } = await fixture();
     await renderReady(<App backend={backend} />);
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
-    backend.snapshot.mockImplementation(async () => {
-      throw new Error("pipe closed");
-    });
-    fireEvent.click(
-      within(document.querySelector(".topbar") as HTMLElement).getByRole("button", { name: "Reconnect" }),
-    );
-    await messageBar().findByText(/Reconnect failed/, undefined, { timeout: 15000 });
-  }, 20000);
+    expect(reconnectButtons()).toHaveLength(0);
+  });
 });
+
+const reconnectButtons = () =>
+  within(document.querySelector(".topbar") as HTMLElement).queryAllByRole("button", { name: "Reconnect" });
+
+/** Makes the next snapshot fail, which is what brings the Reconnect button up. */
+async function loseConnection(backend: { snapshot: ReturnType<typeof vi.fn> }, refresh: () => void) {
+  backend.snapshot.mockImplementation(async () => {
+    throw new Error("pipe closed");
+  });
+  refresh();
+  return within(document.querySelector(".topbar") as HTMLElement).findByRole(
+    "button",
+    { name: "Reconnect" },
+    { timeout: 15000 },
+  );
+}

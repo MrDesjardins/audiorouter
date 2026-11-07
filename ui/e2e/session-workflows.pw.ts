@@ -1,3 +1,4 @@
+import { openSettings } from "./workbench";
 import { test, expect, initialSession } from "./real-backend";
 import type { Session } from "../../contracts/src/index";
 import { readFile } from "node:fs/promises";
@@ -81,10 +82,10 @@ test("draft undo, redo and revert restore exact nodes without saving accidental 
     .filter({ has: page.getByText("Gain", { exact: true }) })
     .click();
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
-  await page.getByRole("tab", { name: "Session", exact: true }).click();
-  await page.locator(".session-page").getByRole("button", { name: "Undo", exact: true }).click();
+  await page.locator(".topbar").getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toHaveCount(0);
-  await page.locator(".session-page").getByRole("button", { name: "Redo", exact: true }).click();
+  await page.locator(".topbar").getByRole("button", { name: "Redo", exact: true }).click();
+  await page.getByRole("tab", { name: "Session", exact: true }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
   await page.getByRole("button", { name: "Revert edits", exact: true }).click();
   await expect(page.getByTestId("rf__node-gain-1")).toHaveCount(0);
@@ -165,8 +166,7 @@ test("session export and validated import roundtrip through the UI without start
 }) => {
   await page.goto("/backend-harness.html");
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
-  await page.getByRole("tab", { name: "Advanced", exact: true }).click();
-  await page.locator(".right-workbench summary").filter({ hasText: "JSON graph transfer (for scripts)" }).click();
+  await openSettings(page, "Session as JSON");
   const panel = page.locator(".right-workbench .session-transfer-panel");
   const downloadReady = page.waitForEvent("download");
   await panel.getByRole("button", { name: "Export session", exact: true }).click();

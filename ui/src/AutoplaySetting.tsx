@@ -91,9 +91,9 @@ const API_AUTOSTART: StartupToggle = {
   label: "Start the local API automatically",
   command: "api_autostart",
   description:
-    "Keeps controllers such as a Stream Deck connected after a restart. The API uses the port and network it last started with (API tab), or this PC only on port 17891.",
+    "Keeps controllers such as a Stream Deck connected after a restart. The API uses the port and network it last started with (Settings, API), or this PC only on port 17891.",
   on: "The API will start with AudioRouter.",
-  off: "Start the API from the API tab when you need it.",
+  off: "Start the API from Settings, API, when you need it.",
   unavailable: "API auto-start setting unavailable.",
   failed: "API auto-start could not be saved. Try again.",
 };

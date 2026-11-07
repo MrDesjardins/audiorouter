@@ -4,7 +4,7 @@ import { openConnectionForm, setColorTheme } from "./workbench";
 test("adds a closed app from its executable path as a PID-free source", async ({ page }) => {
   await page.goto("/route-harness.html");
   await page.getByRole("tab", { name: "Tools" }).click();
-  await page.getByRole("button", { name: "Choose an application source" }).click();
+  await page.locator(".tool-card").filter({ hasText: "Application source" }).click();
 
   await page.getByLabel("Application executable path").fill("C:\\Games\\closed-game.exe");
   await page.getByRole("button", { name: "Add this app source" }).click();
@@ -27,7 +27,7 @@ test("creates an app group without changing existing graph connections in all th
   await connectionEditor.getByLabel("Destination input port").selectOption({ label: "Headphones · in · 2ch" });
   await connectionEditor.getByRole("button", { name: "Add connection", exact: true }).click();
   await page.getByRole("tab", { name: "Tools" }).click();
-  await page.getByRole("button", { name: "Choose an application source" }).click();
+  await page.locator(".tool-card").filter({ hasText: "Application source" }).click();
   await page.getByRole("button", { name: "App group" }).click();
   const path = page.getByLabel("Application executable path");
   for (const executable of ["C:\\Games\\game.exe", "C:\\Chat\\voice.exe"]) {
@@ -49,7 +49,7 @@ test("creates an app group without changing existing graph connections in all th
   }
   await expect(page.getByTestId("rf__node-mic")).toBeVisible();
   // Reopening the picker starts a new group instead of re-adding these apps.
-  await page.getByRole("button", { name: "Choose an application source" }).click();
+  await page.locator(".tool-card").filter({ hasText: "Application source" }).click();
   await page.getByRole("button", { name: "App group", exact: true }).click();
   await expect(page.getByRole("button", { name: "Create app group" })).toBeDisabled();
   await expect(page.getByText("C:\\Games\\game.exe")).toHaveCount(0);
@@ -60,7 +60,7 @@ test("keeps the application picker readable and stable in every theme", async ({
   for (const theme of ["dark", "light", "high-contrast"]) {
     await setColorTheme(page, theme);
     await page.getByRole("tab", { name: "Tools" }).click();
-    await page.getByRole("button", { name: "Choose an application source" }).click();
+    await page.locator(".tool-card").filter({ hasText: "Application source" }).click();
     await page.getByRole("button", { name: "App group", exact: true }).click();
     const status = page.locator(".application-picker-status");
     const before = (await status.boundingBox())?.height;

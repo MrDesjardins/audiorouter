@@ -89,12 +89,14 @@ for (const kind of ["compressor", "gate"] as const) {
       await expect(
         editor.getByRole("slider", { name: kind === "gate" ? "Threshold (opens)" : "Threshold", exact: true }),
       ).toHaveAttribute("aria-valuenow", String(parameters.thresholdDb));
+      for (const title of ["Last 8 seconds", "How one word is shaped"])
+        await editor.locator(".property-section summary").filter({ hasText: title }).click();
       // Let the 8 s history fill with words and pauses.
       await expect(editor.locator(".dynamics-live-dot")).toBeVisible();
       // The pill, status and suggestion change during talk (and the suggestion
       // first appears); nothing below them may move (UI-17).
       const offsets = await editor.evaluate(async (element) => {
-        const sketch = element.querySelector(".dynamics-sketch-details")!;
+        const sketch = element.querySelector(".property-section:last-of-type")!;
         const seen = new Set<number>();
         const until = performance.now() + 5500;
         while (performance.now() < until) {
@@ -108,7 +110,8 @@ for (const kind of ["compressor", "gate"] as const) {
       await editor.scrollIntoViewIfNeeded();
       await editor.screenshot({ path: testInfo.outputPath(`${kind}-${theme}.png`) });
       await editor
-        .locator(".dynamics-sketch-details")
+        .locator(".property-section")
+        .last()
         .screenshot({ path: testInfo.outputPath(`${kind}-${theme}-sketch.png`) });
 
       // Drag the threshold handle on the curve: the draft parameter follows.

@@ -997,6 +997,43 @@ export interface HandshakeResult {
   schemaVersion: number;
 }
 
+/** A starting route a person can pick by what they want to do (UI-01, UI-09). */
+export interface SessionGoal {
+  id: string;
+  title: string;
+  summary: string;
+  adds: string[];
+  main: boolean;
+  /** The question to ask when the route has an application source; null when it has none. */
+  applicationPrompt: string | null;
+  stillToChoose: string[];
+}
+
+/** One saved version of a session (UI-07: the client's identity, never a guessed person). */
+export interface SavedVersion {
+  revision: number;
+  name: string;
+  toolCount: number;
+  connectionCount: number;
+  savedAtMs: number | null;
+  savedBy: string | null;
+}
+
+/** Named settings a person saved for one kind of tool. */
+export interface ToolPreset {
+  id: string;
+  kind: string;
+  name: string;
+  parameters: Record<string, boolean | number | string>;
+}
+
+export interface SessionFromGoalResult {
+  session: Session;
+  state: "stopped";
+  /** What the person still has to pick, in plain words. */
+  stillToChoose: string[];
+}
+
 export interface SessionCreateResult {
   session: Session;
   state: "stopped";
@@ -1520,6 +1557,14 @@ export type ImplementedMethod =
   | "sessions.list"
   | "sessions.create"
   | "sessions.duplicate"
+  | "sessions.goals"
+  | "graph.versions"
+  | "graph.restorePlan"
+  | "nodes.compare"
+  | "toolPresets.list"
+  | "toolPresets.save"
+  | "toolPresets.delete"
+  | "sessions.createFromGoal"
   | "sessions.delete"
   | "sessions.active.get"
   | "sessions.active.set"
@@ -1707,6 +1752,24 @@ export type MethodParams = {
   "sessions.importCommit": { planId: EntityId; idempotencyKey: string };
   "sessions.list": { cursor?: string; limit?: number } | undefined;
   "sessions.create": { session: Session; idempotencyKey?: string };
+  "sessions.goals": undefined;
+  "graph.versions": { sessionId: EntityId };
+  "graph.restorePlan": { sessionId: EntityId; baseRevision: number; revision: number };
+  "nodes.compare": { sessionId?: EntityId; nodes: string[]; idempotencyKey: string };
+  "toolPresets.list": { kind?: string } | undefined;
+  "toolPresets.save": {
+    kind: string;
+    name: string;
+    parameters: Record<string, unknown>;
+    idempotencyKey: string;
+  };
+  "toolPresets.delete": { id: string; idempotencyKey: string };
+  "sessions.createFromGoal": {
+    goal: string;
+    name?: string;
+    application?: { executable: string; executablePath?: string } | null;
+    idempotencyKey: string;
+  };
   "sessions.duplicate": {
     sourceSessionId: EntityId;
     sessionId: EntityId;
@@ -1882,6 +1945,14 @@ export type MethodResult = {
   "sessions.importCommit": { session: Session; state: "stopped"; imported: true };
   "sessions.list": SessionListPage;
   "sessions.create": SessionCreateResult;
+  "sessions.goals": { goals: SessionGoal[] };
+  "graph.versions": { items: SavedVersion[] };
+  "graph.restorePlan": { planId: EntityId; baseRevision: number; expiresInMs: number };
+  "nodes.compare": { comparing: string[]; expiresInMs: number };
+  "toolPresets.list": { items: ToolPreset[] };
+  "toolPresets.save": { preset: ToolPreset };
+  "toolPresets.delete": { deleted: boolean };
+  "sessions.createFromGoal": SessionFromGoalResult;
   "sessions.duplicate": SessionCreateResult;
   "sessions.delete": SessionDeleteResult;
   "sessions.active.get": { sessionId: EntityId | null };

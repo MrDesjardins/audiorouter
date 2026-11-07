@@ -135,6 +135,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 | "nodes.catalog"
                 | "nodes.set"
         ) || method.starts_with("sessions.")
+            || method.starts_with("toolPresets.")
             || method.starts_with("graph.")
             || method.starts_with("audioMedia.")
             || matches!(method, "session.start" | "session.stop");

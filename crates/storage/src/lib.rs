@@ -1747,6 +1747,33 @@ impl Storage {
     }
 
     /// Persist the bounded explicit cross-session virtual-bus route registry.
+    /// A small named value in the settings table, for state that needs no table of its own.
+    pub fn load_control_value(&self, key: &str) -> Result<Option<String>, StorageError> {
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT value FROM control_settings WHERE key = ?1",
+                params![key],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?)
+    }
+
+    pub fn save_control_value(&self, key: &str, value: &str) -> Result<(), StorageError> {
+        self.connection.execute(
+            "INSERT INTO control_settings(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_control_value(&self, key: &str) -> Result<(), StorageError> {
+        self.connection
+            .execute("DELETE FROM control_settings WHERE key = ?1", params![key])?;
+        Ok(())
+    }
+
     /// Remember the session the user last selected, so a restart (for example
     /// AudioRouter started at sign-in with autoplay) selects the same route.
     pub fn save_active_session_id(&self, session_id: &EntityId) -> Result<(), StorageError> {

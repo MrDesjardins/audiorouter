@@ -189,7 +189,9 @@ export function VirtualCablePanel({
         </div>
       )}
       <p className="muted virtual-cable-version">
-        Driver {status?.driverVersion ?? "—"} · protocol {status?.protocol ?? "—"}
+        {status?.driverVersion
+          ? `Driver ${status.driverVersion}${status.protocol ? ` · protocol ${status.protocol}` : ""}`
+          : "No AudioRouter driver installed"}
       </p>
       <ul className="setup-status-list" aria-label="Cables">
         {status && status.cables.length > 0 ? (

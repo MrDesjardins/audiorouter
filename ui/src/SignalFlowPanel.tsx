@@ -474,8 +474,7 @@ export function SignalFlowPanel({
                   </button>
                 )}
                 <p className="muted">
-                  For advanced options (application-capture policy, preparing the native worker), use the Applications
-                  panel in Full workspace mode.
+                  After adding it, select the app's card and open Properties to change how it is captured.
                 </p>
               </section>
             </div>

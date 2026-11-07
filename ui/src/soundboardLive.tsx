@@ -112,6 +112,7 @@ export function useSoundboardController({
 }): SoundboardController {
   const [store] = useState(createSoundboardStore);
   const [importing, setImporting] = useState(false);
+  const pendingPresses = useRef(new Map<string, { released: boolean }>());
   // The ref closes the gap between a second drop and the re-render that disables it.
   const importBusy = useRef(false);
   const importFile = async (nodeId: string, slot: number, file: File, keepCaption: boolean) => {
@@ -178,14 +179,28 @@ export function useSoundboardController({
     };
   }, [backend, nodeIds, sessionId, sessionRunning, store]);
   const trigger = (nodeId: string, slot: number, action: "press" | "release" = "press") => {
+    const key = JSON.stringify([sessionId, nodeId, slot]);
+    const pending = pendingPresses.current.get(key);
+    if (action === "release" && pending) {
+      pending.released = true;
+      return;
+    }
     const send = backend.soundboardTrigger;
     if (!send || !backend.connected) return;
+    const press = action === "press" ? { released: false } : null;
+    if (press) pendingPresses.current.set(key, press);
     void (async () => {
       try {
         if (action === "press" && !sessionRunning && !(await startSession())) return;
+        // A key/pointer can be released while starting the route. Do not
+        // send release first and then start a held voice after the user lets go.
+        if (press?.released) return;
         await send.call(backend, sessionId, nodeId, slot, action);
+        if (press?.released) await send.call(backend, sessionId, nodeId, slot, "release");
       } catch {
         report("The sound could not be played. Check that the session is running.");
+      } finally {
+        if (press && pendingPresses.current.get(key) === press) pendingPresses.current.delete(key);
       }
     })();
   };

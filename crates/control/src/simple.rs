@@ -91,7 +91,7 @@ fn kind_name(kind: NodeKind) -> String {
 
 /// Default parameter values of a kind, from the node catalog. A parameter
 /// family (`namePattern`, such as `slot<N>Mode`) is never a literal key.
-fn default_parameters(kind: NodeKind) -> serde_json::Map<String, Value> {
+pub(crate) fn default_parameters(kind: NodeKind) -> serde_json::Map<String, Value> {
     ControlPlane::node_parameter_schema(kind)
         .as_array()
         .into_iter()
@@ -172,7 +172,7 @@ pub(crate) fn resolve_node<'s>(
 
 /// Connect `from` to the first free input of `to`, refusing an occupied
 /// single input (a Mixer input accepts several).
-fn connect(
+pub(crate) fn connect(
     session: &mut Session,
     from: &EntityId,
     to: &EntityId,

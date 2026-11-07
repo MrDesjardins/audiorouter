@@ -20,6 +20,30 @@ neither changes the export assertion. Hosted Ubuntu migration notice is runner
 metadata; no workflow change is needed for this test repair.
 Next: push the repair and require new-head hosted CI before merging #117.
 
+#118 integration: hosted run 42251017104 passed workspace/shell tests and
+strict Clippy, then probe-build failed because its --locked Cargo.lock lacks
+the control crate's windows dependency. Quality gate reports windows failure.
+Merge #117's repair commit and backport the one-line lockfile fix from #120.
+Validate the exact locked probe command and diff before push; require hosted
+CI on the resulting head. Requirements ENG-02/04; rollback is the scoped
+lockfile revert. Runner Ubuntu migration notice needs no project change.
+Windows local result: the exact locked probe check passed in 3.20 seconds;
+no Rust source changed. Next: push #118 and wait for its new-head CI.
+
+#118 run 42332406025 now passes native checks but fails three UI tests.
+Session picker: backport #120's confirmed ChangeHistory Suspense boundary and
+held-module regression. Apps tab and resume validation: first Status visit
+loads modules lazily; use the existing five-second cold-import budget on
+those queries, retaining every behavior assertion. Reproduced session picker
+failure locally before editing. Requirements UI-17, ENG-02/04. Validate focused
+and full UI suites, typecheck/lint/format and browser Session navigation;
+rollback only these scoped repairs. No real audio or hardware needed.
+Windows results: full UI suite 930/930 passed with --maxWorkers=2; focused
+files 135/135, Edge session-file/workbench navigation 10/10. Typecheck:all,
+lint, format:check, documentation and diff checks passed. No assertions or
+production timeouts weakened. Next: push #118, carry these repairs to #120,
+and require green hosted checks before ordered merges.
+
 ## Where things stand
 
 Owner-approved security-only PR preparation (2026-11-05): isolate all three
@@ -51,6 +75,19 @@ Vite chunk size and shared-policy advisory warnings are explicitly recorded in
 the evidence. The complete security-only diff was inspected. Next after the
 approved push/PR creation: hosted checks and owner review; no merge or release.
 
+Release 0.0.27 was published on 2026-11-05 as an unsigned Windows 11 x64 app-only
+experimental prerelease, from
+[`v0.0.27`](https://github.com/MrDesjardins/audiorouter/releases/tag/v0.0.27).
+Its version bump, notes and evidence live on `origin/release/0.0.27` and are not
+on `main`; that integration needs its own owner-approved PR. Until then `main`
+still says 0.0.26 and its release notes hold 0.0.27's text under "Unreleased".
+
+Local test build, 2026-11-04 (M08 build artifact; ENG-02/04): release shell with
+`custom-protocol`, VST2/VST3 workers and staged MCP CLI from `0a5d7677`. Exact-binary
+packaged smoke passed as Medium/non-admin (cold UI 1,666 ms, warm 799 ms, save 65 ms,
+two graceful exits, no uncaught UI errors). No live audio, hardware, full test suite
+or installer qualification was run. Evidence: `target/local-main-build-2026-11-04/`.
+
 Dependabot 7 (ENG-02/04/05), owner correction: removed the rejected 55k-line
 GLib vendor import, Cargo patch and supporting checks from PR
 [#115](https://github.com/MrDesjardins/audiorouter/pull/115). Normal crates.io
@@ -75,6 +112,9 @@ consolidation.
   capture baseline and iteratively improve all UI categories to evidence-backed
   9/10 in dark/light, with high-contrast regression checks. Isolated branch and
   harness only; preserve the documentation consolidation and live owner route.
+  Round 21 (the 13 approved mockup changes) is on branch `improve/ui-round-21`,
+  stacked on PR #117 and opened with the owner's approval on 2026-11-06. Progress,
+  defects and the remaining owner decision are in that file.
 
 1. Finish the 2026-11-01/2026-10-07 code-review disposition. The detailed
    execution record is [code-review fixes](code-review-fixes.md); most source

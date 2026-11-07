@@ -148,6 +148,29 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-11-06 — Exercise the release exe with its WebView profile isolated too.**
+  Evidence: [Round 21 progress](docs/plans/active/ui-quality-review.md). Scope: driving the built shell through
+  CDP. Consequence: `LOCALAPPDATA` moves the logs but not the WebView profile, so a disposable database met the owner's
+  remembered route, which exposed a real startup dead end. Set `WEBVIEW2_USER_DATA_FOLDER` as well, or the run reads and
+  can overwrite the owner's UI state. The harness never found this or the false "no readings" during a hold.
+
+- **2026-11-06 — Rebuild the `e2e_backend` example before trusting real-backend browser tests.**
+  Evidence: [Round 21 progress](docs/plans/active/ui-quality-review.md), `ui/e2e/session-file.pw.ts`.
+  Scope: `ui/e2e` tests importing `./real-backend`. Consequence: Playwright spawns
+  `target/debug/examples/e2e_backend.exe` and never builds it. A stale binary answered new methods with
+  "method not found", and also hid that an older test no longer matched a security repair. Run
+  `cargo build -p audiorouter-control --example e2e_backend` first, and add any new method family to its allowlist.
+
+- **2026-11-06 — On Windows, `Foo.tsx` and `foo.ts` are one file.**
+  Evidence: Round 21 file names (`paletteItems.ts`, `historyLabels.ts`, `micVerdict.ts`, `compareRules.ts`).
+  Scope: a component with a logic file beside it. Consequence: writing the logic file silently replaced the
+  component. Give the logic file a different name, not a different case.
+
+- **2026-11-06 — React Flow anchors a drag at the first move past its threshold.**
+  Evidence: `drag` helper in `ui/e2e/canvas-aids.pw.ts`. Scope: browser tests dragging cards, with snap on.
+  Consequence: a large first step anchors the drag a grid row away, which looks like a product bug. Wait for the
+  view to settle, then make a 2 px first step.
+
 - **2026-11-05 — Test authorization through the forwarding adapter.**
   Evidence: [security repair](docs/plans/active/evidence/2026-11-05-security-fixes.md),
   `real_mcp_pipe_preserves_roles_and_live_revocation`. Scope: adapters forwarding

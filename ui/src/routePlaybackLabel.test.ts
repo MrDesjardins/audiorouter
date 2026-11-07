@@ -7,6 +7,11 @@ it("identifies a current draft preview until Stop", () => {
   expect(routePlaybackLabel({ ...preview, running: false })).toBe("Audio stopped");
   expect(routePlaybackLabel({ ...preview, busy: true })).toBe("Updating audio…");
 });
+it("says the mic is muted while audio runs, ahead of the preview note", () => {
+  expect(routePlaybackLabel({ ...preview, micMuted: true })).toBe("Audio running · Mic muted");
+  expect(routePlaybackLabel({ ...preview, micMuted: true, running: false })).toBe("Audio stopped");
+  expect(routePlaybackLabel({ ...preview, micMuted: true, busy: true })).toBe("Updating audio…");
+});
 it("does not certify saved or preview audio from stale or externally replaced runtime", () => {
   expect(routePlaybackLabel({ ...preview, fresh: false })).toBe("Audio running");
   expect(routePlaybackLabel({ ...preview, generation: 5 })).toBe("Audio running");

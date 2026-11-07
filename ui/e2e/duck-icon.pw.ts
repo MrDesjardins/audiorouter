@@ -8,7 +8,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.goto("/route-harness.html");
     await page.getByRole("tab", { name: "Tools", exact: true }).click();
     const card = page.locator(".tool-card").filter({ has: page.getByText("Duck", { exact: true }) });
-    await expect(card.locator(".tool-card-icon svg.tool-card-glyph")).toHaveCount(1);
+    await expect(card.locator(".tool-card-icon svg.icon")).toHaveCount(1);
     await expect(card.locator(".tool-card-icon")).not.toContainText("⤓");
     await card.scrollIntoViewIfNeeded();
     await card.screenshot({ path: testInfo.outputPath(`duck-icon-${theme}.png`) });

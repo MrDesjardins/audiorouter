@@ -12,6 +12,12 @@ import { formatUiError } from "./backend";
 
 type Format = "json" | "curl" | "powershell";
 
+function savedValueText(target: BuilderTarget, node: Session["nodes"][number]): string {
+  const current = target.kind === "flag" ? node[target.key] : (node.parameters[target.key] ?? target.spec.default);
+  if (current !== undefined && current !== null) return String(current);
+  return target.kind === "parameter" && target.choices ? (target.choices[0]?.value ?? "") : "";
+}
+
 /**
  * API tab request builder: pick a session, a tool and one setting, then copy
  * the exact REST request or send it once. Choosing never changes anything;
@@ -57,18 +63,16 @@ export function RequestBuilder({
   useEffect(() => {
     if (!targets.some((item) => item.key === targetKey)) setTargetKey(targets[0]?.key ?? "");
   }, [targets, targetKey]);
+  // A backend refresh brings new objects with the same content, and can land after a send has
+  // returned. Compare plain values, so it cannot erase the Sent message or a value being typed.
+  const choiceIdentity = target ? JSON.stringify([session?.id, nodeId, target.kind, target.key]) : null;
+  const savedText = target && node ? savedValueText(target, node) : null;
   useEffect(() => {
-    if (!target) return;
-    const current = target.kind === "flag" ? node?.[target.key] : (node?.parameters[target.key] ?? target.spec.default);
-    setValueText(
-      current === undefined || current === null
-        ? target.kind === "parameter" && target.choices
-          ? (target.choices[0]?.value ?? "")
-          : ""
-        : String(current),
-    );
+    if (savedText !== null) setValueText(savedText);
+  }, [choiceIdentity, savedText]);
+  useEffect(() => {
     setStatus(null);
-  }, [target, node]);
+  }, [choiceIdentity]);
 
   const parsed = target ? parseValue(target, valueText) : null;
   const request =

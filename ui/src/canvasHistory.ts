@@ -8,6 +8,8 @@ export type CanvasSnapshot = {
   sizes: NodeLayoutSizes;
   sides: EdgeLayoutSides;
   edgeIds: string[];
+  /** The right panel's width, a window-wide preference that undoes with the layout around it. */
+  panelWidth?: number;
 };
 export type CanvasHistory = { sessionId: string; past: CanvasSnapshot[]; future: CanvasSnapshot[] };
 const LIMIT = 20;
@@ -36,6 +38,8 @@ export function geometryChanged(before: CanvasRect[], after: CanvasRect[]): bool
 export function canvasLayoutChanged(before: CanvasSnapshot, after: CanvasSnapshot): boolean {
   if (before.sessionId !== after.sessionId) return false;
   if (geometryChanged(before.items, after.items)) return true;
+  if (before.panelWidth !== undefined && after.panelWidth !== undefined && before.panelWidth !== after.panelWidth)
+    return true;
   const current = new Set(after.edgeIds);
   return before.edgeIds.some((id) => {
     if (!current.has(id)) return false;
@@ -104,7 +108,7 @@ export function restoreCanvasHistory(
     }
   const savedCurrent = copyCanvasSnapshot(current);
   return {
-    snapshot: { ...current, items, sizes, sides },
+    snapshot: { ...current, items, sizes, sides, panelWidth: previous.panelWidth ?? current.panelWidth },
     status: "restored",
     history:
       direction === "undo"

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "./browser-test";
-import { openConnectionForm, openDeviceTroubleshooting, stereoDemoSession } from "./workbench";
+import { openConnectionForm, openDeviceTroubleshooting, stereoDemoSession, fitCanvas } from "./workbench";
 
 async function playingRoute(page: Page, mode = "") {
   await page.addInitScript((session) => Object.assign(window, { __routeFixtureSession: session }), stereoDemoSession);
@@ -14,6 +14,7 @@ async function playingRoute(page: Page, mode = "") {
     await editor.getByLabel("Destination input port").selectOption({ label: target });
     await editor.getByRole("button", { name: "Add connection", exact: true }).click();
   }
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/saved.*revision/i);
   await openDeviceTroubleshooting(page);
@@ -77,6 +78,7 @@ test("live flags apply only the flag and keep unsaved topology edits in the draf
     .click();
   await expect(page.getByTestId("rf__node-gain-1")).toBeVisible();
   await expect(save).toBeEnabled();
+  await fitCanvas(page);
   await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
   const bypass = page.locator(".main-content > .inspector").getByRole("checkbox", { name: "Bypass", exact: true });
   await bypass.click();

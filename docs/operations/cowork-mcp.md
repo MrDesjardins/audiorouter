@@ -22,7 +22,7 @@ and [Cowork architecture overview](https://support.claude.com/en/articles/144792
 4. Ask: **“Use AudioRouter to list my sessions. Do not change anything.”**
    Check AudioRouter's MCP activity for the matching client and successful call.
 5. To permit edits, use the **Set client permissions** link or expand **Client
-   permissions** in AudioRouter's MCP tab and choose the role for
+   permissions** on AudioRouter's Settings → AI assistants (MCP) page and choose the role for
    `audiorouter-cowork-local`:
    - **Editor** builds and changes sessions: add, connect and set tools, fill
      Soundboard slots, undo, duplicate and delete sessions.

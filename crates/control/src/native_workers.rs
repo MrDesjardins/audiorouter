@@ -591,6 +591,7 @@ impl ControlPlane {
         let mut session = candidate
             .cloned()
             .unwrap_or_else(|| self.get_session(session_id).expect("loaded above").clone());
+        session = self.with_comparison(session);
         session = audiorouter_engine::prune_unfed_upstream(&session).into_owned();
         let recorder_node_ids = session
             .nodes

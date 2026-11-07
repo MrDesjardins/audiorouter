@@ -29,7 +29,7 @@ assistant run?”, and connect the saved tunnel. The page shows the exact
 then choose **Open ChatGPT connector settings**. Keep
 AudioRouter and its tunnel connected while adding or using the plugin.
 
-![AudioRouter's MCP tab shows the optional ChatGPT OpenAI tunnel ready, the read-only client disclosure, and the Open ChatGPT connector settings button.](../images/chatgpt-mcp-audiorouter-setup.png)
+![AudioRouter's Settings → AI assistants (MCP) page shows the optional ChatGPT OpenAI tunnel ready, the read-only client disclosure, and the Open ChatGPT connector settings button.](../images/chatgpt-mcp-audiorouter-setup.png)
 
 *The owner's AudioRouter connection screen (`Mcp_AudioRouter_Setup.png`).*
 

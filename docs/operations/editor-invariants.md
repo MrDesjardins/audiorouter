@@ -28,8 +28,13 @@ the renderer graph validation or audio authority.
 
 ## Commands and restore
 
-- Drag, resize, alignment, distribution, size matching, connector-side edits
-  and Arrange use one layout history path. Undo arrange is a temporary shortcut
+- The window's Undo, Redo and their shortcuts act on the newest change, whether
+  a route edit or a layout change. Each history restores only its own data, so a
+  layout undo never stands in for a route undo; the older one follows on the next
+  press. Undo layout and Redo layout reach only the layout history.
+- Drag, resize, alignment, distribution, size matching, connector-side edits,
+  right-panel width and Arrange use one layout history path. Resizing several
+  selected groups is one step. Undo arrange is a temporary shortcut
   to that path, with the same redo semantics. A later edit or history restore
   retires the shortcut.
 - A no-op never adds a history entry or clears redo. Missing connector-side

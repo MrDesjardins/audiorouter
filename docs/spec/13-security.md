@@ -51,7 +51,7 @@ The optional [localhost HTTP adapter](16-local-http-api.md) uses a bearer token
 saved encrypted with current-user Windows DPAPI and the existing desktop grant.
 It is retained until explicit regeneration; the listener stays stopped at launch.
 It does not grant additional scopes. Local-network control exists only when
-the user picks one of this PC's private addresses in the API tab (HTTP-09,
+the user picks one of this PC's private addresses in the API page (HTTP-09,
 2026-10-04): unencrypted HTTP with the same token, private/link-local peers
 only, never all interfaces, off at launch. Exact origin/Host checks and bounded requests are
 required alongside authentication.

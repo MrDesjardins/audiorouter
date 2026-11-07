@@ -467,6 +467,100 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
             "required": ["session", "state", "imported"],
             "additionalProperties": false
         }),
+        "graph.versions" => json!({
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "revision": { "type": "integer", "minimum": 0 },
+                            "name": { "type": "string" },
+                            "toolCount": { "type": "integer", "minimum": 0 },
+                            "connectionCount": { "type": "integer", "minimum": 0 },
+                            "savedAtMs": { "type": ["integer", "null"] },
+                            "savedBy": { "type": ["string", "null"], "description": "The saving client's identity; null when it is not known." }
+                        },
+                        "required": ["revision", "name", "toolCount", "connectionCount", "savedAtMs", "savedBy"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["items"],
+            "additionalProperties": false
+        }),
+        "graph.restorePlan" => json!({
+            "type": "object",
+            "properties": {
+                "planId": { "type": "string" },
+                "baseRevision": { "type": "integer", "minimum": 0 },
+                "expiresInMs": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["planId", "baseRevision", "expiresInMs"],
+            "additionalProperties": false
+        }),
+        "nodes.compare" => json!({
+            "type": "object",
+            "properties": {
+                "comparing": { "type": "array", "items": { "type": "string" } },
+                "expiresInMs": { "type": "integer", "minimum": 0 }
+            },
+            "required": ["comparing", "expiresInMs"],
+            "additionalProperties": false
+        }),
+        "toolPresets.list" => json!({
+            "type": "object",
+            "properties": { "items": { "type": "array", "items": tool_preset_schema() } },
+            "required": ["items"],
+            "additionalProperties": false
+        }),
+        "toolPresets.save" => json!({
+            "type": "object",
+            "properties": { "preset": tool_preset_schema() },
+            "required": ["preset"],
+            "additionalProperties": false
+        }),
+        "toolPresets.delete" => json!({
+            "type": "object",
+            "properties": { "deleted": { "type": "boolean" } },
+            "required": ["deleted"],
+            "additionalProperties": false
+        }),
+        "sessions.goals" => json!({
+            "type": "object",
+            "properties": {
+                "goals": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "string" },
+                            "title": { "type": "string" },
+                            "summary": { "type": "string" },
+                            "adds": { "type": "array", "items": { "type": "string" } },
+                            "main": { "type": "boolean" },
+                            "applicationPrompt": { "type": ["string", "null"] },
+                            "stillToChoose": { "type": "array", "items": { "type": "string" } }
+                        },
+                        "required": ["id", "title", "summary", "adds", "main", "applicationPrompt", "stillToChoose"],
+                        "additionalProperties": false
+                    }
+                }
+            },
+            "required": ["goals"],
+            "additionalProperties": false
+        }),
+        "sessions.createFromGoal" => json!({
+            "type": "object",
+            "properties": {
+                "session": session_item_schema(),
+                "state": { "const": "stopped" },
+                "stillToChoose": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["session", "state", "stillToChoose"],
+            "additionalProperties": false
+        }),
         "sessions.create" | "sessions.duplicate" => json!({
             "type": "object",
             "properties": {
@@ -2368,6 +2462,20 @@ pub(crate) fn session_item_schema() -> Value {
             }
         },
         "required": ["id", "name", "schemaVersion", "revision", "nodes", "edges"],
+        "additionalProperties": false
+    })
+}
+
+fn tool_preset_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "id": { "type": "string" },
+            "kind": { "type": "string" },
+            "name": { "type": "string" },
+            "parameters": { "type": "object" }
+        },
+        "required": ["id", "kind", "name", "parameters"],
         "additionalProperties": false
     })
 }

@@ -441,6 +441,9 @@ impl ControlPlane {
         // while playing cannot starve the outputs (heard as a click).
         self.service_running_native_audio(std::time::Instant::now());
         if !result.idempotent_replay {
+            // A save replaces what is playing, so any held comparison ends here.
+            self.clear_comparison(&result.session_id);
+            self.note_saved_revision(&result.session_id, result.revision);
             self.events.append(
                 result.revision,
                 Some(display_operation_id.into()),

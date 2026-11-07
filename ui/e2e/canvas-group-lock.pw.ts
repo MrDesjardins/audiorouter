@@ -6,7 +6,7 @@ test("a locked group cannot be dragged, resized or deleted by accident", async (
     Object.assign(window, { __routeFixtureSession: session });
   }, demoSession);
   await page.goto("/route-harness.html");
-  await page.getByRole("button", { name: "Group A named visual background; no audio routing" }).click();
+  await page.getByRole("button", { name: "Group", exact: true }).click();
   await page.getByLabel("Lock group position and size").check();
   const group = page.locator(".visual-group-node");
   await expect(group).toHaveClass(/is-locked/);

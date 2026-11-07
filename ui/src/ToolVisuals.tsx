@@ -15,6 +15,7 @@ import {
 import type { Node } from "@audiorouter/contracts";
 import type { ProcessorResponse, UiBackend } from "./backend";
 import { NumberField } from "./NumberField";
+import { SliderInput } from "./Slider";
 import { svgPoint } from "./SvgHandle";
 import { formatParameterValue, parameterText } from "./parameterText";
 import { nextFallingLevel, nextPeakHold, type PeakHold } from "./dynamics";
@@ -257,10 +258,11 @@ export function GraphicEqEditor({
               {gains[index] > 0 ? "+" : ""}
               {gains[index]}
             </span>
-            <input
-              type="range"
+            <SliderInput
+              className="is-vertical"
               aria-label={`${bandLabel(index)} band`}
               aria-valuetext={signedDb(gains[index])}
+              title="Double-click to restore 0 dB"
               min={-18}
               max={18}
               step={0.5}
@@ -269,7 +271,7 @@ export function GraphicEqEditor({
               onFocus={() => setSelected(index)}
               onPointerDown={() => setSelected(index)}
               onDoubleClick={() => set(index, 0)}
-              onChange={(event) => set(index, Number(event.target.value))}
+              onValue={(value) => set(index, value)}
             />
             <span className="graphic-eq-hz">{bandLabel(index).replace(" kHz", "k").replace(" Hz", "")}</span>
           </label>
@@ -359,7 +361,7 @@ function ShelfHandle({
       aria-valuenow={gainDb}
       aria-valuetext={`${signedDb(gainDb)} from ${Math.round(frequencyHz)} Hz`}
       onPointerDown={(event) => {
-        if (disabled) return;
+        if (disabled || event.button !== 0) return;
         event.currentTarget.setPointerCapture?.(event.pointerId);
         setDragging(true);
       }}

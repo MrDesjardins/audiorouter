@@ -10,7 +10,8 @@ test("copy and paste a configured node across sessions with menus and shortcuts"
   await page.goto("/backend-harness.html");
   await setColorTheme(page, "dark");
   const source = page.getByTestId("rf__node-voice");
-  await source.click();
+  await source.locator(".flow-node-title").click();
+  await source.focus();
   await page.keyboard.press("Control+c");
 
   await page.getByRole("tab", { name: "Session", exact: true }).click();
@@ -53,7 +54,8 @@ test("copy and paste a configured node across sessions with menus and shortcuts"
     await setColorTheme(page, theme);
     await canvas.click({
       button: "right",
-      position: { x: Math.max(40, bounds.width - 35), y: 40 },
+      // Clear of the map in the top right corner.
+      position: { x: Math.max(40, bounds.width - 35), y: 180 },
     });
     await expect(page.getByRole("menu", { name: "Canvas actions" })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`paste-menu-${theme}.png`) });

@@ -25,6 +25,47 @@ export type LayoutAction =
   | "distribute-horizontal"
   | "distribute-vertical";
 
+const GROUP_MIN_WIDTH = 180;
+const GROUP_MIN_HEIGHT = 100;
+const GROUP_MAX_SIZE = 10_000;
+
+/** One axis of a frame after its two edges moved; at a size limit, the edge being dragged stops. */
+function resizedSpan(start: number, size: number, startMoved: number, endMoved: number, min: number) {
+  const wanted = size + endMoved - startMoved;
+  const limited = Math.min(GROUP_MAX_SIZE, Math.max(min, wanted));
+  // Keep the edge that did not move in place, so a clamped frame does not drift.
+  return { start: startMoved !== 0 ? start + size - limited : start, size: limited };
+}
+
+/**
+ * Every other selected group follows the one being dragged: the same edges move by the same
+ * distance, measured from where the gesture began so a size limit cannot accumulate drift.
+ * Locked groups and everything that is not a selected group stay as they are.
+ */
+export function resizeGroupsTogether(
+  items: CanvasRect[],
+  gestureStart: CanvasRect[],
+  activeId: string,
+  selectedIds: readonly string[],
+): CanvasRect[] {
+  const startById = new Map(gestureStart.map((item) => [item.id, item]));
+  const active = items.find((item) => item.id === activeId);
+  const activeStart = startById.get(activeId);
+  if (!active || !activeStart) return items;
+  const left = active.x - activeStart.x;
+  const right = active.x + active.width - (activeStart.x + activeStart.width);
+  const top = active.y - activeStart.y;
+  const bottom = active.y + active.height - (activeStart.y + activeStart.height);
+  const selected = new Set(selectedIds);
+  return items.map((item) => {
+    const start = startById.get(item.id);
+    if (item.id === activeId || !item.group || item.locked || !start || !selected.has(item.id)) return item;
+    const horizontal = resizedSpan(start.x, start.width, left, right, GROUP_MIN_WIDTH);
+    const vertical = resizedSpan(start.y, start.height, top, bottom, GROUP_MIN_HEIGHT);
+    return { ...item, x: horizontal.start, y: vertical.start, width: horizontal.size, height: vertical.size };
+  });
+}
+
 const LIMIT = 100_000;
 const contains = (outer: CanvasRect, inner: CanvasRect) =>
   outer.x <= inner.x &&

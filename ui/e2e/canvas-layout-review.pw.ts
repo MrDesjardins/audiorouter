@@ -1,6 +1,12 @@
 import type { Page } from "@playwright/test";
 import { test, expect } from "./real-backend";
 
+/** Close cards keep the connection bar hidden until it has focus or the line is pointed at. */
+async function openConnectionMenu(page: Page, edgeId: string) {
+  await page.getByRole("button", { name: "Add processor to connection " + edgeId, exact: true }).focus();
+  await page.keyboard.press("Enter");
+}
+
 /** The session is adopted and measured, and the view has stopped moving. */
 async function canvasSettled(page: Page) {
   const ready = page.getByTestId("canvas-readiness");
@@ -34,7 +40,8 @@ test("foreign saved position fields cannot replace geometry identities", async (
   await expect(voice).toBeVisible();
   const position = () => voice.evaluate((element) => (element as HTMLElement).style.transform);
   const before = await position();
-  await voice.click();
+  await voice.locator(".flow-node-title").click();
+  await voice.focus();
   await page.keyboard.press("ArrowRight");
   await expect.poll(position).not.toBe(before);
   await page.getByRole("button", { name: "Undo layout", exact: true }).click();
@@ -97,15 +104,17 @@ test("Undo layout retires the old Undo arrange shortcut without losing redo", as
 test("connector side changes participate in layout undo and redo", async ({ page }) => {
   await page.goto("/backend-harness.html");
   const edgeId = (await page.locator(".react-flow__edges .react-flow__edge").first().getAttribute("data-id"))!;
-  await page.getByRole("button", { name: "Add processor to connection " + edgeId, exact: true }).click();
+  await openConnectionMenu(page, edgeId);
   const menu = page.getByRole("menu", { name: "Configure connection " + edgeId, exact: true });
   await menu.locator(".edge-side-picker").first().getByRole("menuitem", { name: "bottom", exact: true }).click();
   await expect(page.getByRole("button", { name: "Undo layout", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Undo layout", exact: true }).click();
+  await openConnectionMenu(page, edgeId);
   await expect(
     menu.locator(".edge-side-picker").first().getByRole("menuitem", { name: "right", exact: true }),
   ).toHaveClass("is-selected");
   await page.getByRole("button", { name: "Redo layout", exact: true }).click();
+  await openConnectionMenu(page, edgeId);
   await expect(
     menu.locator(".edge-side-picker").first().getByRole("menuitem", { name: "bottom", exact: true }),
   ).toHaveClass("is-selected");
@@ -128,7 +137,7 @@ test("connector changes still work when saving local preferences fails", async (
   });
   await page.goto("/backend-harness.html");
   const edgeId = (await page.locator(".react-flow__edges .react-flow__edge").first().getAttribute("data-id"))!;
-  await page.getByRole("button", { name: "Add processor to connection " + edgeId, exact: true }).click();
+  await openConnectionMenu(page, edgeId);
   const menu = page.getByRole("menu", { name: "Configure connection " + edgeId, exact: true });
   await menu.locator(".edge-side-picker").first().getByRole("menuitem", { name: "bottom", exact: true }).click();
   await expect(page.getByTestId("rf__node-voice")).toBeVisible();
@@ -157,18 +166,20 @@ test("connector edits and geometry undo in order and a new edit clears redo", as
   const arranged = await position();
   expect(arranged).not.toBe(before);
   const edgeId = (await page.locator(".react-flow__edges .react-flow__edge").first().getAttribute("data-id"))!;
-  await page.getByRole("button", { name: "Add processor to connection " + edgeId, exact: true }).click();
+  await openConnectionMenu(page, edgeId);
   const menu = page.getByRole("menu", { name: "Configure connection " + edgeId, exact: true });
   const source = menu.locator(".edge-side-picker").first();
   await source.getByRole("menuitem", { name: "bottom", exact: true }).click();
   await expect(page.getByRole("button", { name: "Undo arrange", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Undo layout", exact: true }).click();
   expect(await position()).toBe(arranged);
+  await openConnectionMenu(page, edgeId);
   await expect(source.getByRole("menuitem", { name: "right", exact: true })).toHaveClass("is-selected");
   await page.getByRole("button", { name: "Undo layout", exact: true }).click();
   expect(await position()).toBe(before);
   await page.getByRole("button", { name: "Redo layout", exact: true }).click();
   expect(await position()).toBe(arranged);
+  await openConnectionMenu(page, edgeId);
   await source.getByRole("menuitem", { name: "top", exact: true }).click();
   await expect(page.getByRole("button", { name: "Redo layout", exact: true })).toBeDisabled();
 });

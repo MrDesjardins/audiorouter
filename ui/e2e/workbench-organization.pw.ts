@@ -1,6 +1,6 @@
 import { test, expect } from "./browser-test";
 import { DEFAULT_CUSTOM_THEME } from "../src/customTheme";
-import { openAppSettings } from "./workbench";
+import { openDeviceAccessSettings, openSettings, openPage } from "./workbench";
 
 test("a delayed settings panel leaves playback and the canvas in place", async ({ page }) => {
   let release!: () => void;
@@ -11,7 +11,7 @@ test("a delayed settings panel leaves playback and the canvas in place", async (
   const loading = new Promise<void>((resolve) => {
     requested = resolve;
   });
-  await page.route(/\/(?:src\/AdvancedWorkbench\.tsx(?:\?|$)|assets\/AdvancedWorkbench-[^/]+\.js$)/, async (route) => {
+  await page.route(/\/(?:src\/SettingsSections\.tsx(?:\?|$)|assets\/SettingsSections-[^/]+\.js$)/, async (route) => {
     requested();
     await ready;
     await route.fallback();
@@ -21,14 +21,23 @@ test("a delayed settings panel leaves playback and the canvas in place", async (
     await expect(page.getByRole("tab", { name: "Tools", exact: true })).toHaveAttribute("aria-selected", "true");
     const canvas = page.locator("#signal-flow-panel");
     const before = await canvas.boundingBox();
-    await page.getByRole("tab", { name: "Advanced", exact: true }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Virtual Cables", exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "When AudioRouter starts", exact: true }).click();
     await loading;
     await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
-    await expect(page.getByRole("tablist", { name: "Right sidebar" })).toBeVisible();
-    await expect(page.getByRole("tab", { name: "Tools", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("tablist", { name: "Settings pages" })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Virtual Cables", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     expect(await canvas.boundingBox()).toEqual(before);
     release();
-    await expect(page.getByRole("heading", { name: "Advanced controls", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "When AudioRouter starts", exact: true })).toBeVisible();
+    expect(await canvas.boundingBox()).toEqual(before);
+    await page.getByRole("button", { name: "Back to the route" }).click();
+    await expect(page.getByRole("tab", { name: "Tools", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
     expect(await canvas.boundingBox()).toEqual(before);
   } finally {
     release();
@@ -45,22 +54,23 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.locator(".setup-status-list > li")).toHaveCount(6);
     await expect(page.getByRole("heading", { name: "Audio devices on this PC" })).toBeVisible();
     await page.screenshot({ path: info.outputPath(theme + "-status.png") });
-    await page.getByRole("tab", { name: "Virtual Cables", exact: true }).click();
+    await openSettings(page, "Virtual Cables");
     await expect(page.getByRole("heading", { name: "Use with other apps" })).toBeVisible();
     await expect(page.locator("#setup-status-heading")).toHaveCount(0);
     await page.screenshot({ path: info.outputPath(theme + "-cables.png") });
-    await page.getByRole("tab", { name: "UI Options", exact: true }).click();
+    await openSettings(page, "Appearance");
     await expect(page.getByLabel("Color theme")).toBeVisible();
     await expect(page.getByLabel("Import theme file")).toHaveCSS("border-radius", "9px");
     await page.screenshot({ path: info.outputPath(theme + "-options.png") });
-    await openAppSettings(page);
-    await expect(page.getByRole("region", { name: "New versions" })).toBeVisible();
+    await openDeviceAccessSettings(page);
     await expect(page.getByRole("group", { name: "Audio device access" })).toBeVisible();
-    await page.getByRole("tab", { name: "Recording", exact: true }).click();
+    await openPage(page, "New versions");
+    await expect(page.getByRole("region", { name: "New versions" })).toBeVisible();
+    await openPage(page, "Recording");
     await expect(page.locator(".recording-library .recording-empty")).toContainText("No completed recordings yet");
     await expect(page.getByText("No completed recording files yet.", { exact: true })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath(theme + "-recordings.png") });
-    await page.getByRole("tab", { name: "MCP", exact: true }).click();
+    await openSettings(page, "AI assistants (MCP)");
     await page.getByRole("button", { name: "On this PC", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Choose your assistant" })).toBeVisible();
     await page.getByLabel("Local assistant").selectOption("claude");
@@ -72,7 +82,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
 }
 test("custom theme file import, export and persistence", async ({ page }) => {
   await page.goto("/route-harness.html");
-  await page.getByRole("tab", { name: "UI Options", exact: true }).click();
+  await openSettings(page, "Appearance");
   const imported = {
     ...DEFAULT_CUSTOM_THEME,
     name: "Studio mint",
@@ -102,7 +112,7 @@ test("custom theme file import, export and persistence", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("six-digit hex");
   await expect(page.getByLabel("Theme name")).toHaveValue("Studio mint");
   await page.reload();
-  await page.getByRole("tab", { name: "UI Options", exact: true }).click();
+  await openSettings(page, "Appearance");
   await expect(page.getByLabel("Color theme")).toHaveValue(/^custom:/);
   await expect(page.getByLabel("Theme name")).toHaveValue("Studio mint");
   // A new theme is added beside the imported one, then deleted again.
@@ -151,7 +161,7 @@ for (const sidebar of [404, 428, 520]) {
     await page.goto("/route-harness.html");
     await expect(page.locator(".right-workbench")).toHaveCSS("scrollbar-gutter", "stable");
     const heights = new Set<number>();
-    for (const name of ["Tools", "MCP", "Recording", "Properties", "UI Options", "Virtual Cables", "Logs"]) {
+    for (const name of ["Tools", "Status", "Recording", "Properties", "Session"]) {
       await page.getByRole("tab", { name, exact: true }).click();
       for (const height of await page
         .locator(".workbench-tabs button")

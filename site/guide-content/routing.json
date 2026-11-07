@@ -587,7 +587,7 @@
           "minimum": -24,
           "maximum": 6,
           "default": 0,
-          "meaning": "Makes this one sound quieter or louder before it is mixed, from -24 dB to +6 dB.",
+          "meaning": "Makes this one sound quieter or louder before it is mixed, from -24 dB to +6 dB. Drag the slider or type an exact value beside it. The reset button, or a double-click on the slider, restores 0 dB.",
           "increase": "The sound plays louder.",
           "decrease": "The sound plays quieter.",
           "example": "Lower a loud air horn by 6 dB so it does not drown your voice.",
@@ -602,7 +602,7 @@
           "maximum": null,
           "default": "once",
           "options": ["once", "loop", "toggle", "hold"],
-          "meaning": "Play once (a second press restarts it), Loop, Toggle on/off, or Play while held.",
+          "meaning": "Play once (a second press restarts it), Loop, Toggle on/off, or Play while held. For Play while held, keep the mouse button, Space or Enter down; release it to stop. Moving focus away also releases a held sound.",
           "increase": "",
           "decrease": "",
           "example": "Set a background cheer to Toggle and press it once to start and again to stop.",
@@ -616,7 +616,7 @@
             "Add a Soundboard from the Source group and connect it to your output or a Mixer.",
             "Open its properties and choose Add sound.",
             "Search the library, press Preview to listen, then press Use.",
-            "Plan and commit, then press the button on the tool."
+            "Save the route, then press the button on the tool."
           ]
         },
         {

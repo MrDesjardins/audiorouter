@@ -1,11 +1,11 @@
-import { ToolGuideLink } from "./ToolGuideLink";
+import { ToolShelf } from "./ToolShelf";
 import type { VerboseLoggingControl } from "./LogFilesPanel";
 import { SessionIdentity } from "./NodeIdentity";
-import { endLibraryDrag, startLibraryDrag } from "./libraryDrag";
-import { TOOL_HELP, type LibraryEntry } from "./library";
+import type { LibraryEntry } from "./library";
 import { TextField } from "./TextField";
 import { HelpDisclosure } from "./HelpDisclosure";
-import { DuckGlyph } from "./DuckGlyph";
+import { Icon } from "./icons";
+import { usePanelMemory } from "./usePanelMemory";
 import type { Session } from "@audiorouter/contracts";
 import type { ClientRow } from "./backend";
 import { lazy, startTransition, Suspense, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -13,85 +13,110 @@ import { lazy, startTransition, Suspense, useLayoutEffect, useRef, useState, typ
 const ApiPanel = lazy(() => import("./ApiPanel").then((module) => ({ default: module.ApiPanel })));
 const LogFilesPanel = lazy(() => import("./LogFilesPanel").then((module) => ({ default: module.LogFilesPanel })));
 
-const TOOL_ICONS: Record<string, ReactNode> = {
-  volume: "◖",
-  "bass-treble": "♮",
-  dehum: "≁",
-  declick: "⌇",
-  denoise: "░",
-  "speech-denoise": "☊",
-  "spectral-gate": "▥",
-  "fun-voice-changer": "☺",
-  "fir-filter": "⧉",
-  "input-switch": "⇄",
-  "output-switch": "⇄",
-  duck: <DuckGlyph className="tool-card-glyph" />,
-  "time-shift": "↺",
-  "physical-input": "◉",
-  "test-signal": "∿",
-  "audio-file": "♫",
-  soundboard: "▦",
-  "endpoint-loopback": "↶",
-  "virtual-render-source": "⊞",
-  "physical-output": "◎",
-  "virtual-capture-sink": "⊟",
-  gain: "◢",
-  mixer: "⋈",
-  recorder: "●",
-  mute: "⊘",
-  meter: "▥",
-  "parametric-eq": "⌁",
-  compressor: "⤓",
-  gate: "⊐",
-  limiter: "⊤",
-  delay: "◷",
-  "graphic-eq": "▤",
-  pitch: "↟",
-  "network-send": "⇡",
-  "network-receive": "⇣",
-};
-
-function ApplicationSourceAction({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
-  return (
-    <button type="button" className="secondary application-source-action" onClick={onClick} disabled={disabled}>
-      <svg
-        className="application-source-action-icon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        focusable="false"
-      >
-        <rect x="3" y="4" width="14" height="15" rx="2" />
-        <path d="M3 8h14M7 6h.01M10 6h.01M19 10v4m-2-2h4" />
-      </svg>
-      <span>
-        <strong>Choose an application source</strong>
-        <small>Capture audio from a running app into this route</small>
-      </span>
-    </button>
-  );
-}
-
-export type WorkbenchTab =
-  | "tools"
-  | "properties"
-  | "timing"
-  | "session"
-  | "status"
-  | "apps"
+/** A page of the full-window Settings view. */
+export type SettingsPage =
+  | "help"
   | "virtualCables"
+  | "plugins"
+  | "deviceAccess"
   | "uiOptions"
-  | "recording"
-  | "advanced"
+  | "startup"
+  | "shortcuts"
+  | "versions"
   | "mcp"
   | "api"
-  | "diagnostics";
+  | "diagnostics"
+  | "clients"
+  | "sessionJson"
+  | "catalog"
+  | "identity";
 
-const TAB_HELP: Record<Exclude<WorkbenchTab, "properties">, { title: string; content: ReactNode }> = {
+/** Status has three views under one tab. */
+export type StatusView = "status" | "apps" | "timing";
+
+export type WorkbenchTab = "tools" | "properties" | "session" | "recording" | StatusView | SettingsPage;
+
+const DAILY_TABS: [WorkbenchTab, string][] = [
+  ["tools", "Tools"],
+  ["properties", "Properties"],
+  ["status", "Status"],
+  ["session", "Session"],
+  ["recording", "Recording"],
+];
+
+const STATUS_VIEWS: [StatusView, string][] = [
+  ["status", "Readiness"],
+  ["apps", "Apps"],
+  ["timing", "Timing"],
+];
+
+const SETTINGS_GROUPS: { title: string; pages: [SettingsPage, string][] }[] = [
+  {
+    title: "Audio setup",
+    pages: [
+      ["virtualCables", "Virtual Cables"],
+      ["plugins", "Plug-ins"],
+      ["deviceAccess", "Device access"],
+    ],
+  },
+  {
+    title: "This app",
+    pages: [
+      ["uiOptions", "Appearance"],
+      ["startup", "When AudioRouter starts"],
+      ["shortcuts", "Keyboard shortcuts"],
+      ["versions", "New versions"],
+      ["help", "Help"],
+    ],
+  },
+  {
+    title: "For developers",
+    pages: [
+      ["mcp", "AI assistants (MCP)"],
+      ["api", "API"],
+      ["diagnostics", "Logs and support"],
+      ["clients", "Connected clients"],
+      ["sessionJson", "Session as JSON"],
+      ["catalog", "Tool catalog"],
+      ["identity", "App identity"],
+    ],
+  },
+];
+
+export const SETTINGS_PAGES = SETTINGS_GROUPS.flatMap((group) => group.pages);
+
+/** Exhaustive, so a new tab cannot silently fall into the wrong place. */
+export function tabPlace(tab: WorkbenchTab): "daily" | "status" | "settings" {
+  switch (tab) {
+    case "tools":
+    case "properties":
+    case "session":
+    case "recording":
+      return "daily";
+    case "status":
+    case "apps":
+    case "timing":
+      return "status";
+    case "virtualCables":
+    case "plugins":
+    case "deviceAccess":
+    case "uiOptions":
+    case "startup":
+    case "shortcuts":
+    case "versions":
+    case "help":
+    case "mcp":
+    case "api":
+    case "diagnostics":
+    case "clients":
+    case "sessionJson":
+    case "catalog":
+    case "identity":
+      return "settings";
+  }
+}
+
+const TAB_HELP: Partial<Record<WorkbenchTab, { title: string; content: ReactNode }>> = {
   tools: {
     title: "How to build a route",
     content: (
@@ -165,15 +190,6 @@ const TAB_HELP: Record<Exclude<WorkbenchTab, "properties">, { title: string; con
       <p>
         Connect a Recorder to the audio you want to save, choose a recording folder and format, then start the session
         and press Record. Recording starts only on your explicit action.
-      </p>
-    ),
-  },
-  advanced: {
-    title: "How to use advanced controls",
-    content: (
-      <p>
-        Use keyboard graph controls to connect nodes without dragging. Troubleshooting provides manual device binding
-        and recovery. Review each action before applying it.
       </p>
     ),
   },
@@ -276,8 +292,6 @@ export function Workbench({
   onNewSession,
   onDuplicate,
   onDelete,
-  onUndo,
-  onRedo,
   onDiscard,
   sessions,
   selectedSessionId,
@@ -304,7 +318,8 @@ export function Workbench({
   uiOptionsContent,
   timingContent,
   recordingContent,
-  advancedContent,
+  settingsContent,
+  savedVersionsContent,
   pluginsContent,
   sessionFileContent,
   apiBuilder,
@@ -324,8 +339,6 @@ export function Workbench({
   librarySearch: string;
   onLibrarySearch: (value: string) => void;
   onDelete: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
   onDiscard: () => void;
   onPlan?: () => void;
   onCommit?: () => void;
@@ -361,7 +374,10 @@ export function Workbench({
   uiOptionsContent: ReactNode;
   timingContent?: ReactNode;
   recordingContent: ReactNode;
-  advancedContent: ReactNode;
+  /** Pages that App builds whole; the rest are drawn here. */
+  settingsContent: Partial<Record<SettingsPage, ReactNode>>;
+  /** Session › Saved versions. */
+  savedVersionsContent?: ReactNode;
   pluginsContent?: ReactNode;
   sessionFileContent?: ReactNode;
   apiBuilder?: (baseUrl: string) => ReactNode;
@@ -371,6 +387,15 @@ export function Workbench({
   const searchRef = useRef<HTMLInputElement>(null);
   const previousTab = useRef(tab);
   const lastFocusedControl = useRef<HTMLElement | null>(null);
+  const place = tabPlace(tab);
+  const inSettings = place === "settings";
+  // Where "Back to the route" returns, and which page the gear reopens.
+  const lastRouteTab = useRef<WorkbenchTab>(inSettings ? "tools" : tab);
+  const lastSettingsPage = useRef<WorkbenchTab>(inSettings ? tab : "virtualCables");
+  useLayoutEffect(() => {
+    if (inSettings) lastSettingsPage.current = tab;
+    else lastRouteTab.current = tab;
+  }, [inSettings, tab]);
   useLayoutEffect(() => {
     // Only move focus when a tab switch removed its owner. External selection
     // and telemetry/error updates must not steal focus from a surviving control.
@@ -388,6 +413,8 @@ export function Workbench({
     const tabs = tabsRef.current;
     const workspace = tabs?.closest<HTMLElement>(".main-content");
     if (!tabs || !workspace) return;
+    // The Properties overlay sits under these tabs; Settings has no such overlay.
+    if (inSettings) return;
     const measure = () => {
       const height = Math.ceil(tabs.getBoundingClientRect().height);
       if (height > 0) workspace.style.setProperty("--workbench-tabs-height", `${height}px`);
@@ -399,7 +426,7 @@ export function Workbench({
       observer?.disconnect();
       workspace.style.removeProperty("--workbench-tabs-height");
     };
-  }, []);
+  }, [inSettings]);
   const [localAssistant, setLocalAssistant] = useState("codex");
   const [mcpConnectionPath, setMcpConnectionPath] = useState<"local" | "cowork" | "chatgpt">("local");
   const [mcpClientId, setMcpClientId] = useState("audiorouter-local");
@@ -463,99 +490,186 @@ export function Workbench({
       .then(() => setCopyMessage("Copied to clipboard."))
       .catch(() => setCopyMessage("Clipboard unavailable. Select the text and copy it."));
   };
-  const tabs: [WorkbenchTab, string][] = [
-    ["tools", "Tools"],
-    ["properties", "Properties"],
-    ["timing", "Timing"],
-    ["session", "Session"],
-    ["status", "Status"],
-    ["apps", "Apps"],
-    ["virtualCables", "Virtual Cables"],
-    ["uiOptions", "UI Options"],
-    ["recording", "Recording"],
-    ["advanced", "Advanced"],
-    ["mcp", "MCP"],
-    ["api", "API"],
-    ["diagnostics", "Logs"],
-  ];
+  const tabs = DAILY_TABS;
+  const selectedDailyTab: WorkbenchTab = place === "status" ? "status" : tab;
+  const panelRef = usePanelMemory(tab);
   const panelProps = {
     id: `workbench-panel-${tab}`,
-    "aria-labelledby": `workbench-tab-${tab}`,
+    "aria-labelledby": place === "status" ? `workbench-tab-status-view-${tab}` : `workbench-tab-${tab}`,
     tabIndex: 0,
   };
+  const page = (id: SettingsPage, heading: string, content: ReactNode, eyebrow?: string) =>
+    tab === id && (
+      <section className="workbench-page" role="tabpanel" {...panelProps}>
+        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
+        <h2>{heading}</h2>
+        {content}
+      </section>
+    );
   return (
     <aside
-      className="right-workbench"
+      ref={panelRef}
+      className={`right-workbench${inSettings ? " settings-view" : ""}`}
       aria-label="Tools and settings"
       onFocusCapture={(event) => {
         lastFocusedControl.current = event.target;
       }}
     >
-      <div ref={tabsRef} className="workbench-tabs" role="tablist" aria-label="Right sidebar">
-        {tabs.map(([id, label]) => (
+      {inSettings && (
+        <nav className="settings-nav" aria-label="Settings">
           <button
-            key={id}
             type="button"
-            role="tab"
-            id={`workbench-tab-${id}`}
-            aria-controls={id === "properties" ? "workbench-properties" : `workbench-panel-${id}`}
-            tabIndex={tab === id ? 0 : -1}
-            aria-selected={tab === id}
-            aria-describedby={id === "status" && statusHasProblem ? "status-problem-description" : undefined}
-            title={id === "status" && statusHasProblem ? "Setup problems found. Open Status for details." : undefined}
-            className={tab === id ? "active" : ""}
+            className="secondary settings-back"
+            onClick={() => startTransition(() => onTab(lastRouteTab.current))}
+          >
+            <span aria-hidden="true">←</span> Back to the route
+          </button>
+          <div
+            role="tablist"
+            aria-orientation="vertical"
+            aria-label="Settings pages"
+            ref={tabsRef}
             onKeyDown={(event) => {
-              // The Properties overlay precedes the tablist in DOM order.
-              if (id === "properties" && event.key === "Tab" && !event.shiftKey) {
-                if (event.currentTarget.dataset.propertiesExit) {
-                  delete event.currentTarget.dataset.propertiesExit;
-                  return;
-                }
-                const panel = document.getElementById("workbench-properties");
-                if (panel) {
-                  event.preventDefault();
-                  panel.focus();
-                }
-                return;
-              }
-              const index = tabs.findIndex(([key]) => key === id);
-              const next =
-                event.key === "Home"
-                  ? 0
-                  : event.key === "End"
-                    ? tabs.length - 1
-                    : event.key === "ArrowRight"
-                      ? (index + 1) % tabs.length
-                      : event.key === "ArrowLeft"
-                        ? (index + tabs.length - 1) % tabs.length
-                        : null;
-              if (next === null || event.altKey || event.ctrlKey || event.metaKey) return;
+              if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+              const index = SETTINGS_PAGES.findIndex(([id]) => id === tab);
+              const count = SETTINGS_PAGES.length;
+              const next = SETTINGS_PAGES[(index + (event.key === "ArrowDown" ? 1 : count - 1)) % count];
+              if (!next) return;
               event.preventDefault();
-              const target = tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next];
-              target?.focus();
-              target?.click();
-            }}
-            onClick={(event) => {
-              const workbench = event.currentTarget.closest(".right-workbench");
-              if (workbench instanceof HTMLElement) workbench.scrollTop = 0;
-              startTransition(() => onTab(id));
+              onTab(next[0]);
+              window.requestAnimationFrame(() => document.getElementById(`workbench-tab-${next[0]}`)?.focus());
             }}
           >
-            {label}
-            {id === "status" && (
-              <span
-                aria-hidden="true"
-                data-testid="status-problem-indicator"
-                className={`status-problem-indicator${statusHasProblem ? " is-problem" : ""}`}
-              />
-            )}
-          </button>
-        ))}
+            {SETTINGS_GROUPS.map((group) => (
+              <div key={group.title} className="settings-nav-group" role="presentation">
+                <p className="eyebrow" role="presentation">
+                  {group.title}
+                </p>
+                {group.pages.map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    id={`workbench-tab-${id}`}
+                    aria-controls={`workbench-panel-${id}`}
+                    aria-selected={tab === id}
+                    tabIndex={tab === id ? 0 : -1}
+                    className={tab === id ? "active" : ""}
+                    onClick={() => startTransition(() => onTab(id))}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </nav>
+      )}
+      <div ref={inSettings ? undefined : tabsRef} className="workbench-tabs" hidden={inSettings}>
+        <div className="workbench-tablist" role="tablist" aria-label="Right sidebar">
+          {tabs.map(([id, label]) => (
+            <button
+              key={label}
+              type="button"
+              role="tab"
+              id={`workbench-tab-${id}`}
+              aria-controls={
+                id === "properties"
+                  ? "workbench-properties"
+                  : `workbench-panel-${id === "status" && place === "status" ? tab : id}`
+              }
+              tabIndex={selectedDailyTab === id ? 0 : -1}
+              aria-selected={selectedDailyTab === id}
+              aria-describedby={id === "status" && statusHasProblem ? "status-problem-description" : undefined}
+              title={id === "status" && statusHasProblem ? "Setup problems found. Open Status for details." : undefined}
+              className={selectedDailyTab === id ? "active" : ""}
+              onKeyDown={(event) => {
+                // The Properties overlay precedes the tablist in DOM order.
+                if (id === "properties" && event.key === "Tab" && !event.shiftKey) {
+                  if (event.currentTarget.dataset.propertiesExit) {
+                    delete event.currentTarget.dataset.propertiesExit;
+                    return;
+                  }
+                  const panel = document.getElementById("workbench-properties");
+                  if (panel) {
+                    event.preventDefault();
+                    panel.focus();
+                  }
+                  return;
+                }
+                const index = tabs.findIndex(([, name]) => name === label);
+                const next =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? tabs.length - 1
+                      : event.key === "ArrowRight"
+                        ? (index + 1) % tabs.length
+                        : event.key === "ArrowLeft"
+                          ? (index + tabs.length - 1) % tabs.length
+                          : null;
+                if (next === null || event.altKey || event.ctrlKey || event.metaKey) return;
+                event.preventDefault();
+                const target = tabsRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next];
+                target?.focus();
+                target?.click();
+              }}
+              onClick={() => startTransition(() => onTab(id))}
+            >
+              {label}
+              {id === "status" && (
+                <span
+                  aria-hidden="true"
+                  data-testid="status-problem-indicator"
+                  className={`status-problem-indicator${statusHasProblem ? " is-problem" : ""}`}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="settings-gear"
+          aria-label="Settings"
+          title="Settings"
+          onClick={() => startTransition(() => onTab(lastSettingsPage.current))}
+        >
+          <Icon name="settings" />
+        </button>
       </div>
       <span id="status-problem-description" hidden>
         Setup problems found. Open Status for details.
       </span>
-      {tab !== "properties" && (
+      {place === "status" && (
+        <div className="status-views" role="tablist" aria-label="Status views">
+          {STATUS_VIEWS.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              id={`workbench-tab-status-view-${id}`}
+              aria-controls={`workbench-panel-${id}`}
+              aria-selected={tab === id}
+              tabIndex={tab === id ? 0 : -1}
+              className={tab === id ? "active" : ""}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+                const index = STATUS_VIEWS.findIndex(([key]) => key === id);
+                const count = STATUS_VIEWS.length;
+                const next = STATUS_VIEWS[(index + (event.key === "ArrowRight" ? 1 : count - 1)) % count];
+                if (!next) return;
+                event.preventDefault();
+                onTab(next[0]);
+                document.getElementById(`workbench-tab-status-view-${next[0]}`)?.focus();
+              }}
+              onClick={() => startTransition(() => onTab(id))}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {TAB_HELP[tab] && (
         <div className="workbench-help">
           <HelpDisclosure key={tab} title={TAB_HELP[tab].title}>
             {TAB_HELP[tab].content}
@@ -586,100 +700,19 @@ export function Workbench({
         )}
         {tab === "tools" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <p className="eyebrow">Build a route</p>
-            <h2>Add tools</h2>
-            {librarySearch.trim() && tools.length === 0 && (
-              <div className="tool-search-empty">
-                <p role="status">No built-in tools match your search. Try a name such as Gain or Recorder.</p>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
-                    onLibrarySearch("");
-                    searchRef.current?.focus();
-                  }}
-                >
-                  Clear tool search
-                </button>
-              </div>
-            )}
-            <div className="tool-library-entry">
-              <button type="button" className="tool-card" onClick={onAddGroup}>
-                <span className="tool-card-icon" aria-hidden="true">
-                  ▢
-                </span>
-                <span>
-                  <strong>Group</strong>
-                  <small>A named visual background; no audio routing</small>
-                </span>
-              </button>
-              <ToolGuideLink kind="group" compact toolName="Group" />
-            </div>
-            <p className="muted">
-              Add and connect tools, press Play to hear the route, then use Save at the top to keep it.
-            </p>
-            {(["input", "tool", "output"] as const).map((flow) => (
-              <section className="tool-group" key={flow}>
-                <h3>{flow === "input" ? "Inputs" : flow === "tool" ? "Processing" : "Outputs"}</h3>
-                {flow === "input" && (
-                  <div className="tool-library-entry">
-                    <ApplicationSourceAction onClick={onApplicationPicker} disabled={!connected} />
-                    <ToolGuideLink kind="applicationCapture" compact toolName="Application Capture" />
-                  </div>
-                )}
-                {tools
-                  .filter((entry) => entry.flow === flow)
-                  .sort((left, right) => left.label.localeCompare(right.label, undefined, { sensitivity: "base" }))
-                  .map((entry) => {
-                    const help = entry.unavailableReason ?? entry.note ?? TOOL_HELP[entry.id] ?? entry.category;
-                    // Click adds the tool; drag places it where it is dropped on the canvas.
-                    return (
-                      <div className="tool-library-entry" key={entry.id}>
-                        <button
-                          className="tool-card"
-                          type="button"
-                          draggable={connected && Boolean(entry.kind)}
-                          onDragStart={(event) => {
-                            if (entry.kind) startLibraryDrag(event, entry.kind, entry.label);
-                          }}
-                          onDragEnd={endLibraryDrag}
-                          onClick={() => {
-                            if (entry.kind) onAdd(entry.kind);
-                            else if (entry.virtualKind)
-                              onAddCable?.(
-                                entry.virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink",
-                              );
-                          }}
-                          disabled={
-                            !connected ||
-                            (!entry.kind && !(entry.virtualKind && onAddCable && entry.unavailableReason === undefined))
-                          }
-                          title={help}
-                          aria-description={help}
-                        >
-                          <span className="tool-card-icon" aria-hidden="true">
-                            {TOOL_ICONS[entry.id]}
-                          </span>
-                          <span>
-                            <strong>{entry.label}</strong>
-                            <small>{help}</small>
-                          </span>
-                        </button>
-                        <ToolGuideLink
-                          kind={
-                            entry.kind ??
-                            entry.virtualKind ??
-                            (entry.id === "endpoint-loopback" ? "endpointLoopback" : entry.id)
-                          }
-                          compact
-                          toolName={entry.label}
-                        />
-                      </div>
-                    );
-                  })}
-                {flow === "tool" && pluginsContent}
-              </section>
-            ))}
+            <ToolShelf
+              tools={tools}
+              connected={connected}
+              search={librarySearch}
+              searchRef={searchRef}
+              pluginsContent={pluginsContent}
+              onAdd={onAdd}
+              onAddCable={onAddCable}
+              onAddGroup={onAddGroup}
+              onApplicationPicker={onApplicationPicker}
+              onClearSearch={() => onLibrarySearch("")}
+              onOpenVirtualCables={() => onTab("virtualCables")}
+            />
           </section>
         )}
         {tab === "api" && (
@@ -712,18 +745,18 @@ export function Workbench({
             {appsContent}
           </section>
         )}
-        {tab === "virtualCables" && (
-          <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Virtual Cables</h2>
-            {virtualCablesContent}
-          </section>
-        )}
-        {tab === "uiOptions" && (
-          <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>UI Options</h2>
-            {uiOptionsContent}
-          </section>
-        )}
+        {page("virtualCables", "Virtual Cables", virtualCablesContent)}
+        {page("uiOptions", "Appearance", uiOptionsContent)}
+        {page("plugins", "Plug-ins", settingsContent.plugins)}
+        {page("deviceAccess", "Device access", settingsContent.deviceAccess)}
+        {page("startup", "When AudioRouter starts", settingsContent.startup)}
+        {page("shortcuts", "Keyboard shortcuts", settingsContent.shortcuts)}
+        {page("versions", "New versions", settingsContent.versions)}
+        {page("help", "Help", settingsContent.help)}
+        {page("clients", "Connected clients", settingsContent.clients)}
+        {page("sessionJson", "Session as JSON", settingsContent.sessionJson, "For scripts")}
+        {page("catalog", "Tool catalog", settingsContent.catalog)}
+        {page("identity", "App identity", settingsContent.identity)}
         {tab === "recording" && (
           <section className="workbench-page" role="tabpanel" {...panelProps}>
             <h2>Recording</h2>
@@ -732,16 +765,6 @@ export function Workbench({
               before recording.
             </p>
             {recordingContent}
-          </section>
-        )}
-        {tab === "advanced" && (
-          <section className="workbench-page" role="tabpanel" {...panelProps}>
-            <h2>Advanced controls</h2>
-            <p className="muted">
-              These controls affect plugins, startup, connected assistant clients, and recovery. Review each action
-              before applying it.
-            </p>
-            {advancedContent}
           </section>
         )}
         {tab === "session" && (
@@ -795,12 +818,6 @@ export function Workbench({
               <button type="button" className="secondary" onClick={onDuplicate} disabled={!connected}>
                 Duplicate
               </button>
-              <button type="button" className="secondary" onClick={onUndo} disabled={!connected}>
-                Undo
-              </button>
-              <button type="button" className="secondary" onClick={onRedo} disabled={!connected}>
-                Redo
-              </button>
               <button type="button" className="secondary" onClick={onDiscard} disabled={!connected}>
                 Revert edits
               </button>
@@ -809,6 +826,7 @@ export function Workbench({
               </button>
             </div>
             {sessionFileContent}
+            {savedVersionsContent}
             <SessionIdentity sessionId={selectedSessionId} />
           </section>
         )}

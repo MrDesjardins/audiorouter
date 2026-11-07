@@ -58,7 +58,7 @@ export class ErrorBoundary extends Component<BoundaryProps, BoundaryState> {
           {this.props.area} stopped working. Audio keeps running, and the rest of the window still works.
         </p>
         <p className="muted">
-          The cause is listed in the Logs tab. Try again, or reload the window if it keeps failing.
+          The cause is listed in Settings, Logs and support. Try again, or reload the window if it keeps failing.
         </p>
         <div className="error-boundary-actions">
           <button type="button" className="secondary" onClick={this.reset}>

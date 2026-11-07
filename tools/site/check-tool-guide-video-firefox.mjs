@@ -5,6 +5,9 @@ import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const clipTypeFilter = process.env.GUIDE_CLIP_TYPE;
+if (clipTypeFilter && !["overviews", "demos", "properties"].includes(clipTypeFilter))
+  throw new Error("GUIDE_CLIP_TYPE must be overviews, demos or properties");
 const debugPort = Number(process.env.GUIDE_FIREFOX_PORT ?? 9337);
 if (!Number.isInteger(debugPort) || debugPort < 1024 || debugPort > 65535)
   throw new Error("GUIDE_FIREFOX_PORT must be a port from 1024 to 65535");
@@ -95,11 +98,12 @@ try {
           ? "demos"
           : "properties";
       const audible = type !== "overviews" && clip.silent !== true;
+      if (clipTypeFilter && type !== clipTypeFilter) continue;
       if (!existsSync(resolve(root, path))) continue;
       try {
         await send("browsingContext.navigate", {
           context,
-          url: "http://127.0.0.1:4187/docs/plans/active/evidence/tool-guide-preview/index.html",
+          url: `http://127.0.0.1:${process.env.GUIDE_SITE_PORT ?? 4187}/docs/plans/active/evidence/tool-guide-preview/index.html`,
           wait: "complete",
         });
         await evaluate(

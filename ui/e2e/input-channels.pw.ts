@@ -1,4 +1,5 @@
 import { test, expect } from "./browser-test";
+import { openSection } from "./workbench";
 import { demoSession } from "../src/fixtures";
 
 // A stereo audio interface with one microphone: the Channels select sends
@@ -30,6 +31,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(select).toHaveValue("stereo");
     await expect(field).toContainText("only in one ear");
     await field.scrollIntoViewIfNeeded();
+    await openSection(page, "Spatial audio");
     const below = page.getByLabel("Spatial audio settings");
     const before = await below.boundingBox();
     await select.selectOption("left");

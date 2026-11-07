@@ -37,6 +37,7 @@ const telemetry = (inputDb: number, outputDb: number, reductionDb: number, open 
 
 describe("Dynamics editor", () => {
   it("adjusts compressor threshold and ratio from keyboard-operable handles", () => {
+    localStorage.setItem("audiorouter.ui.property-sections", JSON.stringify({ "compressor/Last 8 seconds": true }));
     const onChange = vi.fn();
     render(
       <DynamicsEditor

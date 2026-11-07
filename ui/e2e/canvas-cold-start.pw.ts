@@ -53,7 +53,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
     for (const edge of session.edges)
       await expect(page.getByTestId(`rf__edge-${edge.id}`).locator("path").first()).toHaveAttribute("d", /^M-?\d/);
-    await page.getByRole("button", { name: "Remove connection voice-output" }).click({ force: true });
+    // These cards are close, so the bar stays hidden until it has focus or the line is pointed at.
+    await page.getByRole("button", { name: "Remove connection voice-output" }).focus();
+    await page.keyboard.press("Enter");
     const source = page.getByTestId("rf__node-voice").locator('.source[data-debug-side="right"]');
     const target = page.getByTestId("rf__node-headphones").locator('.target[data-debug-side="left"]');
     const from = await source.boundingBox(),

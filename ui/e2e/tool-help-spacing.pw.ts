@@ -30,10 +30,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     }
     await page.getByRole("tab", { name: "Tools", exact: true }).click();
     const card = page
-      .locator(".tool-library-entry")
+      .locator(".tool-library-entry:has(> .tool-card)")
       .filter({ has: page.getByRole("link", { name: "Open Gain guide", exact: true }) });
     const link = card.getByRole("link");
-    const button = card.getByRole("button");
+    const button = card.locator(".tool-card");
     const cardBox = (await button.boundingBox())!,
       helpBox = (await link.boundingBox())!;
     expect(helpBox.x).toBeGreaterThan(cardBox.x);

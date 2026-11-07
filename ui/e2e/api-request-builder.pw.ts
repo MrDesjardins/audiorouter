@@ -1,4 +1,4 @@
-import { setColorTheme } from "./workbench";
+import { setColorTheme, openSettings } from "./workbench";
 import { test, expect } from "./real-backend";
 
 // API tab request builder against the real backend catalog: choose a tool and
@@ -8,7 +8,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.goto("/backend-harness.html");
     await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
     await setColorTheme(page, theme);
-    await page.getByRole("tab", { name: "API", exact: true }).click();
+    await openSettings(page, "API");
     const builder = page.getByRole("region", { name: "Request builder" });
     await expect(builder).toBeVisible();
 
@@ -57,7 +57,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       .click();
     // The builder addresses saved nodes.
     await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();
-    await page.getByRole("tab", { name: "API", exact: true }).click();
+    await openSettings(page, "API");
     const builder = page.getByRole("region", { name: "Request builder" });
     await expect(builder).toBeVisible();
     await expect(builder.getByLabel("Request tool").locator("option", { hasText: "Soundboard 1" })).toHaveCount(1);

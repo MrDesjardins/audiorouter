@@ -1,4 +1,4 @@
-import { setColorTheme } from "./workbench";
+import { setColorTheme, openSettings, openPage } from "./workbench";
 import type { Page } from "@playwright/test";
 import { test, expect, type RealBackend } from "./real-backend";
 import type { DiagnosticsSnapshot, VirtualCableStatus } from "../../contracts/src/index";
@@ -120,7 +120,7 @@ async function fakeCables(page: Page, backend: RealBackend) {
 }
 
 async function openSetup(page: Page) {
-  await page.getByRole("tab", { name: "Virtual Cables" }).click();
+  await openSettings(page, "Virtual Cables");
   const panel = page.locator(".virtual-cable-panel");
   await expect(panel).toBeVisible();
   return panel;
@@ -212,14 +212,17 @@ test("cable nodes are offered only with installed cables and take the default ca
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
   const toolCard = (name: string) => page.locator(".tool-card").filter({ has: page.getByText(name, { exact: true }) });
   await expect(toolCard("Cable input")).toBeDisabled();
-  await expect(toolCard("Cable input")).toContainText("Install AudioRouter cables in Virtual Cables");
+  await expect(toolCard("Cable input")).toHaveAttribute(
+    "aria-description",
+    /Install AudioRouter cables in Virtual Cables/,
+  );
   const panel = await openSetup(page);
   await expect(panel.getByRole("status")).toHaveText("Not installed");
   await expect(panel.getByRole("button", { name: /Add route:/ })).toBeDisabled();
 
   fake.status = cableStatus("installed");
   await expect(panel.getByRole("status")).toHaveText("Installed", { timeout: 5_000 });
-  await page.getByRole("tab", { name: "Tools", exact: true }).click();
+  await openPage(page, "Tools");
   await expect(toolCard("Cable input")).toBeEnabled();
   await toolCard("Cable input").click();
   await page.getByRole("tab", { name: "Tools", exact: true }).click();

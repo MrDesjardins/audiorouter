@@ -2,7 +2,7 @@ import { test, expect } from "./real-backend";
 
 test("group settings, tool sizes and layout stay in their own session", async ({ page }) => {
   await page.goto("/backend-harness.html");
-  await page.getByRole("button", { name: "Group A named visual background; no audio routing" }).click();
+  await page.getByRole("button", { name: "Group", exact: true }).click();
   await page.getByLabel("Group name").fill("Voice workspace");
   await expect(page.getByLabel("Move contents with group")).toBeChecked();
   await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
@@ -33,7 +33,7 @@ test("wide media tools share sizes without clipping and connectors follow tool r
     .locator(".react-flow__edges .react-flow__edge .react-flow__edge-path")
     .last()
     .getAttribute("d");
-  await page.getByRole("button", { name: "Group A named visual background; no audio routing" }).click();
+  await page.getByRole("button", { name: "Group", exact: true }).click();
   await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
   await page.locator(".canvas-group-caption").click({ modifiers: ["Control"] });
   await page.getByRole("button", { name: "Largest width", exact: true }).click();

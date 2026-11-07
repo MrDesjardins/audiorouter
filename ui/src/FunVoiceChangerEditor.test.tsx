@@ -110,12 +110,12 @@ describe("FunVoiceChangerEditor", () => {
     expect(presetEdited(voiceNode({ preset: "deep", shiftEnabled: true }), presets[0], presets[1])).toBe(true);
   });
 
-  it("explains Custom and opens every section", () => {
+  it("explains Custom and keeps its nine sections closed until asked", () => {
     renderEditor(voiceNode({ preset: "custom" }));
     expect(screen.getByText(/Custom starts with every effect off/)).toBeTruthy();
     const sections = Array.from(document.querySelectorAll(".voice-changer-sections details"));
     expect(sections.length).toBe(9);
-    expect(sections.every((section) => section.hasAttribute("open"))).toBe(true);
+    expect(sections.some((section) => section.hasAttribute("open"))).toBe(false);
   });
 });
 

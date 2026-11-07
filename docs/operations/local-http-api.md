@@ -23,7 +23,7 @@ If your PC's address changes (for example a new DHCP lease), start fails
 with a message; a DHCP reservation in your router keeps it stable.
 
 Choose **Open Swagger documentation** for the locally bundled interactive
-reference at `/docs`. The API tab shows the saved token even while stopped.
+reference at `/docs`. The Settings → API page shows the saved token even while stopped.
 Choose **Copy API token** to use it with your own apps or Swagger's
 **Authorize** dialog. Swagger authorization remains in memory. The token is saved
 encrypted for your Windows account in `%LOCALAPPDATA%\AudioRouter\api-token.dpapi`.
@@ -75,7 +75,7 @@ as the node's ID or its exact name. For example, `POST
 
 ## Build a request in the app
 
-The API tab has a **Build a request** section. Choose whether the request
+The Settings → API page has a **Build a request** section. Choose whether the request
 follows the session selected in AudioRouter or always targets one session,
 then a tool and one setting (Enabled, Bypass, a parameter, a Mixer input's
 volume by its source's name, or a Duck's trigger node by name). It shows the

@@ -29,7 +29,9 @@ attended audio checks remain open in the active plan.
 Use Tools → **Group** to add a named, rounded visual background. Properties
 edits its color, caption font size (18 px by default), and opacity (5% by
 default, with a 1–100% integer slider). Drag its caption or background to move
-it and resize its border. Groups stay beneath audio nodes/wires and save automatically in this
+it, and drag any side or corner to resize it. Ctrl+click several groups to
+resize them together by the same amount. Undo and Redo in the top bar, or
+Ctrl+Z and Ctrl+Y, undo these changes too. Groups stay beneath audio nodes/wires and save automatically in this
 PC's per-session canvas layout. They do not change audio or require Save/Stop;
 session-file exports currently carry the audio graph, not these annotations.
 
@@ -131,7 +133,7 @@ volume/mute, driver state, or startup registration.
 
 The fresh desktop session starts with a neutral 0 dB Gain node between the
 selected input and output. Adjusting that node is a real graph change: use
-  **Save route**; the backend validates it and saves it automatically when there
+  **Save**; the backend validates it and saves it automatically when there
   are no warnings. Review and confirm any warnings. Restart the session if it was
 already running. The same path is used for EQ, gate, compressor, limiter, and
 other built-in processors added from the canvas.
@@ -139,7 +141,7 @@ other built-in processors added from the canvas.
 An ordinary input port accepts one incoming connection. If a Physical output
 already receives another source, dragging Test Signal to that input shows the
 current source and offers **Replace input connection**. This changes only the
-draft; **Undo** restores the old edge, and **Save route** persists the chosen
+draft; **Undo** restores the old edge, and **Save** persists the chosen
 route. To combine both sources in the graph, add a visible Mixer and connect
 them through it rather than stacking two edges on the output port. Native
 activation of a combined route still requires its own validation. The current
@@ -243,7 +245,7 @@ session. A mono microphone connected to a stereo Input device node is copied to
 both channels.
 
 Tools without an enabled input connection, and any downstream nodes fed only
-by those tools, show a warning and are ignored during playback. They stay on
+by those tools, show "no input" and a warning, and stay silent. They stay on
 the canvas and in the saved session; other connected routes can still play.
 Reconnect an input and save to include that chain again.
 
@@ -275,7 +277,7 @@ buttons accessible even when both are present.
    Existing physical/VB-Cable endpoints do not need the AudioRouter virtual
    driver. A Test Signal or Audio File route needs no input device: once it is
    saved with its output chosen, Play runs it without opening any microphone.
-   (**Advanced → Troubleshooting: manual device binding** remains for device
+   (**Settings → Device access → Troubleshooting: manual device binding** remains for device
    diagnostics, loopback tests, and as a fallback for a route whose nodes have
    no device.)
 2. Press **Play** in the header to activate the visible canvas route. Unsaved
@@ -319,7 +321,7 @@ Output` or `Voicemeeter Out B1`) in the receiving tool. Physical microphone
 and desktop captures can then be connected to that output through the same
 validated graph. In the editor, drag the capture into the **Existing virtual
 output** shelf destination (or a physical output), select the exact render
-endpoint in Endpoint binding, then use **Save route**, prepare the exact
+endpoint in Endpoint binding, then use **Save**, prepare the exact
 endpoints, and start the session.
 
 This workflow uses the installed third-party virtual driver and does not
@@ -691,14 +693,14 @@ session and never replaces one: a session ID already present gets an
 each Input/Output node's device should be checked there. The desktop app uses
 the Windows Save/Open dialogs.
 
-The **Setup** tab ("Set up this PC") holds app-wide items only: service and
+The **Status** tab and **Settings** hold app-wide items: service and
 device status, the audio devices Windows offers, guidance for other apps, and
 start at sign-in. Connecting nodes without dragging (keyboard use) is under
-**Advanced → Connect nodes without dragging**.
-For keyboard node selection and topology edits, use **Advanced → Keyboard
-graph controls**. The canvas no longer has a separate List view switch.
+the **Connect** button above the canvas.
+For keyboard node selection and topology edits, use **Route list** above the
+canvas. The canvas no longer has a separate List view switch.
 
-The **Advanced → JSON graph transfer** panel exports the selected stopped
+The **Settings → Session as JSON** page exports the selected stopped
 configuration as a local `.audiorouter.json` file for scripts. Import first validates the file through the
 backend, then requires the separate Commit stopped import action; imported
 sessions remain stopped and require endpoint rebinding/review. The transfer
@@ -904,7 +906,7 @@ first-run guide) builds the voice route for you:
 
 No cable installed yet? The flow sends you to **Virtual Cables** first.
 
-### Checking Discord's devices (Apps tab)
+### Checking Discord's devices (Status → Apps)
 
 Open **Apps** in the right sidebar to check that Discord uses the devices
 your route expects.
@@ -951,7 +953,7 @@ Discord or Windows settings.
   processing" (Discord records your microphone directly). Properties
   gives the full sentence and the device to choose instead.
 
-### Checking and fixing OBS Studio (Apps tab)
+### Checking and fixing OBS Studio (Status → Apps)
 
 The **OBS Studio** card in **Apps** shows *What OBS hears*: each audio
 source, its device, and what reaches it from your session.
@@ -996,7 +998,7 @@ an old fix from changing it. If OBS does not report a source UUID, that
 source stays read-only; change its device in OBS instead.
 
 The OBS check updates while AudioRouter stays open: every 10 seconds on the
-Apps tab, and when you return to the window. A failed status read keeps the
+Apps view, and when you return to the window. A failed status read keeps the
 previous check visible with a Waiting message and disables changes until
 the connection recovers. The Fix dialog keeps your choices steady while
 status updates; if OBS's starting setting has changed, cancel and check

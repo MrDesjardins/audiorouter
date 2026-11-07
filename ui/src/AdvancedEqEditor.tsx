@@ -323,7 +323,7 @@ export function AdvancedEqEditor({
               className="advanced-eq-point"
               aria-label={`Point ${band.index + 1}`}
               onPointerDown={(event) => {
-                if (!connected) return;
+                if (!connected || event.button !== 0) return;
                 event.stopPropagation();
                 setSelectedIndex(band.index);
                 setDrag({

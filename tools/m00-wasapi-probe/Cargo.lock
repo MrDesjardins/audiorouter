@@ -38,6 +38,7 @@ dependencies = [
  "sha2",
  "trash",
  "tungstenite",
+ "windows",
 ]
 
 [[package]]

@@ -37,12 +37,16 @@ use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod compare;
+mod goals;
 mod network_log;
 mod obs;
 pub mod os_transition;
+mod saved_versions;
 mod siege_round;
 mod simple;
 mod threaded_recorder;
+mod tool_presets;
 
 // Control-plane domains. Each module adds its own `impl ControlPlane` block.
 // The globs re-export public items at the crate root and let sibling
@@ -352,6 +356,12 @@ pub struct ControlPlane {
     /// without it (CLI, tests) the list is built inline.
     application_inventory: Option<app_inventory::AppInventory>,
     application_capture_runtime: Option<ApplicationCaptureRuntime>,
+    /// A held comparison (DEC-UI-21b); memory only, never saved.
+    comparison: Option<compare::Comparison>,
+    /// Who saved each revision and when, by session; written through to storage.
+    revision_notes: HashMap<EntityId, Vec<Value>>,
+    /// Named tool presets when there is no database.
+    tool_presets: Vec<Value>,
     plugin_inventories: HashMap<String, Value>,
     /// Live plugin runtime bridges by (session, node), for state capture and
     /// the native editor. Weak: a bridge lives only as long as its graph.
@@ -533,6 +543,9 @@ impl ControlPlane {
             application_snapshot: None,
             application_inventory: None,
             application_capture_runtime: None,
+            comparison: None,
+            revision_notes: HashMap::new(),
+            tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
             plugin_bridges: Default::default(),
             plugin_inventory_order: VecDeque::new(),

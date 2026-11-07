@@ -1,4 +1,5 @@
 import { test, expect } from "./browser-test";
+import { openSection } from "./workbench";
 import { demoSession } from "../src/fixtures";
 
 // Surround to headphones on a Physical Input: the mode select, the loopback
@@ -24,6 +25,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     );
     await page.goto("/route-harness.html");
     await page.getByTestId(`rf__node-${inputId}`).click();
+    await expect(page.locator(".property-section").filter({ hasText: "Spatial audio" })).toContainText("Headphones");
+    await openSection(page, "Spatial audio");
     const field = page.getByLabel("Spatial audio settings");
     await expect(page.getByLabel("Spatial audio mode")).toHaveValue("headphones");
     await expect(field).toContainText("Renders this 7.1 input with a measured head");

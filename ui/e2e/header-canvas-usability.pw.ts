@@ -1,10 +1,11 @@
+import { openStatusView } from "./workbench";
 import { expect, test } from "./browser-test";
 
 for (const theme of ["dark", "light", "high-contrast"]) {
   test(`header status, Session shortcut and collapsed legend in ${theme}`, async ({ page }, info) => {
     await page.addInitScript((theme) => {
       localStorage.setItem("audiorouter.ui.theme", theme);
-      Object.assign(window, { __routeFixtureRunning: true });
+      Object.assign(window, { __routeFixtureRunning: true, __routeFixturePrivacyMuted: false });
     }, theme);
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/route-harness.html");
@@ -34,7 +35,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect((await canvas.boundingBox())!.height).toBe(collapsed.height);
 
     const sessionTab = page.getByRole("tab", { name: "Session", exact: true });
-    await page.getByRole("tab", { name: "Timing", exact: true }).click();
+    await openStatusView(page, "Timing");
     await title.click();
     await expect(sessionTab).toHaveAttribute("aria-selected", "true");
     await page.getByRole("tab", { name: "Tools", exact: true }).click();

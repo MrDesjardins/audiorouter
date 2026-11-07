@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { qualitySeeds } from "./qualitySeeds";
 import {
   arrangedCanvasSnapshot,
@@ -199,3 +199,21 @@ for (const seed of qualitySeeds([1, 47, 997, 0x12345678, 0x7fffffff]))
       expect(current.edgeIds, evidence).toEqual(["edge"]);
     }
   });
+
+describe("right panel width in layout history", () => {
+  it("counts as a layout change and restores in both directions", () => {
+    const before = { ...initial(), panelWidth: 400 };
+    const after = { ...initial(), panelWidth: 480 };
+    expect(canvasLayoutChanged(before, after)).toBe(true);
+    const history = recordCanvasHistory(emptyCanvasHistory("one"), before, after);
+    const undone = restoreCanvasHistory(history, after, "undo");
+    expect(undone.snapshot.panelWidth).toBe(400);
+    const redone = restoreCanvasHistory(undone.history, undone.snapshot, "redo");
+    expect(redone.snapshot.panelWidth).toBe(480);
+  });
+
+  it("is not a change when the width is the same or unknown", () => {
+    expect(canvasLayoutChanged({ ...initial(), panelWidth: 400 }, { ...initial(), panelWidth: 400 })).toBe(false);
+    expect(canvasLayoutChanged(initial(), { ...initial(), panelWidth: 400 })).toBe(false);
+  });
+});

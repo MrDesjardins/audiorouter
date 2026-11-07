@@ -152,7 +152,7 @@ export function ApiPanel({ builder }: { builder?: (baseUrl: string) => ReactNode
         {busy ? "Working…" : status.running ? "Stop API" : "Start API"}
       </button>
       <p className="muted">
-        To start the API every time AudioRouter starts, turn on "Start the local API automatically" in Advanced, under
+        To start the API every time AudioRouter starts, turn on "Start the local API automatically" in Settings, under
         When AudioRouter starts.
       </p>
       {status.url && (

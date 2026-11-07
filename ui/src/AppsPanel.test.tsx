@@ -84,7 +84,7 @@ describe("AppsPanel", () => {
     Object.assign(navigator, { clipboard: { writeText } });
     const { container } = render(panel(needsCheck));
     // The state is a word as well as a colour.
-    expect(container.querySelector(".app-state-badge.is-check")?.textContent).toBe("! Check");
+    expect(container.querySelector(".app-state-badge.is-check")?.textContent?.trim()).toBe("Check");
     expect(screen.getByText("Microphone (PD200X Podcast Microphone)")).toBeTruthy();
     // One "Show me how" only: the ready row has nothing to fix.
     const how = screen.getByRole("button", { name: "Show me how" });

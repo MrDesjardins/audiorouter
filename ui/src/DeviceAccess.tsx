@@ -41,7 +41,7 @@ export function DeviceAccessDialog({
         <h2 id="device-access-heading">Allow AudioRouter to use your audio devices?</h2>
         <p id="device-access-description">
           To play this session, AudioRouter opens the microphones, speakers and virtual cables in it. It asks once on
-          this computer. You can change this later under <strong>Advanced → Device access and version checks</strong>.
+          this computer. You can change this later under <strong>Settings → Device access</strong>.
         </p>
         {error && (
           <p className="muted" role="alert">

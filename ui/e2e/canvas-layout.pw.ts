@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "./browser-test";
+import { fitCanvas } from "./workbench";
 import { demoSession } from "../src/fixtures";
 import type { CanvasGroup } from "../src/CanvasGroups";
 
@@ -49,6 +50,7 @@ async function fixture(page: Page, groups: CanvasGroup[], theme = "dark", five =
   );
   await page.goto("/route-harness.html");
   await expect(page.getByTestId(five ? "rf__node-gain-0" : "rf__node-voice")).toBeVisible();
+  await fitCanvas(page);
   let previous = "";
   await expect
     .poll(
@@ -118,6 +120,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect(saved.groups.find((group: CanvasGroup) => group.id === inner.id).x).toBeCloseTo(after[inner.id].x, 2);
     await page.reload();
     await expect(page.getByTestId("rf__node-voice")).toBeVisible();
+    await fitCanvas(page);
     expect((await geometry(page)).voice.x).toBeCloseTo(after.voice.x, 2);
     await page.getByTestId(`rf__node-${outer.id}`).locator(".canvas-group-caption").click();
     await page.getByLabel("Move contents with group").uncheck();
@@ -334,6 +337,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect(saved.find((group) => group.id === other.id)).toEqual(other);
     await expect(page.locator(".topbar").getByRole("button", { name: "Save", exact: true })).toBeDisabled();
     await page.reload();
+    await expect(page.getByTestId("rf__node-" + outer.id)).toBeAttached();
+    await fitCanvas(page);
     await page
       .getByTestId("rf__node-" + outer.id)
       .locator(".canvas-group-caption")

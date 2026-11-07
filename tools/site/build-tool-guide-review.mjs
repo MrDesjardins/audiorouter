@@ -2,14 +2,33 @@ import {
   readFileSync,
   writeFileSync,
   mkdirSync,
-  copyFileSync,
+  copyFileSync as copyFileOnce,
   existsSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawnSync as spawnOnce } from "node:child_process";
 import { loadFamilies } from "./tool-guide-families.mjs";
 import { selectedKinds } from "./tool-guide-guards.mjs";
+// Windows sometimes refuses to open a just-written video for a moment while it is scanned.
+function spawnSync(command, args, options) {
+  for (let attempt = 0; ; attempt++) {
+    const result = spawnOnce(command, args, options);
+    if (result.status === 0 || attempt >= 8) return result;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250 * (attempt + 1));
+  }
+}
+// Windows sometimes refuses a copy for a moment while a just-written video is scanned.
+function copyFileSync(from, to) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return copyFileOnce(from, to);
+    } catch (error) {
+      if (attempt >= 8) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250 * (attempt + 1));
+    }
+  }
+}
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const families = loadFamilies();
 const inventory = JSON.parse(

@@ -19,7 +19,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.goto("/route-harness.html");
     await setColorTheme(page, theme);
     await expect(page.locator(".inactive-route-warning")).toContainText("Spectral Gate");
-    await expect(page.locator(".inactive-route-warning")).toContainText("ignored during playback");
+    await expect(page.locator(".inactive-route-warning")).toContainText("so they stay silent");
     await page.locator(".topbar").getByRole("button", { name: "Stop", exact: true }).click();
     await page.locator(".topbar").getByRole("button", { name: "Play", exact: true }).click();
     await expect(page.locator(".audio-run-state")).toContainText("Audio running");

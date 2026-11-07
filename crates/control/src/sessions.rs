@@ -218,6 +218,8 @@ impl ControlPlane {
 
     pub fn delete_session(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
+        self.clear_comparison(id);
+        self.forget_revision_notes(id);
         let session = self.get_session(id)?.clone();
         if self
             .runtimes
@@ -1513,6 +1515,8 @@ impl ControlPlane {
             ControlError::InvalidRequest("sessionId and idempotencyKey are required".into())
         })?;
         let id = session_id_from_params(Some(params.clone()))?;
+        // A comparison belongs to this run; it must not carry over to the next Play.
+        self.clear_comparison(&id);
         params
             .get("idempotencyKey")
             .and_then(Value::as_str)

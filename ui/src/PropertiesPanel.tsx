@@ -9,6 +9,8 @@ import type { ApplicationRow, RecorderStatus, UiBackend, UiBackendSnapshot } fro
 import type { ProcessorDescriptor } from "./processorCatalog";
 import { MeterInspector } from "./MeterInspector";
 import { NodePropertyStatus } from "./NodePropertyStatus";
+import { ToolCompare, ToolPresetPicker } from "./ToolCompare";
+import { takesPresets } from "./compareRules";
 import { NodeIdentity } from "./NodeIdentity";
 import { CanvasGroupInspector, type CanvasGroup, type useCanvasGroups } from "./CanvasGroups";
 import { SpatialAudioField } from "./SpatialAudioField";
@@ -16,6 +18,7 @@ import { InputChannelsField } from "./InputChannelsField";
 import { libraryEntries, toolDescription } from "./library";
 import { EditableNodeName } from "./EditableNodeName";
 import { HelpDisclosure } from "./HelpDisclosure";
+import { PropertySection } from "./PropertySection";
 import { SpectralGateEditor } from "./SpectralGateEditor";
 import { FunVoiceChangerEditor } from "./FunVoiceChangerEditor";
 import { DynamicsEditor } from "./DynamicsEditor";
@@ -32,7 +35,7 @@ import {
   PitchEditor,
   StrengthEditor,
 } from "./ToolVisuals";
-import { isDynamicsKind } from "./dynamics";
+import { dynamicsControlSplit, isDynamicsKind } from "./dynamics";
 import { NetworkNodeEditor } from "./NetworkNodeEditor";
 import { EqSpectrumContext } from "./AdvancedEqEditor";
 import { writeEndpointBindingHint } from "./endpointBinding";
@@ -51,7 +54,7 @@ import {
 } from "./NodeEditors";
 import { AudioFileNodeEditor } from "./AudioFileNodeEditor";
 import { SoundboardNodeEditor } from "./SoundboardNodeEditor";
-import { removeNodeDraftParameters, setVirtualBusDraftCable } from "./draft";
+import { removeNodeDraftParameters, setVirtualBusDraftCable, unfedRouteNodes } from "./draft";
 import { useVirtualCableStatus } from "./virtualCableStatus";
 import type { NodeDeviceUsers } from "./appUsage";
 
@@ -180,7 +183,6 @@ export function PropertiesPanel({
       >
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Selected node</p>
             <div className="inspector-title">
               <h2 id="inspector-heading" aria-label={selectedNode.name}>
                 <EditableNodeName
@@ -195,6 +197,7 @@ export function PropertiesPanel({
                 connected={backend.connected}
                 running={sessionRunning}
                 snapshot={liveDiagnostics ?? null}
+                unfed={unfedRouteNodes(draft).some((node) => node.id === selectedNode.id)}
               />
             </div>
           </div>
@@ -206,8 +209,8 @@ export function PropertiesPanel({
           <p className="muted tool-description">{toolDescription(selectedNode.kind)}</p>
         )}
         <ToolGuideLink key={selectedNode.kind} kind={selectedNode.kind} />
-        <HelpDisclosure title="How to edit a node">
-          <p>Click the name to rename this node. Press Enter or click away to finish; Escape cancels.</p>
+        <HelpDisclosure title="How to edit this tool">
+          <p>Click the name to rename this tool. Press Enter or click away to finish; Escape cancels.</p>
           <p>
             Parameter edits save automatically after a short pause while audio plays. Other changes need Save at the
             top; the canvas marks tools that need saving.
@@ -277,6 +280,28 @@ export function PropertiesPanel({
             running={sessionRunning}
             disabled={!backend.connected}
             onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+            mainControls={
+              <ProcessorParameterEditor
+                node={selectedNode}
+                processors={processors}
+                nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
+                connected={backend.connected}
+                onChange={changeNodeParameter}
+                only={dynamicsControlSplit(selectedNode.kind).main}
+                compact
+              />
+            }
+            timingControls={
+              <ProcessorParameterEditor
+                node={selectedNode}
+                processors={processors}
+                nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
+                connected={backend.connected}
+                onChange={changeNodeParameter}
+                only={dynamicsControlSplit(selectedNode.kind).timing}
+                compact
+              />
+            }
           />
         ) : (
           <NodeTelemetryPanel node={selectedNode} snapshot={liveDiagnostics ?? null} running={sessionRunning} />
@@ -331,21 +356,35 @@ export function PropertiesPanel({
           />
         )}
         {selectedNode.kind === "physicalInput" && (
-          <SpatialAudioField
-            devices={devices}
-            endpointId={
-              typeof selectedNode.parameters.endpointId === "string" ? selectedNode.parameters.endpointId : ""
+          <PropertySection
+            kind={selectedNode.kind}
+            title="Spatial audio"
+            summary={
+              selectedNode.parameters.spatialMode === "headphones"
+                ? "Headphones"
+                : selectedNode.parameters.spatialMode === "speakers"
+                  ? "Speakers"
+                  : "Off"
             }
-            mode={typeof selectedNode.parameters.spatialMode === "string" ? selectedNode.parameters.spatialMode : "off"}
-            disabled={!backend.connected}
-            roomPercent={
-              typeof selectedNode.parameters.spatialRoomPercent === "number"
-                ? selectedNode.parameters.spatialRoomPercent
-                : 0
-            }
-            running={sessionRunning}
-            onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
-          />
+          >
+            <SpatialAudioField
+              devices={devices}
+              endpointId={
+                typeof selectedNode.parameters.endpointId === "string" ? selectedNode.parameters.endpointId : ""
+              }
+              mode={
+                typeof selectedNode.parameters.spatialMode === "string" ? selectedNode.parameters.spatialMode : "off"
+              }
+              disabled={!backend.connected}
+              roomPercent={
+                typeof selectedNode.parameters.spatialRoomPercent === "number"
+                  ? selectedNode.parameters.spatialRoomPercent
+                  : 0
+              }
+              running={sessionRunning}
+              onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+            />
+          </PropertySection>
         )}
         {selectedNode.kind === "firFilter" && (
           <FirFilterEditor
@@ -581,6 +620,29 @@ export function PropertiesPanel({
             />
           </>
         )}
+        <ToolCompare backend={backend} session={session} node={selectedNode} running={sessionRunning} />
+        {takesPresets(selectedNode) && (
+          <PropertySection kind={selectedNode.kind} title="My presets" summary="Save and reuse settings">
+            <ToolPresetPicker
+              backend={backend}
+              node={selectedNode}
+              disabled={!backend.connected}
+              onApply={(parameters, name) =>
+                recordDraftChange(
+                  {
+                    ...draft,
+                    nodes: draft.nodes.map((node) =>
+                      node.id === selectedNode.id
+                        ? { ...node, parameters: { ...node.parameters, ...parameters } }
+                        : node,
+                    ),
+                  },
+                  `Applied preset ${name}. Save to keep it.`,
+                )
+              }
+            />
+          </PropertySection>
+        )}
         <div className="inspector-grid">
           <div className="inspector-toggles">
             <label>
@@ -609,40 +671,69 @@ export function PropertiesPanel({
                 : null
             }
           >
-            <ProcessorParameterEditor
-              node={selectedNode}
-              processors={processors}
-              nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
-              connected={backend.connected}
-              onChange={changeNodeParameter}
-            />
+            {/* Compressor, Gate and Limiter show their settings under the curve and in a section. */}
+            {!isDynamicsKind(selectedNode.kind) && (
+              <ProcessorParameterEditor
+                node={selectedNode}
+                processors={processors}
+                nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
+                connected={backend.connected}
+                onChange={changeNodeParameter}
+                compact
+              />
+            )}
           </EqSpectrumContext.Provider>
-          {processors?.some((processor) => processor.id === selectedNode.kind && processor.parameters.length > 0) && (
-            <button type="button" className="secondary" onClick={resetNodeParameters} disabled={!backend.connected}>
-              Reset parameters
-            </button>
-          )}
-          <button type="button" className="secondary" onClick={duplicateSelectedNode} disabled={!backend.connected}>
-            Duplicate node to draft
-          </button>
-          <button type="button" className="secondary" onClick={removeSelectedNode} disabled={!backend.connected}>
-            Remove node from draft
-          </button>
+          {/* Privacy mute stays in plain sight in every tool, never behind a closed section (UI-10). */}
           <button
             type="button"
+            className="secondary"
             onClick={() => void togglePrivacyMute()}
             disabled={!backend.connected}
-            aria-pressed={privacyMuted}
           >
-            {privacyMuted ? "Privacy mute enabled" : "Enable privacy mute"}
+            {privacyMuted ? "Turn off privacy mute" : "Turn on privacy mute"}
           </button>
           <p className="muted">
-            {backend.connected
-              ? "Save changes checks the draft before saving it. Privacy mute is an immediate safety latch."
-              : "Controls are disabled while disconnected. Selection is local presentation state only."}
+            {!backend.connected
+              ? "Controls are disabled while disconnected."
+              : privacyMuted
+                ? "Privacy mute is on: every microphone and captured app is silent, not only this tool."
+                : "Privacy mute silences every microphone and captured app right away."}
           </p>
+          <PropertySection kind={selectedNode.kind} title="Technical details" summary="Tool ID">
+            <NodeIdentity nodeId={selectedNode.id} />
+          </PropertySection>
+          <div className="inspector-tool-actions">
+            {processors?.some((processor) => processor.id === selectedNode.kind && processor.parameters.length > 0) && (
+              <button
+                type="button"
+                className="secondary"
+                aria-label="Reset parameters"
+                onClick={resetNodeParameters}
+                disabled={!backend.connected}
+              >
+                Reset
+              </button>
+            )}
+            <button
+              type="button"
+              className="secondary"
+              aria-label="Duplicate tool"
+              onClick={duplicateSelectedNode}
+              disabled={!backend.connected}
+            >
+              Duplicate
+            </button>
+            <button
+              type="button"
+              className="danger"
+              aria-label="Remove tool"
+              onClick={removeSelectedNode}
+              disabled={!backend.connected}
+            >
+              Remove
+            </button>
+          </div>
         </div>
-        <NodeIdentity nodeId={selectedNode.id} />
       </section>
     </>
   );

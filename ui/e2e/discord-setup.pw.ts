@@ -1,4 +1,4 @@
-import { setColorTheme } from "./workbench";
+import { setColorTheme, openStatusView } from "./workbench";
 import { expect, test, type Page } from "./browser-test";
 import type { ApplicationInfo, DeviceListItem, Session } from "../../contracts/src/index";
 
@@ -101,7 +101,7 @@ test("Set up for Discord adds one undoable route that the Discord card then chec
     { fixture: session, applications: discord("mic"), deviceList: devices },
   );
   await page.goto("/route-harness.html");
-  await page.getByRole("tab", { name: "Apps", exact: true }).click();
+  await openStatusView(page, "Apps");
   const card = page.locator('[data-app="discord"]');
   const microphoneRow = card.locator(".app-check-row").first();
   await expect(microphoneRow).toContainText("does not send your voice to a virtual cable yet");

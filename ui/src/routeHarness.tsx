@@ -31,6 +31,9 @@ const injected = globalThis as {
   __routeFixtureProcessors?: DiscoveryDocument["processors"];
   __routeFixtureDiscovery?: Partial<DiscoveryDocument>;
   __routeFixtureDelayMs?: number;
+  /** Bounded snapshot-failure injection for disposable recovery journeys. */
+  __routeFixtureSnapshotError?: string;
+  __routeFixtureForceResync?: boolean;
   __routeFixtureNoRecordingRoot?: boolean;
   __routeFixtureRecordingLostAudio?: boolean;
   __routeFixtureFreshInstall?: boolean;
@@ -65,6 +68,12 @@ let recordingRoot: string | null = injected.__routeFixtureNoRecordingRoot ? null
 let sequence = 0;
 const lifecycleCalls: string[] = [];
 let planCalls = 0;
+const compareCalls: string[][] = [];
+const goalCalls: string[] = [];
+Object.assign(window, {
+  __routeFixtureCompareCalls: () => structuredClone(compareCalls),
+  __routeFixtureGoalCalls: () => [...goalCalls],
+});
 Object.assign(window, { __routeFixturePlanCalls: () => planCalls });
 Object.assign(window, { __routeFixtureCalls: () => [...lifecycleCalls] });
 const fixtureBackend = createDisconnectedBackend(demoSession);
@@ -239,6 +248,40 @@ const previewBackend: UiBackend = {
         },
       }
     : {}),
+  async compareNodes({ sessionId, nodes }) {
+    compareCalls.push(nodes);
+    return { sessionId, comparing: nodes, expiresInMs: nodes.length > 0 ? 30_000 : 0 };
+  },
+  async listSessionGoals() {
+    return {
+      goals: [
+        {
+          id: "clean-mic",
+          title: "Clean up my mic",
+          summary: "Mic, noise removal, gate and compressor, ready for an output you choose.",
+          adds: ["Microphone", "Speech Denoise", "Gate", "Compressor"],
+          main: true,
+          applicationPrompt: null,
+          stillToChoose: ["your microphone"],
+        },
+        {
+          id: "empty",
+          title: "Start empty",
+          summary: "A blank route.",
+          adds: [],
+          main: true,
+          applicationPrompt: null,
+          stillToChoose: [],
+        },
+      ],
+    };
+  },
+  async createSessionFromGoal({ goal }) {
+    goalCalls.push(goal);
+    const session = { ...structuredClone(demoSession), id: `goal-${goal}-1`, name: "Clean up my mic", revision: 1 };
+    injected.__routeFixtureSessions = [...(injected.__routeFixtureSessions ?? [committed]), session];
+    return { session, state: "stopped" as const, stillToChoose: ["your microphone"] };
+  },
   async listClients() {
     return injected.__routeFixtureMcpClients ?? fixtureBackend.listClients();
   },
@@ -273,6 +316,7 @@ const previewBackend: UiBackend = {
     if (selected) committed = structuredClone(selected);
     if (injected.__routeFixtureDelayMs)
       await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureDelayMs));
+    if (injected.__routeFixtureSnapshotError) throw new Error(injected.__routeFixtureSnapshotError);
     return structuredClone({
       ...initial,
       session: committed,
@@ -323,7 +367,10 @@ const previewBackend: UiBackend = {
     return structuredClone(diagnostics());
   },
   async subscribe(afterSequence = 0) {
-    return { backendEpoch: 1, events: [], nextSequence: sequence, resyncRequired: afterSequence < sequence };
+    // One-shot: makes the next event poll reload the snapshot, as a backend event would.
+    const forced = injected.__routeFixtureForceResync === true;
+    injected.__routeFixtureForceResync = false;
+    return { backendEpoch: 1, events: [], nextSequence: sequence, resyncRequired: forced || afterSequence < sequence };
   },
   // A fresh install: opening devices is refused until the user consents.
   async getDeviceAccess() {
