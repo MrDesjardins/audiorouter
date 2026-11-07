@@ -423,6 +423,7 @@ fn select_shell_grant(
             // Connect to OBS and change its sources after a confirmed
             // preview (authorized 2026-10-23, DEC-22).
             PermissionScope::IntegrationWrite,
+            PermissionScope::FileExport,
             PermissionScope::DeviceAdministration,
         ])));
     }
@@ -975,6 +976,7 @@ fn open_plugin_editor(
 #[tauri::command]
 async fn choose_session_file(
     window: tauri::WebviewWindow,
+    state: State<'_, ShellState>,
     mode: String,
     suggested_name: Option<String>,
 ) -> Result<Option<String>, String> {
@@ -995,13 +997,47 @@ async fn choose_session_file(
         } else {
             suggested
         };
-        session_file_dialog::choose(mode == "save", &format!("{suggested}.audiorouter"), owner)
-            .map(|path| path.map(|path| path.to_string_lossy().into_owned()))
+        let path = session_file_dialog::choose(
+            mode == "save",
+            &format!("{suggested}.audiorouter"),
+            owner,
+        )?;
+        if mode == "save" {
+            if let Some(path) = &path {
+                // The native dialog has just obtained any overwrite consent.
+                // Only this desktop-process pipe can grant the exact path.
+                approve_export_after_dialog(&state.pipe_name, path)?;
+            }
+        }
+        Ok(path.map(|path| path.to_string_lossy().into_owned()))
     }
     #[cfg(not(windows))]
     {
-        let _ = (window, mode, suggested_name);
+        let _ = (window, state, mode, suggested_name);
         Err("session file dialogs are only available on Windows".into())
+    }
+}
+
+#[cfg(windows)]
+fn approve_export_after_dialog(pipe_name: &str, path: &std::path::Path) -> Result<(), String> {
+    let request = JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(serde_json::json!("export-approval")),
+        method: "sessions.approveExport".into(),
+        params: Some(serde_json::json!({ "path": path, "replace": true })),
+    };
+    let response = forward_rpc_request(&request, pipe_name)?;
+    if let Some(error) = response.error {
+        return Err(error.message);
+    }
+    if response
+        .result
+        .as_ref()
+        .is_some_and(|result| result["approved"] == true)
+    {
+        Ok(())
+    } else {
+        Err("The backend did not approve the chosen export destination.".into())
     }
 }
 
@@ -3134,6 +3170,66 @@ mod tests {
         let response = forward_rpc_request(&request, &pipe_name).unwrap();
         assert!(response.error.is_none());
         assert_eq!(response.result.unwrap()["protocolVersion"]["major"], 1);
+        server.join().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn chosen_save_destination_is_approved_and_exported_through_the_real_pipe() {
+        let suffix = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let pipe = format!(r"\\.\pipe\audiorouter-save-{}-{suffix}", std::process::id());
+        let root = std::env::temp_dir().join(format!(
+            "audiorouter-native-save-{}-{suffix}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let database = root.join("test.sqlite");
+        let path = root.join("saved.audiorouter");
+        let server = {
+            let pipe = pipe.clone();
+            std::thread::spawn(move || {
+                let mut plane = ControlPlane::with_storage(
+                    "native-save",
+                    audiorouter_storage::Storage::open(database).unwrap(),
+                );
+                plane.insert_session(default_desktop_session()).unwrap();
+                audiorouter_transport::serve_control_connections(
+                    &pipe,
+                    3,
+                    plane,
+                    ClientGrant::for_desktop_shell(),
+                )
+                .unwrap();
+            })
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            match approve_export_after_dialog(&pipe, &path) {
+                Ok(()) => break,
+                Err(error) => assert!(std::time::Instant::now() < deadline, "{error}"),
+            }
+        }
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.exportFile".into(),
+            params: Some(json!({"sessionId":DESKTOP_SESSION_ID,"path":path,"replace":true})),
+        };
+        assert!(forward_rpc_request(&request, &pipe)
+            .unwrap()
+            .error
+            .is_none());
+        assert!(path.is_file());
+        assert!(
+            forward_rpc_request(&request, &pipe)
+                .unwrap()
+                .error
+                .is_some(),
+            "approval must be used once"
+        );
         server.join().unwrap();
     }
 }

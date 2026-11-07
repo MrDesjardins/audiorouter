@@ -290,6 +290,7 @@ impl ControlPlane {
             startup_plans,
             next_startup_plan: 1,
             session_import_plans: HashMap::new(),
+            session_export_approvals: HashMap::new(),
             next_session_import_plan: 1,
             active_idempotency_scope: None,
             active_device_restart_allowed: None,

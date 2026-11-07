@@ -1,5 +1,5 @@
 {
-  "backendMethods": 123,
+  "backendMethods": 117,
   "operations": [
     {
       "method": "POST",
@@ -640,41 +640,6 @@
     },
     {
       "method": "POST",
-      "path": "/api/v1/obs/connect",
-      "operation": "obs.connect",
-      "permission": "IntegrationWrite",
-      "effect": "Mutating"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/obs/disconnect",
-      "operation": "obs.disconnect",
-      "permission": "IntegrationWrite",
-      "effect": "Mutating"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/obs/preview",
-      "operation": "obs.preview",
-      "permission": "IntegrationWrite",
-      "effect": "PlanOnly"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/obs/apply",
-      "operation": "obs.apply",
-      "permission": "IntegrationWrite",
-      "effect": "ExternalOperation"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/obs/restore",
-      "operation": "obs.restore",
-      "permission": "IntegrationWrite",
-      "effect": "ExternalOperation"
-    },
-    {
-      "method": "POST",
       "path": "/api/v1/nodes/types",
       "operation": "nodes.types",
       "permission": "Read",
@@ -749,13 +714,6 @@
       "operation": "sessions.export",
       "permission": "Read",
       "effect": "ReadOnly"
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/sessions/exportFile",
-      "operation": "sessions.exportFile",
-      "permission": "GraphWrite",
-      "effect": "ExternalOperation"
     },
     {
       "method": "POST",

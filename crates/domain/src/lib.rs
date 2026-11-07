@@ -916,6 +916,9 @@ pub enum PermissionScope {
     /// Change another application's settings, after a preview the user
     /// confirmed (DEC-22: OBS sources). Held by the desktop shell only.
     IntegrationWrite,
+    /// Export a session bundle to a destination explicitly chosen in the
+    /// desktop Save dialog. Never implied by graph editing or recording.
+    FileExport,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -935,7 +938,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 138] = [
+pub const API_METHODS: [ApiMethodSpec; 139] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1563,8 +1566,13 @@ pub const API_METHODS: [ApiMethodSpec; 138] = [
         side_effect: SideEffectClass::ReadOnly,
     },
     ApiMethodSpec {
+        name: "sessions.approveExport",
+        permission: PermissionScope::FileExport,
+        side_effect: SideEffectClass::PlanOnly,
+    },
+    ApiMethodSpec {
         name: "sessions.exportFile",
-        permission: PermissionScope::GraphWrite,
+        permission: PermissionScope::FileExport,
         side_effect: SideEffectClass::ExternalOperation,
     },
     ApiMethodSpec {

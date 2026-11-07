@@ -1,6 +1,55 @@
 # Active plan — current priorities (2026-11-04)
 
+## Ordered PR integration — 2026-11-06
+
+Owner authorized monitoring and merging #117, #118, then #120. Requirements:
+SEC-12 and ENG-02/04. #117's Edge session-file test omits the newly required
+desktop export approval; its Quality gate reports that browser failure.
+Backport the existing harness approval calls from #118, rebuild e2e_backend,
+run the focused Edge test, typecheck, lint and formatting, then push and
+require new-head hosted CI before merge. Follow with #118's probe lockfile
+repair from #120 and verify each subsequent base. No hardware or credentials
+are needed. Preserve unrelated release files and the owner's live app.
+Rollback: revert only the test repair; never weaken production consent.
+Evidence: hosted run 42177734472 failed only session-file.pw.ts at line 20
+(missing Save-dialog consent); Quality gate reported browser failure. On
+Windows, rebuilt e2e_backend with --locked; focused Edge test passed (1/1),
+typecheck:all, lint, format and format:check passed. No product code changed.
+Local browser emitted NO_COLOR/FORCE_COLOR and React Flow attribution notices;
+neither changes the export assertion. Hosted Ubuntu migration notice is runner
+metadata; no workflow change is needed for this test repair.
+Next: push the repair and require new-head hosted CI before merging #117.
+
 ## Where things stand
+
+Owner-approved security-only PR preparation (2026-11-05): isolate all three
+review repairs and the development dependency advisory from concurrent UI work.
+Branch `fix/security-boundaries` is based on `origin/main` at `0a5d7677` in
+`C:\code\audiorouter-security-fixes`; the original checkout and its index remain
+untouched. The owner explicitly authorized opening this PR. Requirements:
+SEC-01–04/09/12/14, HTTP-01/03/06, AUTO-18, ENG-02/04. Scope, decisions,
+rollback, Windows results and remaining gates are recorded in the
+[security review](evidence/2026-11-05-security-review.md) and
+[repair evidence](evidence/2026-11-05-security-fixes.md).
+
+Ordered work: copy only security-owned paths (the active plan is curated,
+not copied from the mixed checkout); validate the isolated branch including
+UI checks; inspect the complete staged diff; commit, push and open the approved
+PR. No source UI, visual guides, unrelated release metadata or UI-plan work
+belongs in this PR. Validation includes real rebuilt MCP/pipe regressions,
+control/CLI/transport/shell tests, formatting, strict Clippy, contract drift,
+UI typecheck/lint/tests/build, docs and advisory checks. No hardware/driver or
+external runtime credentials are required. Cross-account/logon and attended
+packaged/native-dialog qualification remain open. No merge or release is
+authorized. Rollback is a scoped revert; retain the matching app/sidecar rule.
+Isolated validation passed: all-files UI typecheck, lint, 823 tests and normal
+build; control/CLI/transport plus real stdio/security integration tests; 87 shell
+tests; both strict Clippy runs; formatting, contracts, docs and audits. The two
+old pipe stdio fixtures now use their enrolled database in the backend. No UI
+source/e2e changes are included. Existing unchanged-main startup mock stderr,
+Vite chunk size and shared-policy advisory warnings are explicitly recorded in
+the evidence. The complete security-only diff was inspected. Next after the
+approved push/PR creation: hosted checks and owner review; no merge or release.
 
 Dependabot 7 (ENG-02/04/05), owner correction: removed the rejected 55k-line
 GLib vendor import, Cargo patch and supporting checks from PR

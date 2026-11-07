@@ -5,6 +5,30 @@
 //! connected process SID before reading requests; method-level grants remain a
 //! separate authorization boundary in the control plane.
 
+#[cfg(windows)]
+mod client_credentials;
+
+/// Authenticate an enrolled adapter's configured identity. This wrapper is an
+/// internal pipe protocol, never a JSON-RPC method or assistant tool argument.
+/// The backend strips it before dispatch and diagnostics.
+pub fn enrolled_client_frame(client_id: &str, frame: &[u8]) -> Result<Vec<u8>, TransportError> {
+    #[cfg(windows)]
+    {
+        let token = client_credentials::load_or_create(client_id)?;
+        let payload: serde_json::Value = audiorouter_protocol::decode_frame(frame)
+            .map_err(|_| TransportError::Protocol("invalid client request".into()))?;
+        audiorouter_protocol::encode_frame(&serde_json::json!({
+            "pipeClient": { "id": client_id, "token": token }, "payload": payload
+        }))
+        .map_err(|_| TransportError::Protocol("invalid client request".into()))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (client_id, frame);
+        Err(TransportError::UnsupportedPlatform)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransportError {
     UnsupportedPlatform,
@@ -893,15 +917,17 @@ mod windows_pipe {
     use windows::Win32::Security::Authorization::{
         ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
     };
-    use windows::Win32::Security::{GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER};
+    use windows::Win32::Security::{
+        GetTokenInformation, TokenStatistics, TokenUser, TOKEN_QUERY, TOKEN_STATISTICS, TOKEN_USER,
+    };
     use windows::Win32::Storage::FileSystem::{
-        CreateFileW, FlushFileBuffers, ReadFile, WriteFile, FILE_SHARE_NONE, OPEN_EXISTING,
-        PIPE_ACCESS_DUPLEX,
+        CreateFileW, FlushFileBuffers, ReadFile, WriteFile, FILE_FLAG_FIRST_PIPE_INSTANCE,
+        FILE_SHARE_NONE, OPEN_EXISTING, PIPE_ACCESS_DUPLEX,
     };
     use windows::Win32::System::Pipes::{
         ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
-        PeekNamedPipe, WaitNamedPipeW, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
-        PIPE_TYPE_BYTE, PIPE_WAIT,
+        GetNamedPipeServerProcessId, PeekNamedPipe, WaitNamedPipeW, PIPE_READMODE_BYTE,
+        PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
     };
     use windows::Win32::System::Threading::{
         CreateMutexW, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -945,16 +971,25 @@ mod windows_pipe {
     }
 
     #[must_use = "the singleton handle must stay alive while serving"]
-    pub struct ServerSingleton(Handle);
-
-    impl Drop for ServerSingleton {
-        fn drop(&mut self) {
-            let _ = &self.0;
-        }
+    pub struct ServerSingleton {
+        _connection: Handle,
+        _guard: Handle,
+        // Drop the mutex last, after every reserved pipe handle is closed.
+        _mutex: Handle,
     }
 
     pub fn acquire_server_singleton(pipe_name: &str) -> Result<ServerSingleton, TransportError> {
-        Ok(ServerSingleton(acquire_singleton(pipe_name)?))
+        let mutex = acquire_singleton(pipe_name)?;
+        // Keep the first instance connected to ourselves for the entire server
+        // lifetime. It cannot receive real requests, and prevents a gap between
+        // ordinary instances from allowing another process to claim the name.
+        let guard = create_pipe(pipe_name, true)?;
+        let connection = connect_client(&wide(pipe_name))?;
+        Ok(ServerSingleton {
+            _mutex: mutex,
+            _guard: guard,
+            _connection: connection,
+        })
     }
 
     fn check_name(name: &str) -> Result<(), TransportError> {
@@ -1105,7 +1140,31 @@ mod windows_pipe {
             .map_err(win_error)?;
         let current_token = Handle(current_token);
 
-        Ok(token_user_sid_string(client_token.0)? == token_user_sid_string(current_token.0)?)
+        Ok(
+            token_user_sid_string(client_token.0)? == token_user_sid_string(current_token.0)?
+                && token_logon(client_token.0)? == token_logon(current_token.0)?,
+        )
+    }
+
+    fn token_logon(token: HANDLE) -> Result<(u32, i32), TransportError> {
+        let mut statistics = TOKEN_STATISTICS::default();
+        let mut required = 0;
+        // SAFETY: token is an owned TOKEN_QUERY handle; the live, aligned
+        // TOKEN_STATISTICS buffer has exactly the size passed to Windows.
+        unsafe {
+            GetTokenInformation(
+                token,
+                TokenStatistics,
+                Some(std::ptr::addr_of_mut!(statistics).cast()),
+                std::mem::size_of::<TOKEN_STATISTICS>() as u32,
+                &mut required,
+            )
+        }
+        .map_err(win_error)?;
+        Ok((
+            statistics.AuthenticationId.LowPart,
+            statistics.AuthenticationId.HighPart,
+        ))
     }
 
     struct Handle(HANDLE);
@@ -1226,7 +1285,7 @@ mod windows_pipe {
     /// name must be created with the same value.
     pub const SERVER_PIPE_INSTANCES: u32 = 4;
 
-    fn accept_client(name: &str) -> Result<(Handle, u32), TransportError> {
+    fn create_pipe(name: &str, first: bool) -> Result<Handle, TransportError> {
         check_name(name)?;
         let name = wide(name);
         let security = owner_only_security()?;
@@ -1241,9 +1300,14 @@ mod windows_pipe {
         let handle = unsafe {
             CreateNamedPipeW(
                 PCWSTR(name.as_ptr()),
-                PIPE_ACCESS_DUPLEX,
+                PIPE_ACCESS_DUPLEX
+                    | if first {
+                        FILE_FLAG_FIRST_PIPE_INSTANCE
+                    } else {
+                        Default::default()
+                    },
                 PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-                SERVER_PIPE_INSTANCES,
+                SERVER_PIPE_INSTANCES + 1,
                 (MAX_FRAME_BYTES + 4) as u32,
                 (MAX_FRAME_BYTES + 4) as u32,
                 0,
@@ -1253,7 +1317,11 @@ mod windows_pipe {
         if handle == INVALID_HANDLE_VALUE || handle.is_invalid() {
             return Err(win_error(windows::core::Error::from_thread()));
         }
-        let handle = Handle(handle);
+        Ok(Handle(handle))
+    }
+
+    fn accept_client(name: &str) -> Result<(Handle, u32), TransportError> {
+        let handle = create_pipe(name, false)?;
         // SAFETY: `handle.0` is the valid pipe handle created above in synchronous
         // mode, so no OVERLAPPED structure is needed.
         if let Err(error) = unsafe { ConnectNamedPipe(handle.0, None) } {
@@ -1359,7 +1427,7 @@ mod windows_pipe {
     where
         F: FnMut(u32, &[u8]) -> Result<Vec<u8>, TransportError>,
     {
-        let _singleton = acquire_singleton(name)?;
+        let _singleton = acquire_server_singleton(name)?;
         for _ in 0..connections {
             serve_once_with_client(name, |client_pid, frame| handler(client_pid, frame))?;
         }
@@ -1394,7 +1462,20 @@ mod windows_pipe {
                 )
             };
             let error = match result {
-                Ok(handle) => return Ok(Handle(handle)),
+                Ok(handle) => {
+                    let handle = Handle(handle);
+                    let mut server_pid = 0;
+                    // SAFETY: handle is the live connected pipe; Windows writes
+                    // one process ID into the aligned local before any payload.
+                    unsafe { GetNamedPipeServerProcessId(handle.0, &mut server_pid) }
+                        .map_err(win_error)?;
+                    if server_pid == 0 || !client_is_same_user(server_pid)? {
+                        return Err(TransportError::Windows(
+                            "pipe server is not this Windows user and logon".into(),
+                        ));
+                    }
+                    return Ok(handle);
+                }
                 Err(error) => error,
             };
             let elapsed = started.elapsed();
@@ -1508,6 +1589,49 @@ mod windows_pipe {
         encode_frame(&serde_json::json!({"ok": true}))
             .map_err(|e| TransportError::Protocol(e.to_string()))
     }
+
+    #[cfg(test)]
+    mod security_tests {
+        use super::*;
+
+        #[test]
+        fn first_instance_refuses_a_squatted_pipe_and_guard_holds_the_name() {
+            let name = format!(
+                r"\\.\pipe\audiorouter-first-instance-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let squatter = create_pipe(&name, false).unwrap();
+            assert!(
+                create_pipe(&name, true).is_err(),
+                "must not join a pre-existing pipe"
+            );
+            assert!(acquire_server_singleton(&name).is_err());
+            drop(squatter);
+            let guard = acquire_server_singleton(&name).unwrap();
+            assert!(
+                create_pipe(&name, true).is_err(),
+                "guard reserves the name between requests"
+            );
+            drop(guard);
+            assert!(
+                create_pipe(&name, true).is_ok(),
+                "clean shutdown releases the name"
+            );
+        }
+
+        #[test]
+        fn peer_check_requires_the_same_user_and_logon() {
+            assert!(client_is_same_user(std::process::id()).unwrap());
+            assert!(
+                client_is_same_user(0).is_err(),
+                "an unqueryable identity must fail closed"
+            );
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -1529,23 +1653,7 @@ pub fn serve_control_connections(
     for _ in 0..connections {
         serve_once_with_client_optional(name, |client_pid, frame| {
             let client_id = client_user_sid(client_pid)?;
-            let started = std::time::Instant::now();
-            let responses = plane
-                .dispatch_frame_authorized_for_client(frame, &client_id, &grant)
-                .map_err(|error| TransportError::Protocol(error.to_string()))?;
-            let verbose =
-                plane.verbose_diagnostics_active(audiorouter_protocol::diagnostics::unix_time_ms());
-            log_backend_rpc(frame, &responses, verbose, started.elapsed());
-            if responses.is_empty() {
-                Ok(None)
-            } else {
-                let total = responses.iter().map(Vec::len).sum();
-                let mut combined = Vec::with_capacity(total);
-                for response in responses {
-                    combined.extend_from_slice(&response);
-                }
-                Ok(Some(combined))
-            }
+            dispatch_control_frame(&mut plane, &grant, client_pid, &client_id, frame)
         })?;
     }
     Ok(())
@@ -1567,19 +1675,7 @@ pub fn serve_control_sessions(
     for _ in 0..sessions {
         serve_session(name, frames_per_session, |client_pid, frame| {
             let client_id = client_user_sid(client_pid)?;
-            let responses = plane
-                .dispatch_frame_authorized_for_client(frame, &client_id, &grant)
-                .map_err(|error| TransportError::Protocol(error.to_string()))?;
-            if responses.is_empty() {
-                Ok(None)
-            } else {
-                let total = responses.iter().map(Vec::len).sum();
-                let mut combined = Vec::with_capacity(total);
-                for response in responses {
-                    combined.extend_from_slice(&response);
-                }
-                Ok(Some(combined))
-            }
+            dispatch_control_frame(&mut plane, &grant, client_pid, &client_id, frame)
         })?;
     }
     Ok(())
@@ -1643,6 +1739,7 @@ struct ControlFrame {
     /// The client's user SID, resolved on the I/O thread so the control
     /// thread does no token lookup per request (review 2026-11-01, P3-1).
     client_id: String,
+    client_pid: u32,
     frame: Vec<u8>,
     reply: std::sync::mpsc::SyncSender<Result<Option<Vec<u8>>, TransportError>>,
 }
@@ -1779,6 +1876,7 @@ fn spawn_control_io(
                         frames
                             .send(ControlFrame {
                                 client_id,
+                                client_pid,
                                 frame: frame.to_vec(),
                                 reply,
                             })
@@ -1853,8 +1951,13 @@ fn serve_control_plane_frames(
             Ok(request) => {
                 wait = wait_start.map(|start| start.elapsed()).unwrap_or_default();
                 let dispatch_start = std::time::Instant::now();
-                let result =
-                    dispatch_control_frame(plane, grant, &request.client_id, &request.frame);
+                let result = dispatch_control_frame(
+                    plane,
+                    grant,
+                    request.client_pid,
+                    &request.client_id,
+                    &request.frame,
+                );
                 let _ = request.reply.send(result);
                 dispatch = dispatch_start.elapsed();
                 health.request(&request.frame, dispatch);
@@ -1891,18 +1994,51 @@ fn serve_control_plane_frames(
 fn dispatch_control_frame(
     plane: &mut audiorouter_control::ControlPlane,
     grant: &audiorouter_control::ClientGrant,
+    client_pid: u32,
     client_id: &str,
     frame: &[u8],
 ) -> Result<Option<Vec<u8>>, TransportError> {
     let started = std::time::Instant::now();
+    let payload: serde_json::Value = audiorouter_protocol::decode_frame(frame)
+        .map_err(|error| TransportError::Protocol(error.to_string()))?;
+    let (frame, identity, caller_grant) =
+        if payload.get("pipeClient").is_some() || payload.get("payload").is_some() {
+            let client = &payload["pipeClient"];
+            let identity = client["id"].as_str().unwrap_or_default();
+            let authenticated = client["token"]
+                .as_str()
+                .is_some_and(|token| client_credentials::verify(identity, token));
+            let caller_grant = if authenticated {
+                plane
+                    .grant_for_client(identity)
+                    .map_err(|_| TransportError::Protocol("client enrollment unavailable".into()))?
+                    .unwrap_or_default()
+            } else {
+                audiorouter_control::ClientGrant::default()
+            };
+            let frame = audiorouter_protocol::encode_frame(&payload["payload"])
+                .map_err(|error| TransportError::Protocol(error.to_string()))?;
+            (frame, identity.to_owned(), caller_grant)
+        } else {
+            // Only calls originating in the hosting process may use its desktop
+            // grant. An external raw pipe request never inherits that authority.
+            let caller_grant = if client_pid == std::process::id() {
+                grant.clone()
+            } else {
+                // OS-user identity is not a third-party client enrollment. Legacy
+                // raw callers may discover the backend, but may never mutate it.
+                audiorouter_control::ClientGrant::read_only()
+            };
+            (frame.to_vec(), client_id.to_owned(), caller_grant)
+        };
     let responses = plane
-        .dispatch_frame_authorized_for_client(frame, client_id, grant)
+        .dispatch_frame_authorized_for_client(&frame, &identity, &caller_grant)
         .map_err(|error| TransportError::Protocol(error.to_string()))?;
     // Only the window state and a duration are read here; the logger thread
     // does all parsing and file I/O.
     let verbose =
         plane.verbose_diagnostics_active(audiorouter_protocol::diagnostics::unix_time_ms());
-    log_backend_rpc(frame, &responses, verbose, started.elapsed());
+    log_backend_rpc(&frame, &responses, verbose, started.elapsed());
     if responses.is_empty() {
         Ok(None)
     } else {

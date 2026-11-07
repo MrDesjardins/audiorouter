@@ -27,3 +27,6 @@ tungstenite = { version = "0.30.0", default-features = false, features = ["hands
 
 [dev-dependencies]
 rusqlite.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_Storage_FileSystem"] }

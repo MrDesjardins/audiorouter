@@ -52,6 +52,7 @@ dependencies = [
  "sha2",
  "trash",
  "tungstenite",
+ "windows",
 ]
 
 [[package]]
@@ -153,8 +154,10 @@ dependencies = [
  "audiorouter-recording",
  "audiorouter-storage",
  "audiorouter-windows-audio",
+ "getrandom",
  "serde",
  "serde_json",
+ "sha2",
  "windows",
 ]
 

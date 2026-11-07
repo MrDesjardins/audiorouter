@@ -1,6 +1,6 @@
 //! The real desktop app, started like a fresh install: a new database and no
-//! developer opt-in variable. Release 0.0.1 refused Play with "Permission
-//! denied" on a second computer because nothing tested this path. The app
+//! developer opt-in variable. Raw pipe clients must not impersonate its window
+//! to approve recording folders or audio-device access (SEC-01/02/04). The app
 //! serves its own backend on the default pipe, exactly as installed, so no
 //! other AudioRouter may be running (checked first). Opt in with
 //! AUDIOROUTER_SHELL_EXE=<path to audiorouter-shell.exe>. The app window
@@ -14,7 +14,7 @@
 #[cfg(windows)]
 #[test]
 #[ignore = "launches the desktop app; set AUDIOROUTER_SHELL_EXE"]
-fn a_fresh_install_asks_once_for_device_access_then_plays() {
+fn a_fresh_install_keeps_device_and_folder_consent_exclusive_to_its_window() {
     use serde_json::{json, Value};
     use std::time::{Duration, Instant};
 
@@ -88,29 +88,32 @@ fn a_fresh_install_asks_once_for_device_access_then_plays() {
         denied(&refused),
         "fresh install refuses before consent: {refused}"
     );
-    // The first launch already has the full desktop grant (Record).
+    // A raw external process must not receive the window's Record scope.
     let root = folder.join("Recordings");
     let set_root = call(
         "recordings.setRoot",
         json!({ "root": root, "create": true, "idempotencyKey": "fresh-root" }),
     );
     assert!(
-        set_root["error"].is_null(),
-        "first launch can choose a recording folder: {set_root}"
+        denied(&set_root),
+        "raw caller cannot choose a recording folder: {set_root}"
     );
-    // The user allows once in the window; Play's device step is authorized.
+    // The real window owns consent; a same-user raw pipe client does not.
     let allowed = call(
         "devices.setAccess",
         json!({ "allowed": true, "idempotencyKey": "fresh-allow" }),
     );
-    assert_eq!(allowed["result"]["allowed"], true, "{allowed}");
+    assert!(
+        denied(&allowed),
+        "raw client must not give window consent: {allowed}"
+    );
     let authorized = call("nativePaths.prepare", json!({ "sessionId": session }));
     assert!(
-        !denied(&authorized),
-        "authorized after consent (any remaining error is about devices): {authorized}"
+        denied(&authorized),
+        "raw client remains unauthorized: {authorized}"
     );
     eprintln!(
-        "after consent, prepare answered: {}",
+        "raw caller preparation answered: {}",
         authorized["error"]["message"]
     );
     drop(app);

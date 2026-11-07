@@ -13,7 +13,12 @@ const specs = [...section.matchAll(/ApiMethodSpec\s*\{([^}]*)\}/gs)].map(([, bod
   if (!name) return null;
   return { name, permission: field("permission"), effect: field("side_effect") };
 }).filter(Boolean);
-const desktopOnly = new Set(["recordings.setRoot", "devices.setAccess"]);
+// Derive the security exclusions from the adapter; a new desktop-only action
+// must not silently reappear as an advertised public HTTP endpoint.
+const httpAdapter = await readFile(resolve(root, "src-tauri/src/http_api.rs"), "utf8");
+const desktopSection = httpAdapter.match(/pub const DESKTOP_ONLY_METHODS:[\s\S]*?=\s*&\[([\s\S]*?)\];/)?.[1];
+if (!desktopSection) throw new Error("Missing HTTP desktop-only method contract");
+const desktopOnly = new Set([...desktopSection.matchAll(/"([^"]+)"/g)].map(([, name]) => name));
 // Keep the public site focused on shipped, user-facing routes. Driver-track
 // lifecycle APIs stay in local development Swagger until that work is public.
 const developmentOnly = [/^virtualDevices\./, /^virtualRoutes\./, /^nativeBridges\./, /^nativeDuplex\./, /^nativeRenderSources\./];
@@ -81,7 +86,7 @@ const tools = [
 });
 
 await writeFile(resolve(root, "site/assets/api-methods.json"), JSON.stringify({ backendMethods: publicMethods.length, operations }, null, 2) + "\n");
-await writeFile(resolve(root, "site/assets/tool-catalog.json"), JSON.stringify({ nodeKinds: tools.length, tools }, null, 2) + "\n");
+if (!process.argv.includes("--api-only")) await writeFile(resolve(root, "site/assets/tool-catalog.json"), JSON.stringify({ nodeKinds: tools.length, tools }, null, 2) + "\n");
 console.log(`Wrote ${publicMethods.length} public backend methods, ${operations.length} HTTP operations, and ${tools.length} available node kinds.`);
 
-await import("./generate-guides.mjs");
+if (!process.argv.includes("--catalogs-only") && !process.argv.includes("--api-only")) await import("./generate-guides.mjs");
