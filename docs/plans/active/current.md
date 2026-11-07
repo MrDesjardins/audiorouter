@@ -1,5 +1,35 @@
 # Active plan — current priorities (2026-11-04)
 
+## Ordered PR integration — 2026-11-06
+
+Owner authorized monitoring and merging #117, #118, then #120. Requirements:
+SEC-12 and ENG-02/04. #117's Edge session-file test omits the newly required
+desktop export approval; its Quality gate reports that browser failure.
+Backport the existing harness approval calls from #118, rebuild e2e_backend,
+run the focused Edge test, typecheck, lint and formatting, then push and
+require new-head hosted CI before merge. Follow with #118's probe lockfile
+repair from #120 and verify each subsequent base. No hardware or credentials
+are needed. Preserve unrelated release files and the owner's live app.
+Rollback: revert only the test repair; never weaken production consent.
+Evidence: hosted run 42177734472 failed only session-file.pw.ts at line 20
+(missing Save-dialog consent); Quality gate reported browser failure. On
+Windows, rebuilt e2e_backend with --locked; focused Edge test passed (1/1),
+typecheck:all, lint, format and format:check passed. No product code changed.
+Local browser emitted NO_COLOR/FORCE_COLOR and React Flow attribution notices;
+neither changes the export assertion. Hosted Ubuntu migration notice is runner
+metadata; no workflow change is needed for this test repair.
+Next: push the repair and require new-head hosted CI before merging #117.
+
+#118 integration: hosted run 42251017104 passed workspace/shell tests and
+strict Clippy, then probe-build failed because its --locked Cargo.lock lacks
+the control crate's windows dependency. Quality gate reports windows failure.
+Merge #117's repair commit and backport the one-line lockfile fix from #120.
+Validate the exact locked probe command and diff before push; require hosted
+CI on the resulting head. Requirements ENG-02/04; rollback is the scoped
+lockfile revert. Runner Ubuntu migration notice needs no project change.
+Windows local result: the exact locked probe check passed in 3.20 seconds;
+no Rust source changed. Next: push #118 and wait for its new-head CI.
+
 ## Where things stand
 
 Owner-approved security-only PR preparation (2026-11-05): isolate all three
