@@ -708,7 +708,8 @@ describe("VB-Cable endpoint selection", () => {
     }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), osTransition, startSession }} />);
     openTab("Status");
-    fireEvent.click(await screen.findByRole("button", { name: "Revalidate after resume" }));
+    // Troubleshooting loads lazily on the first Status visit.
+    fireEvent.click(await screen.findByRole("button", { name: "Revalidate after resume" }, { timeout: 5000 }));
     await waitFor(() => expect(osTransition).toHaveBeenCalledWith("resume", expect.any(String)));
     expect(await screen.findByText(/No route was restarted/)).toBeTruthy();
     expect(screen.getByText(/portable routes 1; native routes 1/)).toBeTruthy();

@@ -70,6 +70,20 @@ require the new-head hosted run. #117's transient crates.io download failure
 can be retried only after its workflow finishes (GitHub rejected an active-run
 job retry with HTTP 403); keep its watch active for completion.
 
+#118 run 42332406025 now passes native checks but fails three UI tests.
+Session picker: backport #120's confirmed ChangeHistory Suspense boundary and
+held-module regression. Apps tab and resume validation: first Status visit
+loads modules lazily; use the existing five-second cold-import budget on
+those queries, retaining every behavior assertion. Reproduced session picker
+failure locally before editing. Requirements UI-17, ENG-02/04. Validate focused
+and full UI suites, typecheck/lint/format and browser Session navigation;
+rollback only these scoped repairs. No real audio or hardware needed.
+Windows results: full UI suite 930/930 passed with --maxWorkers=2; focused
+files 135/135, Edge session-file/workbench navigation 10/10. Typecheck:all,
+lint, format:check, documentation and diff checks passed. No assertions or
+production timeouts weakened. Next: push #118, carry these repairs to #120,
+and require green hosted checks before ordered merges.
+
 ## Where things stand
 
 Owner-approved security-only PR preparation (2026-11-05): isolate all three
