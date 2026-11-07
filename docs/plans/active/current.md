@@ -36,6 +36,18 @@ Retained limits: desktop main chunk warning, Narrator/scaling/live audio and
 participant gates. No hosted CI result is claimed. Next: commit the inspected
 set, push improve/ui-round-23 and open the explicitly authorized combined PR.
 
+Handoff: the combined implementation is committed as `25b2f048` and pushed to
+`origin/improve/ui-round-23`. Owner-authorized [PR #121](https://github.com/MrDesjardins/audiorouter/pull/121)
+is open against main with all 296 pending files, including the nightly repair.
+The working tree was clean after that commit. Local Edge checks pass 106/106
+and the corrected Firefox playback sweep passes 94/94 selected checks. Hosted
+CI is newly queued/running; no green hosted result, merge or release is claimed.
+The GitHub push also reports two default-branch dependency advisories (moderate
+and low); dependencies are unchanged by this UI/tooling PR, and advisory work
+must use its own dependency validation rather than incidental upgrades here.
+Next: inspect final-head CI and annotations before calling the branch ready;
+merge requires separate owner authorization. Jev remains manually dispatched.
+
 ## Nightly packaged qualification — 2026-11-07
 
 Repair the first-launch goal dialog blocking Session navigation in nightly
