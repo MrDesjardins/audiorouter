@@ -32,6 +32,22 @@ const nodeType = (
 // The catalog now describes device and source settings for API and MCP
 // clients; the Properties panel keeps its dedicated fields for them.
 describe("generic settings editor", () => {
+  it("gives boolean properties a stable name and an explicit state description", () => {
+    const props = {
+      node: node("mute", { muted: false }),
+      processors: [],
+      nodeTypes: [nodeType("mute", [{ name: "muted", type: "boolean" }])],
+      connected: true,
+      onChange: vi.fn(),
+    };
+    const view = render(<ProcessorParameterEditor {...props} />);
+    const state = () =>
+      document.getElementById(screen.getByRole("checkbox", { name: "Muted" }).getAttribute("aria-describedby") ?? "")
+        ?.textContent;
+    expect(state()).toBe("Off");
+    view.rerender(<ProcessorParameterEditor {...props} node={node("mute", { muted: true })} />);
+    expect(state()).toBe("On");
+  });
   it("adds no controls for device and source kinds the catalog describes", () => {
     const nodeTypes = [
       nodeType("physicalInput", [

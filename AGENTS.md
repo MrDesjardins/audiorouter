@@ -148,6 +148,14 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-11-07 — Match complete control captions in guide automation.**
+  Evidence: [Round 25 guide review](docs/plans/active/ui-quality-review.md),
+  `Hold targets its own control and cannot match Threshold` in `tools/site/tool-guide-guards.test.mjs`.
+  Scope: Properties recordings and caption-based control selectors. Consequence:
+  a case-insensitive search for Hold selected Threshold, while the production
+  audio fixture changed Hold. Use whole-caption matching (including the standard
+  precise-value suffix) and inspect the changed field before accepting a clip.
+
 - **2026-11-06 — A browser test must bring a card into view before clicking it.**
   Evidence: [Round 23 verified](docs/plans/active/ui-quality-review.md), `fitCanvas` in `ui/e2e/workbench.ts`.
   Scope: `ui/e2e` tests on routes wider than the canvas at readable zoom. Consequence: Playwright can reach a card past

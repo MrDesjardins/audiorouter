@@ -1,5 +1,6 @@
 import { useComparing } from "./compareHold";
 import { PropertySection } from "./PropertySection";
+import { BooleanField } from "./BooleanField";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
 import { Handle, type HandleSpec } from "./SvgHandle";
@@ -319,15 +320,13 @@ export function DuckEditor({
         <fieldset className="duck-round-phases">
           <legend>Turn this audio down during</legend>
           {ROUND_PHASES.map((phase) => (
-            <label key={phase.name}>
-              <input
-                type="checkbox"
-                checked={phaseOn(node, phase)}
-                disabled={disabled}
-                onChange={(event) => onChange(phase.name, event.target.checked)}
-              />
-              {phase.label}
-            </label>
+            <BooleanField
+              key={phase.name}
+              label={phase.label}
+              checked={phaseOn(node, phase)}
+              disabled={disabled}
+              onChange={(checked) => onChange(phase.name, checked)}
+            />
           ))}
           <small className="muted">
             Unticked phases play at full volume. If Stats.cc stops or reports nothing, the audio returns to full volume.
@@ -404,7 +403,7 @@ export function DuckEditor({
             {[-80, -60, -40, -20, 0].map((value) => (
               <g key={value}>
                 <line x1={L} x2={R} y1={y(value)} y2={y(value)} className="dynamics-grid" />
-                <text x={L - 4} y={y(value) + 3} textAnchor="end" className="dynamics-axis">
+                <text x={L - 4} y={Math.max(17, y(value) + 3)} textAnchor="end" className="dynamics-axis">
                   {value}
                 </text>
               </g>

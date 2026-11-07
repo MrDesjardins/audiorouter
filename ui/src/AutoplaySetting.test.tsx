@@ -5,6 +5,63 @@ import { ApiAutostartSetting, AutoplaySetting } from "./AutoplaySetting";
 
 afterEach(cleanup);
 
+it("distinguishes loading from a confirmed value and an unavailable setting", async () => {
+  let answer: ((value: unknown) => void) | undefined;
+  const invoke = vi.fn(
+    () =>
+      new Promise<unknown>((resolve) => {
+        answer = resolve;
+      }),
+  );
+  const view = render(<AutoplaySetting invoke={invoke} />);
+  expect(screen.getByTestId("autoplay-state").textContent).toBe("Loading…");
+  await waitFor(() => expect(answer).toBeDefined());
+  answer?.(true);
+  await waitFor(() => expect(screen.getByTestId("autoplay-state").textContent).toBe("On"));
+  view.unmount();
+  render(
+    <AutoplaySetting
+      invoke={vi.fn(async () => {
+        throw new Error("unavailable");
+      })}
+    />,
+  );
+  await waitFor(() => expect(screen.getByTestId("autoplay-state").textContent).toBe("Unavailable"));
+});
+
+it("keeps the confirmed state during a save and reports the acknowledged value", async () => {
+  let answer: ((value: unknown) => void) | undefined;
+  const invoke = vi.fn((command: string) =>
+    command === "autoplay_get"
+      ? Promise.resolve(false)
+      : new Promise<unknown>((resolve) => {
+          answer = resolve;
+        }),
+  );
+  render(<AutoplaySetting invoke={invoke} />);
+  const box = screen.getByLabelText("Play the selected session automatically") as HTMLInputElement;
+  await waitFor(() => expect(box.disabled).toBe(false));
+  fireEvent.click(box);
+  expect(screen.getByTestId("autoplay-state").textContent).toBe("Off");
+  expect(box.disabled).toBe(true);
+  expect(screen.getByRole("status").textContent).toContain("Saving");
+  answer?.(false);
+  await waitFor(() => expect(box.disabled).toBe(false));
+  expect(screen.getByTestId("autoplay-state").textContent).toBe("Off");
+  expect(screen.getByRole("status").textContent).toContain("start stopped");
+});
+
+it("reports a synchronous setting-read failure as unavailable", async () => {
+  render(
+    <AutoplaySetting
+      invoke={() => {
+        throw new Error("bridge unavailable");
+      }}
+    />,
+  );
+  await waitFor(() => expect(screen.getByTestId("autoplay-state").textContent).toBe("Unavailable"));
+});
+
 it("shows the shell's saved autoplay value and saves a change", async () => {
   let saved = true;
   const invoke = vi.fn(async (command: string, args?: Record<string, unknown>) => {

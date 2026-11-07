@@ -9,6 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { chromium } from "../../ui/node_modules/@playwright/test/index.mjs";
 import { packagedShellEnvironment } from "./packaged-shell-environment.mjs";
 import { assertStandardUser } from "./standard-user.mjs";
+import { dismissFirstLaunchGoal } from "./packaged-shell-onboarding.mjs";
 
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
@@ -555,6 +556,51 @@ async function waitForCanvas(page, timeoutMs, signal, phase) {
   }
 }
 
+async function verifyOpeningView(page, timeoutMs, output, phase) {
+  await page.waitForFunction(
+    () => {
+      const canvas = document.querySelector(".session-flow-canvas");
+      const nodes = [...document.querySelectorAll(".react-flow__node")];
+      if (!canvas || !nodes.length) return false;
+      const view = canvas.getBoundingClientRect();
+      const map = canvas
+        .querySelector(".canvas-minimap")
+        ?.getBoundingClientRect();
+      return nodes.every((node) => {
+        const box = node.getBoundingClientRect();
+        return (
+          box.width > 0 &&
+          box.height > 0 &&
+          box.left >= view.left &&
+          box.right <= view.right &&
+          box.top >= view.top &&
+          box.bottom <= view.bottom &&
+          (!map ||
+            box.right <= map.left ||
+            box.left >= map.right ||
+            box.bottom <= map.top ||
+            box.top >= map.bottom)
+        );
+      });
+    },
+    undefined,
+    { timeout: timeoutMs },
+  );
+  const geometry = await page
+    .locator(".session-flow-canvas")
+    .evaluate((canvas) => ({
+      canvas: canvas.getBoundingClientRect().toJSON(),
+      nodes: [...canvas.querySelectorAll(".react-flow__node")].map((node) => ({
+        id: node.getAttribute("data-id"),
+        bounds: node.getBoundingClientRect().toJSON(),
+      })),
+    }));
+  await page.screenshot({
+    path: path.join(output, `${phase}-opening-view.png`),
+  });
+  return geometry;
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const started = Date.now();
@@ -804,6 +850,13 @@ async function main() {
     });
 
     const sessionName = `Packaged smoke ${new Date().toISOString().replace(/[:.]/g, "-")}`;
+    await dismissFirstLaunchGoal(page, options.timeout);
+    metrics.initialOpeningView = await verifyOpeningView(
+      page,
+      options.timeout,
+      options.output,
+      "initial",
+    );
     await page.getByRole("tab", { name: "Session", exact: true }).click();
     await page.getByRole("button", { name: "Rename", exact: true }).click();
     await page
@@ -896,6 +949,12 @@ async function main() {
       timeout: options.timeout,
     });
     await waitForCanvas(page, options.timeout, abort.signal, "restarted");
+    metrics.restartedOpeningView = await verifyOpeningView(
+      page,
+      options.timeout,
+      options.output,
+      "restarted",
+    );
     await qualificationCheckpoint(
       qualification,
       "restarted-ready",

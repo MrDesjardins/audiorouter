@@ -1,5 +1,6 @@
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 import { Icon } from "./icons";
+import { keepNativeContextMenu } from "./contextMenuPolicy";
 import { SessionSwitchDialog } from "./SessionSwitchDialog";
 import {
   customThemeStyle,
@@ -48,6 +49,7 @@ import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
 import { SoundboardContext, useSoundboardController } from "./soundboardLive";
 import { assignSoundboardSlotDraft, isSoundboardParameter } from "./soundboard";
 import { AppDialogHost, askConfirm, askText } from "./AppDialog";
+import { KeyboardHelp } from "./KeyboardHelp";
 import { useDraftRecovery } from "./draftRecovery";
 import { useNotificationsClearTabs } from "./notificationPlacement";
 import { useReportUnsaved } from "./unsavedReport";
@@ -168,7 +170,7 @@ import { ErrorBoundary, RootRecoveryPanel } from "./ErrorBoundary";
 import { EqBackendContext, PluginParameterContext, defaultBackend } from "./appContext";
 import { findVbCableEndpointPair, readEndpointBindingHint, routeEndpointBinding } from "./endpointBinding";
 
-import { PluginToolsGroup } from "./PluginPanels";
+import { PluginScanPanel, PluginToolsGroup } from "./PluginPanels";
 export { formatRecordingDuration, recorderHasCaptureSource } from "./RecordingPanels";
 export { findVbCableEndpointPair, findVbCableCaptureEndpointId, deviceChoiceLabel } from "./endpointBinding";
 import { useAudioFileStatus } from "./useAudioFileStatus";
@@ -217,7 +219,6 @@ const PresetCatalog = lazy(() => import("./AdvancedPanels").then((module) => ({ 
 const SessionTransferPanel = lazy(() =>
   import("./AdvancedPanels").then((module) => ({ default: module.SessionTransferPanel })),
 );
-const PluginScanPanel = lazy(() => import("./PluginPanels").then((module) => ({ default: module.PluginScanPanel })));
 const ApplicationIdentityPanel = lazy(() =>
   import("./ApplicationIdentityPanel").then((module) => ({ default: module.ApplicationIdentityPanel })),
 );
@@ -340,6 +341,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const [arrangeSessionId, setArrangeSessionId] = useState<string | null>(null);
   const [tourOpen, setTourOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [dismissedRouteWarning, setDismissedRouteWarning] = useState("");
   const [recordings, setRecordings] = useState<import("@audiorouter/contracts").RecordingRow[]>([]);
@@ -1455,6 +1457,26 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(formatUiError(error, "Unable to rename this tool."));
     }
   };
+  const renameCanvasNode = async (nodeId: string) => {
+    if (!backend.connected || document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+    const current = draftRef.current;
+    const node = current.nodes.find((item) => item.id === nodeId);
+    if (!node) return;
+    const name = await askText({
+      title: "Rename tool",
+      label: "Tool name",
+      initialValue: node.name,
+      confirmLabel: "Rename",
+      maxLength: 120,
+    });
+    if (!name || draftRef.current.id !== current.id) return;
+    try {
+      recordDraftChange(setNodeDraftName(draftRef.current, nodeId, name));
+      setActionMessage("Name changed. Save to keep it.");
+    } catch (error) {
+      setActionMessage(formatUiError(error, "Unable to rename this tool."));
+    }
+  };
   const changeNodeParameterOn = (nodeId: string, name: string, value: boolean | number | string) => {
     if (staleSnapshot) return;
     const targetNode = draftRef.current.nodes.find((candidate) => candidate.id === nodeId);
@@ -1637,6 +1659,41 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setGraphBusy(false);
     }
   };
+  const saveDisabled =
+    !backendReady ||
+    graphBusy ||
+    (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged);
+  const saveChanges = () => {
+    if (!saveDisabled) void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges());
+  };
+  const onSaveShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (
+      event.defaultPrevented ||
+      event.repeat ||
+      isEditableShortcutTarget(event.target) ||
+      document.querySelector('[role="dialog"][aria-modal="true"]')
+    )
+      return;
+    if (
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      ((event.key === "F1" && !event.shiftKey) || event.key === "?")
+    ) {
+      event.preventDefault();
+      setKeyboardHelpOpen(true);
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      saveChanges();
+    }
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => onSaveShortcut(event);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   const togglePrivacyMute = async () => {
     if (safetyActionBusy.current || !backend.connected) return;
     safetyActionBusy.current = true;
@@ -2388,7 +2445,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setShortcuts(next);
     setShortcutMessage(
       shortcutConflicts(next).length > 0
-        ? "Shortcut conflict: duplicate bindings and reserved Ctrl+C/Ctrl+V bindings are disabled until resolved."
+        ? "Shortcut conflict: duplicate bindings and reserved Ctrl+C/Ctrl+V/Ctrl+S bindings are disabled until resolved."
         : null,
     );
   };
@@ -3008,17 +3065,20 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(formatUiError(error, "Unable to unload plugin."));
     }
   };
-  const duplicateSelectedNode = () => {
+  const duplicateNode = (nodeId: string) => {
+    if (!backend.connected) return;
     try {
-      const next = duplicateDraftNode(draft, selectedNode.id);
+      const next = duplicateDraftNode(draft, nodeId);
       const copy = next.nodes[next.nodes.length - 1];
       recordDraftChange(next);
       setSelectedNodeId(copy.id);
+      setSelectedNodeIds([copy.id]);
       setActionMessage(`${copy.name} added without connections. Save to keep it.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to duplicate this tool."));
     }
   };
+  const duplicateSelectedNode = () => duplicateNode(selectedNode.id);
   const copyNodeToClipboard = (nodeId: string) => {
     try {
       const source = draftRef.current.nodes.find((node) => node.id === nodeId);
@@ -3180,6 +3240,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       onLayoutSelection={updateCanvasLayoutSelection}
       onLayoutMessage={setActionMessage}
       onCopyNode={copyNodeToClipboard}
+      onDuplicateNode={duplicateNode}
+      onRenameNode={(nodeId) => void renameCanvasNode(nodeId)}
       onPasteNode={pasteNodeFromClipboard}
       canPasteNode={hasCopiedNode}
       diagnostics={snapshot?.diagnostics ?? null}
@@ -3585,7 +3647,35 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   const renderedWorkspace = (
     <PluginParameterContext.Provider value={{ parameters: pluginParameters, error: pluginParameterError }}>
       <SoundboardContext.Provider value={soundboard}>
-        <div className={`app-shell ${themeClassName}`} style={themeStyle}>
+        <div
+          className={`app-shell ${themeClassName}`}
+          style={themeStyle}
+          onContextMenu={(event) => {
+            if (!keepNativeContextMenu(event.target, window.getSelection())) event.preventDefault();
+          }}
+        >
+          <nav className="skip-navigation" aria-label="Skip navigation">
+            {tabPlace(workbenchTab) !== "settings" && (
+              <a
+                href="#routing-canvas"
+                onClick={(event) => {
+                  event.preventDefault();
+                  document.getElementById("routing-canvas")?.focus();
+                }}
+              >
+                Skip to canvas
+              </a>
+            )}
+            <a
+              href="#routing-workbench"
+              onClick={(event) => {
+                event.preventDefault();
+                document.getElementById("routing-workbench")?.focus();
+              }}
+            >
+              Skip to tools and settings
+            </a>
+          </nav>
           <header className="topbar">
             <div>
               <VersionLine update={availableUpdate} />
@@ -3682,12 +3772,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 }
                 data-save-required={routeChanged && !autoSavePending && !graphBusy}
                 aria-busy={graphBusy}
-                onClick={() => void (pendingGraphPlan ? commitAcknowledgedPlan() : planChanges())}
-                disabled={
-                  !backendReady ||
-                  graphBusy ||
-                  (pendingGraphPlan ? acknowledgedWarnings.size !== pendingWarnings.length : !routeChanged)
-                }
+                onClick={saveChanges}
+                disabled={saveDisabled}
               >
                 {graphBusy ? "Saving…" : pendingGraphPlan ? "Confirm Save" : "Save"}
               </button>
@@ -4229,6 +4315,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               onCancel={() => setDeviceConsent(null)}
             />
           )}
+          {keyboardHelpOpen && <KeyboardHelp bindings={shortcuts} onClose={() => setKeyboardHelpOpen(false)} />}
           <AppDialogHost />
         </div>
       </SoundboardContext.Provider>

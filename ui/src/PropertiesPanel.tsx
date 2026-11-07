@@ -3,7 +3,8 @@ import { ToolGuideLink } from "./ToolGuideLink";
 import { CanvasLayoutInspector } from "./CanvasLayoutInspector";
 import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 // The Properties panel: the selected node's (or canvas group's) inspector and editors (moved from App.tsx).
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import { useId, useRef, type Dispatch, type RefObject, type SetStateAction } from "react";
+import { useSvgTextFloor } from "./useSvgTextFloor";
 import type { DeviceListItem, DiagnosticsSnapshot, Node, Session } from "@audiorouter/contracts";
 import type { ApplicationRow, RecorderStatus, UiBackend, UiBackendSnapshot } from "./backend";
 import type { ProcessorDescriptor } from "./processorCatalog";
@@ -153,6 +154,9 @@ export function PropertiesPanel({
   privacyMuted: boolean;
 }) {
   const cableStatus = useVirtualCableStatus();
+  const flagId = useId();
+  const inspector = useRef<HTMLElement>(null);
+  useSvgTextFloor(inspector, selectedNode.id, !selectedGroup && !(layoutItems.length > 1 && onLayoutAction));
   return layoutItems.length > 1 && onLayoutAction ? (
     <CanvasLayoutInspector
       items={layoutItems}
@@ -175,6 +179,7 @@ export function PropertiesPanel({
     <>
       <section
         className="panel inspector"
+        ref={inspector}
         id="workbench-properties"
         onKeyDown={returnToPropertiesTab}
         role="tabpanel"
@@ -645,24 +650,36 @@ export function PropertiesPanel({
         )}
         <div className="inspector-grid">
           <div className="inspector-toggles">
-            <label>
-              Enabled
-              <input
-                type="checkbox"
-                checked={selectedNode.enabled}
-                disabled={!backend.connected || sessionActionBusy || graphBusy}
-                onChange={(event) => changeNodeFlag("enabled", event.target.checked)}
-              />
-            </label>
-            <label>
-              Bypass
-              <input
-                type="checkbox"
-                checked={selectedNode.bypass}
-                disabled={!backend.connected || sessionActionBusy || graphBusy}
-                onChange={(event) => changeNodeFlag("bypass", event.target.checked)}
-              />
-            </label>
+            <div className="inspector-flag">
+              <label>
+                Enabled
+                <input
+                  type="checkbox"
+                  checked={selectedNode.enabled}
+                  aria-describedby={`${flagId}-enabled`}
+                  disabled={!backend.connected || sessionActionBusy || graphBusy}
+                  onChange={(event) => changeNodeFlag("enabled", event.target.checked)}
+                />
+              </label>
+              <span className="inspector-flag-state" id={`${flagId}-enabled`}>
+                {selectedNode.enabled ? "On" : "Off"}
+              </span>
+            </div>
+            <div className="inspector-flag">
+              <label>
+                Bypass
+                <input
+                  type="checkbox"
+                  checked={selectedNode.bypass}
+                  aria-describedby={`${flagId}-bypass`}
+                  disabled={!backend.connected || sessionActionBusy || graphBusy}
+                  onChange={(event) => changeNodeFlag("bypass", event.target.checked)}
+                />
+              </label>
+              <span className="inspector-flag-state" id={`${flagId}-bypass`}>
+                {selectedNode.bypass ? "On" : "Off"}
+              </span>
+            </div>
           </div>
           <EqSpectrumContext.Provider
             value={

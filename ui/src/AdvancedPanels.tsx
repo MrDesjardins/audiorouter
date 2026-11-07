@@ -134,7 +134,7 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
           );
         } catch (error) {
           setMessage(
-            `Backend policy saved, but native startup registration failed: ${formatUiError(error, "native registration failed")}`,
+            `Startup preference saved, but Windows sign-in setup failed: ${formatUiError(error, "sign-in setup failed")}`,
           );
         }
       } else {
@@ -161,7 +161,7 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
       </div>
       <p className="muted">{status?.reason ?? "Loading startup capability..."}</p>
       <p className="muted" role="status">
-        Native registration: {nativeRegistration}
+        Windows sign-in setup: {nativeRegistration}
       </p>
       <label>
         Desired policy
@@ -201,8 +201,8 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
       {message && <PanelMessage message={message} />}
       <p className="muted">
         {backend.registerStartup
-          ? "The native shell can register this user's startup preference after an authorized plan is applied."
-          : "Native startup registration is unavailable in this host; planning remains a backend-only operation."}
+          ? "The desktop app can add AudioRouter to this user's Windows sign-in after you review and apply the change."
+          : "Windows sign-in setup is unavailable here. You can review the preference, but this host cannot add it to Windows."}
       </p>
     </section>
   );

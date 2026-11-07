@@ -2,7 +2,7 @@
 // a deterministic in-memory preview backend. It never opens audio devices.
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
-import { createDisconnectedBackend, type UiBackend } from "./backend";
+import { createDisconnectedBackend, type UiBackend, type CableManagementRequest } from "./backend";
 import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { demoSession } from "./fixtures";
 import type {
@@ -13,6 +13,7 @@ import type {
   DiagnosticsSnapshot,
   PluginScanResult,
   SetupCheckResult,
+  VirtualCableStatus,
 } from "@audiorouter/contracts";
 import "./styles.css";
 
@@ -30,7 +31,14 @@ const injected = globalThis as {
   __routeFixtureRecordings?: unknown[];
   __routeFixtureProcessors?: DiscoveryDocument["processors"];
   __routeFixtureDiscovery?: Partial<DiscoveryDocument>;
+  /** Isolated latency UI qualification; never calls the shell or driver. */
+  __routeFixtureVirtualCableStatus?: VirtualCableStatus;
+  __routeFixtureCableCalls?: CableManagementRequest[];
   __routeFixtureDelayMs?: number;
+  /** Delay/reject a save without delaying initial route loading. */
+  __routeFixtureCommitDelayMs?: number;
+  __routeFixtureCommitError?: string;
+  __routeFixtureLifecycleDelayMs?: number;
   /** Bounded snapshot-failure injection for disposable recovery journeys. */
   __routeFixtureSnapshotError?: string;
   __routeFixtureForceResync?: boolean;
@@ -42,9 +50,13 @@ const injected = globalThis as {
   __routeFixtureMcpGrants?: string[];
   /** Remembered plugin scans shown in the Plugins list. */
   __routeFixturePluginInventory?: PluginScanResult[];
+  __routeFixturePluginScanDelayMs?: number;
+  __routeFixturePluginScanError?: string;
   /** `apps.list` and `devices.list` answers, for the app checks (D1). */
   __routeFixtureApplications?: ApplicationInfo[];
   __routeFixtureDevices?: DeviceListItem[];
+  __routeFixtureDeviceAccessReadError?: boolean;
+  __routeFixtureDeviceAccessWriteError?: "reject" | "lost";
   __routeFixtureSoundboardStatus?: Awaited<ReturnType<NonNullable<UiBackend["soundboardStatus"]>>>;
   /** `soundLibrary.list` answer; library previews return a tiny silent WAV. */
   __routeFixtureSoundLibrary?: Awaited<ReturnType<NonNullable<UiBackend["soundLibraryList"]>>>;
@@ -52,6 +64,8 @@ const injected = globalThis as {
   __routeFixtureSetupCheck?: SetupCheckResult;
   /** When set, audio uploads succeed with this decoded length; each finished upload is recorded. */
   __routeFixtureUploadDurationMs?: number;
+  __routeFixtureUploadDelayMs?: number;
+  __routeFixtureUploadError?: string;
 };
 /** A JSON-RPC error the next Play answers with, set by a test at any time. */
 type StartErrorFixture = ConstructorParameters<typeof AudioRouterRpcError>[0];
@@ -229,6 +243,26 @@ function silentWavBase64(): string {
 const previewBackend: UiBackend = {
   ...fixtureBackend,
   connected: true,
+  ...(injected.__routeFixtureVirtualCableStatus
+    ? {
+        async getVirtualCableStatus() {
+          if (!injected.__routeFixtureVirtualCableStatus) throw new Error("Missing fixture cable status");
+          return structuredClone(injected.__routeFixtureVirtualCableStatus);
+        },
+        async virtualCableManagementAvailable() {
+          return true;
+        },
+        async manageVirtualCable(request: CableManagementRequest) {
+          if (!injected.__routeFixtureVirtualCableStatus) throw new Error("Missing fixture cable status");
+          if (request.operation !== "setLowLatencyOn" && request.operation !== "setLowLatencyOff")
+            throw new Error("Only latency operations are supported by this fixture");
+          (injected.__routeFixtureCableCalls ??= []).push(structuredClone(request));
+          injected.__routeFixtureVirtualCableStatus.defaultPeriodFrames =
+            request.operation === "setLowLatencyOn" ? 128 : 480;
+          return { ok: true };
+        },
+      }
+    : {}),
   ...(injected.__routeFixtureSoundLibrary
     ? {
         async soundLibraryList() {
@@ -248,6 +282,24 @@ const previewBackend: UiBackend = {
         },
       }
     : {}),
+  async scanPlugins(directory) {
+    if (!injected.__routeFixturePluginScanDelayMs && !injected.__routeFixturePluginScanError)
+      return fixtureBackend.scanPlugins(directory);
+    lifecycleCalls.push("plugin-scan");
+    if (injected.__routeFixturePluginScanDelayMs)
+      await new Promise((resolve) => setTimeout(resolve, injected.__routeFixturePluginScanDelayMs));
+    if (injected.__routeFixturePluginScanError) throw new Error(injected.__routeFixturePluginScanError);
+    return { directory, entries: [] };
+  },
+  async retryPlugins(directory) {
+    if (!injected.__routeFixturePluginScanDelayMs && !injected.__routeFixturePluginScanError)
+      return fixtureBackend.retryPlugins(directory, "fixture-retry");
+    lifecycleCalls.push("plugin-retry");
+    if (injected.__routeFixturePluginScanDelayMs)
+      await new Promise((resolve) => setTimeout(resolve, injected.__routeFixturePluginScanDelayMs));
+    if (injected.__routeFixturePluginScanError) throw new Error(injected.__routeFixturePluginScanError);
+    return { directory, entries: [] };
+  },
   async compareNodes({ sessionId, nodes }) {
     compareCalls.push(nodes);
     return { sessionId, comparing: nodes, expiresInMs: nodes.length > 0 ? 30_000 : 0 };
@@ -374,11 +426,14 @@ const previewBackend: UiBackend = {
   },
   // A fresh install: opening devices is refused until the user consents.
   async getDeviceAccess() {
+    if (injected.__routeFixtureDeviceAccessReadError) throw new Error("Fixture device access read failed");
     return { allowed: deviceAccess };
   },
   async setDeviceAccess(allowed) {
     lifecycleCalls.push(`device-access:${allowed}`);
+    if (injected.__routeFixtureDeviceAccessWriteError === "reject") throw new Error("Fixture access change rejected");
     deviceAccess = allowed;
+    if (injected.__routeFixtureDeviceAccessWriteError === "lost") throw new Error("Fixture access response lost");
     return { allowed };
   },
   async prepareNativeEndpoint(sessionId, captureEndpointId, renderEndpointId) {
@@ -391,6 +446,8 @@ const previewBackend: UiBackend = {
   },
   async startSession(sessionId, _idempotencyKey, candidate) {
     lifecycleCalls.push("start");
+    if (injected.__routeFixtureLifecycleDelayMs)
+      await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureLifecycleDelayMs));
     const startError = (window as { __routeFixtureStartError?: StartErrorFixture }).__routeFixtureStartError;
     if (startError) throw new AudioRouterRpcError(startError);
     if (!prepared || sessionId !== committed.id) throw new Error("Fixture audio is not prepared");
@@ -406,6 +463,8 @@ const previewBackend: UiBackend = {
   },
   async stopSession(sessionId) {
     lifecycleCalls.push("stop");
+    if (injected.__routeFixtureLifecycleDelayMs)
+      await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureLifecycleDelayMs));
     running = false;
     previewCandidate = null;
     sourceStates.clear();
@@ -573,6 +632,9 @@ const previewBackend: UiBackend = {
     return { receivedBytes: 4, nextChunkIndex: chunkIndex + 1 };
   },
   async finishAudioUpload(uploadId) {
+    if (injected.__routeFixtureUploadDelayMs)
+      await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureUploadDelayMs));
+    if (injected.__routeFixtureUploadError) throw new Error(injected.__routeFixtureUploadError);
     const upload = uploads[Number(uploadId.slice("e2e-audio-upload-".length)) - 1];
     // A test that sets the decoded length gets its own file back (Soundboard drops).
     if (upload && injected.__routeFixtureUploadDurationMs !== undefined)
@@ -631,6 +693,9 @@ const previewBackend: UiBackend = {
   },
   async commitGraph(_planId, baseRevision) {
     lifecycleCalls.push("commit");
+    if (injected.__routeFixtureCommitDelayMs)
+      await new Promise((resolve) => setTimeout(resolve, injected.__routeFixtureCommitDelayMs));
+    if (injected.__routeFixtureCommitError) throw new Error(injected.__routeFixtureCommitError);
     const flagMode = new URLSearchParams(window.location.search).get("flags");
     if (running && flagMode === "reject") throw new Error("Fixture commit rejected");
     if (running && flagMode === "slow") await new Promise((resolve) => setTimeout(resolve, 250));

@@ -1,0 +1,24 @@
+{
+  "controls": [
+    {
+      "key": "enabled",
+      "label": "Enabled",
+      "meaning": "Off effects pass sound through; off inputs and outputs contribute silence."
+    },
+    {
+      "key": "bypass",
+      "label": "Bypass",
+      "meaning": "Bypassed effects pass sound through; bypassed inputs, outputs and Mixers contribute silence."
+    }
+  ],
+  "recordings": [
+    {
+      "title": "Enabled and Bypass: Gain example (silent)",
+      "video": "assets/tool-guides/shared-flags.mp4",
+      "poster": "assets/tool-guides/shared-flags.jpg",
+      "description": "A silent configuration recording of the shared Enabled and Bypass switches, shown on Gain. It shows their On/Off labels and status messages, then returns to the top of Properties. This is a control walkthrough, not an audible comparison.",
+      "silent": true,
+      "sharedControls": ["enabled", "bypass"]
+    }
+  ]
+}

@@ -235,6 +235,28 @@ describe("VirtualCablePanel", () => {
     expect(manage).toHaveBeenCalledWith({ operation: "setLowLatencyOn" });
   });
 
+  it("describes known low-latency states and never calls an unknown period Off", () => {
+    const manage = vi.fn();
+    setVirtualCableStatus(status("installed"));
+    render(<VirtualCablePanel connected cableRoute={null} manageVirtualCable={manage} />);
+    const input = screen.getByRole("checkbox", { name: "Low latency cable blocks" }) as HTMLInputElement;
+    const state = () => document.getElementById(input.getAttribute("aria-describedby") ?? "")?.textContent;
+    expect(state()).toBe("Off");
+    act(() => setVirtualCableStatus({ ...status("installed"), defaultPeriodFrames: 128 }));
+    expect(state()).toBe("On");
+    for (const period of [null, undefined]) {
+      const next = status("installed");
+      // Exercise a legacy/malformed response missing the required field too.
+      if (period === undefined) Reflect.deleteProperty(next, "defaultPeriodFrames");
+      else next.defaultPeriodFrames = period;
+      act(() => setVirtualCableStatus(next));
+      expect(state()).toBe("Unavailable");
+      expect(input.disabled).toBe(true);
+      input.click();
+      expect(manage).not.toHaveBeenCalled();
+    }
+  });
+
   it("lists affected sessions before confirming a cable-count reduction", () => {
     vi.useFakeTimers();
     setVirtualCableStatus(status("installed", [true, true, true]));

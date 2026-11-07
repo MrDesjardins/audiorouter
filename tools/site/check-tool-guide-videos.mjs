@@ -4,6 +4,7 @@ import { resolve, dirname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { loadGuideRecordings } from "../../site/guide-recordings.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const tools = JSON.parse(
   readFileSync(
@@ -11,9 +12,7 @@ const tools = JSON.parse(
     "utf8",
   ),
 ).tools;
-const clips = JSON.parse(
-  readFileSync(resolve(root, "site/guide-content/recordings.json"), "utf8"),
-);
+const clips = loadGuideRecordings();
 assert.deepEqual(Object.keys(clips).sort(), tools.map((t) => t.kind).sort());
 const report = [];
 for (const tool of tools) {

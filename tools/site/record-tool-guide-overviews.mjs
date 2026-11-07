@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import ts from "../../ui/node_modules/typescript/lib/typescript.js";
-import { nodeTypeFor, selectedKinds } from "./tool-guide-guards.mjs";
+import { nodeTypeFor, selectedKinds, guideControlName } from "./tool-guide-guards.mjs";
 import { familyActions } from "./tool-guide-family-actions.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const manifest = JSON.parse(
@@ -473,10 +473,7 @@ for (const { tool, render } of selected) {
                         ? "combobox"
                         : "spinbutton",
                     {
-                      name: new RegExp(
-                        label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-                        "i",
-                      ),
+                      name: guideControlName(label),
                     },
                   )
                   .first();
@@ -565,6 +562,15 @@ for (const { tool, render } of selected) {
             );
         }
         if (frame === (family ? 76 : 60)) await inspector.evaluate((e) => (e.scrollTop = 0));
+      } else if (config === 'shared-flags') {
+        const enabled = inspector.getByRole('checkbox', { name: 'Enabled', exact: true });
+        const bypass = inspector.getByRole('checkbox', { name: 'Bypass', exact: true });
+        if (frame === 24) await inspector.locator('.inspector-toggles').scrollIntoViewIfNeeded();
+        if (frame === 40) await enabled.uncheck();
+        if (frame === 54) await enabled.check();
+        if (frame === 66) await bypass.check();
+        if (frame === 80) await bypass.uncheck();
+        if (frame === 96) await inspector.evaluate((element) => { element.scrollTop = 0; });
       } else if (tool.kind === "soundboard" && !config) {
         // Configuration-only: show exact entry and the visible reset without
         // pretending that this silent tour demonstrates the audible effect.

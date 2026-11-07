@@ -510,6 +510,8 @@ export function Workbench({
     <aside
       ref={panelRef}
       className={`right-workbench${inSettings ? " settings-view" : ""}`}
+      id="routing-workbench"
+      tabIndex={-1}
       aria-label="Tools and settings"
       onFocusCapture={(event) => {
         lastFocusedControl.current = event.target;
@@ -1365,8 +1367,8 @@ export function Workbench({
             <h2>Client diagnostics</h2>
             <LogFilesPanel verbose={verboseLogging} clientDiagnostics={diagnostics} />
             <p className="muted">
-              Recent UI error categories and graph checkpoints. Up to 80 short entries are saved in this local app
-              profile so they survive a reload. Raw error text, file paths, and audio are excluded.
+              Recent interface error categories and route checkpoints. Up to 80 short entries are saved in this local
+              app profile so they survive a reload. Raw error text, file paths, and audio are excluded.
             </p>
             <ol className="diagnostic-list">
               {diagnostics.map((row, index) => (

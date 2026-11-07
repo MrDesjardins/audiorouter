@@ -51,27 +51,44 @@ export function UpdatesPanel({
   return (
     <section className="panel updates-panel" aria-labelledby="updates-heading">
       <h3 id="updates-heading">New versions</h3>
-      <p className="muted">
+      <p className="muted updates-summary">
         You have AudioRouter {APP_VERSION}.{" "}
         {enabled
           ? update
             ? `Version ${update.version} is available.`
-            : "No newer version found at the last check."
+            : "New versions appear here when a check finds one."
           : "Checking is off."}
       </p>
-      <label className="updates-toggle">
-        <input type="checkbox" checked={enabled} onChange={(event) => onChange(event.target.checked)} />
-        Check GitHub once a day for a newer version
-      </label>
+      <div className="setting-toggle-row">
+        <label className="updates-toggle">
+          <input
+            type="checkbox"
+            checked={enabled}
+            aria-describedby="update-check-state"
+            onChange={(event) => onChange(event.target.checked)}
+          />
+          Check GitHub once a day for a newer version
+        </label>
+        <span className="setting-toggle-state" id="update-check-state">
+          {enabled ? "On" : "Off"}
+        </span>
+      </div>
       <small className="muted">
         Reads the public AudioRouter release list on github.com; nothing about you or your audio is sent. When a newer
         version exists, a link appears next to the version at the top of the window.
       </small>
-      {update && (
-        <button type="button" className="secondary" onClick={() => openReleasePage(update)}>
-          Open the {update.version} release page
+      <div className="update-release-action">
+        <button
+          type="button"
+          className="secondary"
+          disabled={!update}
+          onClick={() => {
+            if (update) openReleasePage(update);
+          }}
+        >
+          {update ? `Open the ${update.version} release page` : "No release to open"}
         </button>
-      )}
+      </div>
     </section>
   );
 }

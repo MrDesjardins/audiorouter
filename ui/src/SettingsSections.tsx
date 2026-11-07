@@ -36,6 +36,15 @@ export function ShortcutSettings({
     <section className="panel shortcut-panel">
       <h3>Local shortcuts</h3>
       <p className="muted">These work while AudioRouter is focused and never capture typing in a text field.</p>
+      <p className="muted">
+        Ctrl+S saves your edits. Ctrl+K finds tools, settings and actions. Tab starts with links to skip to the canvas
+        or the workbench.
+      </p>
+      <p className="muted">
+        On the canvas: Ctrl+A selects all tools and groups; Ctrl+D duplicates one selected tool. Ctrl+plus and
+        Ctrl+minus zoom; Ctrl+0 fits the route. Arrow keys move a focused card. F2 renames one selected tool. F1 or ?
+        opens the shortcut reference.
+      </p>
       <label>
         Start or stop session
         <input
@@ -59,7 +68,7 @@ export function ShortcutSettings({
           {shortcutMessage}
         </p>
       )}
-      <small>Native tray and OS-wide registration remain platform validation work.</small>
+      <small>These are app shortcuts. Windows-wide shortcuts are not available here.</small>
     </section>
   );
 }

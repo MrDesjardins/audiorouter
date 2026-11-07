@@ -1,5 +1,47 @@
 # Active plan — current priorities (2026-11-04)
 
+## Combined UI and nightly repair PR — 2026-11-07
+
+Owner explicitly authorized committing and pushing the entire pending tree,
+including the nightly shell repair, and opening one large PR. Branch:
+`improve/ui-round-23`, fast-forwarded to main `04c8a6dd` without file changes.
+Scope: UI-02/05/11/13/17/20/36, ENG-02/04/05, NFR-14; UI rounds 24–26,
+shared control/guide media updates, release evidence and native smoke repair.
+No backend method, driver, dependency or Rust-source change is included.
+
+Ordered work: inspect the complete tracked/untracked diff and evidence; run UI
+format/lint/typecheck/unit/browser checks, site/guide/Firefox checks, docs and
+all eleven native smoke qualification cases; stage and inspect the final set;
+commit, push and open the authorized PR. Record branch/head, results and limits
+in the PR. No merge, release or site publication is authorized. Rollback is a
+scoped revert of this combined commit; preserve the owner's saved data/profile.
+Existing Round 26 native evidence qualifies the local release exe, not a signed
+or hardware-qualified release. Next: finish local checks before commit/push.
+
+Local pre-PR results: UI format/lint/typecheck and all 984 unit tests pass;
+106 edited/new Edge scenarios pass across three themes. Contract drift and
+both Rust format checks pass (no Rust source changed). Site policy/recording/
+guard tests pass 81/81; generated social/CSP/pages and coverage checks pass
+(38 kinds, 252 properties, 202 videos). Video metadata/size budgets pass.
+Firefox playback passes for all selected changed tool families after verifying
+the local server returns actual video/mp4. The first attempt hit an unrelated
+server, and a second lacked a running server; neither was a media/product pass.
+Corrected run uses GUIDE_SITE_PORT=4189. The temporary server was stopped.
+All eleven packaged nightly fault/cancellation qualification cases pass; the
+ordinary release smoke and pre-fix negative framing control are recorded in
+the Round 26 plan. Docs acceptance passes (246 files, 1430 links), staged diff
+check is clean, and the complete staged set contains 296 files. Git's evidence
+JSON CRLF-to-LF notices reflect repository normalization, not content changes.
+Retained limits: desktop main chunk warning, Narrator/scaling/live audio and
+participant gates. No hosted CI result is claimed. Next: commit the inspected
+set, push improve/ui-round-23 and open the explicitly authorized combined PR.
+
+## Nightly packaged qualification — 2026-11-07
+
+Repair the first-launch goal dialog blocking Session navigation in nightly
+42362489121 (ENG-02/04/05, NFR-14). Reproduction, prerequisites, ordered tasks,
+validation and rollback: [repair plan](evidence/2026-11-07-nightly-packaged-smoke.md).
+
 ## Ordered PR integration — 2026-11-06
 
 Integration outcome (2026-11-06): #117 merged at 852ded57 after final Windows,

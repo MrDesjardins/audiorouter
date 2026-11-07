@@ -21,6 +21,7 @@ const domainKinds = [...all.matchAll(/Self::([A-Za-z0-9]+)/g)].map(
 );
 const kindName = (name) => name[0].toLowerCase() + name.slice(1);
 const guideTools = [...processing.tools, ...routing.tools];
+const shared = JSON.parse(readFileSync(resolve(root, "site/guide-content/shared-controls.json"), "utf8"));
 const guideKinds = new Set(guideTools.map((tool) => tool.kind));
 const domainNames = new Set([...domainKinds.map(kindName), "group"]);
 const missingGuides = [...domainNames].filter((kind) => !guideKinds.has(kind));
@@ -170,6 +171,13 @@ const inventory = {
     "site/guide-content/routing.json",
   ],
   nodeKindCount: domainKinds.length,
+  sharedControls: shared.controls.map((control) => ({
+    ...control,
+    appliesTo: domainKinds.map(kindName),
+    recordings: shared.recordings.filter((clip) => clip.sharedControls.includes(control.key)),
+    status: shared.recordings.some((clip) => clip.sharedControls.includes(control.key) &&
+      existsSync(resolve(root, "site", clip.video)) && existsSync(resolve(root, "site", clip.poster))) ? "recorded" : "pending",
+  })),
   guideKindCount: tools.length,
   propertyCount: tools.reduce(
     (count, tool) => count + tool.properties.length,

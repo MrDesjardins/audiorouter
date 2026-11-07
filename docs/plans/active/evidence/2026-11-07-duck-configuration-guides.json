@@ -1,0 +1,62 @@
+﻿[
+    {
+        "id":  "duck--level",
+        "silent":  true,
+        "capture":  {
+                        "id":  "duck--level",
+                        "status":  "complete",
+                        "kind":  "duck",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  null,
+                        "eventAtSeconds":  null,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/duck--level.mp4",
+        "sha256":  "0b7dc67e5a55395caf578f42224c44825e57451fb2a1048711f80f10bbe0467d",
+        "firefox":  {
+                        "kind":  "duck",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/duck--level.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "duck--game",
+        "silent":  true,
+        "capture":  {
+                        "id":  "duck--game",
+                        "status":  "complete",
+                        "kind":  "duck",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  null,
+                        "eventAtSeconds":  null,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/duck--game.mp4",
+        "sha256":  "bb2ed083a1e05d0f554fb3c527a41bbcd1b5a63ba96ba9941dc3717998936954",
+        "firefox":  {
+                        "kind":  "duck",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/duck--game.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0,
+                        "state":  "running",
+                        "error":  null
+                    }
+    }
+]

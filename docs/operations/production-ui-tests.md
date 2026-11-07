@@ -137,6 +137,11 @@ requires each seeded fault to reach its owning failed check and retain evidence;
 an injection that never takes effect fails qualification. Page/bridge/readiness
 and refused-quit cases must retain a screenshot, HTML and trace.
 
+The fresh-profile smoke waits for the first-launch goal picker and chooses
+"Not now" before opening Session. This leaves device access ungranted and
+exercises the normal dismissal path before save/restart checks. Run its focused
+Edge regression with `node --test tools/quality/packaged-shell-onboarding.test.mjs`.
+
 Cancellation uses a real Windows CTRL_BREAK event delivered to the runner's
 own hidden console. The app has a separate process group, so its cleanup must
 come from the runner's handler. The report must say `cancelled` and exit 130.

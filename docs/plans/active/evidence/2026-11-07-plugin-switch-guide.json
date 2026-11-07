@@ -1,0 +1,30 @@
+﻿{
+    "kind":  "plugin",
+    "silent":  true,
+    "capture":  {
+                    "id":  "plugin",
+                    "status":  "complete",
+                    "kind":  "plugin",
+                    "parameter":  null,
+                    "sourceHash":  null,
+                    "eventAtSeconds":  null,
+                    "frameRate":  15,
+                    "frames":  120,
+                    "pageErrors":  [
+
+                                   ]
+                },
+    "video":  "site/assets/tool-guides/plugin-overview.mp4",
+    "sha256":  "113b55ef97ee07fb7faacf9436b46695ee48dfd6918be7618e3895a785026d40",
+    "firefox":  {
+                    "kind":  "plugin",
+                    "type":  "overviews",
+                    "video":  "assets/tool-guides/plugin-overview.mp4",
+                    "passed":  true,
+                    "time":  1.429333,
+                    "paused":  false,
+                    "peak":  0,
+                    "state":  "running",
+                    "error":  null
+                }
+}

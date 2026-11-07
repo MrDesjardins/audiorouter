@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadGuideRecordings } from "../../site/guide-recordings.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const clipTypeFilter = process.env.GUIDE_CLIP_TYPE;
 if (clipTypeFilter && !["overviews", "demos", "properties"].includes(clipTypeFilter))
@@ -58,9 +59,7 @@ const send = (method, params) =>
     }, 15000).unref();
   });
 const selected = process.env.GUIDE_KIND?.split(",");
-const recordings = JSON.parse(
-  readFileSync(resolve(root, "site/guide-content/recordings.json"), "utf8"),
-);
+const recordings = loadGuideRecordings();
 const resultPath = resolve(root, "target/tool-guide-firefox-results.json");
 const results =
   selected && existsSync(resultPath)

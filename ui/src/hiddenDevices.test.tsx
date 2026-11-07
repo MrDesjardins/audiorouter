@@ -201,6 +201,7 @@ describe("Audio devices on this PC", () => {
     );
     const toggle = screen.getByLabelText("Show Monitor Speakers in device pickers") as HTMLInputElement;
     expect(toggle.checked).toBe(true);
+    expect(document.getElementById(toggle.getAttribute("aria-describedby") ?? "")?.textContent).toBe("On");
     expect(optionValues("Output device endpoint")).toContain("monitor");
 
     act(() => {

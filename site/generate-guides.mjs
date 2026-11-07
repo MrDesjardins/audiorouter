@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { loadGuideRecordings } from "./guide-recordings.mjs";
 const site = dirname(fileURLToPath(import.meta.url));
 const esc = (value) =>
   String(value ?? "").replace(
@@ -25,9 +26,7 @@ if (new Set(tools.map((t) => t.kind)).size !== tools.length)
 const tutorials = JSON.parse(
   await readFile(resolve(site, "guide-content/tutorials.json"), "utf8"),
 );
-const recordings = JSON.parse(
-  await readFile(resolve(site, "guide-content/recordings.json"), "utf8"),
-);
+const recordings = loadGuideRecordings();
 const mediaVersion = (path) => esc(path) + "?v=" + createHash("sha256").update(readFileSync(resolve(site, path))).digest("hex").slice(0, 12);
 // Same rule as tools/site/check-tool-guide-videos.mjs: property clips and the
 // demo carry audio unless marked silent; configuration overviews never do.

@@ -10,6 +10,7 @@ import { LiveLevelBar } from "./ToolVisuals";
 import { type ProcessorDescriptor } from "./processorCatalog";
 import { networkTelemetryText } from "./NetworkNodeEditor";
 import { NumberField } from "./NumberField";
+import { BooleanField } from "./BooleanField";
 import { SliderField } from "./Slider";
 import { AdvancedEqEditor } from "./AdvancedEqEditor";
 import { EqBackendContext, PluginParameterContext } from "./appContext";
@@ -177,17 +178,14 @@ export function ProcessorParameterEditor({
         const helpText = help ? <small className="parameter-help">{help}</small> : null;
         if (parameter.type === "boolean") {
           return (
-            <label key={parameter.name}>
-              {label}
-              {helpText}
-              <input
-                aria-label={label}
-                type="checkbox"
-                checked={value === true}
-                disabled={!connected}
-                onChange={(event) => onChange(parameter.name, event.target.checked)}
-              />
-            </label>
+            <BooleanField
+              key={parameter.name}
+              label={label}
+              help={helpText}
+              checked={value === true}
+              disabled={!connected}
+              onChange={(checked) => onChange(parameter.name, checked)}
+            />
           );
         }
         if (parameter.type === "string" && parameter.enum) {
@@ -369,9 +367,9 @@ export function NodeTelemetryPanel({
               ? "Live"
               : "No readings";
   const note = !node.enabled
-    ? "This node is off. Effects pass sound through; inputs and outputs contribute silence."
+    ? "This tool is off. Effects pass sound through; inputs and outputs contribute silence."
     : node.bypass
-      ? "This node is bypassed. Its processing and live analysis are inactive; bypassed inputs, outputs and Mixers contribute silence."
+      ? "This tool is bypassed. Its processing and live analysis are inactive; bypassed inputs, outputs and Mixers contribute silence."
       : (applicationCaptureState?.detail ??
         // Only notes that tell the user something; the status pill covers the rest.
         (running && endpointOwned

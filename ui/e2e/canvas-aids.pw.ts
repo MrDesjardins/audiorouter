@@ -109,7 +109,7 @@ test("clicking the map moves the view", async ({ page }) => {
   await expect.poll(() => viewport.evaluate((element) => getComputedStyle(element).transform)).not.toBe(before);
 });
 
-test("a large route opens with readable text, and the fit button still shows it all", async ({ page }) => {
+test("a large route opens completely visible and reload restores the overview", async ({ page }) => {
   const session = {
     id: "wide",
     name: "Wide route",
@@ -131,19 +131,32 @@ test("a large route opens with readable text, and the fit button still shows it 
   };
   await page.addInitScript((value) => Object.assign(window, { __routeFixtureSession: value }), session);
   await open(page);
-  await expect.poll(() => zoom(page)).toBeGreaterThanOrEqual(1);
-  const smallest = await page
-    .locator(".flow-node-content")
-    .first()
-    .evaluate((card) => {
-      const sizes = [...card.querySelectorAll<HTMLElement>("*")]
-        .filter((element) => element.childElementCount === 0 && element.textContent?.trim())
-        .map((element) => parseFloat(getComputedStyle(element).fontSize));
-      return Math.min(...sizes);
-    });
-  expect(smallest * (await zoom(page))).toBeGreaterThanOrEqual(11);
-  await page.locator(".react-flow__controls-fitview").click();
   await expect.poll(() => zoom(page)).toBeLessThan(1);
+  const assertComplete = async () => {
+    await expect
+      .poll(async () => {
+        const view = (await page.locator(".session-flow-canvas").boundingBox())!;
+        return page.locator(".react-flow__node").evaluateAll(
+          (nodes, view) =>
+            nodes.every((node) => {
+              const box = node.getBoundingClientRect();
+              return (
+                box.left >= view.x &&
+                box.right <= view.x + view.width &&
+                box.top >= view.y &&
+                box.bottom <= view.y + view.height
+              );
+            }),
+          view,
+        );
+      })
+      .toBe(true);
+  };
+  await assertComplete();
+  await page.locator(".react-flow__controls-zoomin").click();
+  await page.reload();
+  await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
+  await assertComplete();
 });
 
 for (const theme of ["dark", "light", "high-contrast"]) {

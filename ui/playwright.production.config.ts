@@ -11,6 +11,8 @@ export default defineConfig({
     "**/canvas-groups.pw.ts", "**/canvas-copy-paste.pw.ts", "**/canvas-clipboard-regressions.pw.ts",
     "**/session-workflows.pw.ts", "**/recording-workflows.pw.ts",
     "**/canvas-readiness.pw.ts",
+    "**/canvas-first-view.pw.ts", "**/slow-save.pw.ts", "**/slow-lifecycle.pw.ts",
+    "**/slow-scan.pw.ts", "**/slow-audio-import.pw.ts", "**/startup-reconnect.pw.ts",
   ],
   outputDir: `${process.env.TEMP ?? "."}/audiorouter-production-playwright-results`,
   webServer: {

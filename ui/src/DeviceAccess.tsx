@@ -61,7 +61,7 @@ export function DeviceAccessDialog({
   );
 }
 
-/** Advanced settings: whether this app may open audio devices on Play, with a toggle. */
+/** Whether this app may open audio devices on Play, with explicit change and recheck actions. */
 export function DeviceAccessSetting({
   backend,
 }: {
@@ -69,52 +69,138 @@ export function DeviceAccessSetting({
 }) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(true);
+  const [readFailed, setReadFailed] = useState(false);
+  const [message, setMessage] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const generation = useRef(0);
+  const writeBusy = useRef(false);
+  const readBusy = useRef(false);
+  const previousBackend = useRef(backend);
   const available = backend.connected && Boolean(backend.getDeviceAccess && backend.setDeviceAccess);
   useEffect(() => {
-    if (!available) return;
+    if (previousBackend.current !== backend || !available) setAllowed(null);
+    previousBackend.current = backend;
+    setBusy(false);
+    if (!available) {
+      setReading(false);
+      setMessage("Connect to the desktop backend to check audio device access.");
+      return;
+    }
     let cancelled = false;
-    const load = () =>
-      void backend.getDeviceAccess!()
+    const load = () => {
+      if (writeBusy.current) return;
+      const current = ++generation.current;
+      readBusy.current = true;
+      setReading(true);
+      setReadFailed(false);
+      setMessage("Checking audio device access…");
+      void Promise.resolve()
+        .then(() => backend.getDeviceAccess!())
         .then((result) => {
-          if (!cancelled) setAllowed(result.allowed);
+          if (!cancelled && current === generation.current) {
+            setAllowed(result.allowed);
+            setMessage("");
+          }
         })
         .catch(() => {
-          if (!cancelled) setAllowed(null);
+          if (!cancelled && current === generation.current) {
+            setReadFailed(true);
+            setMessage("Could not read audio device access. Use Check again.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled && current === generation.current) {
+            readBusy.current = false;
+            setReading(false);
+          }
         });
+    };
     load();
     window.addEventListener(ACCESS_CHANGED_EVENT, load);
     return () => {
       cancelled = true;
+      generation.current += 1;
+      readBusy.current = false;
+      writeBusy.current = false;
       window.removeEventListener(ACCESS_CHANGED_EVENT, load);
     };
-  }, [available, backend]);
-  if (!available || allowed === null) return null;
+  }, [available, backend, attempt]);
   const change = async (next: boolean) => {
+    if (!available || writeBusy.current || readBusy.current || readFailed || allowed === null) return;
+    const current = ++generation.current;
+    writeBusy.current = true;
     setBusy(true);
+    setMessage("Saving audio device access…");
     try {
       const result = await backend.setDeviceAccess!(
         next,
         `device-access-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       );
-      setAllowed(result.allowed);
-      window.dispatchEvent(new Event(ACCESS_CHANGED_EVENT));
+      if (current === generation.current) {
+        setAllowed(result.allowed);
+        setMessage(
+          result.allowed ? "Audio device access allowed." : "AudioRouter will ask before opening audio devices.",
+        );
+        window.dispatchEvent(new Event(ACCESS_CHANGED_EVENT));
+      }
+    } catch {
+      if (current === generation.current) {
+        setReadFailed(true);
+        setMessage("Could not confirm the change. Check again before retrying.");
+      }
     } finally {
-      setBusy(false);
+      if (current === generation.current) {
+        writeBusy.current = false;
+        setBusy(false);
+      }
     }
   };
   return (
-    <div className="recording-folder" role="group" aria-label="Audio device access">
-      <strong>Audio device access</strong>
-      <p className="muted">
-        {allowed
-          ? "AudioRouter may open the audio devices of a session when you press Play."
-          : "AudioRouter asks before opening audio devices the first time you press Play."}
+    <div className="recording-folder device-access-setting" role="group" aria-label="Audio device access">
+      <div className="setting-toggle-row">
+        <strong>Audio device access</strong>
+        <span className="setting-toggle-state device-access-state" data-testid="device-access-state">
+          {!available
+            ? "Unavailable"
+            : allowed === null
+              ? reading
+                ? "Loading…"
+                : "Unavailable"
+              : `${readFailed ? "Last known: " : ""}${allowed ? "Allowed" : "Ask first"}`}
+        </span>
+      </div>
+      <p className="muted device-access-description">
+        {readFailed
+          ? "The current access could not be confirmed. Check again before changing it."
+          : allowed === null
+            ? "Choose whether AudioRouter may open your session's audio devices when you press Play."
+            : allowed
+              ? "AudioRouter may open the audio devices of a session when you press Play."
+              : "AudioRouter asks before opening audio devices the first time you press Play."}
       </p>
       <div className="recording-folder-actions">
-        <button type="button" className="secondary" disabled={busy} onClick={() => void change(!allowed)}>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!available || busy || reading || readFailed || allowed === null}
+          aria-busy={busy}
+          onClick={() => void change(!allowed)}
+        >
           {allowed ? "Withdraw access" : "Allow access"}
         </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={!available || busy || reading}
+          onClick={() => setAttempt((value) => value + 1)}
+        >
+          Check again
+        </button>
       </div>
+      <p className="device-access-message" role="status">
+        {message || " "}
+      </p>
     </div>
   );
 }

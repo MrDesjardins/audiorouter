@@ -4,6 +4,7 @@ import { askConfirm } from "./AppDialog";
 import { formatUiError, type RecorderStatus, type UiBackend } from "./backend";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
+import { BooleanField } from "./BooleanField";
 
 export function formatRecordingDuration(frames: number, sampleRate: number): string {
   if (!Number.isFinite(frames) || frames < 0 || !Number.isFinite(sampleRate) || sampleRate <= 0) return "unknown";
@@ -209,16 +210,12 @@ export function RecorderActions({
             <option value={44100}>44.1 kHz</option>
           </select>
         </label>
-        <label>
-          TPDF dither
-          <input
-            aria-label="TPDF dither"
-            type="checkbox"
-            checked={dither}
-            disabled={format === "wavFloat32" || format === "mp3"}
-            onChange={(event) => setDither(event.target.checked)}
-          />
-        </label>
+        <BooleanField
+          label="TPDF dither"
+          checked={dither}
+          disabled={format === "wavFloat32" || format === "mp3"}
+          onChange={setDither}
+        />
         {(format === "wavFloat32" || format === "mp3") && (
           <small>
             {format === "mp3"

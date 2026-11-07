@@ -8,10 +8,21 @@ import {
   exampleOption,
   propertyCoverageStatus,
   guideWireType,
+  guideControlName,
 } from "./tool-guide-guards.mjs";
 const read = (name) => JSON.parse(readFileSync(new URL(name, import.meta.url), "utf8"));
 const catalog = read("./tool-guide-catalog.json");
 const manifest = read("./tool-guide-property-manifest.json");
+
+test("Hold targets its own control and cannot match Threshold", () => {
+  const name = guideControlName("Hold");
+  assert.ok(name.test("Hold"));
+  assert.ok(name.test("Hold precise value"));
+  assert.ok(!name.test("Threshold precise value"));
+  assert.ok(!guideControlName("Gain").test("Makeup gain precise value"));
+  assert.ok(!guideControlName("Bass").test("Bass frequency precise value"));
+  assert.ok(guideControlName("Q / width").test("Q / width precise value"));
+});
 
 test("selector and file controls carry string identities, while numeric and boolean controls retain their types", () => {
   for (const type of ["enum", "selection", "file", "text"]) assert.equal(guideWireType(type), "string");
