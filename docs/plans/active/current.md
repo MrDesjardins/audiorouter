@@ -30,6 +30,30 @@ lockfile revert. Runner Ubuntu migration notice needs no project change.
 Windows local result: the exact locked probe check passed in 3.20 seconds;
 no Rust source changed. Next: push #118 and wait for its new-head CI.
 
+#120 Windows failure on ec1df0e: App.sessionSelection.test.tsx first Session
+visit remained on Tools during asynchronous initial rendering.
+Reproduced locally: 13 passed, 1 failed at the same line 204. Longer picker
+waits and async act failed too. Render evidence showed Session rendering but
+Tools remaining committed: lazy ChangeHistory suspended the entire tab.
+Give history its own Suspense boundary and extend sessionTabLoading's held-
+module regression to cover it. Original sessionSelection assertions unchanged;
+both focused files pass (15 tests). Merge #118's CI repairs first.
+Requirements ENG-02/04; test-only rollback. Next: focused suite, full UI suite,
+typecheck, lint and format, then push and require new-head hosted checks.
+
+Owner also reported off-center canvas delete icons. Center their SVG with
+grid alignment in the existing button, with a browser geometry regression
+and screenshots in dark/light/high-contrast. Requirement UI-17; no controls,
+API or tool behavior changes. Rollback: revert the scoped CSS rule/test.
+Windows verification: final full UI suite with --maxWorkers=2 passed 967/967
+(105 files); typecheck:all, lint, format:check, documentation validation and
+diff check passed. Edge session-file plus three-theme delete alignment passed
+4/4. Reviewed target/canvas-delete-{dark,light,high-contrast}.png: centered
+icons, no card displacement. Existing browser environment/attribution notices
+remain as recorded above. No packaged exe or real audio was run for these
+UI-only repairs. Next: new-head #120 CI, then merge #117 -> #118 -> #120 only
+after each head's checks and annotations are reviewed.
+
 ## Where things stand
 
 Owner-approved security-only PR preparation (2026-11-05): isolate all three

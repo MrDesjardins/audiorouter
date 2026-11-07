@@ -1285,6 +1285,8 @@ button:disabled {
   gap: 0.5rem;
 }
 .flow-node-delete {
+  display: grid;
+  place-items: center;
   min-width: 1.75rem;
   min-height: 1.75rem;
   flex: none;

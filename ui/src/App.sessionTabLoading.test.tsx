@@ -8,6 +8,7 @@ import { createDisconnectedBackend } from "./backend";
 // Session tab's picker and actions must still render (CI's slow first
 // import once hid the whole tab behind "Loading panel...").
 vi.mock("./SessionFilePanel", () => new Promise(() => {}));
+vi.mock("./ChangeHistory", () => new Promise(() => {}));
 
 beforeAll(() => {
   Object.defineProperty(window, "DOMMatrixReadOnly", {
@@ -34,4 +35,5 @@ it("shows the session picker while the session file section is still loading", a
   fireEvent.click(await screen.findByRole("tab", { name: "Session" }));
   expect(await screen.findByLabelText("Choose session")).toBeTruthy();
   expect(screen.getByText("Loading session file tools...")).toBeTruthy();
+  expect(screen.getByText("Loading change history...")).toBeTruthy();
 });
