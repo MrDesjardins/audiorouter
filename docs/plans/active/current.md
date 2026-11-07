@@ -20,6 +20,16 @@ neither changes the export assertion. Hosted Ubuntu migration notice is runner
 metadata; no workflow change is needed for this test repair.
 Next: push the repair and require new-head hosted CI before merging #117.
 
+#118 integration: hosted run 42251017104 passed workspace/shell tests and
+strict Clippy, then probe-build failed because its --locked Cargo.lock lacks
+the control crate's windows dependency. Quality gate reports windows failure.
+Merge #117's repair commit and backport the one-line lockfile fix from #120.
+Validate the exact locked probe command and diff before push; require hosted
+CI on the resulting head. Requirements ENG-02/04; rollback is the scoped
+lockfile revert. Runner Ubuntu migration notice needs no project change.
+Windows local result: the exact locked probe check passed in 3.20 seconds;
+no Rust source changed. Next: push #118 and wait for its new-head CI.
+
 ## Where things stand
 
 Owner-approved security-only PR preparation (2026-11-05): isolate all three
