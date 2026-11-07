@@ -2,6 +2,24 @@
 
 ## Ordered PR integration — 2026-11-06
 
+Integration outcome (2026-11-06): #117 merged at 852ded57 after final Windows,
+Edge, CodeQL and Quality gate passed on 09170a90; #118 then merged at 44a92cb8
+after all checks passed on b28628f2. No review comments remained on either PR.
+The #117 first rerun exposed a bounded backend startup exit; its isolated and
+full MCP stdio suite passed locally, and the subsequent hosted Windows run
+passed. The original child stderr was discarded, so the transient exit's
+cause remains unknown; no production behavior was changed on a guess.
+
+All latest check annotations were read. #117 annotations only announce the
+hosted Ubuntu image migration. #118 CodeQL jobs pass but warn that GitHub
+cannot retrieve the full PR diff above 300 files. Retain this platform limit
+explicitly; it is not a code finding or proof of complete diff coverage.
+No suppression or acceptance criterion was changed. #117's merged clean
+worktree was removed with the required worktree-cleanup.ps1 -Apply script;
+unmerged/dirty worktrees and unrelated release evidence were preserved.
+Next: retarget #120 to main, require its final-head checks and review its
+annotations, merge, then run the prescribed merged-worktree cleanup.
+
 Owner authorized monitoring and merging #117, #118, then #120. Requirements:
 SEC-12 and ENG-02/04. #117's Edge session-file test omits the newly required
 desktop export approval; its Quality gate reports that browser failure.
