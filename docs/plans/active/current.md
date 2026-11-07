@@ -2,6 +2,39 @@
 
 ## Combined UI and nightly repair PR — 2026-11-07
 
+PR #121 CI repair (UI-02/11/17, ENG-02/04): head `a3026351` fails five
+Edge scenarios: group left-side reachability, three stale inspector captions,
+and a short-edge fixture relying on default card spacing. Quality gate reports
+the same browser failure. Working tree began clean. Reproduce with the bundled
+CI profile, inspect actual geometry/captions, repair the owning fixture or
+product layer, then run focused and full bundled Edge, UI typecheck/lint/format,
+docs and diff checks. Read all head annotations and reviews before pushing.
+No hardware/driver is needed; harness evidence does not qualify native audio.
+Rollback: revert only this repair.
+
+Reproduced all five failures locally with `npm --prefix ui run e2e:ci --
+canvas-group-resize.pw.ts inspector-status.pw.ts ui-round-20-fixes.pw.ts`
+(32 passed, 5 failed). The screenshot shows the group's left frame at the
+canvas boundary, clipping its outward grab zone: fit again after adding the
+group. Explicitly persist close-card positions for the short-edge case rather
+than relying on the old default spacing. Match the current "This tool is
+bypassed" caption. Existing geometry, state and keyboard/mouse assertions stay.
+No production source, API, guide or driver changes are needed.
+
+Windows local evidence (2026-11-07): focused bundled Edge 37/37 passed;
+`CI=true npm --prefix ui run e2e:ci` passed 670, skipped 15, no failures or
+flaky retries (20.6 minutes). Both positive/negative browser and asset guards
+qualified; the locked e2e backend rebuild passed. Log:
+`target/pr121-full-browser.log` (local, untracked). UI typecheck:all,
+format/format:check, zero-warning lint, docs (246 files / 1430 links) and diff
+checks pass. Browser NO_COLOR/FORCE_COLOR notices concern conflicting runner
+environment variables, not an application warning. All old-head check
+annotations read: browser/Quality gate failure plus hosted Ubuntu migration
+notices; no code warning or PR review comments. Full diff inspected.
+Next: commit/push this test repair to #121 and require new-head hosted checks;
+no merge is authorized. Native audio and packaged shell were not rerun for
+these test-only changes.
+
 Owner explicitly authorized committing and pushing the entire pending tree,
 including the nightly shell repair, and opening one large PR. Branch:
 `improve/ui-round-23`, fast-forwarded to main `04c8a6dd` without file changes.

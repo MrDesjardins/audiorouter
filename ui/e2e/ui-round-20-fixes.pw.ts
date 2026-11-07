@@ -133,7 +133,14 @@ test("the action bar stays off two close cards until the line is pointed at", as
       enabled: true,
     },
   ];
-  await page.addInitScript((session) => Object.assign(window, { __routeFixtureSession: session }), session);
+  await page.addInitScript((session) => {
+    Object.assign(window, { __routeFixtureSession: session });
+    // Keep the connector gap short regardless of the default card layout.
+    localStorage.setItem(
+      "audiorouter.ui.layout.demo-session",
+      JSON.stringify({ mic: { x: 0, y: 0 }, voice: { x: 284, y: 0 } }),
+    );
+  }, session);
   await page.setViewportSize({ width: 1280, height: 720 });
   await open(page);
   const bar = page.locator(".edge-action-bar").first();

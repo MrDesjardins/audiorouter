@@ -37,7 +37,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     expect(await page.getByLabel("Tool status: Bypass").evaluate((pill) => pill.getBoundingClientRect().width)).toBe(
       width,
     );
-    await expect(page.getByText("This node is bypassed.", { exact: false })).toBeVisible();
+    await expect(page.getByText("This tool is bypassed.", { exact: false })).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`inspector-${theme}.png`) });
   });
 }
