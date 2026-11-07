@@ -207,7 +207,7 @@ test("new connections keep both chosen sides when older geometry is undone", asy
   await page.mouse.down();
   await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
   await page.mouse.up();
-  await expect(page.locator(".global-action-message")).toContainText("Connection added to the draft");
+  await expect(page.locator(".global-action-message")).toContainText("Connection added");
   const sides = () =>
     page.evaluate(() => JSON.parse(localStorage.getItem("audiorouter.ui.layout.e2e-session.edges") ?? "{}")) as Promise<
       Record<string, { source: string; target: string }>

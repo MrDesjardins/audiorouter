@@ -3,7 +3,7 @@ import { routePlaybackLabel } from "./routePlaybackLabel";
 
 const preview = { busy: false, running: true, fresh: true, generation: 4, started: { generation: 4, preview: true } };
 it("identifies a current draft preview until Stop", () => {
-  expect(routePlaybackLabel(preview)).toBe("Audio running · Draft preview");
+  expect(routePlaybackLabel(preview)).toBe("Audio running · Unsaved preview");
   expect(routePlaybackLabel({ ...preview, running: false })).toBe("Audio stopped");
   expect(routePlaybackLabel({ ...preview, busy: true })).toBe("Updating audio…");
 });

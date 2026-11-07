@@ -41,8 +41,8 @@ pub(crate) fn node_template(kind: NodeKind) -> Option<(&'static str, Vec<Port>, 
     let output = || port("out", PortDirection::Output);
     let tool = |name, description| Some((name, vec![input(), output()], description));
     match kind {
-        NodeKind::PhysicalInput => Some(("Physical input", vec![output()], "A microphone or other input device. Choose the device with nodes.set parameters.endpointId (see devices.list).")),
-        NodeKind::PhysicalOutput => Some(("Physical output", vec![input()], "Speakers, headphones or a virtual cable such as CABLE Input. Choose the device with parameters.endpointId (see devices.list).")),
+        NodeKind::PhysicalInput => Some(("Input device", vec![output()], "A microphone or other input device. Choose the device with nodes.set parameters.endpointId (see devices.list).")),
+        NodeKind::PhysicalOutput => Some(("Output device", vec![input()], "Speakers, headphones or a virtual cable such as CABLE Input. Choose the device with parameters.endpointId (see devices.list).")),
         NodeKind::TestSignal => Some(("Test Signal", vec![output()], "A test tone to check a route without a microphone.")),
         NodeKind::Soundboard => Some(("Soundboard", vec![output()], "Up to nine sounds you trigger on demand (from the canvas, the API or a Stream Deck). Choose sounds in the node's parameters (slot1MediaId ... slot9MediaId).")),
         NodeKind::AudioFile => Some(("Audio file", vec![output()], "Plays an uploaded WAV or MP3 file.")),

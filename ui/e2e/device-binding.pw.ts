@@ -20,9 +20,9 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     );
     await page.goto("/route-harness.html");
     await page.getByTestId("rf__node-headphones").click();
-    const picker = page.getByLabel("Physical output endpoint");
+    const picker = page.getByLabel("Output device endpoint");
     await expect(picker).toHaveValue("");
-    const binding = page.getByLabel("Physical output binding");
+    const binding = page.getByLabel("Output device binding");
     await expect(binding).toContainText("No device is chosen for this node yet. Choose one, then Save.");
     await binding.scrollIntoViewIfNeeded();
     await binding.screenshot({ path: testInfo.outputPath(`device-binding-${theme}.png`) });
@@ -33,7 +33,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const save = page.locator(".topbar").getByRole("button", { name: "Save", exact: true });
     await expect(save).toBeEnabled();
     await expect(save).toHaveAttribute("data-save-required", "true");
-    await expect(page.getByTestId("rf__node-headphones").locator(".node-save-indicator")).toHaveText("Save required");
+    await expect(page.getByTestId("rf__node-headphones").locator(".node-save-indicator")).toHaveText("Unsaved");
     expect(
       await page.evaluate(() =>
         (window as unknown as { __routeFixtureCalls: () => string[] })

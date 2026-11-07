@@ -61,7 +61,7 @@ export function NodePropertyStatus({
     <span
       className={`node-state node-property-status is-${nodePropertyStatusTone(status)}`}
       role="status"
-      aria-label={`Node status: ${status}`}
+      aria-label={`Tool status: ${status}`}
     >
       {status}
     </span>

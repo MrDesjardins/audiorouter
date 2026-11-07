@@ -148,6 +148,18 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-11-06 — A browser test must bring a card into view before clicking it.**
+  Evidence: [Round 23 verified](docs/plans/active/ui-quality-review.md), `fitCanvas` in `ui/e2e/workbench.ts`.
+  Scope: `ui/e2e` tests on routes wider than the canvas at readable zoom. Consequence: Playwright can reach a card past
+  the canvas edge by scrolling a clipped container, so such tests pass by luck until card height changes, then fail in
+  dozens with misleading hit targets. Call `fitCanvas` first, and read the failing line before blaming the product: a
+  reveal "race" was fixed here on a guess, then removed because the failures were all clicks after a reload.
+
+- **2026-11-06 — Word checks on UI source miss what the backend seeds.**
+  Evidence: `default_desktop_session_uses_the_plain_device_names`, Round 23. Scope: renames of user-visible terms.
+  Consequence: `plainWords.test.ts` passed while a fresh install still showed "Physical input" on its first cards; only
+  running the exe on a new database showed it. Grep Rust too, and look at the first launch.
+
 - **2026-11-06 — Exercise the release exe with its WebView profile isolated too.**
   Evidence: [Round 21 progress](docs/plans/active/ui-quality-review.md). Scope: driving the built shell through
   CDP. Consequence: `LOCALAPPDATA` moves the logs but not the WebView profile, so a disposable database met the owner's

@@ -47,6 +47,9 @@ import type { DeviceListItem } from "@audiorouter/contracts";
 import { LiveTelemetry, useTelemetryStore } from "./liveTelemetry";
 import { SoundboardContext, useSoundboardController } from "./soundboardLive";
 import { assignSoundboardSlotDraft, isSoundboardParameter } from "./soundboard";
+import { AppDialogHost, askConfirm, askText } from "./AppDialog";
+import { useDraftRecovery } from "./draftRecovery";
+import { useNotificationsClearTabs } from "./notificationPlacement";
 import { useReportUnsaved } from "./unsavedReport";
 import { routePlaybackLabel } from "./routePlaybackLabel";
 import { QuitButton } from "./QuitButton";
@@ -269,6 +272,10 @@ function keepSelectedSession(current: string, items: { id: string }[], connected
 const FIRST_RUN_KEY = "audiorouter.ui.first-run-done";
 const readFirstRunDone = () => readPresentationJson(optionalLocalStorage(), FIRST_RUN_KEY) === true;
 const writeFirstRunDone = () => writePresentationJson(optionalLocalStorage(), FIRST_RUN_KEY, true);
+
+const EDITS_RESTORED_MESSAGE = "Your unsaved edits from last time are back. Save to keep them.";
+const OLDER_EDITS_MESSAGE =
+  "You have unsaved edits from last time, but this route was saved since then. Which one do you want?";
 
 export function App({ backend }: { backend?: UiBackend } = {}) {
   const resolvedBackend = backend ?? defaultBackend;
@@ -777,7 +784,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setActionMessage("Reconnect failed: the AudioRouter backend is not running. Restart AudioRouter.");
       } else if (nextState.error) {
         setActionMessage(
-          `Reconnect failed: ${nextState.error}. Your draft is kept. Reconnect before saving or starting audio.`,
+          `Reconnect failed: ${nextState.error}. Your edits are kept. Reconnect before saving or starting audio.`,
         );
       } else {
         setActionMessage("Reconnected. Sessions, devices and audio status are up to date.");
@@ -949,7 +956,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     backendActiveSessionRef.current = sessionId;
     if (sessionId !== draftRef.current.id && !sameSessionDraft(draftRef.current, authoritativeSession.current)) {
       setActionMessage(
-        "Another client selected a different session. Your draft is preserved; save or discard it in Session before switching.",
+        "Another app selected a different session. Your edits are kept; save or discard them in Session before switching.",
       );
       return false;
     }
@@ -1025,7 +1032,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         `Graph refresh conflict: kept draft revision ${draftRef.current.revision}; backend revision ${session.revision}`,
       );
       setActionMessage(
-        "This session changed elsewhere. Your draft is preserved. In Session, discard the draft to load the saved graph, or copy your edits before resolving the revision conflict.",
+        "This session changed elsewhere. Your edits are kept. In Session, discard them to load the saved route, or note your edits first.",
       );
       return;
     }
@@ -1042,6 +1049,41 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setConnectionSource("");
     setConnectionDestination("");
   }, [session, recordUiDiagnostic]);
+  // After the adoption above, so a restored copy is not replaced by the saved route.
+  const [olderEdits, setOlderEdits] = useState<typeof session | null>(null);
+  const draftRecovery = useDraftRecovery({
+    ready: backend.connected && snapshot !== null && sessionIsAvailable && selectedSessionId === session.id,
+    draft,
+    session,
+    unsaved: routeChanged,
+    knownSessionIds: availableSessions.map((item) => item.id),
+    onRestore: (restored) => {
+      // Undo must return to the saved route, and the ref can still hold the startup placeholder
+      // when this runs in the same commit that adopted the route.
+      draftRef.current = session;
+      recordDraftChange(restored);
+      setActionMessage(EDITS_RESTORED_MESSAGE);
+    },
+    onOlder: (edits) => {
+      setOlderEdits(edits);
+      setActionMessage(OLDER_EDITS_MESSAGE);
+    },
+    onOtherRoute: (sessionId) => {
+      const name = availableSessions.find((item) => item.id === sessionId)?.name ?? "another route";
+      setActionMessage(`You have unsaved edits on ${name}. Open it to get them back; new edits here replace them.`);
+    },
+    onFailure: recordUiDiagnostic,
+  });
+  const notificationsRef = useNotificationsClearTabs(`${actionMessage}|${routeWarningKey}`);
+  const discardRouteEdits = () => {
+    setDraft(session);
+    setDraftHistory({ past: [], future: [] });
+    setPendingWarnings([]);
+    setAcknowledgedWarnings(new Set());
+    setPendingOperation(null);
+    setPendingGraphPlan(null);
+    setActionMessage("Unsaved edits discarded.");
+  };
   useEffect(() => {
     let active = true;
     void backend
@@ -1380,7 +1422,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const wasRunning = sessionRunning;
     if (!wasRunning) {
       recordDraftChange(next);
-      setActionMessage("Node state changed in the draft. Save the route before pressing Play.");
+      setActionMessage("Tool turned on or off. Save the route before pressing Play.");
       return;
     }
     if (!session.nodes.some((node) => node.id === selectedNode.id)) {
@@ -1398,10 +1440,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       await finishGraphSave(submitted, result.revision, result.activation);
     } catch (error) {
       setActionMessage(
-        formatUiError(
-          error,
-          "The node change could not be applied. Audio is still playing with its previous settings.",
-        ),
+        formatUiError(error, "The change could not be applied. Audio is still playing with its previous settings."),
       );
     } finally {
       nodeFlagBusy.current = false;
@@ -1413,7 +1452,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(setNodeDraftName(draft, selectedNode.id, name));
       setActionMessage("Name changed. Save to keep it.");
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to rename node."));
+      setActionMessage(formatUiError(error, "Unable to rename this tool."));
     }
   };
   const changeNodeParameterOn = (nodeId: string, name: string, value: boolean | number | string) => {
@@ -1437,7 +1476,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               )
             : processorParameterError(processors, targetNode.kind, name, value, snapshot?.discovery?.nodeTypes ?? null);
     if (error) {
-      setActionMessage(`Draft rejected: ${error}.`);
+      setActionMessage(`Change rejected: ${error}.`);
       return;
     }
     recordDraftChange(setNodeDraftParameter(draftRef.current, nodeId, name, value), nodeId + ":" + name);
@@ -1449,7 +1488,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     changeNodeParameterOn(selectedNode.id, name, value);
   const resetNodeParameters = () => {
     recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id));
-    setActionMessage("Processor parameters reset in the draft. Review and save the changes when you are ready.");
+    setActionMessage("Settings reset. Save to keep this.");
   };
   const changeSessionName = (name: string) => {
     try {
@@ -1508,7 +1547,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const operation = uiIdempotencyKey("graph-commit");
       const plan = await backend.planGraph(draft);
       if (currentSessionIdRef.current !== draft.id || !sameSessionDraft(draftRef.current, draft)) {
-        setActionMessage("The draft changed during review. Review and save the changes again.");
+        setActionMessage("Your edits changed during review. Review and save them again.");
         return;
       }
       if (plan.baseRevision !== draft.revision)
@@ -1634,8 +1673,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const createSession = async () => {
     if (sessionCrudBusy.current || !backend.connected) return;
-    const name = window.prompt("New session name", "New session")?.trim();
-    if (!name) return;
+    const name = await askText({
+      title: "New session",
+      label: "Session name",
+      initialValue: "New session",
+      confirmLabel: "Create session",
+    });
+    if (!name || sessionCrudBusy.current || !backend.connected) return;
     sessionCrudBusy.current = true;
     setSessionCrudBusyState(true);
     const id = `session-${Date.now()}`;
@@ -1686,8 +1730,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     }
   };
   const deleteSession = async () => {
-    if (sessionCrudBusy.current || !backend.connected || !window.confirm(`Delete stopped session “${session.name}”?`))
-      return;
+    if (sessionCrudBusy.current || !backend.connected) return;
+    const confirmed = await askConfirm({
+      title: `Delete “${session.name}”?`,
+      message: "This removes the session and its saved route. It cannot be undone.",
+      confirmLabel: "Delete session",
+      destructive: true,
+    });
+    if (!confirmed || sessionCrudBusy.current || !backend.connected) return;
     sessionCrudBusy.current = true;
     setSessionCrudBusyState(true);
     try {
@@ -2015,7 +2065,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setActionMessage(
             !binding.renderEndpointId
               ? "No audio started. Choose the speaker or headphones for your output in Properties, then press Play."
-              : "No audio started. This route also needs an input device: add an Input Device node, choose its device in Properties and connect it, or choose one in Advanced → Troubleshooting. Then press Play.",
+              : "No audio started. This route also needs an input device: add an Input Device, choose its device in Properties and connect it, or choose one in Advanced → Troubleshooting. Then press Play.",
           );
           recordUiDiagnostic("Session start blocked: exact endpoint selection is incomplete");
           return false;
@@ -2060,7 +2110,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         const plan = await backend.planGraph(candidate);
         if (currentSessionIdRef.current !== session.id || !sameSessionDraft(draftRef.current, candidate)) {
           setActionMessage(
-            "The route changed while it was being checked. Press Play again to preview the latest draft.",
+            "The route changed while it was being checked. Press Play again to preview your latest edits.",
           );
           return false;
         }
@@ -2081,7 +2131,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         await backend.stopSession(session.id, uiIdempotencyKey("simulation-stop"));
         await refresh();
         setActionMessage(
-          "No audio played. The backend started a preview without a physical audio route, so it was stopped. Check the device chosen in each Input Device and Output Device node's Properties, then try again.",
+          "No audio played. The backend started a preview without a route to a real device, so it was stopped. Check the device chosen in each Input Device and Output Device tool's Properties, then try again.",
         );
         recordUiDiagnostic("Session start rejected simulated runtime; stopped it");
         return false;
@@ -2233,7 +2283,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   ): Promise<{ switched: boolean; stopped: boolean }> => {
     if (id === session.id) return { switched: true, stopped: false };
     if (routeChanged && !deletedCurrentSession) {
-      setActionMessage("Save or discard your draft in Session before switching sessions.");
+      setActionMessage("Save or discard your edits in Session before switching sessions.");
       return { switched: false, stopped: false };
     }
     if (sessionBusy.current) {
@@ -2344,19 +2394,19 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const addLibraryNode = (kind: LibraryNodeKind, _position?: { x: number; y: number }) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing the draft.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return;
     }
     const next = appendLibraryNode(draft, kind);
     const inserted = next.nodes[next.nodes.length - 1];
     recordDraftChange(next);
     setSelectedNodeId(inserted.id);
-    setActionMessage(`${inserted.name} added to the draft. Review and save the changes when you are ready.`);
+    setActionMessage(`${inserted.name} added. Save to keep it.`);
     return inserted.id;
   };
   const addEndpointLoopback = (endpointId: string) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing the draft.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return;
     }
     try {
@@ -2364,16 +2414,14 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
-      setActionMessage(
-        `${inserted?.name ?? "Endpoint loopback"} added to the stopped draft. Review and save the changes when you are ready.`,
-      );
+      setActionMessage(`${inserted?.name ?? "Endpoint loopback"} added. Save to keep it.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add endpoint loopback."));
     }
   };
   const addVirtualBusNode = (busId: string, direction: "renderSource" | "captureSink") => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing the draft.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return undefined;
     }
     try {
@@ -2381,18 +2429,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
-      setActionMessage(
-        `${inserted?.name ?? "Virtual bus node"} added to the stopped draft. Review and save the changes when you are ready.`,
-      );
+      setActionMessage(`${inserted?.name ?? "Virtual bus"} added. Save to keep it.`);
       return inserted?.id;
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to add virtual bus node."));
+      setActionMessage(formatUiError(error, "Unable to add the virtual bus."));
       return undefined;
     }
   };
   const addCablePassThrough = () => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing the draft.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return;
     }
     const status = getVirtualCableStatus();
@@ -2401,7 +2447,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     try {
       recordDraftChange(appendCablePassThrough(draft, source, sink, status));
       setActionMessage(
-        `Added ${cableName(status, source)} → ${cableName(status, sink)} to the draft. Save, then Play; apps playing into ${cableEndpointName(source, "renderSource", status)} are heard on ${cableEndpointName(sink, "captureSink", status)}.`,
+        `Added ${cableName(status, source)} → ${cableName(status, sink)}. Save, then Play; apps playing into ${cableEndpointName(source, "renderSource", status)} are heard on ${cableEndpointName(sink, "captureSink", status)}.`,
       );
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add the pass-through route."));
@@ -2417,13 +2463,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   /** Adds the Discord route as one undoable draft change; returns an error to show, or null. */
   const addDiscordRoute = (choice: DiscordSetupChoice): string | null => {
-    if (!backend.connected) return "Connect to AudioRouter before changing the draft.";
+    if (!backend.connected) return "Reconnect to AudioRouter before editing the route.";
     try {
       const result = appendDiscordRoute(draft, devices, choice);
       recordDraftChange(result.session);
       setDiscordSetup((current) => current && { ...current, added: result.discordMicrophone });
       setActionMessage(
-        `Added your voice route to the draft. Save, then Play, and choose ${result.discordMicrophone.name} as Discord's microphone.`,
+        `Added your voice route. Save, then Play, and choose ${result.discordMicrophone.name} as Discord's microphone.`,
       );
       return null;
     } catch (error) {
@@ -2434,7 +2480,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   // dropped, like a built-in tool; it never replaces a pending insertion.
   const addDroppedPlugin = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing the draft.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return undefined;
     }
     try {
@@ -2445,7 +2491,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
         setSelectedNodeId(inserted.id);
         setSelectedNodeIds([inserted.id]);
       }
-      setActionMessage(`${inserted?.name ?? "Plugin"} added to the draft. Connect it, save, then press Play.`);
+      setActionMessage(`${inserted?.name ?? "Plugin"} added. Connect it, save, then press Play.`);
       return inserted?.id;
     } catch (error) {
       setActionMessage(error instanceof Error ? error.message : "Could not add the plugin.");
@@ -2454,7 +2500,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const addPluginToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing the draft.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return;
     }
     try {
@@ -2477,9 +2523,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           setSelectedNodeId(inserted.id);
           setSelectedNodeIds([inserted.id]);
         }
-        setActionMessage(
-          `${inserted?.name ?? "Plugin"}: added a stopped plugin placeholder to the draft. Bind a worker before activation, then save changes.`,
-        );
+        setActionMessage(`${inserted?.name ?? "Plugin"} added but not loaded yet. Load it in Properties, then save.`);
       }
       closePluginPicker();
     } catch (error) {
@@ -2501,7 +2545,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const next = appendDraftConnection(current, sourceNode, sourcePort, destinationNode, destinationPort);
       const added = next.edges.find((edge) => !current.edges.some((existing) => existing.id === edge.id));
       recordDraftChange(next);
-      setActionMessage("Connection added to the draft. Save when you are ready.");
+      setActionMessage("Connection added. Save to keep it.");
       return added?.id ?? null;
     } catch (error) {
       const occupied =
@@ -2589,7 +2633,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const insertProcessor = (edgeId: string, kind: InsertableProcessorKind) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing draft topology.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return;
     }
     try {
@@ -2597,9 +2641,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
-      setActionMessage(
-        `${inserted?.name ?? kind} inserted into the draft. Review and save the changes when you are ready.`,
-      );
+      setActionMessage(`${inserted?.name ?? kind} added. Save to keep it.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to insert processor."));
     }
@@ -2614,9 +2656,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
       if (inserted) setSelectedNodeId(inserted.id);
-      setActionMessage(
-        `${inserted?.name ?? "EQ preset"} added to the draft. Review and save the changes when you are ready.`,
-      );
+      setActionMessage(`${inserted?.name ?? "EQ preset"} added. Save to keep it.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add preset."));
     }
@@ -2631,9 +2671,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const added = next.nodes.slice(draft.nodes.length);
       recordDraftChange(next);
       if (added[0]) setSelectedNodeId(added[0].id);
-      setActionMessage(
-        `${added.map((node) => node.name).join(", ")} added to the draft. Review and save the changes when you are ready.`,
-      );
+      setActionMessage(`${added.map((node) => node.name).join(", ")} added. Save to keep it.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add voice preset."));
     }
@@ -2657,16 +2695,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const nodeId = (event as CustomEvent<{ nodeId?: string }>).detail?.nodeId;
       if (!nodeId || !backend.connected) return;
       if (draft.nodes.length <= 1) {
-        setActionMessage("A draft must keep at least one node. Add another node before removing this one.");
+        setActionMessage("A route must keep at least one tool. Add another before removing this one.");
         return;
       }
       try {
         const next = removeDraftNode(draft, nodeId);
         recordDraftChange(next);
         setSelectedNodeId(next.nodes[0]?.id ?? "");
-        setActionMessage("Node removed. Choose Undo at the top to bring it back, or Save to keep the change.");
+        setActionMessage("Tool removed. Choose Undo at the top to bring it back, or Save to keep the change.");
       } catch (error) {
-        setActionMessage(formatUiError(error, "Unable to remove node."));
+        setActionMessage(formatUiError(error, "Unable to remove this tool."));
       }
     };
     globalThis.addEventListener("audiorouter:remove-node", handleRemoveNode);
@@ -2867,7 +2905,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       recordDraftChange(next);
       setSelectedNodeId(mixerId);
       setActionMessage(
-        `Added ${addedCount} application sources and a Mixer. Check that none of the selected apps launches another selected app, then plan and save the draft.`,
+        `Added ${addedCount} application sources and a Mixer. Check that none of the selected apps launches another selected app, then save.`,
       );
       closeApplicationPicker();
       return true;
@@ -2888,7 +2926,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const removeConnection = (edgeId: string) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing draft topology.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return;
     }
     const topologyAction = decodeTopologyAction(edgeId);
@@ -2899,10 +2937,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       else recordDraftChange(removeDraftConnection(draft, edgeId));
       setActionMessage(
         topologyAction?.kind === "insertMixer"
-          ? "Mixer inserted into the draft. Review and save the changes when you are ready."
+          ? "Mixer added. Save to keep it."
           : topologyAction?.kind === "removeMixer"
-            ? "Mixer removed and its single path reconnected in the draft. Review and save the changes when you are ready."
-            : "Connection removed from the draft. Review and save the changes when you are ready.",
+            ? "Mixer removed and its one path reconnected. Save to keep this."
+            : "Connection removed. Save to keep this.",
       );
     } catch (error) {
       setActionMessage(
@@ -2919,48 +2957,53 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const toggleConnection = (edgeId: string, enabled: boolean) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing draft topology.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return;
     }
     try {
       recordDraftChange(setDraftConnectionEnabled(draft, edgeId, enabled));
-      setActionMessage(
-        `Connection ${enabled ? "enabled" : "disabled"} in the draft. Review and save the changes when you are ready.`,
-      );
+      setActionMessage(`Connection turned ${enabled ? "on" : "off"}. Save to keep this.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to change connection state."));
     }
   };
   const removeSelectedNode = () => {
     if (draft.nodes.length <= 1) {
-      setActionMessage("A route must keep at least one node. Add another node before removing this one.");
+      setActionMessage("A route must keep at least one tool. Add another before removing this one.");
       return;
     }
     try {
       const next = removeDraftNode(draft, selectedNode.id);
       recordDraftChange(next);
       setSelectedNodeId(next.nodes[0]?.id ?? "");
-      setActionMessage("Node removed. Choose Undo at the top to bring it back, or Save to keep the change.");
+      setActionMessage("Tool removed. Choose Undo at the top to bring it back, or Save to keep the change.");
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to remove node."));
+      setActionMessage(formatUiError(error, "Unable to remove this tool."));
     }
   };
-  const unloadPluginNode = (nodeId: string) => {
+  const unloadPluginNode = async (nodeId: string) => {
     const node = draft.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) return;
     if (draft.nodes.length <= 1) {
-      setActionMessage("A draft must keep at least one node. Add another node before removing this one.");
+      setActionMessage("A route must keep at least one tool. Add another before removing this one.");
       return;
     }
-    if (!window.confirm(`Unload plugin “${node.name}” and remove it from the draft?`)) return;
+    const confirmed = await askConfirm({
+      title: `Remove “${node.name}”?`,
+      message: "This takes the plugin out of the route. Undo brings it back until you save.",
+      confirmLabel: "Remove plugin",
+      destructive: true,
+    });
+    if (!confirmed) return;
     try {
-      const next = removeDraftNode(draft, nodeId);
+      // The route may have changed while the question was open.
+      const next = removeDraftNode(draftRef.current, nodeId);
       recordDraftChange(next);
       if (selectedNodeId === nodeId) {
         setSelectedNodeId(next.nodes[0]?.id ?? "");
         setSelectedNodeIds(next.nodes[0] ? [next.nodes[0].id] : []);
       }
-      setActionMessage(`${node.name} unloaded from the draft. Review and save the changes when you are ready.`);
+      setActionMessage(`${node.name} removed. Save to keep this change.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to unload plugin."));
     }
@@ -2971,11 +3014,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const copy = next.nodes[next.nodes.length - 1];
       recordDraftChange(next);
       setSelectedNodeId(copy.id);
-      setActionMessage(
-        `${copy.name} added to the draft without connections. Review and save the changes when you are ready.`,
-      );
+      setActionMessage(`${copy.name} added without connections. Save to keep it.`);
     } catch (error) {
-      setActionMessage(formatUiError(error, "Unable to duplicate node."));
+      setActionMessage(formatUiError(error, "Unable to duplicate this tool."));
     }
   };
   const copyNodeToClipboard = (nodeId: string) => {
@@ -2991,7 +3032,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   };
   const pasteNodeFromClipboard = (_position: { x: number; y: number }) => {
     if (!backend.connected) {
-      setActionMessage("Connect the backend before changing the draft.");
+      setActionMessage("Reconnect to AudioRouter before editing the route.");
       return undefined;
     }
     const copied = copiedNodeRef.current;
@@ -3002,9 +3043,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (!inserted) return undefined;
       recordDraftChange(next);
       selectNodeProperties(inserted.id);
-      setActionMessage(
-        `${inserted.name} pasted into the draft without connections. Review and save the changes when you are ready.`,
-      );
+      setActionMessage(`${inserted.name} pasted without connections. Save to keep it.`);
       return inserted.id;
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to paste tool."));
@@ -3193,7 +3232,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
           return;
         }
         if (finding.sessionId !== draft.id && routeChanged) {
-          setActionMessage("Save or discard your draft in Session before opening a finding in another session.");
+          setActionMessage("Save or discard your edits in Session before opening a finding in another session.");
           return;
         }
         if (finding.sessionId === draft.id) {
@@ -3578,9 +3617,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   routeMicMuted && !staleSnapshot
                     ? "Privacy mute is on, so your microphone and captured apps are silent. Turn it off in a tool's Properties."
                     : staleSnapshot
-                      ? "Connection lost. Showing the last snapshot and your retained draft. Reconnect before saving or starting audio."
+                      ? "Connection lost. Showing the last known state and your edits. Reconnect before saving or starting audio."
                       : routeChanged
-                        ? "Draft changes await Save. Running audio can differ from the canvas; only saved changes survive restart or enter an export."
+                        ? "You have unsaved edits. Running audio can differ from the canvas. Only saved changes go into an export."
                         : "The route is saved. Running audio may have source playback stopped; use each source's Play control to start it."
                 }
               >
@@ -3638,7 +3677,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   autoSavePending
                     ? "Parameter changes save automatically after a short pause"
                     : routeChanged
-                      ? "Draft changes await Save; save the marked changes to this session"
+                      ? "You have unsaved edits; save them to this session"
                       : "Saved route: changes survive restart and are included in exports"
                 }
                 data-save-required={routeChanged && !autoSavePending && !graphBusy}
@@ -3655,17 +3694,18 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               <button
                 type="button"
                 className={sessionRunning ? "play-stop stop-audio" : "play-stop primary"}
-                title="Header Play starts the route; Stop stops the route. Source Play controls only that source and starts the route first if needed. A draft preview is temporary and does not Save changes."
+                title="Header Play starts the route; Stop stops the route. Source Play controls only that source and starts the route first if needed. Playing unsaved edits is a temporary preview and does not save them."
                 onClick={() => void (sessionRunning ? stopSession() : startSession())}
                 disabled={!backend.connected || sessionActionBusy || (!sessionRunning && staleSnapshot)}
                 aria-busy={sessionActionBusy}
               >
                 <span data-tour="play">{sessionRunning ? "Stop" : "Play"}</span>
               </button>
-              <QuitButton onMessage={setActionMessage} />
+              <QuitButton onMessage={setActionMessage} beforeQuit={draftRecovery.flush} />
             </div>
           </header>
           <aside
+            ref={notificationsRef}
             className="workspace-notifications"
             aria-label="Notifications"
             style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
@@ -3734,6 +3774,39 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                       Open Session
                     </button>
                   )}
+                  {backend.connected && actionMessage === EDITS_RESTORED_MESSAGE && routeChanged && (
+                    <button type="button" className="secondary" onClick={discardRouteEdits}>
+                      Discard edits
+                    </button>
+                  )}
+                  {backend.connected && actionMessage === OLDER_EDITS_MESSAGE && olderEdits && (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          recordDraftChange({ ...olderEdits, revision: session.revision });
+                          setOlderEdits(null);
+                          setActionMessage("Your older edits are back. Saving replaces the newer saved route.");
+                        }}
+                      >
+                        Use my edits
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => {
+                          setOlderEdits(null);
+                          setActionMessage(null);
+                          void draftRecovery
+                            .forget()
+                            .catch(() => recordUiDiagnostic("Removing older unsaved edits failed"));
+                        }}
+                      >
+                        Keep saved route
+                      </button>
+                    </>
+                  )}
                   {backend.connected && actionMessage && (
                     <button
                       type="button"
@@ -3752,7 +3825,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             })()}
           </aside>
           {pendingGraphPlan && pendingWarnings.length > 0 && (
-            <section className="save-warning-review" aria-label="Save warnings">
+            <section
+              className="save-warning-review"
+              aria-label="Save warnings"
+              style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+            >
               <strong>Review before saving</strong>
               {pendingWarnings.map((warning) => (
                 <label key={warning}>
@@ -3797,7 +3874,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   <p className="muted">
                     Revision {session.revision} -{" "}
                     {backend.connected
-                      ? "draft changes require review, then an explicit commit"
+                      ? "edits stay unsaved until you review and save them"
                       : "changes are presentation-only in this preview"}
                   </p>
                 </div>
@@ -3824,7 +3901,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     onClick={undoDraft}
                     disabled={!backend.connected || draftHistory.past.length === 0}
                   >
-                    Undo draft
+                    Undo edit
                   </button>
                   <button
                     type="button"
@@ -3832,23 +3909,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     onClick={redoDraft}
                     disabled={!backend.connected || draftHistory.future.length === 0}
                   >
-                    Redo draft
+                    Redo edit
                   </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => {
-                      setDraft(session);
-                      setDraftHistory({ past: [], future: [] });
-                      setPendingWarnings([]);
-                      setAcknowledgedWarnings(new Set());
-                      setPendingOperation(null);
-                      setPendingGraphPlan(null);
-                      setActionMessage("Draft discarded.");
-                    }}
-                    disabled={!backend.connected}
-                  >
-                    Discard draft
+                  <button type="button" className="secondary" onClick={discardRouteEdits} disabled={!backend.connected}>
+                    Discard edits
                   </button>
                   <button
                     type="button"
@@ -4007,15 +4071,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   onNewSession={() => void createSession()}
                   onDuplicate={() => void duplicateSession()}
                   onDelete={() => void deleteSession()}
-                  onDiscard={() => {
-                    setDraft(session);
-                    setDraftHistory({ past: [], future: [] });
-                    setPendingWarnings([]);
-                    setAcknowledgedWarnings(new Set());
-                    setPendingOperation(null);
-                    setPendingGraphPlan(null);
-                    setActionMessage("Draft discarded.");
-                  }}
+                  onDiscard={discardRouteEdits}
                   onPlan={() => void planChanges()}
                   onCommit={() => void commitAcknowledgedPlan()}
                   canCommit={acknowledgedWarnings.size === pendingWarnings.length && !graphBusy}
@@ -4173,6 +4229,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               onCancel={() => setDeviceConsent(null)}
             />
           )}
+          <AppDialogHost />
         </div>
       </SoundboardContext.Provider>
     </PluginParameterContext.Provider>

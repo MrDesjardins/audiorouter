@@ -1,5 +1,5 @@
 import { test, expect } from "./real-backend";
-import { openAllSections } from "./workbench";
+import { fitCanvas, openAllSections } from "./workbench";
 import { libraryEntries } from "../src/library";
 import { parameterText } from "../src/parameterText";
 import { GENERIC_SETTINGS_EDITOR } from "../src/NodeEditors";
@@ -126,8 +126,8 @@ for (const entry of entriesWithKind) {
       }
     }
     await inspector.locator(".editable-node-name").click();
-    await inspector.getByLabel("Node name", { exact: true }).fill(`Qualified ${entry.kind}`);
-    await inspector.getByLabel("Node name", { exact: true }).press("Enter");
+    await inspector.getByLabel("Tool name", { exact: true }).fill(`Qualified ${entry.kind}`);
+    await inspector.getByLabel("Tool name", { exact: true }).press("Enter");
     await inspector.getByLabel("Enabled", { exact: true }).uncheck();
     await inspector.getByLabel("Bypass", { exact: true }).check();
     await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();
@@ -140,6 +140,8 @@ for (const entry of entriesWithKind) {
     await backend.restart();
     await page.reload();
     await expect(page.getByTestId(`rf__node-${entry.kind}-1`)).toContainText(`Qualified ${entry.kind}`);
+    // Reopened, a four-card route starts at readable zoom with the last card past the view.
+    await fitCanvas(page);
     await page.getByTestId(`rf__node-${entry.kind}-1`).locator(".flow-node-title").click();
     await expect(inspector.getByLabel("Enabled", { exact: true })).not.toBeChecked();
     await expect(inspector.getByLabel("Bypass", { exact: true })).toBeChecked();

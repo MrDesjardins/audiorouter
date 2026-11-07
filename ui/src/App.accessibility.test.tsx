@@ -904,7 +904,7 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scan directory" }));
     fireEvent.click(await screen.findByRole("button", { name: "Select for inspection" }));
     expect(screen.queryByRole("button", { name: "Effect 1 plugin" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Add to draft: C:\\Plugins\\Effect.dll" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to route: C:\\Plugins\\Effect.dll" }));
     fireEvent.click(screen.getByRole("button", { name: "Route list" }));
     const pluginNode = await screen.findByRole("button", { name: /Effect 1 VST/ });
     expect(pluginNode).toBeTruthy();
@@ -952,9 +952,9 @@ describe("VB-Cable endpoint selection", () => {
       target: { value: "C:\\Plugins" },
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Scan directory" }));
-    fireEvent.click(await within(dialog).findByRole("button", { name: "Add to draft: C:\\Plugins\\ReaComp.vst3" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Add to route: C:\\Plugins\\ReaComp.vst3" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a VST2/VST3 plugin" })).toBeNull());
-    expect(await screen.findByText(/added a stopped plugin placeholder/i)).toBeTruthy();
+    expect(await screen.findByText(/added but not loaded yet/i)).toBeTruthy();
     expect(screen.getByRole("heading", { name: "ReaComp 1" })).toBeTruthy();
     const identityPanel = within(screen.getByLabelText("VST plugin binding"));
     expect(identityPanel.getByText("VST3 plugin loaded from disk")).toBeTruthy();
@@ -965,7 +965,6 @@ describe("VB-Cable endpoint selection", () => {
   });
 
   it("lists loaded plugins in the picker and unloads one on confirmation", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const backend = {
       ...connectedPreviewBackend(),
       scanPlugins: async () => ({
@@ -994,13 +993,13 @@ describe("VB-Cable endpoint selection", () => {
     await renderReady(<App backend={backend} />);
     fireEvent.click(await screen.findByRole("button", { name: "Plugin (VST2/VST3)" }));
     let dialog = await screen.findByRole("dialog", { name: "Add a VST2/VST3 plugin" });
-    expect(within(dialog).getByText(/no vst2\/vst3 plugin is loaded/i)).toBeTruthy();
+    expect(within(dialog).getByText(/no vst2\/vst3 plugin is in this route/i)).toBeTruthy();
 
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Absolute plugin directory" }), {
       target: { value: "C:\\Plugins" },
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Scan directory" }));
-    fireEvent.click(await within(dialog).findByRole("button", { name: "Add to draft: C:\\Plugins\\ReaComp.vst3" }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Add to route: C:\\Plugins\\ReaComp.vst3" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a VST2/VST3 plugin" })).toBeNull());
 
     fireEvent.click(screen.getByRole("button", { name: "Plugin (VST2/VST3)" }));
@@ -1010,9 +1009,10 @@ describe("VB-Cable endpoint selection", () => {
     expect(loaded.getByText(/ReaComp\.vst3/)).toBeTruthy();
 
     fireEvent.click(loaded.getByRole("button", { name: "Unload" }));
-    expect(window.confirm).toHaveBeenCalled();
-    await waitFor(() => expect(within(dialog).getByText(/no vst2\/vst3 plugin is loaded/i)).toBeTruthy());
-    expect(await screen.findByText(/unloaded from the draft/i)).toBeTruthy();
+    const question = await screen.findByRole("dialog", { name: /Remove “ReaComp/ });
+    fireEvent.click(within(question).getByRole("button", { name: "Remove plugin" }));
+    await waitFor(() => expect(within(dialog).getByText(/no vst2\/vst3 plugin is in this route/i)).toBeTruthy());
+    expect(await screen.findByText(/removed. Save to keep/i)).toBeTruthy();
   });
 
   it("closes the plugin picker on Escape without adding anything, and restores focus", async () => {
@@ -1025,7 +1025,7 @@ describe("VB-Cable endpoint selection", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a VST2/VST3 plugin" })).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(opener));
-    expect(screen.queryByText(/added a stopped plugin placeholder/i)).toBeNull();
+    expect(screen.queryByText(/added but not loaded yet/i)).toBeNull();
   });
 
   it("disables the plugin shelf entry while the backend is disconnected", async () => {
@@ -1464,11 +1464,7 @@ describe("keyboard connection dialog", () => {
     };
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
-    await waitFor(() =>
-      expect(
-        screen.getByText("Gain 1 added to the draft. Review and save the changes when you are ready."),
-      ).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText("Gain 1 added. Save to keep it.")).toBeTruthy());
     expect(JSON.parse(window.localStorage.getItem("audiorouter.ui.layout.demo-session") ?? "null")).toMatchObject({
       "gain-1": { x: 0, y: 0 },
     });
@@ -1487,16 +1483,12 @@ describe("keyboard connection dialog", () => {
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.dragOver(canvas, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
-    await waitFor(() =>
-      expect(
-        screen.getByText("Test Signal 1 added to the draft. Review and save the changes when you are ready."),
-      ).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText("Test Signal 1 added. Save to keep it.")).toBeTruthy());
   });
 
   it.each([
-    ["Input device", "physicalInput", "Physical input 1"],
-    ["Output device", "physicalOutput", "Physical output 1"],
+    ["Input device", "physicalInput", "Input device 1"],
+    ["Output device", "physicalOutput", "Output device 1"],
     ["Recorder", "recorder", "Recorder 1"],
   ])("routes the actual App draft adapter for %s shelf drops", async (label, kind, insertedName) => {
     await renderReady(<App backend={connectedPreviewBackend()} />);
@@ -1511,11 +1503,7 @@ describe("keyboard connection dialog", () => {
     };
     fireEvent.dragStart(dropSource, { dataTransfer });
     fireEvent.drop(canvas, { dataTransfer, clientX: 240, clientY: 180 });
-    await waitFor(() =>
-      expect(
-        screen.getByText(`${insertedName} added to the draft. Review and save the changes when you are ready.`),
-      ).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText(`${insertedName} added. Save to keep it.`)).toBeTruthy());
   });
 
   it("keeps cable nodes unavailable until the cable status reports installed cables", async () => {
@@ -1535,8 +1523,8 @@ describe("keyboard connection dialog", () => {
       getData: (type: string) => (type === "application/x-audiorouter-library-kind" ? "gain" : ""),
     };
     fireEvent.drop(canvas, { dataTransfer });
-    expect(screen.queryByText("Gain 1 added to the draft. Review and save the changes when you are ready.")).toBeNull();
-    expect(await screen.findByText("Connect the backend before changing the draft.")).toBeTruthy();
+    expect(screen.queryByText("Gain 1 added. Save to keep it.")).toBeNull();
+    expect(await screen.findByText("Reconnect to AudioRouter before editing the route.")).toBeTruthy();
   });
 
   it("binds only explicitly selected active endpoints and preserves the no-defaults boundary", async () => {
@@ -1842,7 +1830,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.keyDown(window, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(cancel);
 
-    const add = within(dialog).getByRole("button", { name: "Add connection to draft" });
+    const add = within(dialog).getByRole("button", { name: "Add connection" });
     fireEvent.click(add);
     expect(screen.getByRole("dialog", { name: "Keyboard connection" })).toBeTruthy();
     expect(screen.getByText("Choose an output and input port first.")).toBeTruthy();
@@ -1864,10 +1852,10 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), {
       target: { value: "voice::in" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection" }));
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Keyboard connection" })).toBeNull());
-    expect(screen.getByText("Connection added to the draft. Save when you are ready.")).toBeTruthy();
+    expect(screen.getByText("Connection added. Save to keep it.")).toBeTruthy();
   });
 
   it("plans a keyboard-created connection through the graph backend", async () => {
@@ -1891,7 +1879,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), {
       target: { value: "voice::in" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection" }));
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() =>
@@ -2379,7 +2367,7 @@ describe("keyboard connection dialog", () => {
     expect((precise as HTMLInputElement).value).toBe("0");
     fireEvent.change(slider, { target: { value: "-6" } });
     expect((precise as HTMLInputElement).value).toBe("-6");
-    expect(screen.getByText("Save required")).toBeTruthy();
+    expect(screen.getByText("Unsaved")).toBeTruthy();
     expect(screen.getByRole("button", { name: /^Save$/ }).hasAttribute("disabled")).toBe(false);
   });
 
@@ -2629,10 +2617,8 @@ describe("keyboard connection dialog", () => {
     };
     await renderReady(<App backend={backend} />);
     await openSettingsPage("Tool catalog");
-    fireEvent.click(await screen.findByRole("button", { name: "Add EQ to draft" }));
-    expect(
-      screen.getByText("Advanced EQ 1 added to the draft. Review and save the changes when you are ready."),
-    ).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Add EQ" }));
+    expect(screen.getByText("Advanced EQ 1 added. Save to keep it.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Advanced EQ 1" })).toBeTruthy();
   });
 
@@ -2653,12 +2639,8 @@ describe("keyboard connection dialog", () => {
     };
     await renderReady(<App backend={backend} />);
     await openSettingsPage("Tool catalog");
-    fireEvent.click(await screen.findByRole("button", { name: "Add voice chain to draft" }));
-    expect(
-      screen.getByText(
-        "Gate 1, Compressor 1, Limiter 1 added to the draft. Review and save the changes when you are ready.",
-      ),
-    ).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Add voice chain" }));
+    expect(screen.getByText("Gate 1, Compressor 1, Limiter 1 added. Save to keep it.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
   });
 
@@ -2700,19 +2682,13 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), {
       target: { value: "voice::in" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Route list" }));
     fireEvent.click((await screen.findAllByRole("button", { name: /Insert mixer on/ }))[0]);
-    expect(
-      screen.getByText("Mixer inserted into the draft. Review and save the changes when you are ready."),
-    ).toBeTruthy();
+    expect(screen.getByText("Mixer added. Save to keep it.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Remove and reconnect Mixer 1" }));
-    expect(
-      screen.getByText(
-        "Mixer removed and its single path reconnected in the draft. Review and save the changes when you are ready.",
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText("Mixer removed and its one path reconnected. Save to keep this.")).toBeTruthy();
   });
 
   it("inserts a built-in processor directly from a connected draft path", async () => {
@@ -2725,13 +2701,11 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), {
       target: { value: "voice::in" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Route list" }));
     fireEvent.click(await screen.findByRole("button", { name: "Insert Gate" }));
-    expect(
-      screen.getByText("Gate 1 inserted into the draft. Review and save the changes when you are ready."),
-    ).toBeTruthy();
+    expect(screen.getByText("Gate 1 added. Save to keep it.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Gate 1" })).toBeTruthy();
     for (const label of [
       "Volume",
@@ -2784,7 +2758,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(within(dialog).getByRole("combobox", { name: "Keyboard destination input port" }), {
       target: { value: "voice::in" },
     });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection to draft" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add connection" }));
 
     fireEvent.click(screen.getByRole("button", { name: "Route list" }));
     fireEvent.click(await screen.findByRole("button", { name: "Insert VST plugin" }));
@@ -2795,7 +2769,7 @@ describe("keyboard connection dialog", () => {
     });
     fireEvent.click(within(pickerDialog).getByRole("button", { name: "Scan directory" }));
     fireEvent.click(
-      await within(pickerDialog).findByRole("button", { name: "Add to draft: C:\\Plugins\\ReaComp.vst3" }),
+      await within(pickerDialog).findByRole("button", { name: "Add to route: C:\\Plugins\\ReaComp.vst3" }),
     );
 
     await waitFor(() =>

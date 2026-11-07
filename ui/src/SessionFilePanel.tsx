@@ -80,7 +80,7 @@ export function SessionFilePanel({
         // The Windows Save dialog already asked before replacing a file.
         const result = await backend.exportSessionFile(session.id, path, Boolean(invoke));
         setMessage(
-          `Exported the saved version of "${session.name}" to ${result.path}. Draft changes are not included. The file includes saved nodes and settings, imported audio and saved plugin settings. Plugins themselves must also be installed on the other PC.`,
+          `Exported the saved version of "${session.name}" to ${result.path}. Unsaved edits are not included. The file includes saved tools and settings, imported audio and saved plugin settings. Plugins themselves must also be installed on the other PC.`,
         );
       } catch (error) {
         setMessage(formatUiError(error, "Unable to export the saved version."));
@@ -108,7 +108,7 @@ export function SessionFilePanel({
       </p>
       {unsaved && (
         <p className="muted session-file-note" role="note">
-          Draft changes await Save. Export uses the saved version only. Use Save in the header first to include your
+          You have unsaved edits. Export uses the saved version only. Use Save in the header first to include your
           changes; if Save fails or reports a conflict, resolve it before exporting.
         </p>
       )}

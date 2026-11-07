@@ -1285,6 +1285,8 @@ button:disabled {
   gap: 0.5rem;
 }
 .flow-node-delete {
+  display: grid;
+  place-items: center;
   min-width: 1.75rem;
   min-height: 1.75rem;
   flex: none;
@@ -4783,6 +4785,13 @@ button.primary {
   font-size: var(--text-sm);
   font-family: var(--font-small);
 }
+/* Over the canvas, like notifications: its message points to the tabs it used to cover. */
+@media (min-width: 901px) {
+  .save-warning-review {
+    right: calc(var(--sidebar-width, 400px) + 2rem);
+    width: min(26rem, calc(100vw - var(--sidebar-width, 400px) - 4rem));
+  }
+}
 .save-warning-review label {
   display: flex;
   align-items: flex-start;
@@ -5620,6 +5629,13 @@ button.primary {
   color: #10151c;
   background: var(--signal-hot, #ffd166);
   border-color: transparent;
+}
+/* The card's general small-text colour is pale; on the amber fill it would be unreadable. */
+.flow-node-content .node-input-switch button.is-selected small {
+  color: inherit;
+}
+.theme-light .flow-node-content .node-input-switch button:not(.is-selected) small {
+  color: #525f72;
 }
 .node-denoise-status {
   font-size: var(--text-sm);
@@ -9089,7 +9105,7 @@ button.danger {
 .node-kind {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.125rem;
 }
 .node-kind-icon {
   flex: none;
@@ -9722,4 +9738,34 @@ button.danger {
   display: flex;
   justify-content: space-between;
   gap: 8px;
+}
+
+/* The app's question dialogs open above everything, including other dialogs. */
+.dialog-backdrop.app-dialog-backdrop {
+  z-index: 60;
+}
+.app-dialog h2 {
+  margin: 0;
+}
+.app-dialog p {
+  margin: 0;
+}
+.app-dialog form {
+  display: grid;
+  gap: 0.75rem;
+}
+.theme-light .connection-dialog label {
+  color: var(--text-strong);
+}
+.app-dialog-hint {
+  display: block;
+  min-height: 1.25rem;
+  color: var(--danger-text, #ff9a9a);
+  font-size: var(--text-sm);
+  font-family: var(--font-small);
+}
+.app-dialog .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }

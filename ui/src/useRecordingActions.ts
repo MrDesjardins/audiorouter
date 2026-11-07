@@ -1,5 +1,6 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { RecordingRow } from "@audiorouter/contracts";
+import { askConfirm } from "./AppDialog";
 import { formatUiError, type UiBackend } from "./backend";
 import { uiIdempotencyKey } from "./idempotency";
 
@@ -79,7 +80,13 @@ export function useRecordingActions({
     }
   };
   const removeRecordingEntry = async (recordingId: string) => {
-    if (!window.confirm("Remove this library entry? The audio file will be preserved.")) return;
+    const confirmed = await askConfirm({
+      title: "Remove this library entry?",
+      message: "The recording leaves this list. The audio file stays on your disk.",
+      confirmLabel: "Remove entry",
+      destructive: true,
+    });
+    if (!confirmed) return;
     if (!backend.connected || recordingMutationBusy.current) return;
     recordingMutationBusy.current = true;
     setRecordingMutationBusyState(true);

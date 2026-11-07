@@ -8,7 +8,14 @@ const CONFIRM_MS = 5000;
  * asks for confirmation so a stray click cannot stop audio mid-game. Shown only
  * in the desktop shell.
  */
-export function QuitButton({ onMessage }: { onMessage: (message: string) => void }) {
+export function QuitButton({
+  onMessage,
+  beforeQuit,
+}: {
+  onMessage: (message: string) => void;
+  /** Keeps unsaved route edits for the next launch; a failure must not block quitting. */
+  beforeQuit?: () => Promise<void>;
+}) {
   const invoke = window.__TAURI_INTERNALS__?.invoke;
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,6 +32,7 @@ export function QuitButton({ onMessage }: { onMessage: (message: string) => void
     }
     setBusy(true);
     try {
+      await beforeQuit?.().catch(() => undefined);
       await invoke("quit_app");
       // The shell exits on success; nothing else to update.
     } catch (error) {
@@ -42,7 +50,7 @@ export function QuitButton({ onMessage }: { onMessage: (message: string) => void
       className={armed ? "quit-button is-armed" : "quit-button secondary"}
       onClick={() => void quit()}
       disabled={busy}
-      title="Stop audio, finish recordings and close AudioRouter (same as the tray's Quit)"
+      title="Stop audio, finish recordings and close AudioRouter (same as the tray's Quit). Unsaved edits come back next time you open it."
       aria-label={armed ? "Confirm quit AudioRouter" : "Quit AudioRouter"}
     >
       {busy ? "Quitting…" : armed ? "Click again to quit" : "Quit"}

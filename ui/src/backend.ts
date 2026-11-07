@@ -139,7 +139,7 @@ function formatUiErrorText(error: unknown, fallback: string): string {
     return "Audio is already prepared in this app. Stop playback, then try Play again. If it still cannot start, close AudioRouter and reopen it.";
   }
   if (isRevisionConflict(error)) {
-    return "Another save changed this route, so your save was not applied. Your draft is preserved. Review it against the latest saved route, then plan and save again.";
+    return "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.";
   }
   if (
     /0x88890004/i.test(error.message) ||

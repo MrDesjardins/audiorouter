@@ -20,10 +20,10 @@ function setup() {
 
 it("explicitly exports the saved version without committing the draft", async () => {
   const exportSessionFile = setup();
-  expect(screen.getByRole("note").textContent).toContain("Draft changes await Save");
+  expect(screen.getByRole("note").textContent).toContain("You have unsaved edits");
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Export saved version…" })));
   expect(exportSessionFile).toHaveBeenCalledExactlyOnceWith(demoSession.id, "C:\\backup.audiorouter", false);
-  expect(screen.getByRole("status").textContent).toContain("Draft changes are not included");
+  expect(screen.getByRole("status").textContent).toContain("Unsaved edits are not included");
 });
 
 it("replaces prior success with the actual export failure", async () => {

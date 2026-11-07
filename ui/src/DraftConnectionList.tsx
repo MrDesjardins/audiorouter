@@ -65,16 +65,16 @@ export function DraftConnectionList({
   };
   return (
     <section className="draft-connections" aria-labelledby="draft-connections-heading">
-      <h3 id="draft-connections-heading">Connections in this draft</h3>
+      <h3 id="draft-connections-heading">Connections in this route</h3>
       <p className="muted draft-connections-help">
         These are the audio links you are editing locally. They are not active until you click{" "}
         <strong>Save changes</strong> and confirm any warnings. You can keep VoiceMeeter Banana open while exploring;
         close it only when it owns the exact endpoint AudioRouter needs to claim.
       </p>
       {session.edges.length === 0 ? (
-        <p className="muted">No draft connections.</p>
+        <p className="muted">No connections yet.</p>
       ) : (
-        <ul aria-label="Draft connections">
+        <ul aria-label="Route connections">
           {session.edges.map((edge) => (
             <li key={edge.id}>
               <span>

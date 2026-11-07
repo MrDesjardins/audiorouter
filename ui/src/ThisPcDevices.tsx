@@ -77,7 +77,7 @@ export function ThisPcDevices({
       </div>
       <p className="muted">
         What Windows offers right now. To use one, add an Input Device or Output Device tool and choose it in that
-        node's Properties. AudioRouter never changes Windows defaults or volumes. Clear "Show in pickers" to keep a
+        tool's Properties. AudioRouter never changes Windows defaults or volumes. Clear "Show in pickers" to keep a
         device you never use (a monitor's speakers, a webcam microphone) out of the device lists on this PC.
       </p>
       {group("capture", "Inputs (microphones, line-in, virtual cables)")}

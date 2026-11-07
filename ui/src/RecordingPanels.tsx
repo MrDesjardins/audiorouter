@@ -1,5 +1,6 @@
 // Recorder and recording-library controls (moved from App.tsx).
 import { useEffect, useState } from "react";
+import { askConfirm } from "./AppDialog";
 import { formatUiError, type RecorderStatus, type UiBackend } from "./backend";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
@@ -448,8 +449,14 @@ export function RecordingActions({
           type="button"
           className="secondary"
           onClick={() => {
-            if (window.confirm("Recycle this recording through the operating system?"))
-              void onRecycle(selected.id, true);
+            void askConfirm({
+              title: "Move this recording to the Recycle Bin?",
+              message: "You can restore it from the Recycle Bin in Windows.",
+              confirmLabel: "Recycle recording",
+              destructive: true,
+            }).then((confirmed) => {
+              if (confirmed) void onRecycle(selected.id, true);
+            });
           }}
           disabled={!connected || busy}
         >

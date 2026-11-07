@@ -19,6 +19,6 @@ export function routePlaybackLabel({
   if (!running) return "Audio stopped";
   if (micMuted) return "Audio running · Mic muted";
   return fresh && started?.preview && generation === started.generation
-    ? "Audio running · Draft preview"
+    ? "Audio running · Unsaved preview"
     : "Audio running";
 }

@@ -1304,4 +1304,85 @@ does not let an average stand in for that. No 10 can be awarded: all four extern
 5. The rest of F13, then F19 and F24.
 6. The four external gates, which every 9 and 10 depends on.
 
-Next action: owner reviews #118 and the #117 order, and chooses from the list above.
+## Round 23 — fixing what held the score back (owner request, 2026-11-06)
+
+The owner asked to fix the holding issues without choosing between a quit warning and a kept copy, so the recommended
+option was built: nothing blocks quitting and the edits come back. This is not a re-rating; the Round 22 scores stand
+until someone grades the result.
+
+### Changes
+
+- **F4, unsaved edits at quit.** While edits are unsaved the page writes a copy to `unsaved-route.json` beside the
+  database (`src-tauri/src/ui_draft.rs`, `ui/src/draftRecovery.ts`), 400 ms after each change and at once when the
+  window's Quit is pressed. Tray Quit and a crash therefore lose at most the last 400 ms. On the next launch the edits
+  return with Discard edits beside the message. If the route was saved in between, nothing is applied until the user
+  picks Use my edits or Keep saved route. A copy for a deleted route, or one that fails decoding, is ignored. Saving or
+  discarding removes the file. The file holds one route: a copy for another route waits for that route, but new edits on
+  the current route replace it, and the message says so.
+- **F6, browser dialogs.** All five use `ui/src/AppDialog.tsx`: focus trap, Esc cancels, Enter submits, empty names refused
+  in the dialog. Destructive questions start on Cancel.
+- **F7, wording.** Glossary below, enforced by `ui/src/plainWords.test.ts`, which first found 27 more strings.
+- **F8, cards.** The port line and the Native badge are gone; port detail moved to the kind label's tooltip. "Save required"
+  became "Unsaved", because Play can preview unsaved edits.
+- **F10, message over tabs.** In a narrow window the message moves to the top, below the top bar, while it would cover the
+  tabs (`ui/src/notificationPlacement.ts`).
+- **N1.** Selected switch text inherits the button's dark colour. Axe also found the unselected text at 4.31:1 in light; fixed.
+- **N2.** "Review before saving" now sits over the canvas in the two-column layout.
+- **Found on the way.** Dialog labels were nearly invisible in the light theme, including the Connect dialog; fixed.
+- **CI.** `tools/m00-wasapi-probe/Cargo.lock` was stale from #117's new dependencies, which failed #118's Windows job. It
+  would fail #117 alone too. One line added; `verify.mjs --checks probe-build` passes.
+
+### Glossary
+
+| Say | Not | Meaning |
+| --- | --- | --- |
+| route | graph | What is on the canvas |
+| tool | node | A card on the canvas |
+| unsaved edits | draft | Changes not saved yet |
+| input device, output device | physical input, physical output, endpoint | A real device |
+
+Scope: the daily tabs, cards and messages. `NativeDevicePanels.tsx` and `AdvancedPanels.tsx` are developer panels in
+Settings and keep engine terms. Identifiers and the API are unchanged. The test reads source strings, so it can miss text
+built in other ways.
+
+### Verified
+
+Run on the Windows PC with no shell running, at below-normal priority.
+
+| Check | Result |
+| --- | --- |
+| Format, lint, typecheck, `cargo fmt --check` for both manifests | Clean |
+| Full UI unit suite | 967 of 967 |
+| Every changed browser file plus `e2e/quit-keeps-edits.pw.ts`, one worker, in Edge | 218 passed, 1 skipped, 1 failed (the 640×690 message defect below) |
+| `e2e/quit-keeps-edits.pw.ts` three times after that repair, with its new regression test | 33 of 33 |
+| `audiorouter-control` lib, `audiorouter-cli` lib, `src-tauri` tests | 359, 49 and 91 passed; 11, 0 and 4 ignored |
+| Clippy, workspace and `src-tauri`, `-D warnings` | Clean |
+| `check:drift`, `verify.mjs --checks site`, `verify.mjs --checks probe-build` | Passed |
+| Axe on the canvas with both switch kinds, New session and Delete session, three themes | No violations |
+| Release exe, new database, isolated `LOCALAPPDATA` and `WEBVIEW2_USER_DATA_FOLDER`, driven over CDP | Edit then forced kill, relaunch: edits back with their message. Edit then window Quit at once: last edit kept. Discard removes the cards and the file; next launch is clean. Backend log: 0 errors |
+| `fresh_install_shell` with `--ignored` against that exe | Passed |
+
+Defects found before handoff, each with a test: Discard right after a restore left the file behind, so the edits would
+have returned; the tab row was measured through a zero-height element, so the message never moved; Undo after a restore
+returned the startup placeholder; the message placement was only measured on a scroll, a resize or a change of text, so
+it stayed on the tabs when they appeared after loading (now rechecked every 250 ms in narrow windows); a new install still
+named its first cards "Physical input" and "Physical output", which the UI word check could not see, because the shell
+seeds them (also fixed in the API's default names and an MCP recipe).
+
+Removing the card's port rows made 33 browser tests fail. They clicked cards past the canvas edge at readable zoom and had
+been passing by scrolling a clipped container, a problem already on `HEAD`. They now press the fit button first.
+
+### Limits
+
+- **Tray Quit itself was not clicked.** A forced kill after the 400 ms write stands in for it, and is the harsher case.
+- **The last browser run predates the message recheck.** After it, only `quit-keeps-edits.pw.ts` and the unit suite ran.
+- **Not run locally:** browser files this work did not change, Rust integration suites beyond those listed, and real audio
+  or real devices. The disposable exe run used no microphone.
+- **Guide clips are not re-recorded** for Input device, Output device, Plugin and Audio file, and the website and quickstart
+  still say "Physical input" and "Physical output" in places, so F7 is not finished there. See the current plan.
+- **A second card can still be clipped at 1000 px.** Geometry is the same on `HEAD`; a person pans or uses the fit button.
+- **Still open from Round 22:** the rest of F13, F16 (On and Off words), F19, F21, F23, F24, F27, and the four external gates.
+
+Rollback: revert the Round 23 commit. A leftover `unsaved-route.json` is harmless and is ignored by an older build.
+
+Next action: the owner tests the exe; then re-record the four guide clips and finish the website wording.

@@ -1,4 +1,4 @@
-import { openSection, openSettings } from "./workbench";
+import { fitCanvas, openSection, openSettings } from "./workbench";
 import { test, expect } from "./browser-test";
 import { demoSession } from "../src/fixtures";
 import { appendLibraryNode } from "../src/draft";
@@ -20,6 +20,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     page.on("pageerror", (error) => errors.push(error.message));
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto("/route-harness.html");
+    await fitCanvas(page);
     for (const kind of ["compressor", "parametricEq", "meter", "gate", "parametricEq", "compressor", "meter"]) {
       await page.getByTestId(`rf__node-${kind}-1`).locator(".flow-node-title").click();
       const inspector = page.locator(".panel.inspector");
@@ -187,6 +188,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     );
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/route-harness.html");
+    await fitCanvas(page);
     await expect(page.getByRole("button", { name: "List view", exact: true })).toHaveCount(0);
     for (const [kind, field] of [
       ["networkSend", "Receiving computer's IP address"],
@@ -206,7 +208,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
       await page.screenshot({ path: info.outputPath(`${theme}-${kind}.png`) });
     }
     await page.getByRole("button", { name: "Route list", exact: true }).click();
-    await expect(page.getByLabel("Graph nodes and connections")).toBeVisible();
+    await expect(page.getByLabel("Tools and connections")).toBeVisible();
     await expect(page.locator(".session-flow-canvas")).toBeVisible();
   });
 }

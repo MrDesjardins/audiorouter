@@ -30,8 +30,8 @@ export function GraphList({
     else globalThis.dispatchEvent(new CustomEvent("audiorouter:insert-processor", { detail: { edgeId, kind } }));
   };
   return (
-    <div className="graph-list" aria-label="Graph nodes and connections">
-      <ol aria-label="Nodes">
+    <div className="graph-list" aria-label="Tools and connections">
+      <ol aria-label="Tools">
         {session.nodes.map((node) => (
           <li key={node.id}>
             <button

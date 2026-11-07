@@ -40,8 +40,9 @@ test("an empty new session has its own ready identity", async ({ page }) => {
   await page.goto("/backend-harness.html");
   await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
   await page.getByRole("tab", { name: "Session", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept("Readiness session"));
   await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("dialog", { name: "New session" }).getByLabel("Session name").fill("Readiness session");
+  await page.getByRole("dialog", { name: "New session" }).getByRole("button", { name: "Create session" }).click();
   await expect(page.getByRole("heading", { name: "Readiness session", exact: true })).toBeVisible();
   const sessionId = await page.getByLabel("Choose session").inputValue();
   expect(sessionId).not.toBe("e2e-session");

@@ -113,6 +113,6 @@ test("a removed line can be dragged back while playing", async ({ page }) => {
   await page.mouse.move((from!.x + to!.x) / 2, (from!.y + to!.y) / 2, { steps: 8 });
   await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 8 });
   await page.mouse.up();
-  await expect(page.locator(".global-action-message")).toContainText("Connection added to the draft");
+  await expect(page.locator(".global-action-message")).toContainText("Connection added");
   await expect(page.locator('[data-testid^="rf__edge-"]')).toHaveCount(7);
 });

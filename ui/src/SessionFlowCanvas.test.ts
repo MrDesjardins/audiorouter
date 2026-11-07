@@ -815,10 +815,10 @@ describe("canvas library drop positions", () => {
 
     const mic = within(getByLabelText("Microphone, physicalInput"));
     expect(mic.getByText("Input")).toBeTruthy();
-    expect(mic.getByText("Physical Input")).toBeTruthy();
+    expect(mic.getByText("Input Device")).toBeTruthy();
 
     const gain = within(getByLabelText("Voice gain, gain"));
-    expect(gain.getByText("Native")).toBeTruthy();
+    expect(gain.queryByText("Native"), "a built-in tool shows no family badge").toBeNull();
     expect(gain.getByText("Gain", { selector: ".node-kind" })).toBeTruthy();
 
     const headphones = within(getByLabelText("Headphones, physicalOutput"));

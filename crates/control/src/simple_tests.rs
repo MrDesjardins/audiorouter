@@ -624,3 +624,10 @@ fn simple_methods_keep_the_existing_permission_boundaries() {
         "only the authorized edit was applied"
     );
 }
+
+#[test]
+fn device_tools_added_by_a_script_get_the_names_the_app_shows() {
+    let name = |kind| node_template(kind).expect("device template").0;
+    assert_eq!(name(NodeKind::PhysicalInput), "Input device");
+    assert_eq!(name(NodeKind::PhysicalOutput), "Output device");
+}

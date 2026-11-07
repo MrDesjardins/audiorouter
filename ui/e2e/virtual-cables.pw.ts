@@ -248,5 +248,5 @@ test("cable nodes are offered only with installed cables and take the default ca
   await (await openSetup(page)).getByRole("button", { name: "Add route: Cable A → Cable B" }).click();
   await expect(page.getByTestId("rf__node-virtual-render-source-2")).toContainText("Cable A Input");
   await expect(page.getByTestId("rf__node-virtual-capture-sink-2")).toContainText("Cable B Output");
-  await expect(page.locator(".global-action-message")).toContainText("Added Cable A → Cable B to the draft");
+  await expect(page.locator(".global-action-message")).toContainText("Added Cable A → Cable B");
 });

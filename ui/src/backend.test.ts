@@ -201,7 +201,7 @@ describe("UI error formatting", () => {
     });
     expect(isRevisionConflict(error)).toBe(true);
     expect(formatUiError(error, "Graph update failed")).toBe(
-      "Another save changed this route, so your save was not applied. Your draft is preserved. Review it against the latest saved route, then plan and save again.",
+      "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.",
     );
     expect(isRevisionConflict(new Error("revisionConflict"))).toBe(false);
   });

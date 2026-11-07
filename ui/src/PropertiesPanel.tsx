@@ -222,7 +222,7 @@ export function PropertiesPanel({
           <p>
             Off silences inputs and outputs; an off effect passes sound without processing. Bypass passes sound around
             an effect; on a prepared input, output, or Mixer it silences that contribution. Live toggles do not require
-            Save or Stop and keep other draft edits. Off devices remain open until Stop and contribute silence.
+            Save or Stop and keep your other edits. Off devices remain open until Stop and contribute silence.
           </p>
         </HelpDisclosure>
         {selectedNode.kind === "meter" ? (
@@ -252,7 +252,7 @@ export function PropertiesPanel({
                     : n,
                 ),
               });
-              setActionMessage("Meter output added to the draft. Connect it downstream and Save to keep it.");
+              setActionMessage("Meter output added. Connect it to the next tool and Save to keep it.");
             }}
           />
         ) : selectedNode.kind === "duck" ? (

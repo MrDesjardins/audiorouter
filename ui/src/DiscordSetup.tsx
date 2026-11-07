@@ -52,7 +52,7 @@ export function DiscordSetup({
       </header>
       {added ? (
         <>
-          <p className="muted">The route is in your draft. Undo removes it in one step.</p>
+          <p className="muted">The route is added. Undo removes it in one step.</p>
           <ol className="discord-setup-list">
             <li>
               <strong>Save</strong>, then press <strong>Play</strong>.

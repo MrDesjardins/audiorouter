@@ -526,7 +526,7 @@ export function PresetCatalog({
                 disabled={!presets}
                 onClick={() => request("voiceChain", preset.id)}
               >
-                Add voice chain to draft
+                Add voice chain
               </button>
             </li>
           ))}
@@ -534,13 +534,13 @@ export function PresetCatalog({
             <li key={"eq-" + preset.id}>
               <strong>{preset.name}</strong> <small>EQ · {preset.description}</small>
               <button type="button" className="secondary" disabled={!presets} onClick={() => request("eq", preset.id)}>
-                Add EQ to draft
+                Add EQ
               </button>
             </li>
           ))}
         </ul>
       )}
-      <p className="muted">Presets expand into ordinary draft nodes; save changes when you are ready to apply them.</p>
+      <p className="muted">A preset adds ordinary tools to your route. Save when you want to keep them.</p>
     </section>
   );
 }

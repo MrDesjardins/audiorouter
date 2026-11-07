@@ -100,7 +100,7 @@ export function SignalFlowPanel({
       </div>
       {flowCanvas}
       <fieldset className="connection-editor" disabled={!backend.connected}>
-        <legend>Add connection to draft</legend>
+        <legend>Add connection</legend>
         <label>
           Output
           <select
@@ -161,7 +161,7 @@ export function SignalFlowPanel({
               </button>
             </div>
             <p id="connection-dialog-description" className="muted">
-              Choose an output and input, then add the connection to the draft. Press Escape to close.
+              Choose an output and input, then add the connection. Press Escape to close.
             </p>
             <label>
               Output
@@ -202,7 +202,7 @@ export function SignalFlowPanel({
                   if (addConnection()) closeConnectionDialog();
                 }}
               >
-                Add connection to draft
+                Add connection
               </button>
               <button type="button" className="secondary" onClick={closeConnectionDialog}>
                 Cancel

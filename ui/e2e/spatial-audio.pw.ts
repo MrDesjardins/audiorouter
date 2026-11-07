@@ -2,7 +2,7 @@ import { test, expect } from "./browser-test";
 import { openSection } from "./workbench";
 import { demoSession } from "../src/fixtures";
 
-// Surround to headphones on a Physical Input: the mode select, the loopback
+// Surround to headphones on a Input Device: the mode select, the loopback
 // device choice and the guidance must use the app field style in every theme.
 const session = {
   ...demoSession,
@@ -30,10 +30,10 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const field = page.getByLabel("Spatial audio settings");
     await expect(page.getByLabel("Spatial audio mode")).toHaveValue("headphones");
     await expect(field).toContainText("Renders this 7.1 input with a measured head");
-    const endpoint = page.getByLabel("Physical input endpoint");
+    const endpoint = page.getByLabel("Input device endpoint");
     await expect(endpoint).toHaveValue("surround-preview");
     await expect(endpoint.locator("option", { hasText: "Loopback · 8-channel multichannel" })).toHaveCount(1);
-    await page.getByLabel("Physical input binding").scrollIntoViewIfNeeded();
+    await page.getByLabel("Input device binding").scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`spatial-audio-${theme}.png`) });
     // Speakers keep the loopback choices and show the room control.
     await page.getByLabel("Spatial audio mode").selectOption("speakers");

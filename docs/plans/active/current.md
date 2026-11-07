@@ -2,6 +2,24 @@
 
 ## Ordered PR integration — 2026-11-06
 
+Integration outcome (2026-11-06): #117 merged at 852ded57 after final Windows,
+Edge, CodeQL and Quality gate passed on 09170a90; #118 then merged at 44a92cb8
+after all checks passed on b28628f2. No review comments remained on either PR.
+The #117 first rerun exposed a bounded backend startup exit; its isolated and
+full MCP stdio suite passed locally, and the subsequent hosted Windows run
+passed. The original child stderr was discarded, so the transient exit's
+cause remains unknown; no production behavior was changed on a guess.
+
+All latest check annotations were read. #117 annotations only announce the
+hosted Ubuntu image migration. #118 CodeQL jobs pass but warn that GitHub
+cannot retrieve the full PR diff above 300 files. Retain this platform limit
+explicitly; it is not a code finding or proof of complete diff coverage.
+No suppression or acceptance criterion was changed. #117's merged clean
+worktree was removed with the required worktree-cleanup.ps1 -Apply script;
+unmerged/dirty worktrees and unrelated release evidence were preserved.
+Next: retarget #120 to main, require its final-head checks and review its
+annotations, merge, then run the prescribed merged-worktree cleanup.
+
 Owner authorized monitoring and merging #117, #118, then #120. Requirements:
 SEC-12 and ENG-02/04. #117's Edge session-file test omits the newly required
 desktop export approval; its Quality gate reports that browser failure.
@@ -29,6 +47,46 @@ CI on the resulting head. Requirements ENG-02/04; rollback is the scoped
 lockfile revert. Runner Ubuntu migration notice needs no project change.
 Windows local result: the exact locked probe check passed in 3.20 seconds;
 no Rust source changed. Next: push #118 and wait for its new-head CI.
+
+#120 Windows failure on ec1df0e: App.sessionSelection.test.tsx first Session
+visit remained on Tools during asynchronous initial rendering.
+Reproduced locally: 13 passed, 1 failed at the same line 204. Longer picker
+waits and async act failed too. Render evidence showed Session rendering but
+Tools remaining committed: lazy ChangeHistory suspended the entire tab.
+Give history its own Suspense boundary and extend sessionTabLoading's held-
+module regression to cover it. Original sessionSelection assertions unchanged;
+both focused files pass (15 tests). Merge #118's CI repairs first.
+Requirements ENG-02/04; test-only rollback. Next: focused suite, full UI suite,
+typecheck, lint and format, then push and require new-head hosted checks.
+
+Owner also reported off-center canvas delete icons. Center their SVG with
+grid alignment in the existing button, with a browser geometry regression
+and screenshots in dark/light/high-contrast. Requirement UI-17; no controls,
+API or tool behavior changes. Rollback: revert the scoped CSS rule/test.
+Windows verification: final full UI suite with --maxWorkers=2 passed 967/967
+(105 files); typecheck:all, lint, format:check, documentation validation and
+diff check passed. Edge session-file plus three-theme delete alignment passed
+4/4. Reviewed target/canvas-delete-{dark,light,high-contrast}.png: centered
+icons, no card displacement. Existing browser environment/attribution notices
+remain as recorded above. No packaged exe or real audio was run for these
+UI-only repairs. Next: new-head #120 CI, then merge #117 -> #118 -> #120 only
+after each head's checks and annotations are reviewed.
+
+#120 older-head Edge run 42331127485: card-width.pw.ts failed on both attempts
+(255.359375 px with icon, allowed 253.6875 px). Reproduced on e3086a0b locally.
+Explicit grid tracks did not change the width: the root card sizes to its
+contents. The compact kind label saves almost enough space for the icon,
+but its 4 px gap exceeds the old width. Reduce that gap to 2 px, retaining
+the icon size and regression tolerance. Validate card width, delete alignment
+and canvas layout in three themes. Requirement UI-17; rollback the gap rule.
+Windows validation: the original failing card-width test now passes unchanged;
+14/14 Edge tests pass (card width, canvas layout/history, and three-theme delete
+alignment). Reviewed refreshed three-theme screenshots. Lint and formatting
+pass; no new TypeScript or Rust behavior. Quality gate on the older run merely
+aggregates the Windows and browser failures. Next: push this gap repair and
+require the new-head hosted run. #117's transient crates.io download failure
+can be retried only after its workflow finishes (GitHub rejected an active-run
+job retry with HTTP 403); keep its watch active for completion.
 
 #118 run 42332406025 now passes native checks but fails three UI tests.
 Session picker: backport #120's confirmed ChangeHistory Suspense boundary and
@@ -114,7 +172,10 @@ consolidation.
   harness only; preserve the documentation consolidation and live owner route.
   Round 21 (the 13 approved mockup changes) is on branch `improve/ui-round-21`,
   stacked on PR #117 and opened with the owner's approval on 2026-11-06. Progress,
-  defects and the remaining owner decision are in that file.
+  defects and the remaining owner decision are in that file. Round 23 there fixes
+  what held the Round 22 score back; it is on `improve/ui-round-23`, stacked on #118,
+  with its checks and limits recorded there. It still needs refreshed guide clips for
+  Input device, Output device, Plugin and Audio file.
 
 1. Finish the 2026-11-01/2026-10-07 code-review disposition. The detailed
    execution record is [code-review fixes](code-review-fixes.md); most source

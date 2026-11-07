@@ -42,7 +42,7 @@ export function FirstRunGuide({
       )}
       <ol>
         <li>Open Tools and add an Input Device and Output Device, or start with Test Signal.</li>
-        <li>Choose an available device in each node's Properties, then connect the route.</li>
+        <li>Choose an available device in each tool's Properties, then connect the route.</li>
         <li>Review the route and press Play when you are ready. AudioRouter never changes Windows default devices.</li>
       </ol>
       <div className="setup-guide-actions">

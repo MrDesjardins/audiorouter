@@ -31,7 +31,7 @@ test("every supported source, processor, and destination can be added to the liv
       .first()
       .click();
   for (const label of labels.map((item) =>
-    item === "Input device" ? "Physical input" : item === "Output device" ? "Physical output" : item,
+    item === "Input device" ? "Input device" : item === "Output device" ? "Output device" : item,
   ))
     await expect(page.locator(".react-flow__node").filter({ hasText: label }).first(), `node ${label}`).toBeVisible();
 });

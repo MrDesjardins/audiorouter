@@ -15,8 +15,9 @@ test("copy and paste a configured node across sessions with menus and shortcuts"
   await page.keyboard.press("Control+c");
 
   await page.getByRole("tab", { name: "Session", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept("Paste target"));
   await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("dialog", { name: "New session" }).getByLabel("Session name").fill("Paste target");
+  await page.getByRole("dialog", { name: "New session" }).getByRole("button", { name: "Create session" }).click();
   await expect(page.getByRole("heading", { name: "Paste target", exact: true })).toBeVisible();
   await page.keyboard.press("Control+v");
   const firstCopy = page.getByTestId("rf__node-voice-copy-1");

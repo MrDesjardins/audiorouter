@@ -181,7 +181,7 @@ describe("session refresh and playback regressions", () => {
     await waitFor(() => expect(backend.listSessions).toHaveBeenCalled());
     start();
     await waitFor(() =>
-      expect(view.container.querySelector(".audio-run-state")?.textContent).toContain("Draft preview"),
+      expect(view.container.querySelector(".audio-run-state")?.textContent).toContain("Unsaved preview"),
     );
     addGain();
     fireEvent.click(within(document.querySelector(".topbar")!).getByRole("button", { name: /^Save$/ }));
@@ -384,7 +384,7 @@ describe("session refresh and playback regressions", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Properties" }));
     fireEvent.click(view.container.querySelector('[data-id="game-eq"]')!);
     fireEvent.click(await screen.findByRole("button", { name: "Rename game-eq" }));
-    const name = await screen.findByLabelText("Node name");
+    const name = await screen.findByLabelText("Tool name");
     fireEvent.change(name, { target: { value: "Unsaved name" } });
     fireEvent.blur(name);
     fireEvent.click(screen.getByLabelText("Bypass"));
@@ -426,7 +426,7 @@ describe("session refresh and playback regressions", () => {
     fireEvent.change(sessionPanel().getByLabelText("Session name"), { target: { value: "My unsaved name" } });
     changeSaved();
     await act(async () => refresh());
-    await messageBar().findByText(/Your draft is preserved/);
+    await messageBar().findByText(/Your edits are kept/);
     expect((sessionPanel().getByLabelText("Session name") as HTMLInputElement).value).toBe("My unsaved name");
     fireEvent.click(sessionPanel().getByRole("button", { name: "Revert edits" }));
     expect((sessionPanel().getByLabelText("Session name") as HTMLInputElement).value).toBe("Changed externally");

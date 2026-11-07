@@ -29,12 +29,12 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const heading = (await page.getByRole("heading", { name: "Canvas", exact: true }).boundingBox())!;
     expect(selection.y - heading.y - heading.height).toBeLessThan(12);
     await expect(page.getByText("No unsaved changes to this node.", { exact: true })).toHaveCount(0);
-    await expect(page.getByLabel("Node name", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Tool name", { exact: true })).toHaveCount(0);
     const rename = page.getByRole("button", { name: "Rename Voice gain", exact: true });
     await rename.hover();
     await expect(rename.locator("svg")).toHaveCSS("opacity", "1");
     await rename.click();
-    const field = page.getByLabel("Node name", { exact: true });
+    const field = page.getByLabel("Tool name", { exact: true });
     await expect(field).toHaveCSS("border-radius", "9px");
     await field.fill("Discard this name");
     await field.press("Escape");
@@ -48,7 +48,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(save).toBeEnabled();
     await expect(save).toHaveAttribute("data-save-required", "true");
     const node = page.getByTestId("rf__node-voice");
-    await expect(node.locator(".node-save-indicator")).toHaveText("Save required");
+    await expect(node.locator(".node-save-indicator")).toHaveText("Unsaved");
     const notice = page.locator(".global-action-message");
     await expect(notice).toContainText("Name changed");
     const popover = page.getByRole("complementary", { name: "Notifications" });
@@ -113,8 +113,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(save).toBeDisabled();
     expect((await canvas.boundingBox())!).toEqual(before);
     await page.getByRole("button", { name: "Rename Voice gain", exact: true }).click();
-    await page.getByLabel("Node name", { exact: true }).fill("Live voice");
-    await page.getByLabel("Node name", { exact: true }).press("Enter");
+    await page.getByLabel("Tool name", { exact: true }).fill("Live voice");
+    await page.getByLabel("Tool name", { exact: true }).press("Enter");
     await page.waitForTimeout(700); // A rename must not take the parameter-only autosave path.
     await expect(content).toHaveAttribute("data-save-state", "needs-save");
     await expect(save).toBeEnabled();
