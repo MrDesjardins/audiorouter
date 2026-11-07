@@ -108,7 +108,7 @@ export function AudioFileNodeEditor({
       activeTakeId.current = recorderId;
       setTakeState("recording");
       setMessage(
-        "Recording Sound Check from the selected, already-routed Recorder node. It stops automatically after 10 seconds.",
+        "Recording Sound Check from the selected, already-routed Recorder. It stops automatically after 10 seconds.",
       );
       stopTimer.current = setTimeout(() => {
         void stopAndImportTake();
@@ -165,12 +165,12 @@ export function AudioFileNodeEditor({
         <label>
           Voice path Recorder
           <select
-            aria-label="Recorder node for temporary take"
+            aria-label="Recorder for temporary take"
             value={selectedRecorder}
             disabled={!backend.connected || busy || takeState === "recording" || recorderNodes.length === 0}
             onChange={(event) => setSelectedRecorder(event.target.value)}
           >
-            <option value="">Choose an enabled Recorder node</option>
+            <option value="">Choose an enabled Recorder</option>
             {recorderNodes.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name || item.id}
@@ -193,7 +193,7 @@ export function AudioFileNodeEditor({
           </button>
         )}
         <small>
-          Connect the voice source through this Recorder node and start the prepared session. Recording stops after 10
+          Connect the voice source through this Recorder and start the prepared session. Recording stops after 10
           seconds or when you stop it. The sample expires after 24 hours. Save this Audio File source, then use Play to
           hear it through the effects in the connected route. This control does not select or open a microphone.
         </small>

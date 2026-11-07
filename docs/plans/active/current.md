@@ -70,7 +70,10 @@ consolidation.
   harness only; preserve the documentation consolidation and live owner route.
   Round 21 (the 13 approved mockup changes) is on branch `improve/ui-round-21`,
   stacked on PR #117 and opened with the owner's approval on 2026-11-06. Progress,
-  defects and the remaining owner decision are in that file.
+  defects and the remaining owner decision are in that file. Round 23 there fixes
+  what held the Round 22 score back; it is on `improve/ui-round-23`, stacked on #118,
+  with its checks and limits recorded there. It still needs refreshed guide clips for
+  Input device, Output device, Plugin and Audio file.
 
 1. Finish the 2026-11-01/2026-10-07 code-review disposition. The detailed
    execution record is [code-review fixes](code-review-fixes.md); most source

@@ -39,8 +39,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(page.locator(".audio-run-state")).toContainText("Audio running");
     await page.getByTestId("rf__node-voice").locator(".flow-node-title").click();
     await page.getByRole("button", { name: "Rename Voice gain", exact: true }).click();
-    await page.getByLabel("Node name", { exact: true }).fill("Unsaved voice name");
-    await page.getByLabel("Node name", { exact: true }).press("Enter");
+    await page.getByLabel("Tool name", { exact: true }).fill("Unsaved voice name");
+    await page.getByLabel("Tool name", { exact: true }).press("Enter");
     await page.getByLabel("Bypass", { exact: true }).check();
     await expect(page.locator(".global-action-message")).toContainText("applied to the playing audio");
     await page.waitForTimeout(1200);

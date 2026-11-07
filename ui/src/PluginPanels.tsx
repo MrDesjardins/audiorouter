@@ -216,11 +216,11 @@ export function PluginScanPanel({
                     <button
                       type="button"
                       className="secondary"
-                      aria-label={`Add to draft: ${entry.path}`}
+                      aria-label={`Add to route: ${entry.path}`}
                       onClick={() => addToDraft(entry)}
                       disabled={!backend.connected || !onAddPlaceholder}
                     >
-                      Add to draft
+                      Add to route
                     </button>
                   )}
                 </li>
@@ -409,13 +409,13 @@ export function LoadedPluginsPanel({
     <section className="panel loaded-plugins-panel" aria-labelledby="loaded-plugins-heading">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Currently in this draft</p>
+          <p className="eyebrow">Currently in this route</p>
           <h2 id="loaded-plugins-heading">Loaded plugins</h2>
         </div>
         <span className="badge">{plugins.length}</span>
       </div>
       {plugins.length === 0 ? (
-        <p className="muted">No VST2/VST3 plugin is loaded into the draft yet. Scan a directory below and add one.</p>
+        <p className="muted">No VST2/VST3 plugin is in this route yet. Scan a directory below and add one.</p>
       ) : (
         <ul aria-label="Loaded plugins">
           {plugins.map((node) => {
@@ -770,12 +770,12 @@ export function PluginNodeInspector({
         )}
       </div>
       <button type="button" className="secondary" onClick={onUnload} disabled={disabled}>
-        Unload plugin from draft
+        Remove plugin
       </button>
       <small>
-        Execution is bound to this exact binary and fingerprint; a changed file requires rescanning and re-adding it
-        from Plugin scan. Unloading removes this node and its connections from the draft only — save changes to keep the
-        removal. While the route plays, Open plugin editor shows the plugin's own window; the controls below work too.
+        This tool runs only this exact plugin file. If the file changes, scan and add it again from Plugin scan.
+        Removing takes it and its connections out of the route; save to keep that. While the route plays, Open plugin
+        editor shows the plugin's own window; the controls below work too.
       </small>
     </div>
   );

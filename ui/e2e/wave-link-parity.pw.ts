@@ -142,15 +142,15 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     // The unbound output's picker no longer offers it and says how many are hidden.
     await page.getByTestId("rf__node-headphones").click();
     await page.getByRole("tab", { name: "Properties", exact: true }).click();
-    const picker = page.getByLabel("Physical output endpoint");
+    const picker = page.getByLabel("Output device endpoint");
     await expect(picker).toHaveValue("");
     await expect(picker.locator("option")).toHaveText([
-      "Select render endpoint",
+      "Choose an output device",
       /Preview Game \(7\.1\)/,
       /1 device hidden/,
     ]);
     await expect(picker.locator('option[value="hidden-devices-note"]')).toBeDisabled();
-    const binding = page.getByLabel("Physical output binding");
+    const binding = page.getByLabel("Output device binding");
     await binding.scrollIntoViewIfNeeded();
     await binding.screenshot({ path: testInfo.outputPath(`devices-picker-${theme}.png`) });
 
@@ -183,7 +183,7 @@ test("a corrupt hidden-device preference hides nothing", async ({ page }) => {
   }, demoSession);
   await page.goto("/route-harness.html");
   await page.getByTestId("rf__node-headphones").click();
-  await expect(page.getByLabel("Physical output endpoint").locator("option")).toHaveCount(3);
+  await expect(page.getByLabel("Output device endpoint").locator("option")).toHaveCount(3);
   await page.getByRole("tab", { name: "Status", exact: true }).click();
   await expect(page.locator(".this-pc-devices input[type=checkbox]:not(:checked)")).toHaveCount(0);
 });

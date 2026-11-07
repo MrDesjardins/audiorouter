@@ -807,18 +807,18 @@ export function PhysicalInputBinding({
   const surroundPlayback = playback.visible;
   const hiddenCount = capture.hiddenCount + playback.hiddenCount;
   return (
-    <div className="node-binding-editor" aria-label="Physical input binding">
+    <div className="node-binding-editor" aria-label="Input device binding">
       <div>
         <p className="eyebrow">Capture source</p>
         <strong>Choose a microphone, input, or virtual capture bus</strong>
       </div>
       <select
-        aria-label="Physical input endpoint"
+        aria-label="Input device endpoint"
         value={value}
         disabled={disabled || activeCapture.length === 0}
         onChange={(event) => onChange(event.target.value)}
       >
-        <option value="">Select capture endpoint</option>
+        <option value="">Choose an input device</option>
         {surroundPlayback.length > 0 ? (
           <optgroup label="Recording devices">
             {activeCapture.map((device) => (
@@ -885,18 +885,18 @@ export function PhysicalOutputBinding({
     value,
   );
   return (
-    <div className="node-binding-editor" aria-label="Physical output binding">
+    <div className="node-binding-editor" aria-label="Output device binding">
       <div>
         <p className="eyebrow">Render destination</p>
         <strong>Choose the headphones, speakers, or virtual output</strong>
       </div>
       <select
-        aria-label="Physical output endpoint"
+        aria-label="Output device endpoint"
         value={value}
         disabled={disabled || activeRender.length === 0}
         onChange={(event) => onChange(event.target.value)}
       >
-        <option value="">Select render endpoint</option>
+        <option value="">Choose an output device</option>
         {activeRender.map((device) => (
           <option key={device.id} value={device.id}>
             {deviceChoiceLabel(device)}
@@ -911,7 +911,7 @@ export function PhysicalOutputBinding({
             : "No active render endpoints are available. Refresh the device list; a reboot is not normally required."
           : !value
             ? "No device is chosen for this node yet. Choose one, then Save."
-            : "This selection is used by the session's stopped native render binding."}
+            : "This route plays through this device when you press Play."}
       </small>
       <button type="button" className="secondary" onClick={onRefresh} disabled={disabled}>
         Refresh available outputs

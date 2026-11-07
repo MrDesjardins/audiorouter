@@ -87,9 +87,7 @@ test("Session holds saved versions; the canvas toolbar holds the keyboard panels
   await expect(page.getByRole("heading", { name: "Change history" })).toBeVisible();
   const toolbar = page.getByRole("group", { name: "Canvas layout actions" });
   await toolbar.getByRole("button", { name: "Route list", exact: true }).click();
-  await expect(
-    page.getByRole("region", { name: "Route list" }).getByLabel("Graph nodes and connections"),
-  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Route list" }).getByLabel("Tools and connections")).toBeVisible();
   await toolbar.getByRole("button", { name: "Connect", exact: true }).click();
   const connect = page.getByRole("region", { name: "Connect without dragging" });
   await expect(connect.getByLabel("Source output port")).toBeVisible();

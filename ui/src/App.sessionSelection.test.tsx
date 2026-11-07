@@ -208,7 +208,7 @@ describe("session switch interruption consent", () => {
     fireEvent.click(panel.getByRole("button", { name: "Rename" }));
     fireEvent.change(panel.getByLabelText("Session name"), { target: { value: "Unsaved voice setup" } });
     fireEvent.change(screen.getByLabelText("Choose session"), { target: { value: "desktop-session" } });
-    await screen.findByText(/Save or discard your draft in Session before switching sessions/);
+    await screen.findByText(/Save or discard your edits in Session before switching sessions/);
     expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session");
     fireEvent.click(panel.getByRole("button", { name: "Rename" }));
     expect((panel.getByLabelText("Session name") as HTMLInputElement).value).toBe("Unsaved voice setup");
@@ -228,7 +228,7 @@ describe("session switch interruption consent", () => {
     fireEvent.click(panel.getByRole("button", { name: "Rename" }));
     fireEvent.change(panel.getByLabelText("Session name"), { target: { value: "Unsaved voice setup" } });
     await backend.setActiveSession("desktop-session");
-    await screen.findByText(/Another client selected a different session.*draft is preserved/, {}, { timeout: 4000 });
+    await screen.findByText(/Another app selected a different session.*edits are kept/, {}, { timeout: 4000 });
     expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session");
     expect((panel.getByLabelText("Session name") as HTMLInputElement).value).toBe("Unsaved voice setup");
   });
@@ -365,4 +365,35 @@ describe("session switch interruption consent", () => {
     expect(stop).not.toHaveBeenCalled();
     expect((screen.getByLabelText("Choose session") as HTMLSelectElement).value).toBe("main-session");
   });
+});
+
+describe("unsaved edits kept across a restart", () => {
+  afterEach(() => {
+    delete window.__TAURI_INTERNALS__;
+  });
+
+  it("restores them on the real route, and Undo returns to the saved route", async () => {
+    const { backend } = await backendWithSavedActiveSession();
+    const saved = await backend.snapshot("main-session");
+    const invoke = vi.fn(async (command: string) =>
+      command === "get_ui_draft"
+        ? {
+            version: 1,
+            sessionId: "main-session",
+            baseRevision: saved.session.revision,
+            draft: { ...saved.session, name: "Edited offline" },
+          }
+        : null,
+    );
+    window.__TAURI_INTERNALS__ = { invoke } as unknown as typeof window.__TAURI_INTERNALS__;
+    render(<App backend={backend} />);
+
+    expect(await screen.findByRole("heading", { name: "Edited offline" }, { timeout: 5000 })).toBeTruthy();
+    expect(screen.getByText(/Your unsaved edits from last time are back/)).toBeTruthy();
+
+    const topbar = within(document.querySelector<HTMLElement>(".topbar")!);
+    fireEvent.click(topbar.getByRole("button", { name: "Undo" }));
+    expect(await screen.findByRole("heading", { name: "Main session" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: demoSession.name })).toBeNull();
+  }, 20_000);
 });

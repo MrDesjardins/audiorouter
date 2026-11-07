@@ -20,7 +20,7 @@ export function EditableNodeName({
   };
   return editing ? (
     <input
-      aria-label="Node name"
+      aria-label="Tool name"
       value={text}
       maxLength={120}
       disabled={disabled}
@@ -41,7 +41,7 @@ export function EditableNodeName({
       ref={button}
       type="button"
       className="editable-node-name"
-      title="Click to rename this node"
+      title="Click to rename this tool"
       aria-label={`Rename ${name}`}
       disabled={disabled}
       onClick={() => {

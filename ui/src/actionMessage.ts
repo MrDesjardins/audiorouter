@@ -9,7 +9,7 @@ export type ActionMessageTone = "error" | "warning" | "success" | "info";
 
 const ERROR_PATTERNS = [
   /^no audio (started|played)/i,
-  /^draft rejected/i,
+  /^change rejected/i,
   /^(could not|unable to|cannot)\b/i,
   /\b(permission denied|not permitted|access denied)\b/i,
   /\b(failed|rejected|unavailable|cannot play|cannot prepare|is not attached|not changed)\b/i,

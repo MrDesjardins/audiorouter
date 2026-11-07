@@ -43,8 +43,8 @@ test("HTTP mutation reaches the authoritative backend and refreshes the frontend
     timeout: 10000,
   });
   await page.locator(".editable-node-name").click();
-  await page.getByLabel("Node name", { exact: true }).fill("Unsaved local label");
-  await page.getByLabel("Node name", { exact: true }).press("Enter");
+  await page.getByLabel("Tool name", { exact: true }).fill("Unsaved local label");
+  await page.getByLabel("Tool name", { exact: true }).press("Enter");
   const latest = await call("sessions.get", { sessionId: session.id });
   latest.nodes.find((node: { kind: string }) => node.kind === "gain").parameters.gainDb = -6;
   const next = await call("graph.plan", { sessionId: session.id, baseRevision: latest.revision, candidate: latest });

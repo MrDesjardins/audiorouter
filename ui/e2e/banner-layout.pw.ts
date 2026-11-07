@@ -31,7 +31,7 @@ const session: Session = {
     node("game", "physicalInput", "Siege game", true),
     node("eq", "parametricEq", "Siege Advanced EQ"),
     node("mixer", "mixer", "Mixer 1"),
-    node("output", "physicalOutput", "Physical output 1"),
+    node("output", "physicalOutput", "Output device 1"),
   ],
   edges: [
     {

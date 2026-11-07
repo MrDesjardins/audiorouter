@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "./browser-test";
+import { fitCanvas } from "./workbench";
 import type { PluginScanEntry } from "@audiorouter/contracts";
 import { demoSession } from "../src/fixtures";
 import { appendPluginPlaceholderNode } from "../src/draft";
@@ -47,6 +48,8 @@ async function openPlugin(page: Page, theme: string, unchangedAudio: boolean, si
   );
   await page.setViewportSize({ width: 1500, height: 950 });
   await page.goto("/route-harness.html");
+  // Four cards in a row run past the view at readable zoom.
+  await fitCanvas(page);
   await page.getByTestId("rf__node-plugin-1").locator(".flow-node-title").click();
   await page.getByRole("tab", { name: "Properties", exact: true }).click();
   await expect(page.getByLabel("Plugin worker health")).toContainText("Audio continuity");
@@ -99,7 +102,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     // The switch goes through the same draft path as any setting; it once failed plugin range validation.
     await guard.getByLabel("Allow unchanged audio").click();
     await expect(guard.getByLabel("Allow unchanged audio")).toBeChecked();
-    await expect(page.getByText(/Draft rejected/)).toHaveCount(0);
+    await expect(page.getByText(/Change rejected/)).toHaveCount(0);
 
     const quiet = await page.context().newPage();
     const quietGuard = await openPlugin(quiet, theme, false);

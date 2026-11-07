@@ -25,7 +25,7 @@ export function ConnectionForm({
 }) {
   return (
     <fieldset className="connection-editor workbench-connection-editor" disabled={!backend.connected}>
-      <legend>Add connections to the draft</legend>
+      <legend>Add connections</legend>
       <p className="muted">
         Choose an output and input for each link. These connections are reviewed when you plan the graph.
       </p>

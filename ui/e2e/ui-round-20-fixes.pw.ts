@@ -115,7 +115,7 @@ test("Play with no device says where to fix it and goes there", async ({ page })
   await expect(tab(page, "Properties")).toHaveAttribute("aria-selected", "true");
   // It must land on the tool it named, not whichever one was selected before.
   await expect(page.locator(".main-content > .inspector").getByRole("heading", { name: "Headphones" })).toBeVisible();
-  await expect(message).not.toContainText("Physical Output");
+  await expect(message).not.toContainText("Output Device");
 });
 
 test("the action bar stays off two close cards until the line is pointed at", async ({ page }) => {

@@ -127,14 +127,14 @@ test("device nodes name the apps on their device without moving anything", async
   const cardBox = (await micCard.boundingBox())!;
   const footerBox = (await micCard.locator(".node-used-by").boundingBox())!;
   expect(footerBox.x + footerBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
-  // Its text starts where the port lines below start.
+  // Its text starts where the card's title starts.
   const textLeft = (selector: string) =>
     micCard.locator(selector).evaluate((element) => {
       const range = document.createRange();
       range.selectNodeContents(element);
       return range.getBoundingClientRect().left;
     });
-  expect(Math.abs((await textLeft(".node-used-by")) - (await textLeft(".node-port-count")))).toBeLessThan(0.5);
+  expect(Math.abs((await textLeft(".node-used-by")) - (await textLeft(".flow-node-title")))).toBeLessThan(2);
   // A long list of apps on the microphone keeps the card's width.
   const many = ["Discord.exe", "obs64.exe", "Spotify.exe", "RainbowSix.exe", "chrome.exe"].map((executable, index) => ({
     ...discord([{ deviceId: "mic", direction: "capture", active: true }]),

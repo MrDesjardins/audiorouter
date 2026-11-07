@@ -65,7 +65,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.mouse.down();
     await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
     await page.mouse.up();
-    await expect(page.locator(".global-action-message")).toContainText("Connection added to the draft");
+    await expect(page.locator(".global-action-message")).toContainText("Connection added");
     await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(2);
     await page.screenshot({ path: testInfo.outputPath(`cold-start-${theme}.png`) });
   });

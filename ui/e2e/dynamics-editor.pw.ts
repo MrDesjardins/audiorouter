@@ -135,7 +135,7 @@ for (const kind of ["compressor", "gate"] as const) {
       // This fixture deliberately has no connected route, so the debounced
       // autosave is rejected by planning and must leave an explicit Save marker.
       await expect(content).toHaveAttribute("data-save-state", "needs-save");
-      await expect(content.locator(".node-save-indicator")).toHaveText("Save required");
+      await expect(content.locator(".node-save-indicator")).toHaveText("Unsaved");
       await expect(page.locator(".topbar").getByRole("button", { name: "Save", exact: true })).toBeEnabled();
       expect(
         await page.evaluate(() =>

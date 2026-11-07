@@ -18,13 +18,13 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const before = await canvas.boundingBox();
     await page.getByLabel("Choose session").selectOption("other-session");
     await expect(page.locator(".global-action-message")).toContainText(
-      "Save or discard your draft in Session before switching sessions.",
+      "Save or discard your edits in Session before switching sessions.",
     );
     await expect(page.getByLabel("Choose session")).toHaveValue(initialSession.id);
     await expect(page.getByRole("heading", { name: "Unsaved voice setup", exact: true })).toBeVisible();
     await backend.call("sessions.active.set", { sessionId: "other-session", idempotencyKey: "external-select" });
     await expect(page.locator(".global-action-message")).toContainText(
-      "Another client selected a different session. Your draft is preserved",
+      "Another app selected a different session. Your edits are kept",
     );
     await expect(page.getByLabel("Choose session")).toHaveValue(initialSession.id);
     await expect(page.getByRole("heading", { name: "Unsaved voice setup", exact: true })).toBeVisible();

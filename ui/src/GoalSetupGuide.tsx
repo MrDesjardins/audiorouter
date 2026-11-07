@@ -27,7 +27,7 @@ export function GoalSetupGuide({
         <li>
           {recording
             ? "In Tools, add Application Capture and choose the exact running process in Properties. Capture includes its process tree, not a browser tab."
-            : "Use Set up for Discord to choose your exact microphone and paired voice cable and add optional voice cleanup to the draft."}
+            : "Use Set up for Discord to choose your exact microphone and paired voice cable and add optional voice cleanup."}
         </li>
         <li>
           {recording

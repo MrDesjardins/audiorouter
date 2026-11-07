@@ -40,7 +40,7 @@ export function DeviceTroubleshooting({
   return (
     <>
       <p className="muted">
-        Devices chosen here are used only when a single route's Input Device or Output Device node has no device of its
+        Devices chosen here are used only when a single route's Input Device or Output Device tool has no device of its
         own.
       </p>
       <NativeEndpointPanel

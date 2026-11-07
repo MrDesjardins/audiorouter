@@ -603,7 +603,7 @@ for (const { tool, render } of selected) {
         if (frame === 65) await page.getByRole("button", { name: "Add running app", exact: true }).scrollIntoViewIfNeeded();
         if (frame === 90) await page.getByRole("button", { name: "Add running app", exact: true }).click();
       } else if (tool.kind === "physicalInput") {
-        const capture = inspector.getByLabel("Physical input endpoint", { exact: true });
+        const capture = inspector.getByLabel("Input device endpoint", { exact: true });
         if (frame === 8) { await capture.scrollIntoViewIfNeeded(); await capture.click(); await page.keyboard.press("Alt+ArrowDown"); }
         if (frame === 30) { await page.keyboard.press("Escape"); await capture.selectOption("capture-preview"); }
         if (frame === 40) { const channels = inspector.getByLabel("Input channels", { exact: true }); await channels.scrollIntoViewIfNeeded(); await channels.selectOption("mono"); }

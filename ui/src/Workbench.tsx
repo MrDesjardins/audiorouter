@@ -124,7 +124,7 @@ const TAB_HELP: Partial<Record<WorkbenchTab, { title: string; content: ReactNode
         <li>Add a source: Input Device, Test Signal, Audio File, or an application.</li>
         <li>Add processing tools such as Gain or Advanced EQ if needed.</li>
         <li>Add an Output Device and choose your speakers or headphones in Properties.</li>
-        <li>Drag from the sending node's blue dot to the receiving node's orange dot.</li>
+        <li>Drag from the sending tool's blue dot to the receiving tool's orange dot.</li>
         <li>Press Play to hear it. Use Save at the top when the canvas marks changes that need saving.</li>
       </ol>
     ),
@@ -151,7 +151,7 @@ const TAB_HELP: Partial<Record<WorkbenchTab, { title: string; content: ReactNode
     title: "How to read status",
     content: (
       <p>
-        Check the six readiness indicators and the audio devices available on this PC. Choose a node’s device in
+        Check the six readiness indicators and the audio devices available on this PC. Choose a tool’s device in
         Properties.
       </p>
     ),
@@ -729,8 +729,8 @@ export function Workbench({
         )}
         {tab === "properties" && (
           <section className="workbench-page">
-            <h2>Node properties</h2>
-            <p className="muted">Select a node on the canvas to edit it here.</p>
+            <h2>Tool properties</h2>
+            <p className="muted">Select a tool on the canvas to edit it here.</p>
           </section>
         )}
         {tab === "status" && (

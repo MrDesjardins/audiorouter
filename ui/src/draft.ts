@@ -94,12 +94,12 @@ const libraryNodeDefinitions: Record<
   }
 > = {
   physicalInput: {
-    name: "Physical input",
+    name: "Input device",
     parameters: {},
     ports: [{ name: "out", direction: "output", channels: 2 }],
   },
   physicalOutput: {
-    name: "Physical output",
+    name: "Output device",
     parameters: {},
     ports: [{ name: "in", direction: "input", channels: 2 }],
   },

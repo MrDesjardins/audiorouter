@@ -35,6 +35,7 @@ mod shell_settings;
 mod startup;
 mod support_bundle;
 mod tray_playback;
+mod ui_draft;
 mod virtual_cable_shell;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
@@ -819,6 +820,22 @@ fn set_ui_unsaved(unsaved: bool, flag: State<'_, UiUnsaved>) {
     flag.0.store(unsaved, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// The unsaved route edits a previous page kept, for this page to offer back.
+#[tauri::command]
+fn get_ui_draft(state: State<'_, ShellState>) -> Option<serde_json::Value> {
+    ui_draft::load(&ui_draft::path_beside(&state.database_path))
+}
+
+/// Keep the page's unsaved route edits on disk, or remove them with `null`.
+/// Both Quit paths exit without asking the page, so the page writes as it goes.
+#[tauri::command]
+fn set_ui_draft(
+    draft: Option<serde_json::Value>,
+    state: State<'_, ShellState>,
+) -> Result<(), String> {
+    ui_draft::save(&ui_draft::path_beside(&state.database_path), draft.as_ref())
+}
+
 /// The page's initialization script, kept to recreate the editor window.
 struct MainWindowScript(String);
 
@@ -1589,7 +1606,7 @@ fn default_desktop_session() -> Session {
                 id: EntityId::new("desktop-input"),
                 kind: NodeKind::PhysicalInput,
                 type_version: 1,
-                name: "Physical input".into(),
+                name: "Input device".into(),
                 enabled: true,
                 bypass: false,
                 parameters: Default::default(),
@@ -1624,7 +1641,7 @@ fn default_desktop_session() -> Session {
                 id: EntityId::new("desktop-output"),
                 kind: NodeKind::PhysicalOutput,
                 type_version: 1,
-                name: "Physical output".into(),
+                name: "Output device".into(),
                 enabled: true,
                 bypass: false,
                 parameters: Default::default(),
@@ -2144,6 +2161,8 @@ fn main() {
             rpc_request,
             quit_app,
             set_ui_unsaved,
+            get_ui_draft,
+            set_ui_draft,
             autoplay_get,
             autoplay_set,
             api_autostart_get,
@@ -2576,6 +2595,14 @@ mod tests {
         let _ = std::fs::remove_file(&database);
         let _ = std::fs::remove_file(database.with_extension("sqlite-wal"));
         let _ = std::fs::remove_file(database.with_extension("sqlite-shm"));
+    }
+
+    /// The first route is the first thing a new user reads; a UI-only word check cannot see it.
+    #[test]
+    fn default_desktop_session_uses_the_plain_device_names() {
+        let session = default_desktop_session();
+        assert_eq!(session.nodes[0].name, "Input device");
+        assert_eq!(session.nodes[2].name, "Output device");
     }
 
     #[test]

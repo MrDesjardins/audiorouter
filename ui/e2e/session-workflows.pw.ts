@@ -47,8 +47,8 @@ test("session duplicate, rename, remembered selection and deletion survive backe
   await expect(page.getByRole("heading", { name: "Durable studio setup", exact: true })).toBeVisible();
   await expect(page.locator(".audio-run-state")).toContainText("Audio stopped");
   await page.getByRole("tab", { name: "Session", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete session", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete session", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Offline qualification", exact: true })).toBeVisible();
   await backend.restart();
   await page.reload();
@@ -60,14 +60,15 @@ test("session duplicate, rename, remembered selection and deletion survive backe
 test("new session and cancelled dialogs never mutate the existing setup", async ({ page, backend }) => {
   await page.goto("/backend-harness.html");
   await page.getByRole("tab", { name: "Session", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("dialog", { name: "New session" }).getByRole("button", { name: "Cancel" }).click();
   expect((await backend.call("sessions.list")).items).toHaveLength(1);
-  page.once("dialog", (dialog) => dialog.accept("Practice setup"));
   await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("dialog", { name: "New session" }).getByLabel("Session name").fill("Practice setup");
+  await page.getByRole("dialog", { name: "New session" }).getByRole("button", { name: "Create session" }).click();
   await expect(page.getByRole("heading", { name: "Practice setup", exact: true })).toBeVisible();
-  page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("button", { name: "Delete session", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
   expect((await backend.call("sessions.list")).items).toHaveLength(2);
   expect(await backend.call<Session>("sessions.get", { sessionId: "e2e-session" })).toMatchObject(
     initialSession as unknown as Record<string, unknown>,

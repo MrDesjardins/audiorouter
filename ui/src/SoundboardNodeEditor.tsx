@@ -246,7 +246,7 @@ export function SoundboardNodeEditor({
   };
   const remove = (slot: SoundboardSlot) => {
     onRemove(SLOT_FIELDS.map((field) => slotParameter(slot.slot, field)));
-    setMessage(`Button ${slot.slot} (${slot.label}) is removed in the draft.`);
+    setMessage(`Button ${slot.slot} (${slot.label}) is removed. Save to keep this.`);
   };
   const playingNow = (slot: number) => live?.slots.find((item) => item.slot === slot)?.playing === true;
   return (

@@ -284,7 +284,8 @@ buttons accessible even when both are present.
    changes to a route with an input device are previewed without saving; a
    route with several paths, or generated sound only, plays its saved version.
    Test Signal and Audio File stay stopped until played on their nodes.
-   **Save** when you want to keep the route.
+   **Save** when you want to keep the route. If you quit first, your unsaved
+   edits come back the next time you open AudioRouter.
 3. Press **Play** on a Test Signal or Audio File node to start that source.
    Its **Stop** button stops only that source; header **Stop** stops the route.
    If an endpoint is unavailable or occupied, resolve that named endpoint's

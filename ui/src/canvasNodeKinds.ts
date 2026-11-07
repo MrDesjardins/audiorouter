@@ -76,8 +76,8 @@ export function nodeKindFamily(kind: NodeKind): NodeKindFamily {
 }
 
 const NODE_KIND_LABELS: Partial<Record<NodeKind, string>> = {
-  physicalInput: "Physical Input",
-  physicalOutput: "Physical Output",
+  physicalInput: "Input Device",
+  physicalOutput: "Output Device",
   applicationCapture: "App Capture",
   endpointLoopback: "Endpoint Loopback",
   virtualRenderSource: "Cable Input",

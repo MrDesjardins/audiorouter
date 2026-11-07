@@ -537,7 +537,7 @@ function AudioEdgeActions({
             ref={menuTriggerRef}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            title="Add a tool between these two nodes."
+            title="Add a tool between these two."
             onClick={() => setMenuOpen((open) => !open)}
           >
             <Icon name="plus" />
@@ -3029,18 +3029,17 @@ export function SessionFlowCanvas({
                     : "Waiting for the backend to save these changes"
                 }
               >
-                {nodeSaveState === "needs-save"
-                  ? "Save required"
-                  : nodeSaveState === "autosave"
-                    ? "Autosaving…"
-                    : "Saving…"}
+                {nodeSaveState === "needs-save" ? "Unsaved" : nodeSaveState === "autosave" ? "Autosaving…" : "Saving…"}
               </span>
             )}
             <div className="flow-node-kicker">
-              <span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>
-                {NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}
-              </span>
-              <span className="node-kind">
+              {nodeKindFamily(node.kind) !== "native" && (
+                <span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>
+                  {NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}
+                </span>
+              )}
+              {/* Port detail stays one hover away: it is not something to act on. */}
+              <span className="node-kind" title={nodePortLabels(node).join(" · ")}>
                 <Icon name={NODE_KIND_ICONS[node.kind]} size={14} className="node-kind-icon" />
                 {humanizeNodeKind(node)}
               </span>
@@ -3104,14 +3103,6 @@ export function SessionFlowCanvas({
                 users={deviceUsers === undefined ? "unavailable" : deviceUsers && (deviceUsers.get(node.id) ?? null)}
               />
             )}
-            <small className="node-port-count">
-              {node.ports.length} port{node.ports.length === 1 ? "" : "s"} · {node.enabled ? "enabled" : "disabled"}
-            </small>
-            <span className="flow-port-list">
-              {nodePortLabels(node).map((port) => (
-                <small key={port}>{port}</small>
-              ))}
-            </span>
             {node.ports
               .filter((port) => port.direction === "output")
               .map((port) => {

@@ -99,7 +99,7 @@ describe("hidden device storage", () => {
     render(
       <PhysicalInputBinding devices={devices} value="" disabled={false} onChange={() => {}} onRefresh={() => {}} />,
     );
-    expect(optionValues("Physical input endpoint")).not.toContain("mic");
+    expect(optionValues("Input device endpoint")).not.toContain("mic");
   });
 
   it("filters choices but always keeps the bound device", () => {
@@ -118,7 +118,7 @@ describe("device pickers with hidden devices", () => {
     render(
       <PhysicalInputBinding devices={devices} value="" disabled={false} onChange={() => {}} onRefresh={() => {}} />,
     );
-    expect(optionValues("Physical input endpoint")).toEqual(["", "mic", "webcam"]);
+    expect(optionValues("Input device endpoint")).toEqual(["", "mic", "webcam"]);
     expect(screen.queryByText(/hidden/)).toBeNull();
   });
 
@@ -127,7 +127,7 @@ describe("device pickers with hidden devices", () => {
     render(
       <PhysicalInputBinding devices={devices} value="" disabled={false} onChange={() => {}} onRefresh={() => {}} />,
     );
-    expect(optionValues("Physical input endpoint")).toEqual(["", "mic", "hidden-devices-note"]);
+    expect(optionValues("Input device endpoint")).toEqual(["", "mic", "hidden-devices-note"]);
     const note = screen.getByRole("option", { name: /1 device hidden/ }) as HTMLOptionElement;
     expect(note.disabled).toBe(true);
   });
@@ -139,10 +139,10 @@ describe("device pickers with hidden devices", () => {
     render(
       <PhysicalInputBinding devices={devices} value="mic" disabled={false} onChange={onChange} onRefresh={() => {}} />,
     );
-    const picker = screen.getByLabelText("Physical input endpoint") as HTMLSelectElement;
+    const picker = screen.getByLabelText("Input device endpoint") as HTMLSelectElement;
     expect(picker.value).toBe("mic");
     expect(picker.disabled).toBe(false);
-    expect(optionValues("Physical input endpoint")).toEqual(["", "mic", "hidden-devices-note"]);
+    expect(optionValues("Input device endpoint")).toEqual(["", "mic", "hidden-devices-note"]);
     expect(onChange).not.toHaveBeenCalled();
   });
 
@@ -153,7 +153,7 @@ describe("device pickers with hidden devices", () => {
     render(
       <PhysicalOutputBinding devices={devices} value="" disabled={false} onChange={() => {}} onRefresh={() => {}} />,
     );
-    expect((screen.getByLabelText("Physical output endpoint") as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByLabelText("Output device endpoint") as HTMLSelectElement).disabled).toBe(true);
     expect(screen.getByText(/Every available device is hidden on this PC/)).toBeTruthy();
     expect(screen.queryByText(/No active render endpoints/)).toBeNull();
     expect(screen.getByRole("option", { name: /3 devices hidden/ })).toBeTruthy();
@@ -171,7 +171,7 @@ describe("device pickers with hidden devices", () => {
         onRefresh={() => {}}
       />,
     );
-    expect(optionValues("Physical input endpoint")).toEqual(["", "mic", "webcam", "hidden-devices-note"]);
+    expect(optionValues("Input device endpoint")).toEqual(["", "mic", "webcam", "hidden-devices-note"]);
     expect(screen.queryByRole("group", { name: "Surround playback devices (loopback)" })).toBeNull();
   });
 
@@ -187,7 +187,7 @@ describe("device pickers with hidden devices", () => {
         onRefresh={() => {}}
       />,
     );
-    expect((screen.getByLabelText("Physical input endpoint") as HTMLSelectElement).value).toBe("game71");
+    expect((screen.getByLabelText("Input device endpoint") as HTMLSelectElement).value).toBe("game71");
   });
 });
 
@@ -201,20 +201,20 @@ describe("Audio devices on this PC", () => {
     );
     const toggle = screen.getByLabelText("Show Monitor Speakers in device pickers") as HTMLInputElement;
     expect(toggle.checked).toBe(true);
-    expect(optionValues("Physical output endpoint")).toContain("monitor");
+    expect(optionValues("Output device endpoint")).toContain("monitor");
 
     act(() => {
       fireEvent.click(toggle);
     });
     expect(toggle.checked).toBe(false);
     expect(toggle.closest("li")!.className).toContain("is-hidden-device");
-    expect(optionValues("Physical output endpoint")).not.toContain("monitor");
+    expect(optionValues("Output device endpoint")).not.toContain("monitor");
     expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(["monitor"]);
 
     act(() => {
       fireEvent.click(toggle);
     });
-    expect(optionValues("Physical output endpoint")).toContain("monitor");
+    expect(optionValues("Output device endpoint")).toContain("monitor");
     expect(screen.queryByRole("option", { name: /hidden/ })).toBeNull();
   });
 

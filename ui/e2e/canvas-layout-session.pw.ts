@@ -12,8 +12,9 @@ test("group settings, tool sizes and layout stay in their own session", async ({
     .poll(() => page.getByTestId("rf__node-voice").evaluate((element) => (element as HTMLElement).offsetWidth))
     .toBe(540);
   await page.getByRole("tab", { name: "Session", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept("Other layout"));
   await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("dialog", { name: "New session" }).getByLabel("Session name").fill("Other layout");
+  await page.getByRole("dialog", { name: "New session" }).getByRole("button", { name: "Create session" }).click();
   await expect(page.getByRole("heading", { name: "Other layout", exact: true })).toBeVisible();
   await expect(page.locator(".visual-group-node")).toHaveCount(0);
   await expect
@@ -80,8 +81,9 @@ test("Undo arrange is discarded when switching sessions", async ({ page }) => {
   await page.getByRole("button", { name: "Arrange", exact: true }).click();
   await expect(page.getByRole("button", { name: "Undo arrange", exact: true })).toBeVisible();
   await page.getByRole("tab", { name: "Session", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept("Arrange isolation"));
   await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.getByRole("dialog", { name: "New session" }).getByLabel("Session name").fill("Arrange isolation");
+  await page.getByRole("dialog", { name: "New session" }).getByRole("button", { name: "Create session" }).click();
   await expect(page.getByRole("heading", { name: "Arrange isolation", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo arrange", exact: true })).toHaveCount(0);
   await page.getByLabel("Choose session").selectOption("e2e-session");
