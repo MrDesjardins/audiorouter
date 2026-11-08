@@ -78,8 +78,13 @@ test("a pin stays on top and survives a restart", async ({ page }) => {
     "aria-pressed",
     "true",
   );
+  // The top rows show the pin at once, without leaving the tab (owner, 2026-11-08).
+  await expect(topRows(page).first()).toHaveText("Duck");
   await page.reload();
   await expect(topRows(page).first()).toHaveText("Duck");
+  // Unpinning takes it off the top at once too.
+  await page.getByRole("button", { name: "Unpin Duck", exact: true }).first().click();
+  await expect(topRows(page).first()).not.toHaveText("Duck");
 });
 
 test("tools that need setup say why, and can open Virtual Cables", async ({ page }) => {

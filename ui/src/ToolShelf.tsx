@@ -94,11 +94,11 @@ export function ToolShelf({
   onClearSearch: () => void;
   onOpenVirtualCables: () => void;
 }) {
-  // Read once per visit: this panel unmounts with the tab, so the top rows refresh when
-  // someone comes back and never move under the pointer (UI-17).
+  // Recents are read once per visit: adding a tool must not reorder the rows under the
+  // pointer (UI-17), so they refresh when someone comes back to the tab. Pins show at
+  // once: pressing a star is a deliberate request to change the top rows.
   const [shownRecents] = useState(readRecents);
-  const [shownPins] = useState(readPins);
-  const [pins, setPins] = useState(shownPins);
+  const [pins, setPins] = useState(readPins);
   const [openGroups, setOpenGroups] = useState(readOpenGroups);
   const [described, setDescribed] = useState<ShelfTool | null>(null);
   const query = search.trim().toLocaleLowerCase();
@@ -160,8 +160,8 @@ export function ToolShelf({
 
   const byId = new Map(all.map((tool) => [tool.id, tool]));
   const usable = new Set(all.filter((tool) => !tool.setup).map((tool) => tool.id));
-  const topRows = shelfRows(shownPins, shownRecents, usable);
-  const hasHistory = shownPins.length + shownRecents.length > 0;
+  const topRows = shelfRows(pins, shownRecents, usable);
+  const hasHistory = pins.length + shownRecents.length > 0;
 
   const remember = (id: string) => writeRecents(rememberRecent(readRecents(), id));
   const toggleGroup = (id: ShelfGroupId) =>
