@@ -113,3 +113,30 @@ export const clippedText = (page: Page, where: string) =>
     }
     return found;
   }, where);
+
+// Inputs criterion: every visible field has an accessible name (label, aria-label or
+// aria-labelledby), so Narrator announces what it is for.
+export const unnamedFields = (page: Page, where: string) =>
+  page.evaluate((label) => {
+    const found: string[] = [];
+    for (const field of document.querySelectorAll<HTMLElement>(
+      "input:not([type=hidden]), select, textarea, [role=combobox], [role=slider], [role=switch], [role=checkbox]",
+    )) {
+      const box = field.getBoundingClientRect();
+      const input = field as HTMLInputElement;
+      if (box.width === 0 || box.height === 0 || field.closest("[aria-hidden=true]")) continue;
+      // A file input hidden behind a styled button is announced through that button.
+      if (input.type === "file" && getComputedStyle(field).opacity === "0") continue;
+      const labelledBy = (field.getAttribute("aria-labelledby") ?? "")
+        .split(/\s+/)
+        .map((id) => document.getElementById(id)?.textContent?.trim() ?? "")
+        .join("");
+      const named =
+        field.getAttribute("aria-label")?.trim() ||
+        labelledBy ||
+        Array.from(input.labels ?? []).some((element) => element.textContent?.trim()) ||
+        field.getAttribute("title")?.trim();
+      if (!named) found.push(`${label}: ${field.tagName.toLowerCase()} ${field.className || field.id || ""}`.trim());
+    }
+    return found;
+  }, where);
