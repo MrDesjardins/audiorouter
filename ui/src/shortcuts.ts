@@ -8,10 +8,17 @@ export const defaultShortcutBinding: ShortcutBinding = {
 };
 
 export function shortcutFromKeyboardEvent(
-  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">,
+  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"> &
+    Partial<Pick<KeyboardEvent, "code">>,
 ): string | null {
   if (!(event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)) return null;
-  const key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  // On Windows Ctrl+Alt is AltGr, so many layouts (Canadian Multilingual:
+  // Ctrl+Alt+M types "µ") report a character instead of the letter pressed.
+  // Keep the typed letter when it is plain, otherwise use the physical key.
+  const physical = /^(?:Key([A-Z])|Digit([0-9]))$/.exec(event.code ?? "");
+  const plain = /^[A-Za-z0-9]$/.test(event.key);
+  const typed = event.key.length === 1 ? event.key.toUpperCase() : event.key;
+  const key = !plain && physical ? (physical[1] ?? physical[2]) : typed;
   if (["Control", "Meta", "Alt", "Shift"].includes(key)) return null;
   return `${event.ctrlKey || event.metaKey ? "Control+" : ""}${event.altKey ? "Alt+" : ""}${event.shiftKey ? "Shift+" : ""}${key}`;
 }

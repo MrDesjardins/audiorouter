@@ -140,6 +140,12 @@ as a failed current-profile setup.
   useful native editing/copy actions. Canvas tool menus remain available
   by pointer and keyboard; text selection is not disabled globally.
 
+  In the Windows desktop shell, disable WebView2's built-in browser
+  accelerators (including Find, Print and Reload). They must not open browser
+  chrome or reload the editor. Continue delivering keyboard events to the
+  app, including its custom audio bindings and canvas shortcuts; ordinary
+  text selection, copy/paste and editing remain available.
+
   Generic boolean tool settings, Duck phase switches, Audio File Loop,
   single-group lock/carry and manual-recorder dither
   show fixed-width On/Off text beside the switch. Their accessible names

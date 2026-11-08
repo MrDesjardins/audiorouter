@@ -1,5 +1,64 @@
 # Active plan — current priorities (2026-11-04)
 
+## Next UI qualification — after Round 27 (2026-11-07)
+
+Round 27's improvement phase is implemented and verified within its recorded
+software scope: native browser Find/Print/Reload are disabled; real Windows
+keys retain unsaved edits, app Save/Find and custom chord capture work; native
+popup, three-theme dropdown/density and measured loading evidence are recorded.
+The owner dismissed the permission overlay; the native blocker is cleared.
+See the [archived execution record](../archived/2026-11-07-ui-round-27.md)
+for exact commands, results, artifact hash, evidence and rollback. All eleven
+native fault cases pass with the final timestamp-aware gate. The owned manual
+shell quit 0; no test shell remains live. No owner route or audio was changed.
+
+Scores remain 112/140. Requirements UI-05/11/12/17, M05/M08: next evidence is
+attended physical-key dropdown cancellation, Narrator, actual Windows scaling,
+native copy/paste, live-route/device-loss and first-time-user/icon checks.
+Automated Down/Escape retains a draft choice in both the app and a plain HTML
+select; do not claim physical cancellation restores the old choice. A default
+Ctrl+Alt+M trial delivered no KeyM DOM event through the input helper, so do
+not claim native audio-shortcut activation from it. These are retained limits,
+not passing attended gates. Keep the 599 kB chunk warning visible; measured
+local startup samples did not identify a bottleneck warranting a split.
+
+Round 28 attended session (2026-11-07, owner, recorded Round 27 exe
+BB23FDD5…4EC4, disposable profile via
+`target/ui-quality-review/round-28/launch-attended.ps1`):
+- Dropdown, physical keys: Down/Up move the choice; Escape closes the list and
+  keeps the moved-to device as an unsaved draft (Save shown). Same as the
+  plain HTML select, so platform behavior; nothing applies until Save, and the
+  empty choice clears it. Pass with that note, not "Escape restores".
+- Copy/paste name field to and from Notepad: pass. Rename save: graph.commit ok.
+- Ctrl+Alt+M: **defect**. On the owner's Canadian Multilingual layout Ctrl+Alt
+  is AltGr and types "µ", so `shortcutFromKeyboardEvent` (event.key) never
+  matched. Fixed to fall back to `event.code` when the typed key is not a plain
+  letter/digit; regression in `ui/src/shortcuts.test.ts` (fails without fix).
+  Not yet re-run on a rebuilt exe.
+- Narrator tab pass and Windows scale 150 %/200 %: owner reports pass.
+- Live route: Play started after first-run device access (one expected
+  permissionDenied before Allow). Unplug/replug: sound returned; the message
+  seen ("No input reaches …") is the canvas wiring hint, so device-loss
+  messaging is still unconfirmed.
+- Plugins list: every row had a "?" opening the same generic VST guide under
+  the plugin's name, crowding the section "?". Per-row links removed;
+  regression in `ui/src/PluginScanPanel.test.tsx`. Two `plugins.scan` errors
+  were the absent standard folders (Steinberg/VSTPlugins, Common Files/VST2),
+  swallowed by design but logged with no detail — follow-up.
+- Icons: only Spectral Gate was unclear (looked like bars, not a gate).
+  Redrawn as a doorway with bars through a dashed threshold (`iconShapes.ts`).
+Next: rebuild the release exe (owner's go-ahead; heavy build), re-check
+Ctrl+Alt+M, the plugin list and the icon with real input, refresh guide
+videos if the icon appears in them, then confirm device-loss messaging.
+
+Next action: coordinate an attended keyboard/Narrator/Windows-scaling session
+on disposable data using the recorded build. Do not change Windows security,
+device permissions, drivers or owner audio as part of setup. Further product
+changes need a reproduced defect and an updated execution plan. The Round 27
+implementation remains uncommitted on improve/ui-round-23 for human review;
+no new PR, publication, release or merge was authorized.
+
+
 ## Combined UI and nightly repair PR — 2026-11-07
 
 PR #121 CI repair (UI-02/11/17, ENG-02/04): head `a3026351` fails five

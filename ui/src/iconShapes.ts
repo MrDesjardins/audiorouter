@@ -110,7 +110,10 @@ export const ICON_SHAPES = {
     '<path d="M15 10V9" /><path d="M16.472 15a6 6 0 01-8.943 0" /><path d="M9 10V9" /><circle cx="12" cy="12" r="10" />',
   speaker:
     '<rect width="16" height="20" x="4" y="2" rx="2" /><path d="M12 6h.01" /><circle cx="12" cy="14" r="4" /><path d="M12 14h.01" />',
-  spectralGate: '<path d="M4 20v-6M9 20V8M14 20v-9M19 20v-5"/><path d="M2 12h20" stroke-dasharray="2 3"/>',
+  // A doorway (the Gate's motif) letting frequency bars through above a dashed
+  // threshold; plain bars read as an EQ or meter to the owner (2026-11-07).
+  spectralGate:
+    '<path d="M2 21h20"/><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17"/><path d="M9 18v-3M12 18V7M15 18v-8"/><path d="M7 13h10" stroke-dasharray="1.5 2"/>',
   speech:
     '<path d="M8.8 20v-4.1l1.9.2a2.3 2.3 0 0 0 2.164-2.1V8.3A5.37 5.37 0 0 0 2 8.25c0 2.8.656 3.054 1 4.55a5.77 5.77 0 0 1 .029 2.758L2 20" /><path d="M19.8 17.8a7.5 7.5 0 0 0 .003-10.603" /><path d="M17 15a3.5 3.5 0 0 0-.025-4.975" />',
   square: '<rect width="18" height="18" x="3" y="3" rx="2" />',

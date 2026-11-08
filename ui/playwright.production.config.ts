@@ -13,6 +13,7 @@ export default defineConfig({
     "**/canvas-readiness.pw.ts",
     "**/canvas-first-view.pw.ts", "**/slow-save.pw.ts", "**/slow-lifecycle.pw.ts",
     "**/slow-scan.pw.ts", "**/slow-audio-import.pw.ts", "**/startup-reconnect.pw.ts",
+    "**/native-select-keyboard.pw.ts", "**/panel-density.pw.ts",
   ],
   outputDir: `${process.env.TEMP ?? "."}/audiorouter-production-playwright-results`,
   webServer: {

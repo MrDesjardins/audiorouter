@@ -42,6 +42,11 @@ windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Security_
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 
+[target.'cfg(windows)'.dependencies]
+# Match Tauri/Wry's existing WebView2 COM ABI; this adds no package upgrade.
+webview2-com = "=0.38.2"
+windows-core = "=0.61.2"
+
 [dev-dependencies]
 audiorouter-control = { path = "../crates/control" }
 audiorouter-engine = { path = "../crates/engine" }

@@ -37,6 +37,8 @@ mod support_bundle;
 mod tray_playback;
 mod ui_draft;
 mod virtual_cable_shell;
+#[cfg(windows)]
+mod webview_keys;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
 
@@ -929,7 +931,7 @@ fn open_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         return Ok(());
     }
     let script = app.state::<MainWindowScript>().0.clone();
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+    let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title(format!("AudioRouter {}", env!("CARGO_PKG_VERSION")))
         .inner_size(1280.0, 800.0)
         .resizable(true)
@@ -946,6 +948,8 @@ fn open_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         .additional_browser_args(WEBVIEW_BROWSER_ARGS)
         .initialization_script(script)
         .build()?;
+    #[cfg(windows)]
+    webview_keys::configure(&_window)?;
     Ok(())
 }
 

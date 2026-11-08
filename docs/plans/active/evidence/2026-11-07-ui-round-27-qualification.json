@@ -1,0 +1,136 @@
+{
+  "status": "passed",
+  "shell": "C:\\code\\audiorouter\\src-tauri\\target\\release\\audiorouter-shell.exe",
+  "cases": [
+    {
+      "name": "baseline",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "passed",
+      "runnerExitCode": 0,
+      "observedStages": [
+        "initial-ready",
+        "restarted-ready"
+      ],
+      "capturedProcesses": 14,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\baseline\\result.json"
+    },
+    {
+      "name": "missing-binary",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "failed",
+      "runnerExitCode": 1,
+      "observedStages": [],
+      "capturedProcesses": 0,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\missing-binary\\result.json"
+    },
+    {
+      "name": "occupied-pipe",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "failed",
+      "runnerExitCode": 1,
+      "observedStages": [],
+      "capturedProcesses": 0,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\occupied-pipe\\result.json"
+    },
+    {
+      "name": "shell-exit",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "failed",
+      "runnerExitCode": 1,
+      "observedStages": [
+        "initial-child-spawned"
+      ],
+      "capturedProcesses": 7,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\shell-exit\\result.json"
+    },
+    {
+      "name": "bridge",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "failed",
+      "runnerExitCode": 1,
+      "observedStages": [
+        "initial-ready"
+      ],
+      "capturedProcesses": 7,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\bridge\\result.json"
+    },
+    {
+      "name": "readiness",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "failed",
+      "runnerExitCode": 1,
+      "observedStages": [
+        "page-attached"
+      ],
+      "capturedProcesses": 7,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\readiness\\result.json"
+    },
+    {
+      "name": "page-error",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "failed",
+      "runnerExitCode": 1,
+      "observedStages": [
+        "page-attached"
+      ],
+      "capturedProcesses": 7,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\page-error\\result.json"
+    },
+    {
+      "name": "cleanup-fallback",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "failed",
+      "runnerExitCode": 1,
+      "observedStages": [
+        "initial-ready"
+      ],
+      "capturedProcesses": 7,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\cleanup-fallback\\result.json"
+    },
+    {
+      "name": "cancel-before-attach",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "cancelled",
+      "runnerExitCode": 130,
+      "observedStages": [
+        "initial-child-spawned"
+      ],
+      "capturedProcesses": 7,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\cancel-before-attach\\result.json"
+    },
+    {
+      "name": "cancel-after-ready",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "cancelled",
+      "runnerExitCode": 130,
+      "observedStages": [
+        "initial-ready"
+      ],
+      "capturedProcesses": 7,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\cancel-after-ready\\result.json"
+    },
+    {
+      "name": "cancel-after-restart",
+      "status": "passed",
+      "failure": null,
+      "expectedRunnerStatus": "cancelled",
+      "runnerExitCode": 130,
+      "observedStages": [
+        "initial-ready",
+        "restarted-ready"
+      ],
+      "capturedProcesses": 14,
+      "report": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-qualification-final\\cancel-after-restart\\result.json"
+    }
+  ]
+}

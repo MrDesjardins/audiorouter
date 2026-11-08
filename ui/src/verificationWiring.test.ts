@@ -60,6 +60,8 @@ it("production patterns refer to real scenarios and retain critical workflows", 
     "session-workflows.pw.ts",
     "recording-workflows.pw.ts",
     "canvas-readiness.pw.ts",
+    "native-select-keyboard.pw.ts",
+    "panel-density.pw.ts",
   ])
     expect(patterns).toContain(`**/${file}`);
   expect(production.outputDir).toContain("audiorouter-production-playwright-results");
