@@ -10,7 +10,7 @@ iteration-15 table recorded for it; nothing reaches 10 (no independent study).
 
 | # | Category | Score | Basis / what still keeps it from 9 or 10 |
 |---|----------|-------|------------------------------------------|
-| 1 | Contrast | 8 | No new pixel audit of gradients and boundaries |
+| 1 | Contrast | 8 | Text contrast now checked against WCAG AA on the canvas, three panels and every Settings page in three themes, gradients judged at their worst stop (`e2e/text-contrast.pw.ts`, 0 failures, negative control included); text over translucent layers, non-text boundaries and hover states are not yet checked |
 | 2 | Typography/size | **9** | Owner checked Windows 150 % and 200 %: nothing clipped or overlapping; new Settings nav checked in three themes |
 | 3 | Clarity | 8 | Test Signal Play/Stop and lost-device wording fixed; still no first-time-user test |
 | 4 | Consistency | 8 | Custom themes unchecked |
