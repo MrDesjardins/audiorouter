@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./browser-test";
 import { clippedText, lowContrastText, smallTargets } from "./ui-audits";
-import { setColorTheme } from "./workbench";
+import { openSettings, setColorTheme } from "./workbench";
 
 // Buttons, Contrast and Spacing criteria for dialogs outside Settings.
 const DIALOGS: { name: string; open: (page: Page) => Promise<void> }[] = [
@@ -22,6 +22,25 @@ const DIALOGS: { name: string; open: (page: Page) => Promise<void> }[] = [
       await page.keyboard.type("gain");
     },
   },
+  {
+    name: "Goal picker",
+    open: async (page) => {
+      await page.locator(".react-flow__pane").click();
+      await page.keyboard.press("Control+K");
+      await page.getByRole("combobox").fill("start from");
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("dialog", { name: "What do you want to do?" })).toBeVisible();
+    },
+  },
+  ...["Add tools from here", "Connect the dots", "Press Play"].map((step, index) => ({
+    name: `Tour step ${index + 1}`,
+    open: async (page: Page) => {
+      await openSettings(page, "Help");
+      await page.getByRole("button", { name: "Take the tour" }).click();
+      for (let next = 0; next < index; next += 1) await page.getByRole("button", { name: "Next" }).click();
+      await expect(page.getByRole("dialog", { name: step })).toBeVisible();
+    },
+  })),
 ];
 
 for (const theme of ["dark", "light", "high-contrast"]) {
