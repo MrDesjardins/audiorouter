@@ -1,30 +1,6 @@
-import type { Page } from "@playwright/test";
 import { expect, test } from "./browser-test";
 import { setColorTheme } from "./workbench";
-
-// Spacing criterion: text that does not fit must stay readable. A clipped label needs a
-// tooltip (title) or an accessible name that carries the full text.
-const clippedText = (page: Page, where: string) =>
-  page.evaluate((label) => {
-    const found: string[] = [];
-    for (const element of document.querySelectorAll<HTMLElement>("body *")) {
-      if (!element.textContent?.trim() || element.children.length > 0) continue;
-      const box = element.getBoundingClientRect();
-      if (box.width === 0 || box.height === 0 || box.bottom < 0 || box.top > innerHeight) continue;
-      const style = getComputedStyle(element);
-      if (style.visibility === "hidden" || element.closest("[aria-hidden=true], .react-flow__minimap")) continue;
-      if (style.overflowX === "visible" && style.overflowY === "visible") continue;
-      if (/auto|scroll/.test(style.overflowX + style.overflowY)) continue;
-      const clipped = element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 2;
-      if (!clipped) continue;
-      const text = element.textContent.trim();
-      const named = element.closest("[title], [aria-label]");
-      const full = named?.getAttribute("title") ?? named?.getAttribute("aria-label") ?? "";
-      if (full.includes(text) || (full && text.endsWith("…"))) continue;
-      found.push(`${label}: "${text.slice(0, 40)}" ${element.scrollWidth}>${element.clientWidth}`);
-    }
-    return found;
-  }, where);
+import { clippedText } from "./ui-audits";
 
 const layouts = [
   ...["dark", "light", "high-contrast"].map((theme) => ({ theme, width: 1500, height: 950 })),

@@ -1,26 +1,7 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./browser-test";
 import { setColorTheme } from "./workbench";
-
-// Buttons criterion: WCAG 2.5.8 asks for pointer targets of at least 24 by 24 CSS px.
-// Inline links inside running text are exempt under 2.5.8, as is the canvas mini map.
-const smallTargets = (page: Page, where: string) =>
-  page.evaluate((label) => {
-    const found: string[] = [];
-    for (const element of document.querySelectorAll<HTMLElement>("button, a[href], [role=button], [role=tab]")) {
-      const box = element.getBoundingClientRect();
-      if (box.width === 0 || box.height === 0) continue;
-      if (getComputedStyle(element).visibility === "hidden") continue;
-      if (element.closest("[aria-hidden=true], .react-flow__minimap")) continue;
-      if (element.tagName === "A" && element.closest("p, li, dd")) continue;
-      if (box.width < 24 || box.height < 24) {
-        const name =
-          element.getAttribute("aria-label") || element.textContent?.trim().slice(0, 30) || element.className;
-        found.push(`${label}: ${name} ${Math.round(box.width)}x${Math.round(box.height)}`);
-      }
-    }
-    return found;
-  }, where);
+import { smallTargets } from "./ui-audits";
 
 async function openHarness(page: Page) {
   await page.setViewportSize({ width: 1500, height: 950 });
