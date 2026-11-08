@@ -2,7 +2,16 @@ export type ShortcutAction = "sessionToggle" | "privacyMute";
 
 export type ShortcutBinding = Record<ShortcutAction, string>;
 
+// Ctrl+Shift, not Ctrl+Alt: Windows treats Ctrl+Alt as AltGr, which types a
+// character on many layouts, and Ctrl+Alt+M never reached the owner's window
+// at all (2026-11-07).
 export const defaultShortcutBinding: ShortcutBinding = {
+  sessionToggle: "Control+Shift+S",
+  privacyMute: "Control+Shift+M",
+};
+
+/** Earlier defaults; a saved value equal to one of these follows the new default. */
+export const previousDefaultShortcutBinding: ShortcutBinding = {
   sessionToggle: "Control+Alt+S",
   privacyMute: "Control+Alt+M",
 };

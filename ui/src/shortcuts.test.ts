@@ -18,11 +18,14 @@ describe("keyboard shortcuts", () => {
     ).toBeNull();
   });
 
-  it("matches the default chords when AltGr turns the letter into a character", () => {
+  it("matches a Ctrl+Alt chord when AltGr turns the letter into a character", () => {
     // Canadian Multilingual Standard: Ctrl+Alt+M types "µ" (owner, 2026-11-07).
     const altGr = { ctrlKey: true, metaKey: false, altKey: true, shiftKey: false };
-    expect(shortcutFromKeyboardEvent({ ...altGr, key: "µ", code: "KeyM" })).toBe(defaultShortcutBinding.privacyMute);
-    expect(shortcutFromKeyboardEvent({ ...altGr, key: "ß", code: "KeyS" })).toBe(defaultShortcutBinding.sessionToggle);
+    expect(shortcutFromKeyboardEvent({ ...altGr, key: "µ", code: "KeyM" })).toBe("Control+Alt+M");
+    expect(shortcutFromKeyboardEvent({ ...altGr, key: "ß", code: "KeyS" })).toBe("Control+Alt+S");
+    // The defaults avoid AltGr entirely.
+    const shifted = { ctrlKey: true, metaKey: false, altKey: false, shiftKey: true };
+    expect(shortcutFromKeyboardEvent({ ...shifted, key: "M", code: "KeyM" })).toBe(defaultShortcutBinding.privacyMute);
     // A layout whose key types its own letter keeps that letter (AZERTY A on KeyQ).
     expect(shortcutFromKeyboardEvent({ ...altGr, key: "a", code: "KeyQ" })).toBe("Control+Alt+A");
     expect(shortcutFromKeyboardEvent({ ...altGr, key: "F5", code: "F5" })).toBe("Control+Alt+F5");

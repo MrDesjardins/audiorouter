@@ -5,6 +5,8 @@ import type { LibraryEntry } from "./library";
 import { TextField } from "./TextField";
 import { HelpDisclosure } from "./HelpDisclosure";
 import { Icon } from "./icons";
+import type { IconName } from "./iconShapes";
+import { paletteScore } from "./paletteItems";
 import { usePanelMemory } from "./usePanelMemory";
 import type { Session } from "@audiorouter/contracts";
 import type { ClientRow } from "./backend";
@@ -84,6 +86,53 @@ const SETTINGS_GROUPS: { title: string; pages: [SettingsPage, string][] }[] = [
 ];
 
 export const SETTINGS_PAGES = SETTINGS_GROUPS.flatMap((group) => group.pages);
+
+/** One icon per page; a Record, so a new page cannot ship without one. */
+export const SETTINGS_PAGE_ICONS: Record<SettingsPage, IconName> = {
+  virtualCables: "cable",
+  plugins: "puzzle",
+  deviceAccess: "shield-check",
+  uiOptions: "palette",
+  startup: "power",
+  shortcuts: "keyboard",
+  versions: "refresh-cw",
+  help: "circle-help",
+  mcp: "bot",
+  api: "code-xml",
+  diagnostics: "scroll-text",
+  clients: "users",
+  sessionJson: "braces",
+  catalog: "book-open",
+  identity: "app-window",
+};
+
+/** Words people search for, shared by the Settings search and Ctrl+K. */
+export const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
+  virtualCables: "cable driver virtual device install",
+  plugins: "vst vst2 vst3 effects scan folder",
+  deviceAccess: "permission allow devices microphone privacy",
+  uiOptions: "theme dark light high contrast colors look animation",
+  startup: "sign in login autostart autoplay tray",
+  shortcuts: "keys keyboard hotkey shortcut chord",
+  versions: "update release upgrade",
+  help: "guide manual how to learn",
+  mcp: "ai assistant claude chatgpt llm",
+  api: "rest http token stream deck script",
+  diagnostics: "logs support bug report export",
+  clients: "connections access revoke",
+  sessionJson: "export import json file",
+  catalog: "tools list kinds",
+  identity: "about version build",
+};
+
+/** Settings pages whose name or keywords match, in their usual order. */
+export function matchingSettingsPages(query: string): Set<SettingsPage> {
+  return new Set(
+    SETTINGS_PAGES.filter(
+      ([id, title]) => paletteScore({ title, detail: "", keywords: SETTINGS_PAGE_KEYWORDS[id] }, query) > 0,
+    ).map(([id]) => id),
+  );
+}
 
 /** Exhaustive, so a new tab cannot silently fall into the wrong place. */
 export function tabPlace(tab: WorkbenchTab): "daily" | "status" | "settings" {
@@ -392,6 +441,11 @@ export function Workbench({
   // Where "Back to the route" returns, and which page the gear reopens.
   const lastRouteTab = useRef<WorkbenchTab>(inSettings ? "tools" : tab);
   const lastSettingsPage = useRef<WorkbenchTab>(inSettings ? tab : "virtualCables");
+  const [settingsQuery, setSettingsQuery] = useState("");
+  const shownPages = matchingSettingsPages(settingsQuery);
+  const shownList = SETTINGS_PAGES.filter(([id]) => shownPages.has(id));
+  // Keep one shown tab reachable with Tab even when the open page is filtered out.
+  const focusablePage = shownPages.has(tab as SettingsPage) ? tab : shownList[0]?.[0];
   useLayoutEffect(() => {
     if (inSettings) lastSettingsPage.current = tab;
     else lastRouteTab.current = tab;
@@ -526,6 +580,31 @@ export function Workbench({
           >
             <span aria-hidden="true">←</span> Back to the route
           </button>
+          <label className="settings-search">
+            <span>Find a setting</span>
+            <input
+              type="search"
+              value={settingsQuery}
+              placeholder="Shortcut, theme, logs…"
+              aria-describedby="settings-search-hint"
+              onChange={(event) => setSettingsQuery(event.target.value)}
+              onKeyDown={(event) => {
+                const first = shownList[0];
+                if (event.key === "Enter" && first) {
+                  event.preventDefault();
+                  startTransition(() => onTab(first[0]));
+                } else if (event.key === "Escape" && settingsQuery) {
+                  event.preventDefault();
+                  setSettingsQuery("");
+                }
+              }}
+            />
+            <small id="settings-search-hint">
+              {shownList.length === 0
+                ? "No settings match. Ctrl+K searches everything."
+                : "Ctrl+K searches everything."}
+            </small>
+          </label>
           <div
             role="tablist"
             aria-orientation="vertical"
@@ -533,35 +612,39 @@ export function Workbench({
             ref={tabsRef}
             onKeyDown={(event) => {
               if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-              const index = SETTINGS_PAGES.findIndex(([id]) => id === tab);
-              const count = SETTINGS_PAGES.length;
-              const next = SETTINGS_PAGES[(index + (event.key === "ArrowDown" ? 1 : count - 1)) % count];
+              const index = shownList.findIndex(([id]) => id === tab);
+              const count = shownList.length;
+              if (count === 0) return;
+              const next = shownList[(index + (event.key === "ArrowDown" ? 1 : count - 1) + count) % count];
               if (!next) return;
               event.preventDefault();
               onTab(next[0]);
               window.requestAnimationFrame(() => document.getElementById(`workbench-tab-${next[0]}`)?.focus());
             }}
           >
-            {SETTINGS_GROUPS.map((group) => (
+            {SETTINGS_GROUPS.filter((group) => group.pages.some(([id]) => shownPages.has(id))).map((group) => (
               <div key={group.title} className="settings-nav-group" role="presentation">
                 <p className="eyebrow" role="presentation">
                   {group.title}
                 </p>
-                {group.pages.map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    role="tab"
-                    id={`workbench-tab-${id}`}
-                    aria-controls={`workbench-panel-${id}`}
-                    aria-selected={tab === id}
-                    tabIndex={tab === id ? 0 : -1}
-                    className={tab === id ? "active" : ""}
-                    onClick={() => startTransition(() => onTab(id))}
-                  >
-                    {label}
-                  </button>
-                ))}
+                {group.pages
+                  .filter(([id]) => shownPages.has(id))
+                  .map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="tab"
+                      id={`workbench-tab-${id}`}
+                      aria-controls={`workbench-panel-${id}`}
+                      aria-selected={tab === id}
+                      tabIndex={focusablePage === id ? 0 : -1}
+                      className={tab === id ? "active" : ""}
+                      onClick={() => startTransition(() => onTab(id))}
+                    >
+                      <Icon name={SETTINGS_PAGE_ICONS[id]} size={16} />
+                      {label}
+                    </button>
+                  ))}
               </div>
             ))}
           </div>

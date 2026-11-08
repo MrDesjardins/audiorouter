@@ -9068,8 +9068,20 @@ button.danger {
 .settings-nav-group .eyebrow {
   margin: 0.75rem 0.5rem 0.25rem;
 }
+.settings-search {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.5rem 0.5rem 0.25rem;
+  font-size: var(--text-sm);
+}
+.settings-search small {
+  color: var(--text-soft);
+  min-height: 1.3em; /* UI-17: the hint swaps text without moving the list. */
+}
 .settings-nav [role="tab"] {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   width: 100%;
   min-height: var(--control-md);
   padding: 0.25rem 0.5rem;

@@ -50,7 +50,20 @@ BB23FDD5…4EC4, disposable profile via
   `plugin_scan_failures_log_their_code_but_never_free_text`.
 - Icons: only Spectral Gate was unclear (looked like bars, not a gate).
   Redrawn as a doorway with bars through a dashed threshold (`iconShapes.ts`).
-Next: rebuild the release exe (owner's go-ahead; heavy build), re-check
+- Rebuilt exe 0852E68A… (owner): plugin "?" and icon confirmed; scan errors
+  now log `invalidRoot`. Ctrl+Alt+M reached no DOM event at all (CDP key
+  recorder: Ctrl+F12 arrived, Ctrl+Alt+M produced nothing, not even Control),
+  while Notepad typed µ. Owner chose new defaults: Ctrl+Shift+S / Ctrl+Shift+M,
+  with saved old defaults migrated (`readShortcuts`, preferences.test.ts).
+- Owner UX requests, same round: tray menu cut from nine lines to status,
+  recording, Open, one Play/Stop item naming its action, Quit (UI-10
+  updated; refresh on right-click). Messages close themselves: info/success
+  8 s, warnings 30 s (also the unfed-route warning), errors, progress and
+  messages with a button stay; paused on hover/focus. Settings gains a page
+  search sharing Ctrl+K keywords, plus one icon per page
+  (`SETTINGS_PAGE_ICONS`/`KEYWORDS`, settingsSearch.test.ts).
+Next: owner check of the toggle, timers and Settings search on a rebuilt
+exe; three-theme screenshots of the Settings nav; then re-check
 Ctrl+Alt+M, the plugin list and the icon with real input, refresh guide
 videos if the icon appears in them, then confirm device-loss messaging.
 

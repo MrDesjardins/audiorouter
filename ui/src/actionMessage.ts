@@ -48,3 +48,24 @@ export function actionMessageTone(message: string | null | undefined): ActionMes
   if (SUCCESS_PATTERNS.some((pattern) => pattern.test(message))) return "success";
   return "info";
 }
+
+export const INFO_LIFETIME_MS = 8_000;
+export const WARNING_LIFETIME_MS = 30_000;
+
+/**
+ * How long a message stays before closing itself (owner, 2026-11-07), or null
+ * to keep it until dismissed. Errors stay so a failure is never missed;
+ * progress text and messages offering a button stay until they change.
+ */
+export function actionMessageLifetimeMs(message: string | null | undefined, hasAction: boolean): number | null {
+  if (!message || hasAction || /(\.\.\.|…)$/.test(message.trim())) return null;
+  switch (actionMessageTone(message)) {
+    case "error":
+      return null;
+    case "warning":
+      return WARNING_LIFETIME_MS;
+    case "success":
+    case "info":
+      return INFO_LIFETIME_MS;
+  }
+}

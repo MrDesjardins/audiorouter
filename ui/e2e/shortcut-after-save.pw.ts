@@ -31,7 +31,7 @@ test("the start/stop shortcut plays the saved route after Save", async ({ page }
   await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();
   await expect(message).toContainText("Route saved");
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await page.keyboard.press("Control+Alt+S");
+  await page.keyboard.press("Control+Shift+S");
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
   await expect(message).toContainText("Audio session is running");
   await expect(message).not.toContainText("Temporary preview");
