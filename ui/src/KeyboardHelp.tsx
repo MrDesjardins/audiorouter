@@ -28,6 +28,7 @@ export function KeyboardHelp({ bindings, onClose }: { bindings: ShortcutBinding;
     ["Ctrl+0", "Fit the route in view"],
     ["Arrow keys", "Move a focused card one grid step"],
     ["Delete", "Remove selected tools or connections"],
+    ["Esc (while dragging)", "Cancel the drag: a card goes back, a connection is not made"],
     ["Shift+F10", "Open a focused card's menu"],
     ["F1 / ?", "Show this reference"],
   ];

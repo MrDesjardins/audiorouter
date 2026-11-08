@@ -9895,3 +9895,8 @@ button.danger {
 .keyboard-help dd {
   margin: 0;
 }
+
+/* Escape cancelled the connection drag: hide its preview line until release. */
+.session-flow-canvas.connection-cancelled .react-flow__connection {
+  visibility: hidden;
+}

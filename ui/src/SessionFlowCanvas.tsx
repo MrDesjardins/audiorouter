@@ -2409,6 +2409,10 @@ export function SessionFlowCanvas({
   } | null>(null);
   const resizingGroupRef = useRef<string | null>(null);
   const resizeStartRef = useRef<CanvasRect[] | null>(null);
+  // Escape cancels a drag in progress and leaves the route as it was.
+  const dragCancelledRef = useRef(false);
+  const connectionCancelledRef = useRef(false);
+  const [connectionCancelled, setConnectionCancelled] = useState(false);
   const geometryItems = useMemo<CanvasRect[]>(
     () => [
       ...groups.map((group) => ({
@@ -2541,6 +2545,27 @@ export function SessionFlowCanvas({
     onLayoutHistoryStep?.(direction);
     onLayoutMessage?.(direction === "undo" ? "Undid the canvas layout change." : "Redid the canvas layout change.");
   };
+  // Escape cancels the drag in progress (Drag/drop criterion, 2026-11-07): a
+  // card returns to where the drag began, and a connection is not made.
+  const cancelDrag = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    const drag = dragSnapshotRef.current;
+    if (drag && !dragCancelledRef.current) {
+      dragCancelledRef.current = true;
+      setGuides(NO_GUIDES);
+      commitGeometry(drag.items);
+    } else if (connectionHandleMode !== "idle" && !connectionCancelledRef.current) {
+      connectionCancelledRef.current = true;
+      setConnectionCancelled(true);
+    } else return;
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => cancelDrag(event);
+    window.addEventListener("keydown", listener, true);
+    return () => window.removeEventListener("keydown", listener, true);
+  }, []);
   if (layoutHistoryRef)
     layoutHistoryRef.current = {
       restore: restoreLayout,
@@ -3280,7 +3305,7 @@ export function SessionFlowCanvas({
         {canvasOverlay}
         <SignalFlowLegend />
         <div
-          className="session-flow-canvas"
+          className={`session-flow-canvas${connectionCancelled ? " connection-cancelled" : ""}`}
           id="routing-canvas"
           aria-label="Signal-flow graph"
           tabIndex={-1}
@@ -3482,7 +3507,10 @@ export function SessionFlowCanvas({
               const moved = new Map<string, { x: number; y: number }>();
               const resized = new Map<string, { width: number; height: number }>();
               for (const change of changes) {
-                if (change.type === "position" && change.position) moved.set(change.id, change.position);
+                if (change.type === "position" && change.position) {
+                  // A cancelled drag keeps following the pointer inside React Flow; ignore it.
+                  if (!dragCancelledRef.current) moved.set(change.id, change.position);
+                }
                 if (change.type === "dimensions" && change.dimensions && change.resizing)
                   resized.set(change.id, change.dimensions);
               }
@@ -3576,6 +3604,8 @@ export function SessionFlowCanvas({
             onMouseDownCapture={captureConnectionHandle}
             onPointerDownCapture={captureConnectionHandle}
             onConnectStart={(event, params) => {
+              connectionCancelledRef.current = false;
+              setConnectionCancelled(false);
               sourceHandleRef.current = null;
               targetHandleRef.current = null;
               pendingConnectionRef.current = null;
@@ -3593,7 +3623,8 @@ export function SessionFlowCanvas({
               const clientX = "clientX" in event ? event.clientX : undefined;
               const clientY = "clientY" in event ? event.clientY : undefined;
               captureConnectionHandle(event);
-              const pending = pendingConnectionRef.current;
+              const cancelled = connectionCancelledRef.current;
+              const pending = cancelled ? null : pendingConnectionRef.current;
               if (
                 pending &&
                 connectionState.fromNode &&
@@ -3651,6 +3682,7 @@ export function SessionFlowCanvas({
                   if (target.side) setEdgeSide(edgeId, "target", target.side, false);
                 }
               } else if (
+                !cancelled &&
                 !pending &&
                 connectionState.fromHandle &&
                 connectionState.toHandle &&
@@ -3666,6 +3698,8 @@ export function SessionFlowCanvas({
               sourceHandleRef.current = null;
               targetHandleRef.current = null;
               setConnectionHandleMode(IDLE_CONNECTION_MODE);
+              connectionCancelledRef.current = false;
+              setConnectionCancelled(false);
               logConnectionDebug("react-flow-connect-end", {
                 inProgress: "inProgress" in connectionState ? connectionState.inProgress : false,
                 fromNode: connectionState.fromNode?.id,
@@ -3727,6 +3761,7 @@ export function SessionFlowCanvas({
                 : undefined
             }
             onNodeDragStart={() => {
+              dragCancelledRef.current = false;
               beforeGestureRef.current = captureLayout();
               dragSnapshotRef.current = {
                 sessionId: session.id,
@@ -3759,7 +3794,10 @@ export function SessionFlowCanvas({
             }}
             onNodeDragStop={() => {
               setGuides(NO_GUIDES);
-              rememberGesture();
+              if (dragCancelledRef.current) {
+                dragCancelledRef.current = false;
+                beforeGestureRef.current = null;
+              } else rememberGesture();
               dragSnapshotRef.current = null;
               writeLayout(optionalLocalStorage(), layoutKey, positionsRef.current);
             }}

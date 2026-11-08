@@ -61,6 +61,16 @@ BB23FDD5…4EC4, disposable profile via
   pass `check-tool-guide-videos` and play in Firefox
   (`GUIDE_SITE_PORT=4188`: port 4187 was held by an unrelated server from
   2026-11-02 serving another checkout, which made every clip fail there).
+- Motion audit: CSS honours reduced motion globally, but a scripted
+  `behavior: "smooth"` overrides it (client-permissions jump). Scripted
+  scrolls now use `scrollBehavior()`; `motion.test.ts` rejects hard-coded
+  smooth scrolls.
+- Drag/drop audit: Escape did not cancel a drag (probe: the connection was
+  still made, the card stayed moved). Escape now returns dragged cards to
+  where the drag began (no layout-history entry) and drops a connection drag,
+  hiding its preview line; listed in the F1 reference. `e2e/drag-cancel.pw.ts`
+  (fails without the fix, with a no-Escape control); 80 canvas browser tests
+  pass.
 - Plugins list: every row had a "?" opening the same generic VST guide under
   the plugin's name, crowding the section "?". Per-row links removed;
   regression in `ui/src/PluginScanPanel.test.tsx`. Two `plugins.scan` errors
