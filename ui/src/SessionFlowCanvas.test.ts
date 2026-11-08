@@ -784,7 +784,7 @@ describe("canvas library drop positions", () => {
     });
   });
 
-  it("labels input, native tool, VST, and output nodes with a distinct family badge", () => {
+  it("names each kind and plugin format once without redundant family badges", () => {
     const sessionWithPlugin = {
       ...demoSession,
       nodes: [
@@ -814,18 +814,21 @@ describe("canvas library drop positions", () => {
     );
 
     const mic = within(getByLabelText("Microphone, physicalInput"));
-    expect(mic.getByText("Input")).toBeTruthy();
+    expect(mic.queryByText("Input")).toBeNull();
     expect(mic.getByText("Input Device")).toBeTruthy();
+    expect(mic.queryByText("No device chosen")).toBeNull();
+    expect(mic.getByText("no device")).toBeTruthy();
 
     const gain = within(getByLabelText("Voice gain, gain"));
     expect(gain.queryByText("Native"), "a built-in tool shows no family badge").toBeNull();
     expect(gain.getByText("Gain", { selector: ".node-kind" })).toBeTruthy();
 
     const headphones = within(getByLabelText("Headphones, physicalOutput"));
-    expect(headphones.getByText("Output")).toBeTruthy();
+    expect(headphones.queryByText("Output")).toBeNull();
+    expect(headphones.getByText("Output Device")).toBeTruthy();
 
     const plugin = within(getByLabelText("ReaComp, plugin"));
-    expect(plugin.getByText("VST")).toBeTruthy();
+    expect(plugin.queryByText("VST")).toBeNull();
     expect(plugin.getByText("VST3 Plugin")).toBeTruthy();
   });
 });

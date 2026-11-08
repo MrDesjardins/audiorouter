@@ -1,5 +1,6 @@
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { setDeviceHidden, useHiddenDevices } from "./hiddenDevices";
+import { BooleanField } from "./BooleanField";
 
 const ROLE_LABELS: Record<string, string> = {
   console: "Windows default",
@@ -50,15 +51,12 @@ export function ThisPcDevices({
                       : ""}
                     {roles.length > 0 ? ` · ${roles.join(", ")}` : ""}
                   </small>
-                  <label className="this-pc-device-shown">
-                    <input
-                      type="checkbox"
-                      checked={shown}
-                      aria-label={`Show ${device.name} in device pickers`}
-                      onChange={(event) => setDeviceHidden(device.id, !event.target.checked)}
-                    />
-                    Show in pickers
-                  </label>
+                  <BooleanField
+                    label="Show in pickers"
+                    name={`Show ${device.name} in device pickers`}
+                    checked={shown}
+                    onChange={(checked) => setDeviceHidden(device.id, !checked)}
+                  />
                 </li>
               );
             })}

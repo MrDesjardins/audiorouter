@@ -36,4 +36,7 @@ describe("keyboard shortcuts", () => {
       "privacyMute",
     ]);
   });
+  it("reserves Save so a customized binding cannot start audio while saving", () => {
+    expect(shortcutConflicts({ ...defaultShortcutBinding, sessionToggle: "Control+S" })).toEqual(["sessionToggle"]);
+  });
 });

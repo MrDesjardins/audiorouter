@@ -32,7 +32,7 @@ export function FirstRunGuide({
       ) : hasRouteEndpoints ? (
         <p className="muted" role="status">
           Found {captures} input{captures === 1 ? "" : "s"} and {renders} output{renders === 1 ? "" : "s"}. Choose the
-          exact devices in your route's node Properties.
+          exact devices in each tool's Properties.
         </p>
       ) : (
         <p className="muted" role="status">
@@ -45,7 +45,7 @@ export function FirstRunGuide({
         <li>Choose an available device in each tool's Properties, then connect the route.</li>
         <li>Review the route and press Play when you are ready. AudioRouter never changes Windows default devices.</li>
       </ol>
-      <div className="setup-guide-actions">
+      <div className="setup-guide-actions actions">
         <button type="button" onClick={onOpenTools} disabled={!connected}>
           Open Tools
         </button>
@@ -59,8 +59,8 @@ export function FirstRunGuide({
         </button>
       </div>
       <small>
-        Virtual-microphone workflows require an existing supported endpoint such as VB-Cable or Voicemeeter. Install
-        that endpoint separately from its vendor.
+        To send your microphone to another app, use an existing supported virtual audio device such as VB-Cable or
+        Voicemeeter. Install it separately from its vendor.
       </small>
     </section>
   );

@@ -1,0 +1,1585 @@
+﻿[
+    {
+        "id":  "gain--gainDb",
+        "kind":  "gain",
+        "capture":  {
+                        "id":  "gain--gainDb",
+                        "status":  "complete",
+                        "kind":  "gain",
+                        "parameter":  "gainDb",
+                        "sourceHash":  "14548f216c1184f25d268380ee739ff8d02f5352cee21c4e56b103a4fdd8a30a",
+                        "eventAtSeconds":  3.2482963,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gain--gainDb.mp4",
+        "sha256":  "e7aad2e738b33013adae2c76adde0f9161e648b7ebba1dfc02b0c5a393fb4939",
+        "outputAudioSha256":  "3bdcfdf1f483d13f9167c3263a9933978a19a32eaf78375c1a98ebd99c486ade",
+        "firefox":  {
+                        "kind":  "gain",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/gain--gainDb.mp4",
+                        "passed":  true,
+                        "time":  1.448,
+                        "paused":  false,
+                        "peak":  0.18518736958503723,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "volume--percent",
+        "kind":  "volume",
+        "capture":  {
+                        "id":  "volume--percent",
+                        "status":  "complete",
+                        "kind":  "volume",
+                        "parameter":  "percent",
+                        "sourceHash":  "490885aa5e94d321aea1d14efd20e8eb066aed09bad86677139b0259a97173a1",
+                        "eventAtSeconds":  3.2363014999999997,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/volume--percent.mp4",
+        "sha256":  "fcaaee431147e9e76494fe51a302b4e90c7b61174c2a38c516ce4efd084db915",
+        "outputAudioSha256":  "ad8eac4e25c55fe52ea1dc351182c7e9c3cef54c7a81abc3ede8f0b67fb39f41",
+        "firefox":  {
+                        "kind":  "volume",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/volume--percent.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.18609842658042908,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "bassTreble--bassDb",
+        "kind":  "bassTreble",
+        "capture":  {
+                        "id":  "bassTreble--bassDb",
+                        "status":  "complete",
+                        "kind":  "bassTreble",
+                        "parameter":  "bassDb",
+                        "sourceHash":  "8560dae1f769b071738f57954fbac4e7af74962669446c5fa1085cd3dccdd4d1",
+                        "eventAtSeconds":  3.2495241999999998,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/bassTreble--bassDb.mp4",
+        "sha256":  "24868636d9cc67f01e3e5a548582af0537f18989d2be3ac57cac63f09a4443b1",
+        "outputAudioSha256":  "f8fab1ccfb653e7d20bc10b645da74c1f84521419d694aa044794038a3a7c7c0",
+        "firefox":  {
+                        "kind":  "bassTreble",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/bassTreble--bassDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "bassTreble--trebleDb",
+        "kind":  "bassTreble",
+        "capture":  {
+                        "id":  "bassTreble--trebleDb",
+                        "status":  "complete",
+                        "kind":  "bassTreble",
+                        "parameter":  "trebleDb",
+                        "sourceHash":  "adfce72db38472a994d683c909b2b16edf1c33f0a209f704e1355f03125a6879",
+                        "eventAtSeconds":  3.2497086999999993,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/bassTreble--trebleDb.mp4",
+        "sha256":  "acc0949ebef9af4ce54982d1977d70d8dea600e5597f2138b1277722f39e59ef",
+        "outputAudioSha256":  "79ea3cde3442b6f026cb0ac77988d98c6f9fe8b556ab58c8d9747a4499923607",
+        "firefox":  {
+                        "kind":  "bassTreble",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/bassTreble--trebleDb.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "bassTreble--bassFrequencyHz",
+        "kind":  "bassTreble",
+        "capture":  {
+                        "id":  "bassTreble--bassFrequencyHz",
+                        "status":  "complete",
+                        "kind":  "bassTreble",
+                        "parameter":  "bassFrequencyHz",
+                        "sourceHash":  "8e2f981724886bef00abe71a173da5990119647c8cf4bb52e9cdc98b12877b73",
+                        "eventAtSeconds":  3.250811999999998,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/bassTreble--bassFrequencyHz.mp4",
+        "sha256":  "39a7ec281b0d355f9bddf93adf4c08367ed75003b6c1602d6cd06ab40eb0dba0",
+        "outputAudioSha256":  "1cc2777698b7128022ca934cf2ca14c048b35d3039ac7cb87632fad44e7a3cb0",
+        "firefox":  {
+                        "kind":  "bassTreble",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/bassTreble--bassFrequencyHz.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.06936028599739075,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "bassTreble--trebleFrequencyHz",
+        "kind":  "bassTreble",
+        "capture":  {
+                        "id":  "bassTreble--trebleFrequencyHz",
+                        "status":  "complete",
+                        "kind":  "bassTreble",
+                        "parameter":  "trebleFrequencyHz",
+                        "sourceHash":  "cd6954f401584c47a73e3a451730453fa008a3ee1ff00a7b3dd607f640535eec",
+                        "eventAtSeconds":  3.2527811,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/bassTreble--trebleFrequencyHz.mp4",
+        "sha256":  "902382b20fa0a776abae1cbfe3beff85ea8199f191243eceb8f8a299c596554a",
+        "outputAudioSha256":  "fff9274beda884b2dc891aba57f9e0557d93e0f8b83f72f4bd1dfc53689323b6",
+        "firefox":  {
+                        "kind":  "bassTreble",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/bassTreble--trebleFrequencyHz.mp4",
+                        "passed":  true,
+                        "time":  1.472,
+                        "paused":  false,
+                        "peak":  0.1133795976638794,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band0Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band0Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band0Db",
+                        "sourceHash":  "dce8ed10f29fbab144288b501375d892d480f2a4f7e4e6719c074b7b7439a91d",
+                        "eventAtSeconds":  3.251331400000003,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band0Db.mp4",
+        "sha256":  "4b38fe2bf4b8fe80bc1956fcb8e387a042e7ea4b2bebd5ed10fcb23997dbed9b",
+        "outputAudioSha256":  "06fa1137cb4fee0924efbd79a24ccf3d9d645a9c3e56b1b02f6cdd6f43fbfd1f",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band0Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05244777351617813,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band1Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band1Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band1Db",
+                        "sourceHash":  "e8a3e8a1d1c332ae3a73d320b6ebaf8ee2fa94a3f33193ae4b7b92cf95929b7b",
+                        "eventAtSeconds":  3.2466046999999962,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band1Db.mp4",
+        "sha256":  "0effcea83f8fe21242aaf2fe9f3d10321e2a8cd8aa0a8aba0f0a2da2aad72add",
+        "outputAudioSha256":  "872ff93704550408e83dfa38a9c3aa1138757fac7dae837530b6724b44341c5d",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band1Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05244777351617813,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band2Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band2Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band2Db",
+                        "sourceHash":  "ceb1fb4527c7342442645c7840cf396a137458b7c2fb16ba5a709c6a4db75dc0",
+                        "eventAtSeconds":  3.249814599999998,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band2Db.mp4",
+        "sha256":  "6aaa049b6d78f5bea4fd59666fe8b8f529527acb603a8fb0d54fa9022638a709",
+        "outputAudioSha256":  "19dc16d81a2f9582831a9e87175fb02ad4637a46c564b2495b296209942be609",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band2Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band3Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band3Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band3Db",
+                        "sourceHash":  "2e9b586578fbb0cf6daa167a9d3733448f7d352940307e297bdbac097ad9533e",
+                        "eventAtSeconds":  3.2413770000000075,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band3Db.mp4",
+        "sha256":  "cdbad425d8033af112d3edd0283d26c2a48b91b5b4bb505f767123fa3d28ae1b",
+        "outputAudioSha256":  "1a03203ddd43224764c9743072c43d5dd430509bd004a114ff1e76b44be18f6e",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band3Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05244777351617813,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band4Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band4Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band4Db",
+                        "sourceHash":  "8b71d663ab8a5b2c17a77f5f09089dbe924a8be1f92ad2ad1be3992fcb890e77",
+                        "eventAtSeconds":  3.245558400000009,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band4Db.mp4",
+        "sha256":  "194d8a1d23b696b41bf2a5b88a68fe2a4aa883443f93ce99be13ca1a96386f05",
+        "outputAudioSha256":  "0a2792723f4ec8c0bad05952d1297ccfa2654675bf1977e36fff3e9185747925",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band4Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band5Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band5Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band5Db",
+                        "sourceHash":  "ec67c7432740f26fcedbe3196778d8a29cd5c8d0a40206409266698202f84a81",
+                        "eventAtSeconds":  3.23855799999999,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band5Db.mp4",
+        "sha256":  "383c570779d341cb3fdfec15ffdbcca95ae3b6d5fbdf7578140a3c8a23abba3f",
+        "outputAudioSha256":  "b163d3a56b11f476ec449b329ebc13a29d5547732e82e46aa965af1c94365951",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band5Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band6Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band6Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band6Db",
+                        "sourceHash":  "384b9989478d9897c8aafd2e914d68e50d79d2449b0dcdb92b5f18f8bd777012",
+                        "eventAtSeconds":  3.240106899999999,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band6Db.mp4",
+        "sha256":  "290c142f38fb645544f10ea44134fec2be7c1679f57f7fad87915df7b76e83ed",
+        "outputAudioSha256":  "a5bf8b2c334823bd3cb6a3679735d16a23f4a94e4c599a5bc3351aeef62db3bb",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band6Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band7Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band7Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band7Db",
+                        "sourceHash":  "7d035402b62a4e1db125440055c24445f8c8ad5d441672e0dbf2ca2f7afd9919",
+                        "eventAtSeconds":  3.249839699999997,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band7Db.mp4",
+        "sha256":  "13f82ff6cb8e079e761b98f850b403e8abdbb5f334576089460cb0ab1cae2447",
+        "outputAudioSha256":  "20b09043cada39f2c6eb3a6ee7a84e321006b0b86bf966314c6d2b4a66a0669d",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band7Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band8Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band8Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band8Db",
+                        "sourceHash":  "9b5807c19968af09391698b9783be1ddb125e695305afae18d4d9fd01171723e",
+                        "eventAtSeconds":  3.242370999999999,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band8Db.mp4",
+        "sha256":  "77d05f31c1d2f9181a1dfbe346f20b82cef80d457c384b484570c88721849000",
+        "outputAudioSha256":  "162d87c2bd5386ff6e0133cc0db3207f5bc2f9581aa1ad5562ad8fe5e07585fd",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band8Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05244777351617813,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "graphicEq--band9Db",
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq--band9Db",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band9Db",
+                        "sourceHash":  "77fea6f2c3797d397129c05a1081f8fe62c52092865a11f34b3af14cb52d1a50",
+                        "eventAtSeconds":  3.239886100000003,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq--band9Db.mp4",
+        "sha256":  "419647a31d79145a9962e713046c912100a844a1d3bdd2249d9613dcc2e57036",
+        "outputAudioSha256":  "b47b3786d84f8edfde2f5449e2973bfd169f13453587de7a34bb177ae0b8e49e",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/graphicEq--band9Db.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "parametricEq--band0Enabled",
+        "kind":  "parametricEq",
+        "capture":  {
+                        "id":  "parametricEq--band0Enabled",
+                        "status":  "complete",
+                        "kind":  "parametricEq",
+                        "parameter":  "band0Enabled",
+                        "sourceHash":  "61058080e293d1576994475a215d58f96af27c5d0806a1c08e3ff2288826faea",
+                        "eventAtSeconds":  3.2426109,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/parametricEq--band0Enabled.mp4",
+        "sha256":  "850c0f140d0c20be73055961f077e4d5fd4508b1080566bd44c956c748104d46",
+        "outputAudioSha256":  "47b7619ca213bd7ef262bf6d8d53cdd19599da41d4393060df0c6e16df522923",
+        "firefox":  {
+                        "kind":  "parametricEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/parametricEq--band0Enabled.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.056755565106868744,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "parametricEq--band0Type",
+        "kind":  "parametricEq",
+        "capture":  {
+                        "id":  "parametricEq--band0Type",
+                        "status":  "complete",
+                        "kind":  "parametricEq",
+                        "parameter":  "band0Type",
+                        "sourceHash":  "260baca04aed44b6e49953a4187f724d396dd1c39b8a6735737d675fdd234f97",
+                        "eventAtSeconds":  3.249213300000003,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/parametricEq--band0Type.mp4",
+        "sha256":  "5c98c13e477c0277d0e5db9dd5b50fb960923ef9bd4edf93aaa5b9f3ef64e55e",
+        "outputAudioSha256":  "3ef307561ba043f74d2e456331737020c1950153fae97a59bec51d7750a8e742",
+        "firefox":  {
+                        "kind":  "parametricEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/parametricEq--band0Type.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.056755565106868744,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "parametricEq--band0FrequencyHz",
+        "kind":  "parametricEq",
+        "capture":  {
+                        "id":  "parametricEq--band0FrequencyHz",
+                        "status":  "complete",
+                        "kind":  "parametricEq",
+                        "parameter":  "band0FrequencyHz",
+                        "sourceHash":  "5c1c78203f513d3e01a6e294fc7d8c3005a47d80d337491a27376e6c247539b5",
+                        "eventAtSeconds":  3.2441334999999962,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/parametricEq--band0FrequencyHz.mp4",
+        "sha256":  "1e482cbf1227fa911d68550bb12ea237561df5bf5f7a6a0837efb7c82d841055",
+        "outputAudioSha256":  "e00c930fdc66010e500e18fb3d999a68815757b686a42ecb56f823ac5e2a8b62",
+        "firefox":  {
+                        "kind":  "parametricEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/parametricEq--band0FrequencyHz.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.056755565106868744,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "parametricEq--band0Q",
+        "kind":  "parametricEq",
+        "capture":  {
+                        "id":  "parametricEq--band0Q",
+                        "status":  "complete",
+                        "kind":  "parametricEq",
+                        "parameter":  "band0Q",
+                        "sourceHash":  "67f3a0f06a0fbe561633c6715a7502d0f8f7f287115040efd5a3add3818203e4",
+                        "eventAtSeconds":  3.2539309999999824,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/parametricEq--band0Q.mp4",
+        "sha256":  "27b5daf0629b10d5ee9f77fc10eb8a1aed0141503bda39ac18d38a8cdfc99c4c",
+        "outputAudioSha256":  "746584f57c0e02c7dbadcf760f8a282f912b196c7e5f55f37bb452ada78ddeda",
+        "firefox":  {
+                        "kind":  "parametricEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/parametricEq--band0Q.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05911265313625336,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "parametricEq--band0GainDb",
+        "kind":  "parametricEq",
+        "capture":  {
+                        "id":  "parametricEq--band0GainDb",
+                        "status":  "complete",
+                        "kind":  "parametricEq",
+                        "parameter":  "band0GainDb",
+                        "sourceHash":  "b15e09d50fba9e0e8d19c6e1b3900a85af3182e5b488091ec60078e11f18f313",
+                        "eventAtSeconds":  3.2530364999999875,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/parametricEq--band0GainDb.mp4",
+        "sha256":  "e581495aa142fba0e823164337b71467d76bf6f091cfab39e1a3ec429afb9e46",
+        "outputAudioSha256":  "691e02bc6e0e29c3e21e96ed09a109f68a966f4cf30c88086b5844df008b3550",
+        "firefox":  {
+                        "kind":  "parametricEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/parametricEq--band0GainDb.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.05911265313625336,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "compressor--thresholdDb",
+        "kind":  "compressor",
+        "capture":  {
+                        "id":  "compressor--thresholdDb",
+                        "status":  "complete",
+                        "kind":  "compressor",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  "46373b30a637900f957c3a2b8ae8392f568b73043f2e52933a40f9359453daf3",
+                        "eventAtSeconds":  3.2335591999999886,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/compressor--thresholdDb.mp4",
+        "sha256":  "326edb629f28d23d999cb35c2ebbfca7e76e269ca937a77878a5cc7038ace20e",
+        "outputAudioSha256":  "960402378c9584c5354e2081ddc7f82707b488944b905b48877331c926cc3d91",
+        "firefox":  {
+                        "kind":  "compressor",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/compressor--thresholdDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.049225158989429474,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "compressor--ratio",
+        "kind":  "compressor",
+        "capture":  {
+                        "id":  "compressor--ratio",
+                        "status":  "complete",
+                        "kind":  "compressor",
+                        "parameter":  "ratio",
+                        "sourceHash":  "70255a5e05cb1b05ff1e5c62990b238a1646a374fb1cf80429bf45f47bd4bd23",
+                        "eventAtSeconds":  3.2221150999999955,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/compressor--ratio.mp4",
+        "sha256":  "daa89ac9ac1abac007777f5f3f2a074320e16705e71b2b03ce079c81fd5f5821",
+        "outputAudioSha256":  "5b02884b9747661c58829454c571a2a47b07da30a7c7ff186abd57661de18bb5",
+        "firefox":  {
+                        "kind":  "compressor",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/compressor--ratio.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.049225158989429474,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "compressor--attackMs",
+        "kind":  "compressor",
+        "capture":  {
+                        "id":  "compressor--attackMs",
+                        "status":  "complete",
+                        "kind":  "compressor",
+                        "parameter":  "attackMs",
+                        "sourceHash":  "33970462032dfc87a8efa16ce7f9d5610600487527a5b9a1741ec6b73d72d2f4",
+                        "eventAtSeconds":  3.242692299999995,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/compressor--attackMs.mp4",
+        "sha256":  "4b3d1e93b224fca52d00355950120a51b162e98375c6a67a174d2f1a6b1b76c4",
+        "outputAudioSha256":  "406faa79a449e7d57c51f0726bc38d855667359c0b483de9e4f299e753f69ca7",
+        "firefox":  {
+                        "kind":  "compressor",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/compressor--attackMs.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.049225158989429474,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "compressor--releaseMs",
+        "kind":  "compressor",
+        "capture":  {
+                        "id":  "compressor--releaseMs",
+                        "status":  "complete",
+                        "kind":  "compressor",
+                        "parameter":  "releaseMs",
+                        "sourceHash":  "a84d75070c524097868aeb90a3cab801e8cc2dc87fe196facf0b7a67d7a5d261",
+                        "eventAtSeconds":  3.2248542000000016,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/compressor--releaseMs.mp4",
+        "sha256":  "702a1eba3f21800b5f0b05e5ffbc3b79839a365c1e2a30049c2518f995dde3cc",
+        "outputAudioSha256":  "49d9fb0daa8a477e6d6a03657e8af4453f4b2b720369eae535a6efea697aa538",
+        "firefox":  {
+                        "kind":  "compressor",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/compressor--releaseMs.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.049225158989429474,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "compressor--kneeDb",
+        "kind":  "compressor",
+        "capture":  {
+                        "id":  "compressor--kneeDb",
+                        "status":  "complete",
+                        "kind":  "compressor",
+                        "parameter":  "kneeDb",
+                        "sourceHash":  "8848e890d32b9d2f709c3900b5aa7599fe1a98a3b74b23ae41b7f80ae6f5a85d",
+                        "eventAtSeconds":  3.2265836999999884,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/compressor--kneeDb.mp4",
+        "sha256":  "442cb3d899b683455078f2229a81a670e0cf1f959d98266bdbedfab0b867fc0a",
+        "outputAudioSha256":  "2bb0d4c5130c64c1935721c3ea557f1702b5dbf38425c4b0f1cf003cd7b57f46",
+        "firefox":  {
+                        "kind":  "compressor",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/compressor--kneeDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.049225158989429474,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "compressor--makeupDb",
+        "kind":  "compressor",
+        "capture":  {
+                        "id":  "compressor--makeupDb",
+                        "status":  "complete",
+                        "kind":  "compressor",
+                        "parameter":  "makeupDb",
+                        "sourceHash":  "9e2ba9b3d2379efc42df08e8f9126aba6c5f65d9579d3e0273dbe2a9efe83773",
+                        "eventAtSeconds":  3.2306653000000223,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/compressor--makeupDb.mp4",
+        "sha256":  "133ba7b87ad80a78bd1f565653c2dd585e89f852edcb7b99766773d1e517c5a1",
+        "outputAudioSha256":  "1c46411938d0c0b0403128cf5c36ee38d1bec3ef26cfac8020daa99bcda3021a",
+        "firefox":  {
+                        "kind":  "compressor",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/compressor--makeupDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.049225158989429474,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "gate--thresholdDb",
+        "kind":  "gate",
+        "capture":  {
+                        "id":  "gate--thresholdDb",
+                        "status":  "complete",
+                        "kind":  "gate",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  "2a5e35f05644d8f653a462abba042da6fd0b42b0b4d7ca6e50383a98bf63f72a",
+                        "eventAtSeconds":  3.2295841000000074,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gate--thresholdDb.mp4",
+        "sha256":  "873130823bdee4b257236b4a4b9fa4f52797007d328c311b2fbd6c75a6deb9c7",
+        "outputAudioSha256":  "4815318fc7d787638e639ada3303f7ec174a864b4f01144486178a99be18813b",
+        "firefox":  {
+                        "kind":  "gate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/gate--thresholdDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.06320760399103165,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "gate--rangeDb",
+        "kind":  "gate",
+        "capture":  {
+                        "id":  "gate--rangeDb",
+                        "status":  "complete",
+                        "kind":  "gate",
+                        "parameter":  "rangeDb",
+                        "sourceHash":  "8bcb10b2e49d6db3a4845d6330f4ed03ff85b850a32318e03d88d92d673aa0f4",
+                        "eventAtSeconds":  3.231241500000004,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gate--rangeDb.mp4",
+        "sha256":  "7432ddead0d219978f56fd9fe6aa125d2cf46093a8e4caad4ed5666e56444a84",
+        "outputAudioSha256":  "d0a34320f314e0ceabc947b5854dfc20bbe00fc8c3102ba01956d63ca5bcef93",
+        "firefox":  {
+                        "kind":  "gate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/gate--rangeDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.062280505895614624,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "gate--attackMs",
+        "kind":  "gate",
+        "capture":  {
+                        "id":  "gate--attackMs",
+                        "status":  "complete",
+                        "kind":  "gate",
+                        "parameter":  "attackMs",
+                        "sourceHash":  "c93ec6bb288225622b4058550556a8ac8386568a0a82c7d796735f04e1ca05d8",
+                        "eventAtSeconds":  3.2211914000000106,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gate--attackMs.mp4",
+        "sha256":  "b4a7861bf413104da7f9d4cafcdd60c9e742c059507b0f2ac2c9243d33026948",
+        "outputAudioSha256":  "5e0366e579dfbbf8af73f0fa007a3fc3b85330b53f12d4103750dd2ed3de076d",
+        "firefox":  {
+                        "kind":  "gate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/gate--attackMs.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.062280505895614624,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "gate--hysteresisDb",
+        "kind":  "gate",
+        "capture":  {
+                        "id":  "gate--hysteresisDb",
+                        "status":  "complete",
+                        "kind":  "gate",
+                        "parameter":  "hysteresisDb",
+                        "sourceHash":  "f72c6f64a31bb89de9c3e8ad39e06fa8f706fe67c3ac21efddafc8a6c638fee1",
+                        "eventAtSeconds":  3.2343363999999712,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gate--hysteresisDb.mp4",
+        "sha256":  "2e0343b3e7de540a872a0da439704543a8d6255db772cfbe24a311947a2d2cb5",
+        "outputAudioSha256":  "44131044d0c45e918c12ffed1c8f94fba369c5694fdc0f768ab3467ea4efa69a",
+        "firefox":  {
+                        "kind":  "gate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/gate--hysteresisDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.0617980882525444,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "gate--ratio",
+        "kind":  "gate",
+        "capture":  {
+                        "id":  "gate--ratio",
+                        "status":  "complete",
+                        "kind":  "gate",
+                        "parameter":  "ratio",
+                        "sourceHash":  "e5ace81f40ca3e954b431c57cc6baa65bb1e085012a609555534220d504e5f3f",
+                        "eventAtSeconds":  3.2366622000000205,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gate--ratio.mp4",
+        "sha256":  "b6f56064d8fb80efdff865797fda79c09c6be22ea98827d835fa514fcc5b189b",
+        "outputAudioSha256":  "4815318fc7d787638e639ada3303f7ec174a864b4f01144486178a99be18813b",
+        "firefox":  {
+                        "kind":  "gate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/gate--ratio.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.062280505895614624,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "gate--holdMs",
+        "kind":  "gate",
+        "capture":  {
+                        "id":  "gate--holdMs",
+                        "status":  "complete",
+                        "kind":  "gate",
+                        "parameter":  "holdMs",
+                        "sourceHash":  "b4883b315cbfe226b42c3177bb92fbb5b568505b49ed828ce1da6e09763fe07c",
+                        "eventAtSeconds":  3.2653976000000005,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gate--holdMs.mp4",
+        "sha256":  "77d5fa93417b5a88468d1d8aa6ff6a31c3d29ed45ae6de2f2587c6bbf07fdc55",
+        "outputAudioSha256":  "3087afb2979ebd8702cf5794922bd684127aba9fc595ee96336d26dfa5709a3e",
+        "firefox":  {
+                        "kind":  "gate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/gate--holdMs.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.062280505895614624,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "gate--releaseMs",
+        "kind":  "gate",
+        "capture":  {
+                        "id":  "gate--releaseMs",
+                        "status":  "complete",
+                        "kind":  "gate",
+                        "parameter":  "releaseMs",
+                        "sourceHash":  "9fa397d6895fb26050a20aacd1ff32fb3996428a15c7d803d375af3db802840f",
+                        "eventAtSeconds":  3.2247707999999986,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gate--releaseMs.mp4",
+        "sha256":  "9a2b039579c7fcc9c92f9d3848c8a1d7c7bb2d0adc16f7e5265aa86721e23a2d",
+        "outputAudioSha256":  "1793dcd12ab2ac1f8f8f72b0d1af67d52027a7c9720c5e2f1505c6e894a2e12c",
+        "firefox":  {
+                        "kind":  "gate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/gate--releaseMs.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.0617980882525444,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "limiter--ceilingDb",
+        "kind":  "limiter",
+        "capture":  {
+                        "id":  "limiter--ceilingDb",
+                        "status":  "complete",
+                        "kind":  "limiter",
+                        "parameter":  "ceilingDb",
+                        "sourceHash":  "96dd166d610b1c0b59e670be449b896ec10b846d5425a43b92b1a20a52798fe0",
+                        "eventAtSeconds":  3.23345199999999,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/limiter--ceilingDb.mp4",
+        "sha256":  "87e118b858a1c66d5cfddae937afd75d99afc1411a0e04f6368db8171d11abdb",
+        "outputAudioSha256":  "fcaf4f9f87b1f28daf1eb345b2da693c200c8a3fd4caebb45dfa7e428090065e",
+        "firefox":  {
+                        "kind":  "limiter",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/limiter--ceilingDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.3256876766681671,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "limiter--lookaheadMs",
+        "kind":  "limiter",
+        "capture":  {
+                        "id":  "limiter--lookaheadMs",
+                        "status":  "complete",
+                        "kind":  "limiter",
+                        "parameter":  "lookaheadMs",
+                        "sourceHash":  "b3a5fa603a580b8fc584a426b3417c528ccb7ff271744d703dd34fbbcd8d97cf",
+                        "eventAtSeconds":  3.22666459999996,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/limiter--lookaheadMs.mp4",
+        "sha256":  "c0bb17a15e3109bf56fc5dc2219a4daf0f9ac7477384561601b4d1614baca504",
+        "outputAudioSha256":  "f8e82f2ad98833046688a736b1471dd9e6c405e0b7f1b82d037248374eb68379",
+        "firefox":  {
+                        "kind":  "limiter",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/limiter--lookaheadMs.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.3256876766681671,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "limiter--releaseMs",
+        "kind":  "limiter",
+        "capture":  {
+                        "id":  "limiter--releaseMs",
+                        "status":  "complete",
+                        "kind":  "limiter",
+                        "parameter":  "releaseMs",
+                        "sourceHash":  "142d533737b78f4ec3ba1ee1c4c50b36f448f6bd16c2ec01f9c0e128b12118e2",
+                        "eventAtSeconds":  3.2260558000000312,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/limiter--releaseMs.mp4",
+        "sha256":  "06b31b2e699e99483e0c45894dca08e02c3ec7d0be61c2e1c134420583ef341c",
+        "outputAudioSha256":  "c3f8acb0ac407bacd325080022b93f3742bd05e079a30591734c8740e0c90d99",
+        "firefox":  {
+                        "kind":  "limiter",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/limiter--releaseMs.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.3256876766681671,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "delay--delayMs",
+        "kind":  "delay",
+        "capture":  {
+                        "id":  "delay--delayMs",
+                        "status":  "complete",
+                        "kind":  "delay",
+                        "parameter":  "delayMs",
+                        "sourceHash":  "a7dffa7d146619f51f932353d55b1d72a5d1c65d601d9a8b7520f4f6db71feca",
+                        "eventAtSeconds":  3.2389152999999933,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/delay--delayMs.mp4",
+        "sha256":  "610388db0faff49aba71c373b0c7da809e2332db18005be9f455519f9274526a",
+        "outputAudioSha256":  "eb6aefe05da4113684013df99df94f104ec7cd13892b5756d2d162bcf1c1f107",
+        "firefox":  {
+                        "kind":  "delay",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/delay--delayMs.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.296742707490921,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "pitch--semitones",
+        "kind":  "pitch",
+        "capture":  {
+                        "id":  "pitch--semitones",
+                        "status":  "complete",
+                        "kind":  "pitch",
+                        "parameter":  "semitones",
+                        "sourceHash":  "a001c4af95032b3c26b18da552ab59ebc0862aee2d131af9305585b6c53e2288",
+                        "eventAtSeconds":  3.2550035999999962,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/pitch--semitones.mp4",
+        "sha256":  "a54b42f9e850d81a94e67d972aca22021d68aaa29ee1ad0c6b1a7ddf357c0e12",
+        "outputAudioSha256":  "583bbacff151fbc3778efacecb6b8f18e5a7d51d1a605a1cf2347395dd147ffc",
+        "firefox":  {
+                        "kind":  "pitch",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/pitch--semitones.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.12274044752120972,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "pitch--cents",
+        "kind":  "pitch",
+        "capture":  {
+                        "id":  "pitch--cents",
+                        "status":  "complete",
+                        "kind":  "pitch",
+                        "parameter":  "cents",
+                        "sourceHash":  "81213e44255e1be73e7d32ebdbf99c73d7c70bcfb1c315ca5b1e63b7986a6465",
+                        "eventAtSeconds":  3.2379500000000117,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/pitch--cents.mp4",
+        "sha256":  "f02341cba83db1c8eb232160d9bac7bc8c770aa1654ee684510326c9e40d914e",
+        "outputAudioSha256":  "ea1bfa76907d991a373414c1e2c9d58c4966ec4fbd54180ba54266b6d851939e",
+        "firefox":  {
+                        "kind":  "pitch",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/pitch--cents.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.12274044752120972,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "dehum--frequencyHz",
+        "kind":  "dehum",
+        "capture":  {
+                        "id":  "dehum--frequencyHz",
+                        "status":  "complete",
+                        "kind":  "dehum",
+                        "parameter":  "frequencyHz",
+                        "sourceHash":  "33c6b82abececb10a3bf8ce896055078ae2568277011bb501be7885aa1a415b1",
+                        "eventAtSeconds":  3.2428237999999547,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/dehum--frequencyHz.mp4",
+        "sha256":  "540c78d7da77e6bd6bb8b64c6d8241b0af79335a7a7e9cead999edcc89ffd094",
+        "outputAudioSha256":  "3a9d76e0afbb456bbc89479b88f4ec90c24d0d7bae957c8baa4d413a02e0875f",
+        "firefox":  {
+                        "kind":  "dehum",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/dehum--frequencyHz.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.0958135724067688,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "dehum--amountPercent",
+        "kind":  "dehum",
+        "capture":  {
+                        "id":  "dehum--amountPercent",
+                        "status":  "complete",
+                        "kind":  "dehum",
+                        "parameter":  "amountPercent",
+                        "sourceHash":  "adc6e2c676bfa888b26fbea506f2b99e74eb9fa1fc3dc2708d50bb2b032e587b",
+                        "eventAtSeconds":  3.2557453000000094,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/dehum--amountPercent.mp4",
+        "sha256":  "c48a7f7aecea11e726a253123e3d852cfd92b21026c649ebea409e51022fdf40",
+        "outputAudioSha256":  "6118fc7f646835ebdc05ba9a3eb1ccc317656bcefa379c551e9c38b21aacc4b1",
+        "firefox":  {
+                        "kind":  "dehum",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/dehum--amountPercent.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.0957665666937828,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "dehum--harmonics",
+        "kind":  "dehum",
+        "capture":  {
+                        "id":  "dehum--harmonics",
+                        "status":  "complete",
+                        "kind":  "dehum",
+                        "parameter":  "harmonics",
+                        "sourceHash":  "aee275775027859837caa598d04432cb5e54bc0b540926fee71cb2dcb5cc9f00",
+                        "eventAtSeconds":  3.2421043000000065,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/dehum--harmonics.mp4",
+        "sha256":  "c65e68e3bebae0049b68b1eda6e290150e4eabb37941c3010759a97a7c72a3f2",
+        "outputAudioSha256":  "b6d0d2bb5f509f72c7be8ec3b01deeffad8ea7e810980add1b74620407927b32",
+        "firefox":  {
+                        "kind":  "dehum",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/dehum--harmonics.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.11137489974498749,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "spectralGate--thresholdDb",
+        "kind":  "spectralGate",
+        "capture":  {
+                        "id":  "spectralGate--thresholdDb",
+                        "status":  "complete",
+                        "kind":  "spectralGate",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  "fe6ce1cf24492ddebe73bf7fc44498947d53f01a0c39b5dcffb518ae025e112b",
+                        "eventAtSeconds":  3.2464258000000266,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/spectralGate--thresholdDb.mp4",
+        "sha256":  "6d0dcc98a9482fceaee7e9073cbab0739dae74bd59aeaa0ac70c8ead71ca2c40",
+        "outputAudioSha256":  "a6bc0e9050134df01978448aee5c35b247efd6757c6cf4e8a43a8a1c3020a549",
+        "firefox":  {
+                        "kind":  "spectralGate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/spectralGate--thresholdDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.056892480701208115,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "spectralGate--reductionDb",
+        "kind":  "spectralGate",
+        "capture":  {
+                        "id":  "spectralGate--reductionDb",
+                        "status":  "complete",
+                        "kind":  "spectralGate",
+                        "parameter":  "reductionDb",
+                        "sourceHash":  "ec4ee1916915e433f40ca92bd2bb9fee64738dd1051462f10c68d31465529c8a",
+                        "eventAtSeconds":  3.2399789000000454,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/spectralGate--reductionDb.mp4",
+        "sha256":  "f2246b4cd89bc01dba336dca245560f3edb965b8533e36c2f231a5f34c632e39",
+        "outputAudioSha256":  "b8efa4ff064ad172bbe9cfc46df6143ffd1571d96b5af7f5b5ea4824d350d8fc",
+        "firefox":  {
+                        "kind":  "spectralGate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/spectralGate--reductionDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.0563509501516819,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "spectralGate--learning",
+        "kind":  "spectralGate",
+        "capture":  {
+                        "id":  "spectralGate--learning",
+                        "status":  "complete",
+                        "kind":  "spectralGate",
+                        "parameter":  "learning",
+                        "sourceHash":  "15576d3e5dc9cffbecd018958311b1e870181b98c3c8289404c9d2f709a5ead2",
+                        "eventAtSeconds":  3.2411358000000474,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/spectralGate--learning.mp4",
+        "sha256":  "9f4429667c2ec525b4fed010b13488f1843cb538f6c8e165f83e8d189dba8f56",
+        "outputAudioSha256":  "47a54d72663ba479ce05871a9849d0f6eac7d657534cd6be3df6cce10b90b9e2",
+        "firefox":  {
+                        "kind":  "spectralGate",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/spectralGate--learning.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.011860357597470284,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "duck--amountDb",
+        "kind":  "duck",
+        "capture":  {
+                        "id":  "duck--amountDb",
+                        "status":  "complete",
+                        "kind":  "duck",
+                        "parameter":  "amountDb",
+                        "sourceHash":  "c9a2e0b2e54e1740d6d802595995e9f22f07c52369f8567ef59c1be6a6e1d914",
+                        "eventAtSeconds":  3.223620799999975,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/duck--amountDb.mp4",
+        "sha256":  "4a9b9f0227fe335c4815de4a241ac372643ac38e26f08a9bdfa086014de31cbc",
+        "outputAudioSha256":  "b68eea93c225ac1e5df2e0fe706d86b2c5f778a1da7c3d5362ae2b61c8edd830",
+        "firefox":  {
+                        "kind":  "duck",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/duck--amountDb.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.04506717249751091,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "duck--attackMs",
+        "kind":  "duck",
+        "capture":  {
+                        "id":  "duck--attackMs",
+                        "status":  "complete",
+                        "kind":  "duck",
+                        "parameter":  "attackMs",
+                        "sourceHash":  "5a47a871011b2485edc869c481aa076baab15c1e1a8c497969b2707de2f80c02",
+                        "eventAtSeconds":  3.219260499999975,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/duck--attackMs.mp4",
+        "sha256":  "dac759f399c09f59e948863c1b0f64f4ecb10610265c681685cc968bdffc7037",
+        "outputAudioSha256":  "e9dc237ef714073f95c22ce5dabdbea68783ca8468334d2f94d82b0fba00b40d",
+        "firefox":  {
+                        "kind":  "duck",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/duck--attackMs.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.04506717249751091,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "duck--holdMs",
+        "kind":  "duck",
+        "capture":  {
+                        "id":  "duck--holdMs",
+                        "status":  "complete",
+                        "kind":  "duck",
+                        "parameter":  "holdMs",
+                        "sourceHash":  "aec6a031af40e4aad245e106da916c8f3c9b2092611a542f2eed4c12a1f4284a",
+                        "eventAtSeconds":  3.222618300000031,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/duck--holdMs.mp4",
+        "sha256":  "6871ea718002873ca4dd91f7779386330e5d03ae698284972857f37d383277af",
+        "outputAudioSha256":  "9591d5451b233ff76749ddcbab829e26b2170ec569775ab79a03035732e77efc",
+        "firefox":  {
+                        "kind":  "duck",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/duck--holdMs.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.04506717249751091,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "duck--releaseMs",
+        "kind":  "duck",
+        "capture":  {
+                        "id":  "duck--releaseMs",
+                        "status":  "complete",
+                        "kind":  "duck",
+                        "parameter":  "releaseMs",
+                        "sourceHash":  "8e53ddd11a0b9becbb198c532ac4583d8e2d0e2136b8fdb2041faf9b8502bf8f",
+                        "eventAtSeconds":  3.226612299999979,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/duck--releaseMs.mp4",
+        "sha256":  "65975a6d46c1739d3789d6ec4012876bb50dee0d01032b9a250161b3512e5394",
+        "outputAudioSha256":  "86dd1f0d67c5e6f8ccc18f2e9ba49b5ff7752e01bf454e68209138873b9f9923",
+        "firefox":  {
+                        "kind":  "duck",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/duck--releaseMs.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.04506717249751091,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "id":  "parametricEq--other-bands",
+        "kind":  "parametricEq",
+        "capture":  {
+                        "id":  "parametricEq--other-bands",
+                        "status":  "complete",
+                        "kind":  "parametricEq",
+                        "parameter":  "otherBands",
+                        "sourceHash":  "db72fc5e1d26a53276e981399a59bf9ef92e2ce2fffde39e48d71de5c8550748",
+                        "eventAtSeconds":  3.2080521999999765,
+                        "family":  true,
+                        "familyActionSeconds":  0.11749850000004525,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/parametricEq--other-bands.mp4",
+        "sha256":  "44c5e6207cc3553c155007537f9e64cc2eb962bc378c2ed3fbfa3d996bbbe27e",
+        "outputAudioSha256":  "727c8decc613dfc41686b4f6c60b0a58da1a3626fdfd0335c4a6d2385b5bd150",
+        "firefox":  {
+                        "kind":  "parametricEq",
+                        "type":  "properties",
+                        "video":  "assets/tool-guides/parametricEq--other-bands.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.056755565106868744,
+                        "state":  "running",
+                        "error":  null
+                    }
+    }
+]

@@ -11,6 +11,124 @@
     "site/guide-content/routing.json"
   ],
   "nodeKindCount": 37,
+  "sharedControls": [
+    {
+      "key": "enabled",
+      "label": "Enabled",
+      "meaning": "Off effects pass sound through; off inputs and outputs contribute silence.",
+      "appliesTo": [
+        "physicalInput",
+        "applicationCapture",
+        "endpointLoopback",
+        "physicalOutput",
+        "virtualRenderSource",
+        "virtualCaptureSink",
+        "testSignal",
+        "mixer",
+        "gain",
+        "mute",
+        "meter",
+        "parametricEq",
+        "compressor",
+        "gate",
+        "limiter",
+        "delay",
+        "graphicEq",
+        "pitch",
+        "recorder",
+        "plugin",
+        "audioFile",
+        "volume",
+        "bassTreble",
+        "dehum",
+        "declick",
+        "inputSwitch",
+        "outputSwitch",
+        "denoise",
+        "speechDenoise",
+        "firFilter",
+        "spectralGate",
+        "timeShift",
+        "networkSend",
+        "networkReceive",
+        "duck",
+        "funVoiceChanger",
+        "soundboard"
+      ],
+      "recordings": [
+        {
+          "title": "Enabled and Bypass: Gain example (silent)",
+          "video": "assets/tool-guides/shared-flags.mp4",
+          "poster": "assets/tool-guides/shared-flags.jpg",
+          "description": "A silent configuration recording of the shared Enabled and Bypass switches, shown on Gain. It shows their On/Off labels and status messages, then returns to the top of Properties. This is a control walkthrough, not an audible comparison.",
+          "silent": true,
+          "sharedControls": [
+            "enabled",
+            "bypass"
+          ]
+        }
+      ],
+      "status": "recorded"
+    },
+    {
+      "key": "bypass",
+      "label": "Bypass",
+      "meaning": "Bypassed effects pass sound through; bypassed inputs, outputs and Mixers contribute silence.",
+      "appliesTo": [
+        "physicalInput",
+        "applicationCapture",
+        "endpointLoopback",
+        "physicalOutput",
+        "virtualRenderSource",
+        "virtualCaptureSink",
+        "testSignal",
+        "mixer",
+        "gain",
+        "mute",
+        "meter",
+        "parametricEq",
+        "compressor",
+        "gate",
+        "limiter",
+        "delay",
+        "graphicEq",
+        "pitch",
+        "recorder",
+        "plugin",
+        "audioFile",
+        "volume",
+        "bassTreble",
+        "dehum",
+        "declick",
+        "inputSwitch",
+        "outputSwitch",
+        "denoise",
+        "speechDenoise",
+        "firFilter",
+        "spectralGate",
+        "timeShift",
+        "networkSend",
+        "networkReceive",
+        "duck",
+        "funVoiceChanger",
+        "soundboard"
+      ],
+      "recordings": [
+        {
+          "title": "Enabled and Bypass: Gain example (silent)",
+          "video": "assets/tool-guides/shared-flags.mp4",
+          "poster": "assets/tool-guides/shared-flags.jpg",
+          "description": "A silent configuration recording of the shared Enabled and Bypass switches, shown on Gain. It shows their On/Off labels and status messages, then returns to the top of Properties. This is a control walkthrough, not an audible comparison.",
+          "silent": true,
+          "sharedControls": [
+            "enabled",
+            "bypass"
+          ]
+        }
+      ],
+      "status": "recorded"
+    }
+  ],
   "guideKindCount": 38,
   "propertyCount": 252,
   "tools": [

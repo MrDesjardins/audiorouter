@@ -15,6 +15,9 @@ async function openGroup(page: Page) {
   await page.getByRole("button", { name: "Group", exact: true }).click();
   const group = page.locator(".visual-group-node");
   await expect(group.locator(".react-flow__resize-control").first()).toBeVisible();
+  // The new frame extends beyond the tools; fit it too so its outside grab
+  // zones are inside the canvas rather than clipped by the left edge.
+  await fitCanvas(page);
   return group;
 }
 

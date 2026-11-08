@@ -42,6 +42,7 @@ describe("PluginNodeInspector unchanged-audio guard", () => {
     );
     const toggle = screen.getByLabelText<HTMLInputElement>("Allow unchanged audio");
     expect(toggle.checked).toBe(false);
+    expect(document.getElementById(toggle.getAttribute("aria-describedby") ?? "")?.textContent).toBe("Off");
     expect(variant(/^On$/).style.visibility).toBe("visible");
     fireEvent.click(toggle);
     expect(onChange).toHaveBeenCalledWith("passThroughAllowed", true);

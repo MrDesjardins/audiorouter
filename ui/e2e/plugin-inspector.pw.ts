@@ -57,6 +57,24 @@ async function openPlugin(page: Page, theme: string, unchangedAudio: boolean, si
 }
 
 for (const theme of ["dark", "light", "high-contrast"]) {
+  test(`plugin pass-through has explicit states without moving its field in ${theme}`, async ({ page }) => {
+    const guard = await openPlugin(page, theme, false);
+    const input = guard.getByRole("checkbox", { name: "Allow unchanged audio", exact: true });
+    await input.scrollIntoViewIfNeeded();
+    await expect(input).toHaveAccessibleDescription("Off");
+    const field = input.locator("xpath=ancestor::label[1]");
+    const before = await field.boundingBox();
+    await input.focus();
+    await input.press("Space");
+    await expect(input).toBeChecked();
+    await expect(input).toHaveAccessibleDescription("On");
+    await expect(guard.getByText("Off for this plugin", { exact: true })).toBeVisible();
+    expect(await field.boundingBox()).toEqual(before);
+    await field.screenshot({ path: `../target/ui-quality-review/round-25/plugin-switch-${theme}.png` });
+    await field.locator("span").first().click();
+    await expect(input).not.toBeChecked();
+    await expect(input).toHaveAccessibleDescription("Off");
+  });
   test(`a plugin that passes audio unchanged suggests a licence check without moving the panel in ${theme}`, async ({
     page,
   }, testInfo) => {

@@ -1,4 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
+import { expect } from "@playwright/test";
 import type { Session } from "@audiorouter/contracts";
 import { demoSession } from "../src/fixtures";
 
@@ -20,7 +21,10 @@ export const stereoDemoSession: Session = {
 export async function openSettings(page: Page, pageName: string) {
   const pages = page.getByRole("tablist", { name: "Settings pages" });
   if (!(await pages.isVisible())) await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await pages.getByRole("tab", { name: pageName, exact: true }).click();
+  const tab = pages.getByRole("tab", { name: pageName, exact: true });
+  await tab.click();
+  // Lazy panels can suspend while the preceding page remains committed.
+  await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
 /** Leave Settings for the tab that was open before it. */
@@ -36,7 +40,9 @@ const leaveSettings = async (page: Page) => {
 /** Status has Readiness, Apps and Timing views. */
 export async function openStatusView(page: Page, view: "Readiness" | "Apps" | "Timing") {
   await page.getByRole("tablist", { name: "Right sidebar" }).getByRole("tab", { name: "Status" }).click();
-  await page.getByRole("tablist", { name: "Status views" }).getByRole("tab", { name: view, exact: true }).click();
+  const tab = page.getByRole("tablist", { name: "Status views" }).getByRole("tab", { name: view, exact: true });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
 /** Canvas toolbar → Connect (the keyboard connection form). Leaves it open if it already is. */
@@ -82,7 +88,9 @@ export async function openPage(page: Page, name: string) {
   }
   if (!DAILY_TABS.has(name)) return openSettings(page, name);
   await leaveSettings(page);
-  await page.getByRole("tablist", { name: "Right sidebar" }).getByRole("tab", { name, exact: true }).click();
+  const tab = page.getByRole("tablist", { name: "Right sidebar" }).getByRole("tab", { name, exact: true });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
 /** Open one section of Properties if it is closed. Each tool type remembers its own. */
@@ -98,7 +106,7 @@ export async function openAllSections(scope: Locator) {
   while (await closed.count()) await closed.first().click();
 }
 
-/** A large route opens at a readable zoom and may run past the view; the fit button shows it all. */
+/** Explicitly fit after edits or zooming before interacting with offscreen cards. */
 export async function fitCanvas(page: Page) {
   await page.locator(".react-flow__controls-fitview").click();
   // The view eases into place.

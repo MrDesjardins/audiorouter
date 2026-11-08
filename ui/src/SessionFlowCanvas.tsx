@@ -1,12 +1,5 @@
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
-import {
-  FLOW_GROUPS,
-  FLOW_GROUP_LABELS,
-  NODE_KIND_FAMILY_LABELS,
-  humanizeNodeKind,
-  nodeFlowGroup,
-  nodeKindFamily,
-} from "./canvasNodeKinds";
+import { FLOW_GROUPS, FLOW_GROUP_LABELS, humanizeNodeKind, nodeFlowGroup } from "./canvasNodeKinds";
 import { CanvasConnectorMeasurements } from "./CanvasConnectorMeasurements";
 import { CanvasContextMenu } from "./CanvasContextMenu";
 import { smartLayout } from "./smartLayout";
@@ -123,28 +116,26 @@ const DROP_GRAB_OFFSET = { x: 90, y: 28 };
 const CANVAS_GRID = 24;
 const CANVAS_SNAP: [number, number] = [CANVAS_GRID, CANVAS_GRID];
 /**
- * The smallest card text is 11 px at 100 %, so automatic fits stop here and a large route is
- * panned or reached from the map (F20). The fit button and Arrange still show everything.
+ * The smallest card text is 11 px at 100 %. Use this zoom when revealing a newly added
+ * card; opening a route instead fits the complete overview (UI-36).
  */
 const READABLE_ZOOM = 1;
 
-/** Everything when it fits. A route too large opens at readable zoom where its signal begins (F20). */
+/** Open with the complete route visible; users can zoom in to edit individual cards. */
 function openRouteView<N extends FlowNode, E extends FlowEdge>(flow: ReactFlowInstance<N, E>, duration: number) {
   const canvas = document.querySelector<HTMLElement>(".session-flow-canvas");
-  const bounds = flow.getNodesBounds(flow.getNodes());
-  if (
-    !canvas ||
-    (bounds.width * (1 + FIT_PADDING) <= canvas.clientWidth && bounds.height * (1 + FIT_PADDING) <= canvas.clientHeight)
-  ) {
-    void flow.fitView({ padding: FIT_PADDING, minZoom: READABLE_ZOOM, duration });
-    return;
-  }
-  const gutter = 32;
-  const top = Math.max(gutter, (canvas.clientHeight - bounds.height * READABLE_ZOOM) / 2);
-  void flow.setViewport(
-    { x: gutter - bounds.x * READABLE_ZOOM, y: top - bounds.y * READABLE_ZOOM, zoom: READABLE_ZOOM },
-    { duration },
-  );
+  // Settings hides the canvas. Moving its viewport while it has no size can
+  // produce non-finite intermediate transforms in React Flow's animations.
+  if (!canvas || canvas.clientWidth <= 0 || canvas.clientHeight <= 0) return;
+  // Leave room above the route for the floating map, especially in short canvases.
+  const map = canvas.querySelector<HTMLElement>(".canvas-minimap");
+  const top = map ? map.offsetHeight + 24 : 32;
+  void flow.fitView({
+    padding: { top: `${top}px`, right: "32px", bottom: "32px", left: "56px" },
+    minZoom: 0,
+    maxZoom: READABLE_ZOOM,
+    duration,
+  });
 }
 const FIT_PADDING = 0.2;
 const MINIMAP_KEY = "audiorouter.ui.canvas-minimap";
@@ -195,6 +186,8 @@ type SessionFlowCanvasProps = {
   onLayoutSelection?: (sessionId: string, items: CanvasRect[]) => void;
   onLayoutMessage?: (message: string) => void;
   onCopyNode?: (nodeId: string) => void;
+  onDuplicateNode?: (nodeId: string) => void;
+  onRenameNode?: (nodeId: string) => void;
   onPasteNode?: (position: { x: number; y: number }) => string | void;
   canPasteNode?: boolean;
   onConnect: (connection: Connection, dropPosition?: { x: number; y: number }) => string | void;
@@ -815,10 +808,17 @@ function nodeTelemetryFor(node: Node | undefined, diagnostics: DiagnosticsSnapsh
  * device nodes, one line high and truncated, so a change never resizes the
  * card (UI-17); the tooltip names each app's role.
  */
-function DeviceUsersLine({ users: state }: { users: NodeDeviceUsers | null | "unavailable" }) {
+function DeviceUsersLine({
+  users: state,
+  unbound,
+}: {
+  users: NodeDeviceUsers | null | "unavailable";
+  unbound: boolean;
+}) {
   // null: the first check has not answered yet.
   const users = typeof state === "object" ? state : null;
-  const text = state === "unavailable" ? "Apps not checked" : (users?.summary ?? "Checking apps…");
+  // The header already says "no device". Keep this slot's height without repeating it.
+  const text = unbound ? "" : state === "unavailable" ? "Apps not checked" : (users?.summary ?? "Checking apps…");
   const detail = [
     ...(users?.uses.map((use) => `${use.label} ${use.detail}`) ?? []),
     ...(users?.warning ? [`Check: ${users.warning}`] : []),
@@ -826,10 +826,10 @@ function DeviceUsersLine({ users: state }: { users: NodeDeviceUsers | null | "un
   return (
     <small
       className={`node-used-by${users?.warning ? " is-warning" : ""}${users?.uses.length ? "" : " is-empty"}`}
-      title={detail || undefined}
-      aria-label={users?.warning ? `${text}. Check: ${users.warning}` : text}
+      title={unbound ? undefined : detail || undefined}
+      aria-label={unbound ? undefined : users?.warning ? `${text}. Check: ${users.warning}` : text}
     >
-      {users?.warning ? "! " : ""}
+      {!unbound && users?.warning ? "! " : ""}
       {text}
     </small>
   );
@@ -2296,6 +2296,8 @@ export function SessionFlowCanvas({
   onLayoutSelection,
   onLayoutMessage,
   onCopyNode,
+  onDuplicateNode,
+  onRenameNode,
   onPasteNode,
   canPasteNode = false,
   onConnect,
@@ -2387,12 +2389,14 @@ export function SessionFlowCanvas({
   } | null>(null);
   const flowInstanceRef = useRef<ReactFlowInstance | null>(null);
   const [guides, setGuides] = useState<CanvasGuides>(NO_GUIDES);
+  const minimapToggleRef = useRef<HTMLButtonElement>(null);
   const [minimapOpen, setMinimapOpen] = useState(
     () => readPresentationJson(optionalLocalStorage(), MINIMAP_KEY) !== false,
   );
   const toggleMinimap = (open: boolean) => {
     setMinimapOpen(open);
     writePresentationJson(optionalLocalStorage(), MINIMAP_KEY, open);
+    if (!open) minimapToggleRef.current?.focus();
   };
   const initialFitDoneRef = useRef(false);
   const skipNextFitRef = useRef(false);
@@ -3033,11 +3037,6 @@ export function SessionFlowCanvas({
               </span>
             )}
             <div className="flow-node-kicker">
-              {nodeKindFamily(node.kind) !== "native" && (
-                <span className={`node-kind-family node-kind-family-${nodeKindFamily(node.kind)}`}>
-                  {NODE_KIND_FAMILY_LABELS[nodeKindFamily(node.kind)]}
-                </span>
-              )}
               {/* Port detail stays one hover away: it is not something to act on. */}
               <span className="node-kind" title={nodePortLabels(node).join(" · ")}>
                 <Icon name={NODE_KIND_ICONS[node.kind]} size={14} className="node-kind-icon" />
@@ -3100,6 +3099,7 @@ export function SessionFlowCanvas({
             />
             {(node.kind === "physicalInput" || node.kind === "physicalOutput") && (
               <DeviceUsersLine
+                unbound={typeof node.parameters.endpointId !== "string"}
                 users={deviceUsers === undefined ? "unavailable" : deviceUsers && (deviceUsers.get(node.id) ?? null)}
               />
             )}
@@ -3270,6 +3270,7 @@ export function SessionFlowCanvas({
             type="button"
             className="secondary"
             aria-pressed={minimapOpen}
+            ref={minimapToggleRef}
             title="Show a small map of the whole route"
             onClick={() => toggleMinimap(!minimapOpen)}
           >
@@ -3280,8 +3281,45 @@ export function SessionFlowCanvas({
         <SignalFlowLegend />
         <div
           className="session-flow-canvas"
+          id="routing-canvas"
           aria-label="Signal-flow graph"
           tabIndex={-1}
+          onKeyDown={(event) => {
+            if (event.defaultPrevented || event.repeat || event.altKey) return;
+            const target = event.target instanceof HTMLElement ? event.target : null;
+            if (
+              target?.isContentEditable ||
+              target?.closest("input, textarea, select, [role='dialog'], [contenteditable='true']")
+            )
+              return;
+            const key = event.key.toLowerCase();
+            if (key === "f2" && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+              event.preventDefault();
+              if (canEdit && selectedGroupIds.length === 0 && selectedNodeIds.length === 1)
+                onRenameNode?.(selectedNodeIds[0]);
+              return;
+            }
+            if (!(event.ctrlKey || event.metaKey)) return;
+            if (key === "a" && !event.shiftKey) {
+              event.preventDefault();
+              if (onSelectItems)
+                onSelectItems([...session.nodes.map((node) => node.id), ...groups.map((group) => group.id)]);
+              else onSelectMany?.(session.nodes.map((node) => node.id));
+            } else if (key === "d" && !event.shiftKey) {
+              event.preventDefault();
+              if (canEdit && selectedGroupIds.length === 0 && selectedNodeIds.length === 1)
+                onDuplicateNode?.(selectedNodeIds[0]);
+            } else if (key === "0" && !event.shiftKey) {
+              event.preventDefault();
+              void flowInstanceRef.current?.fitView({ padding: 0.12, duration: 0 });
+            } else if (key === "+" || (key === "=" && !event.shiftKey)) {
+              event.preventDefault();
+              void flowInstanceRef.current?.zoomIn({ duration: 0 });
+            } else if (key === "-" && !event.shiftKey) {
+              event.preventDefault();
+              void flowInstanceRef.current?.zoomOut({ duration: 0 });
+            }
+          }}
           data-connection-mode={connectionHandleMode}
           onDragOver={(event) => {
             if (!canEdit) return;

@@ -115,7 +115,7 @@ function TransferCurve({
 }) {
   const svg = useRef<SVGSVGElement>(null);
   const { min, max, grid } = AXES[kind];
-  const L = 34,
+  const L = 46,
     R = 214,
     T = 10,
     B = 190;
@@ -173,7 +173,7 @@ function TransferCurve({
           className="dynamics-zone"
         />
         <line x1={x(settings.thresholdDb)} x2={x(settings.thresholdDb)} y1={T} y2={B} className="dynamics-threshold" />
-        <text x={x(settings.thresholdDb) + 4} y={T + 10} className="dynamics-zone-label">
+        <text x={R - 4} y={T + 14} textAnchor="end" className="dynamics-zone-label">
           turned down
         </text>
       </>
@@ -266,7 +266,7 @@ function TransferCurve({
         <g key={value}>
           <line x1={x(value)} x2={x(value)} y1={T} y2={B} className="dynamics-grid" />
           <line x1={L} x2={R} y1={y(value)} y2={y(value)} className="dynamics-grid" />
-          <text x={L - 4} y={y(value) + 3} textAnchor="end" className="dynamics-axis">
+          <text x={L - 4} y={Math.max(17, y(value) + 3)} textAnchor="end" className="dynamics-axis">
             {value}
           </text>
           <text x={x(value)} y={B + 11} textAnchor="middle" className="dynamics-axis">
@@ -298,10 +298,10 @@ function TransferCurve({
         in (dBFS)
       </text>
       <text
-        x={8}
+        x={14}
         y={(T + B) / 2}
         textAnchor="middle"
-        transform={`rotate(-90 8 ${(T + B) / 2})`}
+        transform={`rotate(-90 14 ${(T + B) / 2})`}
         className="dynamics-axis-title"
       >
         out
@@ -443,7 +443,7 @@ function LevelHistory({
       {ticks.map((value) => (
         <g key={value}>
           <line x1={L} x2={R} y1={y(value)} y2={y(value)} className="dynamics-grid" />
-          <text x={L - 4} y={y(value) + 3} textAnchor="end" className="dynamics-axis">
+          <text x={L - 4} y={Math.max(17, y(value) + 3)} textAnchor="end" className="dynamics-axis">
             {value}
           </text>
         </g>

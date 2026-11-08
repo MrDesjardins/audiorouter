@@ -1,5 +1,92 @@
 # Active plan — current priorities (2026-11-04)
 
+## Combined UI and nightly repair PR — 2026-11-07
+
+PR #121 CI repair (UI-02/11/17, ENG-02/04): head `a3026351` fails five
+Edge scenarios: group left-side reachability, three stale inspector captions,
+and a short-edge fixture relying on default card spacing. Quality gate reports
+the same browser failure. Working tree began clean. Reproduce with the bundled
+CI profile, inspect actual geometry/captions, repair the owning fixture or
+product layer, then run focused and full bundled Edge, UI typecheck/lint/format,
+docs and diff checks. Read all head annotations and reviews before pushing.
+No hardware/driver is needed; harness evidence does not qualify native audio.
+Rollback: revert only this repair.
+
+Reproduced all five failures locally with `npm --prefix ui run e2e:ci --
+canvas-group-resize.pw.ts inspector-status.pw.ts ui-round-20-fixes.pw.ts`
+(32 passed, 5 failed). The screenshot shows the group's left frame at the
+canvas boundary, clipping its outward grab zone: fit again after adding the
+group. Explicitly persist close-card positions for the short-edge case rather
+than relying on the old default spacing. Match the current "This tool is
+bypassed" caption. Existing geometry, state and keyboard/mouse assertions stay.
+No production source, API, guide or driver changes are needed.
+
+Windows local evidence (2026-11-07): focused bundled Edge 37/37 passed;
+`CI=true npm --prefix ui run e2e:ci` passed 670, skipped 15, no failures or
+flaky retries (20.6 minutes). Both positive/negative browser and asset guards
+qualified; the locked e2e backend rebuild passed. Log:
+`target/pr121-full-browser.log` (local, untracked). UI typecheck:all,
+format/format:check, zero-warning lint, docs (246 files / 1430 links) and diff
+checks pass. Browser NO_COLOR/FORCE_COLOR notices concern conflicting runner
+environment variables, not an application warning. All old-head check
+annotations read: browser/Quality gate failure plus hosted Ubuntu migration
+notices; no code warning or PR review comments. Full diff inspected.
+Next: commit/push this test repair to #121 and require new-head hosted checks;
+no merge is authorized. Native audio and packaged shell were not rerun for
+these test-only changes.
+
+Owner explicitly authorized committing and pushing the entire pending tree,
+including the nightly shell repair, and opening one large PR. Branch:
+`improve/ui-round-23`, fast-forwarded to main `04c8a6dd` without file changes.
+Scope: UI-02/05/11/13/17/20/36, ENG-02/04/05, NFR-14; UI rounds 24–26,
+shared control/guide media updates, release evidence and native smoke repair.
+No backend method, driver, dependency or Rust-source change is included.
+
+Ordered work: inspect the complete tracked/untracked diff and evidence; run UI
+format/lint/typecheck/unit/browser checks, site/guide/Firefox checks, docs and
+all eleven native smoke qualification cases; stage and inspect the final set;
+commit, push and open the authorized PR. Record branch/head, results and limits
+in the PR. No merge, release or site publication is authorized. Rollback is a
+scoped revert of this combined commit; preserve the owner's saved data/profile.
+Existing Round 26 native evidence qualifies the local release exe, not a signed
+or hardware-qualified release. Next: finish local checks before commit/push.
+
+Local pre-PR results: UI format/lint/typecheck and all 984 unit tests pass;
+106 edited/new Edge scenarios pass across three themes. Contract drift and
+both Rust format checks pass (no Rust source changed). Site policy/recording/
+guard tests pass 81/81; generated social/CSP/pages and coverage checks pass
+(38 kinds, 252 properties, 202 videos). Video metadata/size budgets pass.
+Firefox playback passes for all selected changed tool families after verifying
+the local server returns actual video/mp4. The first attempt hit an unrelated
+server, and a second lacked a running server; neither was a media/product pass.
+Corrected run uses GUIDE_SITE_PORT=4189. The temporary server was stopped.
+All eleven packaged nightly fault/cancellation qualification cases pass; the
+ordinary release smoke and pre-fix negative framing control are recorded in
+the Round 26 plan. Docs acceptance passes (246 files, 1430 links), staged diff
+check is clean, and the complete staged set contains 296 files. Git's evidence
+JSON CRLF-to-LF notices reflect repository normalization, not content changes.
+Retained limits: desktop main chunk warning, Narrator/scaling/live audio and
+participant gates. No hosted CI result is claimed. Next: commit the inspected
+set, push improve/ui-round-23 and open the explicitly authorized combined PR.
+
+Handoff: the combined implementation is committed as `25b2f048` and pushed to
+`origin/improve/ui-round-23`. Owner-authorized [PR #121](https://github.com/MrDesjardins/audiorouter/pull/121)
+is open against main with all 296 pending files, including the nightly repair.
+The working tree was clean after that commit. Local Edge checks pass 106/106
+and the corrected Firefox playback sweep passes 94/94 selected checks. Hosted
+CI is newly queued/running; no green hosted result, merge or release is claimed.
+The GitHub push also reports two default-branch dependency advisories (moderate
+and low); dependencies are unchanged by this UI/tooling PR, and advisory work
+must use its own dependency validation rather than incidental upgrades here.
+Next: inspect final-head CI and annotations before calling the branch ready;
+merge requires separate owner authorization. Jev remains manually dispatched.
+
+## Nightly packaged qualification — 2026-11-07
+
+Repair the first-launch goal dialog blocking Session navigation in nightly
+42362489121 (ENG-02/04/05, NFR-14). Reproduction, prerequisites, ordered tasks,
+validation and rollback: [repair plan](evidence/2026-11-07-nightly-packaged-smoke.md).
+
 ## Ordered PR integration — 2026-11-06
 
 Integration outcome (2026-11-06): #117 merged at 852ded57 after final Windows,

@@ -20,7 +20,7 @@ export function shortcutConflicts(binding: ShortcutBinding): ShortcutAction[] {
   const actions = Object.keys(binding) as ShortcutAction[];
   return actions.filter(
     (action, index) =>
-      ["Control+C", "Control+V"].includes(binding[action]) ||
+      ["Control+C", "Control+V", "Control+S"].includes(binding[action]) ||
       actions.some((other, otherIndex) => otherIndex < index && binding[other] === binding[action]),
   );
 }

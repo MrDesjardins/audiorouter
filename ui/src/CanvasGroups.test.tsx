@@ -65,7 +65,9 @@ test("lock persists, rejects non-boolean values and is offered in Properties", (
   fireEvent.click(screen.getByText("Add group"));
   const lock = screen.getByLabelText("Lock group position and size") as HTMLInputElement;
   expect(lock.checked).toBe(false);
+  expect(document.getElementById(lock.getAttribute("aria-describedby") ?? "")?.textContent).toBe("Off");
   fireEvent.click(lock);
+  expect(document.getElementById(lock.getAttribute("aria-describedby") ?? "")?.textContent).toBe("On");
   expect(readGroups("audiorouter.ui.groups.one")[0].locked).toBe(true);
   expect(screen.getByText(/Locked: the group cannot be moved, resized or deleted from the canvas/)).toBeTruthy();
   const group: CanvasGroup = {

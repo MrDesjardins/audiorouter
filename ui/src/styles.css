@@ -58,6 +58,38 @@ button:focus-visible {
 .app-shell {
   min-height: 100vh;
 }
+.skip-navigation {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: calc(100vw - 1rem);
+  pointer-events: none;
+}
+.skip-navigation a {
+  position: absolute;
+  transform: translateY(-200%);
+  padding: 0.75rem;
+  border: 2px solid var(--focus-ring);
+  border-radius: var(--radius-md);
+  color: var(--text-strong);
+  background: var(--ambient-surface);
+  white-space: nowrap;
+}
+.skip-navigation a:focus {
+  position: relative;
+  transform: none;
+  pointer-events: auto;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+:is(#routing-canvas, #routing-workbench):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: -3px;
+}
 .app-shell.app-startup {
   display: grid;
   place-items: center;
@@ -536,6 +568,9 @@ button:disabled {
   align-content: start;
   justify-items: start;
 }
+.group-position-options > .boolean-field {
+  grid-template-rows: 2.6em 1fr auto;
+}
 .canvas-selection-inspector small {
   display: block;
   margin-top: 0.5rem;
@@ -953,20 +988,6 @@ button:disabled {
 }
 .this-pc-device-group li strong {
   overflow-wrap: anywhere;
-}
-/* UI-22: the switch keeps its place; a hidden device only dims its name. */
-.this-pc-device-shown {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 2px;
-  color: var(--text-strong);
-  font-size: var(--text-sm);
-  font-family: var(--font-small);
-}
-.this-pc-device-group li.is-hidden-device strong,
-.this-pc-device-group li.is-hidden-device small {
-  opacity: 0.6;
 }
 .tools-howto {
   margin-top: 1rem;
@@ -1620,10 +1641,6 @@ button:disabled {
 .workbench-page .recorder-actions fieldset > button,
 .workbench-page .recorder-actions fieldset > small {
   grid-column: 1 / -1;
-}
-.workbench-page .recorder-actions fieldset > label:has(input[type="checkbox"]) {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
 }
 .workbench-page .recorder-actions .section-heading {
   margin: 0;
@@ -2808,6 +2825,10 @@ button.primary {
 .session-flow-canvas .react-flow__node:hover {
   border-color: #9eb9d3 !important;
 }
+.session-flow-canvas .react-flow__node:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
 .session-flow-canvas .react-flow__node.selected {
   border-color: var(--signal-hot) !important;
   box-shadow:
@@ -3687,12 +3708,6 @@ button.primary {
 .plugin-voice-guard.is-alert .plugin-guard-number {
   border-color: var(--danger, #ff6b6b);
   color: var(--danger, #ff6b6b);
-}
-.plugin-voice-guard .plugin-pass-through {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-weight: 600;
 }
 .theme-light .plugin-voice-guard.is-alert .plugin-guard-title,
 .theme-light .plugin-voice-guard.is-alert .plugin-guard-number {
@@ -4604,13 +4619,15 @@ button.primary {
 }
 .topbar h1 {
   max-width: 18rem;
-  overflow: hidden;
+  overflow: visible;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .topbar .header-session-name {
   display: block;
   width: 100%;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -4681,7 +4698,8 @@ button.primary {
   color: #7a4a00;
 }
 .theme-high-contrast .topbar .save-pending {
-  border: 2px solid #ffd889;
+  border-color: #ffd889;
+  box-shadow: inset 0 0 0 1px #ffd889;
   color: #ffd889;
 }
 .topbar .stop-audio {
@@ -4854,6 +4872,9 @@ button.primary {
   font-size: var(--text-xs);
   user-select: none;
   font-family: var(--font-small);
+}
+.inspector svg text {
+  font-size: max(var(--text-xs), var(--svg-text-floor, var(--text-xs)));
 }
 .advanced-eq-curve {
   fill: none;
@@ -6757,14 +6778,27 @@ input[type="color"] {
   gap: 1rem;
   width: 100%;
 }
-.main-content > .inspector .inspector-toggles > label {
+.main-content > .inspector .inspector-flag {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.5rem;
+}
+.main-content > .inspector .inspector-flag > label {
   display: grid;
   gap: 0.25rem;
   justify-items: start;
   color: #dce6ef;
 }
-.theme-light .main-content > .inspector .inspector-toggles > label {
+.theme-light .main-content > .inspector .inspector-flag > label {
   color: #26364d;
+}
+.inspector-flag-state {
+  width: 3ch;
+  padding-bottom: 0.25rem;
+  color: var(--text-soft);
+  font-size: var(--text-sm);
+  text-align: right;
 }
 /* Tool visual editors (Graphic EQ, Bass & Treble, Dehum, Pitch, Delay, Volume/Gain). */
 .tool-visual {
@@ -7288,9 +7322,6 @@ input[type="color"] {
   font-family: var(--font-small);
 }
 .duck-round-phases label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
   font-size: var(--text-md);
 }
 .duck-bars {
@@ -7755,6 +7786,15 @@ input[type="color"] {
 .updates-panel h3 {
   margin: 0;
 }
+.updates-panel .updates-summary {
+  height: 3rem;
+  overflow: auto;
+  line-height: 1.4;
+  margin: 0;
+}
+.update-release-action {
+  min-height: var(--control-lg);
+}
 .updates-toggle,
 .autoplay-toggle {
   display: flex;
@@ -7763,12 +7803,73 @@ input[type="color"] {
   color: var(--text-strong);
   font-size: var(--text-md);
 }
+.setting-toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.setting-toggle-row > label {
+  flex: 1;
+  min-width: 0;
+}
+.setting-toggle-state {
+  flex: 0 0 6rem;
+  width: 6rem;
+  text-align: right;
+  color: var(--text-soft);
+  font-size: var(--text-sm);
+}
+.boolean-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+.boolean-field > .boolean-field-control {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  /* The state word sits beside its switch; its fixed width keeps the row still. */
+  justify-content: flex-start;
+  min-height: 1.5rem;
+  gap: 0.5rem;
+}
+.boolean-field-state {
+  flex: 0 0 3ch;
+  width: 3ch;
+  text-align: left;
+  color: var(--text-soft);
+  font-size: var(--text-sm);
+}
+.boolean-field-state.has-explicit-state {
+  flex-basis: 12ch;
+  width: 12ch;
+  white-space: nowrap;
+}
+.device-access-setting .setting-toggle-row {
+  justify-content: space-between;
+}
+.device-access-setting .device-access-state {
+  flex-basis: 10rem;
+  width: 10rem;
+  height: 2.5rem;
+}
+.device-access-setting .device-access-description,
+.device-access-setting .device-access-message {
+  height: 3rem;
+  overflow: auto;
+  line-height: 1.4;
+}
+.device-access-setting .recording-folder-actions > button {
+  width: 10rem;
+  max-width: 100%;
+}
 .startup-autoplay .autoplay-message {
   margin-top: 0.5rem;
   color: var(--text-strong);
-}
-.updates-panel > button {
-  justify-self: start;
+  height: 3rem;
+  overflow: auto;
+  line-height: 1.4;
 }
 /* Recording library in the Recording tab: one card per take. */
 .recording-library .recording-row {
@@ -7894,19 +7995,6 @@ input[type="color"] {
   overflow: hidden;
   white-space: nowrap;
   color: var(--warning-text, var(--text-soft));
-}
-.virtual-cable-low-latency {
-  grid-template-columns: 1.4rem minmax(0, 1fr);
-  align-items: center;
-}
-.virtual-cable-low-latency > span,
-.virtual-cable-low-latency > small {
-  grid-column: 1 / -1;
-}
-.virtual-cable-low-latency > input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
-  margin: 0;
 }
 .virtual-cable-route {
   display: grid;
@@ -9380,10 +9468,10 @@ button.danger {
 }
 .session-flow-canvas button.canvas-minimap-close {
   display: grid;
-  width: 1.25rem;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  min-height: 1.25rem;
+  width: 1.5rem;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  min-height: 1.5rem;
   place-items: center;
   padding: 0;
   border: 1px solid var(--ambient-edge);
@@ -9768,4 +9856,30 @@ button.danger {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+.keyboard-help {
+  max-height: calc(100dvh - 2rem);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.keyboard-help dl {
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+}
+.keyboard-help dl:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.keyboard-help dl > div {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--ambient-edge);
+}
+.keyboard-help dt {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.keyboard-help dd {
+  margin: 0;
 }

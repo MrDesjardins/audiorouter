@@ -125,6 +125,34 @@ as a failed current-profile setup.
 - **UI-09 — Sessions/presets.** Create, duplicate, rename, export/import, start/stop, and designate startup sessions. Imports open stopped with unresolved bindings highlighted. Include templates for UC-01, processed mic, app recording, and mix-minus. Presets expand into inspectable ordinary nodes. Header Play/Stop starts or stops the visible canvas route; it does not start a stopped Test Signal or Audio File source. Test Signal Play/Stop controls only that tone through the authorized source transport and may first start a stopped route. A routed, enabled Test Signal Play remains actionable when endpoint readiness is missing so the backend can report the specific start failure. Audio playback still requires the session's exact native endpoint preparation.
 - **UI-10 — Background controls.** Tray controls list session states, recording states, and open/quit actions. Omit the global mute toggle; privacy mute remains available through Properties and its shortcut. “Close window” keeps audio running; “Quit and stop audio” explicitly stops the backend after recorder finalization. Offer optional always-on-top compact meters and global shortcuts, with conflict/rebinding support. Shortcuts dispatch API actions.
 - **UI-11 — Accessibility.** All essential actions work without dragging or a mouse. Provide a structured list/tree view of routes, descriptive accessible names, logical focus order, focus restoration after dialogs, high-contrast/light/dark modes, 200% zoom, and non-color status cues. Target WCAG 2.2 AA applicable criteria plus Windows Narrator testing; record the exact audit checklist in M05.
+
+  Properties chart labels retain an 11 CSS-pixel minimum after SVG viewBox
+  scaling. Reserve room for those labels inside each chart; resizing the
+  panel must not crop axis titles or tick labels.
+
+  The session-name navigation button and map-close button have targets at
+  least 24 CSS pixels in both dimensions, with visible keyboard focus.
+  Closing the map returns focus to its Map toggle without changing the
+  header or canvas geometry.
+
+  Workspace chrome suppresses the browser context menu. Text fields,
+  editable content, links, diagnostic code and selected text retain their
+  useful native editing/copy actions. Canvas tool menus remain available
+  by pointer and keyboard; text selection is not disabled globally.
+
+  Generic boolean tool settings, Duck phase switches, Audio File Loop,
+  single-group lock/carry and manual-recorder dither
+  show fixed-width On/Off text beside the switch. Their accessible names
+  remain the setting names; current state is a separate description.
+  Pending Save styling, including high contrast, keeps the header geometry.
+  Multi-group options retain Mixed/On for all/Off for all. Dither remains
+  disabled and Off for Float32 WAV and MP3; changing format does not start
+  recording or otherwise alter the recorder lifecycle.
+  Picker visibility and plugin pass-through switches also show separate
+  On/Off state text. A hidden device's name and format remain fully readable;
+  hiding it is a local picker preference and does not disable it in Windows.
+  Pass-through keeps the voice-protection explanation and deliberate recovery
+  behavior; its state text does not authorize or perform a plugin load.
 - **UI-12 — Responsiveness.** Remain usable at 1280×720 and 100–200% Windows scaling; panels may collapse. Long names wrap/truncate with accessible full labels. Virtualize large lists/canvas where needed and throttle meters. No web audio engine or processing in the renderer; browser microphone access is unnecessary.
 - **UI-13 — API availability.** If backend disconnects, display a reconnecting/offline state and retain the last snapshot as stale. Disable dependent mutations, do not queue unbounded audio edits, and resync snapshot/revision on reconnect. Closing/reopening a plugin editor does not affect its audio.
 - **UI-14 — Recorder UI.** Expose record/arm/pause/split/stop, destination, disk error, duration, and file library actions. Clearly separate deleting a node, removing a library entry, and recycling a recording file. Do not bury recording activity when the session sidebar changes.
@@ -319,7 +347,7 @@ from Test Signal or Audio File sources; capture-only paths remain marked muted.
 - **UI-33 — Find anything.** Ctrl+K searches actions, tools, settings, cards on this route and sessions by keyboard. Nothing in it deletes anything.
 - **UI-34 — Change history.** Session lists changes since the last save, in plain words, with undo back to any of them, and saved versions from `graph.versions` with time and who saved. "Who" is an enrolled client's own ID or "this PC", and "not recorded" otherwise; a person is never guessed. "Go back here" (`graph.restorePlan` then commit) makes a new saved version, so later versions remain, and it refuses while there are unsaved changes.
 - **UI-35 — First-minute tour.** After the first goal, three skippable steps point at where tools are added, how to connect them and Play. It never starts audio and can be replayed from Settings → Help.
-- **UI-36 — Canvas readability and aids.** Body text is 14 px. The canvas opens at the zoom where its text is at least 11 px, showing everything when the route fits; a route too large stays at that zoom and opens where its signal begins, with the map and panning to reach the rest. The fit button and Arrange show everything. Cards snap to a 24 px grid, with alignment guides, a minimap and arrow-key movement. Properties groups settings in sections that show their values while closed and are remembered per kind of tool on this PC.
+- **UI-36 — Canvas readability and aids.** Body text is 14 px. On loading a route, fit the complete route into the available canvas, including routes that require shrinking below 100% zoom (owner decision, 2026-11-07). Cap the initial zoom at 100%; users can zoom in to read and edit individual cards. The fit button and Arrange also show everything. Cards snap to a 24 px grid, with alignment guides, a minimap and arrow-key movement. Properties groups settings in sections that show their values while closed and are remembered per kind of tool on this PC.
 
 Native preparation guidance distinguishes control connection readiness from
 audio readiness and explains the exact endpoint and authorization steps.
@@ -497,6 +525,52 @@ Native preparation guidance distinguishes control connection readiness from
 audio readiness and explains the exact endpoint and authorization steps.
 
 ## Verification
+
+Device access reserves its controls and message slots while loading. A failed
+read stays visible with Check again. After an uncertain permission-change
+response, retain and label the last known setting, disable further changes
+and require a successful fresh read before retrying. Do not claim permission
+was unchanged when a response may have been lost. Ignore late reads and write
+acknowledgements from a previous backend, and prevent duplicate pending writes.
+
+Shared Enabled and Bypass controls show visible On/Off text beside their
+native checkbox states, with stable space and unchanged accessible names.
+The descriptions follow the displayed settings; they are not proof of signal
+or processing activity. Guides include an explicitly silent shared-control
+walkthrough, identified as a Gain example, and coverage tracks these flags
+separately from processor parameters for every backend tool.
+
+The update-check preference has a visible On/Off text slot. The New versions
+panel reserves summary and release-action space so an asynchronous result does
+not move the controls; without a known release, its action is disabled. No
+result must be described as a successful check. Setup and scan action rows
+use the shared wrapping layout with distinct button targets.
+
+Startup autoplay and API auto-start switches show their confirmed On/Off
+state in a fixed-width text slot. While the initial read is pending they say
+Loading; a missing or failed settings bridge says Unavailable. Saving keeps
+the last confirmed value until acknowledged, uses the returned value for
+success feedback and retains that value on failure. Reserved message space
+prevents asynchronous success or error text from moving adjacent settings.
+
+Keyboard navigation starts with focus-only links to the canvas and the tools
+and settings workbench. They move focus without changing layout. Ctrl+S (or
+Command+S) uses the header Save action and its readiness, busy and warning
+acknowledgement checks; it does not save from text fields or modal dialogs.
+Reserve this binding alongside clipboard shortcuts so a customized audio
+shortcut cannot start or stop playback when the user saves.
+
+While the canvas has focus, Ctrl+A selects its tools and groups. Ctrl+D
+duplicates a single selected tool without connections; mixed or multiple
+selections are left unchanged. Ctrl+plus/equal and Ctrl+minus zoom the view;
+Ctrl+0 fits the route, using the same viewport behavior as the canvas controls.
+These commands leave text editing intact, and zoom never changes saved card
+positions. View changes are immediate and respect reduced motion.
+F2 renames a single selected tool through the themed name dialog; Cancel and
+Escape preserve its name. F1 or ? opens the shortcut reference, including the
+current configurable audio bindings. The reference scrolls by keyboard in a
+short window, traps focus until closed and restores focus to its origin.
+Neither help nor rename opens over another modal dialog or while editing text.
 
 Switching node selection must remove the preceding tool's editor and timing
 controls, including while telemetry refreshes. EQ uses its frequency-response

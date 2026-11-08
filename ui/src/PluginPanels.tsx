@@ -6,6 +6,7 @@ import { formatUiError, type UiBackend } from "./backend";
 import { pluginCatalog, STANDARD_PLUGIN_FOLDERS } from "./draft";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
+import { BooleanField } from "./BooleanField";
 import { endLibraryDrag, startPluginDrag } from "./libraryDrag";
 
 export function PluginScanPanel({
@@ -157,7 +158,7 @@ export function PluginScanPanel({
     }
   };
   return (
-    <section className="panel plugin-scan-panel" aria-labelledby={headingId}>
+    <section className="panel plugin-scan-panel" aria-labelledby={headingId} aria-busy={busy}>
       <div className="section-heading">
         <div>
           <p className="eyebrow">VST3 and VST2 discovery</p>
@@ -178,15 +179,17 @@ export function PluginScanPanel({
           placeholder="C:\Plugins"
         />
       </label>
-      <button type="button" className="secondary" onClick={() => void scan()} disabled={!backend.connected}>
-        Scan directory
-      </button>
-      <button type="button" className="secondary" onClick={() => void list()} disabled={!backend.connected}>
-        Load last scan
-      </button>
-      <button type="button" className="secondary" onClick={() => void retry()} disabled={!backend.connected}>
-        Retry scan
-      </button>
+      <div className="actions">
+        <button type="button" className="secondary" onClick={() => void scan()} disabled={!backend.connected || busy}>
+          Scan directory
+        </button>
+        <button type="button" className="secondary" onClick={() => void list()} disabled={!backend.connected || busy}>
+          Load last scan
+        </button>
+        <button type="button" className="secondary" onClick={() => void retry()} disabled={!backend.connected || busy}>
+          Retry scan
+        </button>
+      </div>
       {result && (
         <ul aria-label="Plugin scan results">
           {result.entries.length === 0 ? (
@@ -242,7 +245,7 @@ export function PluginScanPanel({
           placeholder="C:\Plugins\effect.vst3 or effect.dll"
         />
       </label>
-      <button type="button" className="secondary" onClick={() => void inspect()} disabled={!backend.connected}>
+      <button type="button" className="secondary" onClick={() => void inspect()} disabled={!backend.connected || busy}>
         Inspect path
       </button>
       {inspection && (
@@ -255,7 +258,7 @@ export function PluginScanPanel({
       <PanelMessage message={message} />
       <p className="muted">
         The explicit <code>pluginScan</code> permission is required by the backend; selecting a result only copies its
-        path, and inspection remains explicit. Adding a result to the graph is a separate explicit action. Loading the
+        path, and inspection remains explicit. Adding a result to the route is a separate explicit action. Loading the
         last scan never triggers a new filesystem scan.
       </p>
     </section>
@@ -721,20 +724,16 @@ export function PluginNodeInspector({
           </span>
           <span>
             <strong>Meant to leave your voice unchanged?</strong>
-            <label className="plugin-pass-through">
-              <input
-                aria-label="Allow unchanged audio"
-                type="checkbox"
-                checked={passThroughAllowed}
-                disabled={disabled || !onChange}
-                onChange={(event) => {
-                  if (event.target.checked) onChange?.("passThroughAllowed", true);
-                  else if (onRemove) onRemove(["passThroughAllowed"]);
-                  else onChange?.("passThroughAllowed", false);
-                }}
-              />
-              Allow unchanged audio
-            </label>
+            <BooleanField
+              label="Allow unchanged audio"
+              checked={passThroughAllowed}
+              disabled={disabled || !onChange}
+              onChange={(checked) => {
+                if (checked) onChange?.("passThroughAllowed", true);
+                else if (onRemove) onRemove(["passThroughAllowed"]);
+                else onChange?.("passThroughAllowed", false);
+              }}
+            />
             <small className="parameter-help">
               For a meter, an analyser or a plugin set to bypass. The plugin reloads, with a short gap if the route is
               playing.

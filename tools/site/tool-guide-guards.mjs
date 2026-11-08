@@ -4,6 +4,10 @@
 // Kinds drawn only by the UI; they have no backend node type or parameters.
 const uiOnlyKinds = new Set(["group"]);
 
+export function guideControlName(label) {
+  return new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?: precise value)?$`, "i");
+}
+
 // A silent configuration clip does not become audible evidence merely
 // because a manifest is regenerated. Preserve the reviewed exemption.
 export function propertyCoverageStatus(prior, recordings) {

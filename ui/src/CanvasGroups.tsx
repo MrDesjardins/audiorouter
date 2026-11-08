@@ -5,6 +5,7 @@ import { NodeResizer, useStore, type NodeProps } from "@xyflow/react";
 import { NumberField } from "./NumberField";
 import { SliderField } from "./Slider";
 import { TextField } from "./TextField";
+import { BooleanField } from "./BooleanField";
 import { HelpDisclosure } from "./HelpDisclosure";
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 
@@ -251,28 +252,23 @@ export function CanvasGroupInspector({
       </HelpDisclosure>
       <div className="group-properties">
         <div className="group-position-options">
-          <label className="group-lock-toggle">
-            Lock position and size
-            <input
-              type="checkbox"
-              aria-label="Lock group position and size"
-              checked={group.locked === true}
-              onChange={(event) => onChange({ locked: event.target.checked })}
-            />
-            <small>Prevents dragging or resizing the rectangle by accident.</small>
-          </label>
-          <label className="group-lock-toggle">
-            Move contents with group
-            <input
-              type="checkbox"
-              aria-label="Move contents with group"
-              checked={group.moveContents === true}
-              onChange={(event) => onChange({ moveContents: event.target.checked })}
-            />
-            <small>
-              Fully enclosed tools and nested groups follow together. A locked nested group blocks this move.
-            </small>
-          </label>
+          <BooleanField
+            label="Lock position and size"
+            name="Lock group position and size"
+            checked={group.locked === true}
+            onChange={(locked) => onChange({ locked })}
+            help={<small>Prevents dragging or resizing the rectangle by accident.</small>}
+          />
+          <BooleanField
+            label="Move contents with group"
+            checked={group.moveContents === true}
+            onChange={(moveContents) => onChange({ moveContents })}
+            help={
+              <small>
+                Fully enclosed tools and nested groups follow together. A locked nested group blocks this move.
+              </small>
+            }
+          />
         </div>
         <label>
           Name

@@ -39,6 +39,27 @@ if (manifest.tools.length !== manifest.guideKindCount)
   issues.push(`manifest declares ${manifest.guideKindCount} guide kinds but contains ${manifest.tools.length}`);
 if (keys.size !== manifest.propertyCount)
   issues.push(`manifest declares ${manifest.propertyCount} properties but contains ${keys.size}`);
+const shared = manifest.sharedControls ?? [];
+if (JSON.stringify(shared.map((control) => control.key).sort()) !== JSON.stringify(["bypass", "enabled"]))
+  issues.push("shared Enabled/Bypass controls are missing or duplicated");
+const audioKinds = manifest.tools.filter((tool) => tool.kind !== "group").map((tool) => tool.kind).sort();
+for (const control of shared) {
+  if (JSON.stringify([...(control.appliesTo ?? [])].sort()) !== JSON.stringify(audioKinds))
+    issues.push(`shared control does not cover every audio tool: ${control.key}`);
+  if (control.status !== "recorded" || !control.recordings?.length)
+    issues.push(`shared control needs a recording: ${control.key}`);
+  for (const recording of control.recordings ?? []) {
+    if (recording.silent !== true || !recording.sharedControls?.includes(control.key))
+      issues.push(`shared configuration clip needs an explicit silent/control label: ${control.key}`);
+    for (const field of ["video", "poster"]) {
+      const path = recording[field];
+      const absolute = typeof path === "string" ? resolve(root, "site", path) : "";
+      const fromSite = absolute ? relative(resolve(root, "site"), absolute) : "..";
+      if (!path || isAbsolute(path) || fromSite === ".." || fromSite.startsWith(`..${sep}`) || !existsSync(absolute))
+        issues.push(`missing or out-of-site shared ${field}: ${control.key}`);
+    }
+  }
+}
 // A repeated-control row (EQ bands 2-16) counts as recorded only through its
 // representative row's clips and the family's shared clip.
 issues.push(

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { DeviceListItem, DiagnosticsSnapshot, VirtualCableStatus } from "@audiorouter/contracts";
 import type { CableManagementRequest } from "./backend";
 import { markErrorMessage } from "./actionMessage";
+import { BooleanField } from "./BooleanField";
 import {
   cableLabel,
   cableName,
@@ -300,34 +301,36 @@ export function VirtualCablePanel({
                 ))}
               </select>
             </label>
-            <label className="virtual-cable-low-latency">
-              <span>Low latency (128-frame cable blocks)</span>
-              <input
-                type="checkbox"
-                aria-label="Low latency cable blocks"
-                checked={status.defaultPeriodFrames === 128}
-                disabled={
-                  !managementAvailable ||
-                  !canConfigure ||
-                  busy ||
-                  status.defaultPeriodFrames === null ||
-                  status.defaultPeriodFrames === undefined
-                }
-                onChange={(event) =>
-                  void runManagement(
-                    { operation: event.target.checked ? "setLowLatencyOn" : "setLowLatencyOff" },
-                    event.target.checked ? "Low-latency cable blocks enabled." : "Default cable block size restored.",
-                  )
-                }
-              />
-              <small>
-                Current preferred block:{" "}
-                {status.defaultPeriodFrames === null || status.defaultPeriodFrames === undefined
-                  ? "unavailable"
-                  : `${status.defaultPeriodFrames} frames`}
-                . Changing it briefly restarts the cable device.
-              </small>
-            </label>
+            <BooleanField
+              label="Low latency (128-frame cable blocks)"
+              name="Low latency cable blocks"
+              checked={status.defaultPeriodFrames === 128}
+              stateText={
+                status.defaultPeriodFrames == null ? "Unavailable" : status.defaultPeriodFrames === 128 ? "On" : "Off"
+              }
+              disabled={
+                !managementAvailable ||
+                !canConfigure ||
+                busy ||
+                status.defaultPeriodFrames === null ||
+                status.defaultPeriodFrames === undefined
+              }
+              onChange={(checked) =>
+                void runManagement(
+                  { operation: checked ? "setLowLatencyOn" : "setLowLatencyOff" },
+                  checked ? "Low-latency cable blocks enabled." : "Default cable block size restored.",
+                )
+              }
+              help={
+                <small>
+                  Current preferred block:{" "}
+                  {status.defaultPeriodFrames === null || status.defaultPeriodFrames === undefined
+                    ? "unavailable"
+                    : `${status.defaultPeriodFrames} frames`}
+                  . Changing it briefly restarts the cable device.
+                </small>
+              }
+            />
             <button
               type="button"
               className="secondary"

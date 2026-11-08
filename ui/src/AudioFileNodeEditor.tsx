@@ -5,6 +5,7 @@ import { formatUiError, type RecorderStatus, type UiBackend } from "./backend";
 import { audioUploadProblem, uploadAudioMedia } from "./audioUpload";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
+import { BooleanField } from "./BooleanField";
 
 export function AudioFileNodeEditor({
   node,
@@ -128,6 +129,7 @@ export function AudioFileNodeEditor({
       return;
     }
     setBusy(true);
+    setMessage(`Importing ${file.name}…`);
     try {
       const media = await uploadAudioMedia(backend, file);
       if (currentSessionIdRef.current !== sessionId) return;
@@ -227,15 +229,12 @@ export function AudioFileNodeEditor({
           {state}
         </span>
       </div>
-      <label>
-        Loop
-        <input
-          type="checkbox"
-          checked={node.parameters.loop === true}
-          disabled={!backend.connected || busy}
-          onChange={(event) => onChange("loop", event.target.checked)}
-        />
-      </label>
+      <BooleanField
+        label="Loop"
+        checked={node.parameters.loop === true}
+        disabled={!backend.connected || busy}
+        onChange={(checked) => onChange("loop", checked)}
+      />
       <div className="audio-file-editor-status">
         <PanelMessage message={message} />
       </div>

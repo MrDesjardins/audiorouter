@@ -35,11 +35,11 @@ export function GoalSetupGuide({
             : "Send only your processed microphone to the voice cable. Keep microphone monitoring muted; do not connect a headphone monitoring branch until you deliberately want it."}
         </li>
         <li>
-          <strong>Device availability:</strong> check selected endpoints in Properties. An available device or running
+          <strong>Device availability:</strong> check selected devices in Properties. An available device or running
           process does not prove audio is arriving.
         </li>
         <li>
-          <strong>Local signal, not yet verified:</strong> review the draft, then deliberately press Play. Make sound in
+          <strong>Local signal, not yet verified:</strong> review the route, then deliberately press Play. Make sound in
           the selected source and check fresh route meters. Silence needs investigation before continuing.
         </li>
         <li>

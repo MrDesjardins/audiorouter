@@ -1,0 +1,392 @@
+﻿[
+    {
+        "kind":  "volume",
+        "capture":  {
+                        "id":  "volume",
+                        "status":  "complete",
+                        "kind":  "volume",
+                        "parameter":  "percent",
+                        "sourceHash":  "490885aa5e94d321aea1d14efd20e8eb066aed09bad86677139b0259a97173a1",
+                        "eventAtSeconds":  3.2388035,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/volume-demo.mp4",
+        "sha256":  "9fb52eb79700b194a133a6538a8dda8a90d2e5d2b0d8125c7555aa943a77ce11",
+        "outputAudioSha256":  "ad8eac4e25c55fe52ea1dc351182c7e9c3cef54c7a81abc3ede8f0b67fb39f41",
+        "firefox":  {
+                        "kind":  "volume",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/volume-demo.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.18514671921730042,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "gain",
+        "capture":  {
+                        "id":  "gain",
+                        "status":  "complete",
+                        "kind":  "gain",
+                        "parameter":  "gainDb",
+                        "sourceHash":  "b4d44f7c3105d144cd86ca1fbe78b49dce46ced24ad0bd0d7c8fd9c7000dc065",
+                        "eventAtSeconds":  3.2443964000000003,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gain-demo.mp4",
+        "sha256":  "a33a1c9699029f14adf08863da9da5f30d3f06f580479670fef1ef8a18800504",
+        "outputAudioSha256":  "d1cfca56081c58e2b22747588448d3fd24ac8475e3d66c5bda9e48324b7b8d73",
+        "firefox":  {
+                        "kind":  "gain",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/gain-demo.mp4",
+                        "passed":  true,
+                        "time":  1.408,
+                        "paused":  false,
+                        "peak":  0.18619510531425476,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "bassTreble",
+        "capture":  {
+                        "id":  "bassTreble",
+                        "status":  "complete",
+                        "kind":  "bassTreble",
+                        "parameter":  "bassDb",
+                        "sourceHash":  "8560dae1f769b071738f57954fbac4e7af74962669446c5fa1085cd3dccdd4d1",
+                        "eventAtSeconds":  3.2412471000000007,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/bassTreble-demo.mp4",
+        "sha256":  "3c85703fcb1d2fc575f44cf23443257a66a371c297ee4cf3bd4228432ecd2a96",
+        "outputAudioSha256":  "f8fab1ccfb653e7d20bc10b645da74c1f84521419d694aa044794038a3a7c7c0",
+        "firefox":  {
+                        "kind":  "bassTreble",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/bassTreble-demo.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05216306820511818,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "dehum",
+        "capture":  {
+                        "id":  "dehum",
+                        "status":  "complete",
+                        "kind":  "dehum",
+                        "parameter":  "frequencyHz",
+                        "sourceHash":  "33c6b82abececb10a3bf8ce896055078ae2568277011bb501be7885aa1a415b1",
+                        "eventAtSeconds":  3.2410209999999933,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/dehum-demo.mp4",
+        "sha256":  "3f1a71b4224d89c8968212e2fecfad0426358b7bcd2464c70d59d5b7f552f627",
+        "outputAudioSha256":  "3a9d76e0afbb456bbc89479b88f4ec90c24d0d7bae957c8baa4d413a02e0875f",
+        "firefox":  {
+                        "kind":  "dehum",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/dehum-demo.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.0957665666937828,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "spectralGate",
+        "capture":  {
+                        "id":  "spectralGate",
+                        "status":  "complete",
+                        "kind":  "spectralGate",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  "fe6ce1cf24492ddebe73bf7fc44498947d53f01a0c39b5dcffb518ae025e112b",
+                        "eventAtSeconds":  3.2433987999999956,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/spectralGate-demo.mp4",
+        "sha256":  "2f1a26129044a2600fdf721e8a923024eb562be72835c016a7c93febad0af8ef",
+        "outputAudioSha256":  "a6bc0e9050134df01978448aee5c35b247efd6757c6cf4e8a43a8a1c3020a549",
+        "firefox":  {
+                        "kind":  "spectralGate",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/spectralGate-demo.mp4",
+                        "passed":  true,
+                        "time":  1.472,
+                        "paused":  false,
+                        "peak":  0.0563509501516819,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "duck",
+        "capture":  {
+                        "id":  "duck",
+                        "status":  "complete",
+                        "kind":  "duck",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  "2989bae540e955e49529747098746167458b8220561b06bfbaab8fde3eadad91",
+                        "eventAtSeconds":  3.2204284999999944,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/duck-demo.mp4",
+        "sha256":  "7cb7a10f1fe47b43b86709aafd8818c871af013aaca2c2d15cbae82e752dbc1f",
+        "outputAudioSha256":  "7c152cb2eca6ffd43fbaf18db78fe999466c36d19b1537d0b75ba68e9eb79f67",
+        "firefox":  {
+                        "kind":  "duck",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/duck-demo.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.04506717249751091,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "parametricEq",
+        "capture":  {
+                        "id":  "parametricEq",
+                        "status":  "complete",
+                        "kind":  "parametricEq",
+                        "parameter":  "band0FrequencyHz",
+                        "sourceHash":  "5c1c78203f513d3e01a6e294fc7d8c3005a47d80d337491a27376e6c247539b5",
+                        "eventAtSeconds":  3.2472088999999977,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/parametricEq-demo.mp4",
+        "sha256":  "a90bf7da6849d83b88c98484f87fa5b08be1e598a0e130fd2e03d980102be4e1",
+        "outputAudioSha256":  "e00c930fdc66010e500e18fb3d999a68815757b686a42ecb56f823ac5e2a8b62",
+        "firefox":  {
+                        "kind":  "parametricEq",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/parametricEq-demo.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.05911265313625336,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "compressor",
+        "capture":  {
+                        "id":  "compressor",
+                        "status":  "complete",
+                        "kind":  "compressor",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  "41683929d20ef3aa5da5a29287e6cab297e8e98a2bac968ec9efd10937473e81",
+                        "eventAtSeconds":  3.223470500000003,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/compressor-demo.mp4",
+        "sha256":  "db209cd716ed23dad83d1cccfcb4bdbbcbadc30d088777c2120ff13c8eb10e3e",
+        "outputAudioSha256":  "1cf085d150e175f3b185504401f6dd7ba97aaf36bbd14052562401c9941ee03f",
+        "firefox":  {
+                        "kind":  "compressor",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/compressor-demo.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.05633413791656494,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "gate",
+        "capture":  {
+                        "id":  "gate",
+                        "status":  "complete",
+                        "kind":  "gate",
+                        "parameter":  "thresholdDb",
+                        "sourceHash":  "ff975b92e7496a282be703191acaf7657c9972b8accdff1be2edc397d4f81eb4",
+                        "eventAtSeconds":  3.2308727,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/gate-demo.mp4",
+        "sha256":  "a887aefa9d02bc4a40bcece5ebcb4882a634c29f86d51bf7bd734b83d7467e3f",
+        "outputAudioSha256":  "3a16827fb6f7b4760f5039eb85397dab7fb268800c611b378ffc3ba995efad1b",
+        "firefox":  {
+                        "kind":  "gate",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/gate-demo.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.0568879172205925,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "limiter",
+        "capture":  {
+                        "id":  "limiter",
+                        "status":  "complete",
+                        "kind":  "limiter",
+                        "parameter":  "ceilingDb",
+                        "sourceHash":  "06c2fcfee51481c847ad6786b76347a03cf94cd1695aa6d4f7b18781c0cb52ae",
+                        "eventAtSeconds":  3.233342599999989,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/limiter-demo.mp4",
+        "sha256":  "2642d075178242a6b610da7e2434b102cd57ce80a0145de445f3a33507d387d7",
+        "outputAudioSha256":  "498509ff2e331cfae604254144359919dfe40fa2702b8d161d33e987390fe730",
+        "firefox":  {
+                        "kind":  "limiter",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/limiter-demo.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05735018849372864,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "delay",
+        "capture":  {
+                        "id":  "delay",
+                        "status":  "complete",
+                        "kind":  "delay",
+                        "parameter":  "delayMs",
+                        "sourceHash":  "a7dffa7d146619f51f932353d55b1d72a5d1c65d601d9a8b7520f4f6db71feca",
+                        "eventAtSeconds":  3.245738400000002,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/delay-demo.mp4",
+        "sha256":  "a7d27c0eea232677929cd4776b88fff859e004f3504852d6246c84b70b485d0f",
+        "outputAudioSha256":  "eb6aefe05da4113684013df99df94f104ec7cd13892b5756d2d162bcf1c1f107",
+        "firefox":  {
+                        "kind":  "delay",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/delay-demo.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.296742707490921,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "graphicEq",
+        "capture":  {
+                        "id":  "graphicEq",
+                        "status":  "complete",
+                        "kind":  "graphicEq",
+                        "parameter":  "band5Db",
+                        "sourceHash":  "ec67c7432740f26fcedbe3196778d8a29cd5c8d0a40206409266698202f84a81",
+                        "eventAtSeconds":  3.245964400000001,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/graphicEq-demo.mp4",
+        "sha256":  "635c30b1a45957e5458e78f479b5201844c6c3f2c8b984b18f3f691b101bd2a7",
+        "outputAudioSha256":  "b163d3a56b11f476ec449b329ebc13a29d5547732e82e46aa965af1c94365951",
+        "firefox":  {
+                        "kind":  "graphicEq",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/graphicEq-demo.mp4",
+                        "passed":  true,
+                        "time":  1.461333,
+                        "paused":  false,
+                        "peak":  0.05244777351617813,
+                        "state":  "running",
+                        "error":  null
+                    }
+    },
+    {
+        "kind":  "pitch",
+        "capture":  {
+                        "id":  "pitch",
+                        "status":  "complete",
+                        "kind":  "pitch",
+                        "parameter":  "semitones",
+                        "sourceHash":  "a001c4af95032b3c26b18da552ab59ebc0862aee2d131af9305585b6c53e2288",
+                        "eventAtSeconds":  3.2523647000000055,
+                        "frameRate":  15,
+                        "frames":  120,
+                        "pageErrors":  [
+
+                                       ]
+                    },
+        "video":  "site/assets/tool-guides/pitch-demo.mp4",
+        "sha256":  "e493f7dfb739c9baf3a85a131200d05fb74939aa14d827cc3a7ac04006931f16",
+        "outputAudioSha256":  "583bbacff151fbc3778efacecb6b8f18e5a7d51d1a605a1cf2347395dd147ffc",
+        "firefox":  {
+                        "kind":  "pitch",
+                        "type":  "demos",
+                        "video":  "assets/tool-guides/pitch-demo.mp4",
+                        "passed":  true,
+                        "time":  1.469333,
+                        "paused":  false,
+                        "peak":  0.12279529124498367,
+                        "state":  "running",
+                        "error":  null
+                    }
+    }
+]

@@ -238,7 +238,7 @@ describe("VB-Cable endpoint selection", () => {
     // The first visit imports its panel before reading startup.
     // This tests the registration result, not cold module-loading latency.
     await screen.findByRole("heading", { name: "When AudioRouter starts" }, { timeout: 5000 });
-    expect(await screen.findByText("Native registration: registered")).toBeTruthy();
+    expect(await screen.findByText("Windows sign-in setup: registered")).toBeTruthy();
   });
 
   it("keeps the native startup result visible while reconciling observed state", async () => {
@@ -278,7 +278,7 @@ describe("VB-Cable endpoint selection", () => {
     await screen.findByRole("button", { name: "Apply planned policy" });
     fireEvent.click(screen.getByRole("button", { name: "Apply planned policy" }));
     expect(await screen.findByText(/Startup registration enabled:/)).toBeTruthy();
-    expect(await screen.findByText("Native registration: registered")).toBeTruthy();
+    expect(await screen.findByText("Windows sign-in setup: registered")).toBeTruthy();
   });
 
   it("applies the backend-approved startup plan value to native registration", async () => {
@@ -2194,6 +2194,7 @@ describe("keyboard connection dialog", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: "Recorder ID" }), { target: { value: "voice-take" } });
     const dither = screen.getByRole("checkbox", { name: "TPDF dither" });
     expect((dither as HTMLInputElement).checked).toBe(true);
+    expect(document.getElementById(dither.getAttribute("aria-describedby") ?? "")?.textContent).toBe("On");
     fireEvent.click(dither);
     fireEvent.click(screen.getByRole("button", { name: "Create recorder" }));
     await waitFor(() =>
