@@ -40,8 +40,14 @@ BB23FDD5…4EC4, disposable profile via
   permissionDenied before Allow). Unplug/replug: sound returned; the message
   seen ("No input reaches …") is the canvas wiring hint after the owner
   deleted the Gain → output link themselves (confirmed); the app did not
-  edit the route. What the app shows while a device is missing is still
-  unconfirmed.
+  edit the route. Device loss (owner disabled the output in Windows during
+  Play): the notice "Native endpoint binding changed; audio is stopped…"
+  showed a green success check and, with the new timers, closed after 8 s,
+  because "stopped" matched the success words. The session stayed running
+  with the output silenced; re-enabling the device needed Stop then Play.
+  Fixed: binding and virtual-bridge notices are marked errors (red alert,
+  stay) and say what to do ("Reconnect it, then press Stop and Play");
+  regression in `App.accessibility.test.tsx` (fails without the fix).
 - Plugins list: every row had a "?" opening the same generic VST guide under
   the plugin's name, crowding the section "?". Per-row links removed;
   regression in `ui/src/PluginScanPanel.test.tsx`. Two `plugins.scan` errors

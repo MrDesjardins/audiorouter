@@ -8,6 +8,7 @@ import {
   type UiBackend,
   type UiSnapshotState,
 } from "./backend";
+import { markErrorMessage } from "./actionMessage";
 
 /** State categories that can invalidate the workspace snapshot. Meter events
  * are intentionally excluded; diagnostics use the bounded snapshot path. */
@@ -111,16 +112,22 @@ export function useWorkspaceEvents({
         const bridgeEvent = result.events.find(
           (event) => event.category === "virtualBridge.failed" || event.category === "virtualBridge.expired",
         );
+        // Marked as errors: "stopped" otherwise reads as a success, which
+        // showed a green check and closed itself after 8 s (owner, 2026-11-07).
         if (bindingInvalidatedEvent) {
           showMessage(
-            "Native endpoint binding changed; audio is stopped. Review the exact endpoints and rebind before restarting.",
+            markErrorMessage(
+              "An audio device this route uses was disconnected or changed, so audio stopped. Reconnect it, then press Stop and Play.",
+            ),
           );
         } else if (bridgeEvent) {
           const bus = bridgeEvent.operationId ?? "an affected bus";
           showMessage(
-            bridgeEvent.category === "virtualBridge.expired"
-              ? `Virtual bridge lease expired for ${bus}; the route is silenced until it is deliberately restarted.`
-              : `Virtual bridge failure detected for ${bus}; the route is silenced until it is deliberately recovered.`,
+            markErrorMessage(
+              bridgeEvent.category === "virtualBridge.expired"
+                ? `The virtual cable link for ${bus} timed out, so that audio is silent. Press Stop and Play to restart it.`
+                : `The virtual cable link for ${bus} failed, so that audio is silent. Press Stop and Play to restart it.`,
+            ),
           );
         }
         if (result.resyncRequired || result.events.length > 0) {
