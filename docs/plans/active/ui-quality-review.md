@@ -1,5 +1,36 @@
 # UI quality review — 2026-11-03
 
+## Round 28 — attended session and scores (2026-11-07)
+
+Evidence: the owner's attended session on the recorded and rebuilt exes
+(disposable profile), the fixes listed in [the active plan](current.md), PR
+#122, and a full browser run on head `720a6d9d` (688 passed, 15 skipped,
+0 failed). A category rises only where today's evidence closes the gap the
+iteration-15 table recorded for it; nothing reaches 10 (no independent study).
+
+| # | Category | Score | Basis / what still keeps it from 9 or 10 |
+|---|----------|-------|------------------------------------------|
+| 1 | Contrast | 8 | No new pixel audit of gradients and boundaries |
+| 2 | Typography/size | **9** | Owner checked Windows 150 % and 200 %: nothing clipped or overlapping; new Settings nav checked in three themes |
+| 3 | Clarity | 8 | Test Signal Play/Stop and lost-device wording fixed; still no first-time-user test |
+| 4 | Consistency | 8 | Custom themes unchecked |
+| 5 | Spacing/alignment | 8 | Plugin "?" crowding fixed; no full inventory |
+| 6 | Navigation | **9** | Owner's Narrator pass (names read, Tab order sound); Settings search with Ctrl+K hint; keyboard-only route building |
+| 7 | Errors/recovery | 8 | Lost device now a red, lasting, plain message; owner has not yet seen it on a rebuilt exe |
+| 8 | Inputs | 8 | Copy/paste both ways passed; shortcut capture works; no full field inventory |
+| 9 | Buttons | 8 | Compact targets and pressed states not inventoried |
+| 10 | Loading/progress | 8 | Messages now close by kind; slow-action matrix still partial |
+| 11 | Menus/dropdowns | **9** | Physical keys on the native list (arrows move, Escape behaves as the platform's plain select, nothing applies before Save); tray menu cut to five items with a self-naming Play/Stop, owner-confirmed |
+| 12 | Icons | **9** | Owner comprehension check: only Spectral Gate unclear; redrawn and owner-confirmed; Settings pages gained distinct icons |
+| 13 | Drag/drop | 8 | Escape cancels card and connection drags; Enter on a Tools card now adds it selected and focused, so the arrow keys place it (`e2e/keyboard-placement.pw.ts`); owner has not yet tried this path natively |
+| 14 | Motion | 8 | Scripted scroll honours reduced motion; no attended live-route motion check |
+
+Total 116/140 (was 112). Next, in order: owner check of the lost-device
+message on a rebuilt exe (Errors/recovery); a first-time-user walk-through
+(Clarity); owner check of keyboard placement of a new tool on a rebuilt exe
+(Drag/drop; browser path implemented: added cards were focused but not
+canvas-selected, so React Flow ignored the arrow keys).
+
 ## Round 27 — dropdown, density and loading evidence (2026-11-07)
 
 **Final disposition:** software phase implemented and verified; the real-key

@@ -31,7 +31,8 @@ type ShelfTool = {
   guideKind: string;
   guideName: string;
   disabled: boolean;
-  activate: () => void;
+  /** `fromKeyboard`: Enter or Space, so focus can follow the new card. */
+  activate: (fromKeyboard: boolean) => void;
   dragKind?: NonNullable<LibraryEntry["kind"]>;
   setup?: { reason: string; opensCables: boolean };
 };
@@ -58,7 +59,7 @@ export function ToolShelf({
   search: string;
   searchRef: RefObject<HTMLInputElement | null>;
   pluginsContent?: ReactNode;
-  onAdd: (kind: NonNullable<LibraryEntry["kind"]>) => void;
+  onAdd: (kind: NonNullable<LibraryEntry["kind"]>, options?: { focus?: boolean }) => void;
   onAddCable?: (direction: "renderSource" | "captureSink") => void;
   onAddGroup?: () => void;
   onApplicationPicker: () => void;
@@ -90,8 +91,8 @@ export function ToolShelf({
         guideKind: kind,
         guideName: entry.label,
         disabled: !connected || setup || (!addKind && !onAddCable),
-        activate: () => {
-          if (addKind) onAdd(addKind);
+        activate: (fromKeyboard) => {
+          if (addKind) onAdd(addKind, { focus: fromKeyboard });
           else if (virtualKind) onAddCable?.(virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink");
         },
         dragKind: addKind,
@@ -164,8 +165,9 @@ export function ToolShelf({
             endLibraryDrag();
             if (event.dataTransfer.dropEffect !== "none") remember(tool.id);
           }}
-          onClick={() => {
-            tool.activate();
+          onClick={(event) => {
+            // A keyboard-activated click has no pointer clicks (detail 0).
+            tool.activate(event.detail === 0);
             remember(tool.id);
           }}
         >

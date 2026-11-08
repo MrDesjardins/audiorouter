@@ -281,6 +281,19 @@ const FIRST_RUN_KEY = "audiorouter.ui.first-run-done";
 const readFirstRunDone = () => readPresentationJson(optionalLocalStorage(), FIRST_RUN_KEY) === true;
 const writeFirstRunDone = () => writePresentationJson(optionalLocalStorage(), FIRST_RUN_KEY, true);
 
+/** Focus a canvas card once React Flow has rendered and shown it. */
+function focusCanvasCardWhenShown(nodeId: string, attempts = 30) {
+  window.requestAnimationFrame(() => {
+    const card = Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node")).find(
+      (element) => element.dataset.id === nodeId,
+    );
+    // React Flow keeps a new card hidden until measured, and a hidden card
+    // cannot take focus, so try again until focus actually lands.
+    card?.focus();
+    if (document.activeElement !== card && attempts > 1) focusCanvasCardWhenShown(nodeId, attempts - 1);
+  });
+}
+
 const EDITS_RESTORED_MESSAGE = "Your unsaved edits from last time are back. Save to keep them.";
 const OLDER_EDITS_MESSAGE =
   "You have unsaved edits from last time, but this route was saved since then. Which one do you want?";
@@ -2491,6 +2504,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const inserted = next.nodes[next.nodes.length - 1];
     recordDraftChange(next);
     setSelectedNodeId(inserted.id);
+    setSelectedNodeIds([inserted.id]);
     setActionMessage(`${inserted.name} added. Save to keep it.`);
     return inserted.id;
   };
@@ -2503,7 +2517,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const next = appendEndpointLoopbackNode(draft, endpointId);
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
-      if (inserted) setSelectedNodeId(inserted.id);
+      if (inserted) {
+        setSelectedNodeId(inserted.id);
+        setSelectedNodeIds([inserted.id]);
+      }
       setActionMessage(`${inserted?.name ?? "Endpoint loopback"} added. Save to keep it.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add endpoint loopback."));
@@ -2518,7 +2535,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const next = appendVirtualBusNode(draft, busId, direction, getVirtualCableStatus());
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
-      if (inserted) setSelectedNodeId(inserted.id);
+      if (inserted) {
+        setSelectedNodeId(inserted.id);
+        setSelectedNodeIds([inserted.id]);
+      }
       setActionMessage(`${inserted?.name ?? "Virtual bus"} added. Save to keep it.`);
       return inserted?.id;
     } catch (error) {
@@ -4191,7 +4211,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   }
                   tools={visibleLibraryEntries}
                   connected={backendReady}
-                  onAdd={addLibraryNode}
+                  onAdd={(kind, options) => {
+                    const id = addLibraryNode(kind);
+                    // Added with the keyboard: focus the new card so the arrow
+                    // keys place it, the keyboard path for drag and drop.
+                    if (id && options?.focus) focusCanvasCardWhenShown(id);
+                  }}
                   onAddCable={(direction) =>
                     addVirtualBusNode(defaultCable(getVirtualCableStatus(), direction), direction)
                   }

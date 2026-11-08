@@ -380,7 +380,7 @@ export function Workbench({
   onTab: (tab: WorkbenchTab) => void;
   tools: LibraryEntry[];
   connected: boolean;
-  onAdd: (kind: NonNullable<LibraryEntry["kind"]>) => void;
+  onAdd: (kind: NonNullable<LibraryEntry["kind"]>, options?: { focus?: boolean }) => void;
   /** Adds a cable source or destination on its default cable. */
   onAddCable?: (direction: "renderSource" | "captureSink") => void;
   onNewSession: () => void;
