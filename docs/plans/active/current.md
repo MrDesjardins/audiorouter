@@ -53,9 +53,14 @@ BB23FDD5…4EC4, disposable profile via
   when Play was disabled for lack of an output. Now "Play tone"/"Stop tone",
   "Tone off · 1.0 s", and the reason when Play is unavailable; regression in
   `TestSignalPlaybackControls.test.tsx`, one-line fit check in
-  `audio-tools.pw.ts`; guide text regenerated. Open: the Test Signal and
-  Spectral Gate guide videos still show the old label and icon; re-record
-  them (production audio, Firefox check) before calling those guides current.
+  `audio-tools.pw.ts`; guide text regenerated. Guide videos record the
+  Properties panel only, so neither the card buttons nor the Tools icon
+  appear; the Spectral Gate clips were left unchanged. The Test Signal
+  description in them said "Press Play on the node", now "Press Play tone on
+  its card"; its overview, demo and two property clips were re-recorded,
+  pass `check-tool-guide-videos` and play in Firefox
+  (`GUIDE_SITE_PORT=4188`: port 4187 was held by an unrelated server from
+  2026-11-02 serving another checkout, which made every clip fail there).
 - Plugins list: every row had a "?" opening the same generic VST guide under
   the plugin's name, crowding the section "?". Per-row links removed;
   regression in `ui/src/PluginScanPanel.test.tsx`. Two `plugins.scan` errors

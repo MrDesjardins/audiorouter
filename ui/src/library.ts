@@ -310,7 +310,7 @@ export function libraryEntryAccessibleLabel(entry: LibraryEntry): string {
 /** Short explanation of each tool, shown in Tools and at the top of Properties. */
 export const TOOL_HELP: Record<string, string> = {
   "physical-input": "Sound from a microphone, line input, or virtual cable. Choose the device in Properties.",
-  "test-signal": "A steady tone for checking a route without speaking. Press Play on the node to start the tone.",
+  "test-signal": "A steady tone for checking a route without speaking. Press Play tone on its card to start it.",
   "physical-output": "Send the route to speakers, headphones, or a virtual cable. Choose the device in Properties.",
   gain: "Make the sound louder or quieter, in decibels.",
   mixer: "Combine several sources into one, with a volume for each input.",
