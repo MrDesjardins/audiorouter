@@ -8132,6 +8132,24 @@ input[type="color"] {
     11px ui-monospace,
     monospace;
 }
+.theme-contrast {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--ambient-edge);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+.theme-contrast p,
+.theme-contrast ul {
+  margin: 0;
+}
+.theme-contrast ul {
+  padding-left: 1.1rem;
+  margin-top: 0.35rem;
+}
+.theme-contrast.has-warnings {
+  border-color: var(--warning, var(--danger));
+}
 .theme-preview {
   display: grid;
   gap: 0.5rem;
