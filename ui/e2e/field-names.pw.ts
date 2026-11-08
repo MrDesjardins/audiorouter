@@ -3,6 +3,8 @@ import { unnamedFields } from "./ui-audits";
 import { fitCanvas } from "./workbench";
 
 test("every field on the panels and Settings pages has an accessible name", async ({ page }) => {
+  // Walks about 35 cards and 15 Settings pages: about 15 s alone, more beside other workers.
+  test.setTimeout(90_000);
   await page.setViewportSize({ width: 1500, height: 950 });
   await page.goto("/route-harness.html");
   await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");

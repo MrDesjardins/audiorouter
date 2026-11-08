@@ -23,6 +23,21 @@ describe("NumberField", () => {
     expect(onValue).toHaveBeenLastCalledWith(250);
   });
 
+  it("says the allowed range while typed text is outside it, then stops", () => {
+    render(<NumberField aria-label="Frequency" value={1000} min={20} max={20000} onValue={vi.fn()} />);
+    const field = screen.getByRole("spinbutton", { name: "Frequency" }) as HTMLInputElement;
+    fireEvent.focus(field);
+    expect(field.getAttribute("aria-describedby")).toBeNull();
+    fireEvent.change(field, { target: { value: "50000" } });
+    expect(field.getAttribute("aria-invalid")).toBe("true");
+    const hint = document.getElementById(field.getAttribute("aria-describedby") ?? "");
+    expect(hint?.textContent).toBe("Enter a number from 20 to 20000.");
+    expect(field.title).toBe("Enter a number from 20 to 20000.");
+    fireEvent.change(field, { target: { value: "500" } });
+    expect(field.getAttribute("aria-invalid")).toBeNull();
+    expect(field.getAttribute("aria-describedby")).toBeNull();
+  });
+
   it("accepts a leading minus sign for negative values", () => {
     const onValue = vi.fn();
     render(<NumberField aria-label="Gain" value={0} min={-24} max={24} step={0.1} onValue={onValue} />);
