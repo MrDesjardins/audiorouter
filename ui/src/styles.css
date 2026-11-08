@@ -8183,11 +8183,15 @@ input[type="color"] {
 
 .tool-guide-access {
   display: block;
-  margin: 0.5rem 0 0.75rem;
+  /* The link row is 24 px tall (WCAG 2.5.8); the margins give back the extra height. */
+  margin: 0.25rem 0 0.5rem;
   font-size: var(--text-sm);
   font-family: var(--font-small);
 }
 .tool-guide-access a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   color: var(--accent-text);
   text-underline-offset: 3px;
 }
