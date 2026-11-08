@@ -67,9 +67,10 @@ Each step names the category it can move to 9.
 
 Checks: `npm test` 999 passed; lint and format clean; typecheck clean; seven browser
 suites (field names, audio tools, clipped text, reduced motion, keyboard placement,
-number field, text contrast) 43 passed. Not run: the rebuilt exe with these two fixes.
-Errors/recovery and Motion meet their recorded 9 criteria; re-rate after the owner
-confirms steps 2 and 4 on an exe that includes these fixes.
+number field, text contrast) 43 passed. Owner confirmed both fixes, and pins showing in the
+top rows at once (`25f25287`), on a rebuilt release exe the same day.
+Errors/recovery, Motion, Drag/drop and Inputs now have their attended evidence; re-rate
+with the first-time-user walk-through (step 5).
 
 ## Round 27 — dropdown, density and loading evidence (2026-11-07)
 
