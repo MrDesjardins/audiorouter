@@ -26,9 +26,13 @@ const clippedText = (page: Page, where: string) =>
     return found;
   }, where);
 
-for (const theme of ["dark", "light", "high-contrast"]) {
-  test(`no workbench or Settings text is cut off unreadably in ${theme}`, async ({ page }) => {
-    await page.setViewportSize({ width: 1500, height: 950 });
+const layouts = [
+  ...["dark", "light", "high-contrast"].map((theme) => ({ theme, width: 1500, height: 950 })),
+  { theme: "dark", width: 1024, height: 700 },
+];
+for (const { theme, width, height } of layouts) {
+  test(`no workbench or Settings text is cut off unreadably in ${theme} at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
     await page.goto("/route-harness.html");
     await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
     await setColorTheme(page, theme);
