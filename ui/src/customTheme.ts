@@ -38,7 +38,7 @@ export const DEFAULT_CUSTOM_THEME: CustomTheme = {
     signal: "#f6a928",
     highlight: "#ffd166",
     success: "#72e3a2",
-    danger: "#ff6b6b",
+    danger: "#ff8080",
     plugin: "#c792ea",
     input: "#3a86ff",
     output: "#f6a928",

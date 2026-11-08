@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { DEFAULT_CUSTOM_THEME } from "../src/customTheme";
 import { expect, test } from "./browser-test";
 import { clippedText, lowContrastText, smallTargets } from "./ui-audits";
 import { openSettings, setColorTheme } from "./workbench";
@@ -30,6 +31,19 @@ const DIALOGS: { name: string; open: (page: Page) => Promise<void> }[] = [
       await page.getByRole("combobox").fill("start from");
       await page.keyboard.press("Enter");
       await expect(page.getByRole("dialog", { name: "What do you want to do?" })).toBeVisible();
+    },
+  },
+  {
+    name: "Delete theme confirmation",
+    open: async (page) => {
+      await openSettings(page, "Appearance");
+      await page.getByLabel("Import theme file").setInputFiles({
+        name: "mine.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify({ ...DEFAULT_CUSTOM_THEME, name: "Mine" })),
+      });
+      await page.getByRole("button", { name: /Delete this theme/ }).click();
+      await expect(page.getByRole("group", { name: "Confirm theme deletion" })).toBeVisible();
     },
   },
   ...["Add tools from here", "Connect the dots", "Press Play"].map((step, index) => ({

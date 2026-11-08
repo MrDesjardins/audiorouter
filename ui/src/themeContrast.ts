@@ -10,6 +10,7 @@ const PAIRS: { fore: ThemeColor; back: ThemeColor; minimum: number }[] = [
   { fore: "muted", back: "surface", minimum: 4.5 },
   { fore: "muted", back: "raised", minimum: 4.5 },
   { fore: "danger", back: "surface", minimum: 4.5 },
+  { fore: "danger", back: "raised", minimum: 4.5 },
   { fore: "success", back: "surface", minimum: 3 },
   { fore: "accent", back: "surface", minimum: 3 },
   { fore: "border", back: "surface", minimum: 1.5 },

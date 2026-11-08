@@ -13,6 +13,12 @@ describe("custom theme contrast", () => {
     expect(themeContrastWarnings(DEFAULT_CUSTOM_THEME)).toEqual([]);
   });
 
+  it("checks error text on buttons, which sit on raised surfaces", () => {
+    // The first default (#ff6b6b) passed on panels but gave 4.26:1 on the Delete theme button.
+    const theme = { ...DEFAULT_CUSTOM_THEME, colors: { ...DEFAULT_CUSTOM_THEME.colors, danger: "#ff6b6b" } };
+    expect(themeContrastWarnings(theme).map((warning) => `${warning.fore}/${warning.back}`)).toEqual(["danger/raised"]);
+  });
+
   it("names a faint pair in plain words", () => {
     const theme = { ...DEFAULT_CUSTOM_THEME, colors: { ...DEFAULT_CUSTOM_THEME.colors, muted: "#3a414b" } };
     const warnings = themeContrastWarnings(theme);
