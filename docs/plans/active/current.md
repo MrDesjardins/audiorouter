@@ -44,7 +44,10 @@ BB23FDD5…4EC4, disposable profile via
   the plugin's name, crowding the section "?". Per-row links removed;
   regression in `ui/src/PluginScanPanel.test.tsx`. Two `plugins.scan` errors
   were the absent standard folders (Steinberg/VSTPlugins, Common Files/VST2),
-  swallowed by design but logged with no detail — follow-up.
+  swallowed by design but logged with no kind: two hand-kept allowlists in
+  `crates/transport` dropped every unlisted code (`invalidRoot`). Both now
+  use one bounded camelCase check, `is_stable_error_code`; regression
+  `plugin_scan_failures_log_their_code_but_never_free_text`.
 - Icons: only Spectral Gate was unclear (looked like bars, not a gate).
   Redrawn as a doorway with bars through a dashed threshold (`iconShapes.ts`).
 Next: rebuild the release exe (owner's go-ahead; heavy build), re-check

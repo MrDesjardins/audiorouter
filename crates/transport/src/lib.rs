@@ -355,51 +355,24 @@ pub fn graph_activation_log_summary(result: &serde_json::Value) -> serde_json::V
     })
 }
 
+/// A backend error code fit for the log: a short camelCase identifier such as
+/// `invalidRoot`. Codes are fixed strings chosen by the backend; the shape check
+/// keeps any free-form text out of the log without a hand-kept list that new
+/// codes miss (plugin scan failures were logged with no kind, 2026-11-07).
+pub fn is_stable_error_code(kind: &str) -> bool {
+    let mut chars = kind.chars();
+    kind.len() <= 48
+        && chars.next().is_some_and(|first| first.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_alphanumeric())
+}
+
 /// Fixed safe diagnostic fields shared by shell and backend. Raw messages,
 /// request values, paths and arbitrary error data must never enter the log.
 pub fn rpc_failure_log_summary(error: &serde_json::Value) -> serde_json::Value {
     let kind = error
         .pointer("/data/code")
         .and_then(serde_json::Value::as_str)
-        .filter(|kind| {
-            matches!(
-                *kind,
-                "permissionDenied"
-                    | "revisionConflict"
-                    | "rateLimited"
-                    | "invalidParams"
-                    | "notFound"
-                    | "unavailable"
-                    | "unsupported"
-                    | "internalError"
-                    | "invalidArgument"
-                    | "accessDenied"
-                    | "deviceInUse"
-                    | "exclusiveModeOnly"
-                    | "deviceInvalidated"
-                    | "unsupportedFormat"
-                    | "serviceUnavailable"
-                    | "bufferConstraint"
-                    | "other"
-                    | "invalidRequest"
-                    | "invalidGraph"
-                    | "storageFailure"
-                    | "corruptDatabase"
-                    | "idempotencyConflict"
-                    | "deviceUnavailable"
-                    | "ambiguousBinding"
-                    | "feedbackCycle"
-                    | "pluginUnavailable"
-                    | "resourceConflict"
-                    | "budgetExceeded"
-                    | "diskFull"
-                    | "resyncRequired"
-                    | "restartRequired"
-                    | "planExpired"
-                    | "planLimitReached"
-                    | "nodeNotReady"
-            )
-        });
+        .filter(|kind| is_stable_error_code(kind));
     let operation = error
         .pointer("/data/operation")
         .and_then(serde_json::Value::as_str)
@@ -533,7 +506,9 @@ fn backend_rpc_log_records(
         let error_kind = response
             .and_then(|value| value.pointer("/error/data/code"))
             .and_then(serde_json::Value::as_str)
-            .filter(|kind| matches!(*kind, "permissionDenied" | "revisionConflict" | "rateLimited" | "invalidParams" | "notFound" | "unavailable" | "unsupported" | "internalError"))
+            // Any stable camelCase code (invalidRoot, storageFailure…), bounded so
+            // free-form text never enters the log. A fixed list dropped most codes.
+            .filter(|kind| is_stable_error_code(kind))
             .map(str::to_owned);
         let state = response.and_then(|value| value.get("result")).map(|result| if request.method == "devices.list" { device_inventory_log_summary(result) } else if request.method == "graph.commit" { graph_activation_log_summary(result) } else { serde_json::json!({
             "revision": result.get("revision"),
@@ -839,6 +814,22 @@ fn device_logs_show_counts_without_names_and_event_errors_remain_visible() {
         backend_rpc_log_records(&request, &[error], 1, None)[0]["errorKind"],
         "resyncRequired"
     );
+}
+
+#[test]
+fn plugin_scan_failures_log_their_code_but_never_free_text() {
+    let request = audiorouter_protocol::encode_frame(
+        &serde_json::json!({"jsonrpc":"2.0","id":5,"method":"plugins.scan","params":{"directory":"C:/VST2"}}),
+    )
+    .unwrap();
+    let failure = |code: &str| {
+        let frame = audiorouter_protocol::encode_frame(&serde_json::json!({"jsonrpc":"2.0","id":5,"error":{"code":-32000,"message":"InvalidRoot","data":{"code":code}}})).unwrap();
+        backend_rpc_log_records(&request, &[frame], 1, None)[0]["errorKind"].clone()
+    };
+    assert_eq!(failure("invalidRoot"), "invalidRoot");
+    assert_eq!(failure("C:/Users/private path"), serde_json::Value::Null);
+    assert_eq!(failure(&"a".repeat(49)), serde_json::Value::Null);
+    assert_eq!(failure("InvalidRoot"), serde_json::Value::Null);
 }
 
 /// Read-only methods are what the window and controllers poll on timers
