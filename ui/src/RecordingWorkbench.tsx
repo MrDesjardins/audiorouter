@@ -43,7 +43,7 @@ export function RecordingWorkbench({
   recorderStatuses: RecorderStatus[];
   recorderStatusAvailable: boolean;
   draft: Session;
-  selectedNode: Node;
+  selectedNode: Node | undefined;
   setSelectedNodeId: Dispatch<SetStateAction<string>>;
   setSelectedNodeIds: (ids: string[]) => void;
   recorderFormat: RecorderFileFormat;
@@ -80,7 +80,7 @@ export function RecordingWorkbench({
         recorderStatuses={recorderStatuses}
         recorderStatusAvailable={recorderStatusAvailable}
         recorderNodeIds={draft.nodes.filter((node) => node.kind === "recorder").map((node) => node.id)}
-        selectedNodeId={selectedNode.id}
+        selectedNodeId={selectedNode?.id ?? ""}
         onSelectNode={(nodeId) => {
           setSelectedNodeId(nodeId);
           setSelectedNodeIds([nodeId]);

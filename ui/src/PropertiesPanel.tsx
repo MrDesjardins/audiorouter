@@ -110,7 +110,7 @@ export function PropertiesPanel({
   onLayoutAction?: (action: LayoutAction) => void;
   selectedGroup: CanvasGroup | undefined;
   groupState: ReturnType<typeof useCanvasGroups>;
-  selectedNode: Node;
+  selectedNode: Node | undefined;
   backend: UiBackend;
   sessionRunning: boolean;
   liveDiagnostics: DiagnosticsSnapshot | null;
@@ -156,7 +156,7 @@ export function PropertiesPanel({
   const cableStatus = useVirtualCableStatus();
   const flagId = useId();
   const inspector = useRef<HTMLElement>(null);
-  useSvgTextFloor(inspector, selectedNode.id, !selectedGroup && !(layoutItems.length > 1 && onLayoutAction));
+  useSvgTextFloor(inspector, selectedNode?.id ?? "", !selectedGroup && !(layoutItems.length > 1 && onLayoutAction));
   return layoutItems.length > 1 && onLayoutAction ? (
     <CanvasLayoutInspector
       items={layoutItems}
@@ -175,6 +175,18 @@ export function PropertiesPanel({
       onChange={(patch) => groupState.changeGroup(selectedGroup.id, patch)}
       onRemove={() => groupState.removeGroup(selectedGroup.id)}
     />
+  ) : !selectedNode ? (
+    // An empty route (for example the "Start empty" goal) has no tool to describe.
+    <section
+      className="panel inspector"
+      id="workbench-properties"
+      role="tabpanel"
+      aria-labelledby="workbench-tab-properties"
+      tabIndex={0}
+    >
+      <h2 id="inspector-heading">No tool selected</h2>
+      <p className="muted">This route is empty. Open the Tools tab and add a tool, such as your microphone.</p>
+    </section>
   ) : (
     <>
       <section
