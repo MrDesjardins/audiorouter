@@ -13,7 +13,7 @@ iteration-15 table recorded for it; nothing reaches 10 (no independent study).
 | 1 | Contrast | 8 | Text contrast now checked against WCAG AA on the canvas, three panels and every Settings page in three themes, gradients judged at their worst stop (`e2e/text-contrast.pw.ts`, 0 failures, negative control included); Keyboard shortcuts, Ctrl+K, goal picker and tour dialogs pass too; text over translucent layers, non-text boundaries and hover states are not yet checked |
 | 2 | Typography/size | **9** | Owner checked Windows 150 % and 200 %: nothing clipped or overlapping; new Settings nav checked in three themes |
 | 3 | Clarity | 8 | Test Signal Play/Stop and lost-device wording fixed; still no first-time-user test |
-| 4 | Consistency | 8 | Custom themes now warn in plain words when a color pair fails WCAG contrast and say so when all pass (`themeContrast.test.ts`, `e2e/theme-contrast.pw.ts`); the dialog audit caught the default palette's error red at 4.26:1 on buttons, now `#ff8080` (4.87:1) and checked on raised surfaces; the starting custom palette passes the full text-contrast audit (canvas, panels, every Settings page); a user-made palette is only as good as the warning they follow |
+| 4 | Consistency | **9** | Custom themes now warn in plain words when a color pair fails WCAG contrast and say so when all pass (`themeContrast.test.ts`, `e2e/theme-contrast.pw.ts`); the dialog audit caught the default palette's error red at 4.26:1 on buttons, now `#ff8080` (4.87:1) and checked on raised surfaces; the starting custom palette passes the full text-contrast audit (canvas, panels, every Settings page); a user-made palette is only as good as the warning they follow |
 | 5 | Spacing/alignment | 8 | Plugin "?" crowding fixed; clipped-text audit of the canvas, the three panels and every Settings page in three themes and at 1024×700 (`e2e/clipped-text.pw.ts`) found and fixed shaved descenders in "Apps using this device"; Keyboard shortcuts, Ctrl+K, goal picker and tour dialogs pass too; connection, plugin and confirmation dialogs not yet audited |
 | 6 | Navigation | **9** | Owner's Narrator pass (names read, Tab order sound); Settings search with Ctrl+K hint; keyboard-only route building |
 | 7 | Errors/recovery | 8 | Lost device now a red, lasting, plain message; owner has not yet seen it on a rebuilt exe |
@@ -25,7 +25,7 @@ iteration-15 table recorded for it; nothing reaches 10 (no independent study).
 | 13 | Drag/drop | 8 | Escape cancels card and connection drags; Enter on a Tools card now adds it selected and focused, so the arrow keys place it (`e2e/keyboard-placement.pw.ts`); owner has not yet tried this path natively |
 | 14 | Motion | 8 | Scripted scroll honours reduced motion; no attended live-route motion check |
 
-Total 116/140 (was 112). Next, in order: owner check of the lost-device
+Total 117/140 (was 112; Consistency rose after its recorded gap, unchecked custom themes, closed). Next, in order: owner check of the lost-device
 message on a rebuilt exe (Errors/recovery); a first-time-user walk-through
 (Clarity); owner check of keyboard placement of a new tool on a rebuilt exe
 (Drag/drop; browser path implemented: added cards were focused but not
