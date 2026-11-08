@@ -382,7 +382,7 @@
       "title": "Test Signal",
       "purpose": "Generate a predictable tone to check wiring, levels, and destinations.",
       "concept": "A known signal removes uncertainty about whether a microphone or app is currently producing sound.",
-      "signalBehavior": "Node Play starts its bounded tone through the connected session route; node Stop stops the tone while the route can remain running.",
+      "signalBehavior": "The card's Play tone button starts its bounded tone through the connected route; Stop tone stops only the tone while the route keeps running.",
       "properties": [
         {
           "key": "frequencyHz",
@@ -420,8 +420,8 @@
           "minimum": 1,
           "maximum": 600000,
           "default": 1000,
-          "meaning": "Sets how long each press of the node Play button generates the tone.",
-          "increase": "Keeps the tone playing longer after each Play.",
+          "meaning": "Sets how long each press of Play tone generates the tone.",
+          "increase": "Keeps the tone playing longer after each Play tone.",
           "decrease": "Produces a shorter burst.",
           "example": "1000 ms gives a one-second check; 5000 ms gives time to inspect meters.",
           "caution": ""
@@ -439,9 +439,9 @@
         {
           "title": "Separate tone and session transport",
           "steps": [
-            "Start the tone from its node.",
-            "Stop it from the node while keeping the prepared session running.",
-            "Use header Stop to stop the complete session."
+            "Start the tone with Play tone on its card.",
+            "Stop it with Stop tone while the route keeps running.",
+            "Use Stop in the top bar to stop the whole route."
           ]
         }
       ],

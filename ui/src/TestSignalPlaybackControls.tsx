@@ -44,30 +44,30 @@ export function TestSignalPlaybackControls({
         <button
           type="button"
           className="primary"
-          aria-label="Play Test Signal"
+          aria-label="Play tone"
           title="Plays this tone through the canvas route"
           disabled={!canStart || playing || actionBusy}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={startClick}
         >
-          {actionBusy && !playing ? "Starting…" : "Play"}
+          {actionBusy && !playing ? "Starting…" : "Play tone"}
         </button>
         <button
           type="button"
           className="secondary"
-          aria-label="Stop Test Signal"
+          aria-label="Stop tone"
           title="Stops this tone; the canvas route keeps running"
           disabled={!onStop || !playing || actionBusy}
           onPointerDown={(event) => event.stopPropagation()}
           onClick={stopClick}
         >
-          {actionBusy && playing ? "Stopping…" : "Stop"}
+          {actionBusy && playing ? "Stopping…" : "Stop tone"}
         </button>
       </div>
-      {sessionRunning ? (
+      {sessionRunning && routed && nodeEnabled ? (
+        // The route runs either way; say only what this tone is doing (owner, 2026-11-07).
         <small className="node-test-signal-help">
-          {playing ? "Tone playing" : "Route running · tone stopped"} ·{" "}
-          {durationSeconds.toFixed(durationSeconds < 10 ? 1 : 0)} s
+          {playing ? "Tone playing" : "Tone off"} · {durationSeconds.toFixed(durationSeconds < 10 ? 1 : 0)} s
         </small>
       ) : (
         <small className="node-test-signal-help" role="status">

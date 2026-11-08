@@ -48,6 +48,14 @@ BB23FDD5…4EC4, disposable profile via
   Fixed: binding and virtual-bridge notices are marked errors (red alert,
   stay) and say what to do ("Reconnect it, then press Stop and Play");
   regression in `App.accessibility.test.tsx` (fails without the fix).
+- Test Signal card (owner screenshot): its Play/Stop shared the top bar's
+  words, and while the route ran it said "Route running · tone stopped" even
+  when Play was disabled for lack of an output. Now "Play tone"/"Stop tone",
+  "Tone off · 1.0 s", and the reason when Play is unavailable; regression in
+  `TestSignalPlaybackControls.test.tsx`, one-line fit check in
+  `audio-tools.pw.ts`; guide text regenerated. Open: the Test Signal and
+  Spectral Gate guide videos still show the old label and icon; re-record
+  them (production audio, Firefox check) before calling those guides current.
 - Plugins list: every row had a "?" opening the same generic VST guide under
   the plugin's name, crowding the section "?". Per-row links removed;
   regression in `ui/src/PluginScanPanel.test.tsx`. Two `plugins.scan` errors

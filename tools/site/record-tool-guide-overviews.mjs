@@ -359,7 +359,7 @@ for (const { tool, render } of selected) {
         .click();
     if (demo && tool.kind === "testSignal")
       await page
-        .getByRole("button", { name: "Play Test Signal", exact: true })
+        .getByRole("button", { name: "Play tone", exact: true })
         .click();
     await page.locator(".inspector").waitFor({ state: "visible" });
     if (demo && tool.kind === 'audioFile') await page.locator('.inspector').getByRole('button', { name: 'Play', exact: true }).click();

@@ -7,6 +7,26 @@ import { TestSignalPlaybackControls } from "./TestSignalPlaybackControls";
 afterEach(cleanup);
 
 describe("Test Signal playback controls", () => {
+  it("explains a disabled Play while the route runs instead of only saying the tone is off", () => {
+    const base = {
+      durationMs: 1_000,
+      routed: false,
+      sessionRunning: true,
+      playing: false,
+      actionBusy: false,
+      playbackReady: true,
+      endpointPrepared: true,
+      nodeEnabled: true,
+      onStart: vi.fn(),
+      onStop: vi.fn(),
+    };
+    const view = render(<TestSignalPlaybackControls {...base} />);
+    expect((view.getByRole("button", { name: "Play tone" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(view.getByText("Connect to an enabled physical output.")).toBeTruthy();
+    view.rerender(<TestSignalPlaybackControls {...base} routed />);
+    expect(view.getByText("Tone off · 1.0 s")).toBeTruthy();
+  });
+
   it("plays and stops only its tone while leaving the route running", () => {
     const onStart = vi.fn();
     const onStop = vi.fn();
@@ -23,8 +43,8 @@ describe("Test Signal playback controls", () => {
       onStop,
     };
     const view = render(<TestSignalPlaybackControls {...props} />);
-    const play = view.getByRole("button", { name: "Play Test Signal" });
-    const stop = view.getByRole("button", { name: "Stop Test Signal" });
+    const play = view.getByRole("button", { name: "Play tone" });
+    const stop = view.getByRole("button", { name: "Stop tone" });
     expect((play as HTMLButtonElement).disabled).toBe(false);
     expect((stop as HTMLButtonElement).disabled).toBe(true);
     expect(view.getByText(/Ready · 10 s/)).toBeTruthy();
@@ -56,7 +76,7 @@ describe("Test Signal playback controls", () => {
         {...state}
       />,
     );
-    const play = getByRole("button", { name: "Play Test Signal" }) as HTMLButtonElement;
+    const play = getByRole("button", { name: "Play tone" }) as HTMLButtonElement;
     expect(play.disabled).toBe(disabled);
     if (!state.routed) expect(getByText(/Connect to an enabled physical output/)).toBeTruthy();
     if (state.routed && !state.playbackReady) {
@@ -81,7 +101,7 @@ describe("Test Signal playback controls", () => {
         onStop={vi.fn()}
       />,
     );
-    const play = getByRole("button", { name: "Play Test Signal" });
+    const play = getByRole("button", { name: "Play tone" });
     expect((play as HTMLButtonElement).disabled).toBe(false);
     expect(getByText(/Prepare endpoints in Devices/)).toBeTruthy();
     fireEvent.click(play);
@@ -105,7 +125,7 @@ describe("Test Signal playback controls", () => {
         onStop={onStop}
       />,
     );
-    const play = getByRole("button", { name: "Play Test Signal" });
+    const play = getByRole("button", { name: "Play tone" });
     expect((play as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(play);
     expect(onStart).not.toHaveBeenCalled();
@@ -124,7 +144,7 @@ describe("Test Signal playback controls", () => {
         onStop={onStop}
       />,
     );
-    const stop = getByRole("button", { name: "Stop Test Signal" });
+    const stop = getByRole("button", { name: "Stop tone" });
     expect((stop as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(stop);
     expect(onStop).not.toHaveBeenCalled();
