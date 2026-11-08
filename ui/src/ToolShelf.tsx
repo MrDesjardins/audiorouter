@@ -37,6 +37,34 @@ type ShelfTool = {
   setup?: { reason: string; opensCables: boolean };
 };
 
+let escapeReturn: ((event: KeyboardEvent) => void) | null = null;
+
+/**
+ * After Enter adds a tool, focus sits on the new card so the arrow keys place
+ * it. Escape on that card hands focus back to the tool that added it, so a
+ * keyboard user can carry on through the toolbox. The card stays (Ctrl+Z or
+ * Delete removes it).
+ */
+function returnToToolOnEscape(pressed: HTMLButtonElement, toolId: string) {
+  if (escapeReturn) document.removeEventListener("keydown", escapeReturn, true);
+  const listener = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    document.removeEventListener("keydown", listener, true);
+    if (escapeReturn === listener) escapeReturn = null;
+    const active = document.activeElement;
+    if (!(active instanceof Element) || !active.closest(".react-flow__node")) return;
+    // The pressed button, or its copy if a re-render replaced it.
+    const button = pressed.isConnected
+      ? pressed
+      : document.querySelector<HTMLButtonElement>(`[data-tool-id="${CSS.escape(toolId)}"]`);
+    if (!button) return;
+    event.preventDefault();
+    button.focus();
+  };
+  escapeReturn = listener;
+  document.addEventListener("keydown", listener, true);
+}
+
 const APPLICATION_HELP = "Capture audio from a running app into this route.";
 const GROUP_HELP = "A named visual background. It carries no audio.";
 const DESCRIPTION_PLACEHOLDER = "Point at a tool to see what it does. Click to add it, or drag it onto the canvas.";
@@ -165,9 +193,12 @@ export function ToolShelf({
             endLibraryDrag();
             if (event.dataTransfer.dropEffect !== "none") remember(tool.id);
           }}
+          data-tool-id={tool.id}
           onClick={(event) => {
             // A keyboard-activated click has no pointer clicks (detail 0).
-            tool.activate(event.detail === 0);
+            const fromKeyboard = event.detail === 0;
+            tool.activate(fromKeyboard);
+            if (fromKeyboard) returnToToolOnEscape(event.currentTarget, tool.id);
             remember(tool.id);
           }}
         >

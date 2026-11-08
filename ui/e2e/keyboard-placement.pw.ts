@@ -20,4 +20,8 @@ test("a tool added with Enter can be placed with the arrow keys alone", async ({
   const start = await added.evaluate((element) => (element as HTMLElement).style.transform);
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => added.evaluate((element) => (element as HTMLElement).style.transform)).not.toBe(start);
+  // Escape hands focus back to the tool that added the card (owner, Round 28 attended check).
+  await page.keyboard.press("Escape");
+  await expect(tool).toBeFocused();
+  await expect(page.locator(".react-flow__node")).toHaveCount(before + 1);
 });

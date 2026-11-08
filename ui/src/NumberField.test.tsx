@@ -33,6 +33,11 @@ describe("NumberField", () => {
     const hint = document.getElementById(field.getAttribute("aria-describedby") ?? "");
     expect(hint?.textContent).toBe("Enter a number from 20 to 20000.");
     expect(field.title).toBe("Enter a number from 20 to 20000.");
+    // Visible without hovering or a screen reader (owner, Round 28 attended check).
+    expect(document.querySelector(".number-field-hint")?.textContent).toBe("Enter a number from 20 to 20000.");
+    fireEvent.blur(field);
+    expect(document.querySelector(".number-field-hint")).toBeNull();
+    fireEvent.focus(field);
     fireEvent.change(field, { target: { value: "500" } });
     expect(field.getAttribute("aria-invalid")).toBeNull();
     expect(field.getAttribute("aria-describedby")).toBeNull();

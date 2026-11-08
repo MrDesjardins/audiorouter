@@ -49,6 +49,28 @@ Each step names the category it can move to 9.
 5. **Clarity (3).** Someone who has not used AudioRouter: fresh profile, "make my mic
    sound cleaner and send it to Discord", no help. Record where they hesitate.
 
+### Attended session results (2026-11-08, exe built 10:35, disposable profile)
+
+1. **Errors/recovery:** passed. Red message on unplug, sound back after reconnect.
+2. **Drag/drop:** Tab, Enter and the arrow keys worked. Escape on the new card did
+   nothing; the owner expected to get back to Compressor in the toolbox. Fixed: Escape on
+   a card added with Enter returns focus to the exact tool button pressed, and the card
+   stays (Ctrl+Z or Delete removes it). First attempt sent focus to the "Recent" copy of
+   the tool; it now uses the pressed button. Regression in `e2e/keyboard-placement.pw.ts`.
+3. **Motion:** passed. Connection lights stop and resume with Windows Animation effects.
+4. **Inputs:** red edge seen, but no visible words for the range without Narrator or
+   hovering. Fixed: a bubble under the focused out-of-range field reads "Enter a number
+   from 1024 to 65535."; it is fixed-positioned so nothing below moves (UI-17).
+   Regressions in `NumberField.test.tsx` and `e2e/number-field-invalid.pw.ts` (visible,
+   under the field, no shift; screenshots checked in three themes).
+5. **Clarity:** not run yet.
+
+Checks: `npm test` 999 passed; lint and format clean; typecheck clean; seven browser
+suites (field names, audio tools, clipped text, reduced motion, keyboard placement,
+number field, text contrast) 43 passed. Not run: the rebuilt exe with these two fixes.
+Errors/recovery and Motion meet their recorded 9 criteria; re-rate after the owner
+confirms steps 2 and 4 on an exe that includes these fixes.
+
 ## Round 27 — dropdown, density and loading evidence (2026-11-07)
 
 **Final disposition:** software phase implemented and verified; the real-key

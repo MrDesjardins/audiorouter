@@ -15,7 +15,20 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await expect(field).toHaveAccessibleDescription(`Enter a number from ${range[0]} to ${range[1]}.`);
     const border = await field.evaluate((element) => getComputedStyle(element).borderTopColor);
     expect(await field.evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe("dashed");
-    await field.screenshot({ path: testInfo.outputPath(`invalid-${theme}.png`) });
+    // Visible in words too, not only to Narrator or on hover (owner, Round 28).
+    const hint = page.locator(".number-field-hint");
+    await expect(hint).toBeVisible();
+    await expect(hint).toHaveText(`Enter a number from ${range[0]} to ${range[1]}.`);
+    const fieldBox = (await field.boundingBox())!;
+    const hintBox = (await hint.boundingBox())!;
+    expect(hintBox.y, "hint sits under the field").toBeGreaterThanOrEqual(fieldBox.y + fieldBox.height);
+    // Overlays rather than moving the content below (UI-17).
+    const below = page.getByRole("button").filter({ visible: true }).last();
+    await field.fill("2000");
+    const steady = await below.boundingBox();
+    await field.fill("99999");
+    expect(await below.boundingBox()).toEqual(steady);
+    await page.screenshot({ path: testInfo.outputPath(`invalid-${theme}.png`) });
     await field.blur();
     await expect(field).not.toHaveAttribute("aria-invalid");
     expect(await field.evaluate((element) => getComputedStyle(element).borderTopColor)).not.toBe(border);

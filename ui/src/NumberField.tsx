@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type InputHTMLAttributes } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 
 type NumberFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type" | "min" | "max"> & {
   value: number;
@@ -24,6 +24,12 @@ function isPartialNumber(text: string): boolean {
 export function NumberField({ value, min, max, onValue, onBlur, onFocus, ...rest }: NumberFieldProps) {
   const [text, setText] = useState(() => String(value));
   const editing = useRef(false);
+  const [focused, setFocused] = useState(false);
+  const [hintPosition, setHintPosition] = useState<CSSProperties>({});
+  const place = (input: HTMLInputElement) => {
+    const box = input.getBoundingClientRect();
+    setHintPosition({ top: box.bottom + 4, left: box.left, maxWidth: Math.max(box.width, 220) });
+  };
   useEffect(() => {
     if (!editing.current) setText(String(value));
   }, [value]);
@@ -53,12 +59,15 @@ export function NumberField({ value, min, max, onValue, onBlur, onFocus, ...rest
         value={text}
         onFocus={(event) => {
           editing.current = true;
+          setFocused(true);
+          place(event.currentTarget);
           onFocus?.(event);
         }}
         onChange={(event) => {
           const next = event.target.value;
           if (!isPartialNumber(next)) return;
           setText(next);
+          place(event.currentTarget);
           const number = Number(next);
           if (next.trim() !== "" && next.trim() !== "-" && inRange(number)) onValue(number);
         }}
@@ -76,6 +85,7 @@ export function NumberField({ value, min, max, onValue, onBlur, onFocus, ...rest
         }}
         onBlur={(event) => {
           editing.current = false;
+          setFocused(false);
           if (!inRange(parsed)) setText(String(value));
           onBlur?.(event);
         }}
@@ -84,6 +94,13 @@ export function NumberField({ value, min, max, onValue, onBlur, onFocus, ...rest
       <span id={hintId} className="sr-only">
         {invalid ? hint : ""}
       </span>
+      {/* The same rule for sighted users: a bubble anchored under the field,
+          fixed-positioned so it overlays rather than moving the layout (UI-17). */}
+      {invalid && focused && (
+        <span className="number-field-hint" aria-hidden="true" style={hintPosition}>
+          {hint}
+        </span>
+      )}
     </>
   );
 }

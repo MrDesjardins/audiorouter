@@ -3975,6 +3975,24 @@ input[aria-invalid="true"] {
   border-color: #ffd400 !important;
   box-shadow: 0 0 0 1px #ffd400 !important;
 }
+/* The range rule shown under an out-of-range field while it has focus; fixed,
+   so it overlays the content below instead of moving it (UI-17). */
+.number-field-hint {
+  position: fixed;
+  z-index: 1000;
+  padding: 4px 8px;
+  border: 1px solid var(--danger-text);
+  border-radius: 6px;
+  background: var(--ambient-surface-hi);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  line-height: 1.3;
+  pointer-events: none;
+  box-shadow: 0 4px 12px var(--ambient-shadow);
+}
+.theme-high-contrast .number-field-hint {
+  border-color: #ffd400;
+}
 input[aria-invalid="true"]:focus-visible {
   outline-color: var(--danger-text) !important;
 }
