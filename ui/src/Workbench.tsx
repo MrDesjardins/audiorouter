@@ -7,6 +7,7 @@ import { HelpDisclosure } from "./HelpDisclosure";
 import { Icon } from "./icons";
 import type { IconName } from "./iconShapes";
 import { paletteScore } from "./paletteItems";
+import { scrollBehavior } from "./reducedMotion";
 import { usePanelMemory } from "./usePanelMemory";
 import type { Session } from "@audiorouter/contracts";
 import type { ClientRow } from "./backend";
@@ -982,7 +983,7 @@ export function Workbench({
                       ?.querySelector<HTMLDetailsElement>("[data-client-permissions]");
                     if (panel) {
                       panel.open = true;
-                      panel.scrollIntoView({ block: "start", behavior: "smooth" });
+                      panel.scrollIntoView({ block: "start", behavior: scrollBehavior() });
                       panel.querySelector("summary")?.focus();
                     }
                   }}
