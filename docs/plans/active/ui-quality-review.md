@@ -31,6 +31,24 @@ message on a rebuilt exe (Errors/recovery); a first-time-user walk-through
 (Drag/drop; browser path implemented: added cards were focused but not
 canvas-selected, so React Flow ignored the arrow keys).
 
+### Attended script for the next owner session (rebuilt exe, disposable profile)
+
+Build `ui` then the release shell with `custom-protocol`, confirm the exe is newer
+than `ui/dist`, and launch with `target/ui-quality-review/round-28/launch-attended.ps1`.
+Each step names the category it can move to 9.
+
+1. **Errors/recovery (7).** Route a microphone to headphones, press Play, unplug the
+   headphones. Expect a red message that stays: "An audio device this route uses was
+   disconnected or changed…". Plug back in, press Stop then Play; sound returns.
+2. **Drag/drop (13).** Tools tab, Tab to Compressor, press Enter. Focus is on the new
+   card; arrow keys move it one grid step; Esc during a mouse drag puts a card back.
+3. **Motion (14).** With a route playing, turn Windows "Animation effects" off; the
+   connection lights stop. Turn it on again; they resume.
+4. **Inputs (8).** Settings → API → type 99999 in Port: dashed red edge, Narrator reads
+   "Enter a number from 1024 to 65535"; leaving the field restores the old port.
+5. **Clarity (3).** Someone who has not used AudioRouter: fresh profile, "make my mic
+   sound cleaner and send it to Discord", no help. Record where they hesitate.
+
 ## Round 27 — dropdown, density and loading evidence (2026-11-07)
 
 **Final disposition:** software phase implemented and verified; the real-key
