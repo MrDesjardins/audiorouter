@@ -23,7 +23,7 @@ iteration-15 table recorded for it; nothing reaches 10 (no independent study).
 | 11 | Menus/dropdowns | **9** | Physical keys on the native list (arrows move, Escape behaves as the platform's plain select, nothing applies before Save); tray menu cut to five items with a self-naming Play/Stop, owner-confirmed |
 | 12 | Icons | **9** | Owner comprehension check: only Spectral Gate unclear; redrawn and owner-confirmed; Settings pages gained distinct icons |
 | 13 | Drag/drop | 8 | Escape cancels card and connection drags; Enter on a Tools card now adds it selected and focused, so the arrow keys place it (`e2e/keyboard-placement.pw.ts`); owner has not yet tried this path natively |
-| 14 | Motion | 8 | Scripted scroll honours reduced motion; no attended live-route motion check |
+| 14 | Motion | 8 | Scripted scroll honours reduced motion; with reduced motion requested nothing animates on any panel, tab or Settings page (`e2e/reduced-motion-audit.pw.ts`, control test included), on a stopped route; no attended live-route motion check |
 
 Total 117/140 (was 112; Consistency rose after its recorded gap, unchecked custom themes, closed). Next, in order: owner check of the lost-device
 message on a rebuilt exe (Errors/recovery); a first-time-user walk-through
