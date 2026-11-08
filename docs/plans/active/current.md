@@ -38,8 +38,10 @@ BB23FDD5…4EC4, disposable profile via
 - Narrator tab pass and Windows scale 150 %/200 %: owner reports pass.
 - Live route: Play started after first-run device access (one expected
   permissionDenied before Allow). Unplug/replug: sound returned; the message
-  seen ("No input reaches …") is the canvas wiring hint, so device-loss
-  messaging is still unconfirmed.
+  seen ("No input reaches …") is the canvas wiring hint after the owner
+  deleted the Gain → output link themselves (confirmed); the app did not
+  edit the route. What the app shows while a device is missing is still
+  unconfirmed.
 - Plugins list: every row had a "?" opening the same generic VST guide under
   the plugin's name, crowding the section "?". Per-row links removed;
   regression in `ui/src/PluginScanPanel.test.tsx`. Two `plugins.scan` errors
