@@ -36,6 +36,15 @@ describe("disconnected backend", () => {
 });
 
 describe("UI error formatting", () => {
+  it("explains a save rejected because an audio file is still importing", () => {
+    // CI flake on 720a6d9d: Save during an upload showed this raw backend text.
+    const message = formatUiError(new Error("nodes[3].parameters.mediaId: parameter is invalid"), "Save failed");
+    expect(message).toContain("An audio file is not ready yet");
+    expect(message).not.toContain("nodes[");
+    expect(formatUiError(new Error("nodes[0].parameters.gainDb: parameter is invalid"), "Save failed")).toContain(
+      "A tool setting (gainDb)",
+    );
+  });
   it("explains an already-prepared worker without guessing a second process", () => {
     const message = formatUiError(new Error("native worker is already attached"), "Start failed");
     expect(message).toContain("Stop playback, then try Play again");
