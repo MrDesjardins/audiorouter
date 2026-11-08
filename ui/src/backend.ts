@@ -138,6 +138,13 @@ function formatUiErrorText(error: unknown, fallback: string): string {
   ) {
     return "Audio is already prepared in this app. Stop playback, then try Play again. If it still cannot start, close AudioRouter and reopen it.";
   }
+  const invalidSetting = /^nodes\[\d+\]\.parameters\.(\w+): parameter is invalid$/.exec(error.message.trim());
+  if (invalidSetting) {
+    // Seen when Save is pressed while an audio file is still uploading (mediaId not set yet).
+    return invalidSetting[1] === "mediaId"
+      ? "An audio file is not ready yet, so the route was not saved. Wait until the file finishes importing, or choose it again, then press Save."
+      : `A tool setting (${invalidSetting[1]}) has a value AudioRouter cannot use, so the route was not saved. Check the tool's Properties, then press Save.`;
+  }
   if (isRevisionConflict(error)) {
     return "Another save changed this route, so your save was not applied. Your edits are kept. Compare them with the latest saved route, then save again.";
   }

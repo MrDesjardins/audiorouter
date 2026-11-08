@@ -108,7 +108,8 @@ your headphones.
 
 **The streaming PC receives it**, trims the level, feeds OBS through a virtual
 cable, and keeps a backup recording. Light and high-contrast themes are
-available too.
+available too. AudioRouter works with Windows Narrator and the keyboard alone,
+and stays readable at 150 % and 200 % display scaling.
 
 ![Streaming PC session in the light theme: Network Receive, a trim gain, a level meter, an output to OBS and a backup recorder, with the Session file panel](docs/images/streaming-pc-light.png)
 

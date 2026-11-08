@@ -679,16 +679,23 @@ test("an unsaved Test Signal route can be auditioned without changing the saved 
   await sidebar.getByLabel("Destination input port").selectOption({ label: "Output device 1 · in · 2ch" });
   await sidebar.getByRole("button", { name: "Add connection", exact: true }).click();
   await fitCanvas(page);
-  await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
+  // "Play tone" / "Stop tone" must stay on one line in the narrow card.
+  for (const name of ["Play tone", "Stop tone"]) {
+    const fits = await page
+      .getByRole("button", { name, exact: true })
+      .evaluate((button) => button.scrollWidth <= button.clientWidth && button.clientHeight < 48);
+    expect(fits, name).toBe(true);
+  }
+  await page.getByRole("button", { name: "Play tone", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Choose the speaker or headphones/);
   await openDeviceTroubleshooting(page);
   await page.locator(".right-workbench").getByLabel("Native capture endpoint").selectOption("capture-preview");
   await page.locator(".right-workbench").getByLabel("Native render endpoint").selectOption("render-preview");
-  await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
+  await page.getByRole("button", { name: "Play tone", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
   await page.getByRole("tab", { name: "Session" }).click();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
-  await page.getByRole("button", { name: "Stop Test Signal", exact: true }).click();
+  await page.getByRole("button", { name: "Stop tone", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText("Test Signal 1 stopped.");
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
@@ -718,7 +725,7 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
     .evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-id")));
   expect(ids).toHaveLength(5);
   await fitCanvas(page);
-  await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
+  await page.getByRole("button", { name: "Play tone", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Choose the speaker or headphones/);
   await expect(page.getByRole("tab", { name: "Session" })).toHaveAttribute("aria-selected", "true");
   await openDeviceTroubleshooting(page);
@@ -728,9 +735,9 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
   });
   await page.locator(".right-workbench").getByLabel("Native capture endpoint").selectOption("capture-preview");
   await page.locator(".right-workbench").getByLabel("Native render endpoint").selectOption("render-preview");
-  await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
+  await page.getByRole("button", { name: "Play tone", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
-  await expect(page.getByRole("button", { name: "Stop Test Signal", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Stop tone", exact: true })).toBeEnabled();
   // A light "comet" travels along the playing connection.
   const comet = page.locator(".react-flow .flow-comet-body").first();
   await expect(comet).toHaveCount(1);
@@ -761,9 +768,9 @@ test("Test Signal lifecycle refreshes preserve the committed route and explain m
   await expect(page.locator(".react-flow__edges .react-flow__edge")).toHaveCount(1);
   for (const id of ids) await expect(page.getByTestId(`rf__node-${id}`)).toBeVisible();
   await expect(page.locator(".global-action-message")).toContainText(/Test Signal 1 playing/);
-  await page.getByRole("button", { name: "Stop Test Signal", exact: true }).click();
+  await page.getByRole("button", { name: "Stop tone", exact: true }).click();
   await expect(page.locator(".global-action-message")).toContainText("Test Signal 1 stopped.");
-  await expect(page.getByRole("button", { name: "Play Test Signal", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Play tone", exact: true })).toBeEnabled();
   await expect(page.locator(".react-flow__edges .flow-edge-active")).toHaveCount(0);
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
 });
@@ -788,11 +795,11 @@ test("top Play runs the canvas route without starting the Test Signal tone", asy
   await page.locator(".topbar").getByRole("button", { name: "Play", exact: true }).click();
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
   await expect(page.locator(".react-flow__edges .flow-edge-active")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Play Test Signal", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Play tone", exact: true })).toBeEnabled();
   await fitCanvas(page);
-  await page.getByRole("button", { name: "Play Test Signal", exact: true }).click();
+  await page.getByRole("button", { name: "Play tone", exact: true }).click();
   await expect.poll(() => page.locator(".react-flow__edges .flow-edge-active").count()).toBeGreaterThan(0);
-  await page.getByRole("button", { name: "Stop Test Signal", exact: true }).click();
+  await page.getByRole("button", { name: "Stop tone", exact: true }).click();
   await expect(page.locator(".audio-run-state")).toContainText("Audio running");
 });
 

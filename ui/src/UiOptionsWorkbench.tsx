@@ -16,6 +16,27 @@ import {
   type ThemeColor,
 } from "./customTheme";
 import { TextField } from "./TextField";
+import { themeContrastWarnings } from "./themeContrast";
+
+function ThemeContrastReport({ theme }: { theme: CustomTheme }) {
+  const warnings = themeContrastWarnings(theme);
+  return (
+    <div className={`theme-contrast${warnings.length ? " has-warnings" : ""}`} role="status">
+      {warnings.length === 0 ? (
+        <p>Text in this theme is easy to read: every pair meets the WCAG contrast guideline.</p>
+      ) : (
+        <>
+          <p>Some text may be hard to read. Make these colors lighter or darker:</p>
+          <ul>
+            {warnings.map((warning) => (
+              <li key={`${warning.fore}-${warning.back}`}>{warning.text}</li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
 
 const CUSTOM_PREFIX = "custom:";
 
@@ -202,6 +223,7 @@ export function UiOptionsWorkbench({
                   </label>
                 ))}
               </div>
+              <ThemeContrastReport theme={active.theme} />
             </details>
             {confirmDelete ? (
               <div className="theme-delete-confirmation" role="group" aria-label="Confirm theme deletion">

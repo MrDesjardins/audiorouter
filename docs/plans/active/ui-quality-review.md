@@ -1,5 +1,190 @@
 # UI quality review — 2026-11-03
 
+## Round 28 — attended session and scores (2026-11-07)
+
+Evidence: the owner's attended session on the recorded and rebuilt exes
+(disposable profile), the fixes listed in [the active plan](current.md), PR
+#122, and a full browser run on head `720a6d9d` (688 passed, 15 skipped,
+0 failed). A category rises only where today's evidence closes the gap the
+iteration-15 table recorded for it; nothing reaches 10 (no independent study).
+
+| # | Category | Score | Basis / what still keeps it from 9 or 10 |
+|---|----------|-------|------------------------------------------|
+| 1 | Contrast | 8 | Text contrast now checked against WCAG AA on the canvas, three panels and every Settings page in three themes, gradients judged at their worst stop (`e2e/text-contrast.pw.ts`, 0 failures, negative control included); Keyboard shortcuts, Ctrl+K, goal picker and tour dialogs pass too; text over translucent layers, non-text boundaries and hover states are not yet checked |
+| 2 | Typography/size | **9** | Owner checked Windows 150 % and 200 %: nothing clipped or overlapping; new Settings nav checked in three themes |
+| 3 | Clarity | 8 | Test Signal Play/Stop and lost-device wording fixed; still no first-time-user test |
+| 4 | Consistency | **9** | Custom themes now warn in plain words when a color pair fails WCAG contrast and say so when all pass (`themeContrast.test.ts`, `e2e/theme-contrast.pw.ts`); the dialog audit caught the default palette's error red at 4.26:1 on buttons, now `#ff8080` (4.87:1) and checked on raised surfaces; the starting custom palette passes the full text-contrast audit (canvas, panels, every Settings page); a user-made palette is only as good as the warning they follow |
+| 5 | Spacing/alignment | 8 | Plugin "?" crowding fixed; clipped-text audit of the canvas, the three panels and every Settings page in three themes and at 1024×700 (`e2e/clipped-text.pw.ts`) found and fixed shaved descenders in "Apps using this device"; Keyboard shortcuts, Ctrl+K, goal picker and tour dialogs pass too; connection, plugin and confirmation dialogs not yet audited |
+| 6 | Navigation | **9** | Owner's Narrator pass (names read, Tab order sound); Settings search with Ctrl+K hint; keyboard-only route building |
+| 7 | Errors/recovery | 8 | Lost device now a red, lasting, plain message; owner has not yet seen it on a rebuilt exe; Save pressed while an audio file is still uploading now says the file is not ready yet instead of the raw "nodes[3].parameters.mediaId: parameter is invalid" (found from the CI flake on `720a6d9d`) |
+| 8 | Inputs | 8 | Copy/paste both ways passed; shortcut capture works; field inventory: every field in the panels, every Settings page and the Properties of 33 added tool kinds has an accessible name (`e2e/field-names.pw.ts`, control test included); an out-of-range number is now dashed red (yellow in high contrast) and says its range to Narrator and on hover instead of reverting silently (`NumberField.test.tsx`, `e2e/number-field-invalid.pw.ts`); text-field validation beyond numbers not inventoried |
+| 9 | Buttons | 8 | Target sizes inventoried on Properties, Tools, Devices (three themes) and every Settings page (`e2e/target-size.pw.ts`, WCAG 2.5.8): one 16 px guide link fixed; Keyboard shortcuts, Ctrl+K, goal picker and tour dialogs pass too (`e2e/dialog-audits.pw.ts`); connection, plugin and confirmation dialogs and pressed states not yet inventoried |
+| 10 | Loading/progress | 8 | Messages now close by kind; slow-action matrix still partial |
+| 11 | Menus/dropdowns | **9** | Physical keys on the native list (arrows move, Escape behaves as the platform's plain select, nothing applies before Save); tray menu cut to five items with a self-naming Play/Stop, owner-confirmed |
+| 12 | Icons | **9** | Owner comprehension check: only Spectral Gate unclear; redrawn and owner-confirmed; Settings pages gained distinct icons |
+| 13 | Drag/drop | 8 | Escape cancels card and connection drags; Enter on a Tools card now adds it selected and focused, so the arrow keys place it (`e2e/keyboard-placement.pw.ts`); owner has not yet tried this path natively |
+| 14 | Motion | 8 | Scripted scroll honours reduced motion; with reduced motion requested nothing animates on any panel, tab or Settings page (`e2e/reduced-motion-audit.pw.ts`, control test included), on a stopped route; no attended live-route motion check |
+
+Total 117/140 (was 112; Consistency rose after its recorded gap, unchecked custom themes, closed). Next, in order: owner check of the lost-device
+message on a rebuilt exe (Errors/recovery); a first-time-user walk-through
+(Clarity); owner check of keyboard placement of a new tool on a rebuilt exe
+(Drag/drop; browser path implemented: added cards were focused but not
+canvas-selected, so React Flow ignored the arrow keys).
+
+### Attended script for the next owner session (rebuilt exe, disposable profile)
+
+Build `ui` then the release shell with `custom-protocol`, confirm the exe is newer
+than `ui/dist`, and launch with `target/ui-quality-review/round-28/launch-attended.ps1`.
+Each step names the category it can move to 9.
+
+1. **Errors/recovery (7).** Route a microphone to headphones, press Play, unplug the
+   headphones. Expect a red message that stays: "An audio device this route uses was
+   disconnected or changed…". Plug back in, press Stop then Play; sound returns.
+2. **Drag/drop (13).** Tools tab, Tab to Compressor, press Enter. Focus is on the new
+   card; arrow keys move it one grid step; Esc during a mouse drag puts a card back.
+3. **Motion (14).** With a route playing, turn Windows "Animation effects" off; the
+   connection lights stop. Turn it on again; they resume.
+4. **Inputs (8).** Settings → API → type 99999 in Port: dashed red edge, Narrator reads
+   "Enter a number from 1024 to 65535"; leaving the field restores the old port.
+5. **Clarity (3).** Someone who has not used AudioRouter: fresh profile, "make my mic
+   sound cleaner and send it to Discord", no help. Record where they hesitate.
+
+### Attended session results (2026-11-08, exe built 10:35, disposable profile)
+
+1. **Errors/recovery:** passed. Red message on unplug, sound back after reconnect.
+2. **Drag/drop:** Tab, Enter and the arrow keys worked. Escape on the new card did
+   nothing; the owner expected to get back to Compressor in the toolbox. Fixed: Escape on
+   a card added with Enter returns focus to the exact tool button pressed, and the card
+   stays (Ctrl+Z or Delete removes it). First attempt sent focus to the "Recent" copy of
+   the tool; it now uses the pressed button. Regression in `e2e/keyboard-placement.pw.ts`.
+3. **Motion:** passed. Connection lights stop and resume with Windows Animation effects.
+4. **Inputs:** red edge seen, but no visible words for the range without Narrator or
+   hovering. Fixed: a bubble under the focused out-of-range field reads "Enter a number
+   from 1024 to 65535."; it is fixed-positioned so nothing below moves (UI-17).
+   Regressions in `NumberField.test.tsx` and `e2e/number-field-invalid.pw.ts` (visible,
+   under the field, no shift; screenshots checked in three themes).
+5. **Clarity:** not run yet.
+
+Checks: `npm test` 999 passed; lint and format clean; typecheck clean; seven browser
+suites (field names, audio tools, clipped text, reduced motion, keyboard placement,
+number field, text contrast) 43 passed. Owner confirmed both fixes, and pins showing in the
+top rows at once (`25f25287`), on a rebuilt release exe the same day.
+Errors/recovery, Motion, Drag/drop and Inputs now have their attended evidence; re-rate
+with the first-time-user walk-through (step 5).
+
+## Round 27 — dropdown, density and loading evidence (2026-11-07)
+
+**Final disposition:** software phase implemented and verified; the real-key
+blocker was cleared by the owner. The [execution record](../archived/2026-11-07-ui-round-27.md)
+contains the completion audit and retained native/attended limits. Earlier
+pending statements below record intermediate results, superseded by that
+record. Scores remain 112/140; M05/M08 and the wider 9/10 goal remain open.
+
+Owner requested the next improvement phase. Round 26's completed fixes and
+112/140 rating remain the baseline. Execution prerequisites, ordered tasks,
+requirements and rollback are in current.md under UI quality Round 27.
+
+First slice: `native-select-keyboard.pw.ts` exercises ArrowDown on the actual
+output-device select, Alt+ArrowDown/Escape, retained focus, Tab departure,
+Unsaved indication and absence of any backend commit. At 640 px the field
+remains within the viewport. Windows Edge passes 3/3 across dark, light and
+high contrast. The initial three failures expected the wrong first option:
+the channel-first list puts surround-preview first; correcting that fixture
+expectation made the actual keyboard checks pass without product changes.
+
+Inspected all three `target/ui-quality-review/round-27/device-picker-*.png`
+captures: field, selected text, guidance and next focused action remain
+contained and readable. This proves closed-field rendering and keyboard
+behavior in Edge, not the appearance of the OS popup or native WebView2.
+Typecheck:all, docs acceptance (246 files/1430 links) and diff check pass.
+No production source or tool setting changed; guides/API/MCP are unaffected.
+
+Next: long device-name/duplicate-name fixtures and dropdown cancellation
+with a changed provisional option, then remaining menu/density and measured
+loading work. Narrator, actual Windows display scaling, attended live audio
+and user/icon studies remain open. No score increase, commit or PR claimed.
+
+Second slice results (Windows 11 Home 10.0.26300, Edge/WebView2
+157.0.4341.42, Node 22.22.3):
+
+- Long duplicate endpoint names remain two distinct keyboard-selectable IDs.
+  All six keyboard/long-name cases pass in development and optimized builds.
+  Six narrow/ordinary long-name captures are retained; narrow captures were
+  inspected in all themes. Fields contain their contents geometrically, but
+  selected long text truncates. This does not establish full-name readability
+  in a native popup.
+- A stronger provisional-choice cancellation probe failed in the app and in
+  a plain HTML select, both headed and headless. Space, Alt+Down and a pointer
+  opening did not establish a native popup in that automation path. Removed
+  the temporary diagnostic test and narrowed the permanent claim to Escape
+  retaining value/focus; native provisional cancellation remains unverified.
+- The density suite derives Settings destinations from SETTINGS_PAGES. Its
+  22 destinations at 1280x720 and 640x360 pass across three themes, including
+  horizontal field containment, 24px button targets and unclipped button
+  captions. The expanded-panel extension also passes for every addable tool
+  at both widths/themes. JSON inventories are in round-27/density-*.json and
+  tool-density-*.json. This is not a full spacing, popup or Windows-scaling
+  qualification. Development/optimized initial suites passed 9/9; expanded
+  tool development checks pass 3/3. Final combined optimized rerun is pending.
+- Added report-bundle.mjs; production entry is 599,241 bytes. Largest module
+  transformed-length contributors include App, SessionFlowCanvas, Workbench,
+  draft and ToolVisuals. No chunk threshold or boundary changed. The warning
+  stays because these samples do not identify a slow startup bottleneck;
+  moving bytes without measured improvement would not close UX-06.
+- Five native baseline samples on the unchanged E06ADFA6 release hash pass,
+  using a stopped three-card route, no device access, separate database and
+  WebView profile, standard-user token. Fresh-profile times (ms): 1718,1191,
+  1099,1136,1109; restart: 1104,1342,1147,1240,1162. Medians: 1136/1162;
+  maxima: 1718/1342. Machine: Core Ultra 9 285K, 24 logical processors,
+  33,579,425,792 bytes RAM. These are local fresh-profile/restart samples,
+  not OS-cold distributions or an optimization claim. Evidence:
+  round-27/native-baseline[-2 through -5]/result.json. All ten shells quit 0.
+
+Native shortcut repair (UI-11/12; F27): actual Windows input through the
+computer-use skill reproduced Ctrl+F Find UI, Ctrl+P Print UI and F5 resetting
+Session to Tools in the old release. Canceled both browser UIs, never printed
+or played audio, and quit the isolated process 0. Native Settings3 now disables
+browser accelerators without consuming app keyboard events. Only existing
+WebView2 COM ABI packages became direct Windows dependencies; no version changed.
+The COM interfaces stay on Tauri's UI thread, and setting read-back emits a
+bounded shell diagnostic. Failure keeps the editor usable and is recorded.
+
+The packaged regression requires that record from each current shell PID,
+including after restart. Old hash E06ADFA6 fails exactly at the new assertion
+(native-keys-old/result.json), then quits gracefully. Current release hash
+BB23FDD598A14D719255EA62437771C9D364F83CE985BA929C3C79BE94D54EC4 passes
+(native-keys-new/result.json). Shell tests: 91 passed/4 explicit skips; root
+and shell strict all-target/all-feature Clippy, both Rust format checks, UI
+typecheck/lint/format and helper tests 7/7 pass. New native review initially
+hit another app's screen-picker overlay: `point (1003, 196) is over
+PickerHost.exe`. Refreshed/retried once and stopped input; asked owner to
+dismiss/defer the picker. Cleaned up the owned stopped test shell through its
+native quit transport (exit 0), leaving the other app alone. Real-key recheck
+and full smoke fault qualification are pending; no repaired-key behavior claim
+is made from read-back alone. No public API or tool control changed, so no
+contract/MCP/Properties guide update is required. No score increase or PR.
+
+Final available checks: combined optimized suite passes 12/12, including 32
+expanded tool kinds in every theme/width; wiring tests 5/5. All eleven native
+smoke fault/cancellation cases pass on BB23FDD5. Policy tests pass 61/61;
+docs acceptance 246 files/1430 links, final typecheck/lint/format and both Rust
+format checks pass. The native record guard was then tightened to require a
+timestamp at/after the current launch as well as PID, rejecting reused-PID
+stale evidence. Its regression and native-keys-final baseline pass. The full
+fault qualification above precedes only this timestamp refinement.
+
+Re-observation showed a Windows network-permission prompt covering the app,
+explaining the earlier PickerHost interference. Do not automate security or
+privacy permission prompts (computer-use skill). Owner was asked to dismiss
+or defer it. The owned review process (4760) was quit through its isolated
+native transport, exit 0, without interacting with that prompt. No native
+key verification is claimed for the repaired build yet. Next: after the prompt
+is clear, use a fresh disposable profile to check F5/Ctrl+R retain the current
+page/edits, Ctrl+F/P show no browser UI, custom/app shortcuts and text editing
+still work, and native dropdown full-name/cancellation behavior. The goal
+remains active, with no category re-rating, commit, PR or release claim.
+
+
 ## Round 26 — fresh evaluation and complete initial canvas (2026-11-07)
 
 Objective: re-evaluate the fourteen categories against the current dirty working

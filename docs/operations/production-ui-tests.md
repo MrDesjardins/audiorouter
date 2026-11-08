@@ -122,6 +122,27 @@ the native bridge through normal `system.describe` calls; the older create-only
 `AUDIOROUTER_SHELL_PROBE_FILE` probe disrupts repeated UI snapshot refreshes.
 See the [controlled investigation](../plans/active/evidence/2026-10-25-packaged-webview-smoke.md).
 
+Each launch also requires a `shell.browserAccelerators` record from that exact
+shell PID. The Windows window setup disables browser shortcuts through native
+WebView2 Settings3 and reads the setting back. A missing, failed or enabled
+record fails the smoke. The runner records this on initial load and restart;
+real Windows key input separately verifies that Find/Print/Reload do not open
+browser UI or reload the editor and that app shortcuts and text editing work.
+
+For a repeatable production chunk ownership report without replacing `ui/dist`:
+
+```powershell
+node ui/scripts/report-bundle.mjs
+```
+
+The default output is `target/ui-bundle-report/report.json`. An optional output
+directory must remain under `target/`. The report records final chunk byte
+counts, imports and per-module transformed `renderedLength` values; module
+lengths are not additive minified byte counts. It retains old output files
+without recursive cleanup and reports only the current build's bundle graph.
+Chunk sizes do not establish startup latency; use exact-binary native samples
+and retain the machine, workload and fresh-profile/restart distinction.
+
 Qualify the smoke's own failure/cancellation guards against the same binary:
 
 ```powershell

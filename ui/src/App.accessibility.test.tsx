@@ -542,7 +542,8 @@ describe("VB-Cable endpoint selection", () => {
       };
     });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), subscribe }} />);
-    expect(await screen.findByText(/Virtual bridge lease expired for voice-bus; the route is silenced/i)).toBeTruthy();
+    const text = await screen.findByText(/virtual cable link for voice-bus timed out, so that audio is silent/i);
+    expect(text.closest(".global-action-message")!.classList.contains("is-error")).toBe(true);
   });
 
   it("shows an explicit rebind notice when the native endpoint binding is invalidated", async () => {
@@ -566,9 +567,12 @@ describe("VB-Cable endpoint selection", () => {
       };
     });
     await renderReady(<App backend={{ ...connectedPreviewBackend(), subscribe }} />);
-    expect(
-      await screen.findByText(/Native endpoint binding changed; audio is stopped.*rebind before restarting/i),
-    ).toBeTruthy();
+    const text = await screen.findByText(/audio device this route uses was disconnected.*press Stop and Play/i);
+    // A lost device is a failure: red alert that stays, not a green check that
+    // closed itself after 8 s (owner, 2026-11-07).
+    const message = text.closest(".global-action-message")!;
+    expect(message.classList.contains("is-error")).toBe(true);
+    expect(message.getAttribute("role")).toBe("alert");
   });
 
   it("reports the audio thread's late gaps, not the control thread's, while it pumps", () => {

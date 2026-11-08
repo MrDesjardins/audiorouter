@@ -1,5 +1,111 @@
 # Active plan — current priorities (2026-11-04)
 
+## Next UI qualification — after Round 27 (2026-11-07)
+
+Round 27's improvement phase is implemented and verified within its recorded
+software scope: native browser Find/Print/Reload are disabled; real Windows
+keys retain unsaved edits, app Save/Find and custom chord capture work; native
+popup, three-theme dropdown/density and measured loading evidence are recorded.
+The owner dismissed the permission overlay; the native blocker is cleared.
+See the [archived execution record](../archived/2026-11-07-ui-round-27.md)
+for exact commands, results, artifact hash, evidence and rollback. All eleven
+native fault cases pass with the final timestamp-aware gate. The owned manual
+shell quit 0; no test shell remains live. No owner route or audio was changed.
+
+Scores remain 112/140. Requirements UI-05/11/12/17, M05/M08: next evidence is
+attended physical-key dropdown cancellation, Narrator, actual Windows scaling,
+native copy/paste, live-route/device-loss and first-time-user/icon checks.
+Automated Down/Escape retains a draft choice in both the app and a plain HTML
+select; do not claim physical cancellation restores the old choice. A default
+Ctrl+Alt+M trial delivered no KeyM DOM event through the input helper, so do
+not claim native audio-shortcut activation from it. These are retained limits,
+not passing attended gates. Keep the 599 kB chunk warning visible; measured
+local startup samples did not identify a bottleneck warranting a split.
+
+Round 28 attended session (2026-11-07, owner, recorded Round 27 exe
+BB23FDD5…4EC4, disposable profile via
+`target/ui-quality-review/round-28/launch-attended.ps1`):
+- Dropdown, physical keys: Down/Up move the choice; Escape closes the list and
+  keeps the moved-to device as an unsaved draft (Save shown). Same as the
+  plain HTML select, so platform behavior; nothing applies until Save, and the
+  empty choice clears it. Pass with that note, not "Escape restores".
+- Copy/paste name field to and from Notepad: pass. Rename save: graph.commit ok.
+- Ctrl+Alt+M: **defect**. On the owner's Canadian Multilingual layout Ctrl+Alt
+  is AltGr and types "µ", so `shortcutFromKeyboardEvent` (event.key) never
+  matched. Fixed to fall back to `event.code` when the typed key is not a plain
+  letter/digit; regression in `ui/src/shortcuts.test.ts` (fails without fix).
+  Not yet re-run on a rebuilt exe.
+- Narrator tab pass and Windows scale 150 %/200 %: owner reports pass.
+- Live route: Play started after first-run device access (one expected
+  permissionDenied before Allow). Unplug/replug: sound returned; the message
+  seen ("No input reaches …") is the canvas wiring hint after the owner
+  deleted the Gain → output link themselves (confirmed); the app did not
+  edit the route. Device loss (owner disabled the output in Windows during
+  Play): the notice "Native endpoint binding changed; audio is stopped…"
+  showed a green success check and, with the new timers, closed after 8 s,
+  because "stopped" matched the success words. The session stayed running
+  with the output silenced; re-enabling the device needed Stop then Play.
+  Fixed: binding and virtual-bridge notices are marked errors (red alert,
+  stay) and say what to do ("Reconnect it, then press Stop and Play");
+  regression in `App.accessibility.test.tsx` (fails without the fix).
+- Test Signal card (owner screenshot): its Play/Stop shared the top bar's
+  words, and while the route ran it said "Route running · tone stopped" even
+  when Play was disabled for lack of an output. Now "Play tone"/"Stop tone",
+  "Tone off · 1.0 s", and the reason when Play is unavailable; regression in
+  `TestSignalPlaybackControls.test.tsx`, one-line fit check in
+  `audio-tools.pw.ts`; guide text regenerated. Guide videos record the
+  Properties panel only, so neither the card buttons nor the Tools icon
+  appear; the Spectral Gate clips were left unchanged. The Test Signal
+  description in them said "Press Play on the node", now "Press Play tone on
+  its card"; its overview, demo and two property clips were re-recorded,
+  pass `check-tool-guide-videos` and play in Firefox
+  (`GUIDE_SITE_PORT=4188`: port 4187 was held by an unrelated server from
+  2026-11-02 serving another checkout, which made every clip fail there).
+- Motion audit: CSS honours reduced motion globally, but a scripted
+  `behavior: "smooth"` overrides it (client-permissions jump). Scripted
+  scrolls now use `scrollBehavior()`; `motion.test.ts` rejects hard-coded
+  smooth scrolls.
+- Drag/drop audit: Escape did not cancel a drag (probe: the connection was
+  still made, the card stayed moved). Escape now returns dragged cards to
+  where the drag began (no layout-history entry) and drops a connection drag,
+  hiding its preview line; listed in the F1 reference. `e2e/drag-cancel.pw.ts`
+  (fails without the fix, with a no-Escape control); 80 canvas browser tests
+  pass.
+- Plugins list: every row had a "?" opening the same generic VST guide under
+  the plugin's name, crowding the section "?". Per-row links removed;
+  regression in `ui/src/PluginScanPanel.test.tsx`. Two `plugins.scan` errors
+  were the absent standard folders (Steinberg/VSTPlugins, Common Files/VST2),
+  swallowed by design but logged with no kind: two hand-kept allowlists in
+  `crates/transport` dropped every unlisted code (`invalidRoot`). Both now
+  use one bounded camelCase check, `is_stable_error_code`; regression
+  `plugin_scan_failures_log_their_code_but_never_free_text`.
+- Icons: only Spectral Gate was unclear (looked like bars, not a gate).
+  Redrawn as a doorway with bars through a dashed threshold (`iconShapes.ts`).
+- Rebuilt exe 0852E68A… (owner): plugin "?" and icon confirmed; scan errors
+  now log `invalidRoot`. Ctrl+Alt+M reached no DOM event at all (CDP key
+  recorder: Ctrl+F12 arrived, Ctrl+Alt+M produced nothing, not even Control),
+  while Notepad typed µ. Owner chose new defaults: Ctrl+Shift+S / Ctrl+Shift+M,
+  with saved old defaults migrated (`readShortcuts`, preferences.test.ts).
+- Owner UX requests, same round: tray menu cut from nine lines to status,
+  recording, Open, one Play/Stop item naming its action, Quit (UI-10
+  updated; refresh on right-click). Messages close themselves: info/success
+  8 s, warnings 30 s (also the unfed-route warning), errors, progress and
+  messages with a button stay; paused on hover/focus. Settings gains a page
+  search sharing Ctrl+K keywords, plus one icon per page
+  (`SETTINGS_PAGE_ICONS`/`KEYWORDS`, settingsSearch.test.ts).
+Next: owner check of the toggle, timers and Settings search on a rebuilt
+exe; three-theme screenshots of the Settings nav; then re-check
+Ctrl+Alt+M, the plugin list and the icon with real input, refresh guide
+videos if the icon appears in them, then confirm device-loss messaging.
+
+Next action: coordinate an attended keyboard/Narrator/Windows-scaling session
+on disposable data using the recorded build. Do not change Windows security,
+device permissions, drivers or owner audio as part of setup. Further product
+changes need a reproduced defect and an updated execution plan. The Round 27
+implementation remains uncommitted on improve/ui-round-23 for human review;
+no new PR, publication, release or merge was authorized.
+
+
 ## Combined UI and nightly repair PR — 2026-11-07
 
 PR #121 CI repair (UI-02/11/17, ENG-02/04): head `a3026351` fails five

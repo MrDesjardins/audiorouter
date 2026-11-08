@@ -24,7 +24,8 @@ for (const [label, kind] of [
     await picker.setInputFiles({ name: "broken.wav", mimeType: "audio/wav", buffer: Buffer.from("not audio") });
     await expect(inspector).toContainText(/failed|invalid|unsupported|decode/i);
     await picker.setInputFiles({ name: "synthetic.wav", mimeType: "audio/wav", buffer: syntheticWav() });
-    await expect(inspector).toContainText("synthetic.wav");
+    // "Importing synthetic.wav…" shows during the upload; wait for the finished summary before saving.
+    await expect(inspector).toContainText("synthetic.wav · ");
     await page.locator(".topbar").getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.locator(".global-action-message")).toContainText(/saved.*revision/i);
     const session = await backend.call<Session>("sessions.get", { sessionId: "e2e-session" });

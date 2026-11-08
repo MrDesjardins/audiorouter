@@ -30,7 +30,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await stop.click();
     await expect(stop).toBeDisabled();
     await expect(stop).toHaveAttribute("aria-busy", "true");
-    await page.keyboard.press("Control+Alt+s");
+    await page.keyboard.press("Control+Shift+S");
     const play = page.locator(".topbar").getByRole("button", { name: "Play", exact: true });
     await expect(play).toBeEnabled();
     expect(await canvas.boundingBox()).toEqual(before);
@@ -40,7 +40,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await play.click();
     await expect(play).toBeDisabled();
     await expect(play).toHaveAttribute("aria-busy", "true");
-    await page.keyboard.press("Control+Alt+s");
+    await page.keyboard.press("Control+Shift+S");
     await expect(page.locator(".global-action-message")).toContainText("Fixture output unavailable");
     await expect(play).toBeEnabled();
     expect(await canvas.boundingBox()).toEqual(before);

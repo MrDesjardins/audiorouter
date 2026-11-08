@@ -367,7 +367,8 @@ export function PluginToolsGroup({
                 <small>{help}</small>
               </span>
             </button>
-            <ToolGuideLink kind="plugin" compact toolName={item.name} />
+            {/* No per-row guide: every row opened the same generic VST guide under
+                the plugin's own name, beside the section's "?" (owner, 2026-11-07). */}
           </div>
         );
       })}

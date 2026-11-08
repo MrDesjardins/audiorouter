@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionMessageTone } from "./actionMessage";
+import { actionMessageLifetimeMs, actionMessageTone } from "./actionMessage";
 import { formatUiError } from "./backend";
 
 describe("action message tone", () => {
@@ -39,5 +39,16 @@ describe("action message tone", () => {
     ]) {
       expect(actionMessageTone(message), String(message)).toBe("info");
     }
+  });
+});
+
+describe("message lifetime", () => {
+  it("closes info after 8 s and warnings after 30 s, but keeps errors, progress and messages with a button", () => {
+    expect(actionMessageLifetimeMs("Connection removed. Save to keep this.", false)).toBe(8_000);
+    expect(actionMessageLifetimeMs("Review the warnings, then save.", false)).toBe(30_000);
+    expect(actionMessageLifetimeMs("Unable to start session.", false)).toBeNull();
+    expect(actionMessageLifetimeMs("Saving route...", false)).toBeNull();
+    expect(actionMessageLifetimeMs("Connection removed. Save to keep this.", true)).toBeNull();
+    expect(actionMessageLifetimeMs(null, false)).toBeNull();
   });
 });

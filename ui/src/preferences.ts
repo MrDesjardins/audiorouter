@@ -1,5 +1,5 @@
 export type ThemeMode = "dark" | "light" | "high-contrast" | "custom";
-import type { ShortcutBinding } from "./shortcuts";
+import { previousDefaultShortcutBinding, type ShortcutAction, type ShortcutBinding } from "./shortcuts";
 
 const THEME_KEY = "audiorouter.ui.theme";
 const SHORTCUT_KEY = "audiorouter.ui.shortcuts";
@@ -65,9 +65,15 @@ export function readShortcuts(storage: Pick<Storage, "getItem"> | null, fallback
     const value = storage?.getItem(SHORTCUT_KEY);
     if (!value) return fallback;
     const parsed = JSON.parse(value) as Partial<ShortcutBinding>;
-    return parsed.sessionToggle && parsed.privacyMute
-      ? { sessionToggle: parsed.sessionToggle, privacyMute: parsed.privacyMute }
-      : fallback;
+    if (!parsed.sessionToggle || !parsed.privacyMute) return fallback;
+    // The settings page saves every binding, so an untouched old default is
+    // stored as if chosen; move it to the current default.
+    const current = (action: ShortcutAction, saved: string) =>
+      saved === previousDefaultShortcutBinding[action] ? fallback[action] : saved;
+    return {
+      sessionToggle: current("sessionToggle", parsed.sessionToggle),
+      privacyMute: current("privacyMute", parsed.privacyMute),
+    };
   } catch {
     return fallback;
   }

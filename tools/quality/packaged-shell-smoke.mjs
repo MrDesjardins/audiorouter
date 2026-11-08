@@ -10,6 +10,7 @@ import { chromium } from "../../ui/node_modules/@playwright/test/index.mjs";
 import { packagedShellEnvironment } from "./packaged-shell-environment.mjs";
 import { assertStandardUser } from "./standard-user.mjs";
 import { dismissFirstLaunchGoal } from "./packaged-shell-onboarding.mjs";
+import { requireDisabledBrowserKeys } from "./packaged-shell-browser-keys.mjs";
 
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
@@ -848,6 +849,11 @@ async function main() {
       activeSessionCount: status.result.activeSessionCount,
       deviceAccessAllowed: access.result.allowed,
     });
+    metrics.initialBrowserKeys = requireDisabledBrowserKeys(
+      await readFile(path.join(data, "AudioRouter", "logs", "shell.jsonl"), "utf8"),
+      child.pid,
+      launchedAt,
+    );
 
     const sessionName = `Packaged smoke ${new Date().toISOString().replace(/[:.]/g, "-")}`;
     await dismissFirstLaunchGoal(page, options.timeout);
@@ -997,6 +1003,11 @@ async function main() {
       activeSessionCount: relaunchedStatus.result.activeSessionCount,
       deviceAccessAllowed: relaunchedAccess.result.allowed,
     });
+    metrics.restartedBrowserKeys = requireDisabledBrowserKeys(
+      await readFile(path.join(data, "AudioRouter", "logs", "shell.jsonl"), "utf8"),
+      child.pid,
+      relaunchedAt,
+    );
     if (errors.length > 0)
       throw new Error(
         `Uncaught UI errors after restart: ${errors.join(" | ")}`,

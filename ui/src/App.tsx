@@ -27,7 +27,14 @@ import type { CanvasRect, LayoutAction } from "./canvasGeometry";
 import { emptyEditOrder, nextEditKind, recordEdit, recordRestore } from "./editOrder";
 import type { Node, PluginParametersResult } from "@audiorouter/contracts";
 import { LIBRARY_DROP_SOURCE, SessionFlowCanvas, type CanvasLayoutHistoryControls } from "./SessionFlowCanvas";
-import { SETTINGS_PAGES, tabPlace, Workbench, type WorkbenchTab } from "./Workbench";
+import {
+  SETTINGS_PAGE_ICONS,
+  SETTINGS_PAGE_KEYWORDS,
+  SETTINGS_PAGES,
+  tabPlace,
+  Workbench,
+  type WorkbenchTab,
+} from "./Workbench";
 import type { PaletteItem } from "./paletteItems";
 import { libraryEntryIcon, NODE_KIND_ICONS } from "./icons";
 import { humanizeNodeKind } from "./canvasNodeKinds";
@@ -99,7 +106,7 @@ import {
   type LibraryNodeKind,
   type VoiceChainPresetId,
 } from "./draft";
-import { actionMessageTone } from "./actionMessage";
+import { actionMessageLifetimeMs, actionMessageTone, WARNING_LIFETIME_MS } from "./actionMessage";
 import { unfedRouteNodes } from "./draft";
 import { demoSession, demoSessions } from "./fixtures";
 import {
@@ -273,6 +280,19 @@ function keepSelectedSession(current: string, items: { id: string }[], connected
 const FIRST_RUN_KEY = "audiorouter.ui.first-run-done";
 const readFirstRunDone = () => readPresentationJson(optionalLocalStorage(), FIRST_RUN_KEY) === true;
 const writeFirstRunDone = () => writePresentationJson(optionalLocalStorage(), FIRST_RUN_KEY, true);
+
+/** Focus a canvas card once React Flow has rendered and shown it. */
+function focusCanvasCardWhenShown(nodeId: string, attempts = 30) {
+  window.requestAnimationFrame(() => {
+    const card = Array.from(document.querySelectorAll<HTMLElement>(".react-flow__node")).find(
+      (element) => element.dataset.id === nodeId,
+    );
+    // React Flow keeps a new card hidden until measured, and a hidden card
+    // cannot take focus, so try again until focus actually lands.
+    card?.focus();
+    if (document.activeElement !== card && attempts > 1) focusCanvasCardWhenShown(nodeId, attempts - 1);
+  });
+}
 
 const EDITS_RESTORED_MESSAGE = "Your unsaved edits from last time are back. Save to keep them.";
 const OLDER_EDITS_MESSAGE =
@@ -984,6 +1004,15 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     draft.nodes.some((node) => node.enabled && !node.bypass && PRIVACY_MUTED_KINDS.includes(node.kind));
   const unfedNodes = unfedRouteNodes(draft);
   const routeWarningKey = JSON.stringify([draft.id, unfedNodes.map((node) => node.id).sort()]);
+  const [routeWarningHeld, setRouteWarningHeld] = useState(false);
+  const routeWarningShown = unfedNodes.length > 0 && dismissedRouteWarning !== routeWarningKey;
+  useEffect(() => {
+    // A warning closes itself after 30 s like other warnings (owner, 2026-11-07);
+    // a different set of unfed cards brings it back.
+    if (!routeWarningShown || routeWarningHeld) return;
+    const timer = window.setTimeout(() => setDismissedRouteWarning(routeWarningKey), WARNING_LIFETIME_MS);
+    return () => window.clearTimeout(timer);
+  }, [routeWarningShown, routeWarningHeld, routeWarningKey]);
   // Lets the shell free the WebView on close only when nothing would be lost.
   useReportUnsaved(routeChanged, recordUiDiagnostic);
   useEffect(() => {
@@ -1870,6 +1899,23 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       if (node && JSON.stringify(node.parameters) === issue.parameters) visibleNodeIssues[nodeId] = issue.message;
     }
   const firstIssueNode = draft.nodes.find((node) => Object.hasOwn(visibleNodeIssues, node.id));
+  // Messages offering a button stay until they change; the same conditions
+  // render those buttons below.
+  const actionMessageHasButton =
+    !!actionMessage &&
+    ((actionMessage.startsWith("No audio started") && !!firstIssueNode) ||
+      (actionMessage.includes("Troubleshoot") && workbenchTab !== "status") ||
+      (actionMessage.includes("Open Session") && workbenchTab !== "session") ||
+      (actionMessage === EDITS_RESTORED_MESSAGE && routeChanged) ||
+      (actionMessage === OLDER_EDITS_MESSAGE && !!olderEdits));
+  const [actionMessageHeld, setActionMessageHeld] = useState(false);
+  const actionMessageLifetime = actionMessageLifetimeMs(actionMessage, actionMessageHasButton);
+  useEffect(() => {
+    // Paused while the pointer or focus is on the message, so it can be read.
+    if (actionMessageLifetime === null || actionMessageHeld) return;
+    const timer = window.setTimeout(() => setActionMessage(null), actionMessageLifetime);
+    return () => window.clearTimeout(timer);
+  }, [actionMessage, actionMessageLifetime, actionMessageHeld]);
   // Mark the nodes that stopped Play before it reached the backend (a device
   // not chosen yet); the mark clears when the node changes.
   const flagNodes = (nodes: Node[], message: string) =>
@@ -2458,6 +2504,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     const inserted = next.nodes[next.nodes.length - 1];
     recordDraftChange(next);
     setSelectedNodeId(inserted.id);
+    setSelectedNodeIds([inserted.id]);
     setActionMessage(`${inserted.name} added. Save to keep it.`);
     return inserted.id;
   };
@@ -2470,7 +2517,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const next = appendEndpointLoopbackNode(draft, endpointId);
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
-      if (inserted) setSelectedNodeId(inserted.id);
+      if (inserted) {
+        setSelectedNodeId(inserted.id);
+        setSelectedNodeIds([inserted.id]);
+      }
       setActionMessage(`${inserted?.name ?? "Endpoint loopback"} added. Save to keep it.`);
     } catch (error) {
       setActionMessage(formatUiError(error, "Unable to add endpoint loopback."));
@@ -2485,7 +2535,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       const next = appendVirtualBusNode(draft, busId, direction, getVirtualCableStatus());
       const inserted = next.nodes.at(-1);
       recordDraftChange(next);
-      if (inserted) setSelectedNodeId(inserted.id);
+      if (inserted) {
+        setSelectedNodeId(inserted.id);
+        setSelectedNodeIds([inserted.id]);
+      }
       setActionMessage(`${inserted?.name ?? "Virtual bus"} added. Save to keep it.`);
       return inserted?.id;
     } catch (error) {
@@ -3516,9 +3569,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       items.push({
         id: `settings-${page}`,
         group: "Settings",
-        icon: "settings",
+        icon: SETTINGS_PAGE_ICONS[page],
         title,
         detail: "Open in Settings",
+        keywords: SETTINGS_PAGE_KEYWORDS[page],
         run: () => setWorkbenchTab(page),
       });
     }
@@ -3799,7 +3853,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
             {unfedNodes.length > 0 &&
               dismissedRouteWarning !== routeWarningKey &&
               tabPlace(workbenchTab) !== "settings" && (
-                <div className="panel-message is-warning inactive-route-warning">
+                <div
+                  className="panel-message is-warning inactive-route-warning"
+                  onMouseEnter={() => setRouteWarningHeld(true)}
+                  onMouseLeave={() => setRouteWarningHeld(false)}
+                  onFocus={() => setRouteWarningHeld(true)}
+                  onBlur={() => setRouteWarningHeld(false)}
+                >
                   <p role="status">
                     No input reaches {unfedNodes.map((node) => node.name).join(", ")} yet, so they stay silent. Connect
                     a source to hear them.
@@ -3825,6 +3885,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 <div
                   className={`global-action-message is-${tone}${text ? "" : " is-empty"}`}
                   aria-hidden={!text}
+                  onMouseEnter={() => setActionMessageHeld(true)}
+                  onMouseLeave={() => setActionMessageHeld(false)}
+                  onFocus={() => setActionMessageHeld(true)}
+                  onBlur={() => setActionMessageHeld(false)}
                   role={tone === "error" ? "alert" : "status"}
                   aria-live={tone === "error" ? "assertive" : "polite"}
                 >
@@ -4147,7 +4211,12 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   }
                   tools={visibleLibraryEntries}
                   connected={backendReady}
-                  onAdd={addLibraryNode}
+                  onAdd={(kind, options) => {
+                    const id = addLibraryNode(kind);
+                    // Added with the keyboard: focus the new card so the arrow
+                    // keys place it, the keyboard path for drag and drop.
+                    if (id && options?.focus) focusCanvasCardWhenShown(id);
+                  }}
                   onAddCable={(direction) =>
                     addVirtualBusNode(defaultCable(getVirtualCableStatus(), direction), direction)
                   }

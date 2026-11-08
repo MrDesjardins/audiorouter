@@ -93,7 +93,7 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts", exact: true });
     const close = dialog.getByRole("button", { name: "Close", exact: true });
     await expect(close).toBeFocused();
-    await expect(dialog).toContainText("Ctrl+Alt+M");
+    await expect(dialog).toContainText("Ctrl+Shift+M");
     await expect(dialog).toContainText("F2");
     await page.keyboard.press("Tab");
     const reference = dialog.locator("dl");

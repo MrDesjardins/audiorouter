@@ -31,10 +31,39 @@ type ShelfTool = {
   guideKind: string;
   guideName: string;
   disabled: boolean;
-  activate: () => void;
+  /** `fromKeyboard`: Enter or Space, so focus can follow the new card. */
+  activate: (fromKeyboard: boolean) => void;
   dragKind?: NonNullable<LibraryEntry["kind"]>;
   setup?: { reason: string; opensCables: boolean };
 };
+
+let escapeReturn: ((event: KeyboardEvent) => void) | null = null;
+
+/**
+ * After Enter adds a tool, focus sits on the new card so the arrow keys place
+ * it. Escape on that card hands focus back to the tool that added it, so a
+ * keyboard user can carry on through the toolbox. The card stays (Ctrl+Z or
+ * Delete removes it).
+ */
+function returnToToolOnEscape(pressed: HTMLButtonElement, toolId: string) {
+  if (escapeReturn) document.removeEventListener("keydown", escapeReturn, true);
+  const listener = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    document.removeEventListener("keydown", listener, true);
+    if (escapeReturn === listener) escapeReturn = null;
+    const active = document.activeElement;
+    if (!(active instanceof Element) || !active.closest(".react-flow__node")) return;
+    // The pressed button, or its copy if a re-render replaced it.
+    const button = pressed.isConnected
+      ? pressed
+      : document.querySelector<HTMLButtonElement>(`[data-tool-id="${CSS.escape(toolId)}"]`);
+    if (!button) return;
+    event.preventDefault();
+    button.focus();
+  };
+  escapeReturn = listener;
+  document.addEventListener("keydown", listener, true);
+}
 
 const APPLICATION_HELP = "Capture audio from a running app into this route.";
 const GROUP_HELP = "A named visual background. It carries no audio.";
@@ -58,18 +87,18 @@ export function ToolShelf({
   search: string;
   searchRef: RefObject<HTMLInputElement | null>;
   pluginsContent?: ReactNode;
-  onAdd: (kind: NonNullable<LibraryEntry["kind"]>) => void;
+  onAdd: (kind: NonNullable<LibraryEntry["kind"]>, options?: { focus?: boolean }) => void;
   onAddCable?: (direction: "renderSource" | "captureSink") => void;
   onAddGroup?: () => void;
   onApplicationPicker: () => void;
   onClearSearch: () => void;
   onOpenVirtualCables: () => void;
 }) {
-  // Read once per visit: this panel unmounts with the tab, so the top rows refresh when
-  // someone comes back and never move under the pointer (UI-17).
+  // Recents are read once per visit: adding a tool must not reorder the rows under the
+  // pointer (UI-17), so they refresh when someone comes back to the tab. Pins show at
+  // once: pressing a star is a deliberate request to change the top rows.
   const [shownRecents] = useState(readRecents);
-  const [shownPins] = useState(readPins);
-  const [pins, setPins] = useState(shownPins);
+  const [pins, setPins] = useState(readPins);
   const [openGroups, setOpenGroups] = useState(readOpenGroups);
   const [described, setDescribed] = useState<ShelfTool | null>(null);
   const query = search.trim().toLocaleLowerCase();
@@ -90,8 +119,8 @@ export function ToolShelf({
         guideKind: kind,
         guideName: entry.label,
         disabled: !connected || setup || (!addKind && !onAddCable),
-        activate: () => {
-          if (addKind) onAdd(addKind);
+        activate: (fromKeyboard) => {
+          if (addKind) onAdd(addKind, { focus: fromKeyboard });
           else if (virtualKind) onAddCable?.(virtualKind === "virtualRenderSource" ? "renderSource" : "captureSink");
         },
         dragKind: addKind,
@@ -131,8 +160,8 @@ export function ToolShelf({
 
   const byId = new Map(all.map((tool) => [tool.id, tool]));
   const usable = new Set(all.filter((tool) => !tool.setup).map((tool) => tool.id));
-  const topRows = shelfRows(shownPins, shownRecents, usable);
-  const hasHistory = shownPins.length + shownRecents.length > 0;
+  const topRows = shelfRows(pins, shownRecents, usable);
+  const hasHistory = pins.length + shownRecents.length > 0;
 
   const remember = (id: string) => writeRecents(rememberRecent(readRecents(), id));
   const toggleGroup = (id: ShelfGroupId) =>
@@ -164,8 +193,12 @@ export function ToolShelf({
             endLibraryDrag();
             if (event.dataTransfer.dropEffect !== "none") remember(tool.id);
           }}
-          onClick={() => {
-            tool.activate();
+          data-tool-id={tool.id}
+          onClick={(event) => {
+            // A keyboard-activated click has no pointer clicks (detail 0).
+            const fromKeyboard = event.detail === 0;
+            tool.activate(fromKeyboard);
+            if (fromKeyboard) returnToToolOnEscape(event.currentTarget, tool.id);
             remember(tool.id);
           }}
         >

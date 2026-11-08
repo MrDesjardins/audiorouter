@@ -9,8 +9,8 @@ use audiorouter_protocol::{decode_frame, encode_frame, JsonRpcRequest, JsonRpcRe
 use audiorouter_storage::Storage;
 use tauri::{
     image::Image,
-    menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, Runtime, State, WebviewUrl, WebviewWindowBuilder,
 };
 
@@ -37,6 +37,8 @@ mod support_bundle;
 mod tray_playback;
 mod ui_draft;
 mod virtual_cable_shell;
+#[cfg(windows)]
+mod webview_keys;
 
 use backend_supervisor::{BackendRestartDecision, BackendSupervisor};
 
@@ -929,7 +931,7 @@ fn open_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         return Ok(());
     }
     let script = app.state::<MainWindowScript>().0.clone();
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+    let _window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
         .title(format!("AudioRouter {}", env!("CARGO_PKG_VERSION")))
         .inner_size(1280.0, 800.0)
         .resizable(true)
@@ -946,6 +948,8 @@ fn open_main_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         .additional_browser_args(WEBVIEW_BROWSER_ARGS)
         .initialization_script(script)
         .build()?;
+    #[cfg(windows)]
+    webview_keys::configure(&_window)?;
     Ok(())
 }
 
@@ -1908,10 +1912,29 @@ fn tray_status_text(response: &JsonRpcResponse) -> String {
         .and_then(|value| value.get("muted"))
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(true);
-    format!(
-        "Sessions: {active} active · Mic: {}",
-        if muted { "muted" } else { "unmuted" }
-    )
+    let mic = if muted { "Mic muted" } else { "Mic on" };
+    match active {
+        0 => format!("Stopped · {mic}"),
+        1 => format!("Playing · {mic}"),
+        count => format!("Playing {count} sessions · {mic}"),
+    }
+}
+
+/// The tray Play/Stop item names the action it will take.
+fn tray_playback_label(active: Option<u64>) -> &'static str {
+    match active {
+        Some(count) if count > 0 => "Stop audio",
+        _ => "Play",
+    }
+}
+
+/// Number of playing sessions from `status.get`; `None` when unknown.
+fn tray_active_sessions(response: &JsonRpcResponse) -> Option<u64> {
+    response
+        .result
+        .as_ref()?
+        .get("activeSessionCount")?
+        .as_u64()
 }
 
 fn tray_recording_text(response: &JsonRpcResponse) -> String {
@@ -1930,13 +1953,24 @@ fn tray_recording_text(response: &JsonRpcResponse) -> String {
             .filter(|item| item.get("state").and_then(serde_json::Value::as_str) == Some(state))
             .count()
     };
-    format!(
-        "Live recorders: {} active · {} paused · {} armed · {} failed",
-        count("recording"),
-        count("paused"),
-        count("armed"),
-        count("failed")
-    )
+    // Name only the states that are present, so the usual case reads plainly.
+    let parts = [
+        ("recording", "active"),
+        ("paused", "paused"),
+        ("armed", "armed"),
+        ("failed", "failed"),
+    ]
+    .iter()
+    .filter_map(|(state, label)| match count(state) {
+        0 => None,
+        n => Some(format!("{n} {label}")),
+    })
+    .collect::<Vec<_>>();
+    if parts.is_empty() {
+        "Not recording".to_owned()
+    } else {
+        format!("Recorders: {}", parts.join(" · "))
+    }
 }
 
 #[cfg(test)]
@@ -2023,21 +2057,45 @@ fn tray_privacy_muted(response: &JsonRpcResponse) -> Option<bool> {
         .and_then(serde_json::Value::as_bool)
 }
 
-fn refresh_tray_status<R: Runtime>(
-    status: &MenuItem<R>,
-    recordings: &MenuItem<R>,
-    pipe_name: &str,
-) {
+/// The tray items whose text or availability follows the backend.
+struct TrayItems<R: Runtime> {
+    status: MenuItem<R>,
+    recordings: MenuItem<R>,
+    playback: MenuItem<R>,
+}
+
+// Manual: derive would require `R: Clone`, which runtimes are not.
+impl<R: Runtime> Clone for TrayItems<R> {
+    fn clone(&self) -> Self {
+        Self {
+            status: self.status.clone(),
+            recordings: self.recordings.clone(),
+            playback: self.playback.clone(),
+        }
+    }
+}
+
+fn refresh_tray_status<R: Runtime>(items: &TrayItems<R>, pipe_name: &str) {
+    let TrayItems {
+        status,
+        recordings,
+        playback,
+    } = items;
     let status_request = JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: Some(serde_json::json!("tray-status")),
         method: "status.get".into(),
         params: None,
     };
-    let text = forward_rpc_request(&status_request, pipe_name)
-        .map(|response| tray_status_text(&response))
-        .unwrap_or_else(|_| "Status unavailable".to_owned());
+    let response = forward_rpc_request(&status_request, pipe_name).ok();
+    let text = response
+        .as_ref()
+        .map(tray_status_text)
+        .unwrap_or_else(|| "Status unavailable".to_owned());
     let _ = status.set_text(text);
+    // One item that names what it will do: a greyed twin was too subtle to read.
+    let active = response.as_ref().and_then(tray_active_sessions);
+    let _ = playback.set_text(tray_playback_label(active));
 
     let recordings_request = JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -2242,46 +2300,39 @@ fn main() {
                 }
             }
             let open = MenuItem::with_id(app, "open", "Open AudioRouter", true, None::<&str>)?;
-            let close = MenuItem::with_id(app, "close", "Close window", true, None::<&str>)?;
-            let play = MenuItem::with_id(app, "play", "Play", true, None::<&str>)?;
-            let stop = MenuItem::with_id(app, "stop", "Stop audio", true, None::<&str>)?;
+            let playback = MenuItem::with_id(app, "playback", "Play", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit and stop audio", true, None::<&str>)?;
-            let refresh_status =
-                MenuItem::with_id(app, "refresh-status", "Refresh status", true, None::<&str>)?;
             let status =
                 MenuItem::with_id(app, "status", "Status unavailable", false, None::<&str>)?;
             let recordings = MenuItem::with_id(
                 app,
                 "recordings",
-                "Live recorders: unavailable",
+                "Recording status unavailable",
                 false,
                 None::<&str>,
             )?;
-            let backend_endpoint = MenuItem::with_id(
-                app,
-                "backend-endpoint",
-                format!(
-                    "Backend: local Windows pipe ({}) · browser access unavailable",
-                    tray_pipe_name
-                ),
-                false,
-                None::<&str>,
-            )?;
+            // Status first, then Open, Play/Stop, Quit (owner, 2026-11-07: the
+            // old nine-line menu had too many options). The window's own X
+            // closes it with audio running; the menu refreshes when opened.
             let pipe_name = tray_pipe_name.clone();
-            let status_for_handler = status.clone();
-            let recordings_for_handler = recordings.clone();
+            let tray_items = TrayItems {
+                status: status.clone(),
+                recordings: recordings.clone(),
+                playback: playback.clone(),
+            };
+            let items_for_handler = tray_items.clone();
+            let items_for_icon = tray_items.clone();
+            let pipe_for_icon = tray_pipe_name.clone();
             let menu = Menu::with_items(
                 app,
                 &[
-                    &open,
-                    &close,
-                    &play,
-                    &stop,
-                    &quit,
-                    &refresh_status,
                     &status,
                     &recordings,
-                    &backend_endpoint,
+                    &PredefinedMenuItem::separator(app)?,
+                    &open,
+                    &playback,
+                    &PredefinedMenuItem::separator(app)?,
+                    &quit,
                 ],
             )?;
             // Best-effort: reflect the backend's actual current privacy-mute
@@ -2310,31 +2361,36 @@ fn main() {
                 .tooltip("AudioRouter")
                 .on_menu_event(move |app, event| {
                     // The editor window may have been released (closed to
-                    // the tray); every action except Close works without it.
+                    // the tray); every action works without it.
                     match event.id().as_ref() {
                         "open" => {
                             if let Err(error) = open_main_window(app) {
                                 eprintln!("AudioRouter window could not open: {error}");
                             }
                         }
-                        "close" => {
-                            // Same path as the window's own close button.
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.close();
-                            }
-                        }
                         // Play/stop the selected session without the window.
-                        "play" | "stop" => {
+                        "playback" => {
+                            // Ask the backend now: the label may be older than the state.
+                            let status_request = JsonRpcRequest {
+                                jsonrpc: "2.0".into(),
+                                id: Some(serde_json::json!("tray-playback-status")),
+                                method: "status.get".into(),
+                                params: None,
+                            };
+                            let playing = forward_rpc_request(&status_request, &pipe_name)
+                                .ok()
+                                .and_then(|response| tray_active_sessions(&response))
+                                .is_some_and(|count| count > 0);
                             let mut call = backend_call(&pipe_name);
-                            let outcome = if event.id().as_ref() == "play" {
+                            let outcome = if !playing {
                                 tray_playback::play_saved_session(&mut call)
                             } else {
                                 tray_playback::stop_playing(&mut call)
                             };
                             match outcome {
-                                Ok(_) => refresh_tray_status(&status_for_handler, &recordings_for_handler, &pipe_name),
+                                Ok(_) => refresh_tray_status(&items_for_handler, &pipe_name),
                                 Err(reason) => {
-                                    let _ = status_for_handler.set_text(reason);
+                                    let _ = items_for_handler.status.set_text(reason);
                                 }
                             }
                         }
@@ -2353,23 +2409,28 @@ fn main() {
                                         .and_then(serde_json::Value::as_str)
                                         == Some("stopped") => app.exit(0),
                                 _ => {
-                                    let _ = status_for_handler
+                                    let _ = items_for_handler
+                                        .status
                                         .set_text("Quit refused: backend finalization failed");
                                 }
                             }
                         }
-                        "refresh-status" => {
-                            refresh_tray_status(
-                                &status_for_handler,
-                                &recordings_for_handler,
-                                &pipe_name,
-                            );
-                        }
                         _ => {}
                     }
                 })
+                // Refresh just before the menu opens, so it never shows stale state.
+                .on_tray_icon_event(move |_tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Right,
+                        button_state: MouseButtonState::Down,
+                        ..
+                    } = event
+                    {
+                        refresh_tray_status(&items_for_icon, &pipe_for_icon);
+                    }
+                })
                 .build(app)?;
-            refresh_tray_status(&status, &recordings, &tray_pipe_name);
+            refresh_tray_status(&tray_items, &tray_pipe_name);
             app.manage(MainWindowScript(session_script.clone()));
             // A second launch of this program shows this window instead.
             #[cfg(windows)]
@@ -2403,13 +2464,13 @@ fn main() {
                 Err(reason) => eprintln!("local API did not start: {reason}"),
             }
             if shell_settings::load(&shell_settings::path_beside(&database_path)).auto_play {
-                let (status, recordings, pipe) = (status.clone(), recordings.clone(), tray_pipe_name.clone());
+                let (items, pipe) = (tray_items.clone(), tray_pipe_name.clone());
                 std::thread::spawn(move || {
                     let outcome = tray_playback::autoplay(&mut backend_call(&pipe), 40, std::time::Duration::from_millis(500));
                     match outcome {
-                        Ok(_) => refresh_tray_status(&status, &recordings, &pipe),
+                        Ok(_) => refresh_tray_status(&items, &pipe),
                         Err(reason) => {
-                            let _ = status.set_text(reason);
+                            let _ = items.status.set_text(reason);
                         }
                     }
                 });
@@ -2668,13 +2729,26 @@ mod tests {
         };
         assert_eq!(
             tray_status_text(&response),
-            "Sessions: 2 active · Mic: muted"
+            "Playing 2 sessions · Mic muted"
         );
+        let stopped = JsonRpcResponse {
+            result: Some(json!({ "activeSessionCount": 0, "privacyMute": { "muted": false } })),
+            ..response.clone()
+        };
+        assert_eq!(tray_status_text(&stopped), "Stopped · Mic on");
+        assert_eq!(tray_active_sessions(&stopped), Some(0));
         let unavailable = JsonRpcResponse {
             result: None,
             ..response
         };
         assert_eq!(tray_status_text(&unavailable), "Status unavailable");
+    }
+
+    #[test]
+    fn tray_playback_item_names_the_action_it_will_take() {
+        assert_eq!(tray_playback_label(Some(0)), "Play");
+        assert_eq!(tray_playback_label(Some(2)), "Stop audio");
+        assert_eq!(tray_playback_label(None), "Play");
     }
 
     #[test]
@@ -2690,8 +2764,13 @@ mod tests {
         };
         assert_eq!(
             tray_recording_text(&response),
-            "Live recorders: 2 active · 1 paused · 1 armed · 1 failed"
+            "Recorders: 2 active · 1 paused · 1 armed · 1 failed"
         );
+        let idle = JsonRpcResponse {
+            result: Some(json!([{ "state": "stopped" }])),
+            ..response
+        };
+        assert_eq!(tray_recording_text(&idle), "Not recording");
     }
 
     #[test]

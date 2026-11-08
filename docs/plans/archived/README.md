@@ -14,6 +14,10 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 ## Index
 
+- **2026-11-07 — UI Round 27:** native browser shortcuts repaired and exercised;
+  dropdown/density/loading evidence recorded. Attended M05 gates and scores
+  remain open. [Execution record](2026-11-07-ui-round-27.md).
+
 | Date | Milestone / task | Outcome | Path |
 | --- | --- | --- | --- |
 | 2026-11-05 | Release 0.0.27 | Published unsigned app-only experimental prerelease; signing, driver and attended release gates remain open | [Execution record](2026-11-05-release-0.0.27.md) |

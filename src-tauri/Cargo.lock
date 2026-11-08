@@ -198,7 +198,9 @@ dependencies = [
  "sha2 0.11.1",
  "tauri",
  "tauri-build",
+ "webview2-com",
  "windows 0.62.2",
+ "windows-core 0.61.2",
  "zeroize",
  "zip",
 ]

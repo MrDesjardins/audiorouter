@@ -1,0 +1,203 @@
+{
+  "status": "passed",
+  "failure": null,
+  "cancellation": null,
+  "qualification": null,
+  "cleanupFailure": null,
+  "cleanupActions": [
+    {
+      "pid": 4332,
+      "method": "graceful-quit"
+    },
+    {
+      "pid": 71816,
+      "method": "graceful-quit"
+    }
+  ],
+  "launchedChildren": [
+    {
+      "phase": "initial",
+      "pid": 4332,
+      "exitCode": 0,
+      "signalCode": null,
+      "running": false
+    },
+    {
+      "phase": "restarted",
+      "pid": 71816,
+      "exitCode": 0,
+      "signalCode": null,
+      "running": false
+    }
+  ],
+  "sha": "8d313f35e21193bf2408b355a92364073e0f5f86",
+  "workingTreeDirty": true,
+  "shell": "C:\\code\\audiorouter\\src-tauri\\target\\release\\audiorouter-shell.exe",
+  "shellSha256": "bb23fdd598a14d719255ea62437771c9d364f83ce985ba929c3c79be94d54ec4",
+  "windows": "win32",
+  "node": "v22.22.3",
+  "windowsVersion": "Windows 11 Home",
+  "windowsBuild": "10.0.26300",
+  "webview2Version": "157.0.4341.42",
+  "durationMs": 4409,
+  "metrics": {
+    "processIdentity": {
+      "integrityRid": 8192,
+      "isAdministrator": false
+    },
+    "webviewDebugReadyMs": 444,
+    "coldUiReadyMs": 1240,
+    "initialBrowserKeys": {
+      "processId": 4332,
+      "state": "disabled"
+    },
+    "initialOpeningView": {
+      "canvas": {
+        "x": 29,
+        "y": 199,
+        "width": 796,
+        "height": 572,
+        "top": 199,
+        "right": 825,
+        "bottom": 771,
+        "left": 29
+      },
+      "nodes": [
+        {
+          "id": "desktop-input",
+          "bounds": {
+            "x": 86,
+            "y": 413.2906799316406,
+            "width": 172.73626708984375,
+            "height": 143.25765991210938,
+            "top": 413.2906799316406,
+            "right": 258.73626708984375,
+            "bottom": 556.54833984375,
+            "left": 86
+          }
+        },
+        {
+          "id": "desktop-gain",
+          "bounds": {
+            "x": 352.2356872558594,
+            "y": 413.2906799316406,
+            "width": 172.73623657226562,
+            "height": 121.23233032226562,
+            "top": 413.2906799316406,
+            "right": 524.971923828125,
+            "bottom": 534.5230102539062,
+            "left": 352.2356872558594
+          }
+        },
+        {
+          "id": "desktop-output",
+          "bounds": {
+            "x": 618.4713745117188,
+            "y": 413.2906799316406,
+            "width": 173.8133544921875,
+            "height": 143.25765991210938,
+            "top": 413.2906799316406,
+            "right": 792.2847290039062,
+            "bottom": 556.54833984375,
+            "left": 618.4713745117188
+          }
+        }
+      ]
+    },
+    "sessionSaveMs": 89,
+    "restartedOpeningView": {
+      "canvas": {
+        "x": 29,
+        "y": 199,
+        "width": 796,
+        "height": 572,
+        "top": 199,
+        "right": 825,
+        "bottom": 771,
+        "left": 29
+      },
+      "nodes": [
+        {
+          "id": "desktop-input",
+          "bounds": {
+            "x": 86,
+            "y": 413.2906799316406,
+            "width": 172.73626708984375,
+            "height": 143.25765991210938,
+            "top": 413.2906799316406,
+            "right": 258.73626708984375,
+            "bottom": 556.54833984375,
+            "left": 86
+          }
+        },
+        {
+          "id": "desktop-gain",
+          "bounds": {
+            "x": 352.2356872558594,
+            "y": 413.2906799316406,
+            "width": 172.73623657226562,
+            "height": 121.23233032226562,
+            "top": 413.2906799316406,
+            "right": 524.971923828125,
+            "bottom": 534.5230102539062,
+            "left": 352.2356872558594
+          }
+        },
+        {
+          "id": "desktop-output",
+          "bounds": {
+            "x": 618.4713745117188,
+            "y": 413.2906799316406,
+            "width": 173.8133544921875,
+            "height": 143.25765991210938,
+            "top": 413.2906799316406,
+            "right": 792.2847290039062,
+            "bottom": 556.54833984375,
+            "left": 618.4713745117188
+          }
+        }
+      ]
+    },
+    "restartedBrowserKeys": {
+      "processId": 71816,
+      "state": "disabled"
+    },
+    "warmUiReadyMs": 1269
+  },
+  "devToolsTargets": [
+    {
+      "type": "page",
+      "url": "about:blank",
+      "title": "",
+      "webSocketDebuggerUrl": "ws://127.0.0.1:61321/devtools/page/1B72705A6A74CE834330CC642E22934A"
+    }
+  ],
+  "nativeBridge": {
+    "initial": {
+      "protocolVersion": {
+        "major": 1,
+        "minor": 0
+      },
+      "build": "desktop-shell",
+      "activeSessionCount": 0,
+      "deviceAccessAllowed": false
+    },
+    "restarted": {
+      "protocolVersion": {
+        "major": 1,
+        "minor": 0
+      },
+      "build": "desktop-shell",
+      "activeSessionCount": 0,
+      "deviceAccessAllowed": false
+    }
+  },
+  "uiReadyTargetsMs": {
+    "cold": 8000,
+    "warm": 3000
+  },
+  "uiReadyTargetsGated": false,
+  "timingGateNote": "Fresh-profile and restart timings are baseline samples, not OS-cold measurements; Q5 requires runner-variance calibration before enforcing these targets.",
+  "uncaughtUiErrors": [],
+  "output": "C:\\code\\audiorouter\\target\\ui-quality-review\\round-27\\native-keys-final"
+}
