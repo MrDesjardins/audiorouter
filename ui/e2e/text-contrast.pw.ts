@@ -1,13 +1,24 @@
+import { DEFAULT_CUSTOM_THEME } from "../src/customTheme";
 import { expect, test } from "./browser-test";
-import { setColorTheme } from "./workbench";
+import { backToRoute, openSettings, setColorTheme } from "./workbench";
 import { lowContrastText } from "./ui-audits";
 
-for (const theme of ["dark", "light", "high-contrast"]) {
+// "custom" is the starting custom palette, imported the way a user would load a theme file.
+for (const theme of ["dark", "light", "high-contrast", "custom"]) {
   test(`workbench and Settings text meets AA contrast in ${theme}`, async ({ page }) => {
     await page.setViewportSize({ width: 1500, height: 950 });
     await page.goto("/route-harness.html");
     await expect(page.getByTestId("canvas-readiness")).toHaveAttribute("data-ready", "true");
-    await setColorTheme(page, theme);
+    if (theme === "custom") {
+      await openSettings(page, "Appearance");
+      await page.getByLabel("Import theme file").setInputFiles({
+        name: "custom.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify(DEFAULT_CUSTOM_THEME)),
+      });
+      await backToRoute(page);
+      await expect(page.locator(".theme-custom").first()).toBeAttached();
+    } else await setColorTheme(page, theme);
     const low: string[] = [];
     for (const name of ["Properties", "Tools", "Devices"]) {
       const tab = page.getByRole("tab", { name, exact: true });
