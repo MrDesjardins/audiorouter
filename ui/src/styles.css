@@ -2920,7 +2920,8 @@ button.primary {
 }
 .device-apps-list li {
   min-width: 0;
-  padding: 2px 0.5rem;
+  /* 1 px + 1 px border + 1.15rem line fits the 1.45rem row; 2 px clipped descenders. */
+  padding: 1px 0.5rem;
   overflow: hidden;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);

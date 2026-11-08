@@ -14,7 +14,7 @@ iteration-15 table recorded for it; nothing reaches 10 (no independent study).
 | 2 | Typography/size | **9** | Owner checked Windows 150 % and 200 %: nothing clipped or overlapping; new Settings nav checked in three themes |
 | 3 | Clarity | 8 | Test Signal Play/Stop and lost-device wording fixed; still no first-time-user test |
 | 4 | Consistency | 8 | Custom themes now warn in plain words when a color pair fails WCAG contrast and say so when all pass (`themeContrast.test.ts`, `e2e/theme-contrast.pw.ts`); no audit yet of how every panel renders under a custom palette |
-| 5 | Spacing/alignment | 8 | Plugin "?" crowding fixed; no full inventory |
+| 5 | Spacing/alignment | 8 | Plugin "?" crowding fixed; clipped-text audit of the canvas, the three panels and every Settings page in three themes (`e2e/clipped-text.pw.ts`) found and fixed shaved descenders in "Apps using this device"; other dialogs and narrow windows not yet audited |
 | 6 | Navigation | **9** | Owner's Narrator pass (names read, Tab order sound); Settings search with Ctrl+K hint; keyboard-only route building |
 | 7 | Errors/recovery | 8 | Lost device now a red, lasting, plain message; owner has not yet seen it on a rebuilt exe |
 | 8 | Inputs | 8 | Copy/paste both ways passed; shortcut capture works; no full field inventory |
