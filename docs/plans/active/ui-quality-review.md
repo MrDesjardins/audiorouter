@@ -63,7 +63,47 @@ Each step names the category it can move to 9.
    from 1024 to 65535."; it is fixed-positioned so nothing below moves (UI-17).
    Regressions in `NumberField.test.tsx` and `e2e/number-field-invalid.pw.ts` (visible,
    under the field, no shift; screenshots checked in three themes).
-5. **Clarity:** not run yet.
+5. **Clarity:** first-time-user walk-through (owner observing, fresh profile). The tour
+   worked. Findings, all fixed and the Firefox capture owner-confirmed on a rebuilt exe
+   (PR #124): "Start empty" crashed the window (`10f03666`); a goal's app source could
+   never Play, first "select a running application" then "binding does not match the
+   enabled node's identity" (`cd0c71ce`, `8d8eec4a`); the app list could not be
+   filtered and its note sat on the buttons; the app card said "Not prepared · open
+   Properties" with nothing to fix. A doubled "Visual guide" link was not reproduced
+   (audit now fails on two). Tester hesitations, word list and the three questions are
+   not yet recorded.
+
+### Re-rating after the attended session (2026-11-08)
+
+A score rises only where the gap recorded for it above is closed. No new full browser
+run (owner testing a live game on this PC); evidence is the attended session, the
+first-time walk-through, PR #124 checks and the suites named above.
+
+Ranked best to worst:
+
+| Rank | # | Category | Score | Change | Basis / what keeps it from 10 |
+|------|---|----------|-------|--------|-------------------------------|
+| 1 | 2 | Typography/size | 9 | — | 150/200 % owner-checked; no independent study |
+| 1 | 4 | Consistency | 9 | — | Custom-theme warnings; user palettes only as good as the warning followed |
+| 1 | 6 | Navigation | 9 | — | Narrator pass, keyboard route building, Escape returns to the tool pressed |
+| 1 | 11 | Menus/dropdowns | 9 | — | Native popup full names and provisional cancellation unverified |
+| 1 | 12 | Icons | 9 | — | Owner comprehension only, not a group study |
+| 1 | 13 | Drag/drop | **9** | +1 | Owner did Tab, Enter, arrows, Escape on the rebuilt exe |
+| 1 | 14 | Motion | **9** | +1 | Owner saw lights stop/resume with Windows Animation effects on a live route |
+| 8 | 8 | Inputs | 8 | — | Range now visible in words (owner-confirmed); text-field validation beyond numbers not inventoried |
+| 8 | 1 | Contrast | 8 | — | Translucent layers, non-text boundaries, hover states unchecked |
+| 8 | 5 | Spacing/alignment | 8 | — | Connection, plugin and confirmation dialogs not audited; goal note crowding found by tester |
+| 8 | 9 | Buttons | 8 | — | Same dialogs and pressed states not inventoried |
+| 8 | 10 | Loading/progress | 8 | — | Slow-action matrix partial |
+| 13 | 7 | Errors/recovery | 8 | — | Lost device owner-confirmed, but the first-time user met a window crash and two raw Play errors; all fixed, no fresh walk-through yet |
+| 13 | 3 | Clarity | 8 | — | First-time user found four confusing or broken steps; fixed, but hesitation notes and a second clean walk-through are missing |
+
+Total 119/140 (was 117). Ordered next work, by expected gain: (1) record the tester's
+notes and run a second first-time walk-through on the PR #124 build (Clarity, Errors);
+(2) audit connection, plugin and confirmation dialogs for spacing, targets and pressed
+states (Spacing, Buttons); (3) text-field validation inventory (Inputs); (4) contrast of
+translucent layers, boundaries and hover (Contrast); (5) finish the slow-action matrix
+(Loading); (6) screenshot of the doubled guide link if it recurs.
 
 Checks: `npm test` 999 passed; lint and format clean; typecheck clean; seven browser
 suites (field names, audio tools, clipped text, reduced motion, keyboard placement,
