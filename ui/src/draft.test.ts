@@ -820,6 +820,22 @@ describe("Mixer route sources", () => {
   it("returns null without exactly one enabled Mixer", () => {
     expect(mixerRouteSources(demoSession)).toBeNull();
   });
+
+  // Issue #123: microphone → Mixer, Firefox → Duck → Mixer. The walk stopped
+  // at Duck, so Play saw no application source and refused the route.
+  it("walks through a Duck to the application it ducks", () => {
+    let next = appendLibraryNode(
+      { ...demoSession, nodes: demoSession.nodes.filter((node) => node.kind !== "gain"), edges: [] },
+      "mixer",
+    );
+    next = appendApplicationCaptureNode(next, app(9));
+    next = appendLibraryNode(next, "duck");
+    const id = (kind: string) => next.nodes.find((node) => node.kind === kind)!.id;
+    next = appendDraftConnection(next, "mic", "out", id("mixer"), "in");
+    next = appendDraftConnection(next, id("applicationCapture"), "out", id("duck"), "in");
+    next = appendDraftConnection(next, id("duck"), "out", id("mixer"), "in");
+    expect(mixerRouteSources(next)?.map((node) => node.kind)).toEqual(["physicalInput", "applicationCapture"]);
+  });
 });
 
 describe("isParameterOnlyChange", () => {
