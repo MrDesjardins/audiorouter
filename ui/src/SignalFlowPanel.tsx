@@ -66,7 +66,7 @@ export function SignalFlowPanel({
   pluginInsertEdgeId: string | null;
   closePluginPicker: () => void;
   draft: Session;
-  selectedNode: Node;
+  selectedNode: Node | undefined;
   setSelectedNodeId: Dispatch<SetStateAction<string>>;
   setSelectedNodeIds: (ids: string[]) => void;
   unloadPluginNode: (nodeId: string) => void;
@@ -236,7 +236,7 @@ export function SignalFlowPanel({
             </p>
             <LoadedPluginsPanel
               nodes={draft.nodes}
-              selectedNodeId={selectedNode.id}
+              selectedNodeId={selectedNode?.id ?? ""}
               disabled={!backend.connected}
               onSelect={(nodeId) => {
                 setSelectedNodeId(nodeId);

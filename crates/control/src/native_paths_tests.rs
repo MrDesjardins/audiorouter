@@ -326,6 +326,45 @@ fn native_multi_input_preparation_validates_mixed_physical_and_application_sourc
     // validation and proceeds to open a real process-loopback capture,
     // which fails in this test environment for audio/process reasons
     // rather than an identity or kind mismatch.
+    // A goal's app source names an app, not a process (allVerifiedInstances,
+    // no processId): Play binds it to the running copy it found, and the
+    // worker must accept that binding (first-time-user walk-through, Firefox).
+    let mut goal_session = session.clone();
+    let app = goal_session
+        .nodes
+        .iter_mut()
+        .find(|node| node.id == EntityId::new("app"))
+        .unwrap();
+    app.parameters.remove("processId");
+    app.parameters.remove("creationTime100ns");
+    app.parameters
+        .insert("processPolicy".into(), json!("allVerifiedInstances"));
+    for (executable, rejected) in [("Zoom.exe", false), ("other.exe", true)] {
+        let mut plane = ControlPlane::default();
+        plane.insert_session(goal_session.clone()).unwrap();
+        let error = plane
+            .prepare_native_multi_input_worker(
+                session_id.clone(),
+                1,
+                &[
+                    NativeMultiInputSourceBinding::Physical(&mic_endpoint),
+                    NativeMultiInputSourceBinding::Application {
+                        process_id: 31337,
+                        expected_executable: executable,
+                        expected_executable_path: None,
+                        expected_creation_time_100ns: 123,
+                        mode: audiorouter_windows_audio::ProcessLoopbackMode::IncludeTargetTree,
+                    },
+                ],
+                0,
+                1,
+                0,
+            )
+            .unwrap_err();
+        let identity = matches!(&error, ControlError::InvalidRequest(message) if message.contains("does not match"));
+        assert_eq!(identity, rejected, "{executable}: {error:?}");
+    }
+
     let mut plane = ControlPlane::default();
     plane.insert_session(session).unwrap();
     let progressed_error = plane
