@@ -444,25 +444,44 @@ impl ControlPlane {
                     NativeMultiInputSourceBinding::Application {
                         process_id,
                         expected_executable,
+                        expected_executable_path,
                         expected_creation_time_100ns,
                         ..
                     },
                 ) => {
                     let process_id_value = Value::from(u64::from(*process_id));
                     let creation_time_value = Value::from(expected_creation_time_100ns.to_string());
-                    let matches_identity = node
+                    let executable_matches = node
                         .parameters
-                        .get("processId")
-                        .is_some_and(|value| value == &process_id_value)
-                        && node
-                            .parameters
-                            .get("executable")
-                            .and_then(Value::as_str)
-                            .is_some_and(|value| value.eq_ignore_ascii_case(expected_executable))
-                        && node
-                            .parameters
-                            .get("creationTime100ns")
-                            .is_some_and(|value| value == &creation_time_value);
+                        .get("executable")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| value.eq_ignore_ascii_case(expected_executable));
+                    // A PID-free node (goal or .exe pick) is bound at Play to the
+                    // running app found by name; its saved path, if any, must agree.
+                    let all_instances =
+                        node.parameters.get("processPolicy").and_then(Value::as_str)
+                            == Some("allVerifiedInstances");
+                    let matches_identity = if all_instances {
+                        executable_matches
+                            && match node
+                                .parameters
+                                .get("executablePath")
+                                .and_then(Value::as_str)
+                            {
+                                Some(saved) => expected_executable_path
+                                    .is_some_and(|path| path.eq_ignore_ascii_case(saved)),
+                                None => true,
+                            }
+                    } else {
+                        node.parameters
+                            .get("processId")
+                            .is_some_and(|value| value == &process_id_value)
+                            && executable_matches
+                            && node
+                                .parameters
+                                .get("creationTime100ns")
+                                .is_some_and(|value| value == &creation_time_value)
+                    };
                     if !matches_identity || channels != 2 {
                         return Err(ControlError::InvalidRequest(
                             "application capture binding does not match the enabled node's identity".into(),
