@@ -696,11 +696,14 @@ impl ControlPlane {
                         .iter()
                         .find(|port| port.direction == PortDirection::Output)
                         .map(|port| port.channels);
-                    if endpoint.channels == 1
-                        && node_channels == Some(2)
-                        && !node_spatial_headphones(node)
+                    // A mono endpoint behind a stereo node, or a stereo
+                    // endpoint (an audio interface) behind a mono node.
+                    if matches!(
+                        (endpoint.channels, node_channels),
+                        (1, Some(2)) | (2, Some(1))
+                    ) && !node_spatial_headphones(node)
                     {
-                        mono_nodes.push(node.id.clone());
+                        mono_nodes.push((node.id.clone(), endpoint.channels as u8));
                     }
                     NativeMultiInputSourceBinding::Physical(endpoint)
                 }
@@ -795,7 +798,7 @@ impl ControlPlane {
             };
             bindings.insert(node.id.clone(), binding);
         }
-        self.native_multi_input_mono_nodes = mono_nodes;
+        self.native_multi_input_device_channels = mono_nodes;
         let prepared = self.prepare_native_path_worker(
             session_id.clone(),
             generation,

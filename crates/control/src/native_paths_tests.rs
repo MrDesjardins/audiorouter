@@ -107,7 +107,7 @@ fn native_paths_read_a_mono_endpoint_through_a_stereo_device_node() {
             }],
         })
         .unwrap();
-    plane.native_multi_input_mono_nodes = vec![EntityId::new("mic")];
+    plane.native_multi_input_device_channels = vec![(EntityId::new("mic"), 1)];
     let adapted = plane.native_paths_session(&session_id).unwrap();
     assert_eq!(adapted.nodes[0].ports[0].channels, 1);
     assert_eq!(adapted.edges[0].matrix, vec![1.0, 1.0]);
@@ -117,6 +117,120 @@ fn native_paths_read_a_mono_endpoint_through_a_stereo_device_node() {
         plane.get_session(&session_id).unwrap().nodes[0].ports[0].channels,
         2
     );
+}
+
+/// Issue #123: a mono Input Device node ("out (1ch)") bound to a stereo
+/// audio interface was refused with "capture endpoints must exactly match
+/// the physical-input channel/rate/float32 contract". The worker now reads
+/// the interface as stereo and folds it to the node's one channel.
+#[cfg(windows)]
+#[test]
+fn native_paths_read_a_stereo_interface_through_a_mono_device_node() {
+    let port = |name: &str, direction, channels| Port {
+        name: name.into(),
+        direction,
+        channels,
+    };
+    let node = |id: &str, kind, ports: Vec<Port>| Node {
+        id: EntityId::new(id),
+        kind,
+        type_version: 1,
+        name: id.into(),
+        enabled: true,
+        bypass: false,
+        parameters: Default::default(),
+        ports,
+    };
+    let session = |mode: Option<&str>| {
+        let mut mic = node(
+            "mic",
+            NodeKind::PhysicalInput,
+            vec![port("out", PortDirection::Output, 1)],
+        );
+        if let Some(mode) = mode {
+            mic.parameters
+                .insert("channelMode".into(), serde_json::json!(mode));
+        }
+        Session {
+            id: EntityId::new("interface-mic"),
+            name: "interface mic".into(),
+            schema_version: 1,
+            revision: 0,
+            nodes: vec![
+                mic,
+                node(
+                    "cable",
+                    NodeKind::PhysicalOutput,
+                    vec![port("in", PortDirection::Input, 2)],
+                ),
+            ],
+            edges: vec![Edge {
+                id: EntityId::new("mic-cable"),
+                source_node: EntityId::new("mic"),
+                source_port: "out".into(),
+                destination_node: EntityId::new("cable"),
+                destination_port: "in".into(),
+                matrix: vec![1.0, 1.0],
+                enabled: true,
+            }],
+        }
+    };
+    for (mode, expected) in [
+        (None, vec![0.5, 0.5, 0.5, 0.5]),
+        (Some("left"), vec![1.0, 0.0, 1.0, 0.0]),
+        (Some("right"), vec![0.0, 1.0, 0.0, 1.0]),
+    ] {
+        let mut plane = ControlPlane::default();
+        plane.insert_session(session(mode)).unwrap();
+        plane.native_multi_input_device_channels = vec![(EntityId::new("mic"), 2)];
+        let adapted = plane
+            .native_paths_session(&EntityId::new("interface-mic"))
+            .unwrap();
+        assert_eq!(adapted.nodes[0].ports[0].channels, 2, "{mode:?}");
+        assert_eq!(adapted.edges[0].matrix, expected, "{mode:?}");
+        assert!(audiorouter_domain::validate_session(&adapted).is_ok());
+        // The engine's own channelMode fold leaves the adapted weights as they are.
+        let folded = audiorouter_engine::fold_input_channel_modes(&adapted);
+        assert_eq!(folded.edges[0].matrix, expected, "{mode:?}");
+        assert!(
+            audiorouter_engine::compile_native_paths_with_plugins_and_audio(
+                &adapted,
+                RuntimeGeneration::new(1),
+                &Default::default(),
+                &Default::default(),
+            )
+            .is_ok()
+        );
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn capture_format_problem_names_the_failing_condition() {
+    let endpoint =
+        |direction, channels, rate, float: bool| audiorouter_windows_audio::EndpointInfo {
+            id: "interface".into(),
+            direction,
+            default_period_100ns: 100_000,
+            minimum_period_100ns: 30_000,
+            sample_rate_hz: rate,
+            channels,
+            bits_per_sample: if float { 32 } else { 24 },
+            format_tag: 3,
+            channel_mask: 3,
+            subformat_guid: String::new(),
+        };
+    use audiorouter_windows_audio::EndpointDirection::{Capture, Render};
+    assert_eq!(
+        capture_format_problem(&endpoint(Capture, 2, 48_000, true), 2),
+        None
+    );
+    let output = capture_format_problem(&endpoint(Render, 2, 48_000, true), 2).unwrap();
+    assert!(output.contains("output"), "{output}");
+    let rate = capture_format_problem(&endpoint(Capture, 2, 384_000, true), 2).unwrap();
+    assert!(rate.contains("384000 Hz"), "{rate}");
+    let channels = capture_format_problem(&endpoint(Capture, 4, 48_000, true), 2).unwrap();
+    assert!(channels.contains("4 channels"), "{channels}");
 }
 
 #[cfg(windows)]

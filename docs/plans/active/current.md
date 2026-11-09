@@ -1,5 +1,102 @@
 # Active plan — current priorities (2026-11-04)
 
+## Issue #123 validation — 2026-11-09
+
+Objective: validate the two failures in [issue #123](https://github.com/MrDesjardins/audiorouter/issues/123)
+against local head `730364391a06afdbfd8eed3f00bcb6042d5b3548`.
+Requirements: CAP-03/06/11/13, UI-17; M02/M05. Validation only;
+no product implementation, release or issue reply. Preserve the existing
+nightly-test edits in this working tree. Windows is available; the reporter's
+session, interface and endpoint-format inventory are not. Read the issue,
+all three comments, both screenshots, capture specification and prior
+first-time-user evidence before evaluating the reported route.
+
+Finding: **the exact Firefox route is not fixed by PR #124's goal-app fixes**.
+The screenshot has microphone → Mixer and Firefox → Duck → Mixer → Gain →
+output. `mixerRouteSources` walks `CHAIN_PROCESSOR_KINDS`, which omits Duck.
+The current Play classification therefore finds physicalInput + duck rather
+than physicalInput + applicationCapture, and reaches the mixed-app guard.
+Changing only Duck to Gain reaches application mixing. Reproduction:
+`node target/issue123-validation.cjs` (local untracked probe, real draft.ts
+functions transpiled with the installed TypeScript API): both routes have
+needsNativePaths=false and applicationOnly=false; Gain has
+mixerApplicationRoute=true, Duck=false. This is classification evidence,
+not native audio or a reboot test. The old Many-input/Full workspace wording
+was replaced in `4fa85c1e`, but the refusal remains for this shape.
+
+PID restart matching is separately covered: Windows
+`cargo test -p audiorouter-windows-audio --lib restart_binding -- --nocapture`
+passes 4/4; `cargo test -p audiorouter-control --lib goal_app -- --nocapture`
+passes 2/2. Existing attended PR #124 Firefox success does not qualify the
+reporter's Duck route. `npm --prefix ui test -- App.lifecycle.test.tsx
+draft.test.ts` passes 85/85, demonstrating the existing suite misses this
+reported shape. `cargo test -p audiorouter-control --lib
+native_multi_input_preparation -- --nocapture` passes 1/1.
+
+Second screenshot (0.0.27) says "capture endpoints must exactly match the
+physical-input channel/rate/float32 contract" and shows a mono input port
+feeding a stereo output. The current rejection remains in native_paths.rs:
+wrong direction, non-float32, unsupported rate or endpoint/node channel
+mismatch. Screenshot alone cannot distinguish these causes. Existing mono
+adaptation handles a mono endpoint through a stereo node, not every converse
+mismatch. `cargo test -p audiorouter-control --lib native_paths_ --
+--nocapture`: 2 pass, 1 live-hardware test explicitly ignored. An initial
+native_paths_tests filter selected zero tests and is not validation evidence.
+Do not call the interface issue repaired without its route and format data.
+
+Repair (PR #130, 2026-11-09): `isChainProcessor` in `ui/src/draft.ts` is now
+an exhaustive switch mirroring the engine's `is_chain_processor` (Duck
+included). The second screenshot shows the Microphone node as `out (1ch)`
+on a stereo interface. The native path session now widens such a mono node
+to 2 channels, folded by `channelMode` (default 0.5/0.5). The format refusal
+(`capture_format_problem`) names the node and the condition that failed.
+Regressions fail without the fix: `draft.test.ts` (Duck walk) and
+`native_paths_read_a_stereo_interface_through_a_mono_device_node`. Local
+results: control lib 363 pass; tool/source combinations pass; UI 1001 pass;
+fmt, Clippy (control), lint and typecheck are clean. Not run: live interface
+audio, built-exe Play. Next: merge after CI, cut a release, then ask the
+reporter to retest. Disconnected-node semantics and uninstall-data feedback
+remain open reports. Rollback: revert PR #130.
+
+## Nightly UI coverage repair — 2026-11-08
+
+Objective (ENG-02/04, M05): repair run 42471028961/job 128701558777.
+Rust workspace/shell coverage passed; UI failed while loading Settings,
+the EQ catalog and Apps. Missing UI coverage summary is a downstream failure.
+Preserve the four unrelated working-tree changes on improve/ui-round-28.
+Prerequisites: Windows/Node and installed UI dependencies available; no audio,
+driver or credentials needed for local UI tests. Hosted Windows remains a gate.
+Tasks: reproduce focused and full coverage; inspect lazy transition readiness;
+repair bounded waits without skipping assertions; run full coverage, typecheck,
+lint/format and diff checks; record evidence. Rollback: revert only this test
+repair. Focused pre-change coverage passes 121/121 locally in 25.29 s; full
+coverage reproduction passed locally (the hosted timing failure did not recur).
+The prior run 42362489121 failed packaged startup, not coverage; the linked
+42471028961 run passes startup and soak. Its three UI failures are bounded
+lookup/test timeouts during lazy transitions, not Rust or audio failures.
+Repair: give the Settings navigation and EQ/Apps content 10-second bounded
+lookups and the three affected scenarios a 20-second enclosing budget. Keep
+all graph, redaction, EQ request and heading assertions; no global timeout,
+skip, retry or product behavior change. Next: full post-repair coverage and
+static checks. Other files are being edited concurrently; preserve them.
+
+Windows / Node 22.22.3 results: `npm --prefix ui run test:coverage`
+passes 112 files / 1,000 tests (65.58 s), generates coverage-summary.json;
+UI lines 72.10%. Evidence: local `target/quality-full-after.log`; focused
+pre-change log `target/quality-focused-before.log`, full pre-change log
+`target/quality-full-before.log` (1,000 pass). `npm run typecheck:all` and
+`npm run lint` in ui pass; Prettier write/check of the two changed test files
+passes. Inspected the scoped diff and all five linked-job annotations: three
+test failures plus test-step and missing-summary-step exits. No workflow gate
+was weakened. Hosted failure does not reproduce on this faster PC; longer
+bounded waits follow its actual cold-import failure points. No new hosted
+result, product/UI visual, native-audio or Rust validation is claimed for this
+test-only repair. Next: human review of these two test files and this plan,
+then approved PR and new-head hosted nightly coverage. No PR opened.
+Documentation acceptance (`tests/acceptance/docs.ps1`) and `git diff --check`
+also pass. Changes remain uncommitted on improve/ui-round-28 alongside the
+preserved concurrent work; no remote branch or workflow was modified.
+
 ## Next UI qualification — after Round 27 (2026-11-07)
 
 Round 27's improvement phase is implemented and verified within its recorded
