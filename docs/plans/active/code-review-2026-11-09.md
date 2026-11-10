@@ -429,10 +429,30 @@ entries, so those outputs were restored and `--api-only` used (125 public
 methods / 130 HTTP operations). No unrelated guide changes retained.
 Rollback: revert Task 5's commit; optional fields require no migration.
 
+### 2026-11-09 — Task 6 (R9), cleanup after durable commit
+
+GRAPH-09 / UI-07: used a second SQLite connection and a DELETE trigger on
+`graph_plans` to reproduce cleanup failure through `ControlPlane::dispatch`.
+Before the fix the durable commit returned `storageFailure`; afterward it
+returns success, labels the new version, appends `graph.committed` and
+activates the fake running runtime. Same-key retry succeeds; a different key
+cannot reuse the leftover plan because its base revision is stale. No test
+seam or production fault API was needed. Cleanup is now best effort only
+after the durable session/journal write; prior write failures still roll back.
+
+Focused persistence tests: 18/18 passed on Windows; full control suite
+369 passed / 11 explicitly ignored; focused control Clippy with all targets,
+all features and denied warnings passed. Formatting, both format check
+variants and diff checks passed. Native audio publication remains part of
+the final runtime gate.
+Rollback: revert Task 6's commit; no migration.
+
 ## Next action
 
-Task 6 (R9 durable commit cleanup), then Tasks 7–10. Task 2's dual native
+Task 7 (R8 preset identity), then Tasks 8–10. Task 2's dual native
 comparison publication evidence and final built-shell verification still
 remain required. Workspace builds/full tests are authorized; never stop the
 owner's running shell or launch a second shell. Task 3 commit `c4581bea`;
 Task 4 commit `647a5ec2`; Task 2 commit `0be464b0`.
+Task 5 commit `ad3f9db9`. Findings remain pending final qualification until
+the completion audit verifies all required runtime and matrix evidence.
