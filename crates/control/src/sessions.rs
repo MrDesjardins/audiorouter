@@ -218,8 +218,6 @@ impl ControlPlane {
 
     pub fn delete_session(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
-        self.clear_comparison(id);
-        self.forget_revision_notes(id);
         let session = self.get_session(id)?.clone();
         if self
             .runtimes
@@ -280,6 +278,8 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        self.clear_comparison(id);
+        self.forget_revision_notes(id);
         if self.active_session_id.as_ref() == Some(id) {
             // Never leave default node-targeted API/MCP calls aimed at a
             // deleted graph. Selecting a different session is deliberate.
