@@ -241,7 +241,8 @@ describe("voice target zone in the inspector", () => {
     const bands = [...container.querySelectorAll(".meter-target-zone")] as HTMLElement[];
     expect(bands).toHaveLength(2);
     expect(new Set(bands.map((band) => band.style.bottom + "/" + band.style.height)).size).toBe(1);
-    expect(parseFloat(bands[0].style.bottom)).toBeCloseTo(((-18 + 60) / 66) * 100, 5);
-    expect(parseFloat(bands[0].style.height)).toBeCloseTo((12 / 66) * 100, 5);
+    // CSSOM serializes these percentages to four decimal places in jsdom 31.
+    expect(parseFloat(bands[0].style.bottom)).toBeCloseTo(((-18 + 60) / 66) * 100, 4);
+    expect(parseFloat(bands[0].style.height)).toBeCloseTo((12 / 66) * 100, 4);
   });
 });
