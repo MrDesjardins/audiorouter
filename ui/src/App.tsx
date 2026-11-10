@@ -990,7 +990,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     if (selectedSessionListed) writeLastSession(diagnosticStorage, selectedSessionId);
   }, [selectedSessionId, selectedSessionListed, diagnosticStorage]);
   currentSessionIdRef.current = session.id;
-  const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId) ?? draft.nodes[0];
+  const selectedNode = draft.nodes.find((node) => node.id === selectedNodeId) ?? (draft.nodes[0] as Node | undefined);
   useEffect(() => {
     recordUiDiagnostic(
       `Graph checkpoint: ${draft.nodes.length} nodes, ${draft.edges.length} connections; revision ${session.revision}`,
@@ -1448,7 +1448,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     return () => window.removeEventListener("keydown", onHistoryKey);
   }, []);
   const changeNodeFlag = async (flag: "enabled" | "bypass", value: boolean) => {
-    if (sessionBusy.current || nodeFlagBusy.current || graphBusy || !backendReady) return;
+    if (!selectedNode || sessionBusy.current || nodeFlagBusy.current || graphBusy || !backendReady) return;
     const next = setNodeDraftFlag(draftRef.current, selectedNode.id, flag, value);
     const wasRunning = sessionRunning;
     if (!wasRunning) {
@@ -1479,6 +1479,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     }
   };
   const changeNodeName = (name: string) => {
+    if (!selectedNode) return;
     try {
       recordDraftChange(setNodeDraftName(draft, selectedNode.id, name));
       setActionMessage("Name changed. Save to keep it.");
@@ -1535,9 +1536,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     // the enabled Save button and the node's "Save required" mark already say it needs saving.
     setActionMessage(null);
   };
-  const changeNodeParameter = (name: string, value: boolean | number | string) =>
-    changeNodeParameterOn(selectedNode.id, name, value);
+  const changeNodeParameter = (name: string, value: boolean | number | string) => {
+    if (selectedNode) changeNodeParameterOn(selectedNode.id, name, value);
+  };
   const resetNodeParameters = () => {
+    if (!selectedNode) return;
     recordDraftChange(resetNodeDraftParameters(draft, selectedNode.id));
     setActionMessage("Settings reset. Save to keep this.");
   };
@@ -3078,6 +3081,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     }
   };
   const removeSelectedNode = () => {
+    if (!selectedNode) return;
     if (draft.nodes.length <= 1) {
       setActionMessage("A route must keep at least one tool. Add another before removing this one.");
       return;
@@ -3131,7 +3135,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       setActionMessage(formatUiError(error, "Unable to duplicate this tool."));
     }
   };
-  const duplicateSelectedNode = () => duplicateNode(selectedNode.id);
+  const duplicateSelectedNode = () => {
+    if (selectedNode) duplicateNode(selectedNode.id);
+  };
   const copyNodeToClipboard = (nodeId: string) => {
     try {
       const source = draftRef.current.nodes.find((node) => node.id === nodeId);
@@ -3269,7 +3275,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       session={draft}
       pendingNodeIds={unsavedNodeIds(session, draft)}
       nodeSaveState={graphBusy ? "saving" : autoSavePending ? "autosave" : "needs-save"}
-      selectedNodeId={selectedNode.id}
+      selectedNodeId={selectedNode?.id ?? ""}
       selectedNodeIds={selectedNodeIds}
       onSelectItems={(ids) => {
         const groupIds = new Set(groupState.groups.map((group) => group.id));

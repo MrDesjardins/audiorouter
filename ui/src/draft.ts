@@ -536,30 +536,59 @@ const ROUTE_SOURCE_KINDS = new Set([
   "networkReceive",
 ]);
 
-/** Processor kinds the engine accepts in a linear chain before a Mixer input (mirrors `is_chain_processor`). */
-const CHAIN_PROCESSOR_KINDS = new Set<NodeKind>([
-  "gain",
-  "volume",
-  "bassTreble",
-  "dehum",
-  "declick",
-  "denoise",
-  "speechDenoise",
-  "spectralGate",
-  "funVoiceChanger",
-  "firFilter",
-  "timeShift",
-  "mute",
-  "meter",
-  "parametricEq",
-  "compressor",
-  "gate",
-  "limiter",
-  "delay",
-  "graphicEq",
-  "pitch",
-  "plugin",
-]);
+/**
+ * Whether the engine accepts this kind in a linear chain before a Mixer input
+ * (mirrors `is_chain_processor`). Exhaustive on purpose: a hand-kept set
+ * missed Duck, so Firefox → Duck → Mixer was refused at Play (issue #123),
+ * and a new kind now fails typecheck until it is classified here.
+ */
+function isChainProcessor(kind: NodeKind): boolean {
+  switch (kind) {
+    case "gain":
+    case "volume":
+    case "bassTreble":
+    case "dehum":
+    case "declick":
+    case "denoise":
+    case "speechDenoise":
+    case "spectralGate":
+    case "funVoiceChanger":
+    case "firFilter":
+    case "timeShift":
+    case "mute":
+    case "meter":
+    case "parametricEq":
+    case "compressor":
+    case "gate":
+    case "limiter":
+    case "delay":
+    case "graphicEq":
+    case "pitch":
+    case "plugin":
+    case "duck":
+      return true;
+    case "physicalInput":
+    case "applicationCapture":
+    case "endpointLoopback":
+    case "physicalOutput":
+    case "virtualRenderSource":
+    case "virtualCaptureSink":
+    case "testSignal":
+    case "mixer":
+    case "recorder":
+    case "audioFile":
+    case "soundboard":
+    case "inputSwitch":
+    case "outputSwitch":
+    case "networkSend":
+    case "networkReceive":
+      return false;
+    default: {
+      const unclassified: never = kind;
+      return unclassified;
+    }
+  }
+}
 
 /** Exclude silent sources and source-less input chains from runtime only. */
 export function pruneInactiveUpstream(session: Session): Session {
@@ -613,7 +642,7 @@ export function mixerRouteSources(session: Session): Session["nodes"] | null {
     (candidate) => candidate.enabled && candidate.destinationNode === mixers[0].id,
   )) {
     let current = byId.get(edge.sourceNode);
-    for (let depth = 0; current && CHAIN_PROCESSOR_KINDS.has(current.kind); depth += 1) {
+    for (let depth = 0; current && isChainProcessor(current.kind); depth += 1) {
       const node: Session["nodes"][number] = current;
       const feeds = pruned.edges.filter((candidate) => candidate.enabled && candidate.destinationNode === node.id);
       if (feeds.length === 0) break;

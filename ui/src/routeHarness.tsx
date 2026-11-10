@@ -317,6 +317,15 @@ const previewBackend: UiBackend = {
           stillToChoose: ["your microphone"],
         },
         {
+          id: "game-discord",
+          title: "Game and voice for Discord",
+          summary: "A game's sound and your mic, mixed for Discord.",
+          adds: ["Microphone", "Application source", "Mixer"],
+          main: true,
+          applicationPrompt: "Which app is your game?",
+          stillToChoose: ["your microphone"],
+        },
+        {
           id: "empty",
           title: "Start empty",
           summary: "A blank route.",

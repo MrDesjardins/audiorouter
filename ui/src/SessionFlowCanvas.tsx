@@ -1624,8 +1624,10 @@ export function nodeHeaderState(
       return { label: "pick app", tone: "attention" };
     case "failed":
       return { label: "retrying", tone: "attention" };
+    // Before Play nothing is prepared yet; that is normal, not a fault to fix in Properties
+    // (first-time-user walk-through). A failed Play reports its own plain reason.
     default:
-      return { label: "not prepared", tone: "attention" };
+      return attention ? { label: attention, tone: "attention" } : { label: "waiting for Play", tone: "ready" };
   }
 }
 
@@ -1659,7 +1661,7 @@ function ApplicationCaptureVisual({
                   ? "Choose again"
                   : status === "failed"
                     ? "Retrying"
-                    : "Not prepared · open Properties";
+                    : "Waiting for Play";
   return (
     <div className="node-app-capture-wrap">
       <div className="node-app-capture" title={executable}>

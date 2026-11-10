@@ -872,7 +872,7 @@ describe("node header state", () => {
   const capture = (state: string) => ({ sessionId: "s", nodeId: "app", state, detail: "detail" }) as never;
 
   it("does not call an unbound or closed application source ready", () => {
-    expect(nodeHeaderState(appNode, null)).toEqual({ label: "not prepared", tone: "attention" });
+    expect(nodeHeaderState(appNode, null)).toEqual({ label: "waiting for Play", tone: "ready" });
     expect(nodeHeaderState(appNode, capture("app-closed"))).toEqual({ label: "app closed", tone: "attention" });
     expect(nodeHeaderState(appNode, capture("connected"))).toEqual({ label: "live", tone: "ready" });
   });
