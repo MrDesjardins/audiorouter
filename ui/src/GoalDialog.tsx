@@ -58,6 +58,7 @@ export function GoalDialog({
   const [asking, setAsking] = useState<SessionGoal | null>(null);
   const [apps, setApps] = useState<ApplicationRow[]>([]);
   const [app, setApp] = useState("");
+  const [appFilter, setAppFilter] = useState("");
   const dialog = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -82,6 +83,15 @@ export function GoalDialog({
     };
   }, [backend]);
 
+  // Typing narrows the list by shown name or executable; the chosen app stays listed.
+  const filterText = appFilter.trim().toLocaleLowerCase();
+  const filteredApps = filterText
+    ? apps.filter(
+        (row) =>
+          row.executable === app ||
+          `${row.audioDisplayNames[0] ?? ""} ${row.executable}`.toLocaleLowerCase().includes(filterText),
+      )
+    : apps;
   const create = async (goal: SessionGoal, chosen: ApplicationRow | null) => {
     if (busy || !backend.createSessionFromGoal) return;
     setBusy(true);
@@ -147,17 +157,30 @@ export function GoalDialog({
         {asking ? (
           <div className="goal-app-step">
             <label className="goal-app-field">
+              <span>Find an app</span>
+              <input
+                type="search"
+                value={appFilter}
+                placeholder="Type part of its name"
+                autoComplete="off"
+                spellCheck={false}
+                onChange={(event) => setAppFilter(event.target.value)}
+              />
+            </label>
+            <label className="goal-app-field">
               <span>{asking.applicationPrompt}</span>
               <select value={app} onChange={(event) => setApp(event.target.value)}>
-                <option value="">Choose a running app</option>
-                {apps.map((row) => (
+                <option value="">
+                  {filteredApps.length === 0 && appFilter.trim() ? "No running app matches" : "Choose a running app"}
+                </option>
+                {filteredApps.map((row) => (
                   <option key={row.executable} value={row.executable}>
                     {row.audioDisplayNames[0] || row.executable}
                   </option>
                 ))}
               </select>
             </label>
-            <p className="muted">
+            <p className="muted goal-app-note">
               Not running yet? Choose later: the route is made without it, and you add it from Tools.
             </p>
             <div className="actions">

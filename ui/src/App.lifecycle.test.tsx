@@ -189,7 +189,7 @@ describe("session refresh and playback regressions", () => {
     await waitFor(() => expect(view.container.querySelector(".audio-run-state")?.textContent).toBe("Audio running"));
   });
 
-  it("opens Apps after a delayed initial snapshot without changing hook order", async () => {
+  it("opens Apps after a delayed initial snapshot without changing hook order", { timeout: 20000 }, async () => {
     const { backend } = await fixture();
     const initial = await backend.snapshot();
     let resolve!: (value: typeof initial) => void;
@@ -205,9 +205,10 @@ describe("session refresh and playback regressions", () => {
     });
     fireEvent.click(await screen.findByRole("tab", { name: "Status" }));
     // Status loads lazily; a cold worker must finish that transition first.
-    fireEvent.click(await screen.findByRole("tab", { name: "Apps" }, { timeout: 5000 }));
-    expect(await screen.findByRole("heading", { name: "Discord" })).toBeTruthy();
-    expect(await screen.findByRole("heading", { name: "OBS Studio" })).toBeTruthy();
+    fireEvent.click(await screen.findByRole("tab", { name: "Apps" }, { timeout: 10000 }));
+    // Apps also loads lazily, independently of the Status panel above.
+    expect(await screen.findByRole("heading", { name: "Discord" }, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "OBS Studio" }, { timeout: 10000 })).toBeTruthy();
   });
 
   it("rebinds a stopped native worker to the selected endpoints before Play", async () => {

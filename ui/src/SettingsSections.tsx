@@ -143,7 +143,7 @@ export function CanvasKeyboardPanel({
   mode: CanvasKeyboardPanelMode;
   onClose: () => void;
   draft: Session;
-  selectedNode: Node;
+  selectedNode: Node | undefined;
   selectNodeProperties: (id: string) => void;
   removeConnection: (edgeId: string) => void;
   toggleConnection: (edgeId: string, enabled: boolean) => void;
@@ -172,7 +172,7 @@ export function CanvasKeyboardPanel({
       {mode === "routeList" ? (
         <NodeList
           session={draft}
-          selectedNodeId={selectedNode.id}
+          selectedNodeId={selectedNode?.id ?? ""}
           onSelect={selectNodeProperties}
           onRemoveConnection={removeConnection}
           onToggleConnection={toggleConnection}

@@ -25,6 +25,37 @@ pub enum NativeMultiInputSourceBinding<'a> {
     Network(&'a audiorouter_domain::Node),
 }
 
+/// Why a capture endpoint cannot feed an Input Device node whose output port
+/// carries `node_channels`, in words a user can act on, or `None` when it
+/// can. One combined message hid which condition failed (issue #123).
+pub(crate) fn capture_format_problem(
+    endpoint: &audiorouter_windows_audio::EndpointInfo,
+    node_channels: usize,
+) -> Option<String> {
+    if endpoint.direction != audiorouter_windows_audio::EndpointDirection::Capture {
+        return Some("the chosen device is an output, not an input; choose an input device".into());
+    }
+    if !endpoint.is_ieee_float32() {
+        return Some(format!(
+            "Windows shares it as {}-bit integer audio, and AudioRouter needs 32-bit float; choose another input or report this device",
+            endpoint.bits_per_sample
+        ));
+    }
+    if !multi_path_rate_supported(endpoint.sample_rate_hz) {
+        return Some(format!(
+            "its sample rate is {} Hz; set it between 8 kHz and 192 kHz in Windows Sound settings",
+            endpoint.sample_rate_hz
+        ));
+    }
+    if usize::from(endpoint.channels) != node_channels {
+        return Some(format!(
+            "the device has {} channels and the node has {}; set the device to mono or stereo in Windows Sound settings (Properties, Advanced)",
+            endpoint.channels, node_channels
+        ));
+    }
+    None
+}
+
 /// How `prepare_native_path_worker` receives source bindings: in the
 /// compiled input order, or keyed by source node.
 #[cfg(windows)]
@@ -229,7 +260,7 @@ impl ControlPlane {
                     .into(),
             ));
         }
-        self.native_multi_input_mono_nodes.clear();
+        self.native_multi_input_device_channels.clear();
         self.prepare_native_path_worker(
             session_id,
             generation,
@@ -242,9 +273,12 @@ impl ControlPlane {
 
     /// The session copy the multi-input worker compiles: disabled sources
     /// that feed nothing are dropped (only bound sources are opened), and a
-    /// stereo device node bound to a mono endpoint reads that endpoint
-    /// through `[1,1]` duplication folded into its outgoing matrices. The
-    /// saved session is never changed.
+    /// device node whose port channel count differs from its endpoint is
+    /// adapted: a stereo node on a mono endpoint reads it through `[1,1]`
+    /// duplication, and a mono node on a stereo endpoint (an audio
+    /// interface) folds the two channels by its `channelMode` (mono mix when
+    /// unset), both folded into its outgoing matrices. The saved session is
+    /// never changed.
     #[cfg(windows)]
     pub(crate) fn native_paths_session(
         &self,
@@ -261,25 +295,38 @@ impl ControlPlane {
         &self,
         mut session: Session,
     ) -> Result<Session, ControlError> {
-        for node_id in &self.native_multi_input_mono_nodes {
+        for (node_id, endpoint_channels) in &self.native_multi_input_device_channels {
             let Some(node) = session.nodes.iter_mut().find(|node| node.id == *node_id) else {
                 continue;
             };
-            let Some(port) = node
-                .ports
-                .iter_mut()
-                .find(|port| port.direction == PortDirection::Output && port.channels == 2)
-            else {
+            // A mono node reading a stereo endpoint takes the channels its
+            // channelMode names; unset or "stereo" is the GRAPH-03 mono mix.
+            let [left, right] = audiorouter_engine::input_channel_mode_weights(node)
+                .filter(|_| *endpoint_channels == 2)
+                .unwrap_or([0.5, 0.5]);
+            let Some(port) = node.ports.iter_mut().find(|port| {
+                port.direction == PortDirection::Output
+                    && port.channels != *endpoint_channels
+                    && matches!(port.channels, 1 | 2)
+            }) else {
                 continue;
             };
-            port.channels = 1;
+            let widen = port.channels == 1;
+            port.channels = *endpoint_channels;
             let port_name = port.name.clone();
             for edge in session
                 .edges
                 .iter_mut()
                 .filter(|edge| edge.source_node == *node_id && edge.source_port == port_name)
             {
-                edge.matrix = edge.matrix.chunks(2).map(|row| row.iter().sum()).collect();
+                edge.matrix = if widen {
+                    edge.matrix
+                        .iter()
+                        .flat_map(|weight| [weight * left, weight * right])
+                        .collect()
+                } else {
+                    edge.matrix.chunks(2).map(|row| row.iter().sum()).collect()
+                };
             }
         }
         Ok(session)
@@ -429,14 +476,11 @@ impl ControlPlane {
                     continue;
                 }
                 (NodeKind::PhysicalInput, NativeMultiInputSourceBinding::Physical(endpoint)) => {
-                    if endpoint.direction != audiorouter_windows_audio::EndpointDirection::Capture
-                        || !endpoint.is_ieee_float32()
-                        || !multi_path_rate_supported(endpoint.sample_rate_hz)
-                        || usize::from(endpoint.channels) != channels
-                    {
-                        return Err(ControlError::InvalidRequest(
-                            "capture endpoints must exactly match the physical-input channel/rate/float32 contract".into(),
-                        ));
+                    if let Some(problem) = capture_format_problem(endpoint, channels) {
+                        return Err(ControlError::InvalidRequest(format!(
+                            "{} cannot use its device: {problem}",
+                            node.name
+                        )));
                     }
                 }
                 (
@@ -444,25 +488,44 @@ impl ControlPlane {
                     NativeMultiInputSourceBinding::Application {
                         process_id,
                         expected_executable,
+                        expected_executable_path,
                         expected_creation_time_100ns,
                         ..
                     },
                 ) => {
                     let process_id_value = Value::from(u64::from(*process_id));
                     let creation_time_value = Value::from(expected_creation_time_100ns.to_string());
-                    let matches_identity = node
+                    let executable_matches = node
                         .parameters
-                        .get("processId")
-                        .is_some_and(|value| value == &process_id_value)
-                        && node
-                            .parameters
-                            .get("executable")
-                            .and_then(Value::as_str)
-                            .is_some_and(|value| value.eq_ignore_ascii_case(expected_executable))
-                        && node
-                            .parameters
-                            .get("creationTime100ns")
-                            .is_some_and(|value| value == &creation_time_value);
+                        .get("executable")
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| value.eq_ignore_ascii_case(expected_executable));
+                    // A PID-free node (goal or .exe pick) is bound at Play to the
+                    // running app found by name; its saved path, if any, must agree.
+                    let all_instances =
+                        node.parameters.get("processPolicy").and_then(Value::as_str)
+                            == Some("allVerifiedInstances");
+                    let matches_identity = if all_instances {
+                        executable_matches
+                            && match node
+                                .parameters
+                                .get("executablePath")
+                                .and_then(Value::as_str)
+                            {
+                                Some(saved) => expected_executable_path
+                                    .is_some_and(|path| path.eq_ignore_ascii_case(saved)),
+                                None => true,
+                            }
+                    } else {
+                        node.parameters
+                            .get("processId")
+                            .is_some_and(|value| value == &process_id_value)
+                            && executable_matches
+                            && node
+                                .parameters
+                                .get("creationTime100ns")
+                                .is_some_and(|value| value == &creation_time_value)
+                    };
                     if !matches_identity || channels != 2 {
                         return Err(ControlError::InvalidRequest(
                             "application capture binding does not match the enabled node's identity".into(),

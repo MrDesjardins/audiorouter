@@ -446,7 +446,7 @@ export function ProcessorCatalog({
 }: {
   processors: ProcessorDescriptor[] | null;
   error: string | null;
-  node: Node;
+  node: Node | undefined;
   backend: UiBackend;
 }) {
   return (
@@ -481,7 +481,7 @@ export function ProcessorCatalog({
         </ul>
       )}
       <p className="muted">This catalog is read-only. Unavailable processors cannot be added or activated.</p>
-      <EqResponsePreview node={node} backend={backend} />
+      {node && <EqResponsePreview node={node} backend={backend} />}
     </section>
   );
 }
