@@ -386,6 +386,18 @@ no API schema or generated reference content changed. Mapped network drive
 and actual NAS window testing remain unavailable; local/unused drive type
 coverage is included. Built-shell UI verification remains a final gate.
 
+### 2026-11-09 — Task 4 (R7), zero-frame media
+
+ARCH-04 / SND-16/17: reproduced both zero-frame decode and callback `% 0`
+panic with a one-frame 96 kHz WAV and a hand-built empty Loop sound.
+`decode_audio` now refuses empty resampling output; Soundboard preparation
+filters empty sounds and makes emptied slots unavailable. Both regressions
+passed after failing before the fix. Full `cargo test -p audiorouter-engine`
+passed on Windows, including source combinations 5/5, tool combinations 4/4
+and the deterministic audio suite 33/33. Explicit private-fixture ignores
+remain ignored; no hardware/audio device was opened. Both Rust format/check
+commands and diff checks passed. Rollback: revert Task 4's commit.
+
 ## Next action
 
 Complete Task 2's native publication evidence, then Task 3 (R1/R2) on
