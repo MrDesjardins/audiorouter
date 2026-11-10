@@ -696,11 +696,14 @@ impl ControlPlane {
                         .iter()
                         .find(|port| port.direction == PortDirection::Output)
                         .map(|port| port.channels);
-                    if endpoint.channels == 1
-                        && node_channels == Some(2)
-                        && !node_spatial_headphones(node)
+                    // A mono endpoint behind a stereo node, or a stereo
+                    // endpoint (an audio interface) behind a mono node.
+                    if matches!(
+                        (endpoint.channels, node_channels),
+                        (1, Some(2)) | (2, Some(1))
+                    ) && !node_spatial_headphones(node)
                     {
-                        mono_nodes.push(node.id.clone());
+                        mono_nodes.push((node.id.clone(), endpoint.channels as u8));
                     }
                     NativeMultiInputSourceBinding::Physical(endpoint)
                 }
@@ -717,11 +720,27 @@ impl ControlPlane {
                         .get("creationTime100ns")
                         .and_then(Value::as_str)
                         .and_then(|value| value.parse::<u64>().ok());
+                    let all_instances =
+                        node.parameters.get("processPolicy").and_then(Value::as_str)
+                            == Some("allVerifiedInstances");
+                    let (process_id, creation_time) = match (executable, all_instances) {
+                        // A PID-free source (goals, a chosen .exe) names an app,
+                        // not a process: bind to its one running root now. The
+                        // process-tree loopback then captures its helpers too.
+                        (Some(executable), true) => resolve_running_application(
+                            &node.name,
+                            executable,
+                            node.parameters
+                                .get("executablePath")
+                                .and_then(Value::as_str),
+                        )?,
+                        _ => (process_id, creation_time),
+                    };
                     let (Some(process_id), Some(executable), Some(creation_time)) =
                         (process_id, executable, creation_time)
                     else {
                         return Err(ControlError::InvalidRequest(format!(
-                            "select a running application for {} in its Properties",
+                            "Select a running application for {} in its Properties.",
                             node.name
                         )));
                     };
@@ -779,7 +798,7 @@ impl ControlPlane {
             };
             bindings.insert(node.id.clone(), binding);
         }
-        self.native_multi_input_mono_nodes = mono_nodes;
+        self.native_multi_input_device_channels = mono_nodes;
         let prepared = self.prepare_native_path_worker(
             session_id.clone(),
             generation,
@@ -1410,6 +1429,54 @@ impl ControlPlane {
         self.invalidate_changed_native_endpoint_worker(&changes)?;
         self.record_endpoint_changes(true);
         Ok(affected)
+    }
+}
+
+/// Bind a PID-free Application source (`allVerifiedInstances`) to the app's
+/// one running root process, using the same full-path rule as a restart.
+#[cfg(windows)]
+fn resolve_running_application(
+    node_name: &str,
+    executable: &str,
+    executable_path: Option<&str>,
+) -> Result<(Option<u32>, Option<u64>), ControlError> {
+    let applications =
+        audiorouter_windows_audio::enumerate_applications().map_err(audio_control_error)?;
+    choose_running_application(&applications, node_name, executable, executable_path)
+}
+
+/// The choice behind [`resolve_running_application`], separated so it can be
+/// tested with a fixed process list. Errors name the source and say what to do.
+#[cfg(windows)]
+pub(crate) fn choose_running_application(
+    applications: &[audiorouter_windows_audio::ApplicationInfo],
+    node_name: &str,
+    executable: &str,
+    executable_path: Option<&str>,
+) -> Result<(Option<u32>, Option<u64>), ControlError> {
+    use audiorouter_windows_audio::AudioError;
+    match audiorouter_windows_audio::resolve_application_restart_with_path(
+        applications,
+        executable,
+        executable_path,
+    ) {
+        Ok(application) => Ok((
+            Some(application.process_id),
+            application.creation_time_100ns,
+        )),
+        Err(AudioError::ApplicationRestartNotFound { .. }) => {
+            Err(ControlError::InvalidRequest(format!(
+                "{executable} is not running. Start it, then press Play again (source: {node_name})."
+            )))
+        }
+        Err(AudioError::ApplicationRestartAmbiguous { .. }) => {
+            Err(ControlError::InvalidRequest(format!(
+                "More than one copy of {executable} is running. Choose which one in the Properties of {node_name}."
+            )))
+        }
+        Err(_) => Err(ControlError::InvalidRequest(format!(
+            "AudioRouter cannot identify {executable}. Choose it again in the Properties of {node_name}."
+        ))),
     }
 }
 

@@ -434,10 +434,11 @@ pub struct ControlPlane {
     native_multi_input_applied_generation: Option<u64>,
     #[cfg(windows)]
     multi_input_application_sources: Vec<MultiInputApplicationSource>,
-    /// Stereo device nodes the prepared multi-input worker reads from a
-    /// mono endpoint (see `native_paths_session`).
+    /// Device nodes whose port channel count differs from the mono or
+    /// stereo endpoint the prepared multi-input worker reads, with that
+    /// endpoint's channel count (see `native_paths_session`).
     #[cfg(windows)]
-    native_multi_input_mono_nodes: Vec<EntityId>,
+    native_multi_input_device_channels: Vec<(EntityId, u8)>,
     /// Paces `network.jsonl` summaries of playing network nodes.
     network_log: network_log::Sampler,
     /// Stats.cc client for Ducks following the Siege round (started on demand).
@@ -597,7 +598,7 @@ impl ControlPlane {
             #[cfg(windows)]
             multi_input_application_sources: Vec::new(),
             #[cfg(windows)]
-            native_multi_input_mono_nodes: Vec::new(),
+            native_multi_input_device_channels: Vec::new(),
             network_log: network_log::Sampler::default(),
             siege_round_feed: Default::default(),
             obs: Default::default(),
