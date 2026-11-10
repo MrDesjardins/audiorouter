@@ -55,7 +55,15 @@ describe("start-up order", () => {
       }),
       obsStatus: vi.fn(() => {
         calls.push("obs.status");
-        return disconnected.obsStatus!();
+        return Promise.resolve({
+          installed: false,
+          connection: "off" as const,
+          source: null,
+          sceneCollection: null,
+          inputs: [],
+          passwordSource: null,
+          lastChange: { state: "none" as const, changed: 0, restorable: false, error: null },
+        });
       }),
     };
     await act(async () => {

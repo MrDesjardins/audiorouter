@@ -29,6 +29,41 @@ full Windows shell compilation/package tests remain hosted CI work, avoiding
 a full local build while the owner games. Next: push repair, inspect fresh
 CI annotations and merge only after green checks.
 
+Conflict resolution after PR #127 merged: retain both dependency evidence
+sections below and above; no source or lockfile conflict. The jsdom repair
+arrives unchanged from main. Revalidate docs/diff and the locked WebView2
+dependency graph, then require fresh CI on the merge commit.
+
+## Dependabot PR #127 compatibility — 2026-11-09
+
+Objective: qualify jsdom 31 (ENG-02/04, M05). Owner authorized handling and
+merging existing Dependabot PRs. Preserve the primary checkout's unrelated
+edits; work in the isolated dependabot-127 worktree. Windows/Node are available;
+no audio, driver or credentials beyond existing GitHub access are needed.
+Reproduced hosted job 129630692168 locally: MeterInspector's CSS percentage
+serialization rounds to four decimals; ErrorBoundary deliberately calls the
+newly available reportError, producing two expected-but-unhandled test errors.
+Plan: spy on and assert the intentional reportError calls, compare meter
+geometry at CSS serialization precision, run focused/full UI tests, formatting,
+lint, typechecks/build and inspect diff, push to existing PR and require CI.
+No product behavior change or hardware evidence claimed. Rollback: revert
+the compatibility commit.
+
+Local Windows / Node 22.22.3: clean npm ci passed; the original focused
+run failed (1 meter assertion, 2 deliberate error reports), then 13/13 passed.
+Typecheck, lint, formatting and production build pass. Full UI initially
+passed 1001/1001 but printed a startup-test TypeError: the disconnected
+backend has no optional obsStatus method. Replace that invalid test call
+with an explicit off-state response and rerun full UI tests. The build's
+606.27 kB application-chunk advisory remains: these test-only repairs do
+not change the production bundle, and splitting it is separate product work.
+No runtime error suppression or CI gate changes. Hosted CI remains required;
+no built shell, hardware audio or new visual controls were exercised.
+Final rerun: `npm --prefix ui test` passes 112 files / 1001 tests in 52.33 s,
+with no startup TypeError or unhandled errors. Documentation acceptance
+passes 247 files / 1442 links; `git diff --check` is clean. Next: push the
+repair to PR #127, await new-head CI, inspect annotations and merge if green.
+
 ## Issue #123 validation — 2026-11-09
 
 Objective: validate the two failures in [issue #123](https://github.com/MrDesjardins/audiorouter/issues/123)
