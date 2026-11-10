@@ -264,7 +264,9 @@ fn export_requires_desktop_authority_and_one_exact_local_approval() {
     .error
     .is_none());
     for approval in plane.session_export_approvals.values_mut() {
-        approval.created -= Duration::from_secs(301);
+        // Do not subtract from Instant: a fresh Windows runner may have
+        // less than five minutes of monotonic uptime.
+        approval.expires_at = Instant::now();
     }
     assert!(
         call(

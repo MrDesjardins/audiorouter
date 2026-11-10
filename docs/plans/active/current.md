@@ -1,5 +1,11 @@
 # Active plan — current priorities (2026-11-04)
 
+## CI and quality nightly repair — 2026-11-09
+
+Owner authorized follow-up after completing the thirteen review fixes.
+See [execution plan](ci-quality-2026-11-09.md): terminated-process identity
+and fresh-runner export expiry overflow. No PR is authorized yet.
+
 ## Issue #123 validation — 2026-11-09
 
 Objective: validate the two failures in [issue #123](https://github.com/MrDesjardins/audiorouter/issues/123)
