@@ -513,12 +513,28 @@ Typecheck, lint, UI formatting and both Rust formatting checks pass.
 Final three-theme/built-shell comparison verification remains a gate.
 Rollback: revert Task 9's commit; invalid caches are ignored, no migration.
 
+### 2026-11-09 — Task 10 (R13), silent HTTP clients
+
+HTTP-06: four silent sockets delayed a real status request by 2.013 s before
+the fix. The first read now has a 250 ms timeout; once any byte arrives the
+existing 2 s read timeout/deadline behavior applies. Regression now meets
+the one-second response bound. A second regression sends one byte, waits
+350 ms, then completes a valid request, proving active slow clients retain
+their normal allowance. All HTTP tests passed twice, including overflow and
+separate header/body packet tests: 17 passed / 1 attended fixture ignored.
+Full shell suite: 99 passed / 4 explicitly ignored. Both Clippy scopes and
+formatting checks passed with the change. No flaky slow-client result was
+observed, so the task was retained. Rollback: revert Task 10's commit.
+
 ## Next action
 
-Task 8 (measure shell RPC blocking), then Tasks 9–10. Task 2's dual native
-comparison publication evidence and final built-shell verification still
-remain required. Workspace builds/full tests are authorized; never stop the
-owner's running shell or launch a second shell. Task 3 commit `c4581bea`;
+All planned fixes are implemented; final qualification is still required:
+Task 2's dual native comparison publication evidence, final uninstrumented
+built-shell user paths and three-theme comparison check, then a complete
+matrix/diff audit. The owner's shell was closed before Task 8; only owned
+isolated verification shells were launched and stopped. Never stop an owner
+shell or launch a second shell. Workspace builds/full tests are authorized.
+Task 3 commit `c4581bea`;
 Task 4 commit `647a5ec2`; Task 2 commit `0be464b0`.
 Task 5 commit `ad3f9db9`. Findings remain pending final qualification until
 the completion audit verifies all required runtime and matrix evidence.

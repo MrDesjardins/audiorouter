@@ -348,7 +348,9 @@ fn handle(
     // clients send headers/body in separate packets, and bounded blocking
     // reads must wait for them instead of treating WouldBlock as disconnect.
     stream.set_nonblocking(false)?;
-    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    // Silent sockets should not occupy all workers for the whole request
+    // deadline. Once a client begins sending, retain the normal 2 s budget.
+    stream.set_read_timeout(Some(Duration::from_millis(250)))?;
     stream.set_write_timeout(Some(Duration::from_secs(2)))?;
     let started = Instant::now();
     // Read in chunks (it was one system call per byte). Whatever arrives
@@ -366,6 +368,9 @@ fn handle(
         let count = stream.read(&mut chunk[..room])?;
         if count == 0 {
             return Err(std::io::ErrorKind::UnexpectedEof.into());
+        }
+        if bytes.is_empty() {
+            stream.set_read_timeout(Some(Duration::from_secs(2)))?;
         }
         bytes.extend_from_slice(&chunk[..count]);
     };
@@ -651,6 +656,38 @@ mod tests {
                 .map_err(|_| "Backend timeout".into())
         });
         (HttpApi::start(0, forward.clone()).unwrap(), forward)
+    }
+
+    #[test]
+    fn a_started_request_keeps_the_normal_read_timeout() {
+        let (api, _) = fixture();
+        let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, api.port)).unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        stream.write_all(b"G").unwrap();
+        std::thread::sleep(Duration::from_millis(350));
+        stream.write_all(format!("ET /api/v1/status HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nAuthorization: Bearer {}\r\n\r\n", api.port, api.token).as_bytes()).unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+        assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+    }
+
+    #[test]
+    fn silent_connections_release_workers_before_a_real_request_times_out() {
+        let (api, _) = fixture();
+        let silent: Vec<_> = (0..WORKERS)
+            .map(|_| TcpStream::connect((Ipv4Addr::LOCALHOST, api.port)).unwrap())
+            .collect();
+        let started = Instant::now();
+        let (status, result) = call(&api, "/api/v1/status", None);
+        assert_eq!(status, 200, "{result}");
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "silent clients held the workers for {:?}",
+            started.elapsed()
+        );
+        drop(silent);
     }
 
     #[test]
