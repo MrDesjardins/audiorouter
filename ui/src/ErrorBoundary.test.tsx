@@ -1,12 +1,18 @@
 /** @vitest-environment jsdom */
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { ErrorBoundary, RootRecoveryPanel, renderErrorDiagnostic } from "./ErrorBoundary";
 
+beforeEach(() => {
+  // jsdom 31 implements reportError; capture the boundary's deliberate report.
+  vi.stubGlobal("reportError", vi.fn());
+});
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 let shouldThrow = true;
@@ -31,6 +37,7 @@ it("contains a render failure to its area, records a diagnostic and recovers on 
   expect(screen.getByRole("alert", { name: "Signal flow stopped" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "Stop" })).toBeTruthy();
   expect(onError).toHaveBeenCalledWith("UI render error in Signal flow (TypeError)");
+  expect(globalThis.reportError).toHaveBeenCalledExactlyOnceWith(expect.any(TypeError));
   expect(screen.getByRole("button", { name: "Reload window" })).toBeTruthy();
 
   shouldThrow = false;
@@ -62,6 +69,7 @@ it("keeps sibling areas working when one area fails", () => {
   fireEvent.click(screen.getByRole("button", { name: "Clicked 0" }));
   expect(screen.getByRole("button", { name: "Clicked 1" })).toBeTruthy();
   expect(screen.queryByRole("alert", { name: "Side panel stopped" })).toBeNull();
+  expect(globalThis.reportError).toHaveBeenCalledExactlyOnceWith(expect.any(TypeError));
 });
 
 it("never puts error text in the diagnostic, only a safe name", () => {
