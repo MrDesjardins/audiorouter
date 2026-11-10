@@ -462,6 +462,34 @@ Clippy (all targets/features, warnings denied) passed. No preset
 schema, ID algorithm or migration changed; saving an existing folded name
 replaces all matching entries. Rollback: revert Task 7's commit.
 
+### 2026-11-09 — Task 8 (R5), measured shell responsiveness and ordering
+
+R5 reproduced in the built shell: plugin scanning ran for 1835 ms on the
+main thread. With `#[tauri::command(async)]`, the same local folder scanned
+for 1466 ms on a worker thread and the in-progress UI was readable before
+completion. [Measurement evidence](evidence/2026-11-09-review-shell-rpc.md)
+records the environment, exact thread output and limits. Temporary diagnostic
+instrumentation was removed. Commands owning native windows/tray remain on
+their existing thread; the file-picker command already dispatches blocking
+work asynchronously.
+
+Added an ordering regression that failed before release was chained after
+hold. Compare requests now queue, retain their original session/backend on
+release, and ignore stale request errors. Concurrent draft-save regression
+failed with temporary-file rename collisions before adding a process-wide
+mutex and unique create-new temporary files. Focused UI tests 37/37 and
+draft tests 4/4 pass. The `sync_all` addition and expiry/cache changes are
+kept in Task 9's separate commit.
+
+Full combined validation before splitting commits: UI 1005/1005; shell
+99 passed / 4 ignored after the HTTP tests; workspace and shell Clippy
+(all targets/features, warnings denied) passed; lint, typecheck, formatting
+and diff checks passed. Final built-shell live readings/compare checks
+remain required. Vite reports its 500 kB chunk warning: main chunk was
+606.27 kB at baseline and 607.25 kB with these changes. Retained because
+these fixes add no eager module or asset and changing bundle boundaries is
+independent performance work; this is recorded rather than hidden.
+
 ## Next action
 
 Task 8 (measure shell RPC blocking), then Tasks 9–10. Task 2's dual native

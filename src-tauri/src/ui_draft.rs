@@ -3,7 +3,15 @@
 //! owns the meaning of the contents and checks them when it reads them back;
 //! this module only bounds the size and never leaves half a file.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
+
+static SAVE_LOCK: Mutex<()> = Mutex::new(());
+static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
 
 /// Far above a real route. A larger write is refused rather than truncated.
 const MAX_DRAFT_BYTES: usize = 8 * 1024 * 1024;
@@ -25,6 +33,8 @@ pub fn load(path: &Path) -> Option<serde_json::Value> {
 
 /// Replace the saved edits through a temporary file, or remove them for `None`.
 pub fn save(path: &Path, draft: Option<&serde_json::Value>) -> Result<(), String> {
+    // Includes clearing: a concurrent remove must not race a file replacement.
+    let _guard = SAVE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
     let Some(draft) = draft else {
         return match std::fs::remove_file(path) {
             Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
@@ -40,11 +50,23 @@ pub fn save(path: &Path, draft: Option<&serde_json::Value>) -> Result<(), String
     if text.len() > MAX_DRAFT_BYTES {
         return Err("unsaved edits are too large to keep".into());
     }
-    let temporary = path.with_extension("json.tmp");
-    std::fs::write(&temporary, text)
+    let temporary = path.with_extension(format!(
+        "json.{}.{}.tmp",
+        std::process::id(),
+        NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
         .map_err(|error| format!("unsaved edits could not be written: {error}"))?;
-    std::fs::rename(&temporary, path)
-        .map_err(|error| format!("unsaved edits could not be saved: {error}"))
+    let result = file.write_all(text.as_bytes());
+    drop(file);
+    let result = result.and_then(|()| std::fs::rename(&temporary, path));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result.map_err(|error| format!("unsaved edits could not be saved: {error}"))
 }
 
 #[cfg(test)]
@@ -60,6 +82,33 @@ mod tests {
         let _ = std::fs::remove_dir_all(&folder);
         std::fs::create_dir_all(&folder).unwrap();
         folder
+    }
+
+    #[test]
+    fn concurrent_saves_publish_whole_drafts_without_temporary_file_collisions() {
+        let folder = folder("concurrent");
+        let path = path_beside(&folder.join("state.sqlite"));
+        std::thread::scope(|scope| {
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+            let workers: Vec<_> = (0..8)
+                .map(|worker| {
+                    let barrier = barrier.clone();
+                    let path = &path;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        for index in 0..25 {
+                            save(path, Some(&json!({"worker": worker, "index": index}))).unwrap();
+                        }
+                    })
+                })
+                .collect();
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
+        assert!(load(&path).is_some());
+        assert_eq!(std::fs::read_dir(&folder).unwrap().count(), 1);
+        let _ = std::fs::remove_dir_all(&folder);
     }
 
     #[test]
