@@ -1,5 +1,20 @@
 # AudioRouter release notes
 
+## 0.0.28 — 2026-11-09 (unsigned experimental preview)
+
+- Issue #123: a Mixer route with an app behind a Duck now plays, and so does
+  a mono input on a stereo audio interface (folded by its Channels choice).
+  Device refusals name the input and the reason.
+- App sources picked by goal or `.exe` find the running app at Play after a
+  restart; an empty route opens without crashing.
+- UI: Settings search, simpler tray, number ranges in words, keyboard placement
+  and Escape for drags, WCAG AA contrast checks with custom-theme warnings,
+  reduced-motion scrolls, tabs/goals/compare/palette/history.
+
+Windows 11 x64, unsigned app-only experimental prerelease. No driver or intended
+format migration. Back up configuration/recordings, close the app before upgrade
+and retain 0.0.27 for rollback. See the [full notes](../plans/active/evidence/2026-11-09-release-0.0.28-notes.md).
+
 ## Unreleased
 
 - **Start from a goal.** A new install asks what you want to do and builds a
