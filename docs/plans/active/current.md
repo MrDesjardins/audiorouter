@@ -526,8 +526,8 @@ explicitly safe isolated setup.
 These are the only execution plans that remain active after the 2026-11-04
 status reconciliation:
 
-- [Code review 2026-11-09](code-review-2026-11-09.md) — 13 findings and the
-  agent handoff plan (ten tasks); R1 decided: network paths refused over HTTP only.
+- [Code review 2026-11-09](code-review-2026-11-09.md) — all thirteen fixes locally
+  qualified and archived; PR approval pending. Next: CI and quality nightly repair.
 - [Code-review fixes](code-review-fixes.md) — open isolated continuity,
   service-timing and commercial-plugin qualification.
 - [Application quality](application-quality.md) — Q3.2 hosted qualification,
