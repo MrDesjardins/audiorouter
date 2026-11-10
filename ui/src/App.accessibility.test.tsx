@@ -66,7 +66,9 @@ function openTab(name: string) {
 
 async function openSettingsPage(name: string) {
   fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-  const pages = await screen.findByRole("tablist", { name: "Settings pages" });
+  // Settings changes route in a transition and loads its first panel lazily.
+  // Coverage instruments that cold import; wait for the committed navigation.
+  const pages = await screen.findByRole("tablist", { name: "Settings pages" }, { timeout: 10000 });
   fireEvent.click(within(pages).getByRole("tab", { name }));
 }
 
@@ -86,31 +88,35 @@ async function renderReady(element: Parameters<typeof render>[0]) {
 }
 
 describe("persistent client diagnostics", () => {
-  it("restores graph checkpoints after reload without persisting raw error text or paths", async () => {
-    const first = await renderReady(<App backend={connectedPreviewBackend()} />);
-    await openSettingsPage("Logs and support");
-    expect(await screen.findByText(/Graph checkpoint: \d+ nodes, \d+ connections; revision \d+/)).toBeTruthy();
+  it(
+    "restores graph checkpoints after reload without persisting raw error text or paths",
+    { timeout: 20000 },
+    async () => {
+      const first = await renderReady(<App backend={connectedPreviewBackend()} />);
+      await openSettingsPage("Logs and support");
+      expect(await screen.findByText(/Graph checkpoint: \d+ nodes, \d+ connections; revision \d+/)).toBeTruthy();
 
-    window.dispatchEvent(
-      new ErrorEvent("error", {
-        message: "private audio path C:\\private\\voice.wav",
-        filename: "C:\\Program Files\\AudioRouter\\assets\\bundle.js",
-        lineno: 42,
-        colno: 7,
-        error: new TypeError("private audio path C:\\private\\voice.wav"),
-      }),
-    );
-    const persisted = window.localStorage.getItem("audiorouter.client-diagnostics.v1") ?? "";
-    expect(persisted).toContain("TypeError");
-    expect(persisted).toContain("bundle.js:42:7");
-    expect(persisted).not.toContain("voice.wav");
-    expect(persisted).not.toContain("C:\\Program Files");
+      window.dispatchEvent(
+        new ErrorEvent("error", {
+          message: "private audio path C:\\private\\voice.wav",
+          filename: "C:\\Program Files\\AudioRouter\\assets\\bundle.js",
+          lineno: 42,
+          colno: 7,
+          error: new TypeError("private audio path C:\\private\\voice.wav"),
+        }),
+      );
+      const persisted = window.localStorage.getItem("audiorouter.client-diagnostics.v1") ?? "";
+      expect(persisted).toContain("TypeError");
+      expect(persisted).toContain("bundle.js:42:7");
+      expect(persisted).not.toContain("voice.wav");
+      expect(persisted).not.toContain("C:\\Program Files");
 
-    first.unmount();
-    await renderReady(<App backend={connectedPreviewBackend()} />);
-    await openSettingsPage("Logs and support");
-    expect(await screen.findByText(/UI error \(TypeError\) at bundle\.js:42:7/)).toBeTruthy();
-  });
+      first.unmount();
+      await renderReady(<App backend={connectedPreviewBackend()} />);
+      await openSettingsPage("Logs and support");
+      expect(await screen.findByText(/UI error \(TypeError\) at bundle\.js:42:7/)).toBeTruthy();
+    },
+  );
 
   it("keeps the browser's resize notice out of the log, as the packaged app receives it", async () => {
     await renderReady(<App backend={connectedPreviewBackend()} />);
@@ -2376,7 +2382,7 @@ describe("keyboard connection dialog", () => {
     expect(screen.getByRole("button", { name: /^Save$/ }).hasAttribute("disabled")).toBe(false);
   });
 
-  it("renders the backend-derived EQ response for a draft EQ node", async () => {
+  it("renders the backend-derived EQ response for a draft EQ node", { timeout: 20000 }, async () => {
     const processorResponse = vi.fn(async () => ({ frequenciesHz: [20, 1000, 20000], magnitudeDb: [0, -6, 0] }));
     await renderReady(<App backend={{ ...connectedPreviewBackend(), processorResponse }} />);
     // Add it from the Tools tab, as a user does.
@@ -2387,7 +2393,9 @@ describe("keyboard connection dialog", () => {
     // The response is drawn by the processor catalog (Settings).
     await openSettingsPage("Tool catalog");
 
-    expect(await screen.findByRole("img", { name: "Parametric EQ magnitude response" })).toBeTruthy();
+    expect(
+      await screen.findByRole("img", { name: "Parametric EQ magnitude response" }, { timeout: 10000 }),
+    ).toBeTruthy();
     expect(processorResponse).toHaveBeenCalledWith(
       expect.objectContaining({ sampleRateHz: 48000, frequenciesHz: expect.any(Array), bands: expect.any(Array) }),
     );

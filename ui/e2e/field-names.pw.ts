@@ -33,6 +33,9 @@ test("every field on the panels and Settings pages has an accessible name", asyn
     await card.dispatchEvent("click");
     await expect(page.locator(".main-content > .inspector")).toContainText((await card.innerText()).trim());
     found.push(...(await unnamedFields(page, `Properties/${(await card.innerText()).trim()}`)));
+    // One guide link per tool (first-time-user walk-through: App Capture showed two).
+    const guides = await page.locator(".main-content > .inspector .tool-guide-access:not(.is-compact) a").count();
+    if (guides > 1) found.push(`Properties/${(await card.innerText()).trim()}: ${guides} guide links`);
   }
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const list = page.getByRole("tablist", { name: "Settings pages" });

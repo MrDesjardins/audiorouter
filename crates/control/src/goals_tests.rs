@@ -223,3 +223,81 @@ fn every_goal_compiles_for_play_once_its_devices_are_chosen() {
         .unwrap_or_else(|error| panic!("{goal}: {error:?}"));
     }
 }
+
+/// First-time-user walk-through (2026-11-08): a goal's app source names an
+/// executable, not a process, and Play rejected it with "select a running
+/// application" even while the app was playing. Play now looks the app up.
+#[cfg(windows)]
+#[test]
+fn play_looks_up_a_goal_app_and_says_plainly_when_it_is_not_running() {
+    let mut plane = ControlPlane::new("test");
+    let result = create(
+        &mut plane,
+        "record-app",
+        "k",
+        Some(json!({
+            "executable": "audiorouter-no-such-app.exe",
+            "executablePath": r"C:\Nowhere\audiorouter-no-such-app.exe"
+        })),
+    );
+    let session_id = result["session"]["id"].as_str().unwrap().to_owned();
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "nativePaths.prepare".into(),
+        params: Some(json!({ "sessionId": session_id })),
+    });
+    let message = response.error.expect("not running").message;
+    assert!(
+        message.contains(
+            "audiorouter-no-such-app.exe is not running. Start it, then press Play again"
+        ),
+        "{message}"
+    );
+}
+
+/// The process choice behind it: the one root of a multi-process app (as a
+/// browser's helpers are) is chosen, and two independent roots are refused.
+#[cfg(windows)]
+#[test]
+fn a_goal_app_binds_to_its_one_running_root_process() {
+    use audiorouter_windows_audio::ApplicationInfo;
+    let path = r"C:\Program Files\Mozilla Firefox\firefox.exe";
+    let process = |process_id, parent_process_id, creation| ApplicationInfo {
+        process_id,
+        parent_process_id,
+        executable: "firefox.exe".into(),
+        executable_path: Some(path.into()),
+        creation_time_100ns: Some(creation),
+    };
+    let root_and_helpers = [
+        process(10, 1, 100),
+        process(11, 10, 101),
+        process(12, 10, 102),
+    ];
+    assert_eq!(
+        crate::native_dispatch::choose_running_application(
+            &root_and_helpers,
+            "Game",
+            "firefox.exe",
+            Some(path)
+        )
+        .unwrap(),
+        (Some(10), Some(100))
+    );
+    let two_roots = [process(10, 1, 100), process(20, 1, 200)];
+    let message = crate::native_dispatch::choose_running_application(
+        &two_roots,
+        "Game",
+        "firefox.exe",
+        Some(path),
+    )
+    .unwrap_err();
+    let ControlError::InvalidRequest(message) = message else {
+        panic!("expected an invalid-request message, got {message:?}");
+    };
+    assert!(
+        message.contains("More than one copy of firefox.exe is running"),
+        "{message}"
+    );
+}
