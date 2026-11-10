@@ -447,9 +447,24 @@ variants and diff checks passed. Native audio publication remains part of
 the final runtime gate.
 Rollback: revert Task 6's commit; no migration.
 
+### 2026-11-09 — Task 7 (R8), preset identity and unreadable storage
+
+UI-05: both dispatcher regressions failed before the fix: Unicode case
+variants shared an ID but kept two entries, and saving over malformed JSON
+silently replaced the stored presets. Identity/replacement now share one
+Unicode lowercase fold. Listing unreadable presets remains empty; writes
+refuse with a recovery message and preserve stored bytes. Delete also
+refuses unreadable storage instead of treating corruption as an empty list.
+
+Focused tests 6/6 and full control suite 371 passed / 11 explicitly ignored
+on Windows. Both Rust formatting checks, diff checks and focused control
+Clippy (all targets/features, warnings denied) passed. No preset
+schema, ID algorithm or migration changed; saving an existing folded name
+replaces all matching entries. Rollback: revert Task 7's commit.
+
 ## Next action
 
-Task 7 (R8 preset identity), then Tasks 8–10. Task 2's dual native
+Task 8 (measure shell RPC blocking), then Tasks 9–10. Task 2's dual native
 comparison publication evidence and final built-shell verification still
 remain required. Workspace builds/full tests are authorized; never stop the
 owner's running shell or launch a second shell. Task 3 commit `c4581bea`;
