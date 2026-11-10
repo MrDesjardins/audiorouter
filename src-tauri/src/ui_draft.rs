@@ -60,7 +60,9 @@ pub fn save(path: &Path, draft: Option<&serde_json::Value>) -> Result<(), String
         .create_new(true)
         .open(&temporary)
         .map_err(|error| format!("unsaved edits could not be written: {error}"))?;
-    let result = file.write_all(text.as_bytes());
+    let result = file
+        .write_all(text.as_bytes())
+        .and_then(|()| file.sync_all());
     drop(file);
     let result = result.and_then(|()| std::fs::rename(&temporary, path));
     if result.is_err() {

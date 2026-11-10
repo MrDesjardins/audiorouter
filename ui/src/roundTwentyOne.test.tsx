@@ -129,6 +129,34 @@ describe("compare rules", () => {
 });
 
 describe("hold to compare", () => {
+  it("clears the pressed state when the backend hold expires", async () => {
+    vi.useFakeTimers();
+    try {
+      const compareNodes = vi.fn(async (params: { nodes: string[] }) => ({
+        comparing: params.nodes,
+        expiresInMs: params.nodes.length ? 30000 : 0,
+      }));
+      render(
+        <ToolCompare
+          backend={{ compareNodes } as unknown as UiBackend}
+          session={route}
+          node={route.nodes[1]}
+          running
+        />,
+      );
+      const button = screen.getByRole("button", { name: /without this tool/ });
+      await act(async () => {
+        fireEvent.pointerDown(button, { pointerId: 1 });
+      });
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000);
+      });
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("waits for the hold request before sending its release", async () => {
     let finishHold!: (result: { comparing: string[]; expiresInMs: number }) => void;
     const pending = new Promise<{ comparing: string[]; expiresInMs: number }>((resolve) => {

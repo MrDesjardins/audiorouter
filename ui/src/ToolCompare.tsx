@@ -29,6 +29,7 @@ export function ToolCompare({
   const requestTail = useRef<Promise<unknown> | null>(null);
   const holdSequence = useRef(0);
   const releaseTarget = useRef<{ backend: UiBackend; sessionId: string } | null>(null);
+  const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chain = chainOf(session, node.id);
 
   const enqueue = <T,>(send: () => Promise<T>): Promise<T> => {
@@ -44,6 +45,8 @@ export function ToolCompare({
 
   const release = () => {
     if (!holding.current) return;
+    if (expiryTimer.current !== null) clearTimeout(expiryTimer.current);
+    expiryTimer.current = null;
     holding.current = false;
     const sequence = ++holdSequence.current;
     const target = releaseTarget.current;
@@ -93,6 +96,12 @@ export function ToolCompare({
         idempotencyKey: uiIdempotencyKey("compare-hold"),
       }),
     )
+      .then((result) => {
+        if (holdSequence.current !== sequence || !holding.current || result.expiresInMs <= 0) return;
+        expiryTimer.current = setTimeout(() => {
+          if (holdSequence.current === sequence) release();
+        }, result.expiresInMs);
+      })
       .catch((error) => {
         if (holdSequence.current !== sequence) return;
         holding.current = false;

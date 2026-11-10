@@ -490,6 +490,29 @@ remain required. Vite reports its 500 kB chunk warning: main chunk was
 these fixes add no eager module or asset and changing bundle boundaries is
 independent performance work; this is recorded rather than hidden.
 
+### 2026-11-09 — Task 9 (R10/R11/R12)
+
+STATE-02: draft writes now call `File::sync_all` before closing the unique
+temporary file and renaming it. Existing round-trip, refused-write and
+concurrent-save tests pass (4/4). This verifies the write path and durability
+call, not a physical power-cut experiment.
+
+DEC-UI-21b / UI-17: fake-timer regression reproduced the comparison button
+remaining pressed after 30 s. The acknowledged hold's `expiresInMs` now
+schedules release, clearing pressed state and canvas comparison markers.
+Manual release/unmount cancels the timer; sequence checks prevent an old
+response or timer from clearing a newer hold. No DOM/layout or CSS changed.
+
+UI-18: malformed-cache regression reproduced a startup `undefined.trim`
+exception; another showed an injected version and JavaScript URL surviving
+the cache. Cache reads now validate number/string/tag fields and construct
+only canonical version and GitHub release URL values. Both regressions pass.
+Focused UI tests 40/40; full combined UI suite 1005/1005 and shell 99 passed /
+4 ignored were exercised with these changes during Task 8 verification.
+Typecheck, lint, UI formatting and both Rust formatting checks pass.
+Final three-theme/built-shell comparison verification remains a gate.
+Rollback: revert Task 9's commit; invalid caches are ignored, no migration.
+
 ## Next action
 
 Task 8 (measure shell RPC blocking), then Tasks 9–10. Task 2's dual native
