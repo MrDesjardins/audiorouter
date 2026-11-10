@@ -1,5 +1,32 @@
 # Active plan — current priorities (2026-11-04)
 
+## Dependabot PR #126 browser readiness — 2026-11-09
+
+Objective: repair hosted Edge target-size failure (ENG-02/04, M05) without
+weakening target-size assertions. Run 42759467990: 731 passed, 15 skipped;
+Settings test reads zero tabs immediately after clicking the gear because
+allInnerTexts does not wait for the lazy Settings panel. Quality gate fails
+only because browser failed. Preserve unrelated primary-checkout edits;
+use isolated dependabot-126. Tasks: await visible Settings navigation before
+enumeration, reproduce a delayed lazy chunk, run focused production Edge,
+typecheck/lint/format/docs/diff, push existing PR and require full hosted CI.
+No product or audio changes; Windows Edge is available. Rollback: revert
+this test repair.
+
+Windows / Node 22.22.3 / Edge / production bundled assets: delaying lazy
+JavaScript chunks by 250 ms reproduces the exact zero-tab failure with the
+readiness assertion removed. Restoring `expect(list).toBeVisible()` passes
+the same Settings walk and all three theme target-size scenarios. The delay
+uses route.fallback so the bundled-asset fixture still serves chunks; an
+initial route.continue experiment bypassed it and caused a fetch error,
+which was corrected before validation. An initial build invoked from the
+repository root failed entry resolution; building from ui succeeds. No
+full local suite or native audio claimed; full hosted Edge remains required.
+Playwright prints a NO_COLOR/FORCE_COLOR environment warning only; it does
+not change assertions or browser behavior. Final focused run: 4/4 pass in
+11.2 s. UI format, lint and typecheck pass; docs acceptance passes 247 files
+/ 1442 links; diff is clean. Next: push repair and require full hosted CI.
+
 ## Issue #123 validation — 2026-11-09
 
 Objective: validate the two failures in [issue #123](https://github.com/MrDesjardins/audiorouter/issues/123)
