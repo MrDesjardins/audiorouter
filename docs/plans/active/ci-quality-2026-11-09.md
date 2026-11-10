@@ -35,6 +35,17 @@ workflow gate change, Windows device change or public API addition planned.
 
 ## Implementation evidence
 
+Additional CI evidence: run
+[42759080367](https://github.com/MrDesjardins/audiorouter/actions/runs/42759080367),
+job 129640384446, failed `target-size.pw.ts` because immediate
+`allInnerTexts()` returned zero Settings tabs after the transition click.
+The retry passed, but fail-on-flaky correctly failed the job. Add a shared
+bounded Settings-tab readiness helper and deterministic delayed-navigation
+regression, then use it in the five audits with this immediate enumeration
+pattern. Keep all size/contrast/field/motion assertions. Verify focused Edge,
+UI formatting/lint/typecheck and the failed job's annotations. This is test
+readiness repair; no product controls or styles change.
+
 The original timing-dependent process test passed locally. A deterministic
 regression now passes the exact captured inventory entry to the production
 binding validator after killing and waiting for its owned helper. It failed
@@ -66,5 +77,43 @@ acceptance (252 files / 1449 links) passed. Logs: local
 `ci-repair-policy.log`. No new shell or physical audio was used; owner's
 release shell PID 16028 remains untouched.
 
-Next action: finish instrumented coverage and inspect its reports, then
-commit the reviewed repair. Hosted validation of this head remains pending.
+Repair commit: `a4562353` on `fix/code-review-2026-11-09`.
+UI coverage passed 113 files / 1005 tests, 72.26% lines
+(`target/ci-repair-ui-coverage.log`). Instrumented shell coverage passed
+99 tests / 4 ignored and generated
+`target/ci-repair-coverage/rust-shell.json`. No workflow gates, timeouts,
+assertions or retries were weakened. Upstream dependency/UI compatibility
+fixes are already on main and its latest recorded CI is green; this branch
+does not duplicate those changes.
+
+Workspace instrumented tests passed, including 373 control tests and 146
+Windows audio tests (explicit hardware ignores retained). Both Rust JSON
+reports were generated, and the nightly's exact `publish-readme-coverage.mjs
+summarize` command succeeded with those reports and UI coverage. Evidence:
+`target/ci-repair-coverage-workspace.log`, `ci-repair-coverage-shell.log`, and
+`ci-repair-coverage/summary.json`. This resolves the missing-summary chain
+locally; no new hosted nightly result is claimed.
+
+Settings readiness regression failed before the wait with zero pages, then
+passed. The helper waits for visible Settings navigation before taking its
+snapshot, retains the greater-than-five guard and lets all five audits
+enumerate every page. Development Edge: 18/18 passed. UI format/check, lint
+with zero warnings, typecheck, docs acceptance and diff checks passed. The
+development React Flow attribution notice comes from the established
+hideAttribution setting; licensing/branding authority is not established by
+this test-only repair, so it stays documented rather than changing product
+settings. The conflicting color-environment warning was avoided by removing
+NO_COLOR only in the child test shell, without persistent environment edits.
+
+Compiled-asset Edge checks passed 18/18 with CI=true, one worker and the
+unchanged fail-on-flaky policy; no retry was used (41.7 s). Logs:
+`target/ci-repair-browser.log`, `ci-repair-browser-build.log`, and
+`ci-repair-browser-bundled.log`. Inspected the complete scoped diff and the
+owning browser job's failure annotation (step exit, no additional finding).
+Full 700-plus browser discovery, hosted nightly soak/startup and the repaired
+head's hosted workflows have not been rerun locally. Focused audits cover
+the changed test paths; Rust/UI coverage cover the other two repairs.
+
+Next action: human approval to open the reviewed branch's PR, then run its
+hosted CI and nightly qualification. This active plan remains open for that
+hosted gate; no PR is open and none is implicitly authorized.
