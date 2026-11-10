@@ -342,6 +342,27 @@ plus `git diff --check`, passed; formatting touched only the new test.
 Held comparison coverage follows in Task 2. Rollback:
 revert the Task 1 commit; no data migration.
 
+Task 1 commit: `80b99f19`. Backend regression coverage is complete; the
+built-shell delete/compare handoff check remains part of the final gate.
+
+### 2026-11-09 — Task 2 (R4), implementation and portable regressions
+
+Reproduced cross-session state loss: releasing B removed A's hold. Replaced
+the single comparison slot with a session-keyed map, including both
+constructors and failure cleanup. Expiry removes and republishes each
+expired session, without allocation when no hold has expired.
+
+`cargo test -p audiorouter-control --lib compare::tests`: 7 passed. New
+coverage includes releasing B, a refused hold on B, refused deletion of A,
+and independent expiry of two seeded holds. Full control suite: 366 passed,
+11 explicitly ignored. Both Rust format/check commands and diff checks pass.
+These use fake runtimes and seeded holds: successful dual native-worker
+holds and audible restoration remain unverified and must be exercised before
+R4 is marked done. Rollback: revert the Task 2 commit; no migration.
+
 ## Next action
 
-Task 1, on `fix/code-review-2026-11-09`.
+Complete Task 2's native publication evidence, then Task 3 (R1/R2) on
+`fix/code-review-2026-11-09`. All remaining tasks and final matrix gates
+remain required. Workspace builds/full tests are authorized; never stop the
+owner's running shell or launch a second shell.

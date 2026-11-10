@@ -265,7 +265,7 @@ impl ControlPlane {
             application_snapshot: None,
             application_inventory: None,
             application_capture_runtime: None,
-            comparison: None,
+            comparison: HashMap::new(),
             revision_notes: HashMap::new(),
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),

@@ -357,7 +357,7 @@ pub struct ControlPlane {
     application_inventory: Option<app_inventory::AppInventory>,
     application_capture_runtime: Option<ApplicationCaptureRuntime>,
     /// A held comparison (DEC-UI-21b); memory only, never saved.
-    comparison: Option<compare::Comparison>,
+    comparison: HashMap<EntityId, compare::Comparison>,
     /// Who saved each revision and when, by session; written through to storage.
     revision_notes: HashMap<EntityId, Vec<Value>>,
     /// Named tool presets when there is no database.
@@ -544,7 +544,7 @@ impl ControlPlane {
             application_snapshot: None,
             application_inventory: None,
             application_capture_runtime: None,
-            comparison: None,
+            comparison: HashMap::new(),
             revision_notes: HashMap::new(),
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
