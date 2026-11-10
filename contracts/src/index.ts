@@ -245,7 +245,7 @@ export interface SessionSummary {
   playing: boolean;
   privacyMuted: boolean;
   nodes: Array<{ id: EntityId; name: string; kind: NodeKind; enabled: boolean; bypass: boolean; settings: Record<string, string> }>;
-  connections: Array<{ id: EntityId; from: string; to: string; toInput: string; enabled: boolean }>;
+  connections: Array<{ id: EntityId; from: string; to: string; fromOutput: string; toInput: string; enabled: boolean }>;
 }
 
 /** One-click recording on a Recorder node (Record button, StreamDeck, MCP). */
@@ -1646,8 +1646,8 @@ export type MethodParams = {
   "nodes.toggle": { sessionId?: EntityId; node: string; target: string; idempotencyKey: string };
   "nodes.add": { sessionId?: EntityId; kind: NodeKind; name?: string; parameters?: Record<string, boolean | number | string>; between?: { from: string; to: string }; after?: string; idempotencyKey: string };
   "nodes.remove": { sessionId?: EntityId; node: string; bridge?: boolean; idempotencyKey: string };
-  "connections.add": { sessionId?: EntityId; from: string; to: string; idempotencyKey: string };
-  "connections.remove": { sessionId?: EntityId; from: string; to: string; idempotencyKey: string };
+  "connections.add": { sessionId?: EntityId; from: string; to: string; fromOutput?: string; toInput?: string; idempotencyKey: string };
+  "connections.remove": { sessionId?: EntityId; from: string; to: string; fromOutput?: string; toInput?: string; idempotencyKey: string };
   "meters.levels": { sessionId?: EntityId };
   "recorders.stopRecording": { sessionId?: EntityId; nodeId: EntityId; idempotencyKey: string };
   "devices.getAccess": Record<string, never> | undefined;

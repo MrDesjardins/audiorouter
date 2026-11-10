@@ -398,9 +398,41 @@ and the deterministic audio suite 33/33. Explicit private-fixture ignores
 remain ignored; no hardware/audio device was opened. Both Rust format/check
 commands and diff checks passed. Rollback: revert Task 4's commit.
 
+### 2026-11-09 — Task 5 (R6), named connection ports
+
+AUTO-18 / GRAPH-17: dispatcher regression first failed with unknown
+`fromOutput`. Added optional `fromOutput` / `toInput` to both connection
+methods, backend parameter validation, schemas and TypeScript contracts.
+Port names resolve in the backend; unknown ports list available names and
+invalid parameter types refuse without a save. Existing callers retain the
+default selection/removal behavior. Explicit duplicate checks include source
+and destination ports. Summary connections now include `fromOutput`.
+
+Default MCP schemas/descriptions and `get_recipes` cover Output Switch A/B.
+An actual `mcp_tool_call` regression with Editor authority wires both ports
+to the same Mixer, then removes B while retaining A. The dispatcher test
+wires separate outputs and checks the summary. No Properties control changed,
+so the existing Output Switch guide recordings remain applicable.
+
+Windows results: full control lib 368 passed / 11 ignored; CLI 50 lib + 5
+stdio + 1 security test passed; contracts drift passed; UI 1001/1001 passed,
+typecheck/lint/format checks passed. Rust formatting/checks and focused
+control/CLI Clippy passed. Additional wrong-type port regression failed
+before strict optional-text validation, then passed. API reference updated;
+there is no API-reference generator in this checkout. API site catalog and
+authoritative discovery snapshot regenerated with no content diff.
+
+Catalog regeneration exposed its dependency on the removed production
+desktop-only list; the generator now reads `http_access` instead. Full
+guide/tool regeneration also rewrites unrelated existing pages/catalog
+entries, so those outputs were restored and `--api-only` used (125 public
+methods / 130 HTTP operations). No unrelated guide changes retained.
+Rollback: revert Task 5's commit; optional fields require no migration.
+
 ## Next action
 
-Complete Task 2's native publication evidence, then Task 3 (R1/R2) on
-`fix/code-review-2026-11-09`. All remaining tasks and final matrix gates
+Task 6 (R9 durable commit cleanup), then Tasks 7–10. Task 2's dual native
+comparison publication evidence and final built-shell verification still
 remain required. Workspace builds/full tests are authorized; never stop the
-owner's running shell or launch a second shell.
+owner's running shell or launch a second shell. Task 3 commit `c4581bea`;
+Task 4 commit `647a5ec2`; Task 2 commit `0be464b0`.
