@@ -60,6 +60,23 @@ fn can_be_compared(kind: NodeKind) -> bool {
 }
 
 impl ControlPlane {
+    fn republish_comparison(
+        &mut self,
+        session: &EntityId,
+        generation: u64,
+    ) -> Result<Option<&'static str>, ControlError> {
+        // Exercise dispatch/expiry publication independently of endpoint
+        // ownership. Production always uses the real native worker below.
+        #[cfg(test)]
+        if let Some(mut publications) = self.comparison_test_publications.take() {
+            let published = self.with_comparison(self.get_session(session)?.clone());
+            publications.push(published);
+            self.comparison_test_publications = Some(publications);
+            return Ok(Some("test"));
+        }
+        self.republish_running_native_graph(session, generation, true)
+    }
+
     /// The graph to publish: the saved one, with any held comparison applied.
     pub(crate) fn with_comparison(&self, mut session: Session) -> Session {
         if let Some(comparison) = self
@@ -103,7 +120,7 @@ impl ControlPlane {
                 .map(FakeRuntime::generation)
             {
                 // A failure must not stop the audio service.
-                let _ = self.republish_running_native_graph(&session, generation, true);
+                let _ = self.republish_comparison(&session, generation);
             }
         }
     }
@@ -170,7 +187,7 @@ impl ControlPlane {
                 },
             );
         }
-        match self.republish_running_native_graph(&session_id, generation, true) {
+        match self.republish_comparison(&session_id, generation) {
             Ok(Some(_)) => {}
             // Nothing is playing through a native worker, so there is nothing to change.
             Ok(None) if releasing => {}
@@ -182,7 +199,7 @@ impl ControlPlane {
             }
             Err(error) => {
                 self.clear_comparison(&session_id);
-                let _ = self.republish_running_native_graph(&session_id, generation, true);
+                let _ = self.republish_comparison(&session_id, generation);
                 return Err(error);
             }
         }

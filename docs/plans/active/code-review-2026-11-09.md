@@ -35,7 +35,8 @@ panics on the audio path), STATE-02 (draft durability).
 
 ## Findings
 
-Status key: **todo**, **decision** (needs the owner), **done**.
+The tables preserve the original review status. The completion audit below
+is the authoritative final status and commit mapping.
 
 ### P1 — security
 
@@ -526,15 +527,115 @@ Full shell suite: 99 passed / 4 explicitly ignored. Both Clippy scopes and
 formatting checks passed with the change. No flaky slow-client result was
 observed, so the task was retained. Rollback: revert Task 10's commit.
 
+### 2026-11-09 — native qualification found source reset during comparison
+
+The final-shell UDP fixture reproduced a real remaining comparison failure:
+the saved -12 dB Gain processed the generated tone, but holding Compare
+replaced the Test Signal transport with a newly stopped instance, so output
+became zero instead of dry audio. A dispatcher/native-worker regression
+`native_comparison_keeps_a_playing_generated_source_and_its_transport_handle`
+failed on the changed Arc identity before the repair. This is required to
+qualify R4/DEC-UI-21b rather than an expansion of product scope.
+
+Decision: retain source transport Arcs only for flag-only rebuilds, whose
+source settings and sample rate are unchanged. Apply the same operation to
+endpoint graphs and native path sets before registering their control
+handles. This preserves Audio File position, Soundboard active/queued voices
+and Test Signal playback without masking an intentional source-setting
+change. Preparation and map construction stay off the audio callback.
+The source combination suite now also exercises transport retention across
+single/fan-out/Mixer/connected-Mixer layouts. Native regression passes after
+repair; broad checks and the real-audio rerun follow before commit.
+
+The fixture additionally confirmed that the existing canvas Play tone button
+requires a physical output and is disabled on a Network Send-only route.
+This independent UI classification defect is not part of the 13 review
+findings. The qualification fixture uses header Play plus the public source
+transport API, records the limitation and does not claim that button works.
+
+### 2026-11-09 — final native run and owner gaming constraint
+
+Final uninstrumented shell assertions completed successfully in
+`target/review-final-1794278178307/evidence.json`. Real production-engine
+loopback audio peaks: processed 0.063095, held dry 0.251188, released
+0.063053, expired 0.063042. Refused deletion retained the held route.
+The 1708 ms plugin scan delivered 641 loopback packets while 106 UI timer
+ticks ran; HTTP UNC scan returned 403. Captured and visually inspected
+`compare-dark.png`, `compare-light.png`, `compare-high-contrast.png` in that
+folder: comparison controls are readable and keep their reserved geometry.
+The initial geometry check was corrected to focus/scroll the button before
+measuring; its earlier vertical displacement came from deliberate focus
+scrolling, not a layout change. No microphone, physical output or external
+network peer was used. The test-owned shell exited; the owner's release
+shell subsequently runs from `audiorouter-release-028` and is untouched.
+
+The new source-retention repair passes its real native dispatcher regression
+and the expanded source combination suite (5/5); comparison tests 9/9 pass.
+Full control before source-retention changes: 372 passed / 11 ignored;
+workspace Clippy before those changes passed after correcting the test seam.
+These are not evidence for the final source-retention diff.
+
+Owner said "IM playing game now". Immediately stopped only the owned engine
+test tree (verified cargo parent PIDs and deterministic_audio executable
+under this checkout). Final engine run was interrupted during the long
+ordered-DSP-pair test; exit 0xffffffff is cancellation, not a passing result.
+Do not resume builds, CPU-heavy tests, audio runs or another shell while the
+owner is gaming. Lightweight diff review/documentation can continue. Final
+source-retention edits and the runtime harness are uncommitted pending the
+remaining checks. Preserve the owner's running release shell and game.
+
+## Completion audit — 2026-11-09
+
+The owner ended gaming and authorized resuming heavy checks. All thirteen
+findings are **done** within the plan's software scope:
+
+- R1/R2: `c4581bea`; network paths refused only at HTTP, local DLLs and
+  desktop path selection remain allowed. No new desktop-only method.
+- R3: `80b99f19`; refused/failed deletion preserves revision notes and holds.
+- R4: `0be464b0`, plus the source-retention qualification repair recorded
+  below; independent session publication and audible hold/release/expiry.
+- R5: `47b301a4`; measured off-main-thread RPC and ordered compare requests.
+- R6: `ad3f9db9`; named ports through dispatch and default MCP.
+- R7: `647a5ec2`; empty decode and public empty Loop source regressions.
+- R8: `125a145e`; Unicode identity and unreadable stored bytes preserved.
+- R9: `0482595f`; durable commit succeeds despite cleanup failure.
+- R10/R11/R12: `b9847ff1`; synced drafts, expiry UI and validated cache.
+- R13: `7096413e`; silent-client bound and normal slow-request allowance.
+
+Final Windows checks after the source-retention repair (logs under `target/`):
+
+- `cargo test -p audiorouter-engine`: passed, including 181 unit tests,
+  deterministic audio 33, source combinations 5 and tool combinations 4;
+  explicit private-fixture ignores retained. `review-resumed-engine.log`.
+- `cargo test -p audiorouter-control`: 373 passed / 11 ignored.
+  `review-resumed-control.log`.
+- `cargo test --manifest-path src-tauri/Cargo.toml`: 99 passed / 4 ignored.
+  `review-resumed-shell.log`.
+- `cargo test -p audiorouter-cli`: 50 lib, 5 stdio, 1 security passed.
+  `review-resumed-cli.log`.
+- Both required all-target/all-feature Clippy scopes passed with denied
+  warnings: `review-resumed-workspace-clippy.log` and
+  `review-resumed-shell-clippy.log`.
+- Both Rust formatting checks, contracts drift (147 methods), harness
+  Prettier and syntax check, and diff whitespace checks passed.
+- Documentation acceptance passed: 250 Markdown files / 1445 local links.
+- UI 1005/1005, lint, typecheck and format checks passed on the final UI
+  source before the native-only repair; no UI source changed afterward.
+
+The complete implementation diff from `feaf2108` was inspected. Built-shell
+audio, HTTP refusal, scan responsiveness and three-theme evidence are linked
+below. No NAS or mapped share was available for a real window scan; the
+backend UNC regression pins unchanged policy. There is no physical power-cut
+or simultaneous physical endpoint claim. These are documented evidence
+limits, not hardware release qualification. No PR has been opened.
+
 ## Next action
 
-All planned fixes are implemented; final qualification is still required:
-Task 2's dual native comparison publication evidence, final uninstrumented
-built-shell user paths and three-theme comparison check, then a complete
-matrix/diff audit. The owner's shell was closed before Task 8; only owned
-isolated verification shells were launched and stopped. Never stop an owner
-shell or launch a second shell. Workspace builds/full tests are authorized.
-Task 3 commit `c4581bea`;
-Task 4 commit `647a5ec2`; Task 2 commit `0be464b0`.
-Task 5 commit `ad3f9db9`. Findings remain pending final qualification until
-the completion audit verifies all required runtime and matrix evidence.
+Runtime evidence and its limits are consolidated in
+[final runtime qualification](evidence/2026-11-09-review-final-runtime.md).
+
+Commit the final source-retention repair and qualification record, then
+archive this completed execution plan. The owner's next requested task is
+repairing CI and quality nightly failures. Keep the work on its reviewed
+branch until explicit human approval to open a PR. Never stop an owner shell
+or launch a second shell; workspace builds and full tests are authorized.
