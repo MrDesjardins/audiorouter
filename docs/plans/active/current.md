@@ -1,5 +1,49 @@
 # Active plan — current priorities (2026-11-04)
 
+## Dependabot PR #126 browser readiness — 2026-11-09
+
+Objective: repair hosted Edge target-size failure (ENG-02/04, M05) without
+weakening target-size assertions. Run 42759467990: 731 passed, 15 skipped;
+Settings test reads zero tabs immediately after clicking the gear because
+allInnerTexts does not wait for the lazy Settings panel. Quality gate fails
+only because browser failed. Preserve unrelated primary-checkout edits;
+use isolated dependabot-126. Tasks: await visible Settings navigation before
+enumeration, reproduce a delayed lazy chunk, run focused production Edge,
+typecheck/lint/format/docs/diff, push existing PR and require full hosted CI.
+No product or audio changes; Windows Edge is available. Rollback: revert
+this test repair.
+
+Windows / Node 22.22.3 / Edge / production bundled assets: delaying lazy
+JavaScript chunks by 250 ms reproduces the exact zero-tab failure with the
+readiness assertion removed. Restoring `expect(list).toBeVisible()` passes
+the same Settings walk and all three theme target-size scenarios. The delay
+uses route.fallback so the bundled-asset fixture still serves chunks; an
+initial route.continue experiment bypassed it and caused a fetch error,
+which was corrected before validation. An initial build invoked from the
+repository root failed entry resolution; building from ui succeeds. No
+full local suite or native audio claimed; full hosted Edge remains required.
+Playwright prints a NO_COLOR/FORCE_COLOR environment warning only; it does
+not change assertions or browser behavior. Final focused run: 4/4 pass in
+11.2 s. UI format, lint and typecheck pass; docs acceptance passes 247 files
+/ 1442 links; diff is clean. Next: push repair and require full hosted CI.
+
+Conflict resolution after PR #127: preserve globals 17.14.0 and all npm
+minor updates alongside main's jsdom 31 and its regression repairs. Retain
+both evidence sections. Validate a clean npm install, full UI tests, static
+checks and focused Edge before pushing the merge for full hosted CI.
+
+Merged-dependency verification (Windows, Node 22.22.3): clean npm ci,
+typecheck, lint, format, documentation (247 files / 1442 links) and staged
+diff checks pass. UI suite passes 112 files / 1001 tests (78.56 s) with
+Vitest 5.1.0 plus jsdom 31.0.0; globals remains 17.14.0. Production fixture
+build and four focused Edge scenarios pass (35.6 s), including delayed lazy
+Settings loading. Next: push this resolved merge and require fresh full CI.
+
+After PR #129 merged, only these adjacent plan sections conflicted. Preserve
+both records; take the verified Cargo upgrade from main unchanged. No UI
+changes in this merge. Recheck docs, diff and locked dependency resolution,
+then require fresh full CI before merging the final Dependabot PR.
+
 ## Dependabot PR #129 compatibility — 2026-11-09
 
 Objective: retain compatible Cargo major updates (ENG-02/04, REC-02, M04/M05)
