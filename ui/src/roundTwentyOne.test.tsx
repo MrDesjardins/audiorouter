@@ -422,6 +422,33 @@ describe("goal dialog", () => {
     ]);
   });
 
+  it("narrows the app list as you type (first-time-user walk-through)", async () => {
+    const listApplications = vi.fn(async () => [
+      { executable: "game.exe", executablePath: "C:\\game.exe", audioDisplayNames: ["Game"] },
+      { executable: "firefox.exe", executablePath: "C:\\firefox.exe", audioDisplayNames: [] },
+    ]);
+    render(
+      <GoalDialog
+        backend={
+          {
+            listSessionGoals: vi.fn(async () => ({ goals: [goal("podcast", true, "Which app?")] })),
+            createSessionFromGoal: vi.fn(),
+            listApplications,
+          } as never
+        }
+        onCreated={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Use this: podcast" }));
+    const list = (await screen.findByRole("combobox", { name: "Which app?" })) as HTMLSelectElement;
+    await waitFor(() => expect(list.options).toHaveLength(3));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Find an app" }), { target: { value: "fire" } });
+    expect([...list.options].map((option) => option.textContent)).toEqual(["Choose a running app", "firefox.exe"]);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Find an app" }), { target: { value: "zzz" } });
+    expect([...list.options].map((option) => option.textContent)).toEqual(["No running app matches"]);
+  });
+
   it("shows why a route could not be made and stays open", async () => {
     const onCreated = vi.fn();
     render(

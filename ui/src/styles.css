@@ -9627,6 +9627,14 @@ button.danger {
   display: grid;
   gap: 6px;
 }
+.goal-app-step {
+  display: grid;
+  gap: 12px;
+}
+/* Clear of the list above and the buttons below (first-time-user walk-through). */
+.goal-app-note {
+  margin: 4px 0;
+}
 .goal-dialog-message {
   min-height: 1.4em;
   margin: 8px 0 0;
