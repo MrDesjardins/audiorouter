@@ -1,5 +1,39 @@
 # Active plan — current priorities (2026-11-04)
 
+## Dependabot PR #129 compatibility — 2026-11-09
+
+Objective: retain compatible Cargo major updates (ENG-02/04, REC-02, M04/M05)
+under the owner's instruction to handle and merge existing Dependabot PRs.
+Hosted Windows job 129630645515 fails E0599/E0308 in webview_keys.rs:
+webview2-com 0.39.1 uses windows-core 0.62 while Tauri/Wry supplies 0.38.2
+controllers and windows-core 0.61.2. Upgrading a single dependency cannot
+change the controller ABI. Preserve the explicit Tauri-matching 0.38.2 pin;
+ignore this specific incompatible proposal, retain mp3lame-encoder 0.3.0.
+Work in isolated dependabot-129; preserve unrelated primary-checkout edits.
+Tasks: restore the pin, regenerate shell lock, validate encoder tests and
+dependency graph, formatting/docs/diff, then push and require hosted Windows
+Clippy/tests/package checks. No driver or hardware required for these checks;
+audio hardware and a packaged-shell run are not claimed. Rollback: revert
+the repair commit.
+
+Windows / pinned Rust 1.96.0: `cargo test -p audiorouter-recording --locked
+-j 2` passes 47/47, including MP3 encoding/flush, inspection and recorder
+frame-boundary/split rejection tests with encoder 0.3.0. `cargo tree
+--manifest-path src-tauri/Cargo.toml --locked -i webview2-com` proves the
+shell, Tauri, both runtimes and Wry share only 0.38.2. Shell lock regeneration
+removes 0.39.1 and its sys crate; Cargo also normalizes iana-time-zone's
+windows-core choice to existing 0.61.2. Both Rust formatting checks, docs
+acceptance (247 files / 1442 links), and diff checks pass. No Rust source
+changes. The existing shell compile gate is the direct ABI regression check;
+full Windows shell compilation/package tests remain hosted CI work, avoiding
+a full local build while the owner games. Next: push repair, inspect fresh
+CI annotations and merge only after green checks.
+
+Conflict resolution after PR #127 merged: retain both dependency evidence
+sections below and above; no source or lockfile conflict. The jsdom repair
+arrives unchanged from main. Revalidate docs/diff and the locked WebView2
+dependency graph, then require fresh CI on the merge commit.
+
 ## Dependabot PR #127 compatibility — 2026-11-09
 
 Objective: qualify jsdom 31 (ENG-02/04, M05). Owner authorized handling and
