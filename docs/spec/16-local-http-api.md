@@ -81,6 +81,8 @@ second backend.
   deadlines, concurrency and request rate. A connection beyond the bounded
   queue gets 503 with `Retry-After`, never a silent close. HTTP runs off
   audio threads.
+  File and folder path parameters over HTTP must point to this PC; network
+  folders can still be selected in the AudioRouter window.
   Documentation has restrictive CSP and only fixed assets. No bodies/tokens
   in diagnostics.
 - **HTTP-10 — Request IDs.** Each request forwarded to the backend carries a

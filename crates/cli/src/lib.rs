@@ -3533,7 +3533,7 @@ mod tests {
         ("nodes.compare", "a press and hold for the person listening; an assistant can neither hold it nor hear the result, and uses toggle_setting on bypass instead"),
         ("nodes.types", "superseded for assistants by list_tool_kinds (nodes.catalog) and the audiorouter://nodes resource"),
         // Window-only consent, folders and integrations (refused to MCP and
-        // HTTP grants; see DESKTOP_ONLY_METHODS and devices.setAccess).
+        // HTTP grants; see http_access and devices.setAccess).
         ("devices.setAccess", WINDOW_ONLY),
         ("recordings.setRoot", WINDOW_ONLY),
         ("obs.connect", WINDOW_ONLY),

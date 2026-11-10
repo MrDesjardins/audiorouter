@@ -141,7 +141,8 @@ fn host_allowed(host: Option<&str>, origin: Option<&str>, hosts: &[String]) -> b
 /// window (a folder choice, device consent, OBS changes after a preview the
 /// person confirmed, DEC-22). Reading OBS (`obs.status`, `obs.refresh`) stays
 /// available.
-pub const DESKTOP_ONLY_METHODS: &[&str] = &[
+#[cfg(test)]
+const DESKTOP_ONLY_METHODS: &[&str] = &[
     "sessions.approveExport",
     "sessions.exportFile",
     "recordings.setRoot",
@@ -153,6 +154,67 @@ pub const DESKTOP_ONLY_METHODS: &[&str] = &[
     "obs.restore",
 ];
 
+enum HttpAccess {
+    Open,
+    LocalPaths(&'static [&'static str]),
+    DesktopOnly(&'static str),
+}
+
+fn http_access(method: &str) -> HttpAccess {
+    match method {
+        "sessions.approveExport" => {
+            HttpAccess::DesktopOnly("Approve an export file in the AudioRouter window")
+        }
+        "sessions.exportFile" => {
+            HttpAccess::DesktopOnly("Export a session in the AudioRouter window")
+        }
+        "recordings.setRoot" => {
+            HttpAccess::DesktopOnly("Choose the recording folder in the AudioRouter window")
+        }
+        "devices.setAccess" => {
+            HttpAccess::DesktopOnly("Allow audio device access in the AudioRouter window")
+        }
+        "obs.connect" => HttpAccess::DesktopOnly("Connect to OBS in the AudioRouter window"),
+        "obs.disconnect" => {
+            HttpAccess::DesktopOnly("Disconnect from OBS in the AudioRouter window")
+        }
+        "obs.preview" => HttpAccess::DesktopOnly("Preview OBS changes in the AudioRouter window"),
+        "obs.apply" => HttpAccess::DesktopOnly("Apply OBS changes in the AudioRouter window"),
+        "obs.restore" => HttpAccess::DesktopOnly("Restore OBS settings in the AudioRouter window"),
+        "plugins.scan" | "plugins.list" | "plugins.retry" => HttpAccess::LocalPaths(&["directory"]),
+        "plugins.inspect" | "plugins.parameters" | "sessions.importFile" => {
+            HttpAccess::LocalPaths(&["path"])
+        }
+        "nativeBridges.prepare" => {
+            HttpAccess::LocalPaths(&["renderMappingPath", "captureMappingPath"])
+        }
+        _ => HttpAccess::Open,
+    }
+}
+
+/// Check the spelling before touching a caller-selected filesystem path.
+fn network_path(text: &str) -> bool {
+    if text.starts_with(r"\\") || text.starts_with("//") {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        let bytes = text.as_bytes();
+        if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+            let root = [u16::from(bytes[0]), u16::from(b':'), u16::from(b'\\'), 0];
+            // SAFETY: root is a NUL-terminated drive root alive for this
+            // metadata-only call. GetDriveTypeW retains no pointer.
+            let kind = unsafe {
+                windows::Win32::Storage::FileSystem::GetDriveTypeW(windows::core::PCWSTR(
+                    root.as_ptr(),
+                ))
+            };
+            return matches!(kind, 1 | 4);
+        }
+    }
+    false
+}
+
 pub fn operation_path(name: &str) -> String {
     format!("/api/v1/{}", name.replace('.', "/"))
 }
@@ -162,7 +224,7 @@ pub fn openapi(describe: &Value, port: u16, lan: Option<Ipv4Addr>) -> Value {
         let Some(name) = method["name"].as_str() else {
             continue;
         };
-        if DESKTOP_ONLY_METHODS.contains(&name) {
+        if matches!(http_access(name), HttpAccess::DesktopOnly(_)) {
             continue;
         }
         paths.insert(operation_path(name), json!({"post": {
@@ -396,16 +458,8 @@ fn handle(
             {
                 return fail(stream, 404, "Unknown API operation");
             }
-            if DESKTOP_ONLY_METHODS.contains(&method.as_str()) {
-                return fail(
-                    stream,
-                    403,
-                    if method.starts_with("obs.") {
-                        "Connect to and change OBS in the AudioRouter window"
-                    } else {
-                        "Choose the recording folder in the AudioRouter window"
-                    },
-                );
+            if let HttpAccess::DesktopOnly(message) = http_access(&method) {
+                return fail(stream, 403, message);
             }
             method
         }
@@ -459,6 +513,17 @@ fn handle(
         }
         None
     };
+    if let HttpAccess::LocalPaths(parameters) = http_access(&method) {
+        if parameters.iter().any(|name| {
+            params
+                .as_ref()
+                .and_then(|params| params.get(*name))
+                .and_then(Value::as_str)
+                .is_some_and(network_path)
+        }) {
+            return fail(stream, 403, "Over the API, choose a folder on this PC. Network folders can be chosen in the AudioRouter window.");
+        }
+    }
     if stop.load(Ordering::Acquire) {
         return fail(stream, 503, "API stopped");
     }
@@ -586,6 +651,149 @@ mod tests {
                 .map_err(|_| "Backend timeout".into())
         });
         (HttpApi::start(0, forward.clone()).unwrap(), forward)
+    }
+
+    #[test]
+    fn http_refuses_network_paths_before_forwarding_and_keeps_local_paths_available() {
+        let (_fixture, backend) = fixture();
+        let forwarded = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let count = Arc::clone(&forwarded);
+        let api = HttpApi::start(
+            0,
+            Arc::new(move |request, correlation| {
+                if request.method == "system.describe" {
+                    return backend(request, correlation);
+                }
+                count.fetch_add(1, Ordering::Relaxed);
+                Ok(JsonRpcResponse::success(
+                    request.id.clone(),
+                    json!({"forwarded": true}),
+                ))
+            }),
+        )
+        .unwrap();
+        for (method, parameter) in [
+            ("plugins.scan", "directory"),
+            ("plugins.list", "directory"),
+            ("plugins.retry", "directory"),
+            ("plugins.inspect", "path"),
+            ("plugins.parameters", "path"),
+            ("sessions.importFile", "path"),
+            ("nativeBridges.prepare", "renderMappingPath"),
+            ("nativeBridges.prepare", "captureMappingPath"),
+        ] {
+            for path in [
+                r"\\host\share",
+                "//host/share",
+                r"\\?\UNC\host\share",
+                r"\\.\pipe\remote",
+            ] {
+                let mut params = json!({"idempotencyKey": "network-path"});
+                params[parameter] = json!(path);
+                let (status, error) = call(&api, &operation_path(method), Some(params));
+                assert_eq!(status, 403, "{method} {path}: {error}");
+                assert!(error
+                    .to_string()
+                    .contains("Network folders can be chosen in the AudioRouter window"));
+            }
+        }
+        assert_eq!(forwarded.load(Ordering::Relaxed), 0);
+        let (status, _) = call(
+            &api,
+            "/api/v1/plugins/scan",
+            Some(json!({"directory": r"C:\Plugins"})),
+        );
+        assert_eq!(status, 200);
+        assert_eq!(forwarded.load(Ordering::Relaxed), 1);
+        let (status, schema) = call(&api, "/openapi.json", None);
+        assert_eq!(status, 200);
+        assert!(schema["paths"]["/api/v1/plugins/scan"].is_object());
+        for method in DESKTOP_ONLY_METHODS {
+            assert!(schema["paths"][operation_path(method)].is_null());
+        }
+    }
+
+    #[test]
+    fn every_path_parameter_has_an_http_policy_and_desktop_methods_stay_fixed() {
+        let (_api, backend) = fixture();
+        let describe = backend(&rpc("system.describe", None), "policy-test")
+            .unwrap()
+            .result
+            .unwrap();
+        let mut unclassified = Vec::new();
+        for method in describe["methods"].as_array().unwrap() {
+            let name = method["name"].as_str().unwrap();
+            assert_eq!(
+                matches!(http_access(name), HttpAccess::DesktopOnly(_)),
+                DESKTOP_ONLY_METHODS.contains(&name),
+                "{name}"
+            );
+            for (parameter, schema) in method["inputSchema"]["properties"].as_object().unwrap() {
+                let path = matches!(
+                    parameter.as_str(),
+                    "path" | "directory" | "root" | "newPath"
+                ) || parameter.ends_with("Path")
+                    || parameter.ends_with("Directory");
+                if !path || schema["type"] != "string" {
+                    continue;
+                }
+                // This is a fixed local broker identity, not a chosen file:
+                // prepare_native_bridge accepts only \\.\AudioRouterVirtualBridge.
+                if name == "nativeBridges.prepare" && parameter == "devicePath" {
+                    continue;
+                }
+                match http_access(name) {
+                    HttpAccess::DesktopOnly(_) => {}
+                    HttpAccess::LocalPaths(parameters)
+                        if parameters.contains(&parameter.as_str()) => {}
+                    // Storage confines a rename to the recording's own folder.
+                    HttpAccess::Open if name == "recordings.rename" && parameter == "newPath" => {}
+                    _ => unclassified.push(format!("{name}.{parameter}")),
+                }
+            }
+        }
+        assert!(
+            unclassified.is_empty(),
+            "Unclassified path parameters: {unclassified:?}"
+        );
+    }
+
+    #[test]
+    fn desktop_methods_explain_their_own_action() {
+        let (api, _) = fixture();
+        let mut messages = std::collections::HashSet::new();
+        for method in DESKTOP_ONLY_METHODS {
+            let HttpAccess::DesktopOnly(message) = http_access(method) else {
+                panic!("{method}")
+            };
+            let (status, error) = call(&api, &operation_path(method), Some(json!({})));
+            assert_eq!(status, 403);
+            assert!(error.to_string().contains(message), "{method}: {error}");
+            assert!(
+                messages.insert(message),
+                "Each action needs a specific explanation"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn drive_paths_check_the_drive_type_before_forwarding() {
+        assert!(!network_path(r"C:\Plugins"));
+        // Exercise DRIVE_NO_ROOT_DIR without creating a share or mapping.
+        let absent = (b'A'..=b'Z')
+            .find(|letter| {
+                let root = [u16::from(*letter), u16::from(b':'), u16::from(b'\\'), 0];
+                // SAFETY: this NUL-terminated stack buffer lives for the call;
+                // GetDriveTypeW only reads it and retains no pointer.
+                unsafe {
+                    windows::Win32::Storage::FileSystem::GetDriveTypeW(windows::core::PCWSTR(
+                        root.as_ptr(),
+                    )) == 1
+                }
+            })
+            .expect("the fixture PC has an unused drive letter");
+        assert!(network_path(&format!("{}:\\Plugins", char::from(absent))));
     }
     #[test]
     fn http_plan_commit_changes_the_same_backend_and_reports_conflicts() {

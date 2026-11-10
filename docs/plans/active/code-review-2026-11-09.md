@@ -360,6 +360,32 @@ These use fake runtimes and seeded holds: successful dual native-worker
 holds and audible restoration remain unverified and must be exercised before
 R4 is marked done. Rollback: revert the Task 2 commit; no migration.
 
+### 2026-11-09 — Task 3 (R1/R2), HTTP policy
+
+SEC-13 / HTTP-06: replaced the production desktop-only list with a single
+`http_access` classification. The exact nine desktop-only methods remain;
+each now explains its own action. HTTP refuses UNC, device-shaped and
+mapped/unavailable drive paths before forwarding plugin scan/list/retry,
+inspection/parameters, session import and native bridge mapping paths.
+The bridge's fixed local broker device identity is explicitly exempt;
+backend `prepare_native_bridge` accepts only that exact identity. No method
+became desktop-only, and local DLLs remain allowed.
+
+The real-listener regression failed before the fix (UNC scan returned 200
+and reached the forwarding closure), then passed with 403 and zero forwards
+for network paths. Local paths still forward; OpenAPI keeps plugin scan and
+omits the nine desktop-only methods. A discovery-schema guard reproduced
+unclassified bridge path parameters and now covers them. A backend dispatch
+test confirms a localhost UNC share reaches the scanner, whose missing-root
+error is allowed, rather than being refused by an adapter policy.
+
+Windows checks: HTTP tests 14 passed / 1 explicitly ignored; full shell
+tests 95 passed / 4 ignored; focused backend UNC test passed. Documentation
+acceptance: 248 Markdown files / 1443 links passed. SEC-13 and HTTP-06 updated;
+no API schema or generated reference content changed. Mapped network drive
+and actual NAS window testing remain unavailable; local/unused drive type
+coverage is included. Built-shell UI verification remains a final gate.
+
 ## Next action
 
 Complete Task 2's native publication evidence, then Task 3 (R1/R2) on
