@@ -31,8 +31,14 @@ for (const theme of ["dark", "light", "high-contrast"]) {
 
 test("every Settings page keeps its buttons and links at least 24 px", async ({ page }) => {
   await openHarness(page);
+  // Exercise cold lazy Settings chunks, including on a fast local machine.
+  await page.route(/\/assets\/.*\.js$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.fallback();
+  });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const list = page.getByRole("tablist", { name: "Settings pages" });
+  await expect(list).toBeVisible();
   // Walk the tabs the dialog has, so a new Settings page is covered without editing this test.
   const names = await settingsPageNames(page);
   const small: string[] = [];

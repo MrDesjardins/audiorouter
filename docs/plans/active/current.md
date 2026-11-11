@@ -4,7 +4,146 @@
 
 Owner authorized follow-up after completing the thirteen review fixes.
 See [execution plan](ci-quality-2026-11-09.md): terminated-process identity
-and fresh-runner export expiry overflow. No PR is authorized yet.
+and fresh-runner export expiry overflow. Owner approved PR #134 (2026-11-10),
+which carries these fixes with the one-click start-at-sign-in change.
+
+## PR #132 WebView2 compatibility — 2026-11-10
+
+Objective: make the existing PR pass and merge under the owner's explicit
+instruction (ENG-02/04, M05). Run 42774046745 fails shell compilation with
+E0599/E0308 in webview_keys.rs: WebView2 0.39.0 introduces incompatible COM
+types while Tauri/Wry supplies 0.38.2. PR #129 already established the matching
+0.38.2/windows-core 0.61.2 pins, but ignored only 0.39.1, permitting this older
+incompatible proposal. Preserve the working pins and main's shell lock exactly;
+exclude the entire 0.39 series until a coordinated Tauri/Wry upgrade.
+
+Prerequisites: Windows and pinned Rust available; no hardware, driver or audio
+changes needed. Work in isolated dependabot-132; preserve primary checkout.
+Tasks: merge current main, restore matching manifest/lock, widen the version
+exclusion, inspect locked graph and complete diff, run formatting/docs/policy
+checks, push existing PR, inspect new-head CI and annotations, merge only green,
+then use the prescribed worktree cleanup. The existing shell compilation gate
+is the regression check for the exact failing ABI boundary. Local checks do not
+claim packaged-shell or audio evidence. Rollback: revert this policy repair;
+the proposed 0.39 upgrade is deferred rather than shipped.
+
+Local Windows / Rust 1.96.0: locked cargo tree confirms one webview2-com
+version, 0.38.2, shared by shell, Tauri, both runtimes and Wry. Manifest and
+lock are identical to main. Both Rust formatting checks, all 75 verification
+policy tests, docs validation (247 files / 1442 links), and diff checks pass.
+Evidence: verification report `1794359530179-8c67026e-ab67-40fa-9215-6d08e5ef7dde.json`
+under the local temporary audiorouter-verification directory. The complete
+diff against main contains only the version exclusion and this plan record;
+no product source, API or dependency upgrade remains. Next: push and require
+fresh hosted CI, read annotations, then merge and clean eligible worktrees.
+
+## Dependabot PR #126 browser readiness — 2026-11-09
+
+Objective: repair hosted Edge target-size failure (ENG-02/04, M05) without
+weakening target-size assertions. Run 42759467990: 731 passed, 15 skipped;
+Settings test reads zero tabs immediately after clicking the gear because
+allInnerTexts does not wait for the lazy Settings panel. Quality gate fails
+only because browser failed. Preserve unrelated primary-checkout edits;
+use isolated dependabot-126. Tasks: await visible Settings navigation before
+enumeration, reproduce a delayed lazy chunk, run focused production Edge,
+typecheck/lint/format/docs/diff, push existing PR and require full hosted CI.
+No product or audio changes; Windows Edge is available. Rollback: revert
+this test repair.
+
+Windows / Node 22.22.3 / Edge / production bundled assets: delaying lazy
+JavaScript chunks by 250 ms reproduces the exact zero-tab failure with the
+readiness assertion removed. Restoring `expect(list).toBeVisible()` passes
+the same Settings walk and all three theme target-size scenarios. The delay
+uses route.fallback so the bundled-asset fixture still serves chunks; an
+initial route.continue experiment bypassed it and caused a fetch error,
+which was corrected before validation. An initial build invoked from the
+repository root failed entry resolution; building from ui succeeds. No
+full local suite or native audio claimed; full hosted Edge remains required.
+Playwright prints a NO_COLOR/FORCE_COLOR environment warning only; it does
+not change assertions or browser behavior. Final focused run: 4/4 pass in
+11.2 s. UI format, lint and typecheck pass; docs acceptance passes 247 files
+/ 1442 links; diff is clean. Next: push repair and require full hosted CI.
+
+Conflict resolution after PR #127: preserve globals 17.14.0 and all npm
+minor updates alongside main's jsdom 31 and its regression repairs. Retain
+both evidence sections. Validate a clean npm install, full UI tests, static
+checks and focused Edge before pushing the merge for full hosted CI.
+
+Merged-dependency verification (Windows, Node 22.22.3): clean npm ci,
+typecheck, lint, format, documentation (247 files / 1442 links) and staged
+diff checks pass. UI suite passes 112 files / 1001 tests (78.56 s) with
+Vitest 5.1.0 plus jsdom 31.0.0; globals remains 17.14.0. Production fixture
+build and four focused Edge scenarios pass (35.6 s), including delayed lazy
+Settings loading. Next: push this resolved merge and require fresh full CI.
+
+After PR #129 merged, only these adjacent plan sections conflicted. Preserve
+both records; take the verified Cargo upgrade from main unchanged. No UI
+changes in this merge. Recheck docs, diff and locked dependency resolution,
+then require fresh full CI before merging the final Dependabot PR.
+
+## Dependabot PR #129 compatibility — 2026-11-09
+
+Objective: retain compatible Cargo major updates (ENG-02/04, REC-02, M04/M05)
+under the owner's instruction to handle and merge existing Dependabot PRs.
+Hosted Windows job 129630645515 fails E0599/E0308 in webview_keys.rs:
+webview2-com 0.39.1 uses windows-core 0.62 while Tauri/Wry supplies 0.38.2
+controllers and windows-core 0.61.2. Upgrading a single dependency cannot
+change the controller ABI. Preserve the explicit Tauri-matching 0.38.2 pin;
+ignore this specific incompatible proposal, retain mp3lame-encoder 0.3.0.
+Work in isolated dependabot-129; preserve unrelated primary-checkout edits.
+Tasks: restore the pin, regenerate shell lock, validate encoder tests and
+dependency graph, formatting/docs/diff, then push and require hosted Windows
+Clippy/tests/package checks. No driver or hardware required for these checks;
+audio hardware and a packaged-shell run are not claimed. Rollback: revert
+the repair commit.
+
+Windows / pinned Rust 1.96.0: `cargo test -p audiorouter-recording --locked
+-j 2` passes 47/47, including MP3 encoding/flush, inspection and recorder
+frame-boundary/split rejection tests with encoder 0.3.0. `cargo tree
+--manifest-path src-tauri/Cargo.toml --locked -i webview2-com` proves the
+shell, Tauri, both runtimes and Wry share only 0.38.2. Shell lock regeneration
+removes 0.39.1 and its sys crate; Cargo also normalizes iana-time-zone's
+windows-core choice to existing 0.61.2. Both Rust formatting checks, docs
+acceptance (247 files / 1442 links), and diff checks pass. No Rust source
+changes. The existing shell compile gate is the direct ABI regression check;
+full Windows shell compilation/package tests remain hosted CI work, avoiding
+a full local build while the owner games. Next: push repair, inspect fresh
+CI annotations and merge only after green checks.
+
+Conflict resolution after PR #127 merged: retain both dependency evidence
+sections below and above; no source or lockfile conflict. The jsdom repair
+arrives unchanged from main. Revalidate docs/diff and the locked WebView2
+dependency graph, then require fresh CI on the merge commit.
+
+## Dependabot PR #127 compatibility — 2026-11-09
+
+Objective: qualify jsdom 31 (ENG-02/04, M05). Owner authorized handling and
+merging existing Dependabot PRs. Preserve the primary checkout's unrelated
+edits; work in the isolated dependabot-127 worktree. Windows/Node are available;
+no audio, driver or credentials beyond existing GitHub access are needed.
+Reproduced hosted job 129630692168 locally: MeterInspector's CSS percentage
+serialization rounds to four decimals; ErrorBoundary deliberately calls the
+newly available reportError, producing two expected-but-unhandled test errors.
+Plan: spy on and assert the intentional reportError calls, compare meter
+geometry at CSS serialization precision, run focused/full UI tests, formatting,
+lint, typechecks/build and inspect diff, push to existing PR and require CI.
+No product behavior change or hardware evidence claimed. Rollback: revert
+the compatibility commit.
+
+Local Windows / Node 22.22.3: clean npm ci passed; the original focused
+run failed (1 meter assertion, 2 deliberate error reports), then 13/13 passed.
+Typecheck, lint, formatting and production build pass. Full UI initially
+passed 1001/1001 but printed a startup-test TypeError: the disconnected
+backend has no optional obsStatus method. Replace that invalid test call
+with an explicit off-state response and rerun full UI tests. The build's
+606.27 kB application-chunk advisory remains: these test-only repairs do
+not change the production bundle, and splitting it is separate product work.
+No runtime error suppression or CI gate changes. Hosted CI remains required;
+no built shell, hardware audio or new visual controls were exercised.
+Final rerun: `npm --prefix ui test` passes 112 files / 1001 tests in 52.33 s,
+with no startup TypeError or unhandled errors. Documentation acceptance
+passes 247 files / 1442 links; `git diff --check` is clean. Next: push the
+repair to PR #127, await new-head CI, inspect annotations and merge if green.
 
 ## Issue #123 validation — 2026-11-09
 
