@@ -44,7 +44,7 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [target.'cfg(windows)'.dependencies]
 # Match Tauri/Wry's existing WebView2 COM ABI; this adds no package upgrade.
-webview2-com = "=0.39.0"
+webview2-com = "=0.38.2"
 windows-core = "=0.61.2"
 
 [dev-dependencies]
