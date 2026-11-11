@@ -1,5 +1,12 @@
 # Active plan — current priorities (2026-11-04)
 
+## CI and quality nightly repair — 2026-11-09
+
+Owner authorized follow-up after completing the thirteen review fixes.
+See [execution plan](ci-quality-2026-11-09.md): terminated-process identity
+and fresh-runner export expiry overflow. Owner approved PR #134 (2026-11-10),
+which carries these fixes with the one-click start-at-sign-in change.
+
 ## PR #132 WebView2 compatibility — 2026-11-10
 
 Objective: make the existing PR pass and merge under the owner's explicit
@@ -664,6 +671,8 @@ explicitly safe isolated setup.
 These are the only execution plans that remain active after the 2026-11-04
 status reconciliation:
 
+- [Code review 2026-11-09](code-review-2026-11-09.md) — all thirteen fixes locally
+  qualified and archived; PR approval pending. Next: CI and quality nightly repair.
 - [Code-review fixes](code-review-fixes.md) — open isolated continuity,
   service-timing and commercial-plugin qualification.
 - [Application quality](application-quality.md) — Q3.2 hosted qualification,

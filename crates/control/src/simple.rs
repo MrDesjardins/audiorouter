@@ -132,6 +132,13 @@ fn text_param<'v>(params: &'v Value, name: &str) -> Result<&'v str, ControlError
         .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
 }
 
+fn optional_text_param<'v>(params: &'v Value, name: &str) -> Result<Option<&'v str>, ControlError> {
+    params
+        .get(name)
+        .map(|_| text_param(params, name))
+        .transpose()
+}
+
 /// Find a node by ID, then by exact name ignoring case.
 pub(crate) fn resolve_node<'s>(
     session: &'s Session,
@@ -177,6 +184,39 @@ pub(crate) fn connect(
     from: &EntityId,
     to: &EntityId,
 ) -> Result<EntityId, ControlError> {
+    connect_ports(session, from, to, None, None)
+}
+
+fn named_port<'a>(
+    node: &'a Node,
+    direction: PortDirection,
+    name: &str,
+) -> Result<&'a Port, ControlError> {
+    node.ports
+        .iter()
+        .find(|port| port.direction == direction && port.name == name)
+        .ok_or_else(|| {
+            ControlError::InvalidRequest(format!(
+                "\"{}\" has no {:?} port \"{name}\"; ports: {}",
+                node.name,
+                direction,
+                node.ports
+                    .iter()
+                    .filter(|port| port.direction == direction)
+                    .map(|port| port.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))
+        })
+}
+
+fn connect_ports(
+    session: &mut Session,
+    from: &EntityId,
+    to: &EntityId,
+    from_output: Option<&str>,
+    to_input: Option<&str>,
+) -> Result<EntityId, ControlError> {
     let source = session
         .nodes
         .iter()
@@ -189,21 +229,29 @@ pub(crate) fn connect(
         .find(|node| node.id == *to)
         .cloned()
         .ok_or_else(|| ControlError::InvalidRequest("target node is missing".into()))?;
-    let output = source
-        .ports
-        .iter()
-        .find(|port| port.direction == PortDirection::Output)
-        .ok_or_else(|| {
-            ControlError::InvalidRequest(format!(
-                "\"{}\" has no output to connect from",
-                source.name
-            ))
-        })?;
-    if session
-        .edges
-        .iter()
-        .any(|edge| edge.source_node == *from && edge.destination_node == *to)
-    {
+    let output = if let Some(name) = from_output {
+        named_port(&source, PortDirection::Output, name)?
+    } else {
+        source
+            .ports
+            .iter()
+            .find(|port| port.direction == PortDirection::Output)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest(format!(
+                    "\"{}\" has no output to connect from",
+                    source.name
+                ))
+            })?
+    };
+    if let Some(name) = to_input {
+        named_port(&target, PortDirection::Input, name)?;
+    }
+    if session.edges.iter().any(|edge| {
+        edge.source_node == *from
+            && edge.source_port == output.name
+            && edge.destination_node == *to
+            && to_input.is_none_or(|name| edge.destination_port == name)
+    }) {
         return Err(ControlError::InvalidRequest(format!(
             "\"{}\" is already connected to \"{}\"",
             source.name, target.name
@@ -213,6 +261,7 @@ pub(crate) fn connect(
         .ports
         .iter()
         .filter(|port| port.direction == PortDirection::Input)
+        .filter(|port| to_input.is_none_or(|name| port.name == name))
         .find(|port| target.kind == NodeKind::Mixer || !session.edges.iter().any(|edge| edge.destination_node == *to && edge.destination_port == port.name))
         .ok_or_else(|| {
             ControlError::InvalidRequest(format!(
@@ -438,7 +487,7 @@ impl ControlPlane {
         let connections = session
             .edges
             .iter()
-            .map(|edge| json!({ "id": edge.id, "from": name_of(&edge.source_node), "to": name_of(&edge.destination_node), "toInput": edge.destination_port, "enabled": edge.enabled }))
+            .map(|edge| json!({ "id": edge.id, "from": name_of(&edge.source_node), "to": name_of(&edge.destination_node), "fromOutput": edge.source_port, "toInput": edge.destination_port, "enabled": edge.enabled }))
             .collect::<Vec<_>>();
         Ok(json!({
             "sessionId": session.id,
@@ -717,7 +766,13 @@ impl ControlPlane {
                 let to = resolve_node(&current, text_param(params, "to")?)?
                     .id
                     .clone();
-                let edge = connect(&mut candidate, &from, &to)?;
+                let edge = connect_ports(
+                    &mut candidate,
+                    &from,
+                    &to,
+                    optional_text_param(params, "fromOutput")?,
+                    optional_text_param(params, "toInput")?,
+                )?;
                 detail = json!({ "connectionId": edge });
             }
             "connections.remove" => {
@@ -728,9 +783,28 @@ impl ControlPlane {
                     .id
                     .clone();
                 let before = candidate.edges.len();
-                candidate
-                    .edges
-                    .retain(|edge| !(edge.source_node == from && edge.destination_node == to));
+                let from_output = optional_text_param(params, "fromOutput")?;
+                let to_input = optional_text_param(params, "toInput")?;
+                if let Some(name) = from_output {
+                    named_port(
+                        resolve_node(&current, from.as_str())?,
+                        PortDirection::Output,
+                        name,
+                    )?;
+                }
+                if let Some(name) = to_input {
+                    named_port(
+                        resolve_node(&current, to.as_str())?,
+                        PortDirection::Input,
+                        name,
+                    )?;
+                }
+                candidate.edges.retain(|edge| {
+                    !(edge.source_node == from
+                        && edge.destination_node == to
+                        && from_output.is_none_or(|name| edge.source_port == name)
+                        && to_input.is_none_or(|name| edge.destination_port == name))
+                });
                 if candidate.edges.len() == before {
                     return Err(ControlError::InvalidRequest(
                         "those two nodes are not connected".into(),

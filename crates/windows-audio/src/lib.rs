@@ -8289,6 +8289,21 @@ pub fn bind_application_with_path(
         .into_iter()
         .find(|application| application.process_id == process_id)
         .ok_or(AudioError::ApplicationNotFound { process_id })?;
+    validate_application_binding(
+        application,
+        expected_executable,
+        expected_executable_path,
+        expected_creation_time_100ns,
+    )
+}
+
+fn validate_application_binding(
+    application: ApplicationInfo,
+    expected_executable: &str,
+    expected_executable_path: Option<&str>,
+    expected_creation_time_100ns: Option<u64>,
+) -> Result<ApplicationInfo, AudioError> {
+    let process_id = application.process_id;
     let path_matches = expected_executable_path.is_none_or(|expected| {
         application
             .executable_path
@@ -8301,6 +8316,18 @@ pub fn bind_application_with_path(
         || !path_matches
         || application.creation_time_100ns != expected_creation_time_100ns
     {
+        return Err(AudioError::ApplicationIdentityChanged { process_id });
+    }
+    // Inventory is a snapshot: the process may have exited since discovery,
+    // and Windows can retain its object while another handle is still open.
+    // Recheck this PID's live creation/path identity before accepting it.
+    let current = application
+        .creation_time_100ns
+        .zip(application.executable_path.as_deref())
+        .is_some_and(|(created, path)| {
+            application_identity_is_current(process_id, created, path).unwrap_or(false)
+        });
+    if !current {
         return Err(AudioError::ApplicationIdentityChanged { process_id });
     }
     Ok(application)
@@ -12186,6 +12213,18 @@ mod tests {
         .unwrap());
         first_child.kill().expect("stop first helper");
         first_child.wait().expect("reap first helper");
+        // A ToolHelp snapshot can outlive the process it observed. Validate
+        // that exact captured entry, without depending on snapshot timing.
+        assert!(
+            validate_application_binding(
+                first.clone(),
+                &first.executable,
+                first.executable_path.as_deref(),
+                first.creation_time_100ns,
+            )
+            .is_err(),
+            "an exited process in a captured inventory must not bind"
+        );
         assert!(!application_identity_is_current(
             first.process_id,
             first.creation_time_100ns.unwrap(),
@@ -12198,11 +12237,14 @@ mod tests {
             &first.executable,
             first.creation_time_100ns,
         );
-        assert!(matches!(
-            stale,
-            Err(AudioError::ApplicationNotFound { .. })
-                | Err(AudioError::ApplicationIdentityChanged { .. })
-        ));
+        assert!(
+            matches!(
+                stale,
+                Err(AudioError::ApplicationNotFound { .. })
+                    | Err(AudioError::ApplicationIdentityChanged { .. })
+            ),
+            "stale binding result: {stale:?}"
+        );
 
         let mut second_child = launch_helper();
         let second = observe(&second_child);

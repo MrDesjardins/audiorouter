@@ -3,7 +3,7 @@
 use super::*;
 
 pub(crate) struct ExportApproval {
-    pub(super) created: Instant,
+    pub(super) expires_at: Instant,
     replace: bool,
     existing: Option<(u64, std::time::SystemTime)>,
 }
@@ -218,8 +218,6 @@ impl ControlPlane {
 
     pub fn delete_session(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
-        self.clear_comparison(id);
-        self.forget_revision_notes(id);
         let session = self.get_session(id)?.clone();
         if self
             .runtimes
@@ -280,6 +278,8 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        self.clear_comparison(id);
+        self.forget_revision_notes(id);
         if self.active_session_id.as_ref() == Some(id) {
             // Never leave default node-targeted API/MCP calls aimed at a
             // deleted graph. Selecting a different session is deliberate.
@@ -1051,15 +1051,16 @@ impl ControlPlane {
                 "Confirm replacement in the Save dialog.".into(),
             ));
         }
+        let now = Instant::now();
         self.session_export_approvals
-            .retain(|_, approval| approval.created.elapsed() < Duration::from_secs(300));
+            .retain(|_, approval| approval.expires_at > now);
         if self.session_export_approvals.len() >= 16 {
             self.session_export_approvals.clear();
         }
         self.session_export_approvals.insert(
             path,
             ExportApproval {
-                created: Instant::now(),
+                expires_at: now + Duration::from_secs(300),
                 replace,
                 existing,
             },
@@ -1087,7 +1088,7 @@ impl ControlPlane {
                 "Choose this export destination in the Save dialog first.".into(),
             )
         })?;
-        if approval.created.elapsed() >= Duration::from_secs(300)
+        if approval.expires_at <= Instant::now()
             || (replace && !approval.replace)
             || export_fingerprint(&path)? != approval.existing
         {

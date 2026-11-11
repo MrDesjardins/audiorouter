@@ -1,5 +1,5 @@
 import { expect, test } from "./browser-test";
-import { setColorTheme } from "./workbench";
+import { setColorTheme, settingsPageNames } from "./workbench";
 import { clippedText } from "./ui-audits";
 
 const layouts = [
@@ -21,7 +21,7 @@ for (const { theme, width, height } of layouts) {
     }
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     const list = page.getByRole("tablist", { name: "Settings pages" });
-    for (const name of (await list.getByRole("tab").allInnerTexts()).map((value) => value.trim())) {
+    for (const name of await settingsPageNames(page)) {
       const tab = list.getByRole("tab", { name, exact: true });
       await tab.click();
       await expect(tab).toHaveAttribute("aria-selected", "true");

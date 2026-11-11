@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./browser-test";
-import { setColorTheme } from "./workbench";
+import { setColorTheme, settingsPageNames } from "./workbench";
 import { smallTargets } from "./ui-audits";
 
 async function openHarness(page: Page) {
@@ -40,8 +40,7 @@ test("every Settings page keeps its buttons and links at least 24 px", async ({ 
   const list = page.getByRole("tablist", { name: "Settings pages" });
   await expect(list).toBeVisible();
   // Walk the tabs the dialog has, so a new Settings page is covered without editing this test.
-  const names = (await list.getByRole("tab").allInnerTexts()).map((name) => name.trim());
-  expect(names.length).toBeGreaterThan(5);
+  const names = await settingsPageNames(page);
   const small: string[] = [];
   for (const name of names) {
     const tab = list.getByRole("tab", { name, exact: true });
@@ -50,4 +49,17 @@ test("every Settings page keeps its buttons and links at least 24 px", async ({ 
     small.push(...(await smallTargets(page, name)));
   }
   expect([...new Set(small)]).toEqual([]);
+});
+
+test("Settings audits wait for navigation before enumerating pages", async ({ page }) => {
+  await page.setContent(`<button onclick="setTimeout(() => {
+    const pages = document.createElement('nav');
+    pages.setAttribute('role', 'tablist');
+    pages.setAttribute('aria-label', 'Settings pages');
+    pages.innerHTML = ['One','Two','Three','Four','Five','Six'].map(name =>
+      '<button role=tab>' + name + '</button>').join('');
+    document.body.append(pages);
+  }, 200)">Settings</button>`);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  expect(await settingsPageNames(page)).toEqual(["One", "Two", "Three", "Four", "Five", "Six"]);
 });

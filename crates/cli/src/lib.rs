@@ -2775,6 +2775,8 @@ fn mcp_tool_annotations(name: &str) -> Value {
     })
 }
 
+const OUTPUT_SWITCH_RECIPE: &str = "Send one source to either of two outputs (Output Switch): add_tool kind=outputSwitch name=Destinations; connect_nodes from=<source> to=Destinations; connect_nodes from=Destinations fromOutput=a to=<first output>; connect_nodes from=Destinations fromOutput=b to=<second output>. If either output is already connected, disconnect its old source first. toggle_setting node=Destinations target=selected switches the active side. A disconnected selected side stays silent; it never falls back. get_session_summary shows fromOutput and toInput on connections.";
+
 fn mcp_tools() -> Value {
     let mut tools = json!([
         { "name": "get_recipes", "description": "Start here when the user asks for a result rather than a specific step (clean up my voice, lower the game while I talk, record a podcast, use AudioRouter as a Discord microphone). Returns step-by-step recipes using the other tools.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
@@ -2885,6 +2887,23 @@ fn mcp_tools() -> Value {
             .expect("MCP tool names are strings")
             .to_owned();
         tool["annotations"] = mcp_tool_annotations(&name);
+        if matches!(name.as_str(), "connect_nodes" | "disconnect_nodes") {
+            tool["inputSchema"]["properties"]["fromOutput"] = json!({
+                "type": "string", "minLength": 1,
+                "description": "Optional source output port name; Output Switch uses a and b."
+            });
+            tool["inputSchema"]["properties"]["toInput"] = json!({
+                "type": "string", "minLength": 1,
+                "description": "Optional destination input port name."
+            });
+            let ports = if name == "connect_nodes" {
+                " Select named ports with fromOutput and toInput; omit them for the first output and first free input."
+            } else {
+                " Limit removal with fromOutput and toInput; omit both to remove all connections between those nodes."
+            };
+            tool["description"] =
+                json!(format!("{}{ports}", tool["description"].as_str().unwrap()));
+        }
     }
     tools
 }
@@ -3222,7 +3241,7 @@ fn mcp_tool_call(
             );
         }
         "get_recipes" => {
-            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}") }], "isError": false } });
+            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}\n{OUTPUT_SWITCH_RECIPE}") }], "isError": false } });
         }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
@@ -3533,7 +3552,7 @@ mod tests {
         ("nodes.compare", "a press and hold for the person listening; an assistant can neither hold it nor hear the result, and uses toggle_setting on bypass instead"),
         ("nodes.types", "superseded for assistants by list_tool_kinds (nodes.catalog) and the audiorouter://nodes resource"),
         // Window-only consent, folders and integrations (refused to MCP and
-        // HTTP grants; see DESKTOP_ONLY_METHODS and devices.setAccess).
+        // HTTP grants; see http_access and devices.setAccess).
         ("devices.setAccess", WINDOW_ONLY),
         ("recordings.setRoot", WINDOW_ONLY),
         ("obs.connect", WINDOW_ONLY),
@@ -5593,6 +5612,92 @@ mod tests {
         let summary = tool(&mut plane, "get_session_summary", json!({}));
         assert_ne!(summary["result"]["isError"], true, "{summary}");
         assert!(summary.to_string().contains("Replacement"));
+    }
+
+    #[test]
+    fn assistant_can_wire_both_output_switch_ports_and_remove_b_only() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        plane.insert_session(session).unwrap();
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Editor);
+        let mut next_id = 0;
+        let mut tool = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            next_id += 1;
+            let response = mcp_tool_call(
+                plane,
+                "switch-assistant",
+                &grant,
+                None,
+                &json!({"id": next_id, "params": {"name": name, "arguments": arguments}}),
+            );
+            assert_ne!(response["result"]["isError"], true, "{name}: {response}");
+            response["result"]["structuredContent"]["result"].clone()
+        };
+        tool(
+            &mut plane,
+            "add_tool",
+            json!({"kind": "outputSwitch", "name": "Destinations"}),
+        );
+        tool(
+            &mut plane,
+            "add_tool",
+            json!({"kind": "mixer", "name": "Both"}),
+        );
+        for port in ["a", "b"] {
+            tool(
+                &mut plane,
+                "connect_nodes",
+                json!({"from": "Destinations", "fromOutput": port, "to": "Both", "toInput": "in"}),
+            );
+        }
+        let summary = tool(&mut plane, "get_session_summary", json!({}));
+        for port in ["a", "b"] {
+            assert!(summary["connections"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|edge| edge["fromOutput"] == port && edge["toInput"] == "in"));
+        }
+        tool(
+            &mut plane,
+            "disconnect_nodes",
+            json!({"from": "Destinations", "fromOutput": "b", "to": "Both", "toInput": "in"}),
+        );
+        let summary = tool(&mut plane, "get_session_summary", json!({}));
+        assert!(summary["connections"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| edge["fromOutput"] == "a"));
+        assert!(!summary["connections"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| edge["fromOutput"] == "b"));
+        let catalog = mcp_listed_tools(false);
+        for name in ["connect_nodes", "disconnect_nodes"] {
+            let entry = catalog
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .unwrap();
+            assert!(entry["inputSchema"]["properties"]["fromOutput"].is_object());
+            assert!(entry["inputSchema"]["properties"]["toInput"].is_object());
+        }
+        let recipes = mcp_tool_call(
+            &mut plane,
+            "switch-assistant",
+            &grant,
+            None,
+            &json!({"id": 100, "params": {"name": "get_recipes", "arguments": {}}}),
+        );
+        assert!(recipes
+            .to_string()
+            .contains("Send one source to either of two outputs"));
     }
 
     #[test]

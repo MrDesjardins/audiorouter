@@ -471,6 +471,51 @@ fn toggles_flip_flags_on_off_settings_and_two_way_choices() {
 }
 
 #[test]
+fn connections_can_select_output_switch_ports_and_remove_only_one() {
+    let mut plane = plane();
+    let added = call(
+        &mut plane,
+        "nodes.add",
+        json!({"kind": "outputSwitch", "name": "Destinations", "idempotencyKey": "switch"}),
+    )
+    .unwrap();
+    let switch = added["nodeId"].as_str().unwrap();
+    for (port, destination) in [("a", "Headphones"), ("b", "Speakers")] {
+        let source = if port == "a" { "Voice gain" } else { "Game" };
+        call(
+            &mut plane,
+            "connections.remove",
+            json!({"from": source, "to": destination, "idempotencyKey": format!("unwire-{port}")}),
+        )
+        .unwrap();
+        call(&mut plane, "connections.add", json!({"from": switch, "fromOutput": port, "to": destination, "toInput": "in", "idempotencyKey": format!("wire-{port}")})).unwrap();
+    }
+    let summary = call(&mut plane, "sessions.summary", json!({})).unwrap();
+    for port in ["a", "b"] {
+        assert!(summary["connections"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| edge["fromOutput"] == port));
+    }
+    call(&mut plane, "connections.remove", json!({"from": switch, "fromOutput": "b", "to": "Speakers", "toInput": "in", "idempotencyKey": "remove-b"})).unwrap();
+    assert!(session(&plane)
+        .edges
+        .iter()
+        .any(|edge| edge.source_node.as_str() == switch && edge.source_port == "a"));
+    assert!(!session(&plane)
+        .edges
+        .iter()
+        .any(|edge| edge.source_node.as_str() == switch && edge.source_port == "b"));
+    let error = call(&mut plane, "connections.add", json!({"from": switch, "fromOutput": "missing", "to": "Speakers", "idempotencyKey": "bad-port"})).unwrap_err();
+    assert!(error.contains("a") && error.contains("b"), "{error}");
+    let before = session(&plane);
+    let error = call(&mut plane, "connections.add", json!({"from": switch, "fromOutput": 7, "to": "Speakers", "idempotencyKey": "wrong-port-type"})).unwrap_err();
+    assert!(error.contains("fromOutput"), "{error}");
+    assert_eq!(session(&plane), before);
+}
+
+#[test]
 fn connections_respect_single_inputs_and_mixers() {
     let mut plane = plane();
     let occupied = call(

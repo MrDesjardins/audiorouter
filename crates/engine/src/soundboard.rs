@@ -149,8 +149,14 @@ impl SoundboardSource {
         sample_rate_hz: u32,
     ) -> Self {
         let mut slots = slots;
-        for slot in slots.iter_mut().flatten() {
-            slot.sounds.truncate(MAX_SLOT_SOUNDS);
+        for slot in &mut slots {
+            if let Some(prepared) = slot {
+                prepared.sounds.retain(|sound| sound.frames() > 0);
+                prepared.sounds.truncate(MAX_SLOT_SOUNDS);
+                if prepared.sounds.is_empty() {
+                    *slot = None;
+                }
+            }
         }
         Self {
             slots,
@@ -498,6 +504,18 @@ mod tests {
             .iter()
             .map(|sample| sample.abs())
             .sum()
+    }
+
+    #[test]
+    fn an_empty_loop_sound_is_not_loaded_and_cannot_panic_the_callback() {
+        let board = board(vec![(vec![sound(0, 0.5)], SlotMode::Loop)]);
+        // Attempt the real trigger/render path before checking the status.
+        board.trigger(0);
+        let mut out = block();
+        board.process(&mut out);
+        assert_eq!(energy(&out), 0.0);
+        assert!(!board.slot_loaded(0));
+        assert_eq!(board.playing_mask(), 0);
     }
 
     #[test]
