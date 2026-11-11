@@ -244,7 +244,7 @@ describe("VB-Cable endpoint selection", () => {
     // The first visit imports its panel before reading startup.
     // This tests the registration result, not cold module-loading latency.
     await screen.findByRole("heading", { name: "When AudioRouter starts" }, { timeout: 5000 });
-    expect(await screen.findByText("Windows sign-in setup: registered")).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("startup-state").textContent).toBe("On"));
   });
 
   it("keeps the native startup result visible while reconciling observed state", async () => {
@@ -279,12 +279,11 @@ describe("VB-Cable endpoint selection", () => {
     await renderReady(<App backend={backend} />);
     await openSettingsPage("When AudioRouter starts");
     await waitFor(() => expect(backend.getStartup).toHaveBeenCalled());
-    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
-    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
-    await screen.findByRole("button", { name: "Apply planned policy" });
-    fireEvent.click(screen.getByRole("button", { name: "Apply planned policy" }));
-    expect(await screen.findByText(/Startup registration enabled:/)).toBeTruthy();
-    expect(await screen.findByText("Windows sign-in setup: registered")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Start AudioRouter when I sign in to Windows" }));
+    expect(await screen.findByText(/will start in the tray when you sign in/)).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("startup-state").textContent).toBe("On"));
+    expect(backend.planStartup).toHaveBeenCalledWith(true);
+    expect(backend.applyStartup).toHaveBeenCalledTimes(1);
   });
 
   it("applies the backend-approved startup plan value to native registration", async () => {
@@ -310,11 +309,9 @@ describe("VB-Cable endpoint selection", () => {
     };
     await renderReady(<App backend={backend} />);
     await openSettingsPage("When AudioRouter starts");
-    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
-    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Apply planned policy" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Start AudioRouter when I sign in to Windows" }));
     await waitFor(() => expect(registerStartup).toHaveBeenCalledWith(false));
-    expect(await screen.findByText(/Startup registration disabled/)).toBeTruthy();
+    expect(await screen.findByText(/will no longer start when you sign in/)).toBeTruthy();
   });
 
   it("does not register native startup when backend apply fails", async () => {
@@ -337,14 +334,12 @@ describe("VB-Cable endpoint selection", () => {
     };
     await renderReady(<App backend={backend} />);
     await openSettingsPage("When AudioRouter starts");
-    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
-    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Apply planned policy" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Start AudioRouter when I sign in to Windows" }));
     expect(await screen.findByText(/backend apply rejected/)).toBeTruthy();
     expect(registerStartup).not.toHaveBeenCalled();
   });
 
-  it("disables startup apply after the backend disconnects", async () => {
+  it("disables the start-at-sign-in toggle after the backend disconnects", async () => {
     const applyStartup = vi.fn(async () => ({
       planId: "startup-plan",
       state: "unavailable" as const,
@@ -366,12 +361,11 @@ describe("VB-Cable endpoint selection", () => {
     };
     const { rerender } = await renderReady(<App backend={backend} />);
     await openSettingsPage("When AudioRouter starts");
-    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
-    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
-    const apply = await screen.findByRole("button", { name: "Apply planned policy" });
+    const apply = screen.getByRole("checkbox", { name: "Start AudioRouter when I sign in to Windows" });
+    await waitFor(() => expect((apply as HTMLInputElement).disabled).toBe(false));
     backend.connected = false;
     rerender(<App backend={backend} />);
-    expect((apply as HTMLButtonElement).disabled).toBe(true);
+    expect((apply as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(apply);
     expect(applyStartup).not.toHaveBeenCalled();
   });
@@ -407,11 +401,10 @@ describe("VB-Cable endpoint selection", () => {
     };
     await renderReady(<App backend={backend} />);
     await openSettingsPage("When AudioRouter starts");
-    fireEvent.change(screen.getByLabelText("Desired sign-in startup policy"), { target: { value: "enabled" } });
-    fireEvent.click(screen.getByRole("button", { name: "Plan startup policy" }));
-    const apply = await screen.findByRole("button", { name: "Apply planned policy" });
+    const apply = screen.getByRole("checkbox", { name: "Start AudioRouter when I sign in to Windows" });
+    await waitFor(() => expect((apply as HTMLInputElement).disabled).toBe(false));
     fireEvent.click(apply);
-    expect((apply as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect((apply as HTMLInputElement).disabled).toBe(true));
     fireEvent.click(apply);
     expect(applyStartup).toHaveBeenCalledTimes(1);
     releaseApply({ planId: "startup-plan", state: "unavailable", registration: "unavailable", reason: "shell-owned" });

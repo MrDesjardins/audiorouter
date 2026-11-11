@@ -68,7 +68,6 @@ export function RecoveryCheckpointPanel({ backend }: { backend: UiBackend }) {
 export function StartupPanel({ backend }: { backend: UiBackend }) {
   const [status, setStatus] = useState<import("@audiorouter/contracts").StartupStatus | null>(null);
   const [enabled, setEnabled] = useState(false);
-  const [plan, setPlan] = useState<import("@audiorouter/contracts").StartupPlanResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [nativeRegistration, setNativeRegistration] = useState<"registered" | "unregistered" | "unavailable">(
     "unavailable",
@@ -82,7 +81,6 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
       .then((result) => {
         if (generation !== refreshGeneration.current) return;
         setStatus(result);
-        setEnabled(result.enabled);
         if (clearMessage) setMessage(null);
       })
       .catch((error) => {
@@ -101,53 +99,58 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
   // Refresh when the backend connects or changes, with the latest state.
   const refreshOnChange = useEffectEvent(() => refresh());
   useEffect(() => {
-    setPlan(null);
     refreshOnChange();
   }, [backend, backend.connected]);
-  const createPlan = async () => {
+  // The checkbox shows what Windows actually does at sign-in when the host can tell,
+  // otherwise the saved preference.
+  useEffect(() => {
+    if (nativeRegistration !== "unavailable") setEnabled(nativeRegistration === "registered");
+    else if (status) setEnabled(status.enabled);
+  }, [nativeRegistration, status]);
+  // One click: the backend plans and applies the change, then the desktop app registers it with Windows.
+  const change = async (next: boolean) => {
     if (busy || !backend.connected) return;
     setBusy(true);
-    setMessage("Planning sign-in startup policy...");
+    setMessage(next ? "Turning on start at sign-in..." : "Turning off start at sign-in...");
     try {
-      const result = await backend.planStartup(enabled);
-      setPlan(result);
-      setMessage(result.reason);
-    } catch (error) {
-      setMessage(formatUiError(error, "Startup planning unavailable."));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const applyPlan = async () => {
-    if (!plan || busy || !backend.connected) return;
-    setBusy(true);
-    const plannedEnabled = plan.enabled;
-    setMessage("Applying startup policy...");
-    try {
-      const result = await backend.applyStartup(plan.planId, uiIdempotencyKey("startup-apply"));
+      const plan = await backend.planStartup(next);
+      await backend.applyStartup(plan.planId, uiIdempotencyKey("startup-apply"));
+      const planned = plan.enabled;
       if (backend.registerStartup) {
         try {
-          const commandLine = await backend.registerStartup(plannedEnabled);
-          setNativeRegistration(plannedEnabled ? "registered" : "unregistered");
+          await backend.registerStartup(planned);
+          setNativeRegistration(planned ? "registered" : "unregistered");
+          setEnabled(planned);
           setMessage(
-            `${plannedEnabled ? "Startup registration enabled" : "Startup registration disabled"}: ${commandLine}`,
+            planned
+              ? "AudioRouter will start in the tray when you sign in to Windows."
+              : "AudioRouter will no longer start when you sign in.",
           );
         } catch (error) {
-          setMessage(
-            `Startup preference saved, but Windows sign-in setup failed: ${formatUiError(error, "sign-in setup failed")}`,
-          );
+          setMessage(`Windows could not add AudioRouter to sign-in: ${formatUiError(error, "sign-in setup failed")}`);
         }
       } else {
-        setMessage(result.reason);
+        setEnabled(planned);
+        setMessage(plan.reason);
       }
-      setPlan(null);
       refresh(false);
     } catch (error) {
-      setMessage(formatUiError(error, "Startup apply unavailable."));
+      setMessage(formatUiError(error, "Start at sign-in could not be changed."));
     } finally {
       setBusy(false);
     }
   };
+  const stateLabel = !backend.connected
+    ? "Unavailable"
+    : nativeRegistration === "registered"
+      ? "On"
+      : nativeRegistration === "unregistered"
+        ? "Off"
+        : status === null
+          ? "Loading…"
+          : status.enabled
+            ? "On"
+            : "Off";
   return (
     <section className="panel startup-panel" aria-labelledby="startup-heading">
       <div className="section-heading">
@@ -159,50 +162,29 @@ export function StartupPanel({ backend }: { backend: UiBackend }) {
           Refresh
         </button>
       </div>
-      <p className="muted">{status?.reason ?? "Loading startup capability..."}</p>
-      <p className="muted" role="status">
-        Windows sign-in setup: {nativeRegistration}
-      </p>
-      <label>
-        Desired policy
-        <select
-          aria-label="Desired sign-in startup policy"
-          value={enabled ? "enabled" : "disabled"}
-          onChange={(event) => {
-            setEnabled(event.target.value === "enabled");
-            setPlan(null);
-          }}
-          disabled={!backend.connected || busy}
-        >
-          <option value="disabled">Disabled</option>
-          <option value="enabled">Enabled</option>
-        </select>
-      </label>
-      <div className="actions">
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => void createPlan()}
-          disabled={!backend.connected || busy}
-        >
-          Plan startup policy
-        </button>
-        {plan && (
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => void applyPlan()}
+      <div className="setting-toggle-row">
+        <label className="autoplay-toggle">
+          <input
+            type="checkbox"
+            checked={enabled}
             disabled={!backend.connected || busy}
-          >
-            Apply planned policy
-          </button>
-        )}
+            aria-describedby="startup-state"
+            aria-busy={busy}
+            onChange={(event) => void change(event.target.checked)}
+          />
+          Start AudioRouter when I sign in to Windows
+        </label>
+        <span className="setting-toggle-state" id="startup-state" data-testid="startup-state">
+          {stateLabel}
+        </span>
       </div>
-      {message && <PanelMessage message={message} />}
       <p className="muted">
         {backend.registerStartup
-          ? "The desktop app can add AudioRouter to this user's Windows sign-in after you review and apply the change."
-          : "Windows sign-in setup is unavailable here. You can review the preference, but this host cannot add it to Windows."}
+          ? "AudioRouter opens in the tray at sign-in, for your Windows account only."
+          : "Windows sign-in setup is only available in the AudioRouter desktop app. Here the choice is saved but Windows is not changed."}
+      </p>
+      <p className="muted" role="status">
+        {message ?? status?.reason ?? " "}
       </p>
     </section>
   );
