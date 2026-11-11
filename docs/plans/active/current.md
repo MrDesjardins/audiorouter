@@ -1,5 +1,35 @@
 # Active plan — current priorities (2026-11-04)
 
+## PR #132 WebView2 compatibility — 2026-11-10
+
+Objective: make the existing PR pass and merge under the owner's explicit
+instruction (ENG-02/04, M05). Run 42774046745 fails shell compilation with
+E0599/E0308 in webview_keys.rs: WebView2 0.39.0 introduces incompatible COM
+types while Tauri/Wry supplies 0.38.2. PR #129 already established the matching
+0.38.2/windows-core 0.61.2 pins, but ignored only 0.39.1, permitting this older
+incompatible proposal. Preserve the working pins and main's shell lock exactly;
+exclude the entire 0.39 series until a coordinated Tauri/Wry upgrade.
+
+Prerequisites: Windows and pinned Rust available; no hardware, driver or audio
+changes needed. Work in isolated dependabot-132; preserve primary checkout.
+Tasks: merge current main, restore matching manifest/lock, widen the version
+exclusion, inspect locked graph and complete diff, run formatting/docs/policy
+checks, push existing PR, inspect new-head CI and annotations, merge only green,
+then use the prescribed worktree cleanup. The existing shell compilation gate
+is the regression check for the exact failing ABI boundary. Local checks do not
+claim packaged-shell or audio evidence. Rollback: revert this policy repair;
+the proposed 0.39 upgrade is deferred rather than shipped.
+
+Local Windows / Rust 1.96.0: locked cargo tree confirms one webview2-com
+version, 0.38.2, shared by shell, Tauri, both runtimes and Wry. Manifest and
+lock are identical to main. Both Rust formatting checks, all 75 verification
+policy tests, docs validation (247 files / 1442 links), and diff checks pass.
+Evidence: verification report `1794359530179-8c67026e-ab67-40fa-9215-6d08e5ef7dde.json`
+under the local temporary audiorouter-verification directory. The complete
+diff against main contains only the version exclusion and this plan record;
+no product source, API or dependency upgrade remains. Next: push and require
+fresh hosted CI, read annotations, then merge and clean eligible worktrees.
+
 ## Dependabot PR #126 browser readiness — 2026-11-09
 
 Objective: repair hosted Edge target-size failure (ENG-02/04, M05) without
