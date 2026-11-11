@@ -671,6 +671,10 @@ explicitly safe isolated setup.
 These are the only execution plans that remain active after the 2026-11-04
 status reconciliation:
 
+- [Audio latency and clock drift](audio-latency.md) — implemented and qualified
+  in simulation on `perf/audio-queue-latency` (2026-11-11). Next: the owner's
+  listening test, a health log from a real session, and the live continuity
+  test on the owner's cables.
 - [Code review 2026-11-09](code-review-2026-11-09.md) — all thirteen fixes locally
   qualified and archived; PR approval pending. Next: CI and quality nightly repair.
 - [Code-review fixes](code-review-fixes.md) — open isolated continuity,

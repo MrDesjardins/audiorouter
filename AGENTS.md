@@ -148,6 +148,18 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-11-11 — Measure a device queue as a mean over time, and test multi-device routes on a simulated clock.**
+  Evidence: [audio latency repair](docs/plans/active/evidence/2026-11-11-audio-latency-repair.md),
+  `crates/windows-audio/src/drift_sim_tests.rs`. Scope: any queue between two
+  audio devices (output pump, input feeder) and any rule that reacts to its
+  depth. Consequence: devices move audio 10 ms at a time, so a depth read at
+  one moment is a staircase; a controller watching the lowest depth saw 384
+  frames for 16 s while the queue drained, then the device ran empty. Use the
+  time-weighted mean (`drift::MeanDepth`). Clock drift takes hours to show on
+  real devices and every single-clock test passed while the owner's outputs
+  sat at 50–60 ms; run the simulation suite (own rate per device, stalls,
+  late passes) for any change to the pump, the feeder or their constants.
+
 - **2026-11-07 — Match complete control captions in guide automation.**
   Evidence: [Round 25 guide review](docs/plans/active/ui-quality-review.md),
   `Hold targets its own control and cannot match Threshold` in `tools/site/tool-guide-guards.test.mjs`.

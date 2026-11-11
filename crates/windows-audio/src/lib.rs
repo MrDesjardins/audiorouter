@@ -25,6 +25,9 @@ mod network_audio;
 mod packet_codec;
 pub use network_audio::*;
 pub use packet_codec::{decode_interleaved_float32, encode_interleaved_float32};
+mod drift;
+#[cfg(all(test, windows))]
+mod drift_sim_tests;
 mod service_thread;
 pub use service_thread::{AudioServiceThreadCapabilities, AudioServiceThreadGuard};
 #[cfg(windows)]
@@ -5861,6 +5864,11 @@ trait RenderSink {
     fn queued_frames(&self) -> Option<u32> {
         None
     }
+
+    /// The monotonic clock in 100 ns units. Tests supply a simulated clock.
+    fn clock_100ns(&self) -> Option<u64> {
+        qpc_now_100ns()
+    }
 }
 
 impl RenderSink for SharedRender {
@@ -5928,11 +5936,33 @@ pub const RENDER_JITTER_CUSHION_FRAMES: usize = 480;
 /// again at the same depth.
 pub const RENDER_JITTER_CUSHION_STEP_FRAMES: usize = 240;
 pub const MAX_RENDER_JITTER_CUSHION_FRAMES: usize = 1_920;
+/// A block that would join a queue this far (20 ms) above its highest
+/// ordinary depth is discarded instead. Only a backlog delivered after a
+/// stall reaches it; keeping that backlog would be heard as lasting delay.
+/// Two packets arriving in one late pass stay below it.
+pub const OUTPUT_LATENCY_TRIM_EXCESS_FRAMES: u64 = 960;
+/// An underrun after this long (50 ms, 100 ns units) without a block is a
+/// stalled source, which no cushion covers, so the cushion is not deepened.
+pub const OUTPUT_STALL_100NS: u64 = 500_000;
+/// Length of one queue-depth window of an output (250 ms, 100 ns units).
+const OUTPUT_DEPTH_WINDOW_100NS: u64 = 2_500_000;
+/// Blocks over which an output corrects a depth error (about two seconds).
+const OUTPUT_SLIP_TIME_CONSTANT_BLOCKS: f64 = 750.0;
+/// Depth windows (about five minutes) without an underrun after which a
+/// deepened cushion gives back one step it did not use.
+const OUTPUT_CUSHION_DECAY_WINDOWS: u32 = 1_200;
 
 /// Control/worker-thread pump that drains one prebuilt engine output ring
 /// into one render sink. The ring and all byte storage are created before the
 /// pump is started; draining never waits or allocates. A partially accepted
 /// render block remains in the bounded carry buffer for the next wake.
+///
+/// The pump holds the queue ahead of the device at its cushion. The path
+/// that fills the ring and the device that empties it run on different
+/// clocks, so without correction the queue fills to capacity (lasting delay,
+/// then dropped blocks) or drains (underruns). The pump watches the lowest
+/// depth of each window and plays single blocks one frame shorter or longer
+/// until the depth is back at the cushion (see [`drift`]).
 struct RingOutputPump<S: RenderSink> {
     sink: S,
     ring: Arc<audiorouter_engine::AudioBlockRing>,
@@ -5947,6 +5977,22 @@ struct RingOutputPump<S: RenderSink> {
     started: bool,
     /// Device buffer found empty after startup (each one a heard gap).
     underruns: u64,
+    /// Mean queue depth ahead of the device per window of time.
+    depth: drift::MeanDepth,
+    slips: drift::SlipController,
+    /// Last frame of the previous block, for interpolating a slipped block.
+    previous_frame: [f32; audiorouter_engine::MAX_CHANNELS],
+    /// Frames removed or added to hold the cushion, since start.
+    slipped_frames: u64,
+    /// Blocks discarded above the trim depth, since start.
+    latency_trims: u64,
+    /// When the last block was taken from the ring.
+    last_block_100ns: Option<u64>,
+    /// Lowest window depth and window count since the cushion last changed.
+    quiet_lowest: u64,
+    quiet_windows: u32,
+    /// How far the queue dips below its mean within a period.
+    swing: drift::QueueSwing,
 }
 
 impl<S: RenderSink> RingOutputPump<S> {
@@ -5972,8 +6018,10 @@ impl<S: RenderSink> RingOutputPump<S> {
         let max_cushion_bytes = MAX_RENDER_JITTER_CUSHION_FRAMES
             .checked_mul(bytes_per_frame)
             .ok_or(AudioError::InvalidFrameSize)?;
+        // One frame more than a quantum: a lengthened block.
         let pending_bytes = quantum_frames
-            .checked_mul(bytes_per_frame)
+            .checked_add(1)
+            .and_then(|frames| frames.checked_mul(bytes_per_frame))
             .and_then(|bytes| bytes.checked_add(max_cushion_bytes))
             .ok_or(AudioError::InvalidFrameSize)?;
         Ok(Self {
@@ -5987,11 +6035,78 @@ impl<S: RenderSink> RingOutputPump<S> {
             cushion_bytes,
             started: false,
             underruns: 0,
+            depth: drift::MeanDepth::new(OUTPUT_DEPTH_WINDOW_100NS),
+            slips: drift::SlipController::new(OUTPUT_SLIP_TIME_CONSTANT_BLOCKS, true),
+            previous_frame: [0.0; audiorouter_engine::MAX_CHANNELS],
+            slipped_frames: 0,
+            latency_trims: 0,
+            last_block_100ns: None,
+            quiet_lowest: u64::MAX,
+            quiet_windows: 0,
+            swing: drift::QueueSwing::default(),
         })
     }
 
     fn is_drained(&self) -> bool {
         self.pending_bytes == 0
+    }
+
+    /// Forget the stream's state when it stops: the next start primes the
+    /// default cushion again. Counters keep their totals.
+    fn reset_stream(&mut self) {
+        self.pending_bytes = 0;
+        self.started = false;
+        self.cushion_bytes = RENDER_JITTER_CUSHION_FRAMES * self.bytes_per_frame;
+        self.previous_frame = [0.0; audiorouter_engine::MAX_CHANNELS];
+        self.last_block_100ns = None;
+        self.swing = drift::QueueSwing::default();
+        self.restart_depth_tracking();
+    }
+
+    /// Start measuring the queue afresh after its target or contents jumped.
+    fn restart_depth_tracking(&mut self) {
+        self.depth.reset();
+        self.slips.reset();
+        self.quiet_lowest = u64::MAX;
+        self.quiet_windows = 0;
+    }
+
+    /// The depth this pump holds ahead of the device, in frames.
+    fn target_frames(&self) -> u64 {
+        (self.cushion_bytes / self.bytes_per_frame.max(1)) as u64
+    }
+
+    /// One finished depth window: steer the slips toward the cushion plus
+    /// one device period (the mean of a queue whose low points sit at the
+    /// cushion), and give back a cushion step that five quiet minutes never
+    /// used.
+    fn observe_window(&mut self, window: drift::DepthWindow) {
+        self.swing.observe(window);
+        self.slips
+            .update(window.mean.round() as u64, self.target_mean_frames());
+        self.quiet_lowest = self.quiet_lowest.min(window.lowest);
+        self.quiet_windows = self.quiet_windows.saturating_add(1);
+        if self.quiet_windows < OUTPUT_CUSHION_DECAY_WINDOWS {
+            return;
+        }
+        let step = RENDER_JITTER_CUSHION_STEP_FRAMES;
+        let cushion = self.cushion_bytes / self.bytes_per_frame.max(1);
+        // The queue would have stayed half a default cushion above empty
+        // with one step less.
+        let spare = self.quiet_lowest >= (step + RENDER_JITTER_CUSHION_FRAMES / 2) as u64;
+        self.quiet_lowest = u64::MAX;
+        self.quiet_windows = 0;
+        if spare && cushion >= RENDER_JITTER_CUSHION_FRAMES + step {
+            self.cushion_bytes = (cushion - step) * self.bytes_per_frame;
+        }
+    }
+
+    /// The mean depth that keeps the queue's low points at the cushion: the
+    /// cushion plus how far the queue dips below its mean within a period
+    /// (one 10 ms device period, or more for a device or source that moves
+    /// audio in larger steps).
+    fn target_mean_frames(&self) -> u64 {
+        self.target_frames() + self.swing.frames()
     }
 
     /// Frames waiting between this pump and the speaker: queued blocks,
@@ -6030,6 +6145,23 @@ impl<S: RenderSink> RingOutputPump<S> {
     fn pump_one(&mut self) -> Result<WasapiSchedulerPump, AudioError> {
         let mut result = WasapiSchedulerPump::default();
         self.drain_pending(&mut result)?;
+        // Measure the queue on every call, with or without a block to move:
+        // the depth is averaged over time, not over blocks.
+        let device_frames = self.sink.queued_frames();
+        let now = self.sink.clock_100ns();
+        let depth = device_frames.map(|device_frames| {
+            u64::from(device_frames)
+                + self.ring.ready().saturating_mul(self.ring.frames()) as u64
+                + (self.pending_bytes / self.bytes_per_frame.max(1)) as u64
+        });
+        if self.started {
+            if let Some(window) = now
+                .zip(depth)
+                .and_then(|(now, depth)| self.depth.observe(now, depth))
+            {
+                self.observe_window(window);
+            }
+        }
         if !self.is_drained() {
             return Ok(result);
         }
@@ -6041,25 +6173,60 @@ impl<S: RenderSink> RingOutputPump<S> {
             let _ = self.ring.try_recycle(block);
             return Err(AudioError::InvalidFrameSize);
         }
-        let bytes = block
-            .frames()
-            .checked_mul(self.bytes_per_frame)
-            .ok_or(AudioError::InvalidFrameSize)?;
+        let frames = block.frames();
+        let mut slip = drift::SlipDirection::None;
         // An empty device buffer means startup or a gap that was just heard.
         // Queue the cushion ahead of this block so ordinary jitter does not
         // empty the device again. Sinks without padding never arm it.
-        let cushion = if self.sink.queued_frames() == Some(0) {
-            if self.started {
-                self.underruns = self.underruns.saturating_add(1);
-                self.cushion_bytes = (self.cushion_bytes
-                    + RENDER_JITTER_CUSHION_STEP_FRAMES * self.bytes_per_frame)
-                    .min(MAX_RENDER_JITTER_CUSHION_FRAMES * self.bytes_per_frame);
+        let cushion = match device_frames {
+            Some(0) => {
+                if self.started {
+                    self.underruns = self.underruns.saturating_add(1);
+                    let stalled = now
+                        .zip(self.last_block_100ns)
+                        .is_some_and(|(now, last)| now.saturating_sub(last) > OUTPUT_STALL_100NS);
+                    if !stalled {
+                        self.cushion_bytes = (self.cushion_bytes
+                            + RENDER_JITTER_CUSHION_STEP_FRAMES * self.bytes_per_frame)
+                            .min(MAX_RENDER_JITTER_CUSHION_FRAMES * self.bytes_per_frame);
+                    }
+                    self.restart_depth_tracking();
+                }
+                self.cushion_bytes
             }
-            self.cushion_bytes
-        } else {
-            0
+            Some(_) => {
+                // The queue peaks one swing above its mean in ordinary use.
+                let highest_ordinary = self.target_mean_frames() + self.swing.frames();
+                if depth.is_some_and(|depth| {
+                    depth > highest_ordinary + OUTPUT_LATENCY_TRIM_EXCESS_FRAMES
+                }) {
+                    // A backlog arrived behind an already deep queue: keep
+                    // the queue and discard this block.
+                    self.latency_trims = self.latency_trims.saturating_add(1);
+                    self.last_block_100ns = now;
+                    self.ring
+                        .try_recycle(block)
+                        .map_err(|_| AudioError::InvalidFrameSize)?;
+                    self.restart_depth_tracking();
+                    return Ok(result);
+                }
+                if frames >= 2 {
+                    slip = self.slips.next_block();
+                }
+                0
+            }
+            None => 0,
         };
         self.started = true;
+        self.last_block_100ns = now;
+        let frames_out = match slip {
+            drift::SlipDirection::None => frames,
+            drift::SlipDirection::Shorten => frames - 1,
+            drift::SlipDirection::Lengthen => frames + 1,
+        };
+        let bytes = frames_out
+            .checked_mul(self.bytes_per_frame)
+            .ok_or(AudioError::InvalidFrameSize)?;
         if cushion + bytes > self.pending.len() {
             let _ = self.ring.try_recycle(block);
             return Err(AudioError::BufferTooSmall {
@@ -6068,8 +6235,34 @@ impl<S: RenderSink> RingOutputPump<S> {
             });
         }
         self.pending[..cushion].fill(0);
-        let encode_result =
-            encode_interleaved_float32(&block, &mut self.pending[cushion..cushion + bytes]);
+        let encode_result = if slip == drift::SlipDirection::None {
+            encode_interleaved_float32(&block, &mut self.pending[cushion..cushion + bytes])
+        } else {
+            self.slipped_frames = self.slipped_frames.saturating_add(1);
+            let destination = &mut self.pending[cushion..cushion + bytes];
+            let stride = self.bytes_per_frame;
+            for channel in 0..self.channels {
+                let Some(samples) = block.channel(channel) else {
+                    continue;
+                };
+                drift::slip_frames(
+                    frames,
+                    frames_out,
+                    self.previous_frame[channel],
+                    |frame| samples[frame],
+                    |frame, value| {
+                        let start = frame * stride + channel * 4;
+                        destination[start..start + 4].copy_from_slice(&value.to_ne_bytes());
+                    },
+                );
+            }
+            Ok(())
+        };
+        for channel in 0..self.channels {
+            if let Some(&last) = block.channel(channel).and_then(<[f32]>::last) {
+                self.previous_frame[channel] = last;
+            }
+        }
         self.pending_bytes = cushion + bytes;
         self.ring
             .try_recycle(block)
@@ -6077,6 +6270,14 @@ impl<S: RenderSink> RingOutputPump<S> {
         if let Err(error) = encode_result {
             self.pending_bytes = 0;
             return Err(error);
+        }
+        // The block only moved within the queue; a slip or a cushion
+        // changed how much the queue holds.
+        if let Some(depth) = depth {
+            self.depth.hold(
+                (depth + (cushion / self.bytes_per_frame.max(1)) as u64 + frames_out as u64)
+                    .saturating_sub(frames as u64),
+            );
         }
         self.drain_pending(&mut result)?;
         Ok(result)
@@ -6325,9 +6526,7 @@ impl WasapiOutputFanout {
             if let Err(error) = worker.sink.stop() {
                 first_error.get_or_insert(error);
             }
-            worker.pending_bytes = 0;
-            worker.started = false;
-            worker.cushion_bytes = RENDER_JITTER_CUSHION_FRAMES * worker.bytes_per_frame;
+            worker.reset_stream();
             worker.ring.recycle_all();
         }
         for ring in &self.output_rings {
@@ -6455,6 +6654,34 @@ impl WasapiOutputFanout {
             .collect()
     }
 
+    /// Frames removed or added per physical output to hold its queue at the
+    /// cushion against clock drift, since start. Each is one block played
+    /// one frame short or long, not a gap.
+    pub fn output_slipped_frames(&self) -> Vec<u64> {
+        self.workers
+            .iter()
+            .map(|worker| worker.slipped_frames)
+            .collect()
+    }
+
+    /// Blocks discarded per physical output because a backlog arrived
+    /// behind an already deep queue (after a stall), since start.
+    pub fn output_latency_trims(&self) -> Vec<u64> {
+        self.workers
+            .iter()
+            .map(|worker| worker.latency_trims)
+            .collect()
+    }
+
+    /// The queue depth each physical output currently holds (its cushion),
+    /// in frames.
+    pub fn output_target_frames(&self) -> Vec<u64> {
+        self.workers
+            .iter()
+            .map(RingOutputPump::target_frames)
+            .collect()
+    }
+
     /// Smoothed frames queued ahead of each physical output (render ring,
     /// partial block and device buffer), in physical output order.
     pub fn output_queue_frames(&self) -> Vec<Option<f64>> {
@@ -6476,6 +6703,18 @@ impl Drop for WasapiOutputFanout {
 /// newer packet is already queued is backlog from a stall, not jitter:
 /// healthy inputs are picked up within about 20 ms.
 pub const INPUT_BACKLOG_TRIM_AGE_100NS: u64 = 400_000;
+/// Length of one backlog window of an input (250 ms, 100 ns units).
+const INPUT_DEPTH_WINDOW_100NS: u64 = 2_500_000;
+/// Packets over which an input corrects a backlog (about two seconds).
+const INPUT_SLIP_TIME_CONSTANT_PACKETS: f64 = 200.0;
+/// A shorter packet is never slipped.
+const INPUT_SLIP_MIN_PACKET_FRAMES: usize = 64;
+/// An input whose queue here fell below this (5 ms) within a window has no
+/// backlog to remove.
+const INPUT_BACKLOG_FLOOR_FRAMES: u64 = 240;
+/// An input whose queue here never fell below this (30 ms) within a window
+/// loses whole packets until it does.
+const INPUT_BACKLOG_TRIM_FLOOR_FRAMES: u64 = 1_440;
 
 #[derive(Debug)]
 pub enum WasapiMultiInputFanoutError {
@@ -6504,6 +6743,23 @@ pub struct WasapiMultiInputFanout {
     input_trimmed_packets: Vec<u64>,
     /// A source is skipping stale packets until it reaches the newest one.
     input_catching_up: Vec<bool>,
+    /// Mean frames of each source waiting here for the path, per window.
+    input_depths: Vec<drift::MeanDepth>,
+    /// Removes a source's backlog one frame per packet. A source is never
+    /// slowed down, so the slowest source still sets the path's pace.
+    input_slips: Vec<drift::SlipController>,
+    /// Last frame of each source's previous packet, for a slipped packet.
+    input_previous_frames: Vec<[f32; audiorouter_engine::MAX_CHANNELS]>,
+    /// Second packet buffer per source; a slipped packet is written here.
+    slip_bytes: Vec<Vec<u8>>,
+    /// Frames removed per source to keep it current, since construction.
+    input_slipped_frames: Vec<u64>,
+    /// Lowest queue depth of each source in its last finished window.
+    input_backlog_floors: Vec<u64>,
+    input_last_packet_100ns: Vec<Option<u64>>,
+    /// Longest time between two packets of a source since it was last read
+    /// (100 ns). Atomic so a diagnostics read can clear it through `&self`.
+    input_max_packet_gaps_100ns: Vec<std::sync::atomic::AtomicU64>,
     source_blocks: Vec<audiorouter_engine::AudioBlock>,
     channels: Vec<usize>,
     quantum_frames: usize,
@@ -6552,12 +6808,32 @@ impl WasapiMultiInputFanout {
         Ok(Self {
             mixer,
             accumulators,
+            slip_bytes: capture_bytes.clone(),
             capture_bytes,
             pending_packet_bytes,
             input_waits: vec![DelayEstimate::default(); source_channels.len()],
             input_discontinuities: vec![0; source_channels.len()],
             input_trimmed_packets: vec![0; source_channels.len()],
             input_catching_up: vec![false; source_channels.len()],
+            input_depths: vec![
+                drift::MeanDepth::new(INPUT_DEPTH_WINDOW_100NS);
+                source_channels.len()
+            ],
+            input_slips: vec![
+                drift::SlipController::new(INPUT_SLIP_TIME_CONSTANT_PACKETS, false);
+                source_channels.len()
+            ],
+            input_previous_frames: vec![
+                [0.0; audiorouter_engine::MAX_CHANNELS];
+                source_channels.len()
+            ],
+            input_slipped_frames: vec![0; source_channels.len()],
+            input_backlog_floors: vec![0; source_channels.len()],
+            input_last_packet_100ns: vec![None; source_channels.len()],
+            input_max_packet_gaps_100ns: source_channels
+                .iter()
+                .map(|_| std::sync::atomic::AtomicU64::new(0))
+                .collect(),
             pending_packet_offsets,
             source_blocks,
             channels,
@@ -6605,7 +6881,34 @@ impl WasapiMultiInputFanout {
         self.pending_packet_offsets.fill(0);
         self.input_waits.fill(DelayEstimate::default());
         self.input_catching_up.fill(false);
+        for index in 0..self.channels.len() {
+            self.reset_input_drift(index);
+        }
         self.mixer.reset_inputs()
+    }
+
+    /// Forget one input's backlog measurement and slip state.
+    fn reset_input_drift(&mut self, index: usize) {
+        self.input_depths[index].reset();
+        self.input_slips[index].reset();
+        self.input_backlog_floors[index] = 0;
+        self.input_previous_frames[index] = [0.0; audiorouter_engine::MAX_CHANNELS];
+        self.input_last_packet_100ns[index] = None;
+    }
+
+    /// Frames removed per source to keep it at the path's pace, since
+    /// construction. Each is one packet played one frame short, not a gap.
+    pub fn input_slipped_frames(&self) -> &[u64] {
+        &self.input_slipped_frames
+    }
+
+    /// Longest time between two packets of each source since the previous
+    /// call, in ms. A stalled source shows here; the call clears it.
+    pub fn take_input_max_packet_gap_ms(&self) -> Vec<f64> {
+        self.input_max_packet_gaps_100ns
+            .iter()
+            .map(|gap| gap.swap(0, Ordering::Relaxed) as f64 / 10_000.0)
+            .collect()
     }
 
     /// Discard one input's partial packet and accumulated frames when its
@@ -6623,6 +6926,9 @@ impl WasapiMultiInputFanout {
         if let Some(catching_up) = self.input_catching_up.get_mut(index) {
             *catching_up = false;
         }
+        if index < self.channels.len() {
+            self.reset_input_drift(index);
+        }
     }
 
     /// Pump at most one currently available packet from each capture source.
@@ -6633,12 +6939,45 @@ impl WasapiMultiInputFanout {
         &mut self,
         captures: &[&dyn AudioCaptureSource],
     ) -> Result<WasapiSchedulerPump, WasapiMultiInputFanoutError> {
+        self.pump_inputs_at(captures, qpc_now_100ns())
+    }
+
+    /// [`Self::pump_inputs`] with the caller's reading of the capture
+    /// timestamp clock (100 ns units), so tests can run on a simulated clock.
+    fn pump_inputs_at(
+        &mut self,
+        captures: &[&dyn AudioCaptureSource],
+        now_100ns: Option<u64>,
+    ) -> Result<WasapiSchedulerPump, WasapiMultiInputFanoutError> {
         if captures.len() != self.channels.len() {
             return Err(WasapiMultiInputFanoutError::InputCount);
         }
         let mut result = WasapiSchedulerPump::default();
         for (index, capture) in captures.iter().enumerate() {
             let bytes_per_frame = self.channels[index] * std::mem::size_of::<f32>();
+            // Measure how much of this input waits for the path. An input
+            // whose device clock runs faster than the path's pace builds a
+            // backlog here; the slips below remove it.
+            if let Some(now) = now_100ns {
+                let depth = self.input_depth_frames(index);
+                if let Some(window) = self.input_depths[index].observe(now, depth) {
+                    self.input_backlog_floors[index] = window.lowest;
+                    // An input that emptied during the window has no
+                    // backlog, whatever its mean: it only waits within each
+                    // period for the input that paces the path.
+                    let backlog = if window.lowest < INPUT_BACKLOG_FLOOR_FRAMES {
+                        0
+                    } else {
+                        window.mean.round() as u64
+                    };
+                    self.input_slips[index].update(backlog, drift::DEVICE_PERIOD_FRAMES);
+                }
+            }
+            // Audio already accumulated goes to the ring whenever there is
+            // room, not only when a packet arrives. Otherwise a pass that
+            // reads no packet, or skips a stale one, leaves the path without
+            // this input although its audio is here.
+            self.submit_accumulated(index, &mut result)?;
             if self.pending_packet_offsets[index] >= self.pending_packet_bytes[index] {
                 let Some((packet, packet_bytes)) = capture
                     .next_packet_into(&mut self.capture_bytes[index], bytes_per_frame)
@@ -6646,6 +6985,12 @@ impl WasapiMultiInputFanout {
                 else {
                     continue;
                 };
+                if let Some(now) = now_100ns {
+                    if let Some(last) = self.input_last_packet_100ns[index].replace(now) {
+                        self.input_max_packet_gaps_100ns[index]
+                            .fetch_max(now.saturating_sub(last), Ordering::Relaxed);
+                    }
+                }
                 if packet_bytes > self.capture_bytes[index].len() {
                     return Err(WasapiMultiInputFanoutError::Audio(
                         AudioError::BufferTooSmall {
@@ -6664,7 +7009,7 @@ impl WasapiMultiInputFanout {
                 }
                 let mut age = None;
                 if packet.qpc_position != 0 {
-                    if let Some(now) = qpc_now_100ns() {
+                    if let Some(now) = now_100ns {
                         let wait = now.saturating_sub(packet.qpc_position);
                         self.input_waits[index].observe(wait as f64);
                         age = Some(wait);
@@ -6692,6 +7037,21 @@ impl WasapiMultiInputFanout {
                     continue;
                 }
                 self.input_catching_up[index] = false;
+                // The path stopped taking this input for a while (another
+                // input stalled) and 30 ms or more of it never drained.
+                // Discard whole packets until it is near current; the slips
+                // remove the rest.
+                if self.input_backlog_floors[index] >= INPUT_BACKLOG_TRIM_FLOOR_FRAMES
+                    && self.input_depth_frames(index) >= INPUT_BACKLOG_TRIM_FLOOR_FRAMES
+                {
+                    self.input_backlog_floors[index] =
+                        self.input_backlog_floors[index].saturating_sub(packet_frame_count as u64);
+                    self.input_trimmed_packets[index] =
+                        self.input_trimmed_packets[index].saturating_add(1);
+                    result.packets = result.packets.saturating_add(1);
+                    continue;
+                }
+                let packet_bytes = self.slip_packet(index, packet_bytes, bytes_per_frame);
                 self.pending_packet_bytes[index] = packet_bytes;
                 self.pending_packet_offsets[index] = 0;
                 result.packets = result.packets.saturating_add(1);
@@ -6731,40 +7091,96 @@ impl WasapiMultiInputFanout {
                 }
                 offset += consumed;
                 self.pending_packet_offsets[index] = offset;
-                while self.accumulators[index].pending_frames() >= self.quantum_frames {
-                    let Some(ring) = self.mixer.input_ring(index) else {
-                        return Err(WasapiMultiInputFanoutError::InputCount);
-                    };
-                    if ring.available() == 0 {
-                        break;
-                    }
-                    if !self.accumulators[index]
-                        .pop_into(&mut self.source_blocks[index])
-                        .map_err(WasapiMultiInputFanoutError::Audio)?
-                    {
-                        break;
-                    }
-                    let submitted = self
-                        .mixer
-                        .try_submit_input(
-                            index,
-                            self.mixer.generation(),
-                            &self.source_blocks[index],
-                        )
-                        .map_err(WasapiMultiInputFanoutError::Mixer)?;
-                    if !submitted {
-                        break;
-                    }
-                    result.processed_quanta = result.processed_quanta.saturating_add(1);
-                }
+                self.submit_accumulated(index, &mut result)?;
             }
             self.pending_packet_offsets[index] = offset;
             if offset == packet_bytes {
                 self.pending_packet_bytes[index] = 0;
                 self.pending_packet_offsets[index] = 0;
             }
+            let depth = self.input_depth_frames(index);
+            self.input_depths[index].hold(depth);
         }
         Ok(result)
+    }
+
+    /// Move the complete quanta one input's accumulator holds into its ring
+    /// while the ring has room.
+    fn submit_accumulated(
+        &mut self,
+        index: usize,
+        result: &mut WasapiSchedulerPump,
+    ) -> Result<(), WasapiMultiInputFanoutError> {
+        while self.accumulators[index].pending_frames() >= self.quantum_frames {
+            let Some(ring) = self.mixer.input_ring(index) else {
+                return Err(WasapiMultiInputFanoutError::InputCount);
+            };
+            if ring.available() == 0 {
+                break;
+            }
+            if !self.accumulators[index]
+                .pop_into(&mut self.source_blocks[index])
+                .map_err(WasapiMultiInputFanoutError::Audio)?
+            {
+                break;
+            }
+            let submitted = self
+                .mixer
+                .try_submit_input(index, self.mixer.generation(), &self.source_blocks[index])
+                .map_err(WasapiMultiInputFanoutError::Mixer)?;
+            if !submitted {
+                break;
+            }
+            result.processed_quanta = result.processed_quanta.saturating_add(1);
+        }
+        Ok(())
+    }
+
+    /// Frames of one input held here: the unread part of its packet, its
+    /// accumulator and its ring.
+    fn input_depth_frames(&self, index: usize) -> u64 {
+        let bytes_per_frame = self.channels[index] * std::mem::size_of::<f32>();
+        let packet = self.pending_packet_bytes[index]
+            .saturating_sub(self.pending_packet_offsets[index])
+            / bytes_per_frame.max(1);
+        let ring = self
+            .mixer
+            .input_ring(index)
+            .map_or(0, |ring| ring.ready().saturating_mul(ring.frames()));
+        (packet + self.accumulators[index].pending_frames() + ring) as u64
+    }
+
+    /// Play a freshly read packet one frame short when this input is being
+    /// brought back to the path's pace. Returns the packet's new byte length.
+    fn slip_packet(&mut self, index: usize, packet_bytes: usize, bytes_per_frame: usize) -> usize {
+        let channels = self.channels[index];
+        let frames = packet_bytes / bytes_per_frame.max(1);
+        if frames == 0 {
+            return packet_bytes;
+        }
+        let mut last_frame = [0.0_f32; audiorouter_engine::MAX_CHANNELS];
+        for (sample, bytes) in last_frame.iter_mut().zip(
+            self.capture_bytes[index][packet_bytes - bytes_per_frame..packet_bytes].chunks_exact(4),
+        ) {
+            *sample = f32::from_ne_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        }
+        let previous_frame = std::mem::replace(&mut self.input_previous_frames[index], last_frame);
+        if frames < INPUT_SLIP_MIN_PACKET_FRAMES
+            || self.input_slips[index].next_block() != drift::SlipDirection::Shorten
+            || !drift::slip_interleaved(
+                &self.capture_bytes[index][..packet_bytes],
+                &mut self.slip_bytes[index],
+                channels,
+                frames,
+                frames - 1,
+                &previous_frame,
+            )
+        {
+            return packet_bytes;
+        }
+        std::mem::swap(&mut self.capture_bytes[index], &mut self.slip_bytes[index]);
+        self.input_slipped_frames[index] = self.input_slipped_frames[index].saturating_add(1);
+        packet_bytes - bytes_per_frame
     }
 
     /// Pump one bounded packet per source and, when a coherent input quantum
@@ -7317,6 +7733,48 @@ impl NativeMultiInputWorker {
     pub fn input_trimmed_packets(&self) -> Vec<u64> {
         self.feeder.input_trimmed_packets().to_vec()
     }
+
+    /// Frames removed per source to keep it at the path's pace, in input
+    /// order (clock-drift correction, not gaps).
+    pub fn input_slipped_frames(&self) -> Vec<u64> {
+        self.feeder.input_slipped_frames().to_vec()
+    }
+
+    /// Longest time between two packets of each source since the previous
+    /// call (ms), in input order. The call clears it.
+    pub fn take_input_max_packet_gap_ms(&self) -> Vec<f64> {
+        self.feeder.take_input_max_packet_gap_ms()
+    }
+
+    /// Frames removed or added per physical output to hold its queue at
+    /// the cushion, in output order (clock-drift correction, not gaps).
+    pub fn output_slipped_frames(&self) -> Vec<u64> {
+        self.outputs
+            .as_ref()
+            .map_or_else(Vec::new, WasapiOutputFanout::output_slipped_frames)
+    }
+
+    /// Blocks discarded per physical output when a backlog arrived behind
+    /// an already deep queue, in output order.
+    pub fn output_latency_trims(&self) -> Vec<u64> {
+        self.outputs
+            .as_ref()
+            .map_or_else(Vec::new, WasapiOutputFanout::output_latency_trims)
+    }
+
+    /// The queue depth each physical output holds (its cushion, ms), in
+    /// output order.
+    pub fn output_target_ms(&self) -> Vec<f64> {
+        let rate = f64::from(audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ);
+        self.outputs.as_ref().map_or_else(Vec::new, |outputs| {
+            outputs
+                .output_target_frames()
+                .into_iter()
+                .map(|frames| frames as f64 * 1_000.0 / rate)
+                .collect()
+        })
+    }
+
     /// Device-buffer underruns per physical output, in output order.
     pub fn output_underruns_per_output(&self) -> Vec<u64> {
         self.outputs
