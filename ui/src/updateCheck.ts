@@ -58,8 +58,15 @@ type Cache = { checkedAt: number; update: AvailableUpdate | null; forVersion: st
 
 function readCache(): Cache | null {
   try {
-    const value = JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "null") as Cache | null;
-    return value && typeof value.checkedAt === "number" ? value : null;
+    const value: unknown = JSON.parse(window.localStorage.getItem(CACHE_KEY) ?? "null");
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const { checkedAt, forVersion, update } = value as Record<string, unknown>;
+    if (typeof checkedAt !== "number" || !Number.isFinite(checkedAt) || typeof forVersion !== "string") return null;
+    if (update === null) return { checkedAt, forVersion, update: null };
+    if (!update || typeof update !== "object" || Array.isArray(update)) return null;
+    const { tag } = update as Record<string, unknown>;
+    if (typeof tag !== "string" || !/^v\d+\.\d+\.\d+$/.test(tag)) return null;
+    return { checkedAt, forVersion, update: { tag, version: tag.slice(1), url: `${RELEASE_PAGE_PREFIX}${tag}` } };
   } catch {
     return null;
   }

@@ -182,15 +182,15 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.play` | `deviceAdministration` | external operation; prepares the devices saved on the nodes and starts, like Play; sessionId defaults to the active session |
 | `sessions.togglePlay` | `deviceAdministration` | external operation; stops if playing, otherwise plays |
-| `sessions.summary` | `read` | read-only; nodes with readable settings, connections by name, playing and mute state |
+| `sessions.summary` | `read` | read-only; nodes with readable settings, connections by name with `fromOutput` and `toInput` ports, playing and mute state |
 | `safety.togglePrivacyMute` | `sessionControl` | mutating; flips privacy mute and returns the new state |
 | `nodes.catalog` | `read` | read-only; addable kinds with plain descriptions, inputs, outputs and settings |
 | `nodes.set` | `graphWrite` | mutating; node by ID or name; parameters, enabled, bypass or name; applied live and saved |
 | `nodes.toggle` | `graphWrite` | mutating; flips enabled, bypass, an on/off or a two-choice setting |
 | `nodes.add` | `graphWrite` | mutating; adds a kind, optionally between two nodes or after one |
 | `nodes.remove` | `graphWrite` | mutating; removes a node and by default reconnects its neighbours |
-| `connections.add` | `graphWrite` | mutating; connects two nodes by name; refuses an occupied single input |
-| `connections.remove` | `graphWrite` | mutating; removes the connection between two nodes |
+| `connections.add` | `graphWrite` | mutating; connects nodes by name or ID, with optional `fromOutput` and `toInput` port names; defaults to the first output and first free input; refuses an occupied single input |
+| `connections.remove` | `graphWrite` | mutating; removes connections between nodes, optionally limited by `fromOutput` and `toInput` port names |
 | `meters.levels` | `read` | read-only; peak/RMS dBFS, clipping and reduction per playing node |
 | `graph.plan` | `graphWrite` | plan-only |
 | `graph.commit` | `graphWrite` | mutating; requires an idempotency key |

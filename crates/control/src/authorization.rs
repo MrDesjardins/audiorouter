@@ -300,8 +300,14 @@ pub(crate) fn validate_method_params(
             "idempotencyKey",
         ],
         "nodes.remove" => &["sessionId", "node", "bridge", "idempotencyKey"],
-        "connections.add" => &["sessionId", "from", "to", "idempotencyKey"],
-        "connections.remove" => &["sessionId", "from", "to", "idempotencyKey"],
+        "connections.add" | "connections.remove" => &[
+            "sessionId",
+            "from",
+            "to",
+            "fromOutput",
+            "toInput",
+            "idempotencyKey",
+        ],
         "nativeBridges.prepare" => &[
             "busId",
             "generation",

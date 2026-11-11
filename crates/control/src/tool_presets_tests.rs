@@ -30,6 +30,44 @@ fn save(
 }
 
 #[test]
+fn unicode_case_variants_replace_the_same_preset_id() {
+    let mut plane = ControlPlane::new("test");
+    let first = save(&mut plane, "gain", "Été", json!({"gainDb": -3.0}), "first").unwrap();
+    let second = save(&mut plane, "gain", "été", json!({"gainDb": -6.0}), "second").unwrap();
+    assert_eq!(first["preset"]["id"], second["preset"]["id"]);
+    let list = call(&mut plane, "toolPresets.list", json!({})).unwrap();
+    assert_eq!(list["items"].as_array().unwrap().len(), 1);
+    assert_eq!(list["items"][0]["parameters"]["gainDb"], -6.0);
+}
+
+#[test]
+fn unreadable_presets_are_not_overwritten_by_a_save() {
+    let storage = Storage::open_memory().unwrap();
+    let corrupt = "{\"valuable presets\": [broken";
+    storage.save_control_value(SETTINGS_KEY, corrupt).unwrap();
+    let mut plane = ControlPlane::with_storage("corrupt-presets", storage);
+    assert_eq!(
+        call(&mut plane, "toolPresets.list", json!({})).unwrap()["items"],
+        json!([])
+    );
+    let message = save(&mut plane, "gain", "New", json!({}), "new").unwrap_err();
+    assert!(
+        message.contains("your saved presets could not be read"),
+        "{message}"
+    );
+    assert_eq!(
+        plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .load_control_value(SETTINGS_KEY)
+            .unwrap()
+            .as_deref(),
+        Some(corrupt)
+    );
+}
+
+#[test]
 fn a_preset_is_saved_listed_by_kind_replaced_by_name_and_deleted() {
     let mut plane = ControlPlane::new("test");
     save(&mut plane, "gain", "Quiet", json!({ "gainDb": -6.0 }), "a").unwrap();

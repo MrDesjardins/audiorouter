@@ -7900,6 +7900,14 @@ input[type="color"] {
   width: 10rem;
   max-width: 100%;
 }
+/* The "When AudioRouter starts" page stacks three panels; space them like other settings pages. */
+.startup-group {
+  display: grid;
+  gap: 1rem;
+}
+.startup-group > p {
+  margin: 0;
+}
 .startup-autoplay .autoplay-message {
   margin-top: 0.5rem;
   color: var(--text-strong);

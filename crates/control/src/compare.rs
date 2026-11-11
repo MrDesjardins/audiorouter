@@ -11,7 +11,6 @@ use super::*;
 const MAX_HOLD: Duration = Duration::from_secs(30);
 
 pub(crate) struct Comparison {
-    session: EntityId,
     nodes: Vec<EntityId>,
     expires_at: Instant,
 }
@@ -61,12 +60,28 @@ fn can_be_compared(kind: NodeKind) -> bool {
 }
 
 impl ControlPlane {
+    fn republish_comparison(
+        &mut self,
+        session: &EntityId,
+        generation: u64,
+    ) -> Result<Option<&'static str>, ControlError> {
+        // Exercise dispatch/expiry publication independently of endpoint
+        // ownership. Production always uses the real native worker below.
+        #[cfg(test)]
+        if let Some(mut publications) = self.comparison_test_publications.take() {
+            let published = self.with_comparison(self.get_session(session)?.clone());
+            publications.push(published);
+            self.comparison_test_publications = Some(publications);
+            return Ok(Some("test"));
+        }
+        self.republish_running_native_graph(session, generation, true)
+    }
+
     /// The graph to publish: the saved one, with any held comparison applied.
     pub(crate) fn with_comparison(&self, mut session: Session) -> Session {
         if let Some(comparison) = self
             .comparison
-            .as_ref()
-            .filter(|comparison| comparison.session == session.id)
+            .get(&session.id)
             .filter(|comparison| comparison.expires_at > Instant::now())
         {
             for node in &mut session.nodes {
@@ -81,35 +96,32 @@ impl ControlPlane {
     /// Forget a comparison without republishing, because the caller is about
     /// to replace or stop the graph.
     pub(crate) fn clear_comparison(&mut self, session: &EntityId) {
-        if self
-            .comparison
-            .as_ref()
-            .is_some_and(|comparison| comparison.session == *session)
-        {
-            self.comparison = None;
-        }
+        self.comparison.remove(session);
     }
 
     /// Restore a hold that was never released. Called from the audio service.
     pub(crate) fn expire_comparison(&mut self, now: Instant) {
-        let Some(session) = self
-            .comparison
-            .as_ref()
-            .filter(|comparison| comparison.expires_at <= now)
-            .map(|comparison| comparison.session.clone())
-        else {
+        if self.comparison.is_empty() {
             return;
-        };
-        self.comparison = None;
-        if let Some(generation) = self
-            .runtimes
-            .get(&session)
-            .filter(|runtime| runtime.state() == RuntimeState::Running)
-            .map(FakeRuntime::generation)
-        {
-            // The route keeps playing as saved; a failure here is reported by
-            // the next status read, and must not stop the audio service.
-            let _ = self.republish_running_native_graph(&session, generation, true);
+        }
+        // An empty Vec does not allocate, so ordinary service passes stay free.
+        let expired: Vec<_> = self
+            .comparison
+            .iter()
+            .filter(|(_, comparison)| comparison.expires_at <= now)
+            .map(|(session, _)| session.clone())
+            .collect();
+        for session in expired {
+            self.clear_comparison(&session);
+            if let Some(generation) = self
+                .runtimes
+                .get(&session)
+                .filter(|runtime| runtime.state() == RuntimeState::Running)
+                .map(FakeRuntime::generation)
+            {
+                // A failure must not stop the audio service.
+                let _ = self.republish_comparison(&session, generation);
+            }
         }
     }
 
@@ -164,24 +176,30 @@ impl ControlPlane {
             ));
         };
         let releasing = nodes.is_empty();
-        self.comparison = (!releasing).then(|| Comparison {
-            session: session_id.clone(),
-            nodes: nodes.clone(),
-            expires_at: Instant::now() + MAX_HOLD,
-        });
-        match self.republish_running_native_graph(&session_id, generation, true) {
+        if releasing {
+            self.clear_comparison(&session_id);
+        } else {
+            self.comparison.insert(
+                session_id.clone(),
+                Comparison {
+                    nodes: nodes.clone(),
+                    expires_at: Instant::now() + MAX_HOLD,
+                },
+            );
+        }
+        match self.republish_comparison(&session_id, generation) {
             Ok(Some(_)) => {}
             // Nothing is playing through a native worker, so there is nothing to change.
             Ok(None) if releasing => {}
             Ok(None) => {
-                self.comparison = None;
+                self.clear_comparison(&session_id);
                 return Err(ControlError::InvalidRequest(
                     "this route cannot be compared while it plays".into(),
                 ));
             }
             Err(error) => {
-                self.comparison = None;
-                let _ = self.republish_running_native_graph(&session_id, generation, true);
+                self.clear_comparison(&session_id);
+                let _ = self.republish_comparison(&session_id, generation);
                 return Err(error);
             }
         }

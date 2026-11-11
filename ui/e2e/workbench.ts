@@ -27,6 +27,15 @@ export async function openSettings(page: Page, pageName: string) {
   await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
+/** Settings opens in a transition; enumeration itself does not auto-wait. */
+export async function settingsPageNames(page: Page) {
+  const pages = page.getByRole("tablist", { name: "Settings pages" });
+  await expect(pages).toBeVisible();
+  const names = (await pages.getByRole("tab").allInnerTexts()).map((name) => name.trim());
+  expect(names.length).toBeGreaterThan(5);
+  return names;
+}
+
 /** Leave Settings for the tab that was open before it. */
 export async function backToRoute(page: Page) {
   await page.getByRole("button", { name: "Back to the route" }).click();

@@ -16,9 +16,10 @@ const specs = [...section.matchAll(/ApiMethodSpec\s*\{([^}]*)\}/gs)].map(([, bod
 // Derive the security exclusions from the adapter; a new desktop-only action
 // must not silently reappear as an advertised public HTTP endpoint.
 const httpAdapter = await readFile(resolve(root, "src-tauri/src/http_api.rs"), "utf8");
-const desktopSection = httpAdapter.match(/pub const DESKTOP_ONLY_METHODS:[\s\S]*?=\s*&\[([\s\S]*?)\];/)?.[1];
+const desktopSection = httpAdapter.replace(/\r\n/g, "\n").match(/fn http_access\([^]*?\n}\n/)?.[0];
 if (!desktopSection) throw new Error("Missing HTTP desktop-only method contract");
-const desktopOnly = new Set([...desktopSection.matchAll(/"([^"]+)"/g)].map(([, name]) => name));
+const desktopOnly = new Set([...desktopSection.matchAll(/"([^"]+)"\s*=>\s*(?:\{\s*)?HttpAccess::DesktopOnly/g)].map(([, name]) => name));
+if (desktopOnly.size === 0) throw new Error("HTTP desktop-only classification is empty");
 // Keep the public site focused on shipped, user-facing routes. Driver-track
 // lifecycle APIs stay in local development Swagger until that work is public.
 const developmentOnly = [/^virtualDevices\./, /^virtualRoutes\./, /^nativeBridges\./, /^nativeDuplex\./, /^nativeRenderSources\./];

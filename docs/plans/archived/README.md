@@ -14,6 +14,10 @@ Keep an index below with date, milestone/task, outcome, and path. Do not move st
 
 ## Index
 
+- **2026-11-09 — Code review fixes:** all thirteen findings fixed and locally
+  qualified, preserving network-path-only HTTP policy; PR approval pending.
+  [Execution record](2026-11-09-code-review-fixes.md).
+
 - **2026-11-07 — UI Round 27:** native browser shortcuts repaired and exercised;
   dropdown/density/loading evidence recorded. Attended M05 gates and scores
   remain open. [Execution record](2026-11-07-ui-round-27.md).

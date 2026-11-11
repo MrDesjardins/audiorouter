@@ -732,7 +732,7 @@ fn http_api_control(
 /// The window's JSON-RPC bridge. The page sends a `requestId` correlation ID
 /// with each request (P2-3); one is made here when it is missing or invalid,
 /// and it is forwarded to the backend and written to `shell.jsonl`.
-#[tauri::command]
+#[tauri::command(async)]
 fn rpc_request(
     request: audiorouter_protocol::diagnostics::IncomingRequest,
     state: State<'_, ShellState>,
