@@ -3,7 +3,9 @@
 // Private diagnostic ABI. No sample data, addresses or user pointers.
 // The IOCTL and storage exist only in an explicitly opted-in build.
 #define AR_TIMING_IOCTL CTL_CODE(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_READ_DATA | FILE_WRITE_DATA)
-#define AR_TIMING_CAPACITY 131072UL
+// Bound a 30-second, two-stream 1 kHz diagnostic plus packet/state events.
+// Storage exists only in diagnostic builds; never overwrite old records.
+#define AR_TIMING_CAPACITY 262144UL
 #define AR_TIMING_CHUNK 128UL
 #define AR_TIMING_START 1UL
 #define AR_TIMING_STOP 2UL
@@ -15,6 +17,8 @@
 #define AR_TIMING_FETCH_RETURN 5
 #define AR_TIMING_FORMAT 6
 #define AR_TIMING_RESIGNAL 7
+#define AR_TIMING_RENDER_WRITE 8
+#define AR_TIMING_STATE 9
 
 struct AR_TIMING_REQUEST { ULONG Action; ULONG Offset; ULONG Reserved[2]; };
 struct AR_TIMING_RECORD {
