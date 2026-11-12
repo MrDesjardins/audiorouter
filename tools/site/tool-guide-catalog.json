@@ -1316,6 +1316,16 @@
       "latencySamples": 0,
       "parameters": [
         {
+          "description": "The audio-effect class ID from plugins.scan. Selects one effect in a multi-effect VST3 module; default selects its first usable effect.",
+          "name": "classId",
+          "type": "string"
+        },
+        {
+          "description": "Opaque settings asset from plugins.saveState or plugins.prepareUpdate. Omit it to start from the plugin's defaults; plugins.prepareUpdate with resetState removes it and forgets the latest capture once. Never change a fingerprint to bypass a plugin update; use plugins.prepareUpdate after scanning.",
+          "name": "stateId",
+          "type": "string"
+        },
+        {
           "description": "Allow this plugin to pass a microphone through unchanged. When off, a plugin fed by a recording device that returns its audio untouched for about 2 seconds (as an unlicensed plugin does) is silenced until plugins.resume. Adjacent VST2 plugins that share one worker are checked and silenced together, so allow pass-through on every one of them. Turn on only for a plugin meant to be neutral. false when unset.",
           "name": "passThroughAllowed",
           "type": "boolean"
@@ -2858,7 +2868,7 @@
     }
   ],
   "sourceHashes": {
-    "crates/control/src/catalog.rs": "ad9ab4b81ab350e43d3518ea1257ff25bb91cc4f2db4dcd92ad84923b8b9005c",
+    "crates/control/src/catalog.rs": "e77209ad35b793c8b04b15d1030a4c06ea7bfc19b28bd387a79a855c3aea1965",
     "crates/domain/src/voice_changer.rs": "221e9abc0f3bfb14214ce907adb197983d6cdcbab5bf9587476edd6eb904cf14"
   }
 }

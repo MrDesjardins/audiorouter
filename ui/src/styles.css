@@ -4792,7 +4792,35 @@ input[aria-invalid="true"]:focus-visible {
   flex: 0 0 auto;
   padding: 0.25rem 0.5rem;
 }
+.copy-error {
+  display: inline-flex;
+  flex: none;
+  gap: 0.5rem;
+  align-items: center;
+}
+.copy-error > button {
+  min-width: 6rem;
+}
+.copy-error textarea {
+  max-width: 18rem;
+}
+.error-message-text {
+  user-select: text;
+  overflow-wrap: anywhere;
+}
+.panel-message .copy-error {
+  margin-inline-start: 0.5rem;
+  /* The button must not make an error line taller than the status line it
+     replaces (UI-17): keep it within the text's own line box. */
+  vertical-align: middle;
+}
+.panel-message .copy-error > button {
+  padding-block: 0;
+  line-height: 1.35;
+  margin-block: -0.25rem;
+}
 .global-action-message-text {
+  user-select: text;
   flex: 1 1 auto;
   min-width: 0;
 }

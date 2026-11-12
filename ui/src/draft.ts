@@ -1699,12 +1699,20 @@ export function pluginCatalog(
       if (seen.has(key)) continue;
       seen.add(key);
       const file = identity.path.split(/[\\/]/).pop() ?? identity.path;
-      catalog.push({
-        entry,
-        name: file.replace(/\.(vst3|dll)$/i, ""),
-        format: identity.format === "vst3" ? "VST3" : "VST2",
-        folder: inventory.directory,
-      });
+      const classes = identity.format === "vst3" && identity.classIds?.length ? identity.classIds : [null];
+      for (const classId of classes) {
+        catalog.push({
+          entry: classId
+            ? {
+                ...entry,
+                identity: { ...identity, classIds: [classId, ...identity.classIds.filter((id) => id !== classId)] },
+              }
+            : entry,
+          name: file.replace(/\.(vst3|dll)$/i, "") + (classes.length > 1 ? ` (${classId})` : ""),
+          format: identity.format === "vst3" ? "VST3" : "VST2",
+          folder: inventory.directory,
+        });
+      }
     }
   }
   return catalog.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));

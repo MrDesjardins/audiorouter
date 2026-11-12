@@ -1279,7 +1279,7 @@
       "title": "Every setting",
       "video": "assets/tool-guides/plugin-overview.mp4",
       "poster": "assets/tool-guides/plugin-overview.jpg",
-      "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+      "description": "A silent configuration tour of Plugin Properties. It reveals Use scanned version and Start from defaults, shows Allow unchanged audio being enabled and disabled, then returns to the top. That switch weakens voice protection; this recording does not demonstrate a running plugin or perform a vendor update."
     }
   ],
   "group": [

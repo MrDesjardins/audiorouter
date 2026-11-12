@@ -60,7 +60,7 @@ try {
     }
     # The installer is the only download users need; the app, CLI, plugin
     # worker and Stream Deck plugin ship inside it, not as separate assets.
-    foreach ($bundled in @("audiorouter-cli.exe", "audiorouter-plugin-worker.exe", "audiorouter-shell.exe", "audiorouter-ui.zip")) {
+    foreach ($bundled in @("audiorouter-cli.exe", "audiorouter-plugin-worker.exe", "audiorouter-vst3-worker.exe", "audiorouter-shell.exe", "audiorouter-ui.zip")) {
         if (@($manifest.artifacts | Where-Object { $_.file -eq $bundled }).Count -ne 0) {
             throw "release must not publish $bundled separately from the installer"
         }

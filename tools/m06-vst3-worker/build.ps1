@@ -41,6 +41,6 @@ if ($Release) { $flags += @('/O2', '/DNDEBUG') }
 if ($LASTEXITCODE -ne 0) { throw "VST3 worker compile failed with exit code $LASTEXITCODE" }
 & $cl @flags "/I$vcInclude" "/I$sdkInclude" "/I$include/shared" "/I$include/um" "/I$include/ucrt" /c $iidSource /Fo:$iidObject
 if ($LASTEXITCODE -ne 0) { throw "VST3 SDK IID compile failed with exit code $LASTEXITCODE" }
-& $cl /nologo $object $iidObject /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" ole32.lib user32.lib bcrypt.lib wer.lib
+& $cl /nologo $object $iidObject /Fe:$output /link "/LIBPATH:$vcLib" "/LIBPATH:$umLib" "/LIBPATH:$ucrtLib" ole32.lib user32.lib bcrypt.lib wer.lib avrt.lib
 if ($LASTEXITCODE -ne 0) { throw "VST3 worker build failed with exit code $LASTEXITCODE" }
 if ($Release) { Remove-Item -LiteralPath $object, $iidObject -ErrorAction SilentlyContinue }

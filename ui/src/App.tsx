@@ -1,5 +1,6 @@
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 import { Icon } from "./icons";
+import { CopyErrorButton } from "./CopyErrorButton";
 import { keepNativeContextMenu } from "./contextMenuPolicy";
 import { SessionSwitchDialog } from "./SessionSwitchDialog";
 import {
@@ -1178,7 +1179,10 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setPluginParameters(null);
     setPluginParameterError(null);
     void backend
-      .describePluginParameters(path)
+      .describePluginParameters(
+        path,
+        typeof selectedNode.parameters.classId === "string" ? selectedNode.parameters.classId : undefined,
+      )
       .then((result) => {
         if (!active) return;
         if (result.sha256 !== fingerprint) {
@@ -1199,6 +1203,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     selectedNode?.kind,
     selectedNode?.parameters.path,
     selectedNode?.parameters.fingerprint,
+    selectedNode?.parameters.classId,
   ]);
   useEffect(() => {
     let active = true;
@@ -3198,6 +3203,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               : "Your route will appear when the backend responds."}
           </p>
           {snapshotState.error && (
+            <CopyErrorButton message={`Unable to load your saved session: ${snapshotState.error}`} />
+          )}
+          {snapshotState.error && (
             <button type="button" onClick={() => void reconnect()} disabled={reconnecting} aria-busy={reconnecting}>
               Reconnect
             </button>
@@ -3926,6 +3934,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                   <span className="global-action-message-text" title={text}>
                     {text}
                   </span>
+                  {text && tone === "error" && <CopyErrorButton message={text} />}
                   {backend.connected && actionMessage?.startsWith("No audio started") && firstIssueNode && (
                     <button type="button" className="secondary" onClick={() => selectNodeProperties(firstIssueNode.id)}>
                       Go to {firstIssueNode.name}

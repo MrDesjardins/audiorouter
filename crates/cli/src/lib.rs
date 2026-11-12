@@ -2468,6 +2468,7 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "control_time_shift",
     "reset_meter",
     "resume_plugin",
+    "prepare_plugin_update",
     "undo_last_change",
     "duplicate_session",
     "delete_session",
@@ -2779,6 +2780,7 @@ const OUTPUT_SWITCH_RECIPE: &str = "Send one source to either of two outputs (Ou
 
 fn mcp_tools() -> Value {
     let mut tools = json!([
+        { "name": "prepare_plugin_update", "description": "After the user scans an updated plugin, prepare replacement parameters for its existing node while preserving opaque settings. Does not change the route or play audio. Apply the returned parameters with change_settings while stopped, retaining wiring. resetState=true deliberately ignores saved state and starts from defaults; the old assets remain. Requires explicit plugin-scan scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "node": { "type": "string", "minLength": 1 }, "resetState": { "type": "boolean" } }, "required": ["node"], "additionalProperties": false } },
         { "name": "get_recipes", "description": "Start here when the user asks for a result rather than a specific step (clean up my voice, lower the game while I talk, record a podcast, use AudioRouter as a Discord microphone). Returns step-by-step recipes using the other tools.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "list_sessions", "description": "List every saved session (setup) with its ID, name and revision. AudioRouter works on one open session at a time.", "inputSchema": { "type": "object", "properties": { "limit": { "type": "integer", "minimum": 1, "maximum": 100 } }, "required": [], "additionalProperties": false } },
         { "name": "open_session", "description": "Open (select) a session by ID so later calls without sessionId use it. Does not start audio.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
@@ -2985,6 +2987,7 @@ fn mcp_tool_call(
         "control_time_shift" => ("timeShift.transport", Some(mcp_node_params(arguments))),
         "reset_meter" => ("meters.reset", Some(mcp_node_params(arguments))),
         "resume_plugin" => ("plugins.resume", Some(mcp_node_params(arguments))),
+        "prepare_plugin_update" => ("plugins.prepareUpdate", Some(mcp_node_params(arguments))),
         "duplicate_session" => {
             let source = arguments["sessionId"].as_str().unwrap_or_default();
             let copy_id = format!(
@@ -3241,7 +3244,7 @@ fn mcp_tool_call(
             );
         }
         "get_recipes" => {
-            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}\n{OUTPUT_SWITCH_RECIPE}") }], "isError": false } });
+            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}\n{OUTPUT_SWITCH_RECIPE}\nPlugin update recovery: ask the user to scan the updated plugin's folder first (explicit plugin-scan scope). Use prepare_plugin_update with the existing node name or ID. While stopped, apply its returned parameters with change_settings on that node, retaining wiring. resetState=true is deliberate recovery from rejected saved state; keep the old assets. Do not start audio or silently bypass a failed microphone processor.") }], "isError": false } });
         }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
@@ -6261,7 +6264,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 98);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 99);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();
