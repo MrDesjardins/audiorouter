@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **The new-version check now shows what it is doing.** Settings → New versions
+  shows the last successful check, the next attempt and a Check now button. A
+  missing connection is no longer silent: the check retries with increasing
+  waits for up to 12 hours, then waits for the next day and says so. You can
+  check stable and prerelease versions or stable versions only. Turning the
+  check off now forgets the cached result. The app still only opens the release
+  page; it never downloads or installs an update.
 - **Less delay, and no more build-up over a long session.** Every audio
   device runs on its own clock, and AudioRouter did not correct for it. Over
   minutes to hours an output's queue grew to 50–60 ms and stayed there, an
