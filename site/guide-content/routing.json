@@ -937,7 +937,7 @@
     {
       "kind": "plugin",
       "title": "VST Plugin",
-      "purpose": "Use a compatible installed x64 VST effect in an isolated worker.",
+        "purpose": "Use a compatible installed x64 VST effect in an isolated worker.",
       "concept": "Each plugin defines its own automatable controls; scanning discovers metadata, while adding and preparing a plugin is a separate action.",
       "signalBehavior": "An effect processes the branch through its isolated worker. A failed processor on protected voice produces silence until deliberate recovery.",
       "properties": [
@@ -970,7 +970,21 @@
           "caution": "Enabling this weakens voice protection for the plugin or shared chain. A live change reloads the plugin and can cause a short gap."
         },
         {
-          "key": "pluginParameter:<parameterId>",
+            "key": "recovery",
+            "label": "Plugin recovery",
+            "type": "action",
+            "unit": null,
+            "minimum": null,
+            "maximum": null,
+            "default": null,
+            "meaning": "Stop the route and scan the updated plugin's folder again. Use scanned version prepares its new fingerprint while preserving your state and wiring. Save the route to apply it. Start from defaults deliberately ignores saved state and slider values; the old state files are kept.",
+            "increase": "",
+            "decrease": "",
+            "example": "If a vendor update changes the plugin file, use the scanned version instead of deleting the node and rebuilding its connections.",
+            "caution": "A newer plugin may reject its previous state. Start from defaults is an explicit fallback, never an automatic dry-microphone bypass."
+          },
+          {
+            "key": "pluginParameter:<parameterId>",
           "label": "Plugin-provided parameter title",
           "type": "number",
           "unit": "normalized",

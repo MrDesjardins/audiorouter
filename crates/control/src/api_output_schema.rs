@@ -1082,6 +1082,13 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
             "required": ["sessionId", "nodeId", "stateId", "sizeBytes"],
             "additionalProperties": false
         }),
+        "plugins.prepareUpdate" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string" }, "nodeId": { "type": "string" },
+                "parameters": { "type": "object" }, "previousFingerprint": { "type": "string" },
+                "statePreserved": { "type": "boolean" }
+            }, "required": ["sessionId", "nodeId", "parameters", "previousFingerprint", "statePreserved"], "additionalProperties": false
+        }),
         "plugins.resume" => json!({
             "type": "object",
             "properties": {

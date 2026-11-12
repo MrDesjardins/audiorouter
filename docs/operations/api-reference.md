@@ -16,7 +16,7 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 147 methods, including backend-owned quit/finalize,
+The current catalog contains 148 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -127,6 +127,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.list` | `pluginScan` | read-only |
 | `plugins.inventory` | `pluginScan` | read-only; every remembered scan (one per folder), persisted across restarts; never scans or loads plugin code |
 | `plugins.saveState` | `pluginScan` | mutating; captures a playing plugin node's opaque state, stores it under the database's `plugin-states` folder, and returns a `stateId` to set on the node |
+| `plugins.prepareUpdate` | `pluginScan` | mutating; optional `sessionId`, `nodeId` as ID or exact name; prepares parameters for a currently scanned vendor update while keeping old state assets. `resetState: true` explicitly prepares factory defaults. Apply returned parameters through ordinary graph plan/commit; preparation changes no route or audio. |
 | `plugins.openEditor` | `pluginScan` | external operation; opens a playing VST3 or VST2 plugin's own editor inside a parent window owned by `ownerProcessId` (the desktop shell) |
 | `plugins.closeEditor` | `pluginScan` | external operation; closes the editor and applies its edits to the instance that processes audio |
 | `plugins.resume` | `sessionControl` | mutating; `nodeId` (ID or exact name) selects a plugin in a playing route, `sessionId` defaults to the active session; Retry after the plugin was silenced for passing a recording device's audio through unchanged (`plugin.silencedUnchanged`); `resumed` is false, and the plugin stays silent, while it still passes audio through |

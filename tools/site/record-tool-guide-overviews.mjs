@@ -591,6 +591,9 @@ for (const { tool, render } of selected) {
           await inspector.getByTestId("network-pairing-note").scrollIntoViewIfNeeded();
         if (frame === 76) await inspector.evaluate((e) => (e.scrollTop = 0));
       } else if (tool.kind === "plugin") {
+        if (frame === 8) await inspector.getByRole("button", { name: "Use scanned version", exact: true }).scrollIntoViewIfNeeded();
+        if (frame === 16) await inspector.getByRole("button", { name: "Start from defaults", exact: true }).focus();
+        if (frame === 20) await inspector.evaluate((element) => { element.scrollTop = 0; });
         if (frame === 24) {
           const allowed = inspector.getByRole("checkbox", { name: "Allow unchanged audio", exact: true });
           await allowed.scrollIntoViewIfNeeded();

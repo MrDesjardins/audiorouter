@@ -130,7 +130,7 @@
     }
   ],
   "guideKindCount": 38,
-  "propertyCount": 252,
+  "propertyCount": 253,
   "tools": [
     {
       "kind": "gain",
@@ -7366,6 +7366,21 @@
             }
           ],
           "status": "exempted"
+        },
+        {
+          "key": "recovery",
+          "label": "Plugin recovery",
+          "type": "action",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": null,
+          "recordingId": "plugin--recovery",
+          "recordings": [],
+          "status": "pending"
         },
         {
           "key": "pluginParameter:<parameterId>",

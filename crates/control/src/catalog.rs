@@ -162,6 +162,8 @@ impl ControlPlane {
             // AudioRouter's own guard. Its unset value is in `description`, as
             // `nodes.add` saves every `default`.
             audiorouter_domain::NodeKind::Plugin => json!([
+                { "name": "classId", "type": "string", "description": "The audio-effect class ID from plugins.scan. Selects one effect in a multi-effect VST3 module; default selects its first usable effect." },
+                { "name": "stateId", "type": "string", "description": "Opaque settings asset from plugins.saveState or plugins.prepareUpdate. Omit it to start from the plugin's defaults; plugins.prepareUpdate with resetState removes it and forgets the latest capture once. Never change a fingerprint to bypass a plugin update; use plugins.prepareUpdate after scanning." },
                 { "name": "passThroughAllowed", "type": "boolean", "description": "Allow this plugin to pass a microphone through unchanged. When off, a plugin fed by a recording device that returns its audio untouched for about 2 seconds (as an unlicensed plugin does) is silenced until plugins.resume. Adjacent VST2 plugins that share one worker are checked and silenced together, so allow pass-through on every one of them. Turn on only for a plugin meant to be neutral. false when unset." }
             ]),
             audiorouter_domain::NodeKind::Volume => json!([{

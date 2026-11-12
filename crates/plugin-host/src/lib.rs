@@ -33,22 +33,29 @@ pub const FAILURE_WINDOW: Duration = Duration::from_secs(10 * 60);
 pub const MAX_WORKER_FRAMES: usize = 2048;
 pub const MAX_WORKER_AUDIO_BUSES: usize = 4;
 pub const MAX_WORKER_AUDIO_CHANNELS: usize = 8;
-pub const MAX_SCAN_CANDIDATES: usize = 256;
-pub const MAX_SCAN_DIRECTORIES: usize = 256;
+pub const MAX_SCAN_CANDIDATES: usize = 8192;
+pub const MAX_SCAN_DIRECTORIES: usize = 65536;
+/// Linked folders a scan lists as skipped before it stops listing them.
+pub const MAX_SKIPPED_SCAN_LINKS: usize = 256;
 pub const DEFAULT_SCAN_DEADLINE: Duration = Duration::from_secs(10);
+/// Whole-directory scan budget; each plugin still gets `DEFAULT_SCAN_DEADLINE`.
+pub const LIBRARY_SCAN_DEADLINE: Duration = Duration::from_secs(45);
 pub const MAX_PLUGIN_STATE_BYTES: usize = 16 * 1024 * 1024;
 pub const WORKER_HEARTBEAT_TIMEOUT: Duration = Duration::from_millis(100);
-pub const MAX_PARAMETER_EVENTS: usize = 128;
+pub const MAX_PARAMETER_EVENTS: usize = 4096;
 pub const MAX_AUTOMATIC_WORKER_RESTARTS: u32 = 2;
-pub const MAX_PARAMETER_DESCRIPTORS: usize = 256;
+pub const MAX_PARAMETER_DESCRIPTORS: usize = 4096;
 pub const MAX_PARAMETER_TITLE_BYTES: usize = 128;
-pub const MAX_WORKER_MESSAGE_BYTES: usize = 1_024 * 1_024;
+// JSON encodes each opaque byte as up to four characters (255 plus comma).
+// Keep the advertised binary-state bound usable at its worst-case wire size.
+pub const MAX_WORKER_MESSAGE_BYTES: usize = 4 * MAX_PLUGIN_STATE_BYTES + 1024 * 1024;
 pub const MAX_WORKER_FAILURE_CODE_BYTES: usize = 128;
 pub const MAX_WORKER_DIAGNOSTIC_BYTES: usize = 8 * 1024;
-pub const MAX_WORKER_STATE_BYTES: usize = 512 * 1024;
+pub const MAX_WORKER_STATE_BYTES: usize = MAX_PLUGIN_STATE_BYTES;
 pub const WORKER_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_WORKER_LATENCY_MS: u32 = 10_000;
 pub const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_secs(5);
+pub const WORKER_CONTROL_TIMEOUT: Duration = Duration::from_secs(30);
 pub const MIN_WORKER_SAMPLE_RATE_HZ: u32 = 8_000;
 pub const MAX_WORKER_SAMPLE_RATE_HZ: u32 = 192_000;
 pub const DEFAULT_WORKER_SAMPLE_RATE_HZ: u32 = 48_000;
@@ -721,13 +728,7 @@ fn read_module_info(bundle: &Path) -> PluginMetadata {
             .map(str::to_owned)
             .collect::<Vec<_>>();
         if !audio_class_ids.is_empty() {
-            let mut ordered = audio_class_ids;
-            let remaining = class_ids
-                .into_iter()
-                .filter(|id| !ordered.iter().any(|audio| audio == id))
-                .collect::<Vec<_>>();
-            ordered.extend(remaining);
-            class_ids = ordered;
+            class_ids = audio_class_ids;
         }
     }
     // An instrument module declares only audio classes whose VST3
@@ -819,7 +820,11 @@ fn resolve_binary_path(path: &Path) -> Result<PathBuf, InspectionError> {
         let path = entry
             .map_err(|error| InspectionError::Io(error.to_string()))?
             .path();
-        if path.is_file() {
+        if path.is_file()
+            && path
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("vst3"))
+        {
             binaries.push(path);
             if binaries.len() > 1 {
                 return Err(InspectionError::NotPe);
@@ -836,29 +841,50 @@ fn resolve_binary_path(path: &Path) -> Result<PathBuf, InspectionError> {
 /// Enumerates one explicitly selected directory without executing its files.
 /// Every candidate is returned, including unsupported/error entries.
 pub fn scan_directory(root: &Path) -> Result<Vec<ScanEntry>, ScanError> {
-    scan_directory_with_control(root, &ScanControl::default_deadline())
+    // One plugin gets `DEFAULT_SCAN_DEADLINE`; a whole library gets longer,
+    // still below the UI's 60 s request bound.
+    scan_directory_with_control(
+        root,
+        &ScanControl::with_deadline(Instant::now() + LIBRARY_SCAN_DEADLINE),
+    )
 }
 
 pub fn scan_directory_with_control(
     root: &Path,
     control: &ScanControl,
 ) -> Result<Vec<ScanEntry>, ScanError> {
+    // A user may explicitly choose a junction to an external plugin drive.
+    // Grant its resolved root, not arbitrary links encountered underneath it.
+    // Keep the ordinary drive form (no verbatim prefix) where it fits, so
+    // scanned paths match the ones already saved in routes and shown to users.
+    let canonical_root =
+        loadable_plugin_path(&fs::canonicalize(root).map_err(|_| ScanError::InvalidRoot)?);
+    let root = canonical_root.as_path();
     let root_metadata = fs::symlink_metadata(root).map_err(|_| ScanError::InvalidRoot)?;
     if !root_metadata.is_dir() || is_reparse_point(&root_metadata) {
         return Err(ScanError::InvalidRoot);
     }
     control.check()?;
     let mut candidates = Vec::new();
+    let mut skipped = Vec::new();
     let mut directories = vec![root.to_path_buf()];
     let mut directories_seen = 1;
     while let Some(directory) = directories.pop() {
         control.check()?;
-        for entry in fs::read_dir(&directory).map_err(|error| ScanError::Io(error.to_string()))? {
+        // Only an unreadable root fails the scan. One protected or vanished
+        // subfolder must not hide every other plugin in the library.
+        let listing = match fs::read_dir(&directory) {
+            Ok(listing) => listing,
+            Err(error) if directory == root => return Err(ScanError::Io(error.to_string())),
+            Err(_) => continue,
+        };
+        for entry in listing {
             control.check()?;
-            let entry = entry.map_err(|error| ScanError::Io(error.to_string()))?;
+            let Ok(entry) = entry else { continue };
             let path = entry.path();
-            let metadata =
-                fs::symlink_metadata(&path).map_err(|error| ScanError::Io(error.to_string()))?;
+            let Ok(metadata) = fs::symlink_metadata(&path) else {
+                continue;
+            };
             let extension = path
                 .extension()
                 .and_then(|value| value.to_str())
@@ -868,7 +894,18 @@ pub fn scan_directory_with_control(
                 if candidates.len() > MAX_SCAN_CANDIDATES {
                     return Err(ScanError::TooManyCandidates);
                 }
-            } else if metadata.is_dir() && !is_reparse_point(&metadata) {
+            } else if is_reparse_point(&metadata) {
+                // Report skipped linked folders, bounded. Linked files that
+                // are not plugins (cloud placeholders) are not worth listing.
+                if !path.is_dir() || skipped.len() >= MAX_SKIPPED_SCAN_LINKS {
+                    continue;
+                }
+                skipped.push(ScanEntry {
+                    path,
+                    identity: None,
+                    error: Some(InspectionError::OutsideConfiguredRoot),
+                });
+            } else if metadata.is_dir() {
                 directories_seen += 1;
                 if directories_seen > MAX_SCAN_DIRECTORIES {
                     return Err(ScanError::TooManyDirectories);
@@ -878,9 +915,34 @@ pub fn scan_directory_with_control(
         }
     }
     candidates.sort();
+    let mut entries = inspect_scan_candidates(root, candidates, control)?;
+    entries.extend(skipped);
+    Ok(entries)
+}
+
+/// Inspect the plugin candidates a directory walk found. Cancellation fails
+/// the scan; running out of time keeps every result verified so far.
+fn inspect_scan_candidates(
+    root: &Path,
+    candidates: Vec<PathBuf>,
+    control: &ScanControl,
+) -> Result<Vec<ScanEntry>, ScanError> {
     let mut entries = Vec::with_capacity(candidates.len());
     for path in candidates {
-        control.check()?;
+        // Out of time: keep what was verified and list the rest as not
+        // inspected, instead of discarding the whole library's result.
+        match control.check() {
+            Ok(()) => {}
+            Err(ScanError::DeadlineExceeded) => {
+                entries.push(ScanEntry {
+                    path,
+                    identity: None,
+                    error: Some(InspectionError::DeadlineExceeded),
+                });
+                continue;
+            }
+            Err(error) => return Err(error),
+        }
         let candidate_control = control.for_candidate();
         entries.push(
             match inspect_binary_with_control(
@@ -894,7 +956,6 @@ pub fn scan_directory_with_control(
                     error: None,
                 },
                 Err(InspectionError::Cancelled) => return Err(ScanError::Cancelled),
-                Err(InspectionError::DeadlineExceeded) => return Err(ScanError::DeadlineExceeded),
                 Err(error) => ScanEntry {
                     path,
                     identity: None,
@@ -2524,6 +2585,23 @@ pub enum WorkerProcessError {
     Timeout,
 }
 
+impl std::fmt::Display for WorkerProcessError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Spawn(reason) => write!(formatter, "The isolated plugin worker could not start: {reason}. Check that the complete app and the plugin's required runtimes are installed."),
+            Self::Message(WorkerMessageError::Io(reason)) => write!(formatter, "The plugin worker stopped responding: {reason}. Check its licence app or any open plugin dialog, then deliberately press Stop and Play."),
+            Self::Message(_) => formatter.write_str("The plugin returned an invalid or oversized response. Its output stays silent; update the plugin or report this error."),
+            Self::Protocol(reason) => write!(formatter, "The plugin could not complete the request: {reason}. Its output stays silent after a processing failure."),
+            Self::UnsupportedFeature(reason) => write!(formatter, "The plugin declined this operation ({reason}). Audio processing can continue; the previous saved settings are kept."),
+            Self::PluginIdentity(_) => formatter.write_str("The plugin file changed or is outside its scanned folder. Scan the folder again and use the scanned version in Properties."),
+            Self::State(_) => formatter.write_str("The saved plugin settings failed integrity or version checks. Restore a backup or deliberately choose Start from defaults in Properties."),
+            Self::Quarantined => formatter.write_str("The plugin failed repeatedly and is quarantined. Fix its installation or licence, then deliberately retry."),
+            Self::Exited => formatter.write_str("The isolated plugin worker exited. Check the plugin's installation and licence, then press Stop and Play."),
+            Self::Timeout => formatter.write_str("The plugin did not answer before its deadline. Check for a licence dialog, then press Stop and Play."),
+        }
+    }
+}
+
 #[cfg(windows)]
 struct WorkerSandbox {
     handle: *mut std::ffi::c_void,
@@ -2639,17 +2717,18 @@ const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: u32 = 0x0000_2000;
 const JOB_OBJECT_LIMIT_ACTIVE_PROCESS: u32 = 0x0000_0008;
 #[cfg(windows)]
 const JOB_OBJECT_LIMIT_PROCESS_MEMORY: u32 = 0x0000_0100;
-const WORKER_MAX_ACTIVE_PROCESSES: u32 = 1;
+const WORKER_MAX_ACTIVE_PROCESSES: u32 = 16;
 /// The job's process limit while a plugin's own editor is open: the worker
 /// plus WebView2's browser, GPU, renderer and utility processes, with room.
 /// Decision record: docs/plans/active/current.md, 2026-10-22 editor sandbox.
 const WORKER_EDITOR_MAX_ACTIVE_PROCESSES: u32 = 16;
 #[cfg(windows)]
-const WORKER_MAX_PROCESS_MEMORY_BYTES: usize = 512 * 1024 * 1024;
+const WORKER_MAX_PROCESS_MEMORY_BYTES: usize = 2 * 1024 * 1024 * 1024;
 
 /// Windows system and user-profile variables a plugin worker inherits. No
 /// AudioRouter, credential or developer variable is on this list.
-const PLUGIN_WORKER_ENVIRONMENT: [&str; 21] = [
+const PLUGIN_WORKER_ENVIRONMENT: [&str; 22] = [
+    "PATH",
     "SystemRoot",
     "SystemDrive",
     "windir",
@@ -3482,7 +3561,19 @@ impl SupervisedWorkerProcess {
                 supervisor,
             ));
         }
-        let process_result = if identity.format == PluginFormat::Vst2 || plugin_path.is_some() {
+        let process_result = if identity.format == PluginFormat::Vst3 && plugin_path.is_some() {
+            WorkerProcess::spawn_inner_with_class(
+                &executable,
+                &identity.sha256,
+                channels,
+                sample_rate_hz,
+                None,
+                None,
+                plugin_path,
+                None,
+                identity.metadata.class_ids.first().map(String::as_str),
+            )
+        } else if identity.format == PluginFormat::Vst2 || plugin_path.is_some() {
             WorkerProcess::spawn_for_plugin_with_sample_rate(
                 &executable,
                 plugin_path.unwrap_or(&identity.binary_path),
@@ -4211,7 +4302,7 @@ enum BridgeRequest {
 }
 
 /// How long a control request waits for the runtime thread.
-const BRIDGE_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const BRIDGE_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(35);
 
 const WORKER_STATE_STOPPED: u8 = 0;
 const WORKER_STATE_RUNNING: u8 = 1;
@@ -5052,7 +5143,14 @@ impl WorkerProcess {
     ) -> Result<Self, WorkerProcessError> {
         if !matches!(
             mode,
-            "crash" | "hang" | "invalid-output" | "descriptors" | "latency" | "latency-steps"
+            "crash"
+                | "hang"
+                | "invalid-output"
+                | "descriptors"
+                | "latency"
+                | "latency-steps"
+                | "slow-load"
+                | "state-refused"
         ) {
             return Err(WorkerProcessError::Protocol(
                 "invalid worker fixture mode".into(),
@@ -5290,10 +5388,35 @@ impl WorkerProcess {
         plugin_sha256: &str,
         channels: u16,
         sample_rate_hz: u32,
+        shared: Option<SharedAudioTransport>,
+        fixture_mode: Option<&str>,
+        plugin_path: Option<&Path>,
+        bus_layout: Option<&WorkerAudioBusLayout>,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner_with_class(
+            executable,
+            plugin_sha256,
+            channels,
+            sample_rate_hz,
+            shared,
+            fixture_mode,
+            plugin_path,
+            bus_layout,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_inner_with_class(
+        executable: impl AsRef<Path>,
+        plugin_sha256: &str,
+        channels: u16,
+        sample_rate_hz: u32,
         mut shared: Option<SharedAudioTransport>,
         fixture_mode: Option<&str>,
         plugin_path: Option<&Path>,
         bus_layout: Option<&WorkerAudioBusLayout>,
+        class_id: Option<&str>,
     ) -> Result<Self, WorkerProcessError> {
         let executable =
             validate_worker_executable(executable.as_ref()).map_err(WorkerProcessError::Spawn)?;
@@ -5343,6 +5466,14 @@ impl WorkerProcess {
                 "--plugin-path",
                 &loadable_plugin_path(plugin_path).to_string_lossy(),
             ]);
+        }
+        if let Some(class_id) = class_id {
+            if class_id.len() != 32 || !class_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return Err(WorkerProcessError::Protocol(
+                    "VST3 class ID must be 32 hexadecimal characters".into(),
+                ));
+            }
+            command.args(["--class-id", class_id]);
         }
         let input_buses = bus_layout.map(|layout| {
             layout
@@ -5441,7 +5572,9 @@ impl WorkerProcess {
             diagnostic,
             chain_members: 0,
         };
-        let hello = process.read().map_err(WorkerProcessError::Message)?;
+        let hello = process
+            .read_control()
+            .map_err(WorkerProcessError::Message)?;
         match (process.bus_layout.as_ref(), hello) {
             (
                 Some(expected),
@@ -5536,7 +5669,7 @@ impl WorkerProcess {
             asset: asset.clone(),
         })
         .map_err(WorkerProcessError::Message)?;
-        match self.read().map_err(WorkerProcessError::Message)? {
+        match self.read_control().map_err(WorkerProcessError::Message)? {
             WorkerMessage::State { asset: actual } if actual == asset => Ok(()),
             WorkerMessage::Failure { code } if code.contains("StateUnsupported") => {
                 Err(WorkerProcessError::UnsupportedFeature(code))
@@ -5551,7 +5684,7 @@ impl WorkerProcess {
     pub fn describe_parameters(&mut self) -> Result<Vec<ParameterDescriptor>, WorkerProcessError> {
         self.write(&WorkerMessage::DescribeParameters)
             .map_err(WorkerProcessError::Message)?;
-        match self.read().map_err(WorkerProcessError::Message)? {
+        match self.read_control().map_err(WorkerProcessError::Message)? {
             WorkerMessage::Parameters { descriptors } => Ok(descriptors),
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
@@ -5563,7 +5696,7 @@ impl WorkerProcess {
     pub fn describe_editor(&mut self) -> Result<EditorDescriptor, WorkerProcessError> {
         self.write(&WorkerMessage::DescribeEditor)
             .map_err(WorkerProcessError::Message)?;
-        match self.read().map_err(WorkerProcessError::Message)? {
+        match self.read_control().map_err(WorkerProcessError::Message)? {
             WorkerMessage::Editor(descriptor) => Ok(descriptor),
             WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
             _ => Err(WorkerProcessError::Protocol(
@@ -5598,7 +5731,7 @@ impl WorkerProcess {
             authorization_token: authorization.token.clone(),
         })
         .map_err(WorkerProcessError::Message)?;
-        match self.read().map_err(WorkerProcessError::Message)? {
+        match self.read_control().map_err(WorkerProcessError::Message)? {
             WorkerMessage::EditorOpened {
                 parent_window: actual,
             } if actual == authorization.parent_window => Ok(()),
@@ -5620,7 +5753,7 @@ impl WorkerProcess {
             .set_active_process_limit(WORKER_MAX_ACTIVE_PROCESSES);
         self.write(&WorkerMessage::EditorClose)
             .map_err(WorkerProcessError::Message)?;
-        match self.read().map_err(WorkerProcessError::Message)? {
+        match self.read_control().map_err(WorkerProcessError::Message)? {
             WorkerMessage::EditorClosed => Ok(()),
             WorkerMessage::Failure { code } if code == "editorUnavailable" => {
                 Err(WorkerProcessError::UnsupportedFeature(code))
@@ -5646,12 +5779,11 @@ impl WorkerProcess {
     pub fn save_state(&mut self) -> Result<PluginStateAsset, WorkerProcessError> {
         self.write(&WorkerMessage::StateSave)
             .map_err(WorkerProcessError::Message)?;
-        match self.read().map_err(WorkerProcessError::Message)? {
+        match self.read_control().map_err(WorkerProcessError::Message)? {
             WorkerMessage::State { asset } => Ok(asset),
-            WorkerMessage::Failure { code } if code.contains("StateUnsupported") => {
-                Err(WorkerProcessError::UnsupportedFeature(code))
-            }
-            WorkerMessage::Failure { code } => Err(WorkerProcessError::Protocol(code)),
+            // A completed state request can be refused without invalidating
+            // the processing instance. Framing, timeout and pipe errors still fault it.
+            WorkerMessage::Failure { code } => Err(WorkerProcessError::UnsupportedFeature(code)),
             _ => Err(WorkerProcessError::Protocol(
                 "unexpected state save response".into(),
             )),
@@ -5777,6 +5909,11 @@ impl WorkerProcess {
         }
     }
 
+    fn read_control(&mut self) -> Result<WorkerMessage, WorkerMessageError> {
+        receive_worker_message(&self.reader, WORKER_CONTROL_TIMEOUT)
+            .map_err(|error| self.with_diagnostic(error))
+    }
+
     fn read(&mut self) -> Result<WorkerMessage, WorkerMessageError> {
         receive_worker_message(&self.reader, WORKER_RESPONSE_TIMEOUT)
             .map_err(|error| self.with_diagnostic(error))
@@ -5880,7 +6017,7 @@ fn processed_frame_matches(expected: &WorkerFrame, actual: &WorkerFrame) -> bool
 /// by UADx) then fail their signature check and pass audio through
 /// unprocessed. Use the ordinary drive or UNC form whenever it fits within
 /// `MAX_PATH`; longer paths keep the verbatim form.
-fn loadable_plugin_path(path: &Path) -> PathBuf {
+pub fn loadable_plugin_path(path: &Path) -> PathBuf {
     const MAX_ORDINARY_PATH: usize = 259;
     let text = path.to_string_lossy();
     let ordinary = if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
@@ -7289,9 +7426,9 @@ mod tests {
             .and_then(|value| value.trim_end_matches(';').trim().parse().ok())
             .expect("kUiRequestTimeoutMs is declared as a literal");
         assert!(
-            u128::from(ui_timeout_ms) < WORKER_RESPONSE_TIMEOUT.as_millis(),
+            u128::from(ui_timeout_ms) < WORKER_CONTROL_TIMEOUT.as_millis(),
             "worker UI timeout {ui_timeout_ms} ms must be below the host's {:?}",
-            WORKER_RESPONSE_TIMEOUT
+            WORKER_CONTROL_TIMEOUT
         );
         // A latency restart is posted to the UI thread, and no request
         // invalidates the cache the poll is answered from.
@@ -7867,6 +8004,34 @@ mod tests {
     }
 
     #[test]
+    fn a_scan_that_runs_out_of_time_keeps_its_candidates_listed() {
+        let root = temp_root();
+        fs::write(root.join("effect.vst3"), pe_x64()).unwrap();
+        let expired = ScanControl::with_deadline(Instant::now());
+        let entries =
+            inspect_scan_candidates(&root, vec![root.join("effect.vst3")], &expired).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].error, Some(InspectionError::DeadlineExceeded));
+        let cancelled = ScanControl::default_deadline();
+        cancelled.cancel();
+        assert_eq!(
+            inspect_scan_candidates(&root, vec![root.join("effect.vst3")], &cancelled),
+            Err(ScanError::Cancelled)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn scanned_paths_use_the_ordinary_drive_form() {
+        let root = temp_root();
+        fs::write(root.join("effect.vst3"), pe_x64()).unwrap();
+        let entries = scan_directory(&root).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert!(!entries[0].path.to_string_lossy().starts_with(r"\\?\"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn controlled_scan_honors_cancel_and_deadline() {
         let root = temp_root();
         let cancelled = ScanControl::default_deadline();
@@ -7884,7 +8049,7 @@ mod tests {
     }
 
     #[test]
-    fn refuses_a_reparse_point_scan_root() {
+    fn resolves_an_explicit_reparse_point_scan_root() {
         let root = temp_root();
         let target = root.join("target");
         fs::create_dir(&target).unwrap();
@@ -7895,10 +8060,33 @@ mod tests {
         let link_result = std::os::unix::fs::symlink(&target, &link);
 
         if link_result.is_ok() {
-            assert_eq!(scan_directory(&link), Err(ScanError::InvalidRoot));
+            assert!(scan_directory(&link).unwrap().is_empty());
             remove_directory_link(&link);
         }
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn scanning_a_large_library_does_not_drop_every_plugin() {
+        let root = temp_root();
+        for index in 0..300 {
+            let directory = root.join(format!("vendor-{index}"));
+            fs::create_dir(&directory).unwrap();
+            fs::write(directory.join("effect.vst3"), pe_x64()).unwrap();
+        }
+        let entries = scan_directory(&root).unwrap();
+        assert_eq!(entries.len(), 300);
+        assert!(entries.iter().all(|entry| entry.identity.is_some()));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn half_megabyte_state_survives_worst_case_json_encoding() {
+        let asset = PluginStateAsset::new(1, vec![255; 512 * 1024]).unwrap();
+        let message = WorkerMessage::State { asset };
+        let frame = encode_worker_message(&message).unwrap();
+        assert_eq!(decode_worker_message(&frame).unwrap(), message);
+        const { assert!(MAX_WORKER_MESSAGE_BYTES >= MAX_WORKER_STATE_BYTES * 4 + 1024) };
     }
 
     #[test]

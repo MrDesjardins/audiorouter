@@ -7,6 +7,27 @@ import { demoSession } from "./fixtures";
 
 afterEach(cleanup);
 
+it("reports failed standard scans instead of claiming zero plugins were found", async () => {
+  const backend = {
+    ...createDisconnectedBackend(demoSession),
+    connected: true,
+    scanPlugins: vi.fn().mockRejectedValue(new Error("tooManyCandidates: scan the vendor folder separately")),
+  };
+  render(
+    <PluginToolsGroup
+      backend={backend}
+      connected
+      search=""
+      refreshKey={false}
+      onAdd={() => {}}
+      onOpenPicker={() => {}}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Scan standard folders" }));
+  await waitFor(() => expect(screen.getByText(/Plugin scan failed for/)).toBeTruthy());
+  expect(screen.getByRole("button", { name: "Copy error" })).toBeTruthy();
+});
+
 it("marks a pending scan busy, disables competing actions and retains its directory after failure", async () => {
   let reject!: (error: Error) => void;
   const scanPlugins = vi.fn(

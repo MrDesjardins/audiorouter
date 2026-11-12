@@ -2749,6 +2749,21 @@ impl Storage {
         Ok(previous.filter(|previous| previous != state_id))
     }
 
+    /// Forget a plugin node's latest captured state, so the next Play does not
+    /// restore it. The state asset itself is kept. Returns the forgotten ID.
+    pub fn clear_plugin_node_state(
+        &self,
+        session_id: &str,
+        node_id: &str,
+    ) -> Result<Option<String>, StorageError> {
+        let previous = self.plugin_node_state(session_id, node_id)?;
+        self.connection.execute(
+            "DELETE FROM plugin_node_states WHERE session_id = ?1 AND node_id = ?2",
+            params![session_id, node_id],
+        )?;
+        Ok(previous)
+    }
+
     /// The latest captured state of a plugin node, if any.
     pub fn plugin_node_state(
         &self,

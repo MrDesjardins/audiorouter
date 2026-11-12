@@ -1,5 +1,5 @@
 {
-  "backendMethods": 125,
+  "backendMethods": 126,
   "operations": [
     {
       "method": "POST",
@@ -586,6 +586,13 @@
       "method": "POST",
       "path": "/api/v1/plugins/saveState",
       "operation": "plugins.saveState",
+      "permission": "PluginScan",
+      "effect": "Mutating"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/plugins/prepareUpdate",
+      "operation": "plugins.prepareUpdate",
       "permission": "PluginScan",
       "effect": "Mutating"
     },
