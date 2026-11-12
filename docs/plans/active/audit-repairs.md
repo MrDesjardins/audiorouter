@@ -183,3 +183,30 @@ virtual-cable commits (`ffb94197`, `7c88895c`, `a2dd275e`). After committing
 STO-5, move only this branch's repair commits onto the current `origin/main`
 so the requested PR does not include that separate driver work. Preserve the
 original checkout/branch. Repeat affected validation on the resulting base.
+
+Rebase completed onto `8794a7968` (current `origin/main` fetched 2026-11-12).
+The four repair commits are now `37a19810e` (SES-1 coverage), `b47a63849`
+(MEDIA-1), `fd928fd91` (SES-2), `b35628358` (STO-5). Original hashes above
+describe pre-rebase evidence. Main already contained the SES-1 ordering repair
+and a stronger asynchronous OBS fixture; retained the deletion regressions,
+adapted the timeout regression to main's per-session comparison map, and
+dropped the redundant OBS-only commit. Preserved upstream Copy error UI and
+all active-plan entries while resolving conflicts. No driver commit remains
+in this branch's ancestry beyond main. Rebased library results: control
+382 pass / 12 ignored, storage 107 pass, CLI 52 pass. Reinstalled the new
+lockfile's UI dependencies (zero audit vulnerabilities); typecheck passes.
+Formatting changed only the adapted comparison test. Native/browser checks
+will be repeated on this base before PR handoff.
+
+STO-4 prerequisite found: this PC has a real OneDrive root carrying
+`FILE_ATTRIBUTE_REPARSE_POINT` and cloud tag `0x9000701a` (`fsutil reparsepoint
+query` metadata-only inspection). No user files were read, created or changed.
+This allows a real policy reproduction instead of assuming cloud behavior.
+
+Rebased recovery qualification: rebuilt `e2e_backend`, all three real-backend
+Edge recovery journeys pass again (dark/light/high contrast). Contracts drift
+passes at main's 148 methods / 37 kinds / 20 processors / 22 event categories.
+Both format checks pass; docs acceptance passes 259 files / 1,464 links.
+Next concrete repair: REC-1's counting-writer regression and bounded chunk
+encoding, followed by DSP-1/2. Native shell qualification on the new base and
+the full branch validation remain in the final PR gate.

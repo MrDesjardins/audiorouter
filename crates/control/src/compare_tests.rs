@@ -331,10 +331,13 @@ fn refused_delete_preserves_the_comparison_timeout() {
     plane.session_start(&id).unwrap();
     let expires_at = Instant::now() + MAX_HOLD;
     // Seed the hold without a native device; deletion still uses real dispatch.
-    plane.comparison.insert(id.clone(), Comparison {
-        nodes: vec![EntityId::new("gate")],
-        expires_at,
-    });
+    plane.comparison.insert(
+        id.clone(),
+        Comparison {
+            nodes: vec![EntityId::new("gate")],
+            expires_at,
+        },
+    );
     let response = plane.dispatch(JsonRpcRequest {
         jsonrpc: "2.0".into(),
         id: Some(json!(1)),
