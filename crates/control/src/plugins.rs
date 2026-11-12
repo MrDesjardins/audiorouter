@@ -760,29 +760,39 @@ mod plugin_inventory_tests {
         let _ = std::fs::remove_dir_all(&folder);
     }
 
-    /// The UI lists a folder with the text the user typed; the scan is
-    /// remembered under the resolved folder.
+    /// A plugin folder reached through a link (for example one on another
+    /// drive) is scanned under its real folder, and listing with the link's
+    /// own spelling finds that scan. Skipped where the PC cannot create links.
     #[cfg(windows)]
     #[test]
-    fn a_scanned_folder_is_listed_under_another_spelling_of_its_path() {
+    fn a_scanned_folder_behind_a_link_is_listed_under_the_link_spelling() {
         let unique = format!("{}-{:?}", std::process::id(), std::thread::current().id())
             .replace(['(', ')'], "");
-        let folder = std::env::temp_dir().join(format!("audiorouter-plugin-spelling-{unique}"));
-        std::fs::create_dir_all(&folder).unwrap();
-        std::fs::write(folder.join("effect.dll"), b"not a plugin").unwrap();
-        let typed = format!("{}\\", folder.to_string_lossy().to_uppercase());
-        let mut plane = ControlPlane::default();
-        let scanned = plane
-            .dispatch_plugins_scan(Some(json!({ "directory": typed })))
-            .unwrap();
-        assert_eq!(scanned["entries"].as_array().unwrap().len(), 1);
-        let listed = plane
-            .dispatch_plugins_list(Some(json!({ "directory": typed })))
-            .unwrap();
-        assert_eq!(listed["entries"], scanned["entries"]);
-        let path = scanned["entries"][0]["path"].as_str().unwrap();
-        assert!(!path.starts_with(r"\\?\"), "{path}");
-        let _ = std::fs::remove_dir_all(&folder);
+        let base = std::env::temp_dir().join(format!("audiorouter-plugin-link-{unique}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let target = base.join("real");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("effect.dll"), b"not a plugin").unwrap();
+        let link = base.join("link");
+        if std::os::windows::fs::symlink_dir(&target, &link).is_ok() {
+            let typed = link.to_string_lossy().into_owned();
+            let mut plane = ControlPlane::default();
+            let scanned = plane
+                .dispatch_plugins_scan(Some(json!({ "directory": typed })))
+                .unwrap();
+            assert_eq!(scanned["entries"].as_array().unwrap().len(), 1);
+            let path = scanned["entries"][0]["path"].as_str().unwrap();
+            assert!(
+                !path.starts_with(r"\\?\") && !path.starts_with(&typed),
+                "{path}"
+            );
+            let listed = plane
+                .dispatch_plugins_list(Some(json!({ "directory": typed })))
+                .unwrap();
+            assert_eq!(listed["entries"], scanned["entries"]);
+            let _ = std::fs::remove_dir(&link);
+        }
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
 
@@ -1313,13 +1323,16 @@ impl ControlPlane {
                 "directory path must be absolute".into(),
             ));
         }
-        let canonical_root = std::fs::canonicalize(root).map_err(|_| {
-            ControlError::PluginScan(audiorouter_plugin_host::ScanError::InvalidRoot)
-        })?;
-        let directory = audiorouter_plugin_host::loadable_plugin_path(&canonical_root)
-            .to_string_lossy()
-            .into_owned();
-        let root = canonical_root.as_path();
+        // The caller's spelling is kept unless the folder is reached through a
+        // junction or link; then the resolved folder is the key and the grant.
+        let resolved_root =
+            audiorouter_plugin_host::resolve_scan_root(root).map_err(ControlError::PluginScan)?;
+        let directory = if resolved_root == root {
+            directory.to_owned()
+        } else {
+            resolved_root.to_string_lossy().into_owned()
+        };
+        let root = resolved_root.as_path();
         let entries = self
             .while_servicing_audio(|| audiorouter_plugin_host::scan_directory(root))
             .map_err(ControlError::PluginScan)?;
@@ -1379,14 +1392,11 @@ impl ControlPlane {
                 "directory path must be absolute".into(),
             ));
         }
-        // A scan is remembered under its resolved folder. Accept the spelling
-        // the caller scanned with too (other letter case, a trailing
-        // separator, a junction), or the list looks empty after a good scan.
-        let resolved = std::fs::canonicalize(directory).ok().map(|path| {
-            audiorouter_plugin_host::loadable_plugin_path(&path)
-                .to_string_lossy()
-                .into_owned()
-        });
+        // A scan of a folder reached through a junction is remembered under
+        // the resolved folder; accept the spelling the caller scanned with.
+        let resolved = audiorouter_plugin_host::resolve_scan_root(std::path::Path::new(directory))
+            .ok()
+            .map(|path| path.to_string_lossy().into_owned());
         Ok(self
             .plugin_inventories
             .get(directory)
