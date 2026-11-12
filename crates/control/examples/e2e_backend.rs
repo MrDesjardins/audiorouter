@@ -146,6 +146,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "recordings.preview" | "recordings.inspectRecovery" | "recordings.setMetadata"
             );
         if allowed {
+            // TEMPORARY (PR #139 CI debugging): identify the method whose
+            // dispatch exhausts the hosted runner's main-thread stack.
+            eprintln!("fixture dispatch: {method}");
             serde_json::to_writer(&mut output, &plane.dispatch(request))?;
         } else {
             serde_json::to_writer(

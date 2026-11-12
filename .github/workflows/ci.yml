@@ -251,6 +251,56 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # TEMPORARY (PR #139 CI debugging): a short fixture-only crash reproduction.
+  fixture-debug:
+    name: TEMP fixture stack diagnostics
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # 2026-07-16 action revision
+        with:
+          toolchain: 1.96.0
+
+      - name: Install debugger and build fixture
+        shell: pwsh
+        run: |
+          choco install windows-sdk-10.0 --no-progress -y --ignore-package-exit-codes
+          cargo build -p audiorouter-control --example e2e_backend --locked
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe', 'C:\Program Files\Windows Kits\10\Debuggers\x64\cdb.exe' -ErrorAction SilentlyContinue
+
+      - name: Stress fixture under debugger
+        shell: pwsh
+        run: |
+          $cdb = @('C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe', 'C:\Program Files\Windows Kits\10\Debuggers\x64\cdb.exe') | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $cdb) { throw 'cdb was not installed' }
+          $exe = (Resolve-Path 'target/debug/examples/e2e_backend.exe').Path
+          $failed = $false
+          for ($index = 0; $index -lt 200; $index++) {
+            $directory = Join-Path $env:TEMP ("audiorouter-e2e-debug-" + [guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $directory | Out-Null
+            $requests = @('{"jsonrpc":"2.0","id":1,"method":"sessions.active.get"}', '{"jsonrpc":"2.0","id":2,"method":"presets.list"}', '{"jsonrpc":"2.0","id":3,"method":"processors.list"}', '{"jsonrpc":"2.0","id":4,"method":"sessions.list","params":{"limit":500}}', '{"jsonrpc":"2.0","id":5,"method":"recordings.list","params":{"sessionId":"demo-session","limit":500}}', '{"jsonrpc":"2.0","id":6,"method":"recorders.list"}', '{"jsonrpc":"2.0","id":7,"method":"status.get"}', '{"jsonrpc":"2.0","id":8,"method":"system.diagnostics"}', '{"jsonrpc":"2.0","id":9,"method":"system.describe"}', '{"jsonrpc":"2.0","id":10,"method":"sessions.get","params":{"sessionId":"e2e-session"}}') -join "`n"
+            $result = $requests | & $cdb -c 'sxe av; sxe sov; g; kc 200; !peb; q' $exe $directory 2>&1 | Out-String
+            if ($result -match 'overflowed its stack|STATUS_STACK_OVERFLOW|c00000fd') {
+              "CRASH ITERATION $index"
+              $result
+              $failed = $true
+              break
+            }
+            if ($index % 20 -eq 0) { "completed iteration $index" }
+            Remove-Item -LiteralPath $directory -Recurse -Force
+          }
+          if ($failed) { exit 1 }
+
+      - name: Locate debugger logs
+        if: always()
+        shell: pwsh
+        run: Get-ChildItem $env:TEMP -Filter '*.dmp' -Recurse -ErrorAction SilentlyContinue | Select-Object FullName, Length
+
   browser:
     name: UI browser tests (Edge)
     needs: changes
