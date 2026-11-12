@@ -86,6 +86,8 @@ Evidence (2026-11-11, Windows / Node 22.22.3 / Edge):
   now, the channel change, turning off and reloading, and an offline failure.
 - Screenshots: `%TEMP%\audiorouter-playwright-results\update-notice.pw.ts-*\`
   and `target/ui-quality-review/round-25/updates-*.png`.
+- PR screenshots (dark theme, injected 0.0.28 release): [Settings page](evidence/2026-11-11-update-check-settings-dark.png)
+  and [New versions panel](evidence/2026-11-11-update-check-panel-dark.png).
 - One earlier parallel run ended with a Playwright
   `browserContext.close: ENOENT ... recording.trace` artifact error; the same
   scenario passed when rerun alone and in the final single-worker run. It did
