@@ -263,3 +263,10 @@ writer can still exceed STATE-09's Quit budget. Add a stalled-worker regression
 and a bounded lifecycle/retirement path before calling the branch ready. This
 is actual remaining code work, not passing timeout evidence or an external
 hardware blocker.
+
+DSP-2 committed as `d4bcbaaf8`; DSP-1 is `4a6671bcb`, REC-1 is `5fda58555`.
+Next task: reproduce stalled threaded-recorder shutdown with a bounded test
+and repair SES-2's remaining wait/retirement budget. Then finish ENG-1,
+STO-1/2/3/4, SES-3 and SIM-1, update Limiter guide evidence, run the full PR
+gate and create the authorized PR. The scope-count clarification remains
+open; no goal completion or PR readiness is claimed.
