@@ -1424,6 +1424,35 @@ fn every_described_parameter_is_accepted_and_its_bounds_are_enforced() {
     }
 }
 
+#[test]
+fn every_described_media_parameter_is_owned_by_the_domain_reference_walker() {
+    for kind in audiorouter_domain::NodeKind::ALL {
+        for parameter in ControlPlane::node_parameter_schema(kind)
+            .as_array()
+            .unwrap()
+        {
+            let name = concrete_parameter_name(parameter);
+            if !name.ends_with("MediaId") && name != "mediaId" && !name.ends_with("Set") {
+                continue;
+            }
+            let mut node = crate::test_support::session().nodes.remove(0);
+            node.kind = kind;
+            let value = if name.ends_with("Set") {
+                json!(["stored-a", "lib:installed", "stored-b"])
+            } else {
+                json!("stored-a")
+            };
+            node.parameters.insert(name.clone(), value);
+            let expected = if name.ends_with("Set") {
+                vec!["stored-a", "stored-b"]
+            } else {
+                vec!["stored-a"]
+            };
+            assert_eq!(node.audio_media_ids(), expected, "{kind:?}.{name}");
+        }
+    }
+}
+
 /// Every descriptor in nodes.types and processors.list fits the published
 /// output schema: only known fields, and the required ones present.
 #[test]

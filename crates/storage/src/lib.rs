@@ -218,11 +218,7 @@ fn keep_session_audio_media(
     transaction: &Transaction<'_>,
     session: &Session,
 ) -> Result<(), StorageError> {
-    for media_id in session
-        .nodes
-        .iter()
-        .filter_map(|node| node.parameters.get("mediaId")?.as_str())
-    {
+    for media_id in session.audio_media_ids() {
         transaction.execute(
             "UPDATE audio_media SET expires_at = NULL WHERE id = ?1 AND expires_at IS NOT NULL",
             params![media_id],
@@ -3026,11 +3022,7 @@ impl Storage {
         };
         let state_records = self.list_plugin_states(None)?;
         for node in &exported_session.nodes {
-            if let Some(id) = node
-                .parameters
-                .get("mediaId")
-                .and_then(|value| value.as_str())
-            {
+            for id in node.audio_media_ids() {
                 if safe_id(id) && !media.iter().any(|entry: &BundleMedia| entry.id == id) {
                     if let Some((file_name, format, bytes)) = self.load_audio_media(id)? {
                         let path = format!("media/{id}");
@@ -3342,28 +3334,28 @@ impl Storage {
             })?;
             report.plugin_states_restored += 1;
         }
+        let missing_media = session
+            .audio_media_ids()
+            .into_iter()
+            .filter(|id| {
+                !media.iter().any(|(entry, _)| entry.id == *id)
+                    && self.load_audio_media(id).ok().flatten().is_none()
+            })
+            .count();
         let referenced = session
             .nodes
             .iter()
             .filter(|node| {
                 node.parameters
-                    .get("mediaId")
+                    .get("stateId")
                     .and_then(|value| value.as_str())
                     .is_some_and(|id| {
-                        !media.iter().any(|(entry, _)| entry.id == id)
-                            && self.load_audio_media(id).ok().flatten().is_none()
+                        !plugin_states.iter().any(|(state, _)| state.id == id)
+                            && !existing_states.iter().any(|record| record.id == id)
                     })
-                    || node
-                        .parameters
-                        .get("stateId")
-                        .and_then(|value| value.as_str())
-                        .is_some_and(|id| {
-                            !plugin_states.iter().any(|(state, _)| state.id == id)
-                                && !existing_states.iter().any(|record| record.id == id)
-                        })
             })
             .count();
-        report.missing_assets += referenced;
+        report.missing_assets += missing_media + referenced;
         Ok((session, report))
     }
 
@@ -6230,6 +6222,53 @@ mod tests {
         );
         drop((source, target));
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn soundboard_media_is_kept_and_carried_in_bundles() {
+        let source = Storage::open_memory().unwrap();
+        for id in ["pad", "set"] {
+            source
+                .store_audio_media(id, "sound.wav", "wav", b"sound", Some(i64::MAX))
+                .unwrap();
+        }
+        let mut original = session();
+        original.nodes[0].kind = NodeKind::Soundboard;
+        original.nodes[0].parameters = serde_json::from_value(serde_json::json!({
+            "slot1MediaId": "pad", "slot2Set": ["set", "lib:fixture"],
+            "slot3MediaId": "missing"
+        }))
+        .unwrap();
+        source.save_session(&original).unwrap();
+        for id in ["pad", "set"] {
+            let expiry: Option<i64> = source
+                .connection
+                .query_row(
+                    "SELECT expires_at FROM audio_media WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(expiry, None, "{id}");
+        }
+        let prepared = source.prepare_bundle_export(&original.id).unwrap();
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-board-bundle-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let bundle = root.join("board.audiorouter");
+        prepared.write(&bundle).unwrap();
+        let target = Storage::open_memory().unwrap();
+        let staged = Storage::stage_session_bundle(&bundle, root.join("staging")).unwrap();
+        let (_, report) = target.restore_session_bundle(staged).unwrap();
+        assert_eq!(report.media_restored, 2);
+        assert_eq!(report.missing_assets, 1);
+        for id in ["pad", "set"] {
+            assert!(target.load_audio_media(id).unwrap().is_some(), "{id}");
+        }
+        std::fs::remove_file(bundle).unwrap();
+        // Only files owned by this test are removed; no recursive traversal.
+        std::fs::remove_dir(root.join("staging")).unwrap();
+        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]

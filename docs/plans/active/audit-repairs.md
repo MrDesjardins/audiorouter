@@ -59,3 +59,16 @@ MEDIA-1: dispatcher deletion regression fails because used Soundboard media
 was deleted; storage regression fails because pad expiry is retained.
 Next: centralize exhaustive node media references and use them in all four
 owners, then rerun these failures and broader media/bundle tests.
+
+MEDIA-1 repair: `Node::audio_media_ids` exhaustively classifies all 37 kinds;
+`Session::audio_media_ids` deduplicates references. Retention, deletion,
+bundle export and missing-asset reporting share these helpers, including
+Soundboard sets and disabled nodes, excluding installed-library references.
+The catalog test walks described media parameters to prevent schema drift.
+Both original failures now pass. The bundle test also proves two sounds
+restore and one genuinely missing sound is reported (library assets excluded).
+The first post-fix bundle run exposed an empty staging-directory cleanup
+omission in the test; explicit non-recursive cleanup now passes.
+Windows full library suites: control 367 pass / 11 explicitly ignored;
+storage 107 pass. No native endpoint or live-owner session was exercised.
+Next: validate Clippy/format and commit MEDIA-1, then SES-2 shutdown failure.
