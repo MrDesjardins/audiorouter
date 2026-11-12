@@ -10,7 +10,7 @@ import {
   type CustomThemeLibrary,
 } from "./customTheme";
 import { UpdatesPanel } from "./UpdateNotice";
-import { setUpdateCheckEnabled } from "./updateCheck";
+import { readUpdateChannel, setUpdateChannel, setUpdateCheckEnabled } from "./updateCheck";
 import { useCanvasGroups } from "./CanvasGroups";
 import {
   lazy,
@@ -41,7 +41,7 @@ import { humanizeNodeKind } from "./canvasNodeKinds";
 import { useWorkbenchStatus } from "./useWorkbenchStatus";
 import { useRecordingActions } from "./useRecordingActions";
 import { VersionLine } from "./UpdateNotice";
-import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
+import { isAutomatedHarness, noNetworkUpdateFetcher, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
 import {
   formatUiError,
   notReadyNode,
@@ -525,7 +525,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [backend, draft, devices, discordAppCheck, obsAppCheck]);
   // UI-18: optional daily new-version check (GitHub public releases list).
   const [updateChecks, setUpdateChecks] = useState(updateCheckEnabled);
-  const availableUpdate = useUpdateCheck(updateChecks && !isAutomatedHarness());
+  const [updateChannel, setUpdateChannelState] = useState(readUpdateChannel);
+  const updateState = useUpdateCheck(
+    updateChecks,
+    updateChannel,
+    isAutomatedHarness() ? noNetworkUpdateFetcher : undefined,
+  );
+  const availableUpdate = updateState.update;
   const selectNodeProperties = (id: string) => {
     groupState.selectGroup("");
     setSelectedNodeId(id);
@@ -3652,11 +3658,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     versions: (
       <UpdatesPanel
         enabled={updateChecks}
+        channel={updateChannel}
         onChange={(enabled) => {
           setUpdateCheckEnabled(enabled);
           setUpdateChecks(enabled);
         }}
-        update={availableUpdate}
+        onChannelChange={(channel) => {
+          setUpdateChannel(channel);
+          setUpdateChannelState(channel);
+        }}
+        updateState={updateState}
       />
     ),
     clients: <ClientsPanel backend={backend} />,
