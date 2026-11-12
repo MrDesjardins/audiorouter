@@ -10,7 +10,7 @@ network. Every route is a picture you can read, and every setting is live.
 
 [![CI](https://github.com/MrDesjardins/audiorouter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/MrDesjardins/audiorouter/actions/workflows/ci.yml)
 [![Quality: coverage, soak and startup](https://github.com/MrDesjardins/audiorouter/actions/workflows/quality.yml/badge.svg?branch=main)](https://github.com/MrDesjardins/audiorouter/actions/workflows/quality.yml)
-[![Latest release](https://img.shields.io/github/v/release/MrDesjardins/audiorouter)](https://github.com/MrDesjardins/audiorouter/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/MrDesjardins/audiorouter?include_prereleases)](https://github.com/MrDesjardins/audiorouter/releases)
 [![Downloads](https://img.shields.io/github/downloads/MrDesjardins/audiorouter/total)](https://github.com/MrDesjardins/audiorouter/releases)
 
 **[Website](https://audiorouter.org)** ·
