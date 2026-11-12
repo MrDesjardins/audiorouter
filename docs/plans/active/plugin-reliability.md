@@ -298,20 +298,27 @@ with that method sequence.
 
 Cause: the comprehensive output-schema match has a 0x64B40-byte (402.8 KiB)
 debug stack frame. The same prologue exists in the base revision, so this is a
-latent stack-budget defect exposed by the hosted runner, not recursive schema
-references introduced by `plugins.prepareUpdate`. A tiny caller plus nested
-large frames can exceed a Windows main thread's available stack; ordinary local
-runs have enough remaining budget.
+latent stack-budget defect exposed by the hosted runner, not unbounded schema
+recursion. `plugins.inventory` calls `method_output_schema("plugins.list")` in
+its `json!` result; the outer match's frame stays live while a second equally
+large schema frame is built. An ordinary local run has enough remaining stack,
+but the hosted runner does not.
 
-Fix: `method_output_schema` is now a small wrapper around a separate
-`#[inline(never)]` implementation. It returns exactly the same JSON and does
-not change thread or stack-size policy. Disassembly of the debug fixture on
-Windows 11 confirms the wrapper reserves only 0x28 bytes; the implementation's
-0x64B40-byte frame is isolated in its own call. The existing dispatcher tests
-already exercise `presets.list` and `describe`, including schema contents;
-the focused CI job exercises the actual main-thread reproduction. Temporary
-WER, method logging and debugger-job instrumentation must be removed after
-qualification; they are not product changes.
+The first wrapper-only attempt (`eac2409c`, job 131007030416) proved this
+distinction: it reduced the wrapper to 0x28 bytes but still overflowed with
+`impl → wrapper → impl → wrapper` on the debugger stack. Moving the schema
+implementation alone therefore did not fix the nested allocation.
+
+Fix: `method_output_schema` remains a small wrapper around a separate
+`#[inline(never)]` implementation, and the shared plugin scan/list/retry schema
+is a separate 0x2D10-byte (11.3 KiB) helper used by both the direct methods and
+`plugins.inventory`. The outer match's frame is now 0x61E80 bytes (391.6 KiB);
+the nested list schema no longer allocates another 400 KiB. Generated JSON is
+unchanged. Disassembly of the debug fixture on Windows 11 confirms these frame
+sizes. The existing dispatcher tests exercise `presets.list` and `describe`,
+including schema contents; the focused CI job exercises the real main-thread
+reproduction. Temporary WER, method logging and debugger-job instrumentation
+must be removed after qualification; they are not product changes.
 
 Validation and rollback: rerun focused hosted reproduction, then the complete
 Edge suite, control tests, fmt/Clippy, contracts and docs. Revert only the
