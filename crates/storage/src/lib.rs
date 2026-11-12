@@ -37,6 +37,18 @@ pub const MAX_OPERATION_JOURNAL_ENTRIES: usize = 4_096;
 pub const MAX_AUDIO_MEDIA_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_AUDIO_MEDIA_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuarantinedSession {
+    pub session_id: String,
+    pub reason: String,
+}
+
+pub struct SessionInventory {
+    pub sessions: Vec<Session>,
+    pub quarantined: Vec<QuarantinedSession>,
+}
+
 #[derive(Debug)]
 pub enum StorageError {
     Sql(rusqlite::Error),
@@ -2897,6 +2909,80 @@ impl Storage {
         self.list_sessions_after(None, limit)
     }
 
+    /// Isolate invalid graph documents without weakening strict single-row
+    /// reads or treating database I/O failures as an empty successful setup.
+    /// Original rows remain untouched for export, repair or deliberate delete.
+    pub fn session_inventory(&self) -> Result<SessionInventory, StorageError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT id FROM sessions ORDER BY id LIMIT ?1")?;
+        let ids = statement
+            .query_map(
+                [audiorouter_domain::MAX_SESSIONS_GLOBAL as i64 + 1],
+                |row| row.get::<_, String>(0),
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        if ids.len() > audiorouter_domain::MAX_SESSIONS_GLOBAL {
+            return Err(StorageError::InvalidSession(
+                "stored session inventory exceeds the global limit".into(),
+            ));
+        }
+        let mut inventory = SessionInventory {
+            sessions: Vec::new(),
+            quarantined: Vec::new(),
+        };
+        for id in ids {
+            match self.load_session(&EntityId::new(&id)) {
+                Ok(Some(session)) => inventory.sessions.push(session),
+                Ok(None) => {}
+                Err(
+                    StorageError::InvalidSession(_)
+                    | StorageError::Json(_)
+                    | StorageError::DocumentTooLarge { .. },
+                ) => {
+                    inventory.quarantined.push(QuarantinedSession { session_id: id,
+                        reason: "This saved session cannot be read by this version of AudioRouter. Its original data has been kept.".into() });
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(inventory)
+    }
+
+    /// History is advisory recovery data. Skip only invalid documents; an
+    /// unreadable database still fails. The validated current row is loaded
+    /// independently, so a damaged history tail cannot replace that graph.
+    pub fn load_usable_history(&self, id: &EntityId) -> Result<Vec<Session>, StorageError> {
+        validate_session_id(id)?;
+        let mut statement = self.connection.prepare(
+            "SELECT revision, document FROM session_history WHERE session_id = ?1 ORDER BY revision DESC LIMIT ?2")?;
+        let rows = statement
+            .query_map(
+                params![id.as_str(), MAX_SESSION_HISTORY_ITEMS as i64],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut history = Vec::new();
+        for (revision, document) in rows {
+            let validated = (|| {
+                let session = Self::deserialize_validated_session(&document)?;
+                Self::validate_stored_session_identity(id.as_str(), &session)?;
+                Self::validate_stored_session_revision(revision, &session)?;
+                Ok::<_, StorageError>(session)
+            })();
+            match validated {
+                Ok(session) => history.push(session),
+                Err(
+                    StorageError::InvalidSession(_)
+                    | StorageError::Json(_)
+                    | StorageError::DocumentTooLarge { .. },
+                ) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(history)
+    }
+
     pub fn count_sessions(&self) -> Result<usize, StorageError> {
         let count = self
             .connection
@@ -2960,6 +3046,29 @@ impl Storage {
         self.load_session(id)?
             .map(|session| serde_json::to_string(&session).map_err(StorageError::Json))
             .transpose()
+    }
+
+    /// Explicit recovery export: return the stored text without parsing or
+    /// rewriting it. This never admits the document to an executable graph.
+    pub fn export_raw_session(&self, id: &EntityId) -> Result<Option<String>, StorageError> {
+        validate_session_id(id)?;
+        let document: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT document FROM sessions WHERE id = ?1",
+                [id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(document) = &document {
+            if document.len() > MAX_SESSION_DOCUMENT_BYTES {
+                return Err(StorageError::DocumentTooLarge {
+                    bytes: document.len(),
+                    maximum: MAX_SESSION_DOCUMENT_BYTES,
+                });
+            }
+        }
+        Ok(document)
     }
 
     /// Export a stopped session document as a v1 `.audiorouter` ZIP bundle.

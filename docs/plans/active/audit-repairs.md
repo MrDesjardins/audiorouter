@@ -8,6 +8,12 @@ Branch: `fix/audit-high-medium`, isolated at `target/audit-repair` from
 `a2dd275e`. The original checkout's unrelated changes are preserved.
 The owner's request explicitly authorizes opening this PR after validation.
 
+Count correction (2026-11-12): the authoritative audit index has three high
+and **eleven** medium rows, despite the earlier summary saying twelve medium.
+Clarification requested asynchronously about the extra finding (suggested
+SES-4 recorder cleanup). Continue every listed high/medium repair while the
+owner decides; do not silently mark the original count achieved.
+
 ## Requirements and tasks
 
 STATE-02/04/05/07/09/12, REC-01/07/08/09, graph atomicity and DSP dynamics
@@ -109,3 +115,71 @@ Documentation acceptance passes 250 files / 1,449 links; diff whitespace check
 passes. Full shutdown diff inspected. A bounded finalization-time test and
 attended native Stop remain part of final branch qualification, not passing
 evidence from these unit tests. Next implementation task: STO-5.
+
+SES-2 committed as `e23b8c57`.
+
+STO-5: a disposable SQLite database with a healthy session, malformed session
+and malformed history entry failed `try_with_storage` before repair. Storage
+now exposes a bounded usable inventory with quarantined row metadata and a
+separate validated-history loader. Strict single-row reads remain strict;
+SQL/I/O errors and privacy/device latches still fail closed. Startup uses the
+validated current row even when history is damaged. Rows are never rewritten
+or removed by quarantine. List, status and diagnostics remain available.
+`sessions.export raw=true` and default MCP `export_session raw=true` recover
+original text; explicit deletion removes the unavailable row. Contracts,
+discovery and authorization describe the optional parameter and output union.
+
+The UI's existing reserved message slot links to session recovery. The panel
+exports unchanged text and requires a second deliberate delete press. It uses
+existing app styles and does not add fields or alter tool controls.
+Windows evidence: startup/dispatcher regression passes (including persistent
+privacy mute, raw export, refused Play and deliberate delete). Control library
+369 pass / 11 hardware-dependent cases ignored. UI recovery tests 2/2 and full
+UI typecheck pass. Default MCP raw-export regression passes. Rebuilt the real
+`e2e_backend` fixture; all 3 Edge recovery journeys pass in dark/light/high
+contrast, through database fault injection and backend restart, original-byte
+download, cancel/delete and healthy-session retention. Inspected all three
+screenshots under `target/audit-evidence/recovery-<theme>.png`; controls and
+text are readable and unclipped. This is real backend/browser evidence,
+not a packaged-shell or hardware run. Playwright's NO_COLOR/FORCE_COLOR warning
+is inherited runner environment conflict, not an application diagnostic.
+Next: full storage/CLI/UI checks, format/lint/Clippy, contract drift and docs;
+inspect complete diff and commit STO-5. Then repair the eleven medium findings.
+
+STO-5 review found and reproduced a second data-loss path: the shell's default
+session bootstrap could overwrite a quarantined default ID. Creation now
+reserves quarantined IDs, and shell bootstrap uses a reusable, non-conflicting
+recovery ID. A full 128-row quarantined inventory also reproduced a startup
+failure at the durable session cap; it now permits an explicitly unsaved
+in-memory recovery workspace without altering the 128 original rows. Both
+fail-first tests pass. Shell `cargo check` passes. All-feature shell Clippy
+first required `ui/dist`; the production UI build now passes and reports its
+606.99 kB main-chunk advisory. Keep that advisory visible; chunk splitting is
+outside this data-recovery repair and is not required for correctness here.
+The full UI suite passed 1,003 tests but exposed synchronous exceptions from
+the startup-order OBS mock. Fixed that test separately in `9ffc354b` to return
+an asynchronous unavailability rejection; its two cases now pass without
+React error-boundary noise. Storage 107/107, CLI 51/51, UI lint/typecheck,
+contracts drift and docs acceptance pass. Latest control rerun: 370 pass,
+11 ignored. Updated native autoplay regression is compiling: automatic Play
+must not select another route while recovery is required; deliberate Play
+remains available. Final shell Clippy/test evidence is still pending.
+
+STO-5 final evidence: native autoplay regression failed before its guard and
+passes afterward; automatic Play now pauses while any quarantined sessions
+need recovery, leaving deliberate Play available. Native shell suite: 93 pass,
+4 explicitly ignored; all-target/all-feature shell Clippy passes after the UI
+build. Workspace/shell formatting checks, UI lint and diff checks pass.
+The current-row test also covers well-formed JSON rejected by domain validation
+(not only malformed JSON), invalid history, raw-byte preservation, create-ID
+reservation, reusable recovery default, privacy mute and deliberate deletion.
+No packaged executable or physical endpoint was run for this unit of work.
+Next: commit STO-5 and implement DSP-1/2, ENG-1, REC-1, STO-1/2/3/4, SES-3
+and SIM-1 (ten listed medium findings remain after SES-1). Extra finding count
+clarification remains pending; the original requested goal remains intact.
+
+Branch ancestry review: `origin/main..a2dd275e` contains three unrelated
+virtual-cable commits (`ffb94197`, `7c88895c`, `a2dd275e`). After committing
+STO-5, move only this branch's repair commits onto the current `origin/main`
+so the requested PR does not include that separate driver work. Preserve the
+original checkout/branch. Repeat affected validation on the resulting base.

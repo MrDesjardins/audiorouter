@@ -767,6 +767,7 @@ export interface StatusSnapshot {
   reason: string;
   storage: "memory" | "sqlite";
   sessionCount: number;
+  quarantinedSessions?: QuarantinedSession[];
   activeSessionCount: number;
   activeSessionIds: EntityId[];
   privacyMute: {
@@ -812,6 +813,7 @@ export interface SetupCheckResult {
 export interface DiagnosticsSnapshot {
   build: string;
   backend: "control-plane";
+  quarantinedSessions?: QuarantinedSession[];
   storage: "memory" | "sqlite";
   audio: { state: "available" | "unavailable"; reason: string };
   nativeAdapter: "implemented-not-activated" | "configured-stopped" | "running";
@@ -1045,6 +1047,16 @@ export interface SessionFileExportResult {
   path: string;
   revision: number;
   bytes: number;
+}
+
+export interface QuarantinedSession {
+  sessionId: EntityId;
+  reason: string;
+}
+
+export interface RawSessionExport {
+  sessionId: EntityId;
+  document: string;
 }
 
 /** A `.audiorouter` file imported as a new stopped session. */
@@ -1751,7 +1763,7 @@ export type MethodParams = {
     frequenciesHz: number[];
   };
   "sessions.get": { sessionId: EntityId };
-  "sessions.export": { sessionId: EntityId };
+  "sessions.export": { sessionId: EntityId; raw?: boolean };
   "sessions.exportFile": { sessionId: EntityId; path: string; replace?: boolean };
   "sessions.approveExport": { path: string; replace?: boolean };
   "sessions.importFile": { path: string };
@@ -1945,7 +1957,7 @@ export type MethodResult = {
   "processors.list": DiscoveryDocument["processors"];
   "processors.response": { frequenciesHz: number[]; magnitudeDb: number[] };
   "sessions.get": Session;
-  "sessions.export": Session;
+  "sessions.export": Session | RawSessionExport;
   "sessions.exportFile": SessionFileExportResult;
   "sessions.approveExport": { approved: true; expiresInMs: 300000 };
   "sessions.importFile": SessionFileImportResult;

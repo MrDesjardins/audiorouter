@@ -1815,14 +1815,8 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             Err(error) => eprintln!("AudioRouter startup registration unavailable: {error}"),
                         }
                     }
-                    let session_id = EntityId::new(DESKTOP_SESSION_ID);
-                    if plane.get_session(&session_id).is_err() {
-                        plane
-                            .insert_session(default_desktop_session())
-                            .map_err(|error| {
-                                format!("default desktop session creation failed: {error:?}")
-                            })?;
-                    }
+                    let session_id = plane.ensure_default_session(default_desktop_session())
+                        .map_err(|error| format!("default desktop session creation failed: {error:?}"))?;
                     if !safe_mode && std::env::var_os("AUDIOROUTER_CAPTURE_ENDPOINT_ID").is_some() {
                         match prepare_configured_native_worker(&mut plane, session_id.clone()) {
                             Ok(true) => eprintln!("AudioRouter native endpoint worker prepared; session start remains explicit"),

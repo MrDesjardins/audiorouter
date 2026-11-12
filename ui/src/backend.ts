@@ -452,6 +452,7 @@ export interface UiBackend {
   resetMeter?(sessionId: string, nodeId: string): Promise<{ sessionId: string; nodeId: string; reset: boolean }>;
   stopSession(sessionId: string, idempotencyKey?: string): Promise<SessionStopResult>;
   exportSession(sessionId: string): Promise<Session>;
+  exportRawSession?(sessionId: string): Promise<import("@audiorouter/contracts").RawSessionExport>;
   exportSessionFile(sessionId: string, path: string, replace?: boolean): Promise<SessionFileExportResult>;
   importSessionFile(path: string): Promise<SessionFileImportResult>;
   planSessionImport(session: Session): Promise<SessionImportPlanResult>;
@@ -1292,7 +1293,14 @@ export function createLiveBackend(
       });
     },
     async exportSession(exportSessionId) {
-      return client.request("sessions.export", { sessionId: exportSessionId });
+      const result = await client.request("sessions.export", { sessionId: exportSessionId });
+      if ("document" in result) throw new Error("Expected a validated session document.");
+      return result;
+    },
+    async exportRawSession(exportSessionId) {
+      const result = await client.request("sessions.export", { sessionId: exportSessionId, raw: true });
+      if (!("document" in result)) throw new Error("Expected the original stored session text.");
+      return result;
     },
     async exportSessionFile(exportSessionId, path, replace) {
       return client.request("sessions.exportFile", {

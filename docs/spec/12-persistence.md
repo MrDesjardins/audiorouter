@@ -6,6 +6,12 @@ Milestone ownership: M01 storage/revisions/import schema; M04 recording state; M
 
 - **STATE-01 — Storage.** Use a transactional local SQLite database for backend-owned configuration, revisions, operations, client grants, and recording index, with versioned files for large plugin states. Store per-user data under a documented LocalAppData directory; machine driver inventory belongs to a separate protected location. UI/CLI never write the database directly.
 - **STATE-02 — Revision durability.** Persist committed graph changes atomically with operation outcomes and a recoverable journal. Keep a last-known-good snapshot and bounded history. On corruption, preserve the original database for diagnosis, offer validated backup restoration, and start stopped. Never replace a corrupted configuration with an empty “successful” setup without notice.
+  An invalid session document is isolated from the executable graph inventory,
+  not fatal to healthy sessions. Preserve its stored text, report its ID in
+  `status.get` and diagnostics, and offer explicit original-text export and
+  deletion. Invalid history entries are skipped; the validated current row
+  stays authoritative. Privacy/device-access latches and database I/O errors
+  still fail closed. Raw recovery export never validates, imports or runs data.
 - **STATE-03 — Desired/observed separation.** Saved bindings, startup preference, and node parameters describe desired state. Device availability, active revision, metering, and failure state are observed runtime data. Temporary device loss must not rewrite a session or clear the user's graph.
 - **STATE-04 — Session management.** Create, name, duplicate, export/import, delete, and run multiple sessions subject to global resource limits. Duplication generates new entity IDs and keeps endpoint references unresolved if ownership would conflict. Deletion requires stopped state and never deletes recordings automatically.
 - **STATE-05 — Import/export.** Define a versioned `.audiorouter` ZIP bundle containing a JSON manifest, graph, optional UI layout, and referenced plugin/preset assets. Exclude credentials, grants, raw recordings, plugin executables, machine-specific absolute paths, and automatic driver actions. Present rebindings for missing devices/apps/plugins. Imported sessions are stopped, recorders unarmed, and startup disabled.

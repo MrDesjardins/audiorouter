@@ -148,6 +148,13 @@ pub(crate) fn session_file_path(
 
 impl ControlPlane {
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
+        if self
+            .quarantined_sessions
+            .iter()
+            .any(|entry| entry.session_id == session.id.as_str())
+        {
+            return Err(ControlError::InvalidRequest("This ID belongs to an unavailable saved session. Export or delete its original data before reusing the ID.".into()));
+        }
         let checkpoint = self.store.clone();
         self.store
             .insert_session(session.clone())
@@ -168,6 +175,61 @@ impl ControlPlane {
             Some(session.id.clone()),
         );
         Ok(())
+    }
+
+    /// Shell bootstrap must never upsert over a quarantined default graph.
+    /// Keep its original row and give the empty fallback a distinct ID.
+    pub fn ensure_default_session(
+        &mut self,
+        mut fallback: Session,
+    ) -> Result<EntityId, ControlError> {
+        if self.store.session(&fallback.id).is_some() {
+            return Ok(fallback.id);
+        }
+        let original_id = fallback.id.clone();
+        for suffix in 0..=audiorouter_domain::MAX_SESSIONS_GLOBAL {
+            let candidate = if suffix == 0 {
+                original_id.clone()
+            } else {
+                EntityId::new(format!("{}-recovery-{suffix}", original_id.as_str()))
+            };
+            if self.store.session(&candidate).is_some() {
+                return Ok(candidate);
+            }
+            if !self
+                .quarantined_sessions
+                .iter()
+                .any(|entry| entry.session_id == candidate.as_str())
+            {
+                fallback.id = candidate.clone();
+                if !self.quarantined_sessions.is_empty()
+                    && self
+                        .storage
+                        .as_ref()
+                        .map(|storage| storage.count_sessions())
+                        .transpose()
+                        .map_err(storage_error)?
+                        .is_some_and(|count| count >= audiorouter_domain::MAX_SESSIONS_GLOBAL)
+                {
+                    // A full inventory of preserved bad rows must not prevent
+                    // the window from opening recovery. This empty workspace
+                    // is temporary until the user frees a durable slot.
+                    fallback.name = "Recovery workspace (not saved)".into();
+                    self.store
+                        .insert_session(fallback)
+                        .map_err(ControlError::from)?;
+                    if self.active_session_id.is_none() {
+                        self.active_session_id = Some(candidate.clone());
+                    }
+                } else {
+                    self.insert_session(fallback)?;
+                }
+                return Ok(candidate);
+            }
+        }
+        Err(ControlError::InvalidRequest(
+            "No unused session ID is available for recovery.".into(),
+        ))
     }
 
     pub fn create_session(&mut self, session: Session) -> Result<Value, ControlError> {
@@ -217,6 +279,25 @@ impl ControlPlane {
     }
 
     pub fn delete_session(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        if self.store.session(id).is_none()
+            && self
+                .quarantined_sessions
+                .iter()
+                .any(|entry| entry.session_id == id.as_str())
+        {
+            let deleted = self
+                .storage
+                .as_ref()
+                .ok_or_else(|| ControlError::Storage("persistent storage is unavailable".into()))?
+                .delete_session(id)
+                .map_err(storage_error)?;
+            self.quarantined_sessions
+                .retain(|entry| entry.session_id != id.as_str());
+            self.forget_revision_notes(id);
+            self.events
+                .append(0, None, "session.deleted", Some(id.clone()));
+            return Ok(json!({"sessionId": id, "deleted": deleted}));
+        }
         self.ensure_session_loaded(id)?;
         let session = self.get_session(id)?.clone();
         if self
@@ -366,6 +447,13 @@ impl ControlPlane {
         cursor: Option<&str>,
         limit: usize,
     ) -> Result<Value, ControlError> {
+        if cursor.is_some_and(|cursor| {
+            cursor.is_empty() || cursor.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
+        }) {
+            return Err(ControlError::InvalidRequest(
+                "invalid session cursor".into(),
+            ));
+        }
         if !(1..=MAX_SESSION_LIST_ITEMS).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
@@ -378,8 +466,12 @@ impl ControlPlane {
         let mut by_id = BTreeMap::<String, Session>::new();
         if let Some(storage) = &self.storage {
             for session in storage
-                .list_sessions_after(cursor, limit)
+                .session_inventory()
                 .map_err(storage_error)?
+                .sessions
+                .into_iter()
+                .filter(|session| cursor.is_none_or(|cursor| session.id.as_str() > cursor))
+                .take(limit)
             {
                 by_id.insert(session.id.as_str().to_owned(), session);
             }
@@ -1075,7 +1167,24 @@ impl ControlPlane {
         &mut self,
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
+        let raw = params
+            .as_ref()
+            .and_then(|params| params.get("raw"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let id = session_id_from_params(params)?;
+        if raw {
+            let document = self
+                .storage
+                .as_ref()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("raw export requires persistent storage".into())
+                })?
+                .export_raw_session(&id)
+                .map_err(storage_error)?
+                .ok_or_else(|| ControlError::InvalidRequest("session not found".into()))?;
+            return Ok(json!({"sessionId": id, "document": document}));
+        }
         self.ensure_session_loaded(&id)?;
         serde_json::to_value(self.get_session(&id)?)
             .map_err(|error| ControlError::Json(error.to_string()))

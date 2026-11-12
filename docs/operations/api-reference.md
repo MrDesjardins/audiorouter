@@ -16,6 +16,13 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
+`status.get` and `system.diagnostics` include `quarantinedSessions` when saved
+session data cannot be loaded. Those rows stay intact and never play.
+`sessions.export` with `raw: true` returns `{ sessionId, document }`, preserving
+the stored text for repair. The default MCP `export_session` tool accepts the
+same option. Ordinary export still returns a validated graph. Delete a
+quarantined row deliberately through `sessions.delete`; recordings remain.
+
 `sessions.stop` and `system.quit` stop audio before finalizing files. Their
 `recorders` arrays report each recorder's `state`, `fileFinalized` and
 `recoverable` flags, optional `nodeId`, and a `reason` on failure. A recorder

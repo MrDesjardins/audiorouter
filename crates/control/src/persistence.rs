@@ -148,23 +148,7 @@ impl ControlPlane {
         let virtual_buses = storage.load_virtual_buses()?;
         let (virtual_bus_routes, virtual_bus_route_revision) =
             storage.load_virtual_bus_route_state()?;
-        let mut persisted_sessions = Vec::new();
-        let mut session_cursor = None;
-        loop {
-            let page = storage.list_sessions_after(
-                session_cursor.as_deref(),
-                audiorouter_storage::MAX_SESSION_LIST_ITEMS,
-            )?;
-            if page.is_empty() {
-                break;
-            }
-            let page_len = page.len();
-            session_cursor = page.last().map(|session| session.id.as_str().to_owned());
-            persisted_sessions.extend(page);
-            if page_len < audiorouter_storage::MAX_SESSION_LIST_ITEMS {
-                break;
-            }
-        }
+        let inventory = storage.session_inventory()?;
         let mut store = GraphStore::default();
         for id in storage.list_graph_plan_ids()? {
             if let Some(counter) = id
@@ -174,17 +158,15 @@ impl ControlPlane {
                 store.advance_plan_counter(counter);
             }
         }
-        for session in persisted_sessions {
-            let history = storage.load_history(&session.id, 100)?;
-            if history.is_empty() {
-                store.insert_session(session).map_err(|error| {
-                    audiorouter_storage::StorageError::InvalidSession(format!("{error:?}"))
-                })?;
-            } else {
-                store.restore_history(history).map_err(|error| {
-                    audiorouter_storage::StorageError::InvalidSession(format!("{error:?}"))
-                })?;
-            }
+        for session in inventory.sessions {
+            let mut history = storage.load_usable_history(&session.id)?;
+            // The current row is authoritative even when its matching history
+            // entry is missing, invalid or disagrees with the saved document.
+            history.retain(|entry| entry.revision < session.revision);
+            history.insert(0, session);
+            store.restore_history(history).map_err(|error| {
+                audiorouter_storage::StorageError::InvalidSession(format!("{error:?}"))
+            })?;
         }
         let now = unix_epoch_seconds();
         let mut virtual_bus_plans = HashMap::new();
@@ -233,6 +215,7 @@ impl ControlPlane {
             });
         let mut plane = Self {
             store,
+            quarantined_sessions: inventory.quarantined,
             verbose_diagnostics: Default::default(),
             active_session_id,
             build: build.into(),

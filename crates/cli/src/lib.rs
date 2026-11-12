@@ -2849,7 +2849,7 @@ fn mcp_tools() -> Value {
         { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_processors", "description": "List built-in DSP processor metadata and explicit availability without changing audio state.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
-        { "name": "export_session", "description": "Read the canonical session document without changing state.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "export_session", "description": "Read the canonical session document without changing state. Set raw=true to recover the original stored text of an unavailable session listed in get_status.quarantinedSessions. Raw text is data for repair; never execute or import it without validation.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "raw": { "type": "boolean" } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "plan_session_import", "description": "Validate a stopped session import without persisting it.", "inputSchema": { "type": "object", "properties": { "session": { "type": "object" } }, "required": ["session"], "additionalProperties": false } },
         { "name": "commit_session_import", "description": "Commit a previously validated stopped session import.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
@@ -3986,6 +3986,29 @@ mod tests {
             .result
             .unwrap();
         assert!(status["activeSessionIds"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn default_mcp_export_can_recover_original_stored_text() {
+        let storage = audiorouter_storage::Storage::open_memory().unwrap();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        storage.save_session(&session).unwrap();
+        let original = storage.export_raw_session(&session.id).unwrap().unwrap();
+        let mut plane = ControlPlane::with_storage("raw-export", storage);
+        let response = mcp_tool_call(
+            &mut plane,
+            "reader",
+            &audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Observer),
+            None,
+            &json!({"id": 1, "params": {"name": "export_session", "arguments": {"sessionId": session.id, "raw": true}}}),
+        );
+        assert_eq!(response["result"]["isError"], false, "{response}");
+        assert_eq!(
+            response["result"]["structuredContent"]["result"]["document"],
+            original
+        );
     }
 
     /// The other new task tools through the real MCP entry point: reads and

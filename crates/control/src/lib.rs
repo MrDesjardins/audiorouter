@@ -308,6 +308,7 @@ pub const AUDIO_SERVICE_LATE_GAP: std::time::Duration = std::time::Duration::fro
 
 pub struct ControlPlane {
     store: GraphStore,
+    quarantined_sessions: Vec<audiorouter_storage::QuarantinedSession>,
     /// Opt-in verbose logging window (`diagnostics.setVerbose`). Read by the
     /// transport's logger; never touches audio.
     verbose_diagnostics: audiorouter_protocol::diagnostics::VerboseDiagnostics,
@@ -514,6 +515,7 @@ impl ControlPlane {
     pub fn new(build: impl Into<String>) -> Self {
         Self {
             store: GraphStore::default(),
+            quarantined_sessions: Vec::new(),
             verbose_diagnostics: Default::default(),
             active_session_id: None,
             build: build.into(),
