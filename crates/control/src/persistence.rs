@@ -222,6 +222,8 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
+            #[cfg(test)]
+            recorder_shutdown_budget: None,
             recorder_node_workers: HashMap::new(),
             recorder_inlets: Default::default(),
             recorder_node_states: HashMap::new(),

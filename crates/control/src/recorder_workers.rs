@@ -245,6 +245,11 @@ pub trait RecorderWorker: Send {
         Vec::new()
     }
 
+    /// Stop/Quit share one finalization budget across all encoders. Blocking
+    /// file workers must honor it; production file encoders use the threaded
+    /// wrapper. Nonblocking in-process workers need no special handling.
+    fn set_shutdown_deadline(&mut self, _deadline: Instant) {}
+
     fn finalize(&mut self, frame: u64) -> Result<RecorderFinalizationOutcome, String>;
 }
 

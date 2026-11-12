@@ -317,6 +317,8 @@ pub struct ControlPlane {
     runtimes: HashMap<EntityId, FakeRuntime>,
     recorders: HashMap<EntityId, RecorderController>,
     recorder_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
+    #[cfg(test)]
+    recorder_shutdown_budget: Option<Duration>,
     recorder_node_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
     /// Stable realtime inlet per Recorder node. Playback binds the inlet, so
     /// a route with a Recorder always plays; Record attaches a file worker
@@ -522,6 +524,8 @@ impl ControlPlane {
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
+            #[cfg(test)]
+            recorder_shutdown_budget: None,
             recorder_node_workers: HashMap::new(),
             recorder_inlets: Default::default(),
             recorder_node_states: HashMap::new(),

@@ -28,6 +28,9 @@ quarantined row deliberately through `sessions.delete`; recordings remain.
 `recoverable` flags, optional `nodeId`, and a `reason` on failure. A recorder
 failure preserves its recovery evidence and does not refuse shutdown. Quit
 stops every route before attempting any file finalization.
+Encoder reply waits share one shutdown deadline. A timed-out writer is
+reported failed/recoverable; its thread keeps the file until the I/O returns,
+and shutdown does not wait indefinitely for that thread to exit.
 
 The current catalog contains 148 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder

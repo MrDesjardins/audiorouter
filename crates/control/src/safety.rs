@@ -487,6 +487,7 @@ impl ControlPlane {
         if let Some(previous) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
             return Ok(previous);
         }
+        let deadline = self.recorder_shutdown_deadline();
         #[cfg(windows)]
         {
             self.sleep_route_recovery = None;
@@ -508,7 +509,7 @@ impl ControlPlane {
         let mut finalized_recorders = Vec::new();
         let mut stopped_sessions = Vec::new();
         for (session_id, audio_result) in audio_results {
-            let recorders = self.finalize_session_recorders(&session_id);
+            let recorders = self.finalize_session_recorders(&session_id, deadline);
             finalized_recorders.extend(recorders.iter().cloned());
             let mut stopped = audio_result.unwrap_or_else(|error| {
                 json!({

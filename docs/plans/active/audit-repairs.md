@@ -270,3 +270,26 @@ and repair SES-2's remaining wait/retirement budget. Then finish ENG-1,
 STO-1/2/3/4, SES-3 and SIM-1, update Limiter guide evidence, run the full PR
 gate and create the authorized PR. The scope-count clarification remains
 open; no goal completion or PR readiness is claimed.
+
+SES-2 stalled-writer follow-up: the original regression timed out waiting for
+both finalization and Drop before releasing its fake writer. Threaded encoder
+commands now have bounded reply waits and nonblocking queue submission; Stop
+and Quit supply one shared ten-second finalization deadline across recorders
+and sessions. Timeout closes admission, cancels pending commands and leaves
+file ownership on the encoder thread until its current I/O returns. Drop waits
+at most 50 ms (and never past the shutdown deadline) for ordinary cleanup;
+only an already-finished thread is joined. No thread is forcibly terminated
+and no recoverable file is deleted. All production file encoders use this
+wrapper; custom nonblocking Rust test workers retain their direct interface.
+
+The original stalled-finalize/Drop test passes. Additional real-dispatch tests
+exercise sessions.stop and system.quit with two stalled encoders, using the
+same deadline path with a 50 ms test budget. Both return stopped, no active
+audio/owned encoders, and individual failed/recoverable outcomes before the
+fake I/O is released. Full control: 384 pass / 12 explicitly ignored;
+threaded-recorder suite 5/5 passes. All-target/all-feature control Clippy,
+both format checks and diff checks pass. Clippy first caught a test-only
+post-default field assignment; moved it into the initializer and reran clean.
+Inspected the complete worker and deadline-routing diff. This proves
+bounded encoder retirement; it is not a claim about an unresponsive OS driver
+or a real disk unplug qualification.

@@ -813,18 +813,30 @@ impl ControlPlane {
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
+        let deadline = self.recorder_shutdown_deadline();
         // Plugins lose their settings when their workers stop; keep them.
         self.capture_playing_plugin_states(id);
         // File work can fail or wait on storage. Retire every audio worker
         // first, then report each recorder independently of that boundary.
         let audio_result = self.stop_session_audio(id);
-        let recorder_outcomes = self.finalize_session_recorders(id);
+        let recorder_outcomes = self.finalize_session_recorders(id, deadline);
         let mut result = audio_result?;
         result["recorders"] = json!(recorder_outcomes);
         Ok(result)
     }
 
-    pub(crate) fn finalize_session_recorders(&mut self, id: &EntityId) -> Vec<Value> {
+    pub(crate) fn recorder_shutdown_deadline(&self) -> Instant {
+        let budget = Duration::from_secs(10);
+        #[cfg(test)]
+        let budget = self.recorder_shutdown_budget.unwrap_or(budget);
+        Instant::now() + budget
+    }
+
+    pub(crate) fn finalize_session_recorders(
+        &mut self,
+        id: &EntityId,
+        deadline: Instant,
+    ) -> Vec<Value> {
         let recorder_node_ids = self
             .recorder_node_sessions
             .iter()
@@ -833,6 +845,9 @@ impl ControlPlane {
             .collect::<Vec<_>>();
         let mut outcomes = Vec::new();
         for node_id in recorder_node_ids {
+            if let Some(worker) = self.recorder_node_workers.get_mut(&node_id) {
+                worker.set_shutdown_deadline(deadline);
+            }
             match self.stop_node_recording(&node_id) {
                 Ok(outcome) => {
                     let mut summary = json!({"sessionId": id, "nodeId": node_id,
@@ -907,6 +922,7 @@ impl ControlPlane {
                         "finalize the active recorder before stopping the session".into(),
                     )
                 })?;
+                worker.set_shutdown_deadline(deadline);
                 let outcome = worker.finalize(frame).map_err(|error| {
                     ControlError::InvalidRequest(format!("recorder finalization failed: {error}"))
                 })?;
