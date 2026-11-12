@@ -1015,7 +1015,12 @@ pub struct WavWriter<W> {
     data_bytes: u64,
     dither: bool,
     rng: u64,
+    /// Reused only on the file worker; arbitrary caller blocks are encoded
+    /// in bounded batches rather than issuing a system call per sample.
+    encoded: Vec<u8>,
 }
+
+const WAV_ENCODE_SAMPLES: usize = 4096;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WavFileInfo {
@@ -2134,6 +2139,7 @@ impl<W: Write + Seek> WavWriter<W> {
             data_bytes: 0,
             dither,
             rng: 0x9e37_79b9_7f4a_7c15,
+            encoded: Vec::with_capacity(WAV_ENCODE_SAMPLES * 4),
         })
     }
 
@@ -2162,29 +2168,33 @@ impl<W: Write + Seek> WavWriter<W> {
         {
             return Err(RecordingError::TooManyFrames);
         }
-        self.frames = self
-            .frames
+        self.frames
             .checked_add(added)
             .ok_or(RecordingError::TooManyFrames)?;
-        for sample in samples {
-            match self.format {
-                WavFormat::Pcm16 => {
-                    let value = quantize(*sample, self.dither, &mut self.rng, 32767.0);
-                    self.output.write_all(&(value as i16).to_le_bytes())?;
-                    self.data_bytes += 2;
-                }
-                WavFormat::Pcm24 => {
-                    let value = quantize(*sample, self.dither, &mut self.rng, 8_388_607.0) as i32;
-                    let bytes = value.to_le_bytes();
-                    self.output.write_all(&bytes[..3])?;
-                    self.data_bytes += 3;
-                }
-                WavFormat::Float32 => {
-                    let value = if sample.is_finite() { *sample } else { 0.0 };
-                    self.output.write_all(&value.to_le_bytes())?;
-                    self.data_bytes += 4;
+        for chunk in samples.chunks(WAV_ENCODE_SAMPLES) {
+            self.encoded.clear();
+            for sample in chunk {
+                match self.format {
+                    WavFormat::Pcm16 => {
+                        let value = quantize(*sample, self.dither, &mut self.rng, 32767.0);
+                        self.encoded
+                            .extend_from_slice(&(value as i16).to_le_bytes());
+                    }
+                    WavFormat::Pcm24 => {
+                        let value =
+                            quantize(*sample, self.dither, &mut self.rng, 8_388_607.0) as i32;
+                        let bytes = value.to_le_bytes();
+                        self.encoded.extend_from_slice(&bytes[..3]);
+                    }
+                    WavFormat::Float32 => {
+                        let value = if sample.is_finite() { *sample } else { 0.0 };
+                        self.encoded.extend_from_slice(&value.to_le_bytes());
+                    }
                 }
             }
+            self.output.write_all(&self.encoded)?;
+            self.data_bytes += self.encoded.len() as u64;
+            self.frames += (chunk.len() / usize::from(self.channels)) as u64;
         }
         Ok(added)
     }
@@ -3375,6 +3385,65 @@ mod tests {
     impl Seek for FlushFails {
         fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
             self.inner.seek(position)
+        }
+    }
+
+    #[test]
+    fn wav_sample_encoding_uses_bounded_chunk_writes() {
+        #[derive(Default)]
+        struct Counted {
+            inner: Cursor<Vec<u8>>,
+            writes: usize,
+            largest: usize,
+        }
+        impl Write for Counted {
+            fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+                self.writes += 1;
+                self.largest = self.largest.max(bytes.len());
+                self.inner.write(bytes)
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                self.inner.flush()
+            }
+        }
+        impl Seek for Counted {
+            fn seek(&mut self, position: SeekFrom) -> std::io::Result<u64> {
+                self.inner.seek(position)
+            }
+        }
+        for format in [WavFormat::Pcm16, WavFormat::Pcm24, WavFormat::Float32] {
+            let mut writer = WavWriter::new(Counted::default(), format, 2, 48_000, true).unwrap();
+            writer.output.writes = 0;
+            writer.output.largest = 0;
+            let samples = (0..4096)
+                .map(|index| (index as f32 * 0.017).sin())
+                .collect::<Vec<_>>();
+            writer.write_interleaved(&samples).unwrap();
+            assert!(
+                writer.output.writes <= 2,
+                "{format:?}: {} writes",
+                writer.output.writes
+            );
+            assert!(writer.output.largest <= 16 * 1024);
+            let buffer = writer.encoded.as_ptr();
+            let large = samples.repeat(3);
+            writer.write_interleaved(&large).unwrap();
+            assert!(writer.output.writes <= 5);
+            assert!(writer.output.largest <= 16 * 1024);
+            assert_eq!(writer.encoded.as_ptr(), buffer, "reuse the prepared buffer");
+            // Batch boundaries cannot alter sample order, quantization or the
+            // dither stream. Existing format tests check the actual wire bytes.
+            let mut reference =
+                WavWriter::new(Cursor::new(Vec::new()), format, 2, 48_000, true).unwrap();
+            for block in [&samples[..], &large[..]] {
+                for frame in block.chunks_exact(2) {
+                    reference.write_interleaved(frame).unwrap();
+                }
+            }
+            assert_eq!(
+                writer.finish().unwrap().inner.into_inner(),
+                reference.finish().unwrap().into_inner()
+            );
         }
     }
 

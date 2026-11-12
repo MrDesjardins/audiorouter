@@ -210,3 +210,14 @@ Both format checks pass; docs acceptance passes 259 files / 1,464 links.
 Next concrete repair: REC-1's counting-writer regression and bounded chunk
 encoding, followed by DSP-1/2. Native shell qualification on the new base and
 the full branch validation remain in the final PR gate.
+
+REC-1: counting `Write + Seek` regression failed before repair with 4,096
+writes for 4,096 samples. WAV encoding now reuses a construction-time 16 KiB
+buffer in batches of at most 4,096 samples, preserving worker-side flush and
+header boundaries. Successful batches advance frame/byte counters together.
+The test checks bounded write calls and size, buffer reuse for a larger input,
+and byte-for-byte equivalence across batch boundaries for PCM16/24/float32
+with dither. Recording library suite: 48/48 pass including the larger-block
+extension; all-target/all-feature recording Clippy, both format checks and
+diff whitespace checks pass. Inspected the complete focused diff. No realtime callback work, API,
+control setting or guide behavior changed. Next: commit REC-1, then DSP-1/2.
