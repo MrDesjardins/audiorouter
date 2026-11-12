@@ -157,6 +157,12 @@ with no startup TypeError or unhandled errors. Documentation acceptance
 passes 247 files / 1442 links; `git diff --check` is clean. Next: push the
 repair to PR #127, await new-head CI, inspect annotations and merge if green.
 
+## High and medium audit repairs — 2026-11-12
+
+Owner-authorized implementation and PR: [execution plan](audit-repairs.md).
+Repair all three high and twelve medium findings on `fix/audit-high-medium`;
+preserve unrelated work in the original checkout. Next: fail-first regressions.
+
 ## Issue #123 validation — 2026-11-09
 
 Objective: validate the two failures in [issue #123](https://github.com/MrDesjardins/audiorouter/issues/123)

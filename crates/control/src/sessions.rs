@@ -278,6 +278,8 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        // All refusals and the durable delete precede transient cleanup: a
+        // failed delete must preserve saved notes and the comparison timeout.
         self.clear_comparison(id);
         self.forget_revision_notes(id);
         if self.active_session_id.as_ref() == Some(id) {
