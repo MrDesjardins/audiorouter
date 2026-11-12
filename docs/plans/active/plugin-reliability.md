@@ -277,3 +277,42 @@ Still not run: full UI suite, Playwright, three-theme screenshots, built shell o
 - Built shell, isolated (disposable database, `LOCALAPPDATA` and WebView profile, loopback debug port, no other shell running), driven over CDP: "Scan standard folders" found 18 supported plugins; added UA 1176 (VST3, 8 sliders) and Pitchproof x64 (VST2, 2 sliders); the Plugin recovery section is present for both. The backend log shows only two `invalidRoot` scans, for standard folders that do not exist on this PC.
 - Real packaged workers through `ControlPlane::dispatch` (`installed_effect_describes_processes_and_restores_state`, mono and stereo, 200 blocks, state save and restore into a new worker): UA 1176, UA Pure Plate (VST3) and ReaFIR (VST2) pass. ReaEQ and ReaJS return their input unchanged at default settings, so that test's "must change audio" check does not apply to them; they pass the offline sweep.
 - Not run: pressing Play on a route with a plugin through real audio endpoints (it would touch the owner's devices while Discord is in use); the installer on a second PC or VM.
+
+### Hosted E2E stack-overflow repair (2026-11-12, PR #139)
+
+Symptom: the hosted Edge suite repeatedly left "Loading your saved session";
+the real fixture exited with 0xC00000FD and `thread 'main' has overflowed its
+stack`. Runs 43147902058 and 43157972751 failed four/one tests respectively,
+with further flaky retries caused by the same crash. The Quality gate was only
+downstream of the browser failure.
+
+Reproduction and evidence: the failing test files (58 scenarios), the full
+CI-config Playwright suite (727 passed), and 100 startup-burst fixture runs
+passed on Windows 11, including an 8.3 TEMP alias. A focused CI job then ran
+the fixture under `cdb` on the hosted runner. On its second iteration,
+`sessions.active.get` completed and `presets.list` raised a first-chance
+0xC00000FD. The stack was `dispatch` → `describe` → `method_output_schema`;
+there were two consecutive schema frames, not an unbounded recursion. Job
+131001582828 contains the captured stack. The trace's initial RPC burst agrees
+with that method sequence.
+
+Cause: the comprehensive output-schema match has a 0x64B40-byte (402.8 KiB)
+debug stack frame. The same prologue exists in the base revision, so this is a
+latent stack-budget defect exposed by the hosted runner, not recursive schema
+references introduced by `plugins.prepareUpdate`. A tiny caller plus nested
+large frames can exceed a Windows main thread's available stack; ordinary local
+runs have enough remaining budget.
+
+Fix: `method_output_schema` is now a small wrapper around a separate
+`#[inline(never)]` implementation. It returns exactly the same JSON and does
+not change thread or stack-size policy. Disassembly of the debug fixture on
+Windows 11 confirms the wrapper reserves only 0x28 bytes; the implementation's
+0x64B40-byte frame is isolated in its own call. The existing dispatcher tests
+already exercise `presets.list` and `describe`, including schema contents;
+the focused CI job exercises the actual main-thread reproduction. Temporary
+WER, method logging and debugger-job instrumentation must be removed after
+qualification; they are not product changes.
+
+Validation and rollback: rerun focused hosted reproduction, then the complete
+Edge suite, control tests, fmt/Clippy, contracts and docs. Revert only the
+wrapper if needed; schemas and plugin behavior are unchanged.

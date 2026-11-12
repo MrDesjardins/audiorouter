@@ -3,6 +3,15 @@
 use super::*;
 
 pub(crate) fn method_output_schema(name: &str) -> Value {
+    // Keep the comprehensive match in a separate, uninlined function. A debug
+    // build otherwise reserves every arm's temporaries in the caller's frame
+    // (over 400 KiB), which can exhaust a Windows main thread's stack during
+    // discovery. This wrapper must remain tiny and produce identical schemas.
+    method_output_schema_impl(name)
+}
+
+#[inline(never)]
+fn method_output_schema_impl(name: &str) -> Value {
     match name {
         "system.quit" => json!({
             "type": "object",
