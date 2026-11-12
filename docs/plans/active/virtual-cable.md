@@ -7,6 +7,11 @@ certificate is not bought. The pre-purchase assurance plan is
 below; the older status table follows it. VCAB-24/25 stay open until Stage C.
 Do not install the test-signed driver on the development PC.
 
+**2026-11-10 update: the RC3 freeze is ended by owner decision.** The
+review fixes in [virtual-cable-review-fixes.md](virtual-cable-review-fixes.md)
+change kernel code; the next package is 0.2.5 and Stage A restarts on it.
+RC3 statements below remain history.
+
 - WP-09b portable capture-analysis and reporting code is in place; the required
   endpoint measurement matrix has not been run.
 - WP-10 host implementation is archived. The attended app gate needs the signed

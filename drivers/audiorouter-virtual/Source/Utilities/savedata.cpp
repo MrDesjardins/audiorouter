@@ -89,6 +89,12 @@ CSaveData::CSaveData()
     m_DataHeader.dwDataLength     = 0;
 
     RtlZeroMemory(&m_objectAttributes, sizeof(m_objectAttributes));
+    // The destructor frees m_FileName.Buffer, so it must start empty even
+    // when Initialize never ran. The mutex and spin lock are initialised by
+    // Initialize before any use; zero them here so no path reads garbage.
+    RtlZeroMemory(&m_FileName, sizeof(m_FileName));
+    RtlZeroMemory(&m_FileSync, sizeof(m_FileSync));
+    RtlZeroMemory(&m_FrameInUseSpinLock, sizeof(m_FrameInUseSpinLock));
 } // CSaveData
 
 //=============================================================================

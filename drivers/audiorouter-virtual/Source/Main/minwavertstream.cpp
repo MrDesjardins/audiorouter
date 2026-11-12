@@ -12,69 +12,67 @@
 // Convert negotiated endpoint samples to/from the double-precision bridge.
 // PCM24 is left-aligned in its 32-bit container; PCM32 remains exact because
 // every signed 32-bit integer and its 2^-31 scale are exactly representable.
+// Encoding comes from AudioRouterSampleEncoding, resolved once at Init.
 static __forceinline DOUBLE ReadBridgeSample(
     _In_reads_bytes_(sizeof(LONG)) const UCHAR* Source,
-    _In_ const WAVEFORMATEXTENSIBLE* Format)
+    _In_ ULONG Encoding)
 {
-    if (Source == NULL || Format == NULL) {
-        return 0.0;
-    }
-    if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) &&
-        Format->Format.wBitsPerSample == 32) {
+    switch (Encoding) {
+    case AR_SAMPLE_FLOAT32: {
         FLOAT value = 0.0F;
         RtlCopyMemory(&value, Source, sizeof(value));
         return AudioRouterFloat32ToDouble(value);
     }
-    if (!IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM)) {
-        return 0.0;
-    }
-    if (Format->Format.wBitsPerSample == 16 && Format->Samples.wValidBitsPerSample == 16) {
+    case AR_SAMPLE_PCM16: {
         SHORT value = 0;
         RtlCopyMemory(&value, Source, sizeof(value));
         return AudioRouterPcm16ToDouble(value);
     }
-    if (Format->Format.wBitsPerSample == 32 &&
-        Format->Samples.wValidBitsPerSample == 24) {
+    case AR_SAMPLE_PCM24_IN_32: {
         LONG value = 0;
         RtlCopyMemory(&value, Source, sizeof(value));
         return AudioRouterPcm24In32ToDouble(value);
     }
-    if (Format->Format.wBitsPerSample == 32 &&
-        Format->Samples.wValidBitsPerSample == 32) {
+    case AR_SAMPLE_PCM32: {
         LONG value = 0;
         RtlCopyMemory(&value, Source, sizeof(value));
         return AudioRouterPcm32ToDouble(value);
     }
-    return 0.0;
+    default:
+        return 0.0;
+    }
 }
 
+// Callers only pass a resolved encoding (AR_SAMPLE_NONE never reaches the
+// DMA loop), so the destination is left untouched for NONE: Inout, not Out.
 static __forceinline void WriteBridgeSample(
-    _Out_writes_bytes_(sizeof(LONG)) UCHAR* Destination,
-    _In_ const WAVEFORMATEXTENSIBLE* Format,
+    _Inout_updates_bytes_(sizeof(LONG)) UCHAR* Destination,
+    _In_ ULONG Encoding,
     _In_ DOUBLE Sample)
 {
-    if (Destination == NULL || Format == NULL) {
-        return;
-    }
-    if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) &&
-        Format->Format.wBitsPerSample == 32) {
+    switch (Encoding) {
+    case AR_SAMPLE_FLOAT32: {
         FLOAT value = AudioRouterDoubleToFloat32(Sample);
         RtlCopyMemory(Destination, &value, sizeof(value));
-    } else if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
-               Format->Format.wBitsPerSample == 16 &&
-               Format->Samples.wValidBitsPerSample == 16) {
+        break;
+    }
+    case AR_SAMPLE_PCM16: {
         SHORT value = AudioRouterDoubleToPcm16(Sample);
         RtlCopyMemory(Destination, &value, sizeof(value));
-    } else if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
-               Format->Format.wBitsPerSample == 32 &&
-               Format->Samples.wValidBitsPerSample == 24) {
+        break;
+    }
+    case AR_SAMPLE_PCM24_IN_32: {
         LONG value = AudioRouterDoubleToPcm24In32(Sample);
         RtlCopyMemory(Destination, &value, sizeof(value));
-    } else if (IsEqualGUIDAligned(Format->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) &&
-               Format->Format.wBitsPerSample == 32 &&
-               Format->Samples.wValidBitsPerSample == 32) {
+        break;
+    }
+    case AR_SAMPLE_PCM32: {
         LONG value = AudioRouterDoubleToPcm32(Sample);
         RtlCopyMemory(Destination, &value, sizeof(value));
+        break;
+    }
+    default:
+        break;
     }
 }
 
@@ -149,18 +147,6 @@ Return Value:
 
         m_pMiniport->Release();
         m_pMiniport = NULL;
-    }
-
-    if (m_pDpc)
-    {
-        ExFreePoolWithTag( m_pDpc, MINWAVERTSTREAM_POOLTAG );
-        m_pDpc = NULL;
-    }
-
-    if (m_pTimer)
-    {
-        ExFreePoolWithTag( m_pTimer, MINWAVERTSTREAM_POOLTAG );
-        m_pTimer = NULL;
     }
 
     if (m_pbMuted)
@@ -245,9 +231,7 @@ Return Value:
     m_pDmaBuffer = NULL;
     m_ulNotificationsPerBuffer = 0;
     m_KsState = KSSTATE_STOP;
-    m_pTimer = NULL;
     m_pNotificationTimer = NULL;
-    m_pDpc = NULL;
     m_llPacketCounter = 0;
 #if defined(AR_TIMING_DIAGNOSTICS)
     m_TimingStreamId = AudioRouterTimingStreamId();
@@ -258,12 +242,13 @@ Return Value:
     m_hnsElapsedTimeCarryForward = 0;
     m_llLastNotifiedPacketCounter = 0;
     m_ulDmaMovementRate = 0;
-    m_byteDisplacementCarryForward = 0;
+    m_ulFrameRemainder = 0;
     m_bLfxEnabled = FALSE;
     m_pbMuted = NULL;
     m_plVolumeLevel = NULL;
     m_plPeakMeter = NULL;
     m_pWfExt = NULL;
+    m_SampleEncoding = AR_SAMPLE_NONE;
     m_ullLinearPosition = 0;
     m_ullPresentationPosition = 0;
     m_ulContentId = 0;
@@ -322,18 +307,20 @@ Return Value:
     m_bCapture = Capture_;
     m_ulDmaMovementRate = pWfEx->nAvgBytesPerSec;
 
-    m_pDpc = (PRKDPC)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(KDPC), MINWAVERTSTREAM_POOLTAG);
-    if (!m_pDpc)
-    {
-        return STATUS_INSUFFICIENT_RESOURCES;
-    }
-
     m_pWfExt = (PWAVEFORMATEXTENSIBLE)ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(WAVEFORMATEX) + pWfEx->cbSize, MINWAVERTSTREAM_POOLTAG);
     if (m_pWfExt == NULL)
     {
         return STATUS_INSUFFICIENT_RESOURCES;
     }
     RtlCopyMemory(m_pWfExt, pWfEx, sizeof(WAVEFORMATEX) + pWfEx->cbSize);
+    // The format never changes for this stream (SetFormat is unsupported).
+    // Resolve the sample encoding once; the DMA loops switch on it per sample.
+    m_SampleEncoding = IsBridgePcmFormat(m_pWfExt)
+        ? AudioRouterSampleEncoding(
+              IsEqualGUIDAligned(m_pWfExt->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) != FALSE,
+              IsEqualGUIDAligned(m_pWfExt->SubFormat, KSDATAFORMAT_SUBTYPE_PCM) != FALSE,
+              m_pWfExt->Format.wBitsPerSample, m_pWfExt->Samples.wValidBitsPerSample)
+        : AR_SAMPLE_NONE;
 
     m_pbMuted = (PBOOL)ExAllocatePool2(POOL_FLAG_NON_PAGED, m_pWfExt->Format.nChannels * sizeof(BOOL), MINWAVERTSTREAM_POOLTAG);
     if (m_pbMuted == NULL)
@@ -544,25 +531,36 @@ VOID CMiniportWaveRTStream::FreeBufferWithNotification
         KeFlushQueuedDpcs();
     }
 
-    if (Mdl_ != NULL)
+    BYTE* dmaBuffer = DetachDmaBuffer();
+    if (Mdl_ != NULL && m_pPortStream != NULL)
     {
-        if (m_pDmaBuffer != NULL && m_pPortStream != NULL)
+        if (dmaBuffer != NULL)
         {
-            m_pPortStream->UnmapAllocatedPages(m_pDmaBuffer, Mdl_);
-            m_pDmaBuffer = NULL;
+            m_pPortStream->UnmapAllocatedPages(dmaBuffer, Mdl_);
         }
-
-        if (m_pPortStream != NULL)
-        {
-            m_pPortStream->FreePagesFromMdl(Mdl_);
-        }
+        m_pPortStream->FreePagesFromMdl(Mdl_);
     }
 
+    return;
+}
+
+//=============================================================================
+// Position queries (GetPosition, GetPacketCount, ...) run UpdatePosition under
+// the position lock on any thread, independently of the timer joined above.
+// Detach the DMA view under that lock so none of them can read or write it
+// while it is being unmapped.
+#pragma code_seg()
+BYTE* CMiniportWaveRTStream::DetachDmaBuffer()
+{
+    KIRQL oldIrql;
+    KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+    BYTE* dmaBuffer = m_pDmaBuffer;
+    m_pDmaBuffer = NULL;
     m_ulDmaBufferSize = 0;
     m_ulNotificationsPerBuffer = 0;
     m_RenderCommits.Reset();
-
-    return;
+    KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+    return dmaBuffer;
 }
 
 //=============================================================================
@@ -728,23 +726,15 @@ _In_        ULONG       Size_
         KeFlushQueuedDpcs();
     }
 
-    if (Mdl_ != NULL)
+    BYTE* dmaBuffer = DetachDmaBuffer();
+    if (Mdl_ != NULL && m_pPortStream != NULL)
     {
-        if (m_pDmaBuffer != NULL && m_pPortStream != NULL)
+        if (dmaBuffer != NULL)
         {
-            m_pPortStream->UnmapAllocatedPages(m_pDmaBuffer, Mdl_);
-            m_pDmaBuffer = NULL;
+            m_pPortStream->UnmapAllocatedPages(dmaBuffer, Mdl_);
         }
-
-        if (m_pPortStream != NULL)
-        {
-            m_pPortStream->FreePagesFromMdl(Mdl_);
-        }
+        m_pPortStream->FreePagesFromMdl(Mdl_);
     }
-
-    m_ulDmaBufferSize = 0;
-    m_ulNotificationsPerBuffer = 0;
-    m_RenderCommits.Reset();
 }
 
 //=============================================================================
@@ -922,6 +912,11 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     ULONGLONG ullLinearPosition = m_ullLinearPosition;
     ULONGLONG hnsElapsedTimeCarryForward = m_hnsElapsedTimeCarryForward;
     ULONGLONG ullDmaTimeStamp = m_ullDmaTimeStamp;
+    // R3 (2026-11-11 review): DetachDmaBuffer zeroes these under this lock.
+    // Snapshot them here so a buffer free racing this call cannot reach the
+    // division below with a zero notification count.
+    const ULONG dmaBufferSize = m_ulDmaBufferSize;
+    const ULONG notificationsPerBuffer = m_ulNotificationsPerBuffer;
 #if defined(AR_TIMING_DIAGNOSTICS)
     tracePackets = static_cast<ULONGLONG>(packetCounter);
     traceLinear = ullLinearPosition;
@@ -929,9 +924,10 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
 
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
 
+    if (dmaBufferSize == 0 || notificationsPerBuffer == 0) { return STATUS_DEVICE_NOT_READY; }
     if (packetCounter <= 0) { return STATUS_DEVICE_NOT_READY; }
 
-    ULONG packetSize = m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
+    ULONG packetSize = dmaBufferSize / notificationsPerBuffer;
     if (packetSize == 0 ||
         static_cast<ULONGLONG>(packetCounter) >
             MAXULONGLONG / packetSize)
@@ -946,7 +942,7 @@ NTSTATUS CMiniportWaveRTStream::GetReadPacket
     // whose slot was already overwritten are still skipped (a glitch).
     AudioRouterReadSelection selection = {};
     if (!AudioRouterSelectReadPacket(static_cast<ULONGLONG>(packetCounter),
-        m_ulLastOsReadPacket, ullLinearPosition, packetSize, m_ulDmaBufferSize,
+        m_ulLastOsReadPacket, ullLinearPosition, packetSize, dmaBufferSize,
         &selection))
     {
         return STATUS_DEVICE_NOT_READY;
@@ -1086,6 +1082,13 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
 
     KIRQL oldIrql;
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
+    // R3: DetachDmaBuffer zeroes the size and count under this lock; the
+    // checks above ran without it, so repeat them before any division.
+    if (m_ulDmaBufferSize == 0 || m_ulNotificationsPerBuffer == 0)
+    {
+        KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
+        return STATUS_DEVICE_NOT_READY;
+    }
     // The OS wrote this packet into its physical slot before this call. Record
     // that provenance before progress consumes any byte, so bytes the OS has
     // already written (including a late write of the packet now transferring)
@@ -1126,6 +1129,13 @@ NTSTATUS CMiniportWaveRTStream::SetWritePacket
     if (!m_bCapture && m_BridgePublishFrames != 0) {
         RecordBridgeActivity(AR_BRIDGE_DIRECTION_RENDER_SOURCE, &activity);
     }
+#if defined(AR_TIMING_DIAGNOSTICS)
+    RecordTiming(AR_TIMING_RENDER_WRITE,
+        static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart),
+        static_cast<ULONGLONG>(m_llPacketCounter), m_ullLinearPosition,
+        PacketNumber, ntStatus,
+        (static_cast<ULONGLONG>(Flags) << 32) | EosPacketLength);
+#endif
     KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);
     return ntStatus;
 }
@@ -1366,7 +1376,7 @@ NTSTATUS CMiniportWaveRTStream::SetState
             m_llPacketCounter = 0;
             m_llLastNotifiedPacketCounter = 0;
             m_hnsElapsedTimeCarryForward = 0;
-            m_byteDisplacementCarryForward = 0;
+            m_ulFrameRemainder = 0;
             m_ullPlayPosition = 0;
             m_ullWritePosition = 0;
             m_ullLinearPosition = 0;
@@ -1436,6 +1446,10 @@ NTSTATUS CMiniportWaveRTStream::SetState
     KeAcquireSpinLock(&m_PositionSpinLock, &oldIrql);
     m_KsState = State_;
 #if defined(AR_TIMING_DIAGNOSTICS)
+    RecordTiming(AR_TIMING_STATE,
+        static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart),
+        static_cast<ULONGLONG>(m_llPacketCounter), m_ullLinearPosition,
+        m_ulLastOsWritePacket, ntStatus, static_cast<ULONGLONG>(State_));
     if (State_ == KSSTATE_RUN && m_ulNotificationsPerBuffer != 0) {
         RecordTiming(AR_TIMING_FORMAT,
             static_cast<ULONGLONG>(KeQueryPerformanceCounter(NULL).QuadPart),
@@ -1511,64 +1525,31 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // Convert ticks to 100ns units.
     LONGLONG  hnsCurrentTime = KSCONVERT_PERFORMANCE_TIME(m_ullPerformanceCounterFrequency.QuadPart, ilQPC);
 
-    // Calculate the time elapsed since the last call to GetPosition() or since the
-    // DMA engine started.  Note that the division by 10000 to convert to milliseconds
-    // may cause us to lose some of the time, so we will carry the remainder forward
-    // to the next GetPosition() call.
-    //
+    // Advance by whole frames from the exact elapsed time. The fractional
+    // frame carries to the next call, so position moves every frame period
+    // rather than in 1 ms steps, and any call pattern stays drift-free.
     if (hnsCurrentTime < 0 || static_cast<ULONGLONG>(hnsCurrentTime) < m_ullDmaTimeStamp)
     {
         return;
     }
-    ULONGLONG elapsedHns = static_cast<ULONGLONG>(hnsCurrentTime) - m_ullDmaTimeStamp;
-    if (elapsedHns > MAXULONGLONG - m_hnsElapsedTimeCarryForward)
+    const ULONGLONG elapsedHns = static_cast<ULONGLONG>(hnsCurrentTime) - m_ullDmaTimeStamp;
+    const ULONG sampleRate = m_pWfExt->Format.nSamplesPerSec;
+    ULONGLONG frameRemainder = m_ulFrameRemainder;
+    ULONGLONG frames = 0;
+    if (!AudioRouterAdvanceFrames(elapsedHns, sampleRate, &frameRemainder, &frames) ||
+        frames > MAXULONG / m_pWfExt->Format.nBlockAlign)
     {
+        // Unrepresentable stall: re-anchor and drop the time, as before.
         m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
         m_hnsElapsedTimeCarryForward = 0;
-        m_byteDisplacementCarryForward = 0;
+        m_ulFrameRemainder = 0;
         return;
     }
-    elapsedHns += m_hnsElapsedTimeCarryForward;
-    ULONGLONG elapsedMilliseconds = elapsedHns / 10000;
-    if (elapsedMilliseconds > MAXULONG)
-    {
-        m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
-        m_hnsElapsedTimeCarryForward = elapsedHns % 10000;
-        m_byteDisplacementCarryForward = 0;
-        return;
-    }
-    ULONG TimeElapsedInMS = static_cast<ULONG>(elapsedMilliseconds);
-
-    // Carry forward the remainder of this division so we don't fall behind with our position too much.
-    //
-    m_hnsElapsedTimeCarryForward = elapsedHns % 10000;
-
-    // Calculate how many bytes in the DMA buffer would have been processed in the elapsed
-    // time.  Note that the division by 1000 to convert to milliseconds may cause us to
-    // lose part of a sample frame, so carry that fraction to the next call.
-    //
-    // need to divide by 1000 because m_ulDmaMovementRate is average bytes per sec.
-
-    ULONGLONG byteNumerator = static_cast<ULONGLONG>(m_ulDmaMovementRate) *
-        static_cast<ULONGLONG>(TimeElapsedInMS);
-    if (byteNumerator > MAXULONGLONG - m_byteDisplacementCarryForward)
-    {
-        m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
-        m_byteDisplacementCarryForward = 0;
-        return;
-    }
-    byteNumerator += m_byteDisplacementCarryForward;
-    const ULONG frameDenominator = 1000UL * m_pWfExt->Format.nBlockAlign;
-    ULONGLONG byteDisplacementWide = AudioRouterFrameAlignedByteCount(
-        byteNumerator, m_pWfExt->Format.nBlockAlign);
-    if (byteDisplacementWide > MAXULONG)
-    {
-        m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
-        m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % frameDenominator);
-        return;
-    }
-    ULONG ByteDisplacement = static_cast<ULONG>(byteDisplacementWide);
-    m_byteDisplacementCarryForward = static_cast<ULONG>(byteNumerator % frameDenominator);
+    ULONG ByteDisplacement = static_cast<ULONG>(frames) * m_pWfExt->Format.nBlockAlign;
+    m_ulFrameRemainder = static_cast<ULONG>(frameRemainder);
+    // Time already elapsed beyond the reported linear position (under one
+    // frame); GetReadPacket extrapolates packet timestamps with it.
+    m_hnsElapsedTimeCarryForward = sampleRate == 0 ? 0 : frameRemainder / sampleRate;
 
     // These counters are monotonic and are consumed by PortCls position
     // queries.  Do not let a long-lived stream wrap either counter and expose
@@ -1580,7 +1561,7 @@ VOID CMiniportWaveRTStream::UpdatePosition
     {
         m_ullDmaTimeStamp = static_cast<ULONGLONG>(hnsCurrentTime);
         m_hnsElapsedTimeCarryForward = 0;
-        m_byteDisplacementCarryForward = 0;
+        m_ulFrameRemainder = 0;
         return;
     }
 
@@ -1702,7 +1683,7 @@ ByteDisplacement - # of bytes to process.
     }
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
-    const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
+    const BOOLEAN bridgeFormat = m_SampleEncoding != AR_SAMPLE_NONE;
     // The capture endpoint is the virtual sink for processed audio. Its
     // advertised integer/float format is converted at the callback boundary;
     // unavailable or incoherent bridge blocks are rendered as silence.
@@ -1796,7 +1777,7 @@ ByteDisplacement - # of bytes to process.
                             m_pDmaBuffer + bufferOffset +
                                 (writtenFrames + frame) * deviceFrameBytes +
                                 channel * deviceBytesPerSample,
-                            m_pWfExt,
+                            m_SampleEncoding,
                             captureBlocks[m_CaptureQueue.Head][
                                 (m_CaptureQueue.Offset + frame) * bridgeChannels +
                                 channel]);
@@ -1856,7 +1837,7 @@ ByteDisplacement - # of bytes to process.
     ULONGLONG linearByte = m_ullLinearPosition;
     const ULONG packetBytes = m_ulNotificationsPerBuffer == 0 ? 0 :
         m_ulDmaBufferSize / m_ulNotificationsPerBuffer;
-    const BOOLEAN bridgeFormat = IsBridgePcmFormat(m_pWfExt);
+    const BOOLEAN bridgeFormat = m_SampleEncoding != AR_SAMPLE_NONE;
     AR_BRIDGE_STREAM_ACTIVITY activity = {};
     activity.FormatMismatches = renderFormatMismatch ? 1 : 0;
     DrainRenderQueue();
@@ -1909,7 +1890,7 @@ ByteDisplacement - # of bytes to process.
                                 m_pDmaBuffer + bufferOffset +
                                     (consumedFrames + frame) * frameBytes +
                                     channel * bytesPerSample,
-                                m_pWfExt) : 0.0;
+                                m_SampleEncoding) : 0.0;
                     }
                 }
                 m_BridgeScratchFrames += copyFrames;
@@ -1988,7 +1969,7 @@ BOOLEAN CMiniportWaveRTStream::RefreshBridgePublishShape()
             static_cast<USHORT>(m_pMiniport->GetCableBusIndex()),
             AR_BRIDGE_DIRECTION_RENDER_SOURCE, &frames, &channels, &sampleRate,
             &generation)) && frames != 0 && channels != 0;
-    const BOOLEAN bridgeFormat = !m_bCapture && IsBridgePcmFormat(m_pWfExt);
+    const BOOLEAN bridgeFormat = !m_bCapture && m_SampleEncoding != AR_SAMPLE_NONE;
     if (bridgeFormat && leaseActive &&
         channels == m_pWfExt->Format.nChannels &&
         sampleRate == m_pWfExt->Format.nSamplesPerSec) {

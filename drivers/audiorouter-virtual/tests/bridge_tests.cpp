@@ -145,8 +145,12 @@ static void renderBurstChecks() {
                 return true;
             });
             require(queue.Count == 0, "drain iterations are bounded by capacity");
-            require(queue.Capacity >= 1 && queue.Capacity <= 4 &&
+            require(queue.Capacity >= 1 && queue.Capacity <= AR_RENDER_QUEUE_MAX_BLOCKS &&
                 queue.Capacity * queue.SamplesPerBlock <= storage.size(), "all negotiated shapes fit existing storage");
+            // Small quanta get the full depth: 128 frames x 8 ch needs 8 blocks.
+            require(frames * channels * AR_RENDER_QUEUE_MAX_BLOCKS > storage.size() ||
+                queue.Capacity == AR_RENDER_QUEUE_MAX_BLOCKS,
+                "render queue retains eight blocks whenever storage allows");
             queue.Clear();
             require(queue.Count == 0, "STOP drops valid lengths without replay");
             for (auto& sample : input) { sample = 0.25; }
@@ -582,7 +586,95 @@ static void renderTimingModelChecks() {
     require(skipLegacy.Stale > 0, "reference reproduces stale replay without validity");
 }
 
+// Review fix 4 (2026-11-10): a late heartbeat from the owner renews its own
+// lease; expiry only lets a rival in. Mirrors the dispatch in adapter.cpp.
+static void maintenanceDecisionChecks() {
+    // active, retiring, expired, sameOwner, sameIdentity
+    require(AudioRouterMaintenanceDecision(true, false, false, true, true) == ArBridgeMaintenanceProceed,
+        "owner heartbeat on a live lease renews");
+    require(AudioRouterMaintenanceDecision(true, false, true, true, true) == ArBridgeMaintenanceProceed,
+        "owner heartbeat after a long stall renews an unclaimed expired lease");
+    require(AudioRouterMaintenanceDecision(true, false, false, false, true) == ArBridgeMaintenanceAccessDenied &&
+        AudioRouterMaintenanceDecision(true, false, false, false, false) == ArBridgeMaintenanceAccessDenied,
+        "another handle cannot refresh or close a live lease");
+    require(AudioRouterMaintenanceDecision(true, false, true, false, true) == ArBridgeMaintenanceInvalidRetire,
+        "another handle touching an expired lease retires it");
+    require(AudioRouterMaintenanceDecision(true, false, true, true, false) == ArBridgeMaintenanceInvalidRetire,
+        "owner with a different identity cannot revive an expired lease");
+    require(AudioRouterMaintenanceDecision(true, false, false, true, false) == ArBridgeMaintenanceInvalid,
+        "owner with a different identity is refused on a live lease");
+    require(AudioRouterMaintenanceDecision(false, false, false, true, true) == ArBridgeMaintenanceInvalid &&
+        AudioRouterMaintenanceDecision(false, false, true, true, true) == ArBridgeMaintenanceInvalid,
+        "closed or retired lease cannot be renewed");
+    require(AudioRouterMaintenanceDecision(true, true, false, true, true) == ArBridgeMaintenanceInvalid &&
+        AudioRouterMaintenanceDecision(true, true, true, false, true) == ArBridgeMaintenanceInvalid,
+        "retiring lease is never renewed or retired twice");
+}
+
+static void sampleEncodingChecks() {
+    require(AudioRouterSampleEncoding(true, false, 32, 32) == AR_SAMPLE_FLOAT32, "float32 encoding");
+    require(AudioRouterSampleEncoding(true, false, 64, 64) == AR_SAMPLE_NONE, "float64 endpoint unsupported");
+    require(AudioRouterSampleEncoding(false, true, 16, 16) == AR_SAMPLE_PCM16, "PCM16 encoding");
+    require(AudioRouterSampleEncoding(false, true, 32, 24) == AR_SAMPLE_PCM24_IN_32, "PCM24-in-32 encoding");
+    require(AudioRouterSampleEncoding(false, true, 32, 32) == AR_SAMPLE_PCM32, "PCM32 encoding");
+    require(AudioRouterSampleEncoding(false, true, 24, 24) == AR_SAMPLE_NONE &&
+        AudioRouterSampleEncoding(false, false, 16, 16) == AR_SAMPLE_NONE,
+        "packed PCM24 and unknown subformats resolve to silence");
+    // Every advertised cable format resolves to a real encoding.
+    for (USHORT container : { USHORT(16), USHORT(32) }) {
+        for (USHORT valid : { USHORT(16), USHORT(24), USHORT(32) }) {
+            require(AudioRouterCableFormatSupported(48000, 2, AR_CABLE_FORMAT_PCM, container, valid) ==
+                (AudioRouterSampleEncoding(false, true, container, valid) != AR_SAMPLE_NONE),
+                "advertised PCM formats and resolved encodings agree");
+        }
+    }
+}
+
+// Review fix 6 (2026-11-10): the DMA clock advances from exact elapsed time.
+static void frameClockChecks() {
+    for (ULONG rate : { 44100UL, 48000UL, 96000UL }) {
+        // One hour of 1 ms timer ticks: exact frame count, no drift.
+        ULONGLONG remainder = 0, total = 0, frames = 0;
+        for (ULONG tick = 0; tick < 3600000; ++tick) {
+            require(AudioRouterAdvanceFrames(10000, rate, &remainder, &frames), "1 ms advance");
+            total += frames;
+        }
+        require(total == 3600ULL * rate && remainder == 0, "one hour of 1 ms ticks is drift-free");
+        // Irregular call spacing (position queries between ticks) sums to
+        // the same count as one call over the whole interval.
+        remainder = 0; total = 0;
+        const ULONGLONG spacings[] = { 1, 7, 2083, 10000, 3, 9999, 26666, 50000, 1 };
+        ULONGLONG elapsed = 0;
+        for (int lap = 0; lap < 1000; ++lap) {
+            for (ULONGLONG spacing : spacings) {
+                require(AudioRouterAdvanceFrames(spacing, rate, &remainder, &frames), "irregular advance");
+                total += frames;
+                elapsed += spacing;
+            }
+        }
+        ULONGLONG single = 0, singleRemainder = 0;
+        require(AudioRouterAdvanceFrames(elapsed, rate, &singleRemainder, &single), "single advance");
+        require(total == single && remainder == singleRemainder,
+            "sub-millisecond queries never gain or lose a frame");
+        // Sub-millisecond resolution: one frame period advances one frame.
+        remainder = 0;
+        require(AudioRouterAdvanceFrames(10000000ULL / rate + 1, rate, &remainder, &frames) && frames == 1,
+            "one frame period advances exactly one frame (no 1 ms quantization)");
+    }
+    ULONGLONG remainder = 0, frames = 0;
+    require(!AudioRouterAdvanceFrames(1, 0, &remainder, &frames), "zero rate fails closed");
+    require(!AudioRouterAdvanceFrames(~0ULL / 2, 96000, &remainder, &frames), "overflowing stall fails closed");
+    remainder = 10000000;
+    require(!AudioRouterAdvanceFrames(1, 48000, &remainder, &frames), "corrupt remainder fails closed");
+    remainder = 0;
+    require(AudioRouterAdvanceFrames(100ULL * 86400 * 10000000, 96000, &remainder, &frames) &&
+        frames == 100ULL * 86400 * 96000, "100-day stall at 96 kHz is representable");
+}
+
 int main() {
+    maintenanceDecisionChecks();
+    sampleEncodingChecks();
+    frameClockChecks();
     renderCommitChecks();
     renderTimingModelChecks();
     packetClockChecks();
@@ -730,10 +822,24 @@ int main() {
     require(!AudioRouterStreamGenerationChanged(17, 17), "same lease generation retains scratch");
     require(AudioRouterStreamGenerationChanged(17, 18), "same-shape lease replacement resets scratch");
     require(AudioRouterStreamGenerationChanged(17, 0), "lease retirement resets scratch");
-    require(NT_SUCCESS(AudioRouterValidateNextGeneration(0, 17)), "first nonzero generation accepted");
-    require(NT_SUCCESS(AudioRouterValidateNextGeneration(17, 18)), "unique reopen generation accepted");
-    require(!NT_SUCCESS(AudioRouterValidateNextGeneration(17, 17)), "reused reopen generation rejected");
-    require(!NT_SUCCESS(AudioRouterValidateNextGeneration(18, 17)), "non-adjacent reused generation rejected");
+    require(NT_SUCCESS(AudioRouterValidateNextGeneration(0, 0, 17)), "first nonzero generation accepted");
+    require(!NT_SUCCESS(AudioRouterValidateNextGeneration(0, 0, 0)), "zero generation rejected");
+    require(NT_SUCCESS(AudioRouterValidateNextGeneration(17, 0, 18)), "unique reopen generation accepted");
+    require(!NT_SUCCESS(AudioRouterValidateNextGeneration(17, 0, 17)), "reused reopen generation rejected");
+    require(!NT_SUCCESS(AudioRouterValidateNextGeneration(18, 17, 17)), "A-B-A reuse rejected");
+    {
+        // R6: a huge generation must not lock the slot. OPEN 2^63, then a
+        // product-style Unix-ms OPEN, then a backward wall clock step.
+        ULONGLONG last = 0, prior = 0;
+        const ULONGLONG huge = 1ULL << 63;
+        require(NT_SUCCESS(AudioRouterValidateNextGeneration(last, prior, huge)), "huge generation accepted");
+        AudioRouterRecordGeneration(&last, &prior, huge);
+        require(NT_SUCCESS(AudioRouterValidateNextGeneration(last, prior, 1000)), "smaller generation after a huge one accepted");
+        AudioRouterRecordGeneration(&last, &prior, 1000);
+        require(last == 1000 && prior == huge, "generation history keeps the last two");
+        require(!NT_SUCCESS(AudioRouterValidateNextGeneration(last, prior, huge)), "A-B-A after a huge generation rejected");
+        require(NT_SUCCESS(AudioRouterValidateNextGeneration(last, prior, 999)), "backward clock step accepted");
+    }
     constexpr LONG pcm32RoundTripInput = 1073741889;
     require(AudioRouterDoubleToPcm32(AudioRouterPcm32ToDouble(pcm32RoundTripInput)) == pcm32RoundTripInput,
         "PCM32 sample 1073741889 round-trips exactly through double");

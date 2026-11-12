@@ -55,6 +55,10 @@ class CAdapterCommon :
         //=====================================================================
         // Default CUnknown
         DECLARE_STD_UNKNOWN();
+        // C26495: members are not listed here because the only allocator,
+        // operator new (NewDelete.cpp), uses ExAllocatePool2 without
+        // POOL_FLAG_UNINITIALIZED, so every object starts zeroed.
+#pragma warning(suppress: 26495)
         DEFINE_STD_CONSTRUCTOR(CAdapterCommon);
         ~CAdapterCommon();
 

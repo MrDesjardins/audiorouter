@@ -37,7 +37,7 @@
     hardening  A10, A11: Driver Verifier on, A4-A7 again, 30-min IOCTL
                fuzz, Verifier off (about 50 min, two restarts)
     extras     NOT part of 'all'; run it on its own, last (about 35 min, two
-               restarts): the product route's reconnect after a lease-
+               restarts): the product route riding a lease-
                expiring stall, A13 update/repair and a route that binds again
                after the new endpoint IDs, and the VB-Cable latency ratio
                (needs VB-Cable installed first; skipped with a note if not).
@@ -806,8 +806,8 @@ function Session-Hardening([string] $P) {
 function Session-Extras([string] $P) {
     Step-Setup $P
     foreach ($stall in 4000, 6500) {
-        Step "${P}route reconnects after a ${stall} ms stall" {
-            Grade-Reconnect "${P}route reconnects after a ${stall} ms stall" (Invoke-Runner 'run-cable-reconnect.ps1' @('-StallMs', [string]$stall) 'reconnect-')
+        Step "${P}route rides a ${stall} ms stall" {
+            Grade-Reconnect "${P}route rides a ${stall} ms stall (lease renewed)" (Invoke-Runner 'run-cable-reconnect.ps1' @('-StallMs', [string]$stall) 'reconnect-')
         }
     }
     # A13: update to the next package (same source, new version), then repair.
@@ -841,8 +841,8 @@ function Session-Extras([string] $P) {
         Set-CableFormat 2 48000
         Grade-BitExact $label (Invoke-Runner 'run-cable-bitexact.ps1' @('-Channels', '2') 'bitexact-')
     }
-    Step "${P}route reconnects after a 4000 ms stall (updated driver)" {
-        Grade-Reconnect "${P}route reconnects after a 4000 ms stall (updated driver)" (Invoke-Runner 'run-cable-reconnect.ps1' @('-StallMs', '4000') 'reconnect-')
+    Step "${P}route rides a 4000 ms stall (updated driver)" {
+        Grade-Reconnect "${P}route rides a 4000 ms stall (updated driver)" (Invoke-Runner 'run-cable-reconnect.ps1' @('-StallMs', '4000') 'reconnect-')
     }
     Step "${P}VB-Cable latency comparison (VCAB-25)" {
         Grade-VbCompare "${P}VB-Cable latency comparison (VCAB-25)" (Invoke-Runner 'run-cable-vbcompare.ps1' @() 'vbcompare-')

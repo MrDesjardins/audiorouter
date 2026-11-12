@@ -1,6 +1,8 @@
 #ifndef AUDIOROUTER_RENDER_QUEUE_H
 #define AUDIOROUTER_RENDER_QUEUE_H
 
+#define AR_RENDER_QUEUE_MAX_BLOCKS 8
+
 // Fixed-shape wire blocks require silent padding at EoS. Bounds are checked
 // before multiplication; the caller owns a full maximum-sized scratch array.
 inline void AudioRouterPadRenderTail(DOUBLE* samples, ULONG validFrames, ULONG frames, ULONG channels) {
@@ -30,7 +32,10 @@ struct AudioRouterRenderQueue {
             channels == 0 || channels > AR_BRIDGE_MAX_CHANNELS) { return; }
         SamplesPerBlock = frames * channels;
         Capacity = (AR_BRIDGE_MAX_CHANNELS * AR_BRIDGE_MAX_FRAMES) / SamplesPerBlock;
-        if (Capacity > 4) { Capacity = 4; }
+        // Retain up to eight blocks (was four) so a user-mode stall of about
+        // 8 quanta (21 ms at 128 frames / 48 kHz) loses nothing; storage is
+        // the existing fixed array, so large quanta still get fewer blocks.
+        if (Capacity > AR_RENDER_QUEUE_MAX_BLOCKS) { Capacity = AR_RENDER_QUEUE_MAX_BLOCKS; }
     }
     // Append a complete block, replacing the oldest *private* block when full.
     // Return true only for an actual loss. The shared unread slot stays intact.
@@ -46,7 +51,7 @@ struct AudioRouterRenderQueue {
     }
     template<class Publish>
     void Drain(const DOUBLE* storage, Publish publish) {
-        // At most four publications, even if an active reader acknowledges
+        // At most Capacity publications, even if an active reader acknowledges
         // concurrently. A busy/missing lease retains the pending block.
         for (ULONG attempt = 0; attempt < Capacity && Count != 0; ++attempt) {
             if (!publish(storage + Head * SamplesPerBlock, SamplesPerBlock, Generation)) {
