@@ -1,5 +1,17 @@
 # Active plan — current priorities (2026-11-04)
 
+## README release badge — 2026-11-11
+
+Owner-requested documentation repair; no runtime requirement or milestone gate
+changes. The public GitHub releases API identifies v0.0.28 as a prerelease.
+Windows PowerShell HTTP checks reproduce `no releases or repo not found` from
+the original Shields URL and verify `release: v0.0.28` with
+`?include_prereleases`. Updated the badge query and linked the releases list
+so preview downloads are reachable. Validation: live SVG titles and focused
+diff review; `git diff --check`. No application tests needed for this Markdown
+URL change. Rollback: revert the badge URL and target. Owner approved opening
+a PR on 2026-11-11. Next: review and merge the isolated documentation fix.
+
 ## CI and quality nightly repair — 2026-11-09
 
 Owner authorized follow-up after completing the thirteen review fixes.
