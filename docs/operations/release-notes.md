@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- **Less delay, and no more build-up over a long session.** Every audio
+  device runs on its own clock, and AudioRouter did not correct for it. Over
+  minutes to hours an output's queue grew to 50–60 ms and stayed there, an
+  input from a faster device could fall up to about 100 ms behind, and a
+  short stall was followed by a second skip of about 40 ms. Outputs now hold
+  about 20 ms and inputs stay current. The correction plays an occasional
+  2.7 ms block one sample shorter or longer, which is not audible; audio that
+  needs no correction passes through unchanged.
+- **A stall no longer leaves lasting delay.** After a device or application
+  stops delivering for a moment, the audio that piled up behind it is
+  discarded once, and the extra safety margin an output adds after an
+  underrun is given back after five quiet minutes instead of staying until
+  Stop/Play. A long stall no longer adds margin at all, since no margin
+  covers it.
+- **The log names the device that stalled.** The per-minute `audioHealth`
+  record adds, per input, the longest wait for a packet and the frames
+  removed to follow its clock, and per output its target depth, the frames
+  added or removed, and blocks discarded as backlog. See
+  `docs/operations/audio-health-log.md`.
+
 - **Start from a goal.** A new install asks what you want to do and builds a
   stopped route you can change: clean up a mic, game and voice for Discord,
   record a podcast, record one app, or talk to a guest without echo. Nothing

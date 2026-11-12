@@ -128,8 +128,10 @@ impl ControlPlane {
                 ));
             }
             // 50 ms device headroom and an 8-quantum ring absorb capture
-            // bursts and late plugin blocks. Neither adds delay: the pump
-            // queues only processed audio plus its bounded jitter cushion.
+            // bursts and late plugin blocks. They are capacity, not delay:
+            // the output pump holds the queue at its cushion and corrects
+            // clock drift, so the capacity does not fill up over time (it
+            // did until 2026-11; see docs/operations/audio-health-log.md).
             let render = audiorouter_windows_audio::SharedRender::open_with_headroom_at_rate(
                 endpoint_id,
                 MULTI_INPUT_RENDER_HEADROOM_100NS,
