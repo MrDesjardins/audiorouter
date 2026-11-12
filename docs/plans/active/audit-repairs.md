@@ -240,3 +240,26 @@ whitespace checks pass.
 No property schema or setting changed. Refresh Limiter production-audio guide
 evidence after DSP-2 in the same PR; do not report guide documentation ready
 until that workflow and Firefox playback check have been exercised.
+
+DSP-1 committed as `4a6671bcb`.
+
+DSP-2: peak-gain probe and brute-force pending-window reference both failed
+before repair (`0.5073836` applied instead of `0.5011872` at 8 kHz / zero
+lookahead). Added a monotonic deque with construction-time storage for at
+most lookahead+1 constraints. It includes the sample leaving this frame;
+release is capped by every still-pending peak, including a smaller peak after
+a larger one. The final clamp remains a numerical guard, not the limiting
+mechanism. No callback allocation or lock is introduced. Both original
+failures pass at zero/5/10 ms and 8/48/192 kHz; queue fill/pop, reuse and reset
+checks added. Full DSP: 83 pass / 1 ignored; planar reference 7/7, source
+combinations 5/5 and tool combinations 4/4 pass, including
+`processing_never_allocates_for_any_tool_or_layout` with its counting allocator.
+DSP/engine all-target/all-feature Clippy passes. Guide refresh remains pending.
+
+Final shutdown qualification follow-up (SES-2): code inspection shows
+`ThreadedRecorderWorker::call` still uses unbounded `recv`, and Drop joins the
+writer unconditionally. Audio now stops first on an error, but a stalled file
+writer can still exceed STATE-09's Quit budget. Add a stalled-worker regression
+and a bounded lifecycle/retirement path before calling the branch ready. This
+is actual remaining code work, not passing timeout evidence or an external
+hardware blocker.

@@ -1408,8 +1408,20 @@ pub struct PeakLimiter {
     delay: Vec<Vec<f32>>,
     cursor: Vec<usize>,
     gain: f32,
+    /// Monotonic deque of gain constraints for the inclusive lookahead
+    /// window. Storage is prepared once; callback pushes/pops never allocate.
+    gain_window: Vec<LimiterGainConstraint>,
+    gain_window_head: usize,
+    gain_window_len: usize,
+    frame: u64,
     input_level: [LevelFollower; 2],
     output_level: [LevelFollower; 2],
+}
+
+#[derive(Clone, Copy, Debug)]
+struct LimiterGainConstraint {
+    frame: u64,
+    gain: f32,
 }
 
 impl PeakLimiter {
@@ -1452,6 +1464,16 @@ impl PeakLimiter {
             delay: vec![vec![0.0; lookahead_frames.max(1)]; channels],
             cursor: vec![0; channels],
             gain: 1.0,
+            gain_window: vec![
+                LimiterGainConstraint {
+                    frame: 0,
+                    gain: 1.0
+                };
+                lookahead_frames + 1
+            ],
+            gain_window_head: 0,
+            gain_window_len: 0,
+            frame: 0,
             input_level: [LevelFollower::new(); 2],
             output_level: [LevelFollower::new(); 2],
         })
@@ -1480,6 +1502,9 @@ impl PeakLimiter {
         }
         self.cursor.fill(0);
         self.gain = 1.0;
+        self.gain_window_head = 0;
+        self.gain_window_len = 0;
+        self.frame = 0;
         self.input_level = [LevelFollower::new(); 2];
         self.output_level = [LevelFollower::new(); 2];
     }
@@ -1599,10 +1624,35 @@ impl PeakLimiter {
         } else {
             1.0
         };
-        self.gain = self.gain.min(desired_gain);
-        if desired_gain >= self.gain {
-            self.gain += (1.0 - self.gain) * (1.0 - self.release_coefficient);
+        let capacity = self.gain_window.len();
+        // Include the sample leaving this frame, not just future samples:
+        // a peak remains constrained through its actual output boundary.
+        while self.gain_window_len > 0
+            && self
+                .frame
+                .wrapping_sub(self.gain_window[self.gain_window_head].frame)
+                > self.lookahead_frames as u64
+        {
+            self.gain_window_head = (self.gain_window_head + 1) % capacity;
+            self.gain_window_len -= 1;
         }
+        while self.gain_window_len > 0 {
+            let back = (self.gain_window_head + self.gain_window_len - 1) % capacity;
+            if self.gain_window[back].gain < desired_gain {
+                break;
+            }
+            self.gain_window_len -= 1;
+        }
+        let next = (self.gain_window_head + self.gain_window_len) % capacity;
+        self.gain_window[next] = LimiterGainConstraint {
+            frame: self.frame,
+            gain: desired_gain,
+        };
+        self.gain_window_len += 1;
+        let required = self.gain_window[self.gain_window_head].gain;
+        self.gain =
+            (self.gain + (1.0 - self.gain) * (1.0 - self.release_coefficient)).min(required);
+        self.frame = self.frame.wrapping_add(1);
     }
 
     fn process_delayed(&mut self, channel: usize, sample: f32) -> f32 {
@@ -2888,6 +2938,100 @@ mod tests {
         }
         let recovered = (mono.gain - initial) / (1.0 - initial);
         assert!((recovered - (1.0 - (-1.0_f32).exp())).abs() < 0.02);
+    }
+
+    #[test]
+    fn limiter_lookahead_preserves_peak_gain_until_the_peak_is_output() {
+        for rate in [8_000.0, 48_000.0, 192_000.0] {
+            for lookahead_ms in [0.0, 5.0, 10.0] {
+                let mut limiter = PeakLimiter::new_at_sample_rate(
+                    LimiterParams {
+                        ceiling_db: -6.0,
+                        lookahead_ms,
+                        release_ms: 10.0,
+                    },
+                    rate,
+                    2,
+                )
+                .unwrap();
+                let delay = limiter.lookahead_frames();
+                for frame in 0..=delay {
+                    let mut stereo = [0.1, if frame == 0 { 1.0 } else { 0.2 }];
+                    limiter.process_interleaved(&mut stereo);
+                    if frame == delay {
+                        // The quiet channel measures applied gain without the
+                        // ceiling clamp being able to disguise early release.
+                        assert!(
+                            (stereo[0] / 0.1 - limiter.ceiling_linear).abs() < 1.0e-6,
+                            "rate={rate} lookahead={lookahead_ms} gain={}",
+                            stereo[0] / 0.1
+                        );
+                        assert!((stereo[1] - limiter.ceiling_linear).abs() < 1.0e-6);
+                    }
+                }
+                limiter.process_interleaved(&mut [0.1, 0.2]);
+                assert!(
+                    limiter.gain > limiter.ceiling_linear,
+                    "release resumes after the peak leaves"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn limiter_gain_matches_the_minimum_constraint_of_all_pending_samples() {
+        let mut limiter = PeakLimiter::new_at_sample_rate(
+            LimiterParams {
+                ceiling_db: -6.0,
+                lookahead_ms: 10.0,
+                release_ms: 10.0,
+            },
+            8_000.0,
+            1,
+        )
+        .unwrap();
+        let delay = limiter.lookahead_frames();
+        let mut inputs = vec![0.2_f32; delay * 3 + 20];
+        inputs[0] = 1.0;
+        inputs[delay - 1] = 0.99;
+        inputs[delay * 2 + 5] = -0.9;
+        // Increasing required gains fill the entire monotonic queue before
+        // expiry; periodic larger peaks then exercise popping from the back.
+        inputs.extend((0..delay * 3).map(|frame| 1.2 - (frame % (delay + 1)) as f32 * 0.003));
+        let buffer = limiter.gain_window.as_ptr();
+        let mut gain = 1.0;
+        for (frame, input) in inputs.iter().enumerate() {
+            // Deliberately slow reference: the constraint includes every
+            // input still pending and the one leaving the delay this frame.
+            let peak = inputs[frame.saturating_sub(delay)..=frame]
+                .iter()
+                .map(|value| value.abs())
+                .fold(0.0, f32::max);
+            let required = if peak > limiter.ceiling_linear {
+                limiter.ceiling_linear / peak
+            } else {
+                1.0
+            };
+            gain = (gain + (1.0 - gain) * (1.0 - limiter.release_coefficient)).min(required);
+            let mut actual = [*input];
+            limiter.process_channel(0, &mut actual);
+            assert_eq!(limiter.gain, gain, "frame {frame}");
+            let delayed = if frame < delay {
+                0.0
+            } else {
+                inputs[frame - delay]
+            };
+            assert!(
+                (actual[0] - delayed * gain).abs() < 1.0e-6,
+                "the clamp must only be a numeric guard"
+            );
+            assert!(limiter.gain_window_len <= limiter.gain_window.len());
+        }
+        assert_eq!(limiter.gain_window.as_ptr(), buffer);
+        limiter.reset();
+        assert_eq!(limiter.gain_window.as_ptr(), buffer);
+        assert_eq!(limiter.gain_window_len, 0);
+        assert_eq!(limiter.gain, 1.0);
     }
 
     #[test]
