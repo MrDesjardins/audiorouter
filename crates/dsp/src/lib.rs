@@ -1505,9 +1505,14 @@ impl PeakLimiter {
         let mut input_peaks = [0.0_f32; 2];
         let mut output_peaks = [0.0_f32; 2];
         for values in samples.chunks_exact_mut(self.channels) {
+            let peak = values
+                .iter()
+                .map(|sample| finite_or_zero(*sample).abs())
+                .fold(0.0, f32::max);
+            self.update_gain(peak);
             for (channel, sample) in values.iter_mut().enumerate() {
                 let input = *sample;
-                *sample = self.process_one(channel, input);
+                *sample = self.process_delayed(channel, input);
                 if let (Some(input_peak), Some(output_peak)) =
                     (input_peaks.get_mut(channel), output_peaks.get_mut(channel))
                 {
@@ -1527,7 +1532,43 @@ impl PeakLimiter {
         );
     }
 
+    /// Linked stereo: detect both inputs and advance the shared envelope once
+    /// per frame. Delay and gain remain identical across channel planes.
+    pub fn process_planar_linked(&mut self, left: &mut [f32], right: &mut [f32]) {
+        if self.channels != 2 || left.len() != right.len() {
+            left.fill(0.0);
+            right.fill(0.0);
+            return;
+        }
+        let frames = left.len();
+        let mut input_peaks = [0.0_f32; 2];
+        let mut output_peaks = [0.0_f32; 2];
+        for (left, right) in left.iter_mut().zip(right.iter_mut()) {
+            let inputs = [finite_or_zero(*left), finite_or_zero(*right)];
+            self.update_gain(inputs[0].abs().max(inputs[1].abs()));
+            *left = self.process_delayed(0, inputs[0]);
+            *right = self.process_delayed(1, inputs[1]);
+            input_peaks[0] = input_peaks[0].max(inputs[0].abs());
+            input_peaks[1] = input_peaks[1].max(inputs[1].abs());
+            output_peaks[0] = output_peaks[0].max(left.abs());
+            output_peaks[1] = output_peaks[1].max(right.abs());
+        }
+        observe_levels(
+            &mut self.input_level,
+            &mut self.output_level,
+            input_peaks,
+            output_peaks,
+            frames,
+            self.sample_rate,
+        );
+    }
+
+    /// Mono only; use a frame-major entry point for a stereo limiter.
     pub fn process_channel(&mut self, channel: usize, samples: &mut [f32]) {
+        if self.channels != 1 || channel != 0 {
+            samples.fill(0.0);
+            return;
+        }
         let mut input_peak = 0.0_f32;
         let mut output_peak = 0.0_f32;
         for sample in samples.iter_mut() {
@@ -1548,13 +1589,13 @@ impl PeakLimiter {
     }
 
     fn process_one(&mut self, channel: usize, sample: f32) -> f32 {
-        let Some(delay) = self.delay.get_mut(channel) else {
-            return 0.0;
-        };
-        let cursor = &mut self.cursor[channel];
-        let input = if sample.is_finite() { sample } else { 0.0 };
-        let desired_gain = if input.abs() > self.ceiling_linear {
-            self.ceiling_linear / input.abs()
+        self.update_gain(finite_or_zero(sample).abs());
+        self.process_delayed(channel, sample)
+    }
+
+    fn update_gain(&mut self, peak: f32) {
+        let desired_gain = if peak > self.ceiling_linear {
+            self.ceiling_linear / peak
         } else {
             1.0
         };
@@ -1562,6 +1603,14 @@ impl PeakLimiter {
         if desired_gain >= self.gain {
             self.gain += (1.0 - self.gain) * (1.0 - self.release_coefficient);
         }
+    }
+
+    fn process_delayed(&mut self, channel: usize, sample: f32) -> f32 {
+        let Some(delay) = self.delay.get_mut(channel) else {
+            return 0.0;
+        };
+        let cursor = &mut self.cursor[channel];
+        let input = if sample.is_finite() { sample } else { 0.0 };
         let output = if self.lookahead_frames == 0 {
             input
         } else {
@@ -2706,8 +2755,7 @@ mod tests {
         .unwrap();
         let mut left = [1.0_f32; 128];
         let mut right = [0.1_f32; 128];
-        limiter.process_channel(0, &mut left);
-        limiter.process_channel(1, &mut right);
+        limiter.process_planar_linked(&mut left, &mut right);
         assert!(limiter.input_level_db(0).abs() < 1.0e-4);
         assert!(limiter.output_level_db(0) <= -6.0 + 1.0e-3);
         assert!((limiter.input_level_db(1) + 20.0).abs() < 1.0e-3);
@@ -2813,6 +2861,33 @@ mod tests {
         let mut quiet = [0.01];
         gate.process_interleaved(&mut quiet);
         assert!(!gate.is_open());
+    }
+
+    #[test]
+    fn limiter_linked_stereo_has_one_gain_and_the_mono_release_time() {
+        let params = LimiterParams {
+            ceiling_db: -6.0,
+            lookahead_ms: 0.0,
+            release_ms: 100.0,
+        };
+        let mut mono = PeakLimiter::new_at_sample_rate(params, 48_000.0, 1).unwrap();
+        let mut stereo = PeakLimiter::new_at_sample_rate(params, 48_000.0, 2).unwrap();
+        mono.process_interleaved(&mut [1.0]);
+        stereo.process_interleaved(&mut [1.0, 1.0]);
+        let initial = mono.gain;
+        for _ in 0..4800 {
+            let mut left_right = [0.2, 0.2];
+            let mut one = [0.2];
+            stereo.process_interleaved(&mut left_right);
+            mono.process_interleaved(&mut one);
+            assert_eq!(left_right[0], left_right[1], "stereo image must not move");
+            assert_eq!(
+                left_right[0], one[0],
+                "release is measured in frames, not channel samples"
+            );
+        }
+        let recovered = (mono.gain - initial) / (1.0 - initial);
+        assert!((recovered - (1.0 - (-1.0_f32).exp())).abs() < 0.02);
     }
 
     #[test]

@@ -221,3 +221,22 @@ with dither. Recording library suite: 48/48 pass including the larger-block
 extension; all-target/all-feature recording Clippy, both format checks and
 diff whitespace checks pass. Inspected the complete focused diff. No realtime callback work, API,
 control setting or guide behavior changed. Next: commit REC-1, then DSP-1/2.
+
+REC-1 committed as `5fda58555`.
+
+DSP-1: mono/stereo release regression failed on unequal left/right gains
+(`0.100278996` versus `0.100299776`). The actual compiled Limiter stage also
+failed bitwise comparison with frame-major reference processing. Added linked
+planar processing and frame-major interleaved detection: advance the shared
+gain once for the maximum channel peak, then apply it to both delayed samples.
+The engine uses this entry point for stereo; per-channel entry is mono-only
+and invalid shapes silence rather than passing unprocessed audio. Both
+original failures pass. The first engine test tried a private constructor;
+replaced it with public `compile_session`, reproducing the failure through the
+actual compiler/runtime entry. Full DSP: 81 pass / 1 explicitly ignored;
+planar reference suite 7/7, source combinations 5/5 and tool combinations 4/4
+pass. DSP/engine all-target/all-feature Clippy, both format checks and diff
+whitespace checks pass.
+No property schema or setting changed. Refresh Limiter production-audio guide
+evidence after DSP-2 in the same PR; do not report guide documentation ready
+until that workflow and Firefox playback check have been exercised.

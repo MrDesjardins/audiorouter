@@ -10563,10 +10563,14 @@ impl RuntimeGraph {
                 ProcessingStage::Limiter { limiter } => {
                     if limiter
                         .try_with(|processor| {
-                            for channel in 0..block.channels() {
-                                if let Some(samples) = block.channel_mut(channel) {
-                                    processor.process_channel(channel, samples);
+                            if let Some((left, right)) = block.channels_mut_pair() {
+                                processor.process_planar_linked(left, right);
+                            } else if block.channels() == 1 {
+                                if let Some(samples) = block.channel_mut(0) {
+                                    processor.process_channel(0, samples);
                                 }
+                            } else {
+                                block.clear();
                             }
                         })
                         .is_none()
