@@ -25,7 +25,8 @@ per-user NSIS installer containing:
 | --- | --- |
 | Desktop app: window, tray, embedded UI and the audio/control backend (one process, `audiorouter-shell.exe`) | install folder |
 | `audiorouter-cli.exe` (CLI and MCP server) | install folder (resource) |
-| `audiorouter-plugin-worker.exe` (isolated VST host) | install folder (resource) |
+| `audiorouter-plugin-worker.exe` (isolated VST2 host) | install folder (resource) |
+| `audiorouter-vst3-worker.exe` (isolated VST3 host) | install folder (resource) |
 | Stream Deck plugin (`com.mrdesjardins.audiorouter.streamDeckPlugin`) | install folder (resource); **API → Install Stream Deck plugin** hands it to the Stream Deck app |
 | Optional verified OpenAI tunnel runtime and notices (from 0.0.16) | install folder; started only through explicit MCP setup |
 

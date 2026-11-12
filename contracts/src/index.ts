@@ -1521,6 +1521,7 @@ export type ImplementedMethod =
   | "plugins.retry"
   | "plugins.inspect"
   | "plugins.parameters"
+  | "plugins.prepareUpdate"
   | "virtualDevices.list"
   | "virtualDevices.plan"
   | "virtualDevices.apply"
@@ -1700,7 +1701,8 @@ export type MethodParams = {
   "plugins.resume": { sessionId?: EntityId; nodeId: EntityId };
   "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
-  "plugins.parameters": { path: string };
+  "plugins.parameters": { path: string; classId?: string };
+  "plugins.prepareUpdate": { sessionId?: EntityId; nodeId: EntityId; resetState?: boolean };
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
   "virtualDevices.apply": { planId: EntityId; idempotencyKey: string };
@@ -1911,6 +1913,7 @@ export type MethodResult = {
   "plugins.retry": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
   "plugins.parameters": PluginParametersResult;
+  "plugins.prepareUpdate": { sessionId: EntityId; nodeId: EntityId; parameters: Node["parameters"]; previousFingerprint: string; statePreserved: boolean };
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "virtualDevices.plan": VirtualDevicePlanResult;
   "virtualDevices.apply": VirtualDeviceApplyResult;

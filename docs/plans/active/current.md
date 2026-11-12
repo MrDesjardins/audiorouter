@@ -6391,3 +6391,14 @@ remain in the third-party package, not introduced by this change. Vite reports
 the existing 608 kB application chunk warning; bundle splitting is outside
 this dependency repair. Hosted new-head CI and Edge remain required. Next:
 finish final-lock checks, inspect diff, push the fix to PR #81 and inspect CI.
+
+## Plugin reliability and copyable errors — 2026-11-11
+
+Owner-authorized repair of the VST2/VST3 path after a user's Pitchproof failed
+to load and issue #136 reported that no plugin worked. The audit, every finding's
+disposition and the verification run are in
+[the execution plan](plugin-reliability.md). Issue #136's cause is still
+unconfirmed without the reporter's diagnostics. Not run: Play on a route with a
+plugin through real audio endpoints, the installer on a second PC, and a guide
+video for the new Plugin recovery control (the property coverage manifest lists
+it as pending). Next: owner review of the PR, then the remaining items above.

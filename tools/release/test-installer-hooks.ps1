@@ -1,11 +1,25 @@
 $ErrorActionPreference = "Stop"
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
+function Assert-PluginWorkerResources($Configuration) {
+    foreach ($worker in @('audiorouter-plugin-worker.exe', 'audiorouter-vst3-worker.exe')) {
+        $resource = $Configuration.bundle.resources.PSObject.Properties["../target/release/$worker"]
+        if ($null -eq $resource -or $resource.Value -ne $worker) { throw "NSIS resources omit the packaged plugin worker $worker." }
+    }
+}
 foreach ($profile in @("tauri.release.conf.json", "tauri.app-only.release.conf.json")) {
     $profileConfig = Get-Content -LiteralPath (Join-Path $workspace "src-tauri/$profile") -Raw | ConvertFrom-Json
+    Assert-PluginWorkerResources $profileConfig
     $libraryResource = $profileConfig.bundle.resources.PSObject.Properties["../resources/sound-library"]
     if ($null -eq $libraryResource -or $libraryResource.Value -ne "sound-library") {
         throw "$profile must bundle the offline sound-library directory at sound-library."
     }
+}
+$missingVst3 = @{ bundle = @{ resources = @{ '../target/release/audiorouter-plugin-worker.exe' = 'audiorouter-plugin-worker.exe' } } } | ConvertTo-Json -Depth 4 | ConvertFrom-Json
+try {
+    Assert-PluginWorkerResources $missingVst3
+    throw 'Missing VST3 worker was accepted'
+} catch {
+    if ($_.Exception.Message -notlike '*omit the packaged plugin worker audiorouter-vst3-worker.exe*') { throw }
 }
 $config = Get-Content -LiteralPath (Join-Path $workspace "src-tauri/tauri.release.conf.json") -Raw | ConvertFrom-Json
 $nsis = $config.bundle.windows.nsis

@@ -282,6 +282,9 @@ describe("snapshot cache", () => {
       describePluginParameters: async () => {
         throw new Error("not connected");
       },
+      preparePluginUpdate: async () => {
+        throw new Error("not connected");
+      },
       listVirtualDevices: async () => [],
       planVirtualDevice: async () => {
         throw new Error("not connected");

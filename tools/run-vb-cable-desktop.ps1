@@ -44,9 +44,7 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $workspace 'Cargo.toml') -PathType Leaf)) {
             throw '-Build requires running the launcher from the repository checkout'
         }
-        Invoke-Checked 'npm.cmd' @('run', 'build', '--prefix', (Join-Path $workspace 'ui'))
-        Invoke-Checked 'cargo.exe' @('build', '--manifest-path', (Join-Path $workspace 'src-tauri/Cargo.toml'))
-        Invoke-Checked 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $workspace 'tools/stage-mcp-cli.ps1'), '-Profile', 'debug', '-Build')
+        Invoke-Checked 'powershell.exe' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $workspace 'tools/build-desktop.ps1'), '-Profile', 'debug')
     }
     if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) {
         throw "missing CLI binary: $cli (run with -Build)"

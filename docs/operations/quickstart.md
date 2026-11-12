@@ -83,13 +83,11 @@ To build the native Tauri shell and its embedded current UI without launching
 or packaging it, run from the repository root:
 
 ```powershell
-npm.cmd run build --prefix ui
-cargo build --manifest-path src-tauri/Cargo.toml --locked --release --features custom-protocol --target-dir src-tauri/target
-cargo build --manifest-path Cargo.toml -p audiorouter-plugin-host --bin audiorouter-plugin-worker --locked --release --target-dir src-tauri/target
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\m06-vst3-worker\build.ps1 -Release -Output src-tauri\target\release\audiorouter-vst3-worker.exe
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\stage-mcp-cli.ps1 -Profile release -Build
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\build-desktop.ps1
 ```
 
+This command builds the UI, shell, CLI and both workers, then checks all four
+executables and prints their hashes. Use `-Profile debug` for a debug build.
 The shell and matching plugin workers are written beside each other in
 `src-tauri\target\release\` as `audiorouter-shell.exe`,
 `audiorouter-plugin-worker.exe` (VST2) and `audiorouter-vst3-worker.exe`

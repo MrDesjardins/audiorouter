@@ -280,3 +280,31 @@ describe("native host bridge", () => {
     expect(createInitialBackend(null, webview, "session-2", "null").connected).toBe(false);
   });
 });
+
+describe("slow plugin requests", () => {
+  it("gives plugin and Play preparation calls the long timeout and leaves ordinary calls short", async () => {
+    const { requestTimeoutMs, SLOW_REQUEST_TIMEOUT_MS } = await import("./host");
+    for (const method of ["plugins.scan", "plugins.parameters", "plugins.saveState", "nativeEndpoints.prepare"])
+      expect(requestTimeoutMs(method, 5000)).toBe(SLOW_REQUEST_TIMEOUT_MS);
+    expect(requestTimeoutMs("status.get", 5000)).toBe(5000);
+  });
+
+  it("keeps a slow plugin scan pending past the ordinary transport timeout", async () => {
+    vi.useFakeTimers();
+    try {
+      let answer: (value: unknown) => void = () => undefined;
+      const core = { invoke: () => new Promise((resolve) => (answer = resolve)) };
+      const transport = new TauriRpcTransport(core, 20);
+      let settled = false;
+      const pending = transport
+        .send({ jsonrpc: "2.0", id: 1, method: "plugins.scan", params: { directory: "C:/VST3" } })
+        .finally(() => (settled = true));
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(settled).toBe(false);
+      answer({ jsonrpc: "2.0", id: 1, result: { directory: "C:/VST3", entries: [] } });
+      await expect(pending).resolves.toMatchObject({ id: 1 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
