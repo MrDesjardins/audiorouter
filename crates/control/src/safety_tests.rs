@@ -563,7 +563,7 @@ fn system_quit_stops_running_sessions_and_replays_idempotently() {
 }
 
 #[test]
-fn system_quit_keeps_session_running_when_recorder_finalization_fails() {
+fn system_quit_stops_audio_when_recorder_finalization_fails() {
     let mut plane = ControlPlane::default();
     let original = session();
     plane.insert_session(original.clone()).unwrap();
@@ -579,20 +579,81 @@ fn system_quit_keeps_session_running_when_recorder_finalization_fails() {
         params: Some(json!({ "idempotencyKey": "quit-retry" })),
     };
     let grant = ClientGrant::for_role(ClientRole::Operator);
-    let failed = plane.dispatch_authorized_for_client(request(), "shell", &grant);
-    assert!(failed.result.is_none());
-    assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Running);
-
-    plane
-        .attach_recorder_worker(original.id.clone(), Box::new(TestRecorderWorker))
-        .unwrap();
-    let recovered = plane.dispatch_authorized_for_client(request(), "shell", &grant);
-    assert_eq!(recovered.result.as_ref().unwrap()["state"], "stopped");
+    let stopped = plane.dispatch_authorized_for_client(request(), "shell", &grant);
+    assert_eq!(stopped.result.as_ref().unwrap()["state"], "stopped");
+    assert_eq!(
+        stopped.result.as_ref().unwrap()["recorders"][0]["state"],
+        "failed"
+    );
     assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Stopped);
+    let replay = plane.dispatch_authorized_for_client(request(), "shell", &grant);
+    assert_eq!(replay.result, stopped.result);
 }
 
 #[test]
-fn system_quit_finalizes_all_active_node_recorders_before_stopping_session() {
+fn stop_and_quit_report_node_finalize_failure_after_stopping_audio() {
+    for method in ["sessions.stop", "system.quit"] {
+        let mut plane = ControlPlane::default();
+        let mut original = session();
+        original.nodes.push(Node {
+            id: EntityId::new("failed-recorder"),
+            kind: NodeKind::Recorder,
+            type_version: 1,
+            name: "Recorder".into(),
+            enabled: true,
+            bypass: false,
+            parameters: Default::default(),
+            ports: vec![],
+        });
+        let id = original.id.clone();
+        plane.insert_session(original).unwrap();
+        plane.session_start(&id).unwrap();
+        let node_id = EntityId::new("failed-recorder");
+        let queue = Arc::new(RecordingQueue::new(4).unwrap());
+        plane
+            .attach_recorder_worker_to_node(
+                &id,
+                node_id.clone(),
+                Box::new(FailingTapRecorderWorker {
+                    tap: Arc::new(RecorderAudioTap::new(queue)),
+                }),
+            )
+            .unwrap();
+        plane
+            .control_recorder_node(&node_id, "recorders.arm", None)
+            .unwrap();
+        plane
+            .control_recorder_node(&node_id, "recorders.start", Some(0))
+            .unwrap();
+        let params = if method == "sessions.stop" {
+            json!({"sessionId": id, "idempotencyKey": "stop"})
+        } else {
+            json!({"idempotencyKey": "quit"})
+        };
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        });
+        let result = response
+            .result
+            .expect("file failure must not refuse shutdown");
+        assert_eq!(result["state"], "stopped");
+        assert_eq!(result["recorders"][0]["nodeId"], "failed-recorder");
+        assert_eq!(result["recorders"][0]["state"], "failed");
+        assert_eq!(plane.runtimes[&id].state(), RuntimeState::Stopped);
+        assert!(!plane.recorder_node_workers.contains_key(&node_id));
+        assert_eq!(
+            plane.recorder_node_states[&node_id].state(),
+            RecorderState::Failed
+        );
+        assert_eq!(plane.session_stop(&id).unwrap()["state"], "stopped");
+    }
+}
+
+#[test]
+fn system_quit_finalizes_all_active_node_recorders_after_stopping_session() {
     let mut plane = ControlPlane::default();
     let mut original = session();
     for node_id in ["quit-recorder-a", "quit-recorder-b"] {

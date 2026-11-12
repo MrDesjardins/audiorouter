@@ -16,6 +16,12 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
+`sessions.stop` and `system.quit` stop audio before finalizing files. Their
+`recorders` arrays report each recorder's `state`, `fileFinalized` and
+`recoverable` flags, optional `nodeId`, and a `reason` on failure. A recorder
+failure preserves its recovery evidence and does not refuse shutdown. Quit
+stops every route before attempting any file finalization.
+
 The current catalog contains 148 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.

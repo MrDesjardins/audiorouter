@@ -72,3 +72,40 @@ omission in the test; explicit non-recursive cleanup now passes.
 Windows full library suites: control 367 pass / 11 explicitly ignored;
 storage 107 pass. No native endpoint or live-owner session was exercised.
 Next: validate Clippy/format and commit MEDIA-1, then SES-2 shutdown failure.
+
+MEDIA-1 committed as `5614e9f8`; domain/storage/control all-target,
+all-feature Clippy and both formatting checks passed.
+
+SES-2: the injected node-finalize failure test and changed legacy Quit test
+both failed before repair. Audio shutdown is now separate from finalization;
+Quit stops every session before any recording finalization. Node and legacy
+failures drop encoder ownership, retain failed recovery checkpoints and return
+per-recorder failures. Repeated Stop and idempotent Quit remain usable.
+Existing tests explicitly expecting a live route after recording failure were
+updated to the STATE-09 safety contract. Output schemas and TypeScript now
+describe failure outcomes. The default MCP `control_session` test injects a
+disk failure and verifies stopped status and the recorder failure response.
+
+Verification: Windows / Rust 1.96.0, one build job; CLI library 50/50 passes
+(including default MCP reachability and the new failure case). Control library
+368 pass / 11 hardware-dependent tests ignored before the final repeat-failure
+adjustment; full rerun pending. Control/CLI all-target/all-feature Clippy,
+workspace/shell formatting and contract drift (147 methods, 37 kinds, 20
+processors, 22 event categories) pass. API-only and guide discovery catalogs
+regenerated without changes. Full site generation revealed unrelated stale
+tool-catalog content; that generated-only change was restored rather than
+mixed into shutdown behavior. Docs acceptance initially caught the original
+audit's link to the other checkout's untracked plugin plan; changed that
+historical reference to plain text, without importing unrelated work.
+
+No physical audio, built shell, OneDrive or deadline/finalization timeout
+qualification is claimed. Next: finish SES-2 validation/commit, then STO-5
+quarantine and the remaining eleven medium findings. Goal and PR scope remain
+all fifteen findings; no PR has been opened yet.
+
+SES-2 final local rerun: control library 368 pass / 11 ignored; CLI 50 pass;
+control/CLI all-target/all-feature Clippy and both format checks pass.
+Documentation acceptance passes 250 files / 1,449 links; diff whitespace check
+passes. Full shutdown diff inspected. A bounded finalization-time test and
+attended native Stop remain part of final branch qualification, not passing
+evidence from these unit tests. Next implementation task: STO-5.

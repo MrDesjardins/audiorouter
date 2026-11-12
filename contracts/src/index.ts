@@ -1087,18 +1087,23 @@ export interface SessionStopResult {
   sessionId: EntityId;
   state: "stopped";
   runtime: "fake" | "native";
-  recorders: Array<{
-    sessionId: EntityId;
-    state: "completed";
-    fileFinalized: true;
-    recoverable: false;
-  }>;
+  reason?: string;
+  recorders: RecorderShutdownOutcome[];
+}
+
+export interface RecorderShutdownOutcome {
+  sessionId: EntityId;
+  nodeId?: EntityId;
+  state: "idle" | "armed" | "completed" | "failed";
+  fileFinalized: boolean;
+  recoverable: boolean;
+  reason?: string;
 }
 
 export interface SystemQuitResult {
   state: "stopped";
   sessions: SessionStopResult[];
-  recorders: RecorderLifecycleResult[];
+  recorders: RecorderShutdownOutcome[];
 }
 
 export interface GraphUndoPlanResult {

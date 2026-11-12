@@ -3921,6 +3921,73 @@ mod tests {
         assert_eq!(mcp_tool_annotations("check_setup")["readOnlyHint"], true);
     }
 
+    #[test]
+    fn mcp_stop_reports_encoder_failure_without_leaving_audio_running() {
+        struct BrokenEncoder;
+        impl audiorouter_control::RecorderWorker for BrokenEncoder {
+            fn finalize(
+                &mut self,
+                _: u64,
+            ) -> Result<audiorouter_control::RecorderFinalizationOutcome, String> {
+                Err("injected disk failure".into())
+            }
+        }
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let id = session.id.clone();
+        plane.insert_session(session).unwrap();
+        plane.session_start(&id).unwrap();
+        plane
+            .attach_recorder_worker(id.clone(), Box::new(BrokenEncoder))
+            .unwrap();
+        for (method, params) in [
+            (
+                "recorders.arm",
+                json!({"sessionId": id, "idempotencyKey": "arm"}),
+            ),
+            (
+                "recorders.start",
+                json!({"sessionId": id, "frame": 0, "idempotencyKey": "record"}),
+            ),
+        ] {
+            let response = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            });
+            assert!(response.error.is_none(), "{response:?}");
+        }
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let response = mcp_tool_call(
+            &mut plane,
+            "assistant",
+            &grant,
+            None,
+            &json!({"id": 2, "params": {"name": "control_session", "arguments": {
+                "sessionId": id, "action": "stop", "idempotencyKey": "stop"
+            }}}),
+        );
+        assert_eq!(response["result"]["isError"], false, "{response}");
+        let result = &response["result"]["structuredContent"]["result"];
+        assert_eq!(result["state"], "stopped");
+        assert_eq!(result["recorders"][0]["state"], "failed");
+        assert_eq!(result["recorders"][0]["recoverable"], true);
+        let status = plane
+            .dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(3)),
+                method: "status.get".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert!(status["activeSessionIds"].as_array().unwrap().is_empty());
+    }
+
     /// The other new task tools through the real MCP entry point: reads and
     /// session copies succeed, and runtime controls on a stopped session
     /// reach their own "not playing" refusal (the name and the open session

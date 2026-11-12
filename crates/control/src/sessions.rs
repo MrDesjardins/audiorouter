@@ -721,120 +721,164 @@ impl ControlPlane {
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
-        #[cfg(windows)]
-        self.cancel_sleep_route_recovery(id);
         // Plugins lose their settings when their workers stop; keep them.
         self.capture_playing_plugin_states(id);
+        // File work can fail or wait on storage. Retire every audio worker
+        // first, then report each recorder independently of that boundary.
+        let audio_result = self.stop_session_audio(id);
+        let recorder_outcomes = self.finalize_session_recorders(id);
+        let mut result = audio_result?;
+        result["recorders"] = json!(recorder_outcomes);
+        Ok(result)
+    }
+
+    pub(crate) fn finalize_session_recorders(&mut self, id: &EntityId) -> Vec<Value> {
         let recorder_node_ids = self
-            .get_session(id)?
-            .nodes
+            .recorder_node_sessions
             .iter()
-            .filter(|node| {
-                node.kind == NodeKind::Recorder && self.recorder_node_workers.contains_key(&node.id)
-            })
-            .map(|node| node.id.clone())
+            .filter(|(_, session)| *session == id)
+            .map(|(node, _)| node.clone())
             .collect::<Vec<_>>();
+        let mut outcomes = Vec::new();
         for node_id in recorder_node_ids {
-            self.stop_node_recording(&node_id)?;
-        }
-        let has_node_worker = self
-            .get_session(id)?
-            .nodes
-            .iter()
-            .filter(|node| node.kind == NodeKind::Recorder)
-            .any(|node| self.recorder_node_workers.contains_key(&node.id));
-        if has_node_worker {
-            return Err(ControlError::InvalidRequest(
-                "node-keyed recorder lifecycle must be finalized before stopping the session"
-                    .into(),
-            ));
-        }
-        let mut recorder_outcomes = Vec::new();
-        let active_frame = self
-            .recorders
-            .get(id)
-            .filter(|recorder| {
-                matches!(
-                    recorder.state(),
-                    RecorderState::Recording | RecorderState::Paused | RecorderState::Stopping
-                )
-            })
-            .map(|recorder| {
-                let checkpoint = recorder.checkpoint();
-                checkpoint
-                    .stop_frame
-                    .or(checkpoint.last_frame)
-                    .ok_or_else(|| {
-                        ControlError::InvalidRequest(
-                            "active recorder has no committed frame boundary".into(),
-                        )
-                    })
-            })
-            .transpose()?;
-        if let Some(frame) = active_frame {
-            let mut recorder_candidate = self.recorders.get(id).cloned().ok_or_else(|| {
-                ControlError::InvalidRequest("active recorder disappeared".into())
-            })?;
-            let boundary_result = if recorder_candidate.state() == RecorderState::Stopping {
-                recorder_candidate.complete()
-            } else {
-                recorder_candidate.stop(frame)
-            };
-            boundary_result.map_err(|error| {
-                ControlError::InvalidRequest(format!(
-                    "recorder boundary finalization failed: {error:?}"
-                ))
-            })?;
-            let worker = self.recorder_workers.get_mut(id).ok_or_else(|| {
-                ControlError::InvalidRequest(
-                    "finalize the active recorder before stopping the session".into(),
-                )
-            })?;
-            let outcome = worker.finalize(frame).map_err(|error| {
-                ControlError::InvalidRequest(format!("recorder finalization failed: {error}"))
-            })?;
-            if outcome.state != "completed" || !outcome.file_finalized || outcome.recoverable {
-                return Err(ControlError::InvalidRequest(
-                    "recorder finalization did not produce a completed file".into(),
-                ));
-            }
-            let finalized_recordings = worker.finalized_recordings();
-            self.recorders.insert(id.clone(), recorder_candidate);
-            let checkpoint = self
-                .recorders
-                .get(id)
-                .expect("recorder candidate inserted above")
-                .checkpoint();
-            if let Some(storage) = &self.storage {
-                storage
-                    .save_recording_checkpoint(id.as_str(), &checkpoint)
-                    .map_err(storage_error)?;
-                for recording in &finalized_recordings {
-                    storage.save_recording(recording).map_err(storage_error)?;
+            match self.stop_node_recording(&node_id) {
+                Ok(outcome) => {
+                    let mut summary = json!({"sessionId": id, "nodeId": node_id,
+                        "state": outcome["state"],
+                        "fileFinalized": matches!(outcome["state"].as_str(), Some("completed" | "failed")),
+                        "recoverable": false});
+                    if let Some(reason) = outcome.get("reason") {
+                        summary["reason"] = reason.clone();
+                    }
+                    outcomes.push(summary);
+                }
+                Err(error) => {
+                    // Drop encoder ownership, not its recoverable file or
+                    // failed checkpoint. Repeated Stop must remain usable.
+                    self.recorder_node_workers.remove(&node_id);
+                    self.sync_recorder_inlet(&node_id);
+                    if let Some(state) = self.recorder_node_states.get_mut(&node_id) {
+                        state.fail();
+                        if let Some(storage) = &self.storage {
+                            let _ = storage
+                                .save_recording_checkpoint(node_id.as_str(), &state.checkpoint());
+                        }
+                    }
+                    outcomes.push(json!({"sessionId": id, "nodeId": node_id,
+                        "state": "failed", "fileFinalized": false, "recoverable": true,
+                        "reason": control_error_message(&error)}));
                 }
             }
-            self.events.append(
-                self.get_session(id)?.revision,
-                None,
-                "recorder.changed",
-                Some(id.clone()),
-            );
-            self.recorder_workers.remove(id);
-            recorder_outcomes.push(json!({
-                "sessionId": id,
-                "state": "completed",
-                "fileFinalized": true,
-                "recoverable": false
-            }));
         }
+        let legacy_result = (|| -> Result<Vec<Value>, ControlError> {
+            let mut recorder_outcomes = Vec::new();
+            let active_frame = self
+                .recorders
+                .get(id)
+                .filter(|recorder| {
+                    matches!(
+                        recorder.state(),
+                        RecorderState::Recording
+                            | RecorderState::Paused
+                            | RecorderState::Stopping
+                            | RecorderState::Failed
+                    )
+                })
+                .map(|recorder| {
+                    let checkpoint = recorder.checkpoint();
+                    checkpoint
+                        .stop_frame
+                        .or(checkpoint.last_frame)
+                        .ok_or_else(|| {
+                            ControlError::InvalidRequest(
+                                "active recorder has no committed frame boundary".into(),
+                            )
+                        })
+                })
+                .transpose()?;
+            if let Some(frame) = active_frame {
+                let mut recorder_candidate = self.recorders.get(id).cloned().ok_or_else(|| {
+                    ControlError::InvalidRequest("active recorder disappeared".into())
+                })?;
+                let boundary_result = if recorder_candidate.state() == RecorderState::Stopping {
+                    recorder_candidate.complete()
+                } else {
+                    recorder_candidate.stop(frame)
+                };
+                boundary_result.map_err(|error| {
+                    ControlError::InvalidRequest(format!(
+                        "recorder boundary finalization failed: {error:?}"
+                    ))
+                })?;
+                let worker = self.recorder_workers.get_mut(id).ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "finalize the active recorder before stopping the session".into(),
+                    )
+                })?;
+                let outcome = worker.finalize(frame).map_err(|error| {
+                    ControlError::InvalidRequest(format!("recorder finalization failed: {error}"))
+                })?;
+                if outcome.state != "completed" || !outcome.file_finalized || outcome.recoverable {
+                    return Err(ControlError::InvalidRequest(
+                        "recorder finalization did not produce a completed file".into(),
+                    ));
+                }
+                let finalized_recordings = worker.finalized_recordings();
+                self.recorders.insert(id.clone(), recorder_candidate);
+                let checkpoint = self
+                    .recorders
+                    .get(id)
+                    .expect("recorder candidate inserted above")
+                    .checkpoint();
+                if let Some(storage) = &self.storage {
+                    storage
+                        .save_recording_checkpoint(id.as_str(), &checkpoint)
+                        .map_err(storage_error)?;
+                    for recording in &finalized_recordings {
+                        storage.save_recording(recording).map_err(storage_error)?;
+                    }
+                }
+                self.events.append(
+                    self.get_session(id)?.revision,
+                    None,
+                    "recorder.changed",
+                    Some(id.clone()),
+                );
+                self.recorder_workers.remove(id);
+                recorder_outcomes.push(json!({
+                    "sessionId": id,
+                    "state": "completed",
+                    "fileFinalized": true,
+                    "recoverable": false
+                }));
+            }
+            Ok(recorder_outcomes)
+        })();
+        match legacy_result {
+            Ok(legacy) => outcomes.extend(legacy),
+            Err(error) => {
+                self.recorder_workers.remove(id);
+                if let Some(recorder) = self.recorders.get_mut(id) {
+                    recorder.fail();
+                    if let Some(storage) = &self.storage {
+                        let _ =
+                            storage.save_recording_checkpoint(id.as_str(), &recorder.checkpoint());
+                    }
+                }
+                outcomes.push(json!({"sessionId": id, "state": "failed",
+                    "fileFinalized": false, "recoverable": true, "reason": control_error_message(&error)}));
+            }
+        }
+        outcomes
+    }
 
-        // A session stop is also the native endpoint shutdown boundary. The
-        // worker is deliberately stopped only after recorder finalization so
-        // a failed recorder operation leaves the session and its endpoint
-        // available for explicit recovery. Once this point is reached, stop
-        // the exact bound worker before retiring the runtime generation; even
-        // a worker stop error must not leave an audio client running against
-        // a session that is reported stopped.
+    /// Stop all audio even when one native stop reports an error. Kept
+    /// separate so Quit can silence every session before any file work.
+    pub(crate) fn stop_session_audio(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        self.ensure_session_loaded(id)?;
+        self.clear_comparison(id);
+        #[cfg(windows)]
+        self.cancel_sleep_route_recovery(id);
         let native_attached = self.native_endpoint_session_is_attached(id) || {
             #[cfg(windows)]
             {
@@ -956,7 +1000,7 @@ impl ControlPlane {
             "sessionId": id,
             "state": "stopped",
             "runtime": if native_attached { "native" } else { "fake" },
-            "recorders": recorder_outcomes
+            "recorders": []
         }))
     }
 

@@ -17,8 +17,11 @@ fn method_output_schema_impl(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "state": { "const": "stopped" },
-                "sessions": { "type": "array", "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS },
-                "recorders": { "type": "array", "maxItems": MAX_ACTIVE_RECORDERS }
+                "sessions": { "type": "array", "maxItems": audiorouter_domain::MAX_SESSIONS_GLOBAL,
+                    "items": method_output_schema("sessions.stop") },
+                "recorders": { "type": "array",
+                    "maxItems": audiorouter_domain::MAX_SESSIONS_GLOBAL * (audiorouter_domain::MAX_NODES_PER_SESSION + 1),
+                    "items": method_output_schema("sessions.stop")["properties"]["recorders"]["items"].clone() }
             },
             "required": ["state", "sessions", "recorders"],
             "additionalProperties": false
@@ -607,16 +610,19 @@ fn method_output_schema_impl(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "stopped" },
                 "runtime": { "enum": ["fake", "native"] },
+                "reason": { "type": "string" },
                 "recorders": {
                     "type": "array",
-                    "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+                    "maxItems": audiorouter_domain::MAX_NODES_PER_SESSION + 1,
                     "items": {
                         "type": "object",
                         "properties": {
                             "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                            "state": { "const": "completed" },
-                            "fileFinalized": { "const": true },
-                            "recoverable": { "const": false }
+                            "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                            "state": { "enum": ["idle", "armed", "completed", "failed"] },
+                            "fileFinalized": { "type": "boolean" },
+                            "recoverable": { "type": "boolean" },
+                            "reason": { "type": "string" }
                         },
                         "required": ["sessionId", "state", "fileFinalized", "recoverable"],
                         "additionalProperties": false
