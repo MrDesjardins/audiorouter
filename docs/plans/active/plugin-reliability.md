@@ -320,6 +320,11 @@ including schema contents; the focused CI job exercises the real main-thread
 reproduction. Temporary WER, method logging and debugger-job instrumentation
 must be removed after qualification; they are not product changes.
 
-Validation and rollback: rerun focused hosted reproduction, then the complete
-Edge suite, control tests, fmt/Clippy, contracts and docs. Revert only the
-wrapper if needed; schemas and plugin behavior are unchanged.
+Validation and rollback: job 131010860623 completed 200 hosted-runner fixture
+iterations under `cdb` with no overflow. The complete run 43166882823 passed
+its Edge browser job with 739 passed and 15 skipped (zero failed or flaky),
+plus Windows tests, UI checks, release preparation and Quality gate. All check annotations were read; no new warning or unresolved diagnostic
+belongs to this repair. Temporary WER, method logging and debugger-job
+instrumentation were removed afterward, restoring `ci.yml` and the fixture to
+the base revision. Revert only the schema wrapper/helper if needed; generated
+schemas and plugin behavior are unchanged.
