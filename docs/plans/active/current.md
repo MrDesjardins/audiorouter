@@ -160,8 +160,13 @@ repair to PR #127, await new-head CI, inspect annotations and merge if green.
 ## High and medium audit repairs — 2026-11-12
 
 Owner-authorized implementation and PR: [execution plan](audit-repairs.md).
-Repair all three high and twelve medium findings on `fix/audit-high-medium`;
-preserve unrelated work in the original checkout. Next: fail-first regressions.
+Owner clarified the scope to three high and eleven listed medium findings on
+`fix/audit-high-medium`. Thirteen repairs are implemented; STO-4 is unconfirmed
+after real OneDrive metadata-only policy probes, so security checks remain.
+Workspace tests, Clippy, UI tests/build, native shell tests and fresh-profile
+launch, three-theme recovery journeys and Limiter Firefox clips pass. See the
+execution plan for exact evidence and limitations. Next: final diff/commit,
+push and create the explicitly authorized PR; inspect CI annotations afterward.
 
 ## Issue #123 validation — 2026-11-09
 

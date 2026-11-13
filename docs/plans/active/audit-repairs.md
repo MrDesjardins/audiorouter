@@ -460,3 +460,66 @@ real recording, personal file write, cloud upload or credential access occurred.
 Next: refresh Limiter production-audio Properties clips with the existing
 portrait capture pipeline, verify Firefox playback, then complete branch-wide
 tests/builds/visual qualification and create the authorized PR.
+
+STO-4 qualification committed as `30de5a039`.
+
+## Final branch qualification — 2026-11-12
+
+Scope accounted for: MEDIA-1, STO-5 and SES-2 (high); SES-1, DSP-1/2,
+REC-1, STO-1/2/3, ENG-1, SES-3 and SIM-1 (medium) repaired, plus STO-4
+qualified as unconfirmed above. SES-1's production ordering repair was already
+on the rebased main; this branch retains its regression coverage. No SES-4 or
+unrelated original-checkout changes were added.
+
+Windows / pinned Rust 1.96.0, one Cargo build job:
+
+- `cargo test --workspace --all-features -j 1 -- --quiet`: 1,404 passed,
+  56 explicitly ignored; complete output `target/audit-workspace-tests.log`.
+- `cargo clippy --workspace --all-targets --all-features -j 1 -- -D warnings`
+  passes (`target/audit-workspace-clippy.log`). Both formatting checks pass.
+- Shell all-target/all-feature Clippy passes; shell tests 101 passed / 4
+  ignored (`target/audit-shell-clippy.log`, `target/audit-shell-tests.log`).
+- UI format check, zero-warning lint, all-code typecheck and production build
+  pass; 115 test files / 1,018 tests pass (`target/audit-ui-tests.log`). Vite
+  reports a 610.70 kB main chunk. Keep the advisory: changing unrelated startup
+  chunk architecture or raising its warning limit is outside these repairs;
+  the actual fresh-profile backend startup check below passes.
+- Rebuilt `e2e_backend`; Edge recovery journeys pass 3/3 in dark/light/high
+  contrast. Inspected fresh `target/audit-evidence/recovery-<theme>.png` images:
+  original-file export, deliberate deletion controls and text are visible.
+- Built native debug shell with custom-protocol after the current UI build;
+  executable timestamp 17:00:30 is newer than UI dist 16:56:18. Opt-in
+  `fresh_install_shell` passes with isolated LOCALAPPDATA and WebView profile;
+  real backend answers status.get in 63 ms, device/folder consent stays denied
+  to raw callers, and no audio device opens. Disposable shell log reports ready.
+  The killed test process leaves a partial backend log line for its deliberately
+  denied permission request; do not interpret this as an absence-of-errors soak.
+- Contract drift passes (148 methods / 37 kinds / 20 processors / 22 event
+  categories); regenerated API-only and tool-discovery catalogs are unchanged.
+
+Limiter guides: rebuilt production-engine fixtures and ceiling/lookahead/release
+variants from this branch, recorded the actual Properties panel alone in portrait
+with live readings, and refreshed the silent overview and representative demo.
+Inspected control-change and late-playback frames: controls remain visible and
+the live visual stays at the top. Capture metadata records no page errors.
+All six Limiter clips pass real-click Firefox playback, including measurable
+output for audible clips. Format/size checker passes all 202 published clips.
+Property manifest and generated guide pages were regenerated; only Limiter media,
+its guide hashes and preview entry change. Manifest coverage data is unchanged.
+The first Firefox run failed because Python was unavailable and its server never
+started; reran with a local Node server and all six passed. Guide regeneration
+also requires social and CSP regeneration; after both, configured site checks
+pass (38 guides / 146 anchors / 1,320 local links/assets and 13 guard tests).
+The standalone full-property coverage check still reports `plugin.recovery`
+pending. It is outside the explicitly limited audit scope and no plugin control
+changed here; retain that honest pending row rather than invent an exemption.
+Limiter's three property rows remain recorded with verified refreshed media.
+
+Limits: no physical latency, actual disk unplug, signed driver, release package,
+licensed plugin or live microphone qualification. Shutdown stalls use injected
+encoder I/O; the native launch test exercises startup/consent, not every repaired
+workflow in the packaged UI. Owner processes and personal audio/data are untouched.
+Rollback remains reverting the focused commits; no migration is required.
+Next: commit guide/evidence refresh, inspect complete branch diff, fetch main,
+push `fix/audit-high-medium`, create PR and read its check annotations. Do not
+mark merge-ready while required CI is unresolved.
