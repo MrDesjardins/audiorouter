@@ -1,5 +1,17 @@
 # Active plan — current priorities (2026-11-04)
 
+## CI speed — 2026-11-12
+
+Owner approved all phases of affected-area selection, daily full CI, four
+isolated Edge shards and parallel Rust/UI/release jobs. See the
+[execution plan](ci-speed.md) for ENG-01/02/04/05, validation and rollback.
+Implemented on `improve/ci-speed`; unrelated changes are preserved. Full
+[hosted qualification](https://github.com/MrDesjardins/audiorouter/actions/runs/43343093910)
+passed all 15 jobs on code head `abb0ba376`, including 742 Edge passes and 15
+explicit skips. Owner approved opening the PR on 2026-11-12. Current main's
+daily-retention changes are preserved; next: current-base PR CI and post-merge
+cache/nightly observation. Branch protection is unchanged.
+
 ## Daily quality data retention — 2026-11-12
 
 Owner requires continued daily collection and explicitly approved opening this

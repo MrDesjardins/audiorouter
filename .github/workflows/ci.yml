@@ -6,19 +6,25 @@ name: AudioRouter CI
 # underneath us.
 #
 # Pull requests and main pushes run only checks for changed areas (see the
-# `changes` job). Manual runs execute the full quality inventory.
+# `changes` job). Manual and scheduled runs execute the full quality inventory.
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "47 3 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || github.event_name == 'workflow_dispatch' && 'manual' || 'changes' }}
   cancel-in-progress: true
+
+env:
+  # Incremental directories are large and cannot be reused across fresh checkouts.
+  CARGO_INCREMENTAL: '0'
 
 jobs:
   changes:
@@ -153,9 +159,9 @@ jobs:
           retention-days: 14
 
   windows:
-    name: Windows build, tests and release preparation
+    name: Windows Rust and native checks
     needs: changes
-    if: needs.changes.outputs.windows == 'true'
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.contracts == 'true' || needs.changes.outputs.probe == 'true' || needs.changes.outputs.sdk == 'true'
     runs-on: windows-latest
     timeout-minutes: 150
     steps:
@@ -174,6 +180,19 @@ jobs:
         with:
           toolchain: 1.96.0
           components: rustfmt, clippy
+
+      - name: Restore Rust dependencies and build cache
+        id: rust-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            src-tauri/target
+          key: rust-windows-${{ runner.arch }}-1.96.0-${{ hashFiles('**/Cargo.lock') }}-${{ github.job }}-${{ github.sha }}
+          restore-keys: |
+            rust-windows-${{ runner.arch }}-1.96.0-${{ hashFiles('**/Cargo.lock') }}-${{ github.job }}-
 
       # All-feature shell lint embeds frontendDist through custom-protocol.
       - name: Install UI dependencies
@@ -218,29 +237,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           node tools/quality/verify.mjs --checks contract-type,contract-drift
 
-      - name: Test and build UI
-        if: needs.changes.outputs.ui == 'true'
-        shell: pwsh
-        run: node tools/quality/verify.mjs --checks ui-format,ui-lint,ui-tests,ui-build
-
       - name: Verify SDK installer provenance
         if: needs.changes.outputs.sdk == 'true'
         shell: pwsh
         run: node tools/quality/verify.mjs --checks sdk-provenance
 
-      - name: Test release tooling
-        if: needs.changes.outputs.release == 'true'
-        shell: pwsh
-        run: node tools/quality/verify.mjs --checks release-tests
-
-      - name: Build and verify the unsigned installer and release assets
-        if: needs.changes.outputs.release == 'true'
-        shell: pwsh
-        env:
-          # `gh attestation verify` (OpenAI tunnel runtime provenance) needs a
-          # token even for a public repository's attestations.
-          GH_TOKEN: ${{ github.token }}
-        run: node tools/quality/verify.mjs --checks release-build
+      - name: Save trusted Rust cache
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && steps.rust-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            src-tauri/target
+          key: rust-windows-${{ runner.arch }}-1.96.0-${{ hashFiles('**/Cargo.lock') }}-${{ github.job }}-${{ github.sha }}
 
       - name: Upload verification results
         if: always()
@@ -251,8 +262,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  browser:
-    name: UI browser tests (Edge)
+  browser-prepare:
+    name: Build browser fixtures
     needs: changes
     # The browser tests drive the real backend through the e2e_backend fixture.
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.backend == 'true'
@@ -280,21 +291,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           npm ci --prefix ui
 
-      # Builds the e2e_backend fixture and every browser entry, then runs the
-      # full Playwright discovery against bundled assets. README screenshot
-      # generators stay off (they write into docs/).
-      # playwright.config.ts runs one worker when CI is set.
-      - name: Run Playwright tests
+      # Build once; dependent shards download the exact generated fixtures.
+      # Guard qualification remains mandatory before any shard can succeed.
+      - name: Prepare browser fixtures and qualify guards
         shell: pwsh
         env:
           TEMP: ${{ runner.temp }}
-        run: node tools/quality/verify.mjs --checks browser
+        run: node tools/quality/browser-ci.mjs prepare
+
+      - name: Upload browser fixtures
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: browser-fixtures
+          path: |
+            target/debug/examples/e2e_backend.exe
+            target/browser-acceptance-ui
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload Playwright traces and screenshots
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-results
+          name: playwright-results-prepare
           path: |
             ${{ runner.temp }}/audiorouter-playwright-results
             ${{ runner.temp }}/audiorouter-production-playwright-results
@@ -321,6 +340,102 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  ui:
+    name: UI format, lint, tests and build
+    needs: changes
+    if: needs.changes.outputs.ui == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+      - run: npm ci --prefix ui
+      - run: node tools/quality/verify.mjs --checks ui-format,ui-lint,ui-tests,ui-build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  release:
+    name: Windows installer and release checks
+    needs: changes
+    if: needs.changes.outputs.release == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
+        with:
+          toolchain: 1.96.0
+      - run: npm ci --prefix ui
+      - name: Test release tooling
+        run: node tools/quality/verify.mjs --checks release-tests
+      - name: Build and verify the unsigned installer and release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node tools/quality/verify.mjs --checks release-build
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: verification-${{ github.job }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  browser:
+    name: UI browser tests (Edge shard ${{ matrix.shard }}/4)
+    needs: [changes, browser-prepare]
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.backend == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: 22.22.3
+          package-manager-cache: false
+      - run: npm ci --prefix ui
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          name: browser-fixtures
+          path: target
+      - name: Run Playwright tests
+        env:
+          BROWSER_SHARD: ${{ matrix.shard }}/4
+          BROWSER_SCOPE: ${{ needs.changes.outputs.ui == 'true' && 'all' || 'backend' }}
+          TEMP: ${{ runner.temp }}
+        run: node tools/quality/verify.mjs --checks browser
+      - name: Upload shard verification
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: verification-browser-${{ matrix.shard }}
+          path: ${{ runner.temp }}/audiorouter-verification/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload shard traces and screenshots
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: playwright-results-${{ matrix.shard }}
+          path: ${{ runner.temp }}/audiorouter-playwright-results
+          if-no-files-found: ignore
+          retention-days: 7
+
   policy:
     name: Verification policy tests
     runs-on: ubuntu-latest
@@ -334,6 +449,14 @@ jobs:
           package-manager-cache: false
       - name: Test classification, required checks and failure reporting
         run: node tools/quality/verify.mjs --checks policy
+
+      - name: Validate all workflow syntax and expressions
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/actionlint.tar.gz" https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -shellcheck="" -pyflakes=""
 
       - name: Upload verification results
         if: always()
@@ -375,7 +498,7 @@ jobs:
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, docs, site, policy, supply-chain, windows, browser, streamdeck]
+    needs: [changes, docs, site, policy, supply-chain, windows, ui, release, browser-prepare, browser, streamdeck]
     runs-on: ubuntu-latest
     steps:
       - name: Check out
