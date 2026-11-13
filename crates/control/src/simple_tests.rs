@@ -379,6 +379,176 @@ fn add_inserts_tools_between_or_after_nodes_and_remove_bridges_them() {
 }
 
 #[test]
+fn removing_a_tool_composes_both_rectangular_edge_matrices() {
+    let mut original = session(&plane());
+    original
+        .nodes
+        .retain(|node| ["mic", "voice", "headphones"].contains(&node.id.as_str()));
+    original
+        .nodes
+        .iter_mut()
+        .find(|node| node.id.as_str() == "mic")
+        .unwrap()
+        .ports[0]
+        .channels = 1;
+    original
+        .nodes
+        .iter_mut()
+        .find(|node| node.id.as_str() == "headphones")
+        .unwrap()
+        .ports[0]
+        .channels = 1;
+    original.edges.retain(|edge| edge.id.as_str() != "e3");
+    original.edges[0].matrix = vec![0.2, 0.3];
+    original.edges[1].matrix = vec![0.25, 0.5];
+    let mut plane = ControlPlane::default();
+    plane.insert_session(original).unwrap();
+    let result = call(
+        &mut plane,
+        "nodes.remove",
+        json!({"node":"voice", "bridge":true, "idempotencyKey":"compose"}),
+    )
+    .unwrap();
+    assert_eq!(result["bridged"], true);
+    let matrix = &session(&plane).edges[0].matrix;
+    assert_eq!(matrix.len(), 1);
+    assert!((matrix[0] - 0.2).abs() < 1e-6);
+}
+
+#[test]
+fn inserting_a_stereo_tool_in_a_mono_connection_preserves_its_gain() {
+    let mut original = session(&plane());
+    original
+        .nodes
+        .retain(|node| ["mic", "voice"].contains(&node.id.as_str()));
+    for node in &mut original.nodes {
+        for port in &mut node.ports {
+            port.channels = 1;
+        }
+    }
+    original.edges.retain(|edge| edge.id.as_str() == "e1");
+    original.edges[0].matrix = vec![0.4];
+    let mut plane = ControlPlane::default();
+    plane.insert_session(original).unwrap();
+    call(
+        &mut plane,
+        "nodes.add",
+        json!({"kind":"meter", "after":"mic", "idempotencyKey":"mono-insert"}),
+    )
+    .unwrap();
+    let inserted = session(&plane);
+    assert_eq!(
+        inserted
+            .edges
+            .iter()
+            .find(|edge| edge.destination_node.as_str() == "voice")
+            .unwrap()
+            .matrix,
+        vec![0.2, 0.2]
+    );
+    call(
+        &mut plane,
+        "nodes.remove",
+        json!({"node":"meter-1", "idempotencyKey":"mono-remove"}),
+    )
+    .unwrap();
+    assert_eq!(session(&plane).edges[0].matrix, vec![0.4]);
+}
+
+#[test]
+fn inserting_and_bridging_preserve_ports_matrices_flags_and_mixer_volume() {
+    for (kind, inputs, port_name) in [
+        (NodeKind::Mixer, vec!["in"], "in"),
+        (NodeKind::InputSwitch, vec!["a", "b"], "b"),
+        (NodeKind::Duck, vec!["in", "key"], "key"),
+    ] {
+        for enabled in [true, false] {
+            for after in [true, false] {
+                let mut original = session(&plane());
+                original.nodes = vec![
+                    node("mic", NodeKind::PhysicalInput, "Mic", &[], true, json!({})),
+                    node(
+                        "target",
+                        kind,
+                        "Target",
+                        &inputs,
+                        true,
+                        if kind == NodeKind::Mixer {
+                            json!({"inputVolume:mic":40.0})
+                        } else {
+                            json!({})
+                        },
+                    ),
+                ];
+                let mut connection = edge("original", "mic", "target");
+                connection.destination_port = port_name.into();
+                original.nodes[0].ports[0].name = "capture".into();
+                connection.source_port = "capture".into();
+                connection.matrix = vec![0.2, 0.3, 0.4, 0.5];
+                connection.enabled = enabled;
+                original.edges = vec![connection.clone()];
+                let mut plane = ControlPlane::default();
+                plane.insert_session(original).unwrap();
+                let mut request = json!({"kind":"meter", "idempotencyKey":"insert"});
+                if after {
+                    request["after"] = json!("mic");
+                } else {
+                    request["between"] = json!({"from":"mic", "to":"target"});
+                }
+                call(&mut plane, "nodes.add", request).unwrap();
+                let inserted = session(&plane);
+                let downstream = inserted
+                    .edges
+                    .iter()
+                    .find(|edge| edge.destination_node.as_str() == "target")
+                    .unwrap();
+                assert_eq!(downstream.destination_port, port_name);
+                assert_eq!(downstream.matrix, connection.matrix);
+                assert_eq!(downstream.enabled, enabled);
+                if kind == NodeKind::Mixer {
+                    let mixer = inserted
+                        .nodes
+                        .iter()
+                        .find(|node| node.id.as_str() == "target")
+                        .unwrap();
+                    assert_eq!(
+                        audiorouter_domain::mixer_input_volume(mixer, &EntityId::new("meter-1")),
+                        0.4
+                    );
+                    assert!(!mixer.parameters.contains_key("inputVolume:mic"));
+                }
+                let removed = call(
+                    &mut plane,
+                    "nodes.remove",
+                    json!({"node":"meter-1", "bridge":true,"idempotencyKey":"remove"}),
+                )
+                .unwrap();
+                assert_eq!(removed["bridged"], true);
+                let restored = session(&plane);
+                let bridge = &restored.edges[0];
+                assert_eq!(bridge.source_node, connection.source_node);
+                assert_eq!(bridge.source_port, connection.source_port);
+                assert_eq!(bridge.destination_port, port_name);
+                assert_eq!(bridge.matrix, connection.matrix);
+                assert_eq!(bridge.enabled, enabled);
+                if kind == NodeKind::Mixer {
+                    let mixer = restored
+                        .nodes
+                        .iter()
+                        .find(|node| node.id.as_str() == "target")
+                        .unwrap();
+                    assert_eq!(
+                        audiorouter_domain::mixer_input_volume(mixer, &EntityId::new("mic")),
+                        0.4
+                    );
+                    assert!(!mixer.parameters.contains_key("inputVolume:meter-1"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn toggles_flip_flags_on_off_settings_and_two_way_choices() {
     let mut plane = plane();
     call(

@@ -398,3 +398,33 @@ SES-3 final local results: control library 387 passed / 12 explicitly ignored;
 both formatting checks and diff check pass. Inspected the entire activation,
 rollback and test diff. Next: commit SES-3, finish STO-4 and SIM-1, refresh
 Limiter guide evidence, and run the full branch gate before the authorized PR.
+
+SES-3 committed as `46be4269e`. SIM-1 dispatcher reproduction fails because
+inserting a Meter replaces a custom matrix with identity. Repair insertions
+using the original source/destination ports and edge flags; retain the original
+matrix at the compatible side of the inserted tool. Bridges compose both
+edge matrices through the removed tool's dry channel conversion. Move a Mixer
+input's volume key with its upstream identity. Refuse ambiguous between edges
+rather than deleting several connections. Verify both after/between, enabled
+and disabled links, Mixer 40%, Duck key and Input Switch b through dispatch.
+Rollback: revert the focused edit; saved graphs need no migration.
+
+SIM-1 repair: the combined dispatcher regression now passes for after/between,
+enabled/disabled links, non-default source port, Duck key and Input Switch b,
+custom matrix and Mixer input volume 40%, including removal with bridge. A
+separate rectangular-matrix test verifies composition of both edges. Its first
+fixture used disallowed coefficients above one; corrected to valid 0.2/0.3.
+The real default-MCP assistant journey initially caught a mono->stereo->mono
+insertion refusal; added dry channel conversion with the original mapping and
+a focused mono 40% insert/remove regression. The MCP journey now passes.
+No parameters or API shapes changed; updated the API reference behavior text.
+Simple task tests 16/16 pass. Full control/CLI, Clippy and drift checks pending.
+
+SIM-1 validation: control 390 passed / 12 ignored; CLI 52 passed including
+the real mcp_tool_call assistant journey and default reachability check.
+Control/CLI all-target/all-feature Clippy, both format checks, contract drift
+(148 methods / 37 kinds / 20 processors / 22 event categories) and diff check
+pass. Final review also prevents a stale new-ID Mixer volume from overriding
+the old input's implicit 100% default. Focused simple tests pass again after
+that adjustment. Complete helper/callsite/test diff inspected. Next: commit
+SIM-1, then STO-4 (last listed repair), guides and full branch qualification.

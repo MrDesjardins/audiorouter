@@ -204,8 +204,8 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `nodes.catalog` | `read` | read-only; addable kinds with plain descriptions, inputs, outputs and settings |
 | `nodes.set` | `graphWrite` | mutating; node by ID or name; parameters, enabled, bypass or name; applied live and saved |
 | `nodes.toggle` | `graphWrite` | mutating; flips enabled, bypass, an on/off or a two-choice setting |
-| `nodes.add` | `graphWrite` | mutating; adds a kind, optionally between two nodes or after one |
-| `nodes.remove` | `graphWrite` | mutating; removes a node and by default reconnects its neighbours |
+| `nodes.add` | `graphWrite` | mutating; adds a kind, optionally between two nodes or after one, preserving the replaced connection's ports, mapping, enabled state and Mixer input volume |
+| `nodes.remove` | `graphWrite` | mutating; removes a node and by default bridges a single incoming/outgoing pair, preserving ports and Mixer volume and composing its edge mappings |
 | `connections.add` | `graphWrite` | mutating; connects nodes by name or ID, with optional `fromOutput` and `toInput` port names; defaults to the first output and first free input; refuses an occupied single input |
 | `connections.remove` | `graphWrite` | mutating; removes connections between nodes, optionally limited by `fromOutput` and `toInput` port names |
 | `meters.levels` | `read` | read-only; peak/RMS dBFS, clipping and reduction per playing node |
