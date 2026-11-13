@@ -115,6 +115,9 @@ public:
     DECLARE_STD_UNKNOWN();
 
 #pragma code_seg("PAGE")
+    // C26495: members not in the initializer list start zeroed: operator new
+    // (NewDelete.cpp) uses ExAllocatePool2 without POOL_FLAG_UNINITIALIZED.
+#pragma warning(suppress: 26495)
     CMiniportWaveRT(
         _In_            PUNKNOWN                                UnknownAdapter,
         _In_            PENDPOINT_MINIPAIR                      MiniportPair,

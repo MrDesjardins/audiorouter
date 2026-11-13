@@ -62,6 +62,9 @@ protected:
 
 public:
     DECLARE_STD_UNKNOWN();
+    // C26495: zeroed by operator new (ExAllocatePool2 without
+    // POOL_FLAG_UNINITIALIZED); Init sets the rest.
+#pragma warning(suppress: 26495)
     DEFINE_STD_CONSTRUCTOR(CMiniportWaveRTStream);
     ~CMiniportWaveRTStream();
 
@@ -94,8 +97,6 @@ protected:
     BYTE*                       m_pDmaBuffer;
     ULONG                       m_ulNotificationsPerBuffer;
     KSSTATE                     m_KsState;
-    PKTIMER                     m_pTimer;
-    PRKDPC                      m_pDpc;
     ULONGLONG                   m_ullPlayPosition;
     ULONGLONG                   m_ullWritePosition;
     ULONGLONG                   m_ullLinearPosition;
@@ -113,13 +114,14 @@ protected:
     LARGE_INTEGER               m_ullPerformanceCounterFrequency;
     ULONGLONG                   m_hnsElapsedTimeCarryForward;
     LONGLONG                    m_llLastNotifiedPacketCounter;
-    ULONG                       m_byteDisplacementCarryForward;
+    ULONG                       m_ulFrameRemainder;   // fractional frame, 1/10^7 frame units
     ULONG                       m_ulDmaMovementRate;
     BOOL                        m_bLfxEnabled;
     PBOOL                       m_pbMuted;
     PLONG                       m_plVolumeLevel;
     PLONG                       m_plPeakMeter;
     PWAVEFORMATEXTENSIBLE       m_pWfExt;
+    ULONG                       m_SampleEncoding;   // AR_SAMPLE_*, fixed at Init
     ULONG                       m_ulContentId;
     GUID                        m_SignalProcessingMode;
     BOOLEAN                     m_bEoSReceived;
@@ -185,6 +187,7 @@ private:
     // lease shape discards only the stream's partial scratch quantum.
     BOOLEAN RefreshBridgePublishShape();
     VOID DrainRenderQueue();
+    BYTE* DetachDmaBuffer();
     VOID RecordBridgeActivity(_In_ USHORT Direction, _Inout_ AR_BRIDGE_STREAM_ACTIVITY* Activity);
 
     VOID UpdatePosition

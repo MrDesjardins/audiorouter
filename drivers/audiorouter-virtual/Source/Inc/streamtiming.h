@@ -125,6 +125,26 @@ __forceinline bool AudioRouterSelectReadPacket(
     return true;
 }
 
+// Advance the simulated DMA clock by whole sample frames from elapsed 100 ns
+// units. Remainder carries the fractional frame (in units of 1/10^7 frame)
+// between calls, so any call pattern sums to exactly Rate frames per second
+// with no millisecond quantization. Returns false when the product would
+// overflow; the caller re-anchors the clock.
+__forceinline bool AudioRouterAdvanceFrames(
+    ULONGLONG ElapsedHns, ULONG Rate, ULONGLONG* Remainder, ULONGLONG* Frames)
+{
+    const ULONGLONG hnsPerSecond = 10000000;
+    const ULONGLONG maximum = ~static_cast<ULONGLONG>(0);
+    if (Rate == 0 || *Remainder >= hnsPerSecond ||
+        ElapsedHns > (maximum - hnsPerSecond) / Rate) {
+        return false;
+    }
+    const ULONGLONG numerator = ElapsedHns * Rate + *Remainder;
+    *Frames = numerator / hnsPerSecond;
+    *Remainder = numerator % hnsPerSecond;
+    return true;
+}
+
 struct AudioRouterDmaWindow {
     ULONG Offset;
     ULONG Bytes;

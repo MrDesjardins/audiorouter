@@ -6,9 +6,13 @@
    control plane) pauses its own service loop for -StallMs, so no heartbeat is sent.
    Verdict: the sampled state timeline shows running -> reconnecting -> running and ends
    running, the route exits 0, Cable B is silent during the stall, and audio returns
-   within StallMs + 4 s of the stall's start. Diagnostic only, never qualification. #>
+   within StallMs + 4 s of the stall's start. Diagnostic only, never qualification.
+   2026-11-10 review R1: from driver 0.2.5 the owner renews its expired lease, and the
+   client defers lease validity to the driver, so by default the route must ride the
+   stall: no reconnecting state, ends running, Cable B never silent for over 1 s.
+   -ExpectReconnect keeps the old verdict for drivers before 0.2.5. #>
 [CmdletBinding()]
-param([ValidateRange(3000, 8000)][int] $StallMs = 4000)
+param([ValidateRange(3000, 8000)][int] $StallMs = 4000, [switch] $ExpectReconnect)
 $ErrorActionPreference = 'Stop'
 $bundle = [IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\')
 if ($env:COMPUTERNAME -ine 'AR-DriverTest' -or $bundle -notlike 'C:\ar\*') { throw 'Run inside AR-DriverTest from the copied bundle under C:\ar.' }
@@ -97,15 +101,22 @@ try {
 
     $problems = @()
     if (-not $summary.StalledAndResumed) { $problems += 'the stall did not run' }
-    if (-not $summary.SawReconnect) { $problems += "state timeline '$timeline' lacks running -> reconnecting -> running" }
+    if ($ExpectReconnect) {
+        if (-not $summary.SawReconnect) { $problems += "state timeline '$timeline' lacks running -> reconnecting -> running" }
+    } elseif ($timeline -match 'reconnecting' -or -not $timeline.EndsWith('running')) {
+        $problems += "state timeline '$timeline': the route left running during a $StallMs ms stall (driver 0.2.5 renews the lease)"
+    }
     if (-not $summary.FinalRunning) { $problems += 'the route did not end running' }
     if ($summary.RouteCode -ne 0) { $problems += "route exit $($summary.RouteCode)" }
     if ($summary.ProbeCode -ne 0) { $problems += "probe exit $($summary.ProbeCode)" }
-    if ($maxGap -lt ($StallMs - 1500)) { $problems += "Cable B was silent only $($summary.LongestSilenceMs) ms during a $StallMs ms stall" }
-    if ($maxGap -gt ($StallMs + 4000)) { $problems += "audio took $($summary.LongestSilenceMs) ms to return after a $StallMs ms stall (limit $($StallMs + 4000) ms)" }
-    if ($summary.ArrivalsAfterSilence -lt 200) { $problems += "only $($summary.ArrivalsAfterSilence) arrivals after the silence" }
+    if ($ExpectReconnect) {
+        if ($maxGap -lt ($StallMs - 1500)) { $problems += "Cable B was silent only $($summary.LongestSilenceMs) ms during a $StallMs ms stall" }
+        if ($maxGap -gt ($StallMs + 4000)) { $problems += "audio took $($summary.LongestSilenceMs) ms to return after a $StallMs ms stall (limit $($StallMs + 4000) ms)" }
+    } elseif ($maxGap -gt 1000) { $problems += "Cable B was silent $($summary.LongestSilenceMs) ms during a $StallMs ms control-loop stall (limit 1000 ms; the audio worker does not wait for the control loop)" }
+    if ($ExpectReconnect -and $summary.ArrivalsAfterSilence -lt 200) { $problems += "only $($summary.ArrivalsAfterSilence) arrivals after the silence" }
+    if (-not $ExpectReconnect -and $summary.Arrivals -lt 1000) { $problems += "only $($summary.Arrivals) of 1500 impulses arrived (the route must carry audio through the stall)" }
     if ($problems.Count) { throw ('Reconnect check failed: ' + ($problems -join '; ')) }
-    Write-Host ("Reconnect PASS: {0}; Cable B silent {1} ms, then {2} arrivals." -f $timeline, $summary.LongestSilenceMs, $summary.ArrivalsAfterSilence)
+    Write-Host ("Stall PASS ({3}): {0}; longest Cable B silence {1} ms, then {2} arrivals." -f $timeline, $summary.LongestSilenceMs, $summary.ArrivalsAfterSilence, $(if ($ExpectReconnect) { 'reconnect' } else { 'lease renewed' }))
 } catch { $failure = $_ } finally {
     foreach ($process in $owned) {
         try { if (-not $process.HasExited) { $process.Kill(); [void]$process.WaitForExit(5000) } } finally { $process.Dispose() }

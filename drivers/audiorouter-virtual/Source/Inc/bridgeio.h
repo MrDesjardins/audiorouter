@@ -503,6 +503,34 @@ __forceinline NTSTATUS AudioRouterOpenOwnershipStatus(bool Held, ULONG OwnerSess
     return OwnerSession == RequestSession ? STATUS_SHARING_VIOLATION : STATUS_ACCESS_DENIED;
 }
 
+// HEARTBEAT/CLOSE outcome for an existing lease slot. The owning handle with
+// the same identity may renew or close its lease even after the lease timed
+// out, as long as no rival has reclaimed it: a long system stall (or sleep)
+// must not end a live route by itself. Expiry only lets a rival OPEN win.
+typedef enum _AR_BRIDGE_MAINTENANCE_DECISION {
+    ArBridgeMaintenanceProceed = 0,      // CLOSE closes, HEARTBEAT renews
+    ArBridgeMaintenanceAccessDenied,     // live lease held by another handle
+    ArBridgeMaintenanceInvalid,          // no usable lease for this request
+    ArBridgeMaintenanceInvalidRetire,    // as Invalid, and the expired lease is detached
+} AR_BRIDGE_MAINTENANCE_DECISION;
+
+__forceinline AR_BRIDGE_MAINTENANCE_DECISION AudioRouterMaintenanceDecision(
+    _In_ bool Active,
+    _In_ bool Retiring,
+    _In_ bool Expired,
+    _In_ bool SameOwner,
+    _In_ bool SameIdentity)
+{
+    if (Active && !Retiring && SameOwner && SameIdentity) {
+        return ArBridgeMaintenanceProceed;
+    }
+    if (Active && !Retiring && !Expired && !SameOwner) {
+        return ArBridgeMaintenanceAccessDenied;
+    }
+    return Active && !Retiring && Expired
+        ? ArBridgeMaintenanceInvalidRetire : ArBridgeMaintenanceInvalid;
+}
+
 // Pure state transition shared by the stream callback and host regressions.
 // A new generation invalidates partial blocks even when the format is equal.
 __forceinline bool AudioRouterStreamGenerationChanged(
@@ -512,12 +540,30 @@ __forceinline bool AudioRouterStreamGenerationChanged(
     return PreviousGeneration != CurrentGeneration;
 }
 
+// R6 (2026-11-11 review): an OPEN generation must be nonzero and differ from
+// the last two generations used on the slot. Streams detect turnover by
+// inequality only, so this still rejects the A-B-A reuse a stream could miss.
+// It no longer requires a rising value: a monotonic floor let any client
+// lock a cable until reboot with one huge generation, and a backward wall
+// clock step (product generations are Unix milliseconds) did the same.
 __forceinline NTSTATUS AudioRouterValidateNextGeneration(
     _In_ ULONGLONG PreviousGeneration,
+    _In_ ULONGLONG PriorGeneration,
     _In_ ULONGLONG RequestedGeneration)
 {
-    return RequestedGeneration != 0 && RequestedGeneration > PreviousGeneration
+    return RequestedGeneration != 0 &&
+        RequestedGeneration != PreviousGeneration &&
+        RequestedGeneration != PriorGeneration
         ? STATUS_SUCCESS : STATUS_INVALID_PARAMETER;
+}
+
+__forceinline void AudioRouterRecordGeneration(
+    _Inout_ ULONGLONG* PreviousGeneration,
+    _Inout_ ULONGLONG* PriorGeneration,
+    _In_ ULONGLONG AcceptedGeneration)
+{
+    *PriorGeneration = *PreviousGeneration;
+    *PreviousGeneration = AcceptedGeneration;
 }
 
 // This validator is safe to call from a future callback-owned mapped-view

@@ -243,9 +243,88 @@ void runWorker(DWORD seconds, ULONGLONG seed, unsigned index, Stats& stats) {
     invoke(device, kClose, &current, sizeof(current), stats);
     CloseHandle(device);
 }
+HANDLE openBridge() {
+    return CreateFileW(L"\\\\.\\AudioRouterVirtualBridge", GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+}
+
+// Generations must rise across every OPEN the driver ever saw for a slot,
+// including earlier runs; derive them from the clock.
+ULONGLONG freshGeneration() {
+    static ULONGLONG last = 0;
+    ULONGLONG value = GetTickCount64() * 1000;
+    if (value <= last) value = last + 1;
+    last = value;
+    return value;
+}
+
+// 2026-11-10 review: READ/WRITE/FLUSH on the control device must be refused
+// by the catch-all dispatch (no bugcheck, no PortCls handler on it).
+int probeIo() {
+    HANDLE device = openBridge();
+    if (device == INVALID_HANDLE_VALUE) { std::fwprintf(stderr, L"cannot open bridge: Win32 %lu\n", GetLastError()); return 1; }
+    int failures = 0;
+    BYTE buffer[64] = {};
+    DWORD bytes = 0;
+    const BOOL read = ReadFile(device, buffer, sizeof(buffer), &bytes, nullptr);
+    const DWORD readError = read ? 0 : GetLastError();
+    const BOOL write = WriteFile(device, buffer, sizeof(buffer), &bytes, nullptr);
+    const DWORD writeError = write ? 0 : GetLastError();
+    const BOOL flush = FlushFileBuffers(device);
+    const DWORD flushError = flush ? 0 : GetLastError();
+    std::wprintf(L"probe-io read=%lu write=%lu flush=%lu (expect 1 = ERROR_INVALID_FUNCTION each)\n", readError, writeError, flushError);
+    if (read || write || flush) failures++;
+    // The handle must still work for a normal request afterwards.
+    std::array<BYTE, kDriverInfoBytes> info{};
+    if (!DeviceIoControl(device, kQuery, nullptr, 0, info.data(), kDriverInfoBytes, &bytes, nullptr)) {
+        std::fwprintf(stderr, L"QUERY after probe failed: Win32 %lu\n", GetLastError()); failures++;
+    }
+    CloseHandle(device);
+    std::wprintf(L"probe-io %s\n", failures == 0 ? L"PASS" : L"FAIL");
+    return failures == 0 ? 0 : 1;
+}
+
+// 2026-11-10 review R2: a handle opened before the device restarted keeps the
+// old, deleted control device. OPEN on it must fail with
+// ERROR_DEVICE_NOT_CONNECTED; OPEN on a new handle must succeed.
+int probeStaleOpen(const wchar_t* restartCommand) {
+    HANDLE stale = openBridge();
+    if (stale == INVALID_HANDLE_VALUE) { std::fwprintf(stderr, L"cannot open bridge: Win32 %lu\n", GetLastError()); return 1; }
+    std::wprintf(L"probe-stale: handle open; running: %s\n", restartCommand);
+    const int restart = _wsystem(restartCommand);
+    std::wprintf(L"probe-stale: restart command exit %d\n", restart);
+    HANDLE fresh = INVALID_HANDLE_VALUE;
+    for (int attempt = 0; attempt < 300 && fresh == INVALID_HANDLE_VALUE; ++attempt) {
+        fresh = openBridge();
+        if (fresh == INVALID_HANDLE_VALUE) Sleep(100);
+    }
+    if (fresh == INVALID_HANDLE_VALUE) { std::fwprintf(stderr, L"bridge did not come back within 30 s: Win32 %lu\n", GetLastError()); CloseHandle(stale); return 1; }
+    // Wait for the cables, then try the stale handle first.
+    Sleep(2000);
+    int failures = 0;
+    SharedSection staleSection, freshSection;
+    Request staleRequest = makeRequest(1, staleSection.handle, freshGeneration());
+    DWORD bytes = 0;
+    const BOOL staleOk = DeviceIoControl(stale, kOpen, &staleRequest, sizeof(staleRequest), nullptr, 0, &bytes, nullptr);
+    const DWORD staleError = staleOk ? 0 : GetLastError();
+    std::wprintf(L"probe-stale: OPEN on old handle -> %s Win32 %lu (expect 1167 ERROR_DEVICE_NOT_CONNECTED)\n", staleOk ? L"accepted" : L"refused", staleError);
+    if (staleOk) { DeviceIoControl(stale, kClose, &staleRequest, sizeof(staleRequest), nullptr, 0, &bytes, nullptr); failures++; }
+    else if (staleError != ERROR_DEVICE_NOT_CONNECTED) failures++;
+    Request freshRequest = makeRequest(1, freshSection.handle, freshGeneration());
+    const BOOL freshOk = DeviceIoControl(fresh, kOpen, &freshRequest, sizeof(freshRequest), nullptr, 0, &bytes, nullptr);
+    std::wprintf(L"probe-stale: OPEN on new handle -> %s Win32 %lu (expect accepted)\n", freshOk ? L"accepted" : L"refused", freshOk ? 0 : GetLastError());
+    if (freshOk) DeviceIoControl(fresh, kClose, &freshRequest, sizeof(freshRequest), nullptr, 0, &bytes, nullptr);
+    else failures++;
+    CloseHandle(fresh);
+    CloseHandle(stale);
+    std::wprintf(L"probe-stale %s\n", failures == 0 ? L"PASS" : L"FAIL");
+    return failures == 0 ? 0 : 1;
+}
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
+    if (argc == 2 && !wcscmp(argv[1], L"--probe-io")) return probeIo();
+    if (argc == 3 && !wcscmp(argv[1], L"--probe-stale-open")) return probeStaleOpen(argv[2]);
     DWORD seconds = 1800;
     unsigned workers = 4;
     ULONGLONG seed = GetTickCount64() ^ (static_cast<ULONGLONG>(GetCurrentProcessId()) << 32);
@@ -256,7 +335,7 @@ int wmain(int argc, wchar_t** argv) {
         if (!wcscmp(argv[i - 1], L"--seconds") && value <= 86400) seconds = static_cast<DWORD>(value);
         else if (!wcscmp(argv[i - 1], L"--workers") && value <= 16) workers = static_cast<unsigned>(value);
         else if (!wcscmp(argv[i - 1], L"--seed")) seed = value;
-        else { std::fwprintf(stderr, L"Usage: m03-bridge-fuzz.exe [--seconds 1800] [--seed N] [--workers 4]\n"); return 2; }
+        else { std::fwprintf(stderr, L"Usage: m03-bridge-fuzz.exe [--seconds 1800] [--seed N] [--workers 4]\n       m03-bridge-fuzz.exe --probe-io\n       m03-bridge-fuzz.exe --probe-stale-open \"<device restart command>\"\n"); return 2; }
     }
     std::wprintf(L"Bridge IOCTL fuzz seconds=%lu workers=%u seed=%llu. Run only in the test VM with Driver Verifier enabled.\n", seconds, workers, seed);
     Stats stats;

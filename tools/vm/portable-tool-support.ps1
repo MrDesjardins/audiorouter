@@ -1,6 +1,6 @@
 <# Definitions only: inspect a PE file without loading or executing it. #>
 function Get-VmToolImports {
-    param([Parameter(Mandatory=$true)][string] $Path, [long] $MaxBytes = 16MB)
+    param([Parameter(Mandatory=$true)][string] $Path, [long] $MaxBytes = 32MB)
     if ((Get-Item -LiteralPath $Path).Length -gt $MaxBytes) { throw "PE exceeds the allowed size of $MaxBytes bytes." }
     $bytes = [IO.File]::ReadAllBytes($Path)
     if ($bytes.Length -lt 256 -or $bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw 'Not a PE executable.' }
@@ -50,7 +50,7 @@ function Get-VmToolImports {
 }
 
 function Assert-PortableVmTool {
-    param([Parameter(Mandatory=$true)][string] $Path, [long] $MaxBytes = 16MB)
+    param([Parameter(Mandatory=$true)][string] $Path, [long] $MaxBytes = 32MB)
     $imports = @(Get-VmToolImports -Path $Path -MaxBytes $MaxBytes)
     if ($imports.Count -eq 0) { throw 'VM tool imports are missing.' }
     $runtime = @($imports | Where-Object { $_ -match '^(vcruntime|msvcp|msvcr|concrt)\d.*\.dll$' })

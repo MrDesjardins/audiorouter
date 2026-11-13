@@ -1415,6 +1415,10 @@ impl NativeBridgeController {
             let _ = session.remove_owned_mapping();
             return Err(NativeBridgeControllerError::Windows(error));
         }
+        // The driver owns the lease from here; its HEARTBEAT result is the
+        // only liveness decision (a stalled owner may renew, spec 17 §5).
+        let mut session = session;
+        session.defer_lease_to_driver();
         Ok(Self {
             client,
             session: Some(session),
@@ -10112,6 +10116,12 @@ pub struct NativeBridgeSession {
     region: NativeBridgeRegion,
     next_sequence: u64,
     last_heartbeat: std::time::Instant,
+    /// Set once the kernel accepted OPEN for this mapping. From then on the
+    /// driver alone decides whether the lease is alive: its HEARTBEAT renews
+    /// an owner's expired lease that no rival reclaimed (spec 17 §5), and its
+    /// clock ignores sleep. A local wall-clock deadline would end the route
+    /// after any stall longer than `lease_ms` even though the driver kept it.
+    driver_authoritative: bool,
 }
 
 impl NativeBridgeSession {
@@ -10148,6 +10158,7 @@ impl NativeBridgeSession {
             region,
             next_sequence: 0,
             last_heartbeat: std::time::Instant::now(),
+            driver_authoritative: false,
         })
     }
 
@@ -10169,6 +10180,7 @@ impl NativeBridgeSession {
             region,
             next_sequence: 0,
             last_heartbeat: std::time::Instant::now(),
+            driver_authoritative: false,
         })
     }
 
@@ -10346,7 +10358,17 @@ impl NativeBridgeSession {
         Ok(())
     }
 
+    /// Hand lease validity to the kernel broker. Call only after the driver
+    /// accepted OPEN for this session's mapping; the owner must then send
+    /// every HEARTBEAT to the driver and treat its refusal as the loss.
+    pub fn defer_lease_to_driver(&mut self) {
+        self.driver_authoritative = true;
+    }
+
     pub fn is_lease_expired_at(&self, now: std::time::Instant) -> bool {
+        if self.driver_authoritative {
+            return false;
+        }
         self.lease_elapsed_at(now).is_some_and(|elapsed| {
             elapsed > std::time::Duration::from_millis(u64::from(self.hello.lease_ms))
         })
@@ -13916,6 +13938,44 @@ mod tests {
             session.write_at(expired, &[0.0; 4]),
             Err(NativeBridgeSessionError::LeaseExpired)
         ));
+        drop(session);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    /// Review R1 (2026-11-10): once the driver owns the lease, a stall or
+    /// sleep longer than `lease_ms` must not end the route on the client's
+    /// own clock. The driver's HEARTBEAT decides (it renews an owner's
+    /// expired lease no rival reclaimed); without this, every such stall
+    /// forced a 1/2/4 s reconnect even with a 0.2.5 driver.
+    #[test]
+    fn driver_owned_session_survives_a_stall_longer_than_its_lease() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-driver-owned-session-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let hello = audiorouter_protocol::AudioBridgeHello {
+            protocol_major: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MAJOR,
+            protocol_minor: audiorouter_protocol::AUDIO_BRIDGE_PROTOCOL_MINOR,
+            bus_id: "bus-main".to_owned(),
+            direction: audiorouter_protocol::AudioBridgeDirection::CaptureSink,
+            generation: 10,
+            sample_rate_hz: 48_000,
+            channels: 2,
+            frames_per_quantum: 4,
+            lease_ms: 1_000,
+        };
+        let mut session = NativeBridgeSession::create(&path, hello).unwrap();
+        session.defer_lease_to_driver();
+        let base = std::time::Instant::now();
+        session.heartbeat_at(base).unwrap();
+        let stalled = base + std::time::Duration::from_secs(30);
+        assert!(!session.is_lease_expired_at(stalled));
+        session.write_at(stalled, &[0.0; 8]).unwrap();
+        session.heartbeat_at(stalled).unwrap();
         drop(session);
         std::fs::remove_file(path).unwrap();
     }

@@ -40,6 +40,25 @@ __forceinline bool AudioRouterCableFormatSupported(
          (ContainerBits == 32 && (ValidBits == 24 || ValidBits == 32)));
 }
 
+// Endpoint sample encoding, resolved once per stream so the DMA conversion
+// loops never compare format GUIDs per sample.
+#define AR_SAMPLE_NONE 0
+#define AR_SAMPLE_FLOAT32 1
+#define AR_SAMPLE_PCM16 2
+#define AR_SAMPLE_PCM24_IN_32 3
+#define AR_SAMPLE_PCM32 4
+
+__forceinline unsigned long AudioRouterSampleEncoding(
+    bool IsFloat, bool IsPcm, unsigned short ContainerBits, unsigned short ValidBits)
+{
+    if (IsFloat) { return ContainerBits == 32 ? AR_SAMPLE_FLOAT32 : AR_SAMPLE_NONE; }
+    if (!IsPcm) { return AR_SAMPLE_NONE; }
+    if (ContainerBits == 16 && ValidBits == 16) { return AR_SAMPLE_PCM16; }
+    if (ContainerBits == 32 && ValidBits == 24) { return AR_SAMPLE_PCM24_IN_32; }
+    if (ContainerBits == 32 && ValidBits == 32) { return AR_SAMPLE_PCM32; }
+    return AR_SAMPLE_NONE;
+}
+
 __forceinline bool AudioRouterDoubleIsFinite(DOUBLE Value)
 {
     return Value == Value && Value <= 1.7976931348623157e+308 &&

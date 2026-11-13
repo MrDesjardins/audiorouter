@@ -33,6 +33,37 @@ fnPcDriverUnload gPCDriverUnloadRoutine = NULL;
 extern "C" DRIVER_UNLOAD DriverUnload;
 PDEVICE_OBJECT g_BridgeControlDevice = NULL;
 
+// The control device carries its own small extension. A deleted control
+// device can still receive CLEANUP/CLOSE/IOCTL for handles opened before the
+// stop or removal, after g_BridgeControlDevice is cleared, so identity comes
+// from the object itself, never from the global pointer.
+#define AR_BRIDGE_CONTROL_MAGIC 0x6C727443524Aull  // "JRCtrl"
+typedef struct _AR_BRIDGE_CONTROL_EXTENSION {
+    ULONGLONG Magic;
+    // Per device object, not global: a handle opened on a control device
+    // that was later deleted keeps that delete-pending object. It must never
+    // open a lease again, even after a restart creates a new control device
+    // (the old handle would pin the old object and the driver image).
+    // Read and written under BridgeControlGuard.
+    BOOLEAN AcceptingOpens;
+} AR_BRIDGE_CONTROL_EXTENSION;
+
+static __forceinline AR_BRIDGE_CONTROL_EXTENSION* BridgeControlExtension(
+    _In_ PDEVICE_OBJECT DeviceObject)
+{
+    return static_cast<AR_BRIDGE_CONTROL_EXTENSION*>(DeviceObject->DeviceExtension);
+}
+
+static __forceinline bool IsBridgeControlDevice(_In_ PDEVICE_OBJECT DeviceObject)
+{
+    // PortCls adapter FDOs are FILE_DEVICE_KS with a PortCls extension.
+    return DeviceObject != NULL &&
+        DeviceObject->DeviceType == FILE_DEVICE_UNKNOWN &&
+        DeviceObject->DeviceExtension != NULL &&
+        static_cast<AR_BRIDGE_CONTROL_EXTENSION*>(DeviceObject->DeviceExtension)->Magic ==
+            AR_BRIDGE_CONTROL_MAGIC;
+}
+
 typedef struct _AR_BRIDGE_LEASE_STATE {
     KSPIN_LOCK Lock;
     EX_RUNDOWN_REF Rundown;
@@ -45,6 +76,7 @@ typedef struct _AR_BRIDGE_LEASE_STATE {
     PFILE_OBJECT OwnerFileObject;
     ULONG OwnerSessionId;
     ULONGLONG LastGeneration;
+    ULONGLONG PriorGeneration;   // the one before LastGeneration (R6)
     ULONGLONG LastHeartbeat100ns;
     AR_BRIDGE_OPEN_REQUEST Request;
     PVOID SectionObject;
@@ -59,9 +91,17 @@ AR_BRIDGE_LEASE_STATE g_BridgeLeases[AR_BRIDGE_LEASE_SLOTS] = {};
 // being simultaneously claimed for both directions. No WaveRT callback takes
 // this mutex. Complete IRPs only after releasing it to avoid completion reentry.
 EX_PUSH_LOCK g_BridgeControlLock;
+// Push locks require normal kernel APCs disabled: a thread suspended while
+// holding this lock would otherwise block every OPEN/CLOSE and handle cleanup.
 struct BridgeControlGuard {
-    BridgeControlGuard() { ExAcquirePushLockExclusive(&g_BridgeControlLock); }
-    ~BridgeControlGuard() { ExReleasePushLockExclusive(&g_BridgeControlLock); }
+    BridgeControlGuard() {
+        KeEnterCriticalRegion();
+        ExAcquirePushLockExclusive(&g_BridgeControlLock);
+    }
+    ~BridgeControlGuard() {
+        ExReleasePushLockExclusive(&g_BridgeControlLock);
+        KeLeaveCriticalRegion();
+    }
 };
 
 #if defined(AR_TIMING_DIAGNOSTICS)
@@ -400,14 +440,9 @@ NTSTATUS AudioRouterPublishLeaseBlock(
         ExReleaseRundownProtection(&Lease->Rundown);
         return STATUS_DEVICE_BUSY;
     }
-    for (SIZE_T index = 0; index < sampleCount; ++index) {
-        if (Samples[index] != Samples[index] ||
-            Samples[index] > 1.7976931348623157e+308 ||
-            Samples[index] < -1.7976931348623157e+308) {
-            ExReleaseRundownProtection(&Lease->Rundown);
-            return STATUS_DATA_ERROR;
-        }
-    }
+    // No finite scan here: the only caller publishes driver-private scratch
+    // filled by ReadBridgeSample, which maps every non-finite float to 0.0
+    // and converts integers exactly. User-mode readers validate again.
     volatile LONG64* state = reinterpret_cast<volatile LONG64*>(
         static_cast<UCHAR*>(view) + AR_BRIDGE_STATE_OFFSET);
     ULONGLONG current = static_cast<ULONGLONG>(
@@ -712,15 +747,16 @@ static NTSTATUS CompleteBridgeIrp(
 
 static void ReleaseLeasesOwnedByFileObject(_In_opt_ PFILE_OBJECT FileObject);
 
-NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP Irp)
+NTSTATUS BridgeControlCreateClose(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp)
 {
     if (Irp == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
     // Dispatch entries belong to the whole driver. Only the standalone
     // control device lacks PortCls state; audio FDO requests remain owned
-    // (and completed) by PortCls. The control object lives until unload.
-    if (DeviceObject != g_BridgeControlDevice) {
+    // (and completed) by PortCls. A deleted control device still receives
+    // CLEANUP/CLOSE for its open handles; identity comes from the object.
+    if (!IsBridgeControlDevice(DeviceObject)) {
         return PcDispatchIrp(DeviceObject, Irp);
     }
     PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
@@ -803,7 +839,13 @@ static NTSTATUS HandleBridgeControlRequest(
         if (NT_SUCCESS(status)) {
             status = AudioRouterParseCableBusId(
                 request->BusId, request->BusIdBytes, &busIndex);
-            if (NT_SUCCESS(status) && busIndex >= g_EnabledCableCount) {
+            // A stopped adapter has no cables; a handle that outlived its
+            // control device must not map a new lease, even after a restart
+            // created a new one (the flag lives on the handle's own device).
+            if (NT_SUCCESS(status) &&
+                (busIndex >= g_EnabledCableCount ||
+                 (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN &&
+                  !BridgeControlExtension(stack->DeviceObject)->AcceptingOpens))) {
                 status = STATUS_DEVICE_NOT_CONNECTED;
             }
             // MaxLeaseMs (17 §5.5) bounds how long a silent owner can hold a
@@ -892,7 +934,9 @@ static NTSTATUS HandleBridgeControlRequest(
             BOOLEAN publishAfterRetire = FALSE;
             KIRQL oldIrql;
             KeAcquireSpinLock(&lease->Lock, &oldIrql);
-            ULONGLONG now = KeQueryInterruptTime();
+            // Unbiased: time the machine spent asleep never counts toward
+            // lease expiry, so a resume does not hand every cable to a rival.
+            ULONGLONG now = KeQueryUnbiasedInterruptTime();
             // Expiry belongs to the stored lease, never the rival request.
             // Otherwise an attacker could send LeaseMs=1 to seize a live owner.
             ULONGLONG leaseTicks = static_cast<ULONGLONG>(lease->Request.LeaseMs) * _100NS_PER_MILLISECOND;
@@ -901,9 +945,10 @@ static NTSTATUS HandleBridgeControlRequest(
 
             if (code == IOCTL_AUDIOROUTER_BRIDGE_OPEN) {
                 status = AudioRouterValidateNextGeneration(
-                    lease->LastGeneration, request->Generation);
+                    lease->LastGeneration, lease->PriorGeneration,
+                    request->Generation);
                 if (!NT_SUCCESS(status)) {
-                    // Each successful OPEN needs a fresh generation, even
+                    // Each successful OPEN needs a generation unlike the last two, even
                     // after CLOSE, so streams can detect turnover if they
                     // were not scheduled while the lease was inactive.
                 } else if ((lease->Active && !expired) || lease->Retiring) {
@@ -955,7 +1000,7 @@ static NTSTATUS HandleBridgeControlRequest(
                         // view yet: reset counters, announce float64 samples.
                         InitializeBridgeViewHeader(mappedView);
                         PublishBridgeRequest(lease, request);
-                        lease->LastGeneration = request->Generation;
+                        AudioRouterRecordGeneration(&lease->LastGeneration, &lease->PriorGeneration, request->Generation);
                         lease->OwnerFileObject = stack->FileObject;
                         lease->OwnerSessionId = sessionId;
                         lease->LastHeartbeat100ns = now;
@@ -975,21 +1020,24 @@ static NTSTATUS HandleBridgeControlRequest(
                         status = STATUS_SUCCESS;
                     }
                 }
-            } else if (lease->Active && !expired && !lease->Retiring &&
-                       (lease->OwnerFileObject != stack->FileObject || lease->OwnerSessionId != sessionId)) {
-                // A live lease belongs to the handle that opened it. Keep
-                // ownership failures distinct from an expired or invalidated
-                // lease so user mode can report authorization separately.
+            } else {
+            // A live lease belongs to the handle that opened it. Keep
+            // ownership failures distinct from an invalidated lease so user
+            // mode can report authorization separately. The owner may renew
+            // an expired lease that no rival reclaimed (spec 17 §5).
+            const AR_BRIDGE_MAINTENANCE_DECISION decision =
+                AudioRouterMaintenanceDecision(
+                    lease->Active != FALSE, lease->Retiring != FALSE, expired != FALSE,
+                    lease->OwnerFileObject == stack->FileObject &&
+                        lease->OwnerSessionId == sessionId,
+                    BridgeRequestsHaveSameLeaseIdentity(&lease->Request, request) != FALSE);
+            if (decision == ArBridgeMaintenanceAccessDenied) {
                 status = STATUS_ACCESS_DENIED;
-            } else if (!lease->Active || expired || lease->Retiring ||
-                       lease->OwnerFileObject != stack->FileObject ||
-                       lease->OwnerSessionId != sessionId ||
-                       !BridgeRequestsHaveSameLeaseIdentity(
-                           &lease->Request, request)) {
-                // Expiry is terminal for the mapped callback view. Detach it
-                // before returning the rejected maintenance request, then
-                // wait for any callback reader before unmapping below.
-                if (expired && lease->Active && !lease->Retiring) {
+            } else if (decision != ArBridgeMaintenanceProceed) {
+                // A rejected request against an expired lease detaches its
+                // mapped callback view, then waits for any callback reader
+                // before unmapping below.
+                if (decision == ArBridgeMaintenanceInvalidRetire) {
                     oldSectionObject = lease->SectionObject;
                     oldLockedMdl = lease->LockedMdl;
                     lease->LockedMdl = NULL;
@@ -1028,6 +1076,7 @@ static NTSTATUS HandleBridgeControlRequest(
                 lease->LastHeartbeat100ns = now;
                 status = STATUS_SUCCESS;
             }
+            }
             KeReleaseSpinLock(&lease->Lock, oldIrql);
             if (publishAfterRetire) {
                 RetireBridgeResources(lease, oldMappedView, oldSectionObject, oldLockedMdl,
@@ -1042,7 +1091,7 @@ static NTSTATUS HandleBridgeControlRequest(
                     lease->RundownStarted = FALSE;
                     InitializeBridgeViewHeader(mappedView);
                     PublishBridgeRequest(lease, request);
-                    lease->LastGeneration = request->Generation;
+                    AudioRouterRecordGeneration(&lease->LastGeneration, &lease->PriorGeneration, request->Generation);
                     lease->OwnerFileObject = stack->FileObject;
                     lease->OwnerSessionId = sessionId;
                     lease->LastHeartbeat100ns = now;
@@ -1091,12 +1140,39 @@ static NTSTATUS HandleBridgeControlRequest(
     return status;
 }
 
-NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP Irp)
+// Dispatch table installed by PortCls, captured before the wrappers.
+static PDRIVER_DISPATCH g_ForwardDispatch[IRP_MJ_MAXIMUM_FUNCTION + 1] = {};
+
+_Dispatch_type_(IRP_MJ_READ)
+_Dispatch_type_(IRP_MJ_WRITE)
+_Dispatch_type_(IRP_MJ_FLUSH_BUFFERS)
+_Dispatch_type_(IRP_MJ_QUERY_SECURITY)
+_Dispatch_type_(IRP_MJ_SET_SECURITY)
+_Dispatch_type_(IRP_MJ_POWER)
+_Dispatch_type_(IRP_MJ_SYSTEM_CONTROL)
+_Dispatch_type_(IRP_MJ_SHUTDOWN)
+_Dispatch_type_(IRP_MJ_INTERNAL_DEVICE_CONTROL)
+DRIVER_DISPATCH BridgeControlOther;
+
+// Every major function without a dedicated handler. The control device
+// supports none of them; PortCls devices keep PortCls's own dispatch.
+NTSTATUS BridgeControlOther(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp)
+{
+    if (!IsBridgeControlDevice(DeviceObject)) {
+        // Forward to exactly what was installed before the wrapper (PortCls
+        // or the I/O manager's invalid-request routine), never a guess.
+        const UCHAR major = IoGetCurrentIrpStackLocation(Irp)->MajorFunction;
+        return g_ForwardDispatch[major](DeviceObject, Irp);
+    }
+    return CompleteBridgeIrp(Irp, STATUS_INVALID_DEVICE_REQUEST);
+}
+
+NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT DeviceObject, _Inout_ PIRP Irp)
 {
     if (Irp == NULL) { return STATUS_INVALID_PARAMETER; }
     // Never interpret an audio FDO's KS IOCTL as a bridge request. PortCls
     // owns that device's extension and the forwarded IRP completion.
-    if (DeviceObject != g_BridgeControlDevice) {
+    if (!IsBridgeControlDevice(DeviceObject)) {
         return PcDispatchIrp(DeviceObject, Irp);
     }
     NTSTATUS status;
@@ -1108,35 +1184,56 @@ NTSTATUS BridgeControlDeviceControl(_In_ PDEVICE_OBJECT DeviceObject, _In_ PIRP 
     return CompleteBridgeIrp(Irp, status, information);
 }
 
+// Created when the audio adapter starts, deleted when it stops or is removed.
+// A control device that lived from DriverEntry to DriverUnload kept the
+// driver image loaded after its PnP device was removed, so every driver
+// update needed a reboot ("Driver did not unload", VM 2026-10-12).
 NTSTATUS CreateBridgeControlDevice(_In_ PDRIVER_OBJECT DriverObject)
 {
+    BridgeControlGuard controlGuard;
+    if (g_BridgeControlDevice != NULL) {
+        return STATUS_SUCCESS;
+    }
     UNICODE_STRING deviceName;
     UNICODE_STRING dosName;
     RtlInitUnicodeString(&deviceName, AUDIOROUTER_BRIDGE_DEVICE_NAME);
     RtlInitUnicodeString(&dosName, AUDIOROUTER_BRIDGE_DOS_NAME);
 
+    PDEVICE_OBJECT device = NULL;
     NTSTATUS status = IoCreateDeviceSecure(
-        DriverObject, 0, &deviceName, FILE_DEVICE_UNKNOWN,
-        FILE_DEVICE_SECURE_OPEN, FALSE,
+        DriverObject, sizeof(AR_BRIDGE_CONTROL_EXTENSION), &deviceName,
+        FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE,
         &AUDIOROUTER_BRIDGE_DEVICE_SDDL,
-        &PID_AUDIOROUTERVIRTUAL, &g_BridgeControlDevice);
+        &PID_AUDIOROUTERVIRTUAL, &device);
     if (!NT_SUCCESS(status)) {
         return status;
     }
+    BridgeControlExtension(device)->Magic = AR_BRIDGE_CONTROL_MAGIC;
+    BridgeControlExtension(device)->AcceptingOpens = FALSE;
 
     status = IoCreateSymbolicLink(&dosName, &deviceName);
     if (!NT_SUCCESS(status)) {
-        IoDeleteDevice(g_BridgeControlDevice);
-        g_BridgeControlDevice = NULL;
+        IoDeleteDevice(device);
         return status;
     }
-    g_BridgeControlDevice->Flags &= ~DO_DEVICE_INITIALIZING;
+    g_BridgeControlDevice = device;
+    BridgeControlExtension(device)->AcceptingOpens = TRUE;
+    device->Flags &= ~DO_DEVICE_INITIALIZING;
     return STATUS_SUCCESS;
 }
 
+// Releases every lease (waiting for audio callbacks to leave each mapped
+// view), then deletes the control device. Handles opened earlier keep the
+// delete-pending object alive; their later IOCTLs cannot open a lease and
+// their CLEANUP/CLOSE still route here by object identity. The driver image
+// unloads after the last such handle closes.
 void DeleteBridgeControlDevice()
 {
     BridgeControlGuard controlGuard;
+    if (g_BridgeControlDevice != NULL) {
+        // Permanent for this object: it is never reused after deletion.
+        BridgeControlExtension(g_BridgeControlDevice)->AcceptingOpens = FALSE;
+    }
 #if defined(AR_TIMING_DIAGNOSTICS)
     StopTiming(); g_Timing.Reset(); g_TimingOwner = NULL;
 #endif
@@ -1466,19 +1563,23 @@ Return Value:
         DPF(D_ERROR, ("PcInitializeAdapterDriver failed, 0x%x", ntStatus)),
         Done);
 
-    // PortCls initialization replaces dispatch entries. Install the device
-    // routing wrappers afterward, before publishing the bridge symbolic link,
-    // so a control open never reaches PortCls with a missing audio extension.
+    // PortCls initialization replaces dispatch entries. Route *every* major
+    // function through a wrapper so no request for the bridge control device
+    // (READ, WRITE, FLUSH, security queries, ...) ever reaches a PortCls
+    // handler that expects an audio extension. The control device itself is
+    // created at StartDevice, after these wrappers are installed.
+    for (ULONG major = 0; major <= IRP_MJ_MAXIMUM_FUNCTION; ++major) {
+        g_ForwardDispatch[major] = DriverObject->MajorFunction[major];
+        // C28168: one catch-all wrapper covers every major function by
+        // design; it forwards the IRP unchanged to the routine saved above.
+        // The four bridge entries below are replaced with dedicated handlers.
+#pragma warning(suppress: 28168)
+        DriverObject->MajorFunction[major] = BridgeControlOther;
+    }
     DriverObject->MajorFunction[IRP_MJ_CREATE] = BridgeControlCreateClose;
     DriverObject->MajorFunction[IRP_MJ_CLEANUP] = BridgeControlCreateClose;
     DriverObject->MajorFunction[IRP_MJ_CLOSE] = BridgeControlCreateClose;
     DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = BridgeControlDeviceControl;
-
-    ntStatus = CreateBridgeControlDevice(DriverObject);
-    IF_FAILED_ACTION_JUMP(
-        ntStatus,
-        DPF(D_ERROR, ("CreateBridgeControlDevice failed, 0x%x", ntStatus)),
-        Done);
 
     //
     // To intercept stop/remove/surprise-remove.
@@ -1612,17 +1713,12 @@ InstallEndpointRenderFilters(
     PUNKNOWN                    unknownTopology         = NULL;
     PUNKNOWN                    unknownWave             = NULL;
     PPORTCLSETWHELPER           pPortClsEtwHelper       = NULL;
-#ifdef _USE_IPortClsRuntimePower
-    PPORTCLSRUNTIMEPOWER        pPortClsRuntimePower    = NULL;
-#endif // _USE_IPortClsRuntimePower
-    PPORTCLSStreamResourceManager pPortClsResMgr        = NULL;
-    PPORTCLSStreamResourceManager2 pPortClsResMgr2      = NULL;
 
     PAGED_CODE();
 
     UNREFERENCED_PARAMETER(_pDeviceObject);
 
-    ntStatus = _pAdapterCommon->InstallEndpointFilters(
+    const NTSTATUS installStatus = _pAdapterCommon->InstallEndpointFilters(
         _pIrp,
         _pAeMiniports,
         NULL,
@@ -1639,103 +1735,17 @@ InstallEndpointRenderFilters(
             ASSERT(pPortClsEtwHelper != NULL);
             pPortClsEtwHelper->Release();
         }
-
-#ifdef _USE_IPortClsRuntimePower
-        // Let's get the runtime power interface on PortCls.
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsRuntimePower, (PVOID *)&pPortClsRuntimePower);
-        if (NT_SUCCESS(ntStatus))
-        {
-            // This interface would typically be stashed away for later use.  Instead,
-            // let's just send an empty control with GUID_NULL.
-            NTSTATUS ntStatusTest =
-                pPortClsRuntimePower->SendPowerControl
-                (
-                    _pDeviceObject,
-                    &GUID_NULL,
-                    NULL,
-                    0,
-                    NULL,
-                    0,
-                    NULL
-                );
-
-            if (NT_SUCCESS(ntStatusTest) || STATUS_NOT_IMPLEMENTED == ntStatusTest || STATUS_NOT_SUPPORTED == ntStatusTest)
-            {
-                ntStatus = pPortClsRuntimePower->RegisterPowerControlCallback(_pDeviceObject, &PowerControlCallback, NULL);
-                if (NT_SUCCESS(ntStatus))
-                {
-                    ntStatus = pPortClsRuntimePower->UnregisterPowerControlCallback(_pDeviceObject);
-                }
-            }
-            else
-            {
-                ntStatus = ntStatusTest;
-            }
-
-            pPortClsRuntimePower->Release();
-        }
-#endif // _USE_IPortClsRuntimePower
-
-        //
-        // Test: add and remove current thread as streaming audio resource.
-        // In a real driver you should only add interrupts and driver-owned threads
-        // (i.e., do NOT add the current thread as streaming resource).
-        //
-        // testing IPortClsStreamResourceManager:
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsStreamResourceManager, (PVOID *)&pPortClsResMgr);
-        if (NT_SUCCESS(ntStatus))
-        {
-            PCSTREAMRESOURCE_DESCRIPTOR res;
-            PCSTREAMRESOURCE hRes = NULL;
-            PDEVICE_OBJECT pdo = NULL;
-
-            PcGetPhysicalDeviceObject(_pDeviceObject, &pdo);
-            PCSTREAMRESOURCE_DESCRIPTOR_INIT(&res);
-            res.Pdo = pdo;
-            res.Type = ePcStreamResourceThread;
-            res.Resource.Thread = PsGetCurrentThread();
-
-            NTSTATUS ntStatusTest = pPortClsResMgr->AddStreamResource(NULL, &res, &hRes);
-            if (NT_SUCCESS(ntStatusTest))
-            {
-                pPortClsResMgr->RemoveStreamResource(hRes);
-                hRes = NULL;
-            }
-
-            pPortClsResMgr->Release();
-            pPortClsResMgr = NULL;
-        }
-
-        // testing IPortClsStreamResourceManager2:
-        ntStatus = unknownWave->QueryInterface(IID_IPortClsStreamResourceManager2, (PVOID *)&pPortClsResMgr2);
-        if (NT_SUCCESS(ntStatus))
-        {
-            PCSTREAMRESOURCE_DESCRIPTOR res;
-            PCSTREAMRESOURCE hRes = NULL;
-            PDEVICE_OBJECT pdo = NULL;
-
-            PcGetPhysicalDeviceObject(_pDeviceObject, &pdo);
-            PCSTREAMRESOURCE_DESCRIPTOR_INIT(&res);
-            res.Pdo = pdo;
-            res.Type = ePcStreamResourceThread;
-            res.Resource.Thread = PsGetCurrentThread();
-
-            NTSTATUS ntStatusTest = pPortClsResMgr2->AddStreamResource2(pdo, NULL, &res, &hRes);
-            if (NT_SUCCESS(ntStatusTest))
-            {
-                pPortClsResMgr2->RemoveStreamResource(hRes);
-                hRes = NULL;
-            }
-
-            pPortClsResMgr2->Release();
-            pPortClsResMgr2 = NULL;
-        }
+        // The Microsoft sample also probed IPortClsRuntimePower and added the
+        // calling PnP thread as a streaming resource, then removed it. Those
+        // were demonstrations (the sample says a real driver must not add
+        // the current thread), and their status used to replace the install
+        // status returned below. Removed 2026-11-10 (review, C6387).
     }
 
     SAFE_RELEASE(unknownTopology);
     SAFE_RELEASE(unknownWave);
 
-    return ntStatus;
+    return installStatus;
 }
 
 #pragma code_seg("PAGE")
@@ -1964,6 +1974,18 @@ Return Value:
     ntStatus = InstallAllCaptureFilters(DeviceObject, Irp, pAdapterCommon);
     IF_FAILED_JUMP(ntStatus, Exit);
 
+    // Publish the bridge only once the cables exist; it is deleted again
+    // at stop/removal so the driver image can unload on update. A failure
+    // here (for example the name still held by a delete-pending device after
+    // a fast stop/start) must not take the endpoints down: the cables stay
+    // usable by ordinary apps and AudioRouter reports the driver unavailable.
+    {
+        const NTSTATUS bridgeStatus = CreateBridgeControlDevice(DeviceObject->DriverObject);
+        if (!NT_SUCCESS(bridgeStatus)) {
+            DPF(D_ERROR, ("CreateBridgeControlDevice failed, 0x%x", bridgeStatus));
+        }
+    }
+
 Exit:
 
     //
@@ -2034,6 +2056,8 @@ Return Value:
     case IRP_MN_REMOVE_DEVICE:
     case IRP_MN_SURPRISE_REMOVAL:
     case IRP_MN_STOP_DEVICE:
+        // Release every lease and delete the bridge before the cables go.
+        DeleteBridgeControlDevice();
         ext = static_cast<PortClassDeviceContext*>(_DeviceObject->DeviceExtension);
 
         if (ext->m_pCommon != NULL)

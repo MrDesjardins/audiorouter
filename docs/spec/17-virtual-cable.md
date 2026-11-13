@@ -338,6 +338,18 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
    - store the opener's session ID (`IoGetRequestorSessionId`) and
      `FILE_OBJECT` in the lease at OPEN;
    - HEARTBEAT and CLOSE from another file object → `STATUS_ACCESS_DENIED`;
+   - **expiry (2026-11-10 review).** A lease past `LeaseMs` stays mapped until
+     a request touches it. The owning file object with the same lease
+     identity may still renew (HEARTBEAT) or CLOSE it; any other request, or
+     a rival OPEN, retires it. Expiry is measured on unbiased interrupt time,
+     so time asleep never counts. In the driver, a system stall longer than
+     `LeaseMs` therefore no longer retires the lease by itself; only a rival
+     can claim the cable. Once OPEN succeeds the client hands lease validity
+     to the driver (`NativeBridgeSession::defer_lease_to_driver`): it keeps
+     no wall-clock deadline of its own, and only a refused HEARTBEAT ends the
+     route, so a route rides such a stall without reconnecting (review R1,
+     [plan](../plans/active/virtual-cable-review-fixes.md)). Against an
+     older driver the refused HEARTBEAT still triggers the reconnect below;
    - an OPEN for a lease held by another live file object → `STATUS_SHARING_VIOLATION`
      (maps to API `resourceConflict`, VDEV-07);
    - an OPEN from a different session while a lease is active →
@@ -356,6 +368,15 @@ device in `Source/Main/adapter.cpp` and bridge helpers in
    read/write/execute (sample default for audio stacks). Keep it for the
    audio stack, but the bridge control device must use only the SDDL in
    item 2.
+   **Control device lifetime and dispatch (2026-11-10 review).** The control
+   device is created when the adapter starts and deleted, after every lease
+   is released, at stop and removal, so a driver update can unload the image
+   without a reboot. Every IRP major function goes through a wrapper: the
+   control device answers only CREATE, CLEANUP, CLOSE and DEVICE_CONTROL and
+   fails every other request with `STATUS_INVALID_DEVICE_REQUEST`; PortCls
+   devices keep PortCls's own dispatch. The control lock is taken inside a
+   critical region. A handle left open after deletion cannot OPEN a lease
+   (`STATUS_DEVICE_NOT_CONNECTED`).
 6. Lessons from 2026 Voicemeeter CVEs (CVE-2026-23762–23764): never map
    kernel non-paged pool into user space, never honor special file
    attributes on open, and fuzz every IOCTL.
@@ -735,7 +756,9 @@ notifications that the backend already watches.
   lesson: never pump from a UI timer) and heartbeats leases at
   `LeaseMs / 4` (default `LeaseMs` = 2000).
 - **Lost connection (user decision 2026-10-16: retries, then a message).**
-  A whole-system freeze longer than `LeaseMs` expires the leases. A
+  A whole-system freeze longer than `LeaseMs` makes the leases expired;
+  from driver 0.2.5 the owner's next heartbeat renews them unless another
+  client has opened the cable meanwhile (§5 item 2). A
   cable-only route whose heartbeat or worker fails closes (its cable outputs
   silence), reports `reconnecting`, and reopens after 1, 2 and 4 s while the
   session stays playing. A loss within 30 s of a reconnect continues that

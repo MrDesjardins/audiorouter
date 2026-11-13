@@ -84,7 +84,8 @@ static std::wstring Quote(const std::wstring& text) {
 }
 int wmain(int argc, wchar_t** argv) {
     if (argc == 2 && wcscmp(argv[1], L"selftest") == 0) return SelfTest();
-    if (argc != 3) { std::fprintf(stderr, "Usage: m03-timing-trace <bundle> <evidence directory>\n"); return 1; }
+    const bool tone = argc == 4 && wcscmp(argv[3], L"--tone") == 0;
+    if (argc != 3 && !tone) { std::fprintf(stderr, "Usage: m03-timing-trace <bundle> <evidence directory> [--tone]\n"); return 1; }
     wchar_t computer[MAX_COMPUTERNAME_LENGTH + 1]; DWORD computerChars = ARRAYSIZE(computer);
     DWORD marker = GetFileAttributesW(L"C:\\ar\\IS_TEST_VM");
     if (!GetComputerNameW(computer, &computerChars) || _wcsicmp(computer, L"AR-DriverTest") != 0 ||
@@ -111,8 +112,9 @@ int wmain(int argc, wchar_t** argv) {
     if (systemLength && systemLength < ARRAYSIZE(system)) {
         std::wstring powershell = std::wstring(system) + L"\\WindowsPowerShell\\v1.0\\powershell.exe";
         std::wstring command = Quote(powershell) + L" -NoProfile -ExecutionPolicy Bypass -File " +
-            Quote(bundle + L"\\run-cable-latency-starts.ps1") +
-            L" -Route engine -Starts 1 -Impulses 1000 -TraceRoute -PeriodMode low-latency";
+            Quote(bundle + (tone ? L"\\vm-checks.ps1" : L"\\run-cable-latency-starts.ps1")) +
+            (tone ? L" -Step tone -ToneSeconds 30" :
+                L" -Route engine -Starts 1 -Impulses 1000 -TraceRoute -PeriodMode low-latency");
         SECURITY_ATTRIBUTES security = { sizeof(security), nullptr, TRUE };
         HANDLE out = CreateFileW((evidence + L"\\measurement.txt").c_str(), GENERIC_WRITE, FILE_SHARE_READ,
             &security, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
