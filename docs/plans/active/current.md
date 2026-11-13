@@ -5,7 +5,11 @@
 Owner approved all phases of affected-area selection, daily full CI, four
 isolated Edge shards and parallel Rust/UI/release jobs. See the
 [execution plan](ci-speed.md) for ENG-01/02/04/05, validation and rollback.
-Work is isolated on `improve/ci-speed`; unrelated changes are preserved.
+Implemented on `improve/ci-speed`; unrelated changes are preserved. Full
+[hosted qualification](https://github.com/MrDesjardins/audiorouter/actions/runs/43343093910)
+passed all 15 jobs on code head `abb0ba376`, including 742 Edge passes and 15
+explicit skips. Next: owner approval to open the PR, then current-base CI and
+post-merge cache/nightly observation. No PR or branch-protection change made.
 
 ## Update-check hardening — 2026-11-11
 

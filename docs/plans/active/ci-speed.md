@@ -69,3 +69,60 @@ The local terminal inherited conflicting NO_COLOR/FORCE_COLOR values; the
 browser command now removes NO_COLOR when FORCE_COLOR is set for its children.
 No Rust product code changed. Hosted Linux UI, artifact transfer, cache size,
 installer/full inventory and end-to-end Actions timing remain unmeasured.
+
+## Hosted qualification — passed
+
+Code head: `abb0ba37696b4df6c177200b13244195e9dd1054`.
+[Full manual CI](https://github.com/MrDesjardins/audiorouter/actions/runs/43343093910)
+passed all 15 jobs, including Quality gate, on 2026-11-13 UTC (November 12
+locally). It exercised the complete inventory, Linux UI, Windows workspace and
+shell tests, strict Clippy, native probes, SDK provenance, CLI parity, contract
+drift, release tooling and the unsigned installer build/verification.
+
+The single cold run took 20m29s from creation to completion. Windows Rust/native
+checks took 19m17s; installer verification 16m29s; Linux UI 1m22s; browser
+preparation 2m11s. Edge shard jobs took 8m18s, 8m36s, 12m10s and 6m53s.
+These are observations from one run, not warm-cache or general timing promises.
+The browser totals are 742 passed and 15 existing explicit skips, with no flaky
+success allowance. The unchanged flaky-test failure policy remains enabled.
+
+All four shards verified the same 8,020,825-byte fixture artifact digest:
+`498e3b6fb6561173fa44806a58c07e0aec26fdf04d01e7f5876933a003ad6cfc`.
+All 27 check-result records in the downloaded verification artifacts are
+`passed` (browser has four records); reports identify the clean tested SHA.
+Transient local copies: `target/hosted-all-reports`, `target/hosted-full-ci.log`
+and `target/hosted-shard-*.log`. Durable review evidence is the linked Actions
+run and its bounded-retention artifacts.
+
+Superseded runs 43342703113 and 43342895841 were deliberately cancelled after
+adding nested-spec coverage and checksum-pinned workflow lint. Their aggregate
+gates failed instead of accepting cancellation, providing a live negative check.
+The current code head is the replacement, not a rerun of those older commits.
+
+Every check-run annotation has been read through the API. Only GitHub's
+Ubuntu 26 runner-image migration notices appear. Keep the established
+ubuntu-latest policy for portable tooling; the hosted UI run passed on its
+actual image. Product Windows/hardware acceptance is unchanged.
+
+Build-log warnings were inspected and remain visible:
+- Vite reports a 620.62 kB production application chunk above its 500 kB
+  advisory threshold. Application source and bundling policy are unchanged;
+  changing loading behavior is outside this CI task. No threshold was raised.
+- Stream Deck Rollup strips misplaced PURE annotations in zod core util/regex
+  comments and reports the core.js/util.js import cycle. Its tests and package
+  build passed. The dependency graph is unchanged; no vendor edits or warning
+  filters were introduced to hide these diagnostics.
+- Pinned actions/download-artifact v8.0.2 emits Node DEP0005 (Buffer constructor)
+  inside each artifact download, before the test command. All four downloads
+  verified the expected digest and succeeded. Keep the reviewed action SHA;
+  an unqualified action upgrade or vendored dependency patch would expand this
+  change. This is an action dependency warning, not a browser-test failure.
+
+Branch caches cannot save by design: the first successful trusted main run
+will warm the cache. No warm-cache speed or quota claim has been established.
+
+Next: obtain explicit approval to open the PR for improve/ci-speed, then require
+the PR's current-base gate. After merge, verify the first trusted cache save and
+the scheduled full inventory. The schedule activates only after merge. Keep the
+plan active until these rollout observations exist; no release/hardware gate is
+waived and no branch protection was modified.
