@@ -543,3 +543,74 @@ Tool exit 1.
   This matches the 2026-10-10 lesson: VirtualBox NEM stalls all guest threads.
   The cause is user-mode pump starvation, not the driver, but it is attributed by correlation only, with no scheduler trace.
   Driver Verifier and audio acceptance stay open.
+
+## Stage A `-Session all` results (2026-11-12)
+
+Bundle `C:\VMs\ar-share\rc-0.2.5` (commit `a2dd275e`, driver 0.2.5.0), results
+`Z:\rc-0.2.5\stage-a-all-20261112-164626.zip`. Summary: 4 FAIL, all in the
+`eight` session; no bugcheck or crash dump in any session.
+
+- **users:** all PASS (second user refused by the lease session rule, A11).
+- **eight: install / status FAIL (harness sequencing, not the driver).** The
+  preceding `users: remove` returned exit 5 (restart pending) and `eight:
+  install` ran with no restart in between: helper exit 4, 0 endpoints, status
+  `needsRestart`. Every later session installed cleanly. Fix: `run-stage-a.ps1`
+  must restart after a remove that returns 5 before the next install.
+- **eight: VCAB-05 FAIL** (Cable A/B endpoint IDs changed after 2 -> 8 -> 2).
+  Ran on top of the half-installed state above, so not conclusive; rerun after
+  the sequencing fix.
+- **eight: 8 cables 30 min FAIL** `unexplained-events`: 2,388 events, of which
+  VM-wide 1,267, cross-route 523, relay trim 465, unexplained 25; corrupted 0
+  on all four routes. Crosstalk 56 pairs PASS (worst -1000 dBFS).
+- **quality:** float32 48 kHz 2 ch bit-exact PASS; other rates VM (one lost
+  block each, the stall pattern). Sweep 44.1/48 PASS, 96 kHz REVIEW (0.097 dB vs
+  0.05). THD+N -153 dB PASS. Latency p50 36.62 ms, jitter 0.022 ms.
+- **pool:** A8 REVIEW, 2.187 MiB/h whole-system growth over 60 min (`pool.csv`).
+- **hardening (Verifier):** A10 stall and crash recovery PASS, tone and
+  bit-exact VM; **A11 IOCTL fuzz 30 min PASS** (no crash, no unexpected
+  result). The guest froze for ~20 h after the fuzz and hung on the following
+  restart; owner took a core dump `C:\VMs\ar-dump-a11.elf` before reset.
+  Cause not yet analysed; no bugcheck was recorded.
+
+Next: fix the remove/restart sequencing, rerun `-Session eight`, then
+`-Session extras`.
+
+### `-Session eight` rerun (2026-11-12, after commit `4964fa5b`)
+
+`Z:\rc-0.2.5\stage-a-eight-20261112-175118.zip`: install, status and VCAB-05
+(Cable A/B endpoint IDs unchanged after 2 -> 8 -> 2) now PASS, confirming the
+earlier failures were the missing restart. Crosstalk 56 pairs PASS, no
+bugcheck. The 30-minute run still reports `unexplained-events`: 4 unexplained
+of 882 events (VM-wide 411, cross-route 270, relay trim 197), corrupted 0 on
+all four routes, about 0.2 % impulses lost. Open questions before calling it
+VM-only: each route counted ~127,200 impulses against ~179,900 in the first
+run, and "capture dropped" is ~25.4 M frames per route against ~180 k; check
+the continuity report for a shortened run or a counter change.
+
+Explained (continuity `e85b9e07…`): the run lasted the full 30 minutes (Cable B
+device position 86,456,219 frames = 1,801 s), but the user-mode side ran at
+about 70 % of real time on every route at once. Engine quanta 477,007 (61.1 M
+frames) against 674,621 in the first run, and the tone tool emitted 127,193
+impulses instead of ~180,000. The missing ~25.4 M frames show up as capture
+underrun (25,404,520) and render overrun (25,436,323), so the driver accounted
+for every frame it was not fed. Lost/corrupted are measured against what was
+emitted (0.2 % / 0). Reading: guest user mode was CPU-starved (host load or
+NEM) for a large part of the run, not a driver defect; the 4 unexplained events
+remain for Stage C on native hardware.
+
+### `-Session extras` (2026-11-12)
+
+`Z:\rc-0.2.5\stage-a-extras-20261112-180833.zip`:
+- **R1 PASS:** the product route rode 4,000 ms and 6,500 ms stalls with the
+  lease renewed, timeline `running` (Cable B silent 10 ms and 171 ms).
+- **A13 PASS:** update to 0.2.6.0 on the same device instance, endpoints and
+  formats kept, the 96 kHz Cable B format migrated and restored; repair exit 0;
+  the route binds again after the update (bit-exact VM, one lost block) and
+  rides a 4,000 ms stall on the updated driver.
+- **VB-Cable comparison (VCAB-25) FAIL:** VB-Cable is not installed in the
+  guest; needs an owner install, or stays for Stage C.
+- A12 Discord/OBS is attended and not run. No bugcheck.
+
+Stage A for 0.2.5 is therefore complete except VCAB-25 (VB-Cable not
+installed), A12 (attended), A8 pool growth and the 96 kHz sweep (REVIEW), and
+the post-fuzz guest freeze (dump `C:\VMs\ar-dump-a11.elf`, not analysed).
