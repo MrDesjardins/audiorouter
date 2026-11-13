@@ -8,8 +8,29 @@ isolated Edge shards and parallel Rust/UI/release jobs. See the
 Implemented on `improve/ci-speed`; unrelated changes are preserved. Full
 [hosted qualification](https://github.com/MrDesjardins/audiorouter/actions/runs/43343093910)
 passed all 15 jobs on code head `abb0ba376`, including 742 Edge passes and 15
-explicit skips. Next: owner approval to open the PR, then current-base CI and
-post-merge cache/nightly observation. No PR or branch-protection change made.
+explicit skips. Owner approved opening the PR on 2026-11-12. Current main's
+daily-retention changes are preserved; next: current-base PR CI and post-merge
+cache/nightly observation. Branch protection is unchanged.
+
+## Daily quality data retention — 2026-11-12
+
+Owner requires continued daily collection and explicitly approved opening this
+PR (ENG-01/02/04/05, NFR-04/05/06). Windows Actions run 43206191838 succeeded
+with coverage, soak and startup artifacts. Daily scheduling is already enabled;
+the repository CSV remains a reviewed snapshot. No runtime, hardware, driver,
+credentials or branch-protection changes are needed.
+
+Tasks: retain cumulative cached trend history as a separate 90-day artifact,
+extend proposed snapshot retention to 90 days, add policy regression coverage,
+and document collection versus publication. Work is isolated on
+`fix/daily-quality-retention` from current main; unrelated local work is excluded.
+Validation on Windows: `node --test tools/quality/policy.test.mjs` passed all
+62 tests; `node tools/docs/validate.mjs` passed 259 files / 1,474 links;
+`git diff --check` passed. Complete four-file diff inspected before commit.
+Risk: cache eviction can interrupt cumulative history; artifacts expire and are
+recovery evidence rather than permanent storage. Rollback: revert this scoped
+workflow, policy and runbook change. Next: open the authorized PR; hosted CI
+and the first post-merge daily history upload remain unverified locally.
 
 ## Update-check hardening — 2026-11-11
 

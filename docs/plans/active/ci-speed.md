@@ -34,7 +34,7 @@ Risks: nightly can detect packaging or unmodeled browser coupling later than a
 PR. Four runners increase concurrency demand. Cache eviction reduces speed,
 never correctness. Artifacts include only generated fixtures, no user data.
 Rollback: revert these scoped commits; existing Quality gate name stays stable.
-Next: obtain PR-opening approval, then verify current-base CI and the first
+Next: open the owner-approved PR, then verify current-base CI and the first
 post-merge trusted cache/nightly runs. One cohesive branch
 keeps the classifier, gate and renamed jobs compatible throughout rollout.
 
@@ -122,8 +122,11 @@ Build-log warnings were inspected and remain visible:
 Branch caches cannot save by design: the first successful trusted main run
 will warm the cache. No warm-cache speed or quota claim has been established.
 
-Next: obtain explicit approval to open the PR for improve/ci-speed, then require
-the PR's current-base gate. After merge, verify the first trusted cache save and
+Owner explicitly approved opening the PR on 2026-11-12. Merged current main's
+daily-retention change, preserving both active-plan entries; only their shared
+insertion point conflicted. Recheck policy, docs and workflow syntax locally.
+Next: open the PR for improve/ci-speed and require its current-base gate.
+After merge, verify the first trusted cache save and
 the scheduled full inventory. The schedule activates only after merge. Keep the
 plan active until these rollout observations exist; no release/hardware gate is
 waived and no branch protection was modified.

@@ -229,6 +229,13 @@ test('nightly metrics use read-only permissions and artifacts instead of pushing
   assert.match(workflow, /ref: \$\{\{ github.sha \}\}/);
 });
 
+test('daily quality collection retains cumulative history outside the cache', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /cron: "17 3 \* \* \*"/);
+  assert.match(workflow, /name: quality-history-update[\s\S]*?retention-days: 90/);
+  assert.match(workflow, /name: quality-history-collected\s+path: quality-history.csv\s+if-no-files-found: error\s+retention-days: 90/);
+});
+
 test('nightly packaged shell smoke uses the built release binary and retains failure evidence', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/quality.yml', import.meta.url), 'utf8');
   assert.match(workflow, /name: Packaged WebView2 smoke[\s\S]*?packaged-shell-smoke\.mjs', '--shell', 'src-tauri\/target\/release\/audiorouter-shell\.exe'/);
