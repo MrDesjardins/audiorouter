@@ -226,6 +226,7 @@ impl ControlPlane {
         Ok(json!({
             "build": self.build,
             "backend": "control-plane",
+            "quarantinedSessions": self.quarantined_sessions,
             "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
             "audio": { "state": audio, "reason": audio_reason },
             "nativeAdapter": self.native_adapter_state(),

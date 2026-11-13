@@ -1,0 +1,68 @@
+[
+  {
+    "kind": "limiter",
+    "type": "demos",
+    "video": "assets/tool-guides/limiter-demo.mp4",
+    "passed": true,
+    "time": 1.290666,
+    "paused": false,
+    "peak": 0.05624578148126602,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "limiter",
+    "type": "properties",
+    "video": "assets/tool-guides/limiter--ceilingDb.mp4",
+    "passed": true,
+    "time": 1.450666,
+    "paused": false,
+    "peak": 0.3056439459323883,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "limiter",
+    "type": "properties",
+    "video": "assets/tool-guides/limiter--lookaheadMs.mp4",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0.3056439459323883,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "limiter",
+    "type": "properties",
+    "video": "assets/tool-guides/limiter--releaseMs.mp4",
+    "passed": true,
+    "time": 1.472,
+    "paused": false,
+    "peak": 0.3056439459323883,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "limiter",
+    "type": "overviews",
+    "video": "assets/tool-guides/limiter-overview.mp4",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  },
+  {
+    "kind": "limiter",
+    "type": "properties",
+    "video": "assets/tool-guides/shared-flags.mp4",
+    "passed": true,
+    "time": 1.461333,
+    "paused": false,
+    "peak": 0,
+    "state": "running",
+    "error": null
+  }
+]

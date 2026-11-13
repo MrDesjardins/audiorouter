@@ -11,7 +11,7 @@ import {
   type CustomThemeLibrary,
 } from "./customTheme";
 import { UpdatesPanel } from "./UpdateNotice";
-import { setUpdateCheckEnabled } from "./updateCheck";
+import { readUpdateChannel, setUpdateChannel, setUpdateCheckEnabled } from "./updateCheck";
 import { useCanvasGroups } from "./CanvasGroups";
 import {
   lazy,
@@ -42,7 +42,7 @@ import { humanizeNodeKind } from "./canvasNodeKinds";
 import { useWorkbenchStatus } from "./useWorkbenchStatus";
 import { useRecordingActions } from "./useRecordingActions";
 import { VersionLine } from "./UpdateNotice";
-import { isAutomatedHarness, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
+import { isAutomatedHarness, noNetworkUpdateFetcher, updateCheckEnabled, useUpdateCheck } from "./updateCheck";
 import {
   formatUiError,
   notReadyNode,
@@ -526,7 +526,13 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
   }, [backend, draft, devices, discordAppCheck, obsAppCheck]);
   // UI-18: optional daily new-version check (GitHub public releases list).
   const [updateChecks, setUpdateChecks] = useState(updateCheckEnabled);
-  const availableUpdate = useUpdateCheck(updateChecks && !isAutomatedHarness());
+  const [updateChannel, setUpdateChannelState] = useState(readUpdateChannel);
+  const updateState = useUpdateCheck(
+    updateChecks,
+    updateChannel,
+    isAutomatedHarness() ? noNetworkUpdateFetcher : undefined,
+  );
+  const availableUpdate = updateState.update;
   const selectNodeProperties = (id: string) => {
     groupState.selectGroup("");
     setSelectedNodeId(id);
@@ -3660,11 +3666,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     versions: (
       <UpdatesPanel
         enabled={updateChecks}
+        channel={updateChannel}
         onChange={(enabled) => {
           setUpdateCheckEnabled(enabled);
           setUpdateChecks(enabled);
         }}
-        update={availableUpdate}
+        onChannelChange={(channel) => {
+          setUpdateChannel(channel);
+          setUpdateChannelState(channel);
+        }}
+        updateState={updateState}
       />
     ),
     clients: <ClientsPanel backend={backend} />,
@@ -3672,6 +3683,8 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
       <SessionTransferPanel
         backend={backend}
         session={session}
+        quarantinedSessions={snapshot?.status.quarantinedSessions}
+        onRecovered={() => void refresh()}
         onImported={(imported) => {
           setCreatedSessions((current) => [...current.filter((item) => item.id !== imported.id), imported]);
           void switchSession(imported.id);
@@ -3893,8 +3906,16 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                 ? actionMessage
                 : !backend.connected
                   ? `Audio unavailable: ${(snapshot?.status.reason ?? "the backend is disconnected").replace(/\.+$/, "")}. Reconnect to edit or play.`
-                  : "";
-              const tone = !backend.connected ? "error" : actionMessage ? actionMessageTone(actionMessage) : "info";
+                  : snapshot?.status.quarantinedSessions?.length
+                    ? "Some saved sessions could not be loaded. Their original data is kept. Open session recovery to export or delete them."
+                    : "";
+              const tone = !backend.connected
+                ? "error"
+                : actionMessage
+                  ? actionMessageTone(actionMessage)
+                  : snapshot?.status.quarantinedSessions?.length
+                    ? "warning"
+                    : "info";
               return (
                 <div
                   className={`global-action-message is-${tone}${text ? "" : " is-empty"}`}
@@ -3924,6 +3945,11 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
                     {text}
                   </span>
                   {text && tone === "error" && <CopyErrorButton message={text} />}
+                  {!actionMessage && backend.connected && Boolean(snapshot?.status.quarantinedSessions?.length) && (
+                    <button type="button" className="secondary" onClick={() => setWorkbenchTab("sessionJson")}>
+                      Open session recovery
+                    </button>
+                  )}
                   {backend.connected && actionMessage?.startsWith("No audio started") && firstIssueNode && (
                     <button type="button" className="secondary" onClick={() => selectNodeProperties(firstIssueNode.id)}>
                       Go to {firstIssueNode.name}

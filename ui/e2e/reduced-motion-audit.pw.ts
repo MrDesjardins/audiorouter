@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./browser-test";
+import { settingsPageNames } from "./workbench";
 
 // Motion criterion: with Windows "Animation effects" off (prefers-reduced-motion), nothing
 // keeps moving: no running CSS or Web Animations anywhere on the workbench or Settings.
@@ -40,7 +41,7 @@ test("nothing animates on the workbench or Settings when reduced motion is reque
   }
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const list = page.getByRole("tablist", { name: "Settings pages" });
-  for (const name of (await list.getByRole("tab").allInnerTexts()).map((value) => value.trim())) {
+  for (const name of await settingsPageNames(page)) {
     await list.getByRole("tab", { name, exact: true }).click();
     await page.waitForTimeout(100);
     found.push(...(await moving(page)));

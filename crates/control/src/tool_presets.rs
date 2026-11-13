@@ -69,14 +69,22 @@ fn parse_kind(text: &str) -> Result<NodeKind, ControlError> {
 }
 
 impl ControlPlane {
-    fn load_tool_presets(&self) -> Result<Vec<Value>, ControlError> {
+    fn load_tool_presets(&self, refuse_unreadable: bool) -> Result<Vec<Value>, ControlError> {
         if let Some(storage) = &self.storage {
             let stored = storage
                 .load_control_value(SETTINGS_KEY)
                 .map_err(storage_error)?;
-            return Ok(stored
-                .and_then(|text| serde_json::from_str(&text).ok())
-                .unwrap_or_default());
+            return match stored {
+                None => Ok(Vec::new()),
+                Some(text) => match serde_json::from_str(&text) {
+                    Ok(presets) => Ok(presets),
+                    Err(_) if !refuse_unreadable => Ok(Vec::new()),
+                    Err(_) => Err(ControlError::InvalidRequest(
+                        "your saved presets could not be read; the stored presets have been kept"
+                            .into(),
+                    )),
+                },
+            };
         }
         Ok(self.tool_presets.clone())
     }
@@ -102,7 +110,7 @@ impl ControlPlane {
             .and_then(|params| params.get("kind"))
             .and_then(Value::as_str);
         let items = self
-            .load_tool_presets()?
+            .load_tool_presets(false)?
             .into_iter()
             .filter(|preset| kind.is_none_or(|kind| preset["kind"] == kind))
             .collect::<Vec<_>>();
@@ -186,13 +194,14 @@ impl ControlPlane {
                 errors.first().map_or_else(String::new, ToString::to_string)
             ))
         })?;
-        let mut presets = self.load_tool_presets()?;
+        let mut presets = self.load_tool_presets(true)?;
+        let folded_name = name.to_lowercase();
         // Saving a name again replaces that preset, as a person expects from "Save as".
         presets.retain(|preset| {
             !(preset["kind"] == kind_text
                 && preset["name"]
                     .as_str()
-                    .is_some_and(|known| known.eq_ignore_ascii_case(name)))
+                    .is_some_and(|known| known.to_lowercase() == folded_name))
         });
         if presets.len() >= MAX_PRESETS {
             return Err(ControlError::InvalidRequest(format!(
@@ -202,7 +211,7 @@ impl ControlPlane {
         let id = format!(
             "preset-{}",
             &audiorouter_storage::lower_hex(&Sha256::digest(
-                format!("{kind_text}:{}", name.to_lowercase()).as_bytes()
+                format!("{kind_text}:{folded_name}").as_bytes()
             ))[..16]
         );
         let preset = json!({ "id": id, "kind": kind_text, "name": name, "parameters": parameters });
@@ -223,7 +232,7 @@ impl ControlPlane {
             .get("id")
             .and_then(Value::as_str)
             .ok_or_else(|| ControlError::InvalidRequest("id is required".into()))?;
-        let mut presets = self.load_tool_presets()?;
+        let mut presets = self.load_tool_presets(true)?;
         let before = presets.len();
         presets.retain(|preset| preset["id"] != id);
         let deleted = presets.len() != before;

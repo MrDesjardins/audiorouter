@@ -3,6 +3,177 @@
 use super::*;
 use crate::test_support::*;
 
+#[cfg(windows)]
+#[test]
+#[ignore = "requires a real OneDrive placeholder root; metadata-only qualification"]
+fn real_onedrive_root_is_accepted_by_session_export_policy() {
+    let root = std::path::PathBuf::from(
+        std::env::var_os("OneDrive").expect("OneDrive must be configured"),
+    );
+    let destination = root.join(format!(
+        "audiorouter-policy-probe-{}.audiorouter",
+        std::process::id()
+    ));
+    assert_eq!(
+        local_export_path(Some(&json!({"path": destination}))).unwrap(),
+        root.canonicalize()
+            .unwrap()
+            .join(destination.file_name().unwrap())
+    );
+    assert!(!destination.exists());
+}
+
+#[test]
+fn failed_start_rolls_back_running_status_and_can_be_retried() {
+    let mut plane = ControlPlane {
+        fail_next_session_activation: true,
+        ..ControlPlane::default()
+    };
+    let original = session();
+    plane.insert_session(original.clone()).unwrap();
+    let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        })
+    };
+    let failed = call(
+        &mut plane,
+        "sessions.start",
+        json!({"sessionId": original.id, "idempotencyKey": "failed-start"}),
+    );
+    assert!(failed.error.is_some());
+    let status = call(&mut plane, "status.get", json!({})).result.unwrap();
+    assert_eq!(status["activeSessionCount"], 0);
+    assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Stopped);
+    let retry = call(
+        &mut plane,
+        "sessions.start",
+        json!({"sessionId": original.id, "idempotencyKey": "retry-start"}),
+    );
+    assert_eq!(retry.result.unwrap()["state"], "running");
+}
+
+#[test]
+fn refused_or_failed_delete_preserves_saved_version_notes() {
+    let path = std::env::temp_dir().join(format!(
+        "audiorouter-delete-notes-{}-{}.sqlite",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let mut plane = ControlPlane::with_storage("delete-notes", Storage::open(&path).unwrap());
+    let original = session();
+    let id = original.id.clone();
+    plane.create_session(original).unwrap();
+    let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        })
+    };
+    for revision in 0..2 {
+        let mut candidate = plane.get_session(&id).unwrap().clone();
+        candidate.name = format!("Saved {revision}");
+        let plan = call(
+            &mut plane,
+            "graph.plan",
+            json!({
+                "sessionId": id, "baseRevision": revision, "candidate": candidate
+            }),
+        );
+        assert!(plan.error.is_none(), "{:?}", plan.error);
+        let committed = call(
+            &mut plane,
+            "graph.commit",
+            json!({
+                "planId": plan.result.unwrap()["planId"], "baseRevision": revision,
+                "idempotencyKey": format!("notes-{revision}")
+            }),
+        );
+        assert!(committed.error.is_none(), "{:?}", committed.error);
+    }
+    let key = format!("revisionNotes:{}", id.as_str());
+    let notes = plane
+        .storage
+        .as_ref()
+        .unwrap()
+        .load_control_value(&key)
+        .unwrap()
+        .unwrap();
+    plane.session_start(&id).unwrap();
+    let refused = call(
+        &mut plane,
+        "sessions.delete",
+        json!({"sessionId": id, "idempotencyKey": "running"}),
+    );
+    assert!(refused.error.is_some());
+    assert_eq!(
+        plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .load_control_value(&key)
+            .unwrap(),
+        Some(notes.clone())
+    );
+    let versions = call(&mut plane, "graph.versions", json!({"sessionId": id}))
+        .result
+        .unwrap();
+    for revision in 1..=2 {
+        assert!(versions["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|item| item["revision"] == revision && item["savedAtMs"].as_u64().is_some()));
+    }
+    plane.session_stop(&id).unwrap();
+    let injector = rusqlite::Connection::open(&path).unwrap();
+    injector.execute_batch("CREATE TRIGGER reject_delete BEFORE DELETE ON sessions BEGIN SELECT RAISE(ABORT, 'forced delete failure'); END;").unwrap();
+    let failed = call(
+        &mut plane,
+        "sessions.delete",
+        json!({"sessionId": id, "idempotencyKey": "failed"}),
+    );
+    assert!(failed.error.is_some());
+    assert_eq!(
+        plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .load_control_value(&key)
+            .unwrap(),
+        Some(notes)
+    );
+    injector
+        .execute_batch("DROP TRIGGER reject_delete;")
+        .unwrap();
+    let deleted = call(
+        &mut plane,
+        "sessions.delete",
+        json!({"sessionId": id, "idempotencyKey": "deleted"}),
+    );
+    assert!(deleted.error.is_none(), "{:?}", deleted.error);
+    assert_eq!(
+        plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .load_control_value(&key)
+            .unwrap(),
+        None
+    );
+    drop(injector);
+    drop(plane);
+    std::fs::remove_file(path).unwrap();
+}
+
 #[test]
 fn export_requires_desktop_authority_and_one_exact_local_approval() {
     let suffix = std::time::SystemTime::now()
@@ -146,7 +317,9 @@ fn export_requires_desktop_authority_and_one_exact_local_approval() {
     .error
     .is_none());
     for approval in plane.session_export_approvals.values_mut() {
-        approval.created -= Duration::from_secs(301);
+        // Do not subtract from Instant: a fresh Windows runner may have
+        // less than five minutes of monotonic uptime.
+        approval.expires_at = Instant::now();
     }
     assert!(
         call(

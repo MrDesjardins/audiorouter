@@ -131,6 +131,51 @@ describe("compare rules", () => {
 });
 
 describe("hold to compare", () => {
+  it("clears the pressed state when the backend hold expires", async () => {
+    vi.useFakeTimers();
+    try {
+      const compareNodes = vi.fn(async (params: { nodes: string[] }) => ({
+        comparing: params.nodes,
+        expiresInMs: params.nodes.length ? 30000 : 0,
+      }));
+      render(
+        <ToolCompare
+          backend={{ compareNodes } as unknown as UiBackend}
+          session={route}
+          node={route.nodes[1]}
+          running
+        />,
+      );
+      const button = screen.getByRole("button", { name: /without this tool/ });
+      await act(async () => {
+        fireEvent.pointerDown(button, { pointerId: 1 });
+      });
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30000);
+      });
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("waits for the hold request before sending its release", async () => {
+    let finishHold!: (result: { comparing: string[]; expiresInMs: number }) => void;
+    const pending = new Promise<{ comparing: string[]; expiresInMs: number }>((resolve) => {
+      finishHold = resolve;
+    });
+    const compareNodes = vi.fn().mockReturnValueOnce(pending).mockResolvedValue({ comparing: [], expiresInMs: 0 });
+    render(
+      <ToolCompare backend={{ compareNodes } as unknown as UiBackend} session={route} node={route.nodes[1]} running />,
+    );
+    const button = screen.getByRole("button", { name: /without this tool/ });
+    fireEvent.pointerDown(button, { pointerId: 1 });
+    fireEvent.pointerUp(button, { pointerId: 1 });
+    expect(compareNodes).toHaveBeenCalledTimes(1);
+    await act(async () => finishHold({ comparing: ["gate"], expiresInMs: 30000 }));
+    expect(compareNodes).toHaveBeenCalledTimes(2);
+    expect((compareNodes.mock.calls[1][0] as { nodes: string[] }).nodes).toEqual([]);
+  });
   const setup = (running = true) => {
     const compareNodes = vi.fn(async () => ({ comparing: [], expiresInMs: 0 }));
     const backend = { compareNodes, connected: true } as unknown as UiBackend;
@@ -139,13 +184,13 @@ describe("hold to compare", () => {
   };
   const lastNodes = (mock: ReturnType<typeof vi.fn>) => (mock.mock.calls.at(-1)![0] as { nodes: string[] }).nodes;
 
-  it("warns that a hold is live and sends the tool only while held", () => {
+  it("warns that a hold is live and sends the tool only while held", async () => {
     const { compareNodes, button } = setup();
     expect(screen.getByText(/anyone hearing this route, on Discord or a stream, hears it too/)).toBeTruthy();
     fireEvent.pointerDown(button, { pointerId: 1 });
     expect(lastNodes(compareNodes)).toEqual(["gate"]);
     fireEvent.pointerUp(button, { pointerId: 1 });
-    expect(lastNodes(compareNodes)).toEqual([]);
+    await waitFor(() => expect(lastNodes(compareNodes)).toEqual([]));
   });
 
   it("leaves the whole chain out with the second button", () => {
@@ -161,19 +206,19 @@ describe("hold to compare", () => {
   it.each([
     ["the window losing focus", () => fireEvent.blur(window)],
     ["the page being hidden", () => fireEvent(document, new Event("visibilitychange"))],
-  ])("restores on %s", (_name, leave) => {
+  ])("restores on %s", async (_name, leave) => {
     const { compareNodes, button } = setup();
     fireEvent.pointerDown(button, { pointerId: 1 });
     leave();
-    expect(lastNodes(compareNodes)).toEqual([]);
+    await waitFor(() => expect(lastNodes(compareNodes)).toEqual([]));
     expect(compareNodes).toHaveBeenCalledTimes(2);
   });
 
-  it("restores when the panel goes away", () => {
+  it("restores when the panel goes away", async () => {
     const { compareNodes, button, view } = setup();
     fireEvent.pointerDown(button, { pointerId: 1 });
     view.unmount();
-    expect(lastNodes(compareNodes)).toEqual([]);
+    await waitFor(() => expect(lastNodes(compareNodes)).toEqual([]));
   });
 
   it("does nothing on a stopped route", () => {

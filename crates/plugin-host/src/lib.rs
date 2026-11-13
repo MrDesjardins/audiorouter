@@ -855,10 +855,7 @@ pub fn scan_directory_with_control(
 ) -> Result<Vec<ScanEntry>, ScanError> {
     // A user may explicitly choose a junction to an external plugin drive.
     // Grant its resolved root, not arbitrary links encountered underneath it.
-    // Keep the ordinary drive form (no verbatim prefix) where it fits, so
-    // scanned paths match the ones already saved in routes and shown to users.
-    let canonical_root =
-        loadable_plugin_path(&fs::canonicalize(root).map_err(|_| ScanError::InvalidRoot)?);
+    let canonical_root = resolve_scan_root(root)?;
     let root = canonical_root.as_path();
     let root_metadata = fs::symlink_metadata(root).map_err(|_| ScanError::InvalidRoot)?;
     if !root_metadata.is_dir() || is_reparse_point(&root_metadata) {
@@ -977,6 +974,21 @@ fn root_contains(root: &Path, candidate: &Path) -> bool {
     fs::canonicalize(root)
         .map(|root| candidate.starts_with(root))
         .unwrap_or(false)
+}
+
+/// The folder a scan reads and grants. The caller's own spelling is kept (so
+/// saved routes and the UI keep matching) unless it passes through a junction
+/// or symbolic link, for example a plugin folder on another drive. Only then
+/// is it resolved, in the ordinary drive form, so the granted root is a real
+/// directory and links found underneath it stay refused.
+pub fn resolve_scan_root(root: &Path) -> Result<PathBuf, ScanError> {
+    fs::symlink_metadata(root).map_err(|_| ScanError::InvalidRoot)?;
+    if !path_has_reparse_ancestor(root) {
+        return Ok(root.to_path_buf());
+    }
+    Ok(loadable_plugin_path(
+        &fs::canonicalize(root).map_err(|_| ScanError::InvalidRoot)?,
+    ))
 }
 
 fn path_has_reparse_ancestor(path: &Path) -> bool {
@@ -8148,9 +8160,27 @@ mod tests {
         let link_result = std::os::unix::fs::symlink(&target, &link);
 
         if link_result.is_ok() {
-            assert!(scan_directory(&link).unwrap().is_empty());
+            fs::write(target.join("effect.vst3"), pe_x64()).unwrap();
+            // The folder behind the link is granted, listed in its ordinary
+            // drive form, and its plugins are verified under that real folder.
+            let entries = scan_directory(&link).unwrap();
+            assert_eq!(entries.len(), 1);
+            assert!(entries[0].identity.is_some(), "{:?}", entries[0].error);
+            assert!(!entries[0].path.starts_with(&link));
+            assert!(!entries[0].path.to_string_lossy().starts_with(r"\\?\"));
             remove_directory_link(&link);
         }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn an_ordinary_scan_root_keeps_the_callers_spelling() {
+        let root = temp_root();
+        assert_eq!(resolve_scan_root(&root).unwrap(), root);
+        assert_eq!(
+            resolve_scan_root(&root.join("missing")),
+            Err(ScanError::InvalidRoot)
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

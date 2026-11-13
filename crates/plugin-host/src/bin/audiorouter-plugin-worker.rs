@@ -174,7 +174,6 @@ fn run() -> Result<(), String> {
     if _fixture_mode.as_deref() == Some("slow-load") {
         thread::sleep(Duration::from_secs(6));
     }
-    #[cfg(windows)]
     // Each plugin is loaded on its editor's UI thread, which later shows its
     // window: many plugins crash when another thread opens it (2026-11-12).
     #[cfg(windows)]

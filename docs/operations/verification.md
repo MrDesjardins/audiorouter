@@ -37,9 +37,33 @@ checks explicitly; it cannot count as a complete full run.
 
 The classifier conservatively selects every area for an unknown executable or
 build surface. Contract changes select backend, UI and Stream Deck consumers;
-backend changes select browser integration. Documentation validation and policy
-tests always run. Main pushes and manual CI runs select all areas. PR CI compares
+backend changes select browser integration. Documentation assets select only
+documentation validation; policy tests always run. Main pushes select affected
+areas; scheduled and manual CI runs select all areas. PR CI compares
 the tested merge commit with its first parent, the current base tip.
+
+CI runs Linux UI checks independently of Windows Rust/native and installer
+checks. Ordinary shell source changes run Rust and backend browser checks;
+packaging manifests/build scripts, npm manifests/locks, release tools and
+drivers also select installer verification. Unknown paths select everything.
+Named ancillary workflow edits select policy tests and checksum-pinned
+actionlint syntax/expression validation of all workflows; manual-release selects
+release verification. The daily full CI at 03:47 UTC complements the existing
+03:17 UTC coverage/soak/startup workflow without narrowing either inventory.
+
+Browser preparation builds the current backend fixture and bundled UI once,
+qualifies both guards, and transfers only those generated files to four Windows
+runners. Each shard retains one worker and the existing flaky-test failure
+policy. UI changes run every spec; backend-only changes follow local helper
+imports to select real-backend specs, conservatively including unfamiliar
+imports. Nightly/manual runs always run all specs. This subset may defer an
+unmodeled backend/UI interaction until nightly; it does not replace full
+release acceptance. Shard failures retain separate reports, traces and images.
+
+Rust caches restore by Windows architecture, pinned toolchain, lock hashes and
+job. Only successful trusted main runs save them; PRs never save. Cache eviction
+can reduce speed and must not change selected checks. Hosted timings and cache
+size must be measured after rollout; no speed estimate is acceptance evidence.
 
 ## Results and evidence
 

@@ -760,29 +760,39 @@ mod plugin_inventory_tests {
         let _ = std::fs::remove_dir_all(&folder);
     }
 
-    /// The UI lists a folder with the text the user typed; the scan is
-    /// remembered under the resolved folder.
+    /// A plugin folder reached through a link (for example one on another
+    /// drive) is scanned under its real folder, and listing with the link's
+    /// own spelling finds that scan. Skipped where the PC cannot create links.
     #[cfg(windows)]
     #[test]
-    fn a_scanned_folder_is_listed_under_another_spelling_of_its_path() {
+    fn a_scanned_folder_behind_a_link_is_listed_under_the_link_spelling() {
         let unique = format!("{}-{:?}", std::process::id(), std::thread::current().id())
             .replace(['(', ')'], "");
-        let folder = std::env::temp_dir().join(format!("audiorouter-plugin-spelling-{unique}"));
-        std::fs::create_dir_all(&folder).unwrap();
-        std::fs::write(folder.join("effect.dll"), b"not a plugin").unwrap();
-        let typed = format!("{}\\", folder.to_string_lossy().to_uppercase());
-        let mut plane = ControlPlane::default();
-        let scanned = plane
-            .dispatch_plugins_scan(Some(json!({ "directory": typed })))
-            .unwrap();
-        assert_eq!(scanned["entries"].as_array().unwrap().len(), 1);
-        let listed = plane
-            .dispatch_plugins_list(Some(json!({ "directory": typed })))
-            .unwrap();
-        assert_eq!(listed["entries"], scanned["entries"]);
-        let path = scanned["entries"][0]["path"].as_str().unwrap();
-        assert!(!path.starts_with(r"\\?\"), "{path}");
-        let _ = std::fs::remove_dir_all(&folder);
+        let base = std::env::temp_dir().join(format!("audiorouter-plugin-link-{unique}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let target = base.join("real");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("effect.dll"), b"not a plugin").unwrap();
+        let link = base.join("link");
+        if std::os::windows::fs::symlink_dir(&target, &link).is_ok() {
+            let typed = link.to_string_lossy().into_owned();
+            let mut plane = ControlPlane::default();
+            let scanned = plane
+                .dispatch_plugins_scan(Some(json!({ "directory": typed })))
+                .unwrap();
+            assert_eq!(scanned["entries"].as_array().unwrap().len(), 1);
+            let path = scanned["entries"][0]["path"].as_str().unwrap();
+            assert!(
+                !path.starts_with(r"\\?\") && !path.starts_with(&typed),
+                "{path}"
+            );
+            let listed = plane
+                .dispatch_plugins_list(Some(json!({ "directory": typed })))
+                .unwrap();
+            assert_eq!(listed["entries"], scanned["entries"]);
+            let _ = std::fs::remove_dir(&link);
+        }
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
 
@@ -1313,13 +1323,16 @@ impl ControlPlane {
                 "directory path must be absolute".into(),
             ));
         }
-        let canonical_root = std::fs::canonicalize(root).map_err(|_| {
-            ControlError::PluginScan(audiorouter_plugin_host::ScanError::InvalidRoot)
-        })?;
-        let directory = audiorouter_plugin_host::loadable_plugin_path(&canonical_root)
-            .to_string_lossy()
-            .into_owned();
-        let root = canonical_root.as_path();
+        // The caller's spelling is kept unless the folder is reached through a
+        // junction or link; then the resolved folder is the key and the grant.
+        let resolved_root =
+            audiorouter_plugin_host::resolve_scan_root(root).map_err(ControlError::PluginScan)?;
+        let directory = if resolved_root == root {
+            directory.to_owned()
+        } else {
+            resolved_root.to_string_lossy().into_owned()
+        };
+        let root = resolved_root.as_path();
         let entries = self
             .while_servicing_audio(|| audiorouter_plugin_host::scan_directory(root))
             .map_err(ControlError::PluginScan)?;
@@ -1379,14 +1392,11 @@ impl ControlPlane {
                 "directory path must be absolute".into(),
             ));
         }
-        // A scan is remembered under its resolved folder. Accept the spelling
-        // the caller scanned with too (other letter case, a trailing
-        // separator, a junction), or the list looks empty after a good scan.
-        let resolved = std::fs::canonicalize(directory).ok().map(|path| {
-            audiorouter_plugin_host::loadable_plugin_path(&path)
-                .to_string_lossy()
-                .into_owned()
-        });
+        // A scan of a folder reached through a junction is remembered under
+        // the resolved folder; accept the spelling the caller scanned with.
+        let resolved = audiorouter_plugin_host::resolve_scan_root(std::path::Path::new(directory))
+            .ok()
+            .map(|path| path.to_string_lossy().into_owned());
         Ok(self
             .plugin_inventories
             .get(directory)
@@ -1677,19 +1687,112 @@ impl ControlPlane {
             .map_err(storage_error)?;
         // Drop the automatic capture this one replaces, unless another node
         // (for example a duplicated session) still restores it.
-        if let Some(previous) =
-            replaced.filter(|previous| previous.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX))
-        {
-            if !storage
-                .plugin_node_state_in_use(&previous)
-                .map_err(storage_error)?
-            {
-                let _ = storage.remove_plugin_state(&previous);
-                let _ = std::fs::remove_file(root.join(format!("{previous}.bin")));
-                let _ = std::fs::remove_file(plugin_slider_snapshot_path(&root, &previous));
-            }
+        if let Some(previous) = replaced {
+            self.cleanup_automatic_plugin_states(&[previous]);
         }
         Ok((state_id, asset.bytes.len()))
+    }
+
+    pub(crate) fn session_plugin_state_candidates(
+        &self,
+        session_id: &EntityId,
+    ) -> Result<Vec<String>, ControlError> {
+        let mut states = self
+            .storage
+            .as_ref()
+            .map(|storage| storage.plugin_node_states(session_id.as_str()))
+            .transpose()
+            .map_err(storage_error)?
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(_, id)| id)
+            .collect::<Vec<_>>();
+        let history = self.store.history(session_id, MAX_GRAPH_HISTORY_ITEMS);
+        for saved in self
+            .store
+            .session(session_id)
+            .cloned()
+            .into_iter()
+            .chain(history)
+        {
+            for node in saved.nodes {
+                if let Some(id) = node.parameters.get("stateId").and_then(Value::as_str) {
+                    states.push(id.to_owned());
+                }
+            }
+        }
+        states.sort_unstable();
+        states.dedup();
+        Ok(states)
+    }
+
+    /// Reclaim only backend-owned captures after their references disappear.
+    /// Explicit library states and unverifiable quarantined graphs are kept.
+    /// File failures retain the metadata rather than losing the cleanup record.
+    pub(crate) fn cleanup_automatic_plugin_states(&self, candidates: &[String]) {
+        if !self.quarantined_sessions.is_empty()
+            || !candidates
+                .iter()
+                .any(|id| id.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX))
+        {
+            return;
+        }
+        let Some(storage) = &self.storage else {
+            return;
+        };
+        let Ok(records) = storage.list_plugin_states(None) else {
+            return;
+        };
+        let Some(root) = storage.plugin_state_directory() else {
+            return;
+        };
+        let Some(parent) = storage
+            .session_inventory_path()
+            .and_then(std::path::Path::parent)
+        else {
+            return;
+        };
+        let (Ok(root), Ok(parent)) = (root.canonicalize(), parent.canonicalize()) else {
+            return;
+        };
+        if root != parent.join("plugin-states") {
+            return;
+        }
+        let mut protected = std::collections::HashSet::new();
+        for session in self.store.sessions(audiorouter_domain::MAX_SESSIONS_GLOBAL) {
+            let history = self.store.history(&session.id, MAX_GRAPH_HISTORY_ITEMS);
+            for saved in std::iter::once(session).chain(history) {
+                for node in saved.nodes {
+                    if let Some(id) = node.parameters.get("stateId").and_then(Value::as_str) {
+                        protected.insert(id.to_owned());
+                    }
+                }
+            }
+        }
+        let remove = |path: std::path::PathBuf| match std::fs::remove_file(path) {
+            Ok(()) => true,
+            Err(error) => error.kind() == std::io::ErrorKind::NotFound,
+        };
+        for record in records {
+            let id = &record.id;
+            if !candidates.contains(id)
+                || !id.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX)
+                || !id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+                || protected.contains(id)
+                || !matches!(storage.plugin_node_state_in_use(id), Ok(false))
+            {
+                continue;
+            }
+            // Derive names inside the owned directory; never follow a stored
+            // arbitrary path when deleting an automatic capture.
+            if remove(root.join(format!("{id}.bin")))
+                && remove(plugin_slider_snapshot_path(&root, id))
+            {
+                let _ = storage.remove_plugin_state(id);
+            }
+        }
     }
 
     /// Open or close a playing plugin's native editor. The parent window must
@@ -1866,3 +1969,7 @@ fn plugin_sliders_to_apply(
 #[cfg(test)]
 #[path = "plugins_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "plugin_state_cleanup_tests.rs"]
+mod state_cleanup_tests;

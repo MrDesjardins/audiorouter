@@ -255,7 +255,7 @@ Defects found in the repair diff and fixed, each with a regression test:
 
 1. The UI transport gave every request 5 s, so a slow scan, plugin load at Play, state save or editor open showed "request timed out" while the backend's new 30 s allowance was still running. Plugin and `*.prepare` requests now get 60 s (`requestTimeoutMs`, `host.test.ts`).
 2. A whole-library scan still had 10 s in total and failed completely at that point or at one unreadable subfolder. It now has 45 s, keeps verified results and lists the rest as `deadlineExceeded`; only an unreadable root fails (`a_scan_that_runs_out_of_time_keeps_its_candidates_listed`).
-3. Scan results carried verbatim (`\\?\` prefix) paths and were remembered under the resolved folder, so `plugins.list` with the typed folder looked empty. Paths use the ordinary drive form and the list accepts either spelling (`a_scanned_folder_is_listed_under_another_spelling_of_its_path`, `scanned_paths_use_the_ordinary_drive_form`).
+3. A scan resolved every root and remembered it under the resolved folder, so `plugins.list` with the typed folder could look empty, and on a PC whose temp or profile path has an 8.3 alias (the CI runner) three tests failed. The caller's spelling is now kept unless the folder is reached through a junction or link; only then is it resolved (ordinary drive form, no `\\?\` prefix) and listing accepts the link's spelling (`resolve_scan_root`, `an_ordinary_scan_root_keeps_the_callers_spelling`, `resolves_an_explicit_reparse_point_scan_root`, `a_scanned_folder_behind_a_link_is_listed_under_the_link_spelling`). Verified with `TEMP` set to an 8.3 path.
 4. "Start from defaults" wrote a permanent `factory-default` marker that discarded every later editor or Stop capture at each Play. It now removes `stateId` and forgets the latest capture once (`Storage::clear_plugin_node_state`); state files are kept.
 5. The VST2 channel rule refused graphs wider than stereo that worked before (6 in, 6 out). Equal widths pass again.
 6. VST3 class selection compared one spelling of the class ID and reported "no audio effect class" on a mismatch. Both spellings match; a class that is not in the binary (stale `moduleinfo.json`) loads the first usable effect and says so on stderr (worker self-test).
@@ -277,6 +277,57 @@ Still not run: full UI suite, Playwright, three-theme screenshots, built shell o
 - Built shell, isolated (disposable database, `LOCALAPPDATA` and WebView profile, loopback debug port, no other shell running), driven over CDP: "Scan standard folders" found 18 supported plugins; added UA 1176 (VST3, 8 sliders) and Pitchproof x64 (VST2, 2 sliders); the Plugin recovery section is present for both. The backend log shows only two `invalidRoot` scans, for standard folders that do not exist on this PC.
 - Real packaged workers through `ControlPlane::dispatch` (`installed_effect_describes_processes_and_restores_state`, mono and stereo, 200 blocks, state save and restore into a new worker): UA 1176, UA Pure Plate (VST3) and ReaFIR (VST2) pass. ReaEQ and ReaJS return their input unchanged at default settings, so that test's "must change audio" check does not apply to them; they pass the offline sweep.
 - Not run: pressing Play on a route with a plugin through real audio endpoints (it would touch the owner's devices while Discord is in use); the installer on a second PC or VM.
+
+### Hosted E2E stack-overflow repair (2026-11-12, PR #139)
+
+Symptom: the hosted Edge suite repeatedly left "Loading your saved session";
+the real fixture exited with 0xC00000FD and `thread 'main' has overflowed its
+stack`. Runs 43147902058 and 43157972751 failed four/one tests respectively,
+with further flaky retries caused by the same crash. The Quality gate was only
+downstream of the browser failure.
+
+Reproduction and evidence: the failing test files (58 scenarios), the full
+CI-config Playwright suite (727 passed), and 100 startup-burst fixture runs
+passed on Windows 11, including an 8.3 TEMP alias. A focused CI job then ran
+the fixture under `cdb` on the hosted runner. On its second iteration,
+`sessions.active.get` completed and `presets.list` raised a first-chance
+0xC00000FD. The stack was `dispatch` → `describe` → `method_output_schema`;
+there were two consecutive schema frames, not an unbounded recursion. Job
+131001582828 contains the captured stack. The trace's initial RPC burst agrees
+with that method sequence.
+
+Cause: the comprehensive output-schema match has a 0x64B40-byte (402.8 KiB)
+debug stack frame. The same prologue exists in the base revision, so this is a
+latent stack-budget defect exposed by the hosted runner, not unbounded schema
+recursion. `plugins.inventory` calls `method_output_schema("plugins.list")` in
+its `json!` result; the outer match's frame stays live while a second equally
+large schema frame is built. An ordinary local run has enough remaining stack,
+but the hosted runner does not.
+
+The first wrapper-only attempt (`eac2409c`, job 131007030416) proved this
+distinction: it reduced the wrapper to 0x28 bytes but still overflowed with
+`impl → wrapper → impl → wrapper` on the debugger stack. Moving the schema
+implementation alone therefore did not fix the nested allocation.
+
+Fix: `method_output_schema` remains a small wrapper around a separate
+`#[inline(never)]` implementation, and the shared plugin scan/list/retry schema
+is a separate 0x2D10-byte (11.3 KiB) helper used by both the direct methods and
+`plugins.inventory`. The outer match's frame is now 0x61E80 bytes (391.6 KiB);
+the nested list schema no longer allocates another 400 KiB. Generated JSON is
+unchanged. Disassembly of the debug fixture on Windows 11 confirms these frame
+sizes. The existing dispatcher tests exercise `presets.list` and `describe`,
+including schema contents; the focused CI job exercises the real main-thread
+reproduction. Temporary WER, method logging and debugger-job instrumentation
+must be removed after qualification; they are not product changes.
+
+Validation and rollback: job 131010860623 completed 200 hosted-runner fixture
+iterations under `cdb` with no overflow. The complete run 43166882823 passed
+its Edge browser job with 739 passed and 15 skipped (zero failed or flaky),
+plus Windows tests, UI checks, release preparation and Quality gate. All check annotations were read; no new warning or unresolved diagnostic
+belongs to this repair. Temporary WER, method logging and debugger-job
+instrumentation were removed afterward, restoring `ci.yml` and the fixture to
+the base revision. Revert only the schema wrapper/helper if needed; generated
+schemas and plugin behavior are unchanged.
 
 ### Owner session 2026-11-12: Radio Voice route, plugin window crash, panel wording
 

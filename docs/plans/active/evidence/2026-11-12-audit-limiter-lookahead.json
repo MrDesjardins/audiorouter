@@ -1,0 +1,11 @@
+{
+  "id": "limiter--lookaheadMs",
+  "status": "complete",
+  "kind": "limiter",
+  "parameter": "lookaheadMs",
+  "sourceHash": "1037611d33e60c1ad248a7ee15a2f07e6fc6ba40939417b22a80d911cc254b34",
+  "eventAtSeconds": 3.2317809,
+  "frameRate": 15,
+  "frames": 120,
+  "pageErrors": []
+}

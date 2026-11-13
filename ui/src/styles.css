@@ -7845,19 +7845,71 @@ input[type="color"] {
 }
 .updates-panel {
   display: grid;
-  gap: 0.5rem;
+  gap: 0.65rem;
 }
 .updates-panel h3 {
   margin: 0;
 }
-.updates-panel .updates-summary {
-  height: 3rem;
-  overflow: auto;
-  line-height: 1.4;
+/* Three reserved status lines: an asynchronous answer never moves the page. */
+.updates-status {
+  display: grid;
+  align-content: start;
+  gap: 0.2rem;
+  height: 6rem;
+  overflow-y: auto;
+  line-height: 1.35;
+}
+.updates-status p {
   margin: 0;
 }
-.update-release-action {
-  min-height: var(--control-lg);
+.updates-announcement {
+  display: grid;
+  gap: 0.2rem;
+}
+.updates-headline {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.updates-status[data-status="available"] .updates-headline {
+  color: var(--signal-hot, #ffd166);
+}
+.updates-status[data-status="current"] .updates-headline {
+  color: var(--good, #72e3a2);
+}
+.updates-status[data-status="failed"] .updates-headline {
+  color: var(--danger-text, #ff9a9a);
+}
+.theme-light .updates-status[data-status="available"] .updates-headline {
+  color: #8a4b00;
+}
+.theme-light .updates-status[data-status="current"] .updates-headline {
+  color: #146c43;
+}
+.theme-high-contrast .updates-status[data-status="current"] .updates-headline {
+  color: #ffffff;
+}
+.updates-detail,
+.updates-last-checked {
+  color: var(--text-soft);
+  font-family: var(--font-small);
+  font-size: var(--text-sm);
+}
+.updates-last-checked {
+  font-variant-numeric: tabular-nums;
+}
+/* Both actions are always present and stacked, so their area never changes. */
+.updates-actions {
+  display: grid;
+  gap: 0.5rem;
+}
+.updates-channel {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--text-soft);
+  font-size: var(--text-sm);
+}
+.updates-channel select {
+  width: 100%;
 }
 .updates-toggle,
 .autoplay-toggle {
@@ -7927,6 +7979,14 @@ input[type="color"] {
 .device-access-setting .recording-folder-actions > button {
   width: 10rem;
   max-width: 100%;
+}
+/* The "When AudioRouter starts" page stacks three panels; space them like other settings pages. */
+.startup-group {
+  display: grid;
+  gap: 1rem;
+}
+.startup-group > p {
+  margin: 0;
 }
 .startup-autoplay .autoplay-message {
   margin-top: 0.5rem;

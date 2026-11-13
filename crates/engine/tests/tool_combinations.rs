@@ -90,6 +90,37 @@ const FLAGS: [Flags; 6] = [
     Flags::Mixed,
 ];
 
+#[test]
+fn duck_immediately_after_mixer_compiles_through_the_mixer_entry_point() {
+    for flags in FLAGS {
+        let mut session = route(&[NodeKind::Duck], Layout::Mixer, flags, 0);
+        session.edges = vec![
+            edge("src-a", "mix-1"),
+            edge("src-b", "mix-1"),
+            edge("mix-1", "t0"),
+            edge("t0", "out-1"),
+        ];
+        let graph = audiorouter_engine::compile_mixer_fanout_session_with_plugins_and_audio(
+            &session,
+            RuntimeGeneration::new(1),
+            &HashMap::new(),
+            &HashMap::new(),
+        )
+        .unwrap_or_else(|error| panic!("{flags:?}: {error:?}"));
+        let inputs = [source_block("src-a", 0), source_block("src-b", 0)];
+        let mut scratch = AudioBlock::new(2, FRAMES).unwrap();
+        let mut output = AudioBlock::new(2, FRAMES).unwrap();
+        graph
+            .process(&inputs, &mut scratch, &mut [&mut output])
+            .unwrap();
+        assert!(output
+            .channel(0)
+            .unwrap()
+            .iter()
+            .all(|sample| sample.is_finite()));
+    }
+}
+
 impl Flags {
     /// (enabled, bypass) for the tool at `index` in a chain.
     fn at(self, index: usize) -> (bool, bool) {

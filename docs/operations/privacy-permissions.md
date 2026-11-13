@@ -155,10 +155,14 @@ Afterwards, copy the JSONL files from `%LOCALAPPDATA%\AudioRouter\logs`
   plays. It holds the longest gap between audio service passes, the slowest
   request (method name and duration) and how many requests took longer than
   8 ms, failed service passes (`pumpErrors`, `lastPumpError` category), and
-  per input (node ID) the pickup delay and packets Windows flagged as
-  following lost data, and per physical output the queued audio, device
-  underruns and blocks dropped at a full queue. Counters are cumulative;
-  compare consecutive records to see when audio was lost.
+  per input (node ID) the pickup delay, packets Windows flagged as
+  following lost data, the longest wait for a packet and the frames removed
+  to follow the device clock, and per physical output the queued audio and
+  its target, device underruns, blocks dropped at a full queue or discarded
+  as backlog, and the frames added or removed to follow the device clock.
+  Counters are cumulative; compare consecutive records to see when audio was
+  lost. The [audio health log guide](audio-health-log.md) explains each
+  field. The record holds counts and times only, never audio.
 - `discovery.jsonl` and `discovery.previous.jsonl`: failed device reads,
   including endpoints skipped because they disappeared during enumeration.
 - `mcp-activity.jsonl`: assistant tool calls (tool name, safe argument

@@ -612,6 +612,29 @@ fn plugin_scan_is_read_only_and_keeps_invalid_candidates_visible() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+#[cfg(windows)]
+#[test]
+fn desktop_dispatch_does_not_apply_the_http_network_path_policy() {
+    let mut plane = ControlPlane::default();
+    // The local machine's missing share needs no remote host or credentials.
+    // Scan errors are allowed; an HTTP path-policy rejection is not.
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "plugins.scan".into(),
+        params: Some(json!({"directory": r"\\localhost\AudioRouterMissingScanFixture"})),
+    });
+    if let Some(error) = response.error {
+        assert!(
+            matches!(
+                error.data.as_ref().and_then(|data| data["code"].as_str()),
+                Some("invalidRoot" | "io")
+            ),
+            "The scanner must receive the desktop path: {error:?}"
+        );
+    }
+}
+
 #[test]
 fn plugin_placeholder_plan_requires_current_scan_evidence() {
     let mut plane = ControlPlane::default();

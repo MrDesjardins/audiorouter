@@ -13,7 +13,7 @@ use std::sync::Arc;
 use audiorouter_domain::{Edge, EntityId, Node, NodeKind, Port, PortDirection, Session};
 use audiorouter_engine::{
     compile_native_paths_with_plugins_and_audio, AudioBlock, CompiledMixerFanoutGraph,
-    CompiledPathSet, DecodedAudio, RuntimeGeneration,
+    CompiledPathSet, DecodedAudio, RuntimeGeneration, SourceTransport,
 };
 use serde_json::json;
 
@@ -334,6 +334,37 @@ fn compile_and_run(session: &Session, label: &str) {
                     "{label}: started {kind:?} did not reach an output"
                 );
             }
+        }
+    }
+    // A Compare hold/release recompiles flags without changing source
+    // settings. The same playing transports must survive in every layout.
+    let mut transports = HashMap::new();
+    for path in set.paths() {
+        for node in &session.nodes {
+            if let Some(source) = path.test_signal_source_for_node(&node.id) {
+                transports.insert(node.id.clone(), SourceTransport::TestSignal(source));
+            }
+            if let Some(source) = path.audio_file_source_for_node(&node.id) {
+                transports.insert(node.id.clone(), SourceTransport::AudioFile(source));
+            }
+            if let Some(source) = path.soundboard_for_node(&node.id) {
+                transports.insert(node.id.clone(), SourceTransport::Soundboard(source));
+            }
+        }
+    }
+    let mut replacement = compile(session).unwrap_or_else(|error| panic!("{label}: {error}"));
+    replacement.retain_unchanged_source_transports(&transports);
+    for path in replacement.paths() {
+        let outputs = process_quantum(path, label);
+        if session
+            .nodes
+            .iter()
+            .any(|node| renders_own_audio(node.kind) && path.input_node_ids().contains(&node.id))
+        {
+            assert!(
+                peak(&outputs) > 0.01,
+                "{label}: a flag-only replacement stopped a source"
+            );
         }
     }
 }

@@ -1,0 +1,11 @@
+{
+  "id": "limiter--ceilingDb",
+  "status": "complete",
+  "kind": "limiter",
+  "parameter": "ceilingDb",
+  "sourceHash": "a0ac702ecc4be4f1aa920714b8251e716033994be949dd06349db82cd9126ca9",
+  "eventAtSeconds": 3.2486099,
+  "frameRate": 15,
+  "frames": 120,
+  "pageErrors": []
+}

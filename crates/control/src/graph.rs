@@ -432,9 +432,11 @@ impl ControlPlane {
                 self.store = checkpoint;
                 return Err(storage_error(error));
             }
-            storage
-                .delete_graph_plan(plan_id.as_str())
-                .map_err(storage_error)?;
+            // The session and journal are already durable. Cleanup cannot
+            // turn that success into a failure or skip live activation. A
+            // leftover plan expires normally and its old base revision
+            // prevents another commit; the same key replays the journal.
+            let _ = storage.delete_graph_plan(plan_id.as_str());
         }
         // Committing runs on the audio service thread; let running audio
         // advance between the durable write and the graph rebuild so a save

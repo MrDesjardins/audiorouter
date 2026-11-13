@@ -270,6 +270,8 @@ impl ControlPlane {
                 let waits = worker.input_wait_ms();
                 let discontinuities = worker.input_discontinuities();
                 let input_trims = worker.input_trimmed_packets();
+                let input_slips = worker.input_slipped_frames();
+                let packet_gaps = worker.take_input_max_packet_gap_ms();
                 let inputs = worker
                     .input_node_ids()
                     .iter()
@@ -280,12 +282,21 @@ impl ControlPlane {
                             "waitMs": ms(waits.get(index).copied().flatten()),
                             "discontinuities": discontinuities.get(index).copied().unwrap_or(0),
                             "trimmedPackets": input_trims.get(index).copied().unwrap_or(0),
+                            // Frames removed to follow a faster device
+                            // clock; inaudible, unlike a trimmed packet.
+                            "slippedFrames": input_slips.get(index).copied().unwrap_or(0),
+                            // Longest wait for a packet this interval: a
+                            // stalled input shows here.
+                            "maxPacketGapMs": ms(packet_gaps.get(index).copied()),
                         })
                     })
                     .collect::<Vec<_>>();
                 let queues = worker.output_queue_ms();
                 let underruns = worker.output_underruns_per_output();
                 let drops = worker.output_full_drops();
+                let output_slips = worker.output_slipped_frames();
+                let latency_trims = worker.output_latency_trims();
+                let targets = worker.output_target_ms();
                 // Physical outputs come first in output-node order.
                 let outputs = worker
                     .output_node_ids()
@@ -298,6 +309,15 @@ impl ControlPlane {
                             "queueMs": ms(queues.get(index).copied().flatten()),
                             "underruns": underruns[index],
                             "fullDrops": drops.get(index).copied().unwrap_or(0),
+                            // The cushion the output holds; `queueMs`
+                            // settles about one device period above it.
+                            "targetMs": ms(targets.get(index).copied()),
+                            // Frames removed or added to follow the
+                            // device clock; inaudible.
+                            "slippedFrames": output_slips.get(index).copied().unwrap_or(0),
+                            // Blocks discarded when a backlog arrived
+                            // after a stall.
+                            "latencyTrims": latency_trims.get(index).copied().unwrap_or(0),
                         })
                     })
                     .collect::<Vec<_>>();
