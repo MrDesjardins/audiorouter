@@ -79,6 +79,8 @@ test('full nightly, four isolated shards, shared fixtures and trusted cache are 
   assert.match(workflow, /BROWSER_SCOPE:.*outputs.ui == 'true' && 'all' \|\| 'backend'/);
   assert.match(workflow, /name: Save trusted Rust cache\s+if: github.ref == 'refs\/heads\/main' && github.event_name != 'pull_request'/);
   assert.match(workflow, /name: playwright-results-\$\{\{ matrix.shard \}\}/);
+  assert.match(workflow, /name: Validate all workflow syntax and expressions/);
+  assert.match(workflow, /sha256sum --check --strict/);
 });
 
 const fixtures = [

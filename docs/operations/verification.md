@@ -46,7 +46,8 @@ CI runs Linux UI checks independently of Windows Rust/native and installer
 checks. Ordinary shell source changes run Rust and backend browser checks;
 packaging manifests/build scripts, npm manifests/locks, release tools and
 drivers also select installer verification. Unknown paths select everything.
-Named ancillary workflow edits select policy tests; manual-release selects
+Named ancillary workflow edits select policy tests and checksum-pinned
+actionlint syntax/expression validation of all workflows; manual-release selects
 release verification. The daily full CI at 03:47 UTC complements the existing
 03:17 UTC coverage/soak/startup workflow without narrowing either inventory.
 
