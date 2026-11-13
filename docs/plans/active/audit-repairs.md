@@ -558,3 +558,10 @@ notice is not a compiler, application or test failure. Other inspected runs
 131613747643, 131613747664 and 131613747705 have no annotations at inspection.
 Required Windows/browser/security jobs are still pending; inspect their final
 annotations separately, without treating this interim record as passing CI.
+
+Owner requested an out-of-date branch update: merged `origin/main` at
+`a19d0b507` cleanly in `b4181747f`. The incoming change only adds daily-quality
+history retention, its policy regression and documentation; no product Rust or
+UI source changed. All 62 policy tests, docs acceptance (261 files / 1,478
+links) and diff checks pass. Pushed the updated branch to PR #142. Previous
+product validation remains applicable; CI will rerun for the updated head.
