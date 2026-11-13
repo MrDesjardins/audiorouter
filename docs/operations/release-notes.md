@@ -2,7 +2,29 @@
 
 ## Unreleased
 
-- **The new-version check now shows what it is doing.** Settings → New versions
+## 0.0.29 — 2026-11-12 (unsigned experimental preview)
+
+- **Plugin windows open without crashing.** Some VST2 plugins (Pitchproof)
+  stopped their worker as soon as Open plugin window was pressed. Plugins are
+  now loaded on their window's thread.
+- **A failed plugin says why.** The plugin's health box shows a "Why:" line,
+  and the backend log names failed plugins, with file paths removed.
+- **A mono plugin after a stereo Mixer plays.** Routes such as a stereo mic →
+  Mixer → mono plugin were refused with "path 1 … is not supported".
+- **Plugin Properties start with adjusting the plugin:** the plugin window
+  button and its sliders come first, and recovery after a plugin update moved
+  into its own closed section.
+- **VST2 and VST3 reliability:** saving, scanning large libraries, longer
+  deadlines for slow plugins, higher limits, copyable error messages and
+  recovery after a plugin update.
+- **Compare by ear** says how many tools the second button leaves out and names
+  them in route order. **Apps** shows the Discord and OBS logos.
+- **Start at sign-in** is one checkbox that takes effect at once.
+- **Audit repairs:** Soundboard and FIR media references are kept, invalid
+  sessions are quarantined without losing data, recordings finish after audio
+  stops, the stereo Limiter's linked detection is corrected, and inserting or
+  removing a tool keeps ports, Mixer volumes and disabled links.
+- **The new-version check now shows what it is doing.** Settings → New versions now shows what it is doing.** Settings → New versions
   shows the last successful check, the next attempt and a Check now button. A
   missing connection is no longer silent: the check retries with increasing
   waits for up to 12 hours, then waits for the next day and says so. You can
@@ -28,6 +50,14 @@
   removed to follow its clock, and per output its target depth, the frames
   added or removed, and blocks discarded as backlog. See
   `docs/operations/audio-health-log.md`.
+
+Windows 11 x64, unsigned app-only experimental prerelease. No driver and no
+session or database format change. Close the app before upgrading and keep the
+0.0.28 installer for rollback. Not yet qualified for this release: the full
+hardware matrix, long-run continuity, accessibility and
+install/upgrade/rollback on a clean machine.
+
+## 0.0.27 and 0.0.28 (unsigned experimental previews)
 
 - **Start from a goal.** A new install asks what you want to do and builds a
   stopped route you can change: clean up a mic, game and voice for Discord,
