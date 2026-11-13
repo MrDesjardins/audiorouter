@@ -1,5 +1,12 @@
 # Active plan — current priorities (2026-11-04)
 
+## CI speed — 2026-11-12
+
+Owner approved all phases of affected-area selection, daily full CI, four
+isolated Edge shards and parallel Rust/UI/release jobs. See the
+[execution plan](ci-speed.md) for ENG-01/02/04/05, validation and rollback.
+Work is isolated on `improve/ci-speed`; unrelated changes are preserved.
+
 ## Update-check hardening — 2026-11-11
 
 Owner requested improvements 1–6 to the existing read-only new-version notice

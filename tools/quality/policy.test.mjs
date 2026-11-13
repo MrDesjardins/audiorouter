@@ -3,12 +3,79 @@ import assert from 'node:assert/strict';
 import { classifyChanges, expectedJobs, areas } from './policy.mjs';
 import { evaluateGate } from './gate.mjs';
 import { spawnSync, execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, readdirSync, unlinkSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checks, fullChecks } from './checks.mjs';
 import { packagedShellEnvironment } from './packaged-shell-environment.mjs';
+import { backendSpecs } from './browser-scope.mjs';
+
+test('affected areas are exact for assets, workflows, shell and packaging', () => {
+  const cases = [
+    [['docs/images/route.png', 'docs/data/result.csv', 'docs/image.svg'], ['docs']],
+    ...['ci', 'quality', 'pages', 'code-size', 'marketing-metrics', 'dependabot-auto-merge', 'jev-review'].map(name => [[`.github/workflows/${name}.yml`], []]),
+    [['.github/workflows/manual-release.yml'], ['release']],
+    [['src-tauri/src/lib.rs'], ['backend']],
+    [['src-tauri/tauri.release.conf.json'], ['backend', 'release']],
+    [['src-tauri/build.rs'], ['backend', 'release']],
+    [['src-tauri/installer-hooks.nsh'], ['backend', 'release']],
+    [['src-tauri/http-assets/swagger-ui-bundle.js'], ['backend', 'release']],
+    [['ui/package-lock.json'], ['ui', 'release', 'supply']],
+    ...['build-desktop', 'test-build-desktop', 'run-vb-cable-desktop', 'stage-mcp-cli'].map(name => [[`tools/${name}.ps1`], ['backend', 'release']]),
+    [['.github/workflows/new.yml'], areas],
+  ];
+  for (const [files, enabled] of cases) {
+    const flags = classifyChanges(files);
+    assert.deepEqual(areas.filter(area => flags[area]).sort(), [...enabled].sort(), files.join(','));
+  }
+});
+
+test('backend browser selection follows helpers, cycles and unknown imports', () => {
+  const root = mkdtempSync(join(tmpdir(), 'browser-scope-'));
+  try {
+    const files = {
+      'real-backend.ts': '',
+      'helper.ts': 'export { test } from "./real-backend";',
+      'direct.pw.ts': 'import { test } from "./real-backend";',
+      'indirect.pw.ts': 'import { test } from "./helper";',
+      'mock.pw.ts': 'import { test } from "@playwright/test";',
+      'unknown.pw.ts': 'import { test } from "./missing";',
+      'dynamic.pw.ts': 'const test = import("./real-backend");',
+      'cycle.ts': 'import "./cycle";',
+      'cycle.pw.ts': 'import "./cycle";',
+    };
+    for (const [name, source] of Object.entries(files)) writeFileSync(join(root, name), source);
+    assert.deepEqual(backendSpecs(root).sort(), ['direct.pw.ts', 'dynamic.pw.ts', 'indirect.pw.ts', 'unknown.pw.ts']);
+  } finally {
+    // This fixture contains only files written above, never node_modules/junctions.
+    for (const name of readdirSync(root)) unlinkSync(join(root, name));
+    rmdirSync(root);
+  }
+});
+
+test('each new required job fails the gate on skips, cancellation and failure', () => {
+  for (const job of ['ui', 'release', 'browser-prepare', 'browser']) {
+    for (const result of ['skipped', 'cancelled', 'failure', undefined]) {
+      const needs = needsFor(classifyChanges([], { full: true }));
+      needs[job] = result ? { result } : undefined;
+      assert.ok(evaluateGate(needs).some(error => error.startsWith(`${job}:`)));
+    }
+  }
+});
+
+test('full nightly, four isolated shards, shared fixtures and trusted cache are wired', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  assert.match(workflow, /schedule:\s+- cron: "47 3 \* \* \*"/);
+  assert.match(workflow, /shard: \[1, 2, 3, 4\]/);
+  assert.match(workflow, /fail-fast: false/);
+  assert.match(workflow, /needs: \[changes, browser-prepare\]/);
+  assert.match(workflow, /name: browser-fixtures\s+path: target/);
+  assert.match(workflow, /target\/debug\/examples\/e2e_backend.exe\s+target\/browser-acceptance-ui/);
+  assert.match(workflow, /BROWSER_SCOPE:.*outputs.ui == 'true' && 'all' \|\| 'backend'/);
+  assert.match(workflow, /name: Save trusted Rust cache\s+if: github.ref == 'refs\/heads\/main' && github.event_name != 'pull_request'/);
+  assert.match(workflow, /name: playwright-results-\$\{\{ matrix.shard \}\}/);
+});
 
 const fixtures = [
   ['docs', ['docs/spec/09-interface.md'], ['docs']],
@@ -25,7 +92,7 @@ const fixtures = [
   ['website styles', ['site/assets/compare.css'], ['site']],
   ['CI change', ['.github/workflows/ci.yml'], []],
   ['Jev workflow', ['.github/workflows/jev-review.yml'], []],
-  ['quality workflow', ['.github/workflows/quality.yml'], areas],
+  ['quality workflow', ['.github/workflows/quality.yml'], []],
   ['policy change', ['tools/quality/policy.mjs'], []],
   ['project size metrics', ['tools/metrics/code-size.mjs'], []],
   ['documentation validator', ['tools/docs/validate.mjs'], ['docs']],
@@ -142,7 +209,7 @@ test('CI invokes the shared full inventory and gates every classified job', () =
   for (const id of selected) assert.ok(Object.hasOwn(checks, id));
   assert.deepEqual(checks.browser[0].args, ['--prefix', 'ui', 'run', 'e2e:ci']);
   assert.ok(workflow.includes('audiorouter-bundled-asset-guard-*'));
-  assert.match(workflow, /quality-gate:\s+name: Quality gate\s+if: always\(\)\s+needs: \[changes, docs, site, policy, supply-chain, windows, browser, streamdeck\]/);
+  assert.match(workflow, /quality-gate:\s+name: Quality gate\s+if: always\(\)\s+needs: \[changes, docs, site, policy, supply-chain, windows, ui, release, browser-prepare, browser, streamdeck\]/);
   assert.match(workflow, /NEEDS_RESULTS: \$\{\{ toJSON\(needs\) \}\}/);
   assert.match(workflow, /node tools\/quality\/gate\.mjs/);
   assert.match(workflow, /node tools\/quality\/policy\.mjs --github --event/);
