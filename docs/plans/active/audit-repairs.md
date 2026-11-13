@@ -374,3 +374,27 @@ ENG-1 verification: engine library 181 passed / 1 ignored; source combinations
 Engine all-target/all-feature Clippy, both formatting checks and diff checks
 pass. Complete focused diff inspected. Next: STO-4 path policy, SES-3 startup
 rollback and SIM-1 rewiring, then guide refresh and full branch qualification.
+
+ENG-1 committed as `dd74a8c54`. SES-3 next: wrap every post-runtime-start
+activation step in a single fallible boundary and run one rollback on error,
+including application-capture maintenance. Reuse audio-only Stop to retire
+all workers and bridges, clear taps, and preserve the original activation error.
+Add a dispatcher fault-injection seam at this boundary to prove stopped status
+and a usable retry without requiring an actual process-loopback endpoint.
+This test does not qualify real Windows application restart behavior. Rollback
+is reverting the focused change; no saved session or database format changes.
+
+SES-3 fail-first dispatcher test observed activeSessionCount=1 after an injected
+post-start activation error. It now passes with activeSessionCount=0, stopped
+runtime and a successful retry with a new idempotency key. All post-start
+fallible calls are inside the shared boundary, including the previously bare
+application-maintenance `?`; removed hand-copied rollback blocks. Audio-only
+Stop retires all workers and bridges even when an individual stop fails;
+rollback also clears endpoint/render taps and returns the original error.
+Control all-target/all-feature Clippy passes. Full library and formatting
+results recorded next; no real application capture was opened for this test.
+
+SES-3 final local results: control library 387 passed / 12 explicitly ignored;
+both formatting checks and diff check pass. Inspected the entire activation,
+rollback and test diff. Next: commit SES-3, finish STO-4 and SIM-1, refresh
+Limiter guide evidence, and run the full branch gate before the authorized PR.

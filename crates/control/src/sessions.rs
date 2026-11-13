@@ -609,199 +609,120 @@ impl ControlPlane {
             .start()
             .map_err(|_| ControlError::InvalidRequest("session was not prepared".into()))?;
 
-        // A session with an explicitly attached endpoint pair must cross the
-        // native boundary as part of the same start operation.  Previously we
-        // left the native worker stopped and reported the fake runtime as
-        // running, which made the control plane appear healthy while no
-        // samples could reach the endpoint.  Prepare and publish the graph
-        // before starting the worker; any failure rolls back the runtime and
-        // selected bridge generation so the session cannot be half-started.
-        #[cfg(windows)]
-        if self.native_multi_input_worker_session.as_ref() == Some(id)
-            && self.native_multi_input_worker.is_some()
-        {
-            let branch_node_ids = self
-                .native_multi_input_worker
-                .as_ref()
-                .expect("multi-input worker is attached")
-                .output_node_ids()
-                .to_vec();
-            let capture_bus_ids = session_virtual_capture_bus_ids(&session);
-            if let Err(error) = self
-                .prepare_virtual_route_bridges(id, generation, &capture_bus_ids)
-                .and_then(|_| {
-                    self.bind_native_multi_input_branches(id, generation, &branch_node_ids)
-                        .map(|_| ())
-                })
-                .and_then(|_| self.start_native_multi_input_worker())
-            {
-                let _ = self
-                    .native_multi_input_worker
-                    .as_mut()
-                    .expect("multi-input worker is attached")
-                    .stop();
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                self.native_endpoint_taps = None;
-                self.native_render_source_taps = None;
-                return Err(error);
+        // Every fallible activation step must stay inside this boundary.
+        // In particular, application maintenance must not bypass rollback.
+        let activation = (|| -> Result<(), ControlError> {
+            #[cfg(test)]
+            if std::mem::take(&mut self.fail_next_session_activation) {
+                return Err(ControlError::InvalidRequest(
+                    "injected activation failure".into(),
+                ));
             }
-        }
 
-        // A cable-to-cable route opens its two leases now; a failure leaves
-        // nothing open and the session stopped.
-        #[cfg(windows)]
-        if self.cable_route_prepared_for(id) {
-            if let Err(error) = self.start_cable_route(id, &session, generation) {
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                return Err(error);
-            }
-        }
-
-        if native_endpoint_attached {
-            let sample_rate_hz = self
-                .native_endpoint_worker_for_session(id)
-                .expect("native_attached implies an endpoint worker")
-                .bridge()
-                .sample_rate_hz();
-            let activated = if candidate.is_some() {
-                self.activate_native_graph_candidate(id, generation, sample_rate_hz, Some(&session))
-            } else {
-                self.activate_native_graph(id, generation, sample_rate_hz)
-            };
-            if let Err(error) = activated {
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
-                    *taps = None;
-                }
-                self.native_render_source_taps = None;
-                return Err(error);
-            }
+            // A session with an explicitly attached endpoint pair must cross the
+            // native boundary as part of the same start operation.  Previously we
+            // left the native worker stopped and reported the fake runtime as
+            // running, which made the control plane appear healthy while no
+            // samples could reach the endpoint.  Prepare and publish the graph
+            // before starting the worker; any failure rolls back the runtime and
+            // selected bridge generation so the session cannot be half-started.
             #[cfg(windows)]
-            let application_waiting = self
-                .application_capture_runtime
-                .as_ref()
-                .is_some_and(|binding| binding.session_id == *id)
-                && self.maintain_application_capture(id, true)?;
-            #[cfg(not(windows))]
-            let application_waiting = false;
-            if !application_waiting {
-                let start_result = self
-                    .native_endpoint_worker_for_session_mut(id)
+            if self.native_multi_input_worker_session.as_ref() == Some(id)
+                && self.native_multi_input_worker.is_some()
+            {
+                let branch_node_ids = self
+                    .native_multi_input_worker
+                    .as_ref()
+                    .expect("multi-input worker is attached")
+                    .output_node_ids()
+                    .to_vec();
+                let capture_bus_ids = session_virtual_capture_bus_ids(&session);
+                self.prepare_virtual_route_bridges(id, generation, &capture_bus_ids)?;
+                self.bind_native_multi_input_branches(id, generation, &branch_node_ids)?;
+                self.start_native_multi_input_worker()?;
+            }
+
+            // A cable-to-cable route opens its two leases now; a failure leaves
+            // nothing open and the session stopped.
+            #[cfg(windows)]
+            if self.cable_route_prepared_for(id) {
+                self.start_cable_route(id, &session, generation)?;
+            }
+
+            if native_endpoint_attached {
+                let sample_rate_hz = self
+                    .native_endpoint_worker_for_session(id)
                     .expect("native_attached implies an endpoint worker")
-                    .start()
-                    .map_err(audio_control_error);
-                if let Err(error) = start_result {
-                    if let Some(runtime) = self.runtimes.get_mut(id) {
-                        runtime.stop();
-                    }
-                    self.deactivate_virtual_route_bridges(id);
-                    if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
-                        *taps = None;
-                    }
-                    self.native_render_source_taps = None;
-                    return Err(error);
-                }
+                    .bridge()
+                    .sample_rate_hz();
+                let activated = if candidate.is_some() {
+                    self.activate_native_graph_candidate(
+                        id,
+                        generation,
+                        sample_rate_hz,
+                        Some(&session),
+                    )
+                } else {
+                    self.activate_native_graph(id, generation, sample_rate_hz)
+                };
+                activated?;
                 #[cfg(windows)]
-                if self
+                let application_waiting = self
                     .application_capture_runtime
                     .as_ref()
                     .is_some_and(|binding| binding.session_id == *id)
-                {
-                    self.set_application_capture_state(
+                    && self.maintain_application_capture(id, true)?;
+                #[cfg(not(windows))]
+                let application_waiting = false;
+                if !application_waiting {
+                    self.native_endpoint_worker_for_session_mut(id)
+                        .expect("native_attached implies an endpoint worker")
+                        .start()
+                        .map_err(audio_control_error)?;
+                    #[cfg(windows)]
+                    if self
+                        .application_capture_runtime
+                        .as_ref()
+                        .is_some_and(|binding| binding.session_id == *id)
+                    {
+                        self.set_application_capture_state(
                         "connected",
                         "Connected to this application. Audio flow appears when the app produces sound.",
                     );
+                    }
+                }
+                #[cfg(windows)]
+                if self.native_output_fanout_session.as_ref() == Some(id)
+                    && self.native_output_fanout.is_some()
+                {
+                    self.start_native_output_fanout()?;
                 }
             }
             #[cfg(windows)]
-            if self.native_output_fanout_session.as_ref() == Some(id)
-                && self.native_output_fanout.is_some()
+            if !native_endpoint_attached
+                && self.native_duplex_worker_session.as_ref() == Some(id)
+                && self.native_duplex_worker.is_some()
             {
-                if let Err(error) = self.start_native_output_fanout() {
-                    let _ = self
-                        .native_endpoint_worker_for_session_mut(id)
-                        .expect("native_attached implies an endpoint worker")
-                        .stop();
-                    if let Some(runtime) = self.runtimes.get_mut(id) {
-                        runtime.stop();
-                    }
-                    self.deactivate_virtual_route_bridges(id);
-                    if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
-                        *taps = None;
-                    }
-                    return Err(error);
-                }
+                self.start_native_duplex_worker()?;
             }
-        }
-        #[cfg(windows)]
-        if !native_endpoint_attached
-            && self.native_duplex_worker_session.as_ref() == Some(id)
-            && self.native_duplex_worker.is_some()
-        {
-            if let Err(error) = self.start_native_duplex_worker() {
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                return Err(error);
-            }
-        }
-        #[cfg(windows)]
-        if self.native_render_source_worker_session.as_ref() == Some(id)
-            && self.native_render_source_worker.is_some()
-        {
-            let sample_rate_hz = self
-                .native_render_source_worker
-                .as_ref()
-                .expect("native render-source worker is attached")
-                .bridge()
-                .sample_rate_hz();
-            if let Err(error) =
-                self.activate_native_render_source_graph(id, generation, sample_rate_hz)
+            #[cfg(windows)]
+            if self.native_render_source_worker_session.as_ref() == Some(id)
+                && self.native_render_source_worker.is_some()
             {
-                let _ = self
-                    .native_duplex_worker
-                    .as_mut()
-                    .filter(|_| self.native_duplex_worker_session.as_ref() == Some(id))
-                    .map(audiorouter_windows_audio::NativeBridgeDuplexWorker::stop);
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                self.native_endpoint_taps = None;
-                return Err(error);
+                let sample_rate_hz = self
+                    .native_render_source_worker
+                    .as_ref()
+                    .expect("native render-source worker is attached")
+                    .bridge()
+                    .sample_rate_hz();
+                self.activate_native_render_source_graph(id, generation, sample_rate_hz)?;
+                self.start_native_render_source_worker()?;
             }
-            if let Err(error) = self.start_native_render_source_worker() {
-                let _ = self
-                    .native_duplex_worker
-                    .as_mut()
-                    .filter(|_| self.native_duplex_worker_session.as_ref() == Some(id))
-                    .map(audiorouter_windows_audio::NativeBridgeDuplexWorker::stop);
-                let _ = self
-                    .native_endpoint_worker
-                    .as_mut()
-                    .filter(|_| self.native_endpoint_session.as_ref() == Some(id))
-                    .map(audiorouter_windows_audio::NativeAudioWorker::stop);
-                let _ = self
-                    .native_output_fanout
-                    .as_mut()
-                    .filter(|_| self.native_output_fanout_session.as_ref() == Some(id))
-                    .map(audiorouter_windows_audio::WasapiOutputFanout::stop);
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                self.native_endpoint_taps = None;
-                return Err(error);
-            }
+            Ok(())
+        })();
+        if let Err(error) = activation {
+            self.rollback_session_start(id);
+            return Err(error);
         }
         self.events
             .append(session.revision, None, "runtime.started", Some(id.clone()));
@@ -813,6 +734,16 @@ impl ControlPlane {
             "preview": candidate.is_some(),
             "savedRevision": saved_revision
         }))
+    }
+
+    fn rollback_session_start(&mut self, id: &EntityId) {
+        // Stop visits every worker even when one stop fails. Preserve the
+        // activation error, rather than hiding it behind a cleanup failure.
+        let _ = self.stop_session_audio(id);
+        if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
+            *taps = None;
+        }
+        self.native_render_source_taps = None;
     }
 
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {

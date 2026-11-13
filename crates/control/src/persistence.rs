@@ -227,6 +227,8 @@ impl ControlPlane {
             recorder_workers: HashMap::new(),
             #[cfg(test)]
             recorder_shutdown_budget: None,
+            #[cfg(test)]
+            fail_next_session_activation: false,
             recorder_node_workers: HashMap::new(),
             recorder_inlets: Default::default(),
             recorder_node_states: HashMap::new(),
