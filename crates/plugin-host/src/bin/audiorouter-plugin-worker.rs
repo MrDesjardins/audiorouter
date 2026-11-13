@@ -70,6 +70,90 @@ fn suppress_windows_fault_reporting_ui() {
 #[cfg(not(windows))]
 fn suppress_windows_fault_reporting_ui() {}
 
+fn receive_while_pumping(
+    messages: &std::sync::mpsc::Receiver<
+        Result<WorkerMessage, audiorouter_plugin_host::WorkerMessageError>,
+    >,
+) -> Result<WorkerMessage, String> {
+    loop {
+        #[cfg(windows)]
+        audiorouter_plugin_host::vst2::pump_owner_messages();
+        match messages.recv_timeout(std::time::Duration::from_millis(4)) {
+            Ok(result) => return result.map_err(|error| format!("{error:?}")),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err("worker protocol closed".into())
+            }
+        }
+    }
+}
+
+#[cfg(windows)]
+fn isolated_protocol_streams() -> Result<(std::fs::File, std::fs::File), String> {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle};
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetCurrentProcess() -> *mut std::ffi::c_void;
+        fn GetStdHandle(kind: u32) -> *mut std::ffi::c_void;
+        fn SetStdHandle(kind: u32, handle: *mut std::ffi::c_void) -> i32;
+        fn DuplicateHandle(
+            source_process: *mut std::ffi::c_void,
+            source: *mut std::ffi::c_void,
+            target_process: *mut std::ffi::c_void,
+            target: *mut *mut std::ffi::c_void,
+            access: u32,
+            inherit: i32,
+            options: u32,
+        ) -> i32;
+    }
+    unsafe extern "C" {
+        fn _open(path: *const i8, flags: i32, ...) -> i32;
+        fn _dup2(source: i32, target: i32) -> i32;
+        fn _close(fd: i32) -> i32;
+    }
+    let duplicate = |kind| -> Result<std::fs::File, String> {
+        let mut result = std::ptr::null_mut();
+        // SAFETY: duplicate the current process's protocol handles into owned,
+        // non-inheritable File handles before loading any plugin. Windows
+        // writes exactly one handle; File closes each successful duplicate.
+        unsafe {
+            let process = GetCurrentProcess();
+            if DuplicateHandle(process, GetStdHandle(kind), process, &mut result, 0, 0, 2) == 0 {
+                return Err("Could not isolate plugin protocol pipes".into());
+            }
+            Ok(std::fs::File::from_raw_handle(result))
+        }
+    };
+    let input = duplicate((-10_i32) as u32)?;
+    let output = duplicate((-11_i32) as u32)?;
+    let null = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open("NUL")
+        .map_err(|e| e.to_string())?;
+    // SAFETY: these process-wide redirections occur once, before plugins or
+    // editor threads exist. Protocol uses only the duplicated File handles.
+    // SetStdHandle borrows the NUL handle, which is retained for process life.
+    unsafe {
+        if SetStdHandle((-10_i32) as u32, null.as_raw_handle()) == 0
+            || SetStdHandle((-11_i32) as u32, null.as_raw_handle()) == 0
+        {
+            return Err("Could not redirect plugin stdio".into());
+        }
+        let descriptor = _open(c"NUL".as_ptr(), 2 | 0x8000);
+        if descriptor < 0 {
+            return Err("Could not redirect plugin CRT stdio".into());
+        }
+        let result = _dup2(descriptor, 0) | _dup2(descriptor, 1);
+        _close(descriptor);
+        if result != 0 {
+            return Err("Could not redirect plugin CRT stdio".into());
+        }
+    }
+    std::mem::forget(null);
+    Ok((input, output))
+}
+
 fn run() -> Result<(), String> {
     let (
         plugin_sha256,
@@ -83,25 +167,32 @@ fn run() -> Result<(), String> {
     if let Some(layout) = multi_bus_layout {
         return run_multi_bus(plugin_sha256, layout, fixture_mode.as_deref());
     }
-    let _fixture_mode = fixture_mode;
     #[cfg(windows)]
-    let mut vst2_plugins: Vec<Vst2Library> = plugin_path
+    let (stdin, stdout) = isolated_protocol_streams()?;
+    let _fixture_mode = fixture_mode;
+    #[cfg(feature = "test-fixtures")]
+    if _fixture_mode.as_deref() == Some("slow-load") {
+        thread::sleep(Duration::from_secs(6));
+    }
+    #[cfg(windows)]
+    // Each plugin is loaded on its editor's UI thread, which later shows its
+    // window: many plugins crash when another thread opens it (2026-11-12).
+    #[cfg(windows)]
+    let loaded = plugin_path
         .clone()
-        .map(|path| Vst2Library::load(&path))
+        .map(|path| Vst2EditorThread::spawn_loading(&path))
         .transpose()
-        .map_err(|error| format!("VST2 load failed: {error:?}"))?
-        .into_iter()
-        .collect();
+        .map_err(|error| format!("VST2 load failed: {error:?}"))?;
+    #[cfg(windows)]
+    let (first_plugin, first_editor) = loaded.map_or((None, None), |(plugin, editor)| {
+        (Some(plugin), Some(editor))
+    });
+    #[cfg(windows)]
+    let mut vst2_plugins: Vec<Vst2Library> = first_plugin.into_iter().collect();
     #[cfg(windows)]
     // Each editor thread shows its processing instance. Declared after the
     // plugins so it is dropped (editor closed, thread joined) first.
-    let mut vst2_editors: Vec<Vst2EditorThread> = vst2_plugins
-        .first()
-        .map(|plugin| Vst2EditorThread::spawn(plugin.editor_access()))
-        .transpose()
-        .map_err(|error| format!("VST2 editor thread failed: {error:?}"))?
-        .into_iter()
-        .collect();
+    let mut vst2_editors: Vec<Vst2EditorThread> = first_editor.into_iter().collect();
     let mut selected_instance = 0;
     let mut chain_configured = false;
     #[cfg(feature = "test-fixtures")]
@@ -124,10 +215,18 @@ fn run() -> Result<(), String> {
         })
         .transpose()?;
     let mut state: Option<PluginStateAsset> = None;
-    let stdin = io::stdin();
-    let stdout = io::stdout();
-    let mut reader = BufReader::new(stdin.lock());
-    let mut writer = BufWriter::new(stdout.lock());
+    #[cfg(not(windows))]
+    let (stdin, stdout) = (io::stdin(), io::stdout());
+    let mut reader = BufReader::new(stdin);
+    let mut writer = BufWriter::new(stdout);
+    let (message_sender, messages) = std::sync::mpsc::sync_channel(4);
+    std::thread::spawn(move || loop {
+        let result = read_worker_message(&mut reader);
+        let finished = result.is_err();
+        if message_sender.send(result).is_err() || finished {
+            break;
+        }
+    });
 
     write_worker_message(
         &mut writer,
@@ -141,7 +240,7 @@ fn run() -> Result<(), String> {
     session
         .hello_sent()
         .map_err(|error| format!("hello state transition failed: {error:?}"))?;
-    let ready = read_worker_message(&mut reader)
+    let ready = receive_while_pumping(&messages)
         .map_err(|error| format!("ready read failed: {error:?}"))?;
     if ready != WorkerMessage::Ready {
         return Err("worker requires Ready after Hello".into());
@@ -166,7 +265,7 @@ fn run() -> Result<(), String> {
     }
 
     loop {
-        let message = read_worker_message(&mut reader)
+        let message = receive_while_pumping(&messages)
             .map_err(|error| format!("message read failed: {error:?}"))?;
         if let Err(error) = session.accept(&message, worker_clock_tick()) {
             write_worker_message(
@@ -203,15 +302,11 @@ fn run() -> Result<(), String> {
                         }
                     }
                     for member in &plugins {
-                        let plugin = Vst2Library::load(&member.path)
+                        // Loaded on its editor's UI thread (see `spawn_loading`).
+                        let (plugin, editor) = Vst2EditorThread::spawn_loading(&member.path)
                             .map_err(|error| format!("chain member load failed: {error:?}"))?;
-                        let access = plugin.editor_access();
                         vst2_plugins.push(plugin);
-                        vst2_editors.push(
-                            Vst2EditorThread::spawn(access).map_err(|error| {
-                                format!("chain editor thread failed: {error:?}")
-                            })?,
-                        );
+                        vst2_editors.push(editor);
                     }
                 }
                 #[cfg(not(windows))]
@@ -507,6 +602,17 @@ fn run() -> Result<(), String> {
                     .map_err(|error| format!("state restore write failed: {error:?}"))?;
             }
             WorkerMessage::StateSave => {
+                #[cfg(feature = "test-fixtures")]
+                if _fixture_mode.as_deref() == Some("state-refused") {
+                    write_worker_message(
+                        &mut writer,
+                        &WorkerMessage::Failure {
+                            code: "StateSaveDeclined".into(),
+                        },
+                    )
+                    .map_err(|error| format!("{error:?}"))?;
+                    continue;
+                }
                 #[cfg(windows)]
                 let plugin_asset = if let Some(plugin) = vst2_plugins.get_mut(selected_instance) {
                     match plugin.save_state() {
@@ -540,7 +646,7 @@ fn run() -> Result<(), String> {
                         },
                     )
                     .map_err(|error| format!("state failure write failed: {error:?}"))?;
-                    return Err("no opaque state has been restored".into());
+                    continue;
                 };
                 write_worker_message(&mut writer, &WorkerMessage::State { asset })
                     .map_err(|error| format!("state save write failed: {error:?}"))?;
@@ -717,6 +823,8 @@ fn parse_arguments() -> Result<WorkerArguments, String> {
                             | "descriptors"
                             | "latency"
                             | "latency-steps"
+                            | "slow-load"
+                            | "state-refused"
                     ) {
                         return Err("unsupported --fixture-mode".into());
                     }
@@ -876,9 +984,12 @@ fn process_vst2_frame(
 }
 
 /// Whether a graph of `graph_channels` can use a plugin with
-/// `plugin_outputs` outputs: the same count, or mono and stereo either way.
+/// `plugin_outputs` outputs: the same count (any width), or a mono or stereo
+/// graph with a plugin of any supported width, whose first one or two
+/// channels carry the signal.
 fn channel_layouts_are_mappable(graph_channels: usize, plugin_outputs: usize) -> bool {
-    plugin_outputs == graph_channels || matches!((graph_channels, plugin_outputs), (1, 2) | (2, 1))
+    plugin_outputs == graph_channels
+        || (matches!(graph_channels, 1 | 2) && (1..=64).contains(&plugin_outputs))
 }
 
 /// Copy interleaved graph audio into planar plugin inputs. Equal counts map
@@ -889,7 +1000,10 @@ fn spread_graph_to_plugin_inputs(samples: &[f32], graph_channels: usize, inputs:
     for frame in 0..frames {
         let row = &samples[frame * graph_channels..(frame + 1) * graph_channels];
         match (graph_channels, inputs.len()) {
-            (1, _) => inputs.iter_mut().for_each(|input| input[frame] = row[0]),
+            (1, _) => inputs
+                .iter_mut()
+                .take(2)
+                .for_each(|input| input[frame] = row[0]),
             (2, 1) => inputs[0][frame] = (row[0] + row[1]) * 0.5,
             _ => {
                 for (channel, sample) in row.iter().enumerate() {
@@ -910,7 +1024,7 @@ fn fold_plugin_outputs_to_graph(outputs: &[Vec<f32>], graph_channels: usize, sam
     for frame in 0..frames {
         for channel in 0..graph_channels {
             samples[frame * graph_channels + channel] = match (graph_channels, outputs.len()) {
-                (1, 2) => (outputs[0][frame] + outputs[1][frame]) * 0.5,
+                (1, count) if count >= 2 => (outputs[0][frame] + outputs[1][frame]) * 0.5,
                 (2, 1) => outputs[0][frame],
                 _ => outputs[channel][frame],
             };
@@ -925,7 +1039,9 @@ mod channel_mapping_tests {
     #[test]
     fn a_mono_route_uses_a_stereo_plugin() {
         assert!(channel_layouts_are_mappable(1, 2) && channel_layouts_are_mappable(2, 1));
-        assert!(!channel_layouts_are_mappable(2, 4));
+        assert!(channel_layouts_are_mappable(2, 4));
+        // A wider graph keeps working with a plugin of the same width.
+        assert!(channel_layouts_are_mappable(6, 6) && !channel_layouts_are_mappable(6, 2));
         let mut inputs = vec![vec![0.0; 3]; 2];
         spread_graph_to_plugin_inputs(&[0.1, 0.2, 0.3], 1, &mut inputs);
         assert_eq!(inputs, vec![vec![0.1, 0.2, 0.3]; 2]);

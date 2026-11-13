@@ -340,7 +340,12 @@ export interface UiBackend {
   savePluginState?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.saveState"]>;
   retryPlugins(directory: string, idempotencyKey: string): Promise<PluginScanResult>;
   inspectPlugin(path: string): Promise<PluginScanEntry>;
-  describePluginParameters(path: string): Promise<PluginParametersResult>;
+  describePluginParameters(path: string, classId?: string): Promise<PluginParametersResult>;
+  preparePluginUpdate(
+    nodeId: string,
+    sessionId?: string,
+    resetState?: boolean,
+  ): Promise<import("@audiorouter/contracts").MethodResult["plugins.prepareUpdate"]>;
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
   planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
   applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
@@ -638,6 +643,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async describePluginParameters() {
       throw new Error("The backend is disconnected; plugin parameter discovery is unavailable.");
+    },
+    async preparePluginUpdate() {
+      throw new Error("Plugin recovery requires the connected native backend.");
     },
     async listVirtualDevices() {
       return [];
@@ -1071,8 +1079,11 @@ export function createLiveBackend(
     async inspectPlugin(path) {
       return client.request("plugins.inspect", { path });
     },
-    async describePluginParameters(path) {
-      return client.request("plugins.parameters", { path });
+    async describePluginParameters(path, classId) {
+      return client.request("plugins.parameters", { path, ...(classId && classId !== "default" ? { classId } : {}) });
+    },
+    async preparePluginUpdate(nodeId, sessionId, resetState = false) {
+      return client.request("plugins.prepareUpdate", { nodeId, sessionId, resetState });
     },
     async listVirtualDevices() {
       return collectPagedRows((cursor) =>

@@ -155,6 +155,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "plugins.closeEditor" => "Close a plugin node editor. The editor shows the instance that processes audio, so edits already apply live.",
         "plugins.resume" => "Retry a plugin in a playing route that was silenced because it passed a recording device's audio through unchanged (for example an unlicensed plugin). Audio resumes only if the plugin has changed audio since; otherwise it stays silent and resumed is false.",
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
+        "plugins.prepareUpdate" => "Prepare replacement node parameters from a current scan after a vendor update, retaining the old state asset. Does not change a route or start audio: apply the returned parameters through graph plan/commit. resetState deliberately starts from defaults instead.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
         "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
@@ -676,7 +677,8 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         ),
         "plugins.parameters" => object_schema(
             json!({
-                "path": { "type": "string", "minLength": 1 }
+                "path": { "type": "string", "minLength": 1 },
+                "classId": { "type": "string", "minLength": 1, "description": "Optional audio-effect class ID from the scan; selects an effect in a multi-effect VST3 module." }
             }),
             &["path"],
         ),
@@ -684,6 +686,12 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             json!({
                 "sessionId": target_session(),
                 "nodeId": target_node()
+            }),
+            &["nodeId"],
+        ),
+        "plugins.prepareUpdate" => object_schema(
+            json!({
+                "sessionId": target_session(), "nodeId": target_node(), "resetState": { "type": "boolean" }
             }),
             &["nodeId"],
         ),

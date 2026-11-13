@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AppLogo } from "./appLogos";
 import type { DeviceListItem } from "@audiorouter/contracts";
 import { CopyName } from "./AppsPanel";
 import type { DiscordSetupOptions } from "./discordRoute";
@@ -44,9 +45,7 @@ export function DiscordSetup({
   return (
     <section className="panel app-card discord-setup" aria-labelledby="discord-setup-heading">
       <header className="app-card-heading">
-        <span className="app-monogram" aria-hidden="true">
-          D
-        </span>
+        <AppLogo app="discord" />
         <h3 id="discord-setup-heading">Set up for Discord</h3>
         <span className="discord-setup-step">Step {added ? 2 : 1} of 2</span>
       </header>

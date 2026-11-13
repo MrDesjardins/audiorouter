@@ -148,6 +148,16 @@ Report the result, affected requirement IDs/files, checks performed and limitati
 
 ## Validated lessons
 
+- **2026-11-12 — Open a VST2 editor on the thread that loaded the plugin.**
+  Evidence: [plugin reliability plan, owner session 2026-11-12](docs/plans/active/plugin-reliability.md),
+  `supervised_vst2_worker_survives_its_editor_window_being_built`. Scope: VST2
+  loading and editors in the plugin worker. Consequence: Pitchproof crashed the
+  worker (0xC0000005) as soon as its window opened from a thread other than the
+  loader, while every editor test passed because none pumped the parent's
+  messages, so no window was ever built. Load on the editor's UI thread
+  (`spawn_loading`), process on the worker thread, and test editors with a
+  pumped parent and audio flowing.
+
 - **2026-11-07 — Match complete control captions in guide automation.**
   Evidence: [Round 25 guide review](docs/plans/active/ui-quality-review.md),
   `Hold targets its own control and cannot match Threshold` in `tools/site/tool-guide-guards.test.mjs`.

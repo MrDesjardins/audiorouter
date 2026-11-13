@@ -309,6 +309,7 @@ export function PluginToolsGroup({
     setMessage("Scanning standard plugin folders…");
     const results: import("@audiorouter/contracts").PluginScanResult[] = [];
     let denied: string | null = null;
+    const failures: string[] = [];
     for (const folder of STANDARD_PLUGIN_FOLDERS) {
       try {
         results.push(await backend.scanPlugins(folder));
@@ -317,6 +318,10 @@ export function PluginToolsGroup({
           denied = formatUiError(error, "Plugin scanning is not permitted.");
           break;
         }
+        // Missing optional standard folders are normal. Other failures must
+        // not be presented as a successful scan finding zero plugins.
+        const text = error instanceof Error ? error.message : String(error);
+        if (!/invalidRoot|not found|does not exist/i.test(text)) failures.push(`${folder}: ${text}`);
       }
     }
     const merged = [
@@ -327,7 +332,14 @@ export function PluginToolsGroup({
     const found = pluginCatalog(results).length;
     setMessage(
       denied ??
-        `Found ${found} supported plugin${found === 1 ? "" : "s"} in ${results.length} standard folder${results.length === 1 ? "" : "s"}. Other folders: use Scan another folder.`,
+        (failures.length
+          ? formatUiError(
+              new Error(
+                `Plugin scan failed for ${failures.length} folder(s). ${failures.join("; ")} Found ${found} supported plugins in the folders scanned successfully.`,
+              ),
+              "Plugin scan failed.",
+            )
+          : `Found ${found} supported plugin${found === 1 ? "" : "s"} in ${results.length} standard folder${results.length === 1 ? "" : "s"}. Other folders: use Scan another folder.`),
     );
     setBusy(false);
   };
@@ -346,7 +358,10 @@ export function PluginToolsGroup({
       {catalog.map((item) => {
         const help = `${item.format}${item.entry.identity?.vendor ? ` · ${item.entry.identity.vendor}` : ""} · ${item.folder}`;
         return (
-          <div className="tool-library-entry" key={`${item.entry.identity?.sha256}-${item.entry.path}`}>
+          <div
+            className="tool-library-entry"
+            key={`${item.entry.identity?.sha256}-${item.entry.path}-${item.entry.identity?.classIds?.[0] ?? "default"}`}
+          >
             <button
               className="tool-card"
               type="button"
@@ -504,7 +519,7 @@ export function PluginEditorControls({
       setMessage(
         response?.error
           ? `Editor unavailable: ${response.error.message ?? "the backend refused"}`
-          : "Editor opened in its own window. Changes apply as you make them and are kept automatically when you close the window or press Stop. The sliders below still work; the latest change wins.",
+          : "The plugin's window is open. Changes apply right away and are kept when you close it or press Stop. The sliders below still work; the latest change wins.",
       );
     } catch (error) {
       setMessage(formatUiError(error, "The plugin editor could not be opened."));
@@ -530,24 +545,23 @@ export function PluginEditorControls({
   return (
     <div className="node-binding-editor" aria-label="Plugin editor and settings">
       <div>
-        <p className="eyebrow">Plugin editor</p>
-        <strong>Your changes are kept automatically</strong>
+        <p className="eyebrow">Adjust this plugin</p>
+        <strong>{node.name}</strong>
       </div>
       <div className="actions">
         <button
           type="button"
-          className="secondary"
           disabled={busy || !running || !inShell}
           title={
             !inShell
-              ? "Editors open only in the desktop app."
+              ? "The plugin's window opens only in the desktop app."
               : !running
-                ? "Start the route first."
+                ? "Press Play first."
                 : "Open the plugin's own window"
           }
           onClick={() => void openEditor()}
         >
-          Open plugin editor
+          Open plugin window
         </button>
         <button
           type="button"
@@ -555,24 +569,101 @@ export function PluginEditorControls({
           disabled={busy || !running || !backend.savePluginState}
           title={
             !running
-              ? "Start the route first."
-              : "Keep the current settings now, without stopping. Changes are also kept automatically when you close the editor or press Stop."
+              ? "Press Play first."
+              : "Keep the current settings now. They are also kept when you close the plugin's window or press Stop."
           }
           onClick={() => void saveState()}
         >
-          Save plugin settings
+          Save settings now
         </button>
       </div>
       {message ? (
         <PanelMessage message={message} small />
       ) : (
         <small className="muted">
-          {!running
-            ? "Start the route to open the editor. Settings you change are kept automatically when you close the editor or press Stop."
-            : "Open the editor and make changes. They are kept when you close its window or press Stop."}
+          {!inShell
+            ? "The plugin's window opens only in the desktop app. You can still use the sliders below."
+            : !running
+              ? "Press Play to open the plugin's window, or use the sliders below. Your changes are kept."
+              : "Open the plugin's window, or use the sliders below. Your changes are kept."}
         </small>
       )}
     </div>
+  );
+}
+
+export function PluginRecoveryControls({
+  node,
+  backend,
+  sessionId,
+  running,
+  disabledReason,
+  onPrepared,
+}: {
+  node: Node;
+  backend: Pick<UiBackend, "preparePluginUpdate">;
+  sessionId: string;
+  running: boolean;
+  disabledReason?: string;
+  onPrepared: (original: Node, parameters: Node["parameters"]) => boolean;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const current = useRef(onPrepared);
+  const mounted = useRef(true);
+  useEffect(() => {
+    current.current = onPrepared;
+  }, [onPrepared]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  async function prepare(reset: boolean) {
+    setBusy(true);
+    setMessage("Preparing plugin recovery…");
+    try {
+      const result = await backend.preparePluginUpdate(node.id, sessionId, reset);
+      if (!mounted.current) return;
+      if (!current.current(node, result.parameters))
+        throw new Error("The tool changed while recovery was prepared. Try again.");
+      setMessage(
+        reset
+          ? "Prepared factory defaults. Save the route, then press Play. Your previous state files are kept."
+          : "Prepared the scanned version with your settings. Save the route, then press Play.",
+      );
+    } catch (error) {
+      if (mounted.current) setMessage(formatUiError(error, "Plugin recovery failed."));
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }
+  return (
+    <section aria-label="Plugin recovery">
+      <p>
+        After updating a plugin, scan its folder again, then use the scanned version here. Your wiring and previous
+        state files are kept.
+      </p>
+      <div className="actions">
+        <button type="button" disabled={running || busy || !!disabledReason} onClick={() => void prepare(false)}>
+          Use scanned version
+        </button>
+        <button
+          type="button"
+          className="secondary"
+          disabled={running || busy || !!disabledReason}
+          onClick={() => void prepare(true)}
+        >
+          Start from defaults
+        </button>
+      </div>
+      <div style={{ height: "7rem", overflow: "auto" }}>
+        <PanelMessage
+          message={disabledReason ?? (running ? "Stop this route before preparing plugin recovery." : message)}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -761,6 +852,7 @@ export function PluginNodeInspector({
             {health.state === "quarantined" ? "; requires deliberate retry after review" : ""}.
           </small>
         )}
+        {health?.failureReason && <small className="plugin-failure-reason">Why: {health.failureReason}</small>}
         {!health && <small>Health is only observable while the session is running with this worker bound.</small>}
         {health?.outputMisses !== undefined && (
           <small>
@@ -775,7 +867,7 @@ export function PluginNodeInspector({
       <small>
         This tool runs only this exact plugin file. If the file changes, scan and add it again from Plugin scan.
         Removing takes it and its connections out of the route; save to keep that. While the route plays, Open plugin
-        editor shows the plugin's own window; the controls below work too.
+        window shows the plugin's own window; the sliders above work too.
       </small>
     </div>
   );

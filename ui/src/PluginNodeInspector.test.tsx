@@ -3,9 +3,63 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { DiagnosticsSnapshot, Node } from "@audiorouter/contracts";
-import { PluginNodeInspector } from "./PluginPanels";
+import { PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
 
 afterEach(cleanup);
+
+it("prepares an update as a draft and makes a state reset explicit", async () => {
+  const node = plugin();
+  const parameters = { ...node.parameters, fingerprint: "b".repeat(64) };
+  const preparePluginUpdate = vi.fn().mockResolvedValue({
+    sessionId: "route",
+    nodeId: node.id,
+    parameters,
+    previousFingerprint: node.parameters.fingerprint,
+    statePreserved: true,
+  });
+  const onPrepared = vi.fn().mockReturnValue(true);
+  render(
+    <PluginRecoveryControls
+      node={node}
+      backend={{ preparePluginUpdate }}
+      sessionId="route"
+      running={false}
+      onPrepared={onPrepared}
+    />,
+  );
+  expect(preparePluginUpdate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Use scanned version" }));
+  await waitFor(() => expect(onPrepared).toHaveBeenCalledWith(node, parameters));
+  expect(preparePluginUpdate).toHaveBeenCalledWith(node.id, "route", false);
+  fireEvent.click(screen.getByRole("button", { name: "Start from defaults" }));
+  await waitFor(() => expect(preparePluginUpdate).toHaveBeenLastCalledWith(node.id, "route", true));
+});
+
+it("does not prepare recovery while the route is running or the tool has unsaved settings", () => {
+  const preparePluginUpdate = vi.fn();
+  const view = render(
+    <PluginRecoveryControls
+      node={plugin()}
+      backend={{ preparePluginUpdate }}
+      sessionId="route"
+      running
+      onPrepared={() => true}
+    />,
+  );
+  expect((screen.getByRole("button", { name: "Use scanned version" }) as HTMLButtonElement).disabled).toBe(true);
+  view.rerender(
+    <PluginRecoveryControls
+      node={plugin()}
+      backend={{ preparePluginUpdate }}
+      sessionId="route"
+      running={false}
+      disabledReason="Save or discard changes first."
+      onPrepared={() => true}
+    />,
+  );
+  expect((screen.getByRole("button", { name: "Start from defaults" }) as HTMLButtonElement).disabled).toBe(true);
+  expect(preparePluginUpdate).not.toHaveBeenCalled();
+});
 
 const plugin = (parameters: Node["parameters"] = {}): Node => ({
   id: "plugin-1",
@@ -102,6 +156,23 @@ describe("PluginNodeInspector unchanged-audio guard", () => {
     expect(within(guard).getByText("2").style.visibility).toBe("visible");
     // The worker itself is fine, so its health box is not a second alert.
     expect(screen.queryByRole("alert", { name: "Plugin worker health" })).toBeNull();
+  });
+
+  it("says why the worker failed (owner report 2026-11-12)", () => {
+    render(
+      <PluginNodeInspector
+        node={plugin()}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={snapshot({
+          state: "failed",
+          failureCount: 1,
+          failureReason: "processing audio failed: Timeout",
+        })}
+      />,
+    );
+    const health = screen.getByRole("alert", { name: "Plugin worker health" });
+    expect(within(health).getByText("Why: processing audio failed: Timeout")).toBeTruthy();
   });
 
   it("keeps Retry out of reach while the plugin is not muted", () => {

@@ -71,8 +71,10 @@ export function chainOf(session: Session, nodeId: string): string[] {
   const self = byId.get(nodeId);
   if (self && canCompare(self)) chain.add(nodeId);
   walk(nodeId, upstream, downstream);
+  const before = [...chain].filter((id) => id !== nodeId).reverse();
   walk(nodeId, downstream, upstream);
-  return [...chain];
+  // In route order: the tools before this one, this one, then the tools after it.
+  return [...before, ...[...chain].filter((id) => !before.includes(id))];
 }
 
 /** Kinds with settings worth naming; mirrors `takes_presets` in the backend, which has the final say. */

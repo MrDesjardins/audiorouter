@@ -1082,6 +1082,13 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
             "required": ["sessionId", "nodeId", "stateId", "sizeBytes"],
             "additionalProperties": false
         }),
+        "plugins.prepareUpdate" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string" }, "nodeId": { "type": "string" },
+                "parameters": { "type": "object" }, "previousFingerprint": { "type": "string" },
+                "statePreserved": { "type": "boolean" }
+            }, "required": ["sessionId", "nodeId", "parameters", "previousFingerprint", "statePreserved"], "additionalProperties": false
+        }),
         "plugins.resume" => json!({
             "type": "object",
             "properties": {
@@ -1964,7 +1971,8 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                                 "outputMisses": { "type": "integer", "minimum": 0 },
                                 "inputDrops": { "type": "integer", "minimum": 0 },
                                 "unchangedAudio": { "type": "boolean" },
-                                "silencedUnchanged": { "type": "boolean" }
+                                "silencedUnchanged": { "type": "boolean" },
+                                "failureReason": { "type": ["string", "null"], "maxLength": 300 }
                             },
                             "required": ["state", "failureCount"],
                             "additionalProperties": false

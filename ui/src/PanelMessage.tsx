@@ -1,5 +1,6 @@
 // A panel's status or error line, toned by its text (moved from App.tsx).
 import { actionMessageTone } from "./actionMessage";
+import { CopyErrorButton } from "./CopyErrorButton";
 
 /**
  * A panel's status line. Error-phrased messages (see `actionMessageTone`)
@@ -10,13 +11,19 @@ export function PanelMessage({ message, small = false }: { message: string | nul
   const tone = actionMessageTone(message);
   const error = tone === "error";
   const className = `panel-message is-${tone}`;
+  const content = (
+    <>
+      <span className="error-message-text">{message}</span>
+      {error && <CopyErrorButton message={message} />}
+    </>
+  );
   return small ? (
     <small className={className} role={error ? "alert" : "status"}>
-      {message}
+      {content}
     </small>
   ) : (
     <p className={className} role={error ? "alert" : "status"} aria-live={error ? "assertive" : "polite"}>
-      {message}
+      {content}
     </p>
   );
 }

@@ -8353,6 +8353,21 @@ fn harmonize_chain_widths(
                 adapt.push((member.id.clone(), width));
             }
         }
+        // A Mixer path runs its chain at the Mixer's width, so a Mixer whose
+        // only output feeds this run mixes at the run's width (its input
+        // edges are re-matrixed below). A stereo Mixer before a mono plugin
+        // otherwise made the whole path "not supported".
+        let mixer = match into.as_slice() {
+            [feed] => node(&feed.source_node).filter(|upstream| {
+                matches!(upstream.kind, NodeKind::Mixer | NodeKind::InputSwitch)
+                    && outgoing(&upstream.id).len() == 1
+                    && upstream.ports.iter().any(|port| port.channels != width)
+            }),
+            _ => None,
+        };
+        if let Some(mixer) = mixer {
+            adapt.push((mixer.id.clone(), width));
+        }
     }
     if adapt.is_empty() {
         return std::borrow::Cow::Borrowed(session);
@@ -15493,6 +15508,59 @@ mod tests {
             "outputs keep their mono-to-stereo copy"
         );
         assert!(audiorouter_domain::validate_session(&adapted).is_ok());
+
+        // The owner's "PD200X Radio Voice" route (2026-11-12): stereo mic into
+        // a one-input stereo Mixer, then a mono plugin, a stereo EQ and three
+        // stereo outputs. It failed with "path 1 ... is not supported".
+        let radio = Session {
+            id: EntityId::new("radio"),
+            name: "Radio".into(),
+            schema_version: 1,
+            revision: 1,
+            nodes: vec![
+                node("mic", NodeKind::PhysicalInput, &[("out", Output, 2)]),
+                node(
+                    "mixer",
+                    NodeKind::Mixer,
+                    &[("in", Input, 2), ("out", Output, 2)],
+                ),
+                node(
+                    "reaeq",
+                    NodeKind::Plugin,
+                    &[("in", Input, 1), ("out", Output, 1)],
+                ),
+                node(
+                    "eq",
+                    NodeKind::ParametricEq,
+                    &[("in", Input, 2), ("out", Output, 2)],
+                ),
+                node("cable", NodeKind::PhysicalOutput, &[("in", Input, 2)]),
+                node("monitor", NodeKind::PhysicalOutput, &[("in", Input, 2)]),
+                node(
+                    "recorder",
+                    NodeKind::Recorder,
+                    &[("in", Input, 2), ("out", Output, 2)],
+                ),
+            ],
+            edges: vec![
+                edge("r1", "mic", "mixer", vec![1.0, 0.0, 0.0, 1.0]),
+                edge("r2", "mixer", "reaeq", vec![0.5, 0.5]),
+                edge("r3", "reaeq", "eq", vec![1.0, 1.0]),
+                edge("r4", "eq", "cable", vec![1.0, 0.0, 0.0, 1.0]),
+                edge("r5", "eq", "monitor", vec![1.0, 0.0, 0.0, 1.0]),
+                edge("r6", "eq", "recorder", vec![1.0, 0.0, 0.0, 1.0]),
+            ],
+        };
+        assert!(audiorouter_domain::validate_session(&radio).is_ok());
+        let compiled = compile_native_paths_with_plugins_and_audio(
+            &radio,
+            RuntimeGeneration::new(2),
+            &plugins,
+            &Default::default(),
+        )
+        .expect("a mono plugin after a stereo Mixer compiles");
+        assert_eq!(compiled.input_node_ids(), [EntityId::new("mic")]);
+        assert_eq!(compiled.output_node_ids().len(), 3);
     }
 
     #[test]

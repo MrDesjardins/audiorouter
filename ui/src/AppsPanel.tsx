@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { AppLogo } from "./appLogos";
 import type { ApplicationInfo, DeviceListItem } from "@audiorouter/contracts";
 import {
   DISCORD_RECOMMENDED_SETTINGS,
@@ -140,9 +141,7 @@ function DiscordCard({
   return (
     <section className="panel app-card" aria-labelledby="app-card-discord" data-app="discord">
       <header className="app-card-heading">
-        <span className="app-monogram" aria-hidden="true">
-          D
-        </span>
+        <AppLogo app="discord" />
         <h3 id="app-card-discord">Discord</h3>
         <AppStateBadge state={check.state} />
       </header>

@@ -41,7 +41,7 @@ import { NetworkNodeEditor } from "./NetworkNodeEditor";
 import { EqSpectrumContext } from "./AdvancedEqEditor";
 import { writeEndpointBindingHint } from "./endpointBinding";
 import { recorderHasCaptureSource } from "./RecordingPanels";
-import { PluginEditorControls, PluginNodeInspector } from "./PluginPanels";
+import { PluginEditorControls, PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
 import {
   ApplicationCaptureBinding,
   CableBinding,
@@ -623,6 +623,18 @@ export function PropertiesPanel({
               running={sessionRunning}
               onStateSaved={(stateId) => changeNodeParameterOn(selectedNode.id, "stateId", stateId)}
             />
+            {/* The plugin's own settings come right after its window button: adjusting it is
+                why the user selected it (owner, 2026-11-12). */}
+            <div aria-label="Plugin settings">
+              <ProcessorParameterEditor
+                node={selectedNode}
+                processors={processors}
+                nodeTypes={snapshot?.discovery?.nodeTypes ?? null}
+                connected={backend.connected}
+                onChange={changeNodeParameter}
+                compact
+              />
+            </div>
             <PluginNodeInspector
               node={selectedNode}
               disabled={!backend.connected}
@@ -635,6 +647,33 @@ export function PropertiesPanel({
                 recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)
               }
             />
+            <PropertySection kind={selectedNode.kind} title="After a plugin update" summary="Use the new version">
+              <PluginRecoveryControls
+                node={selectedNode}
+                backend={backend}
+                sessionId={session.id}
+                running={sessionRunning}
+                disabledReason={
+                  JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)?.parameters) !==
+                  JSON.stringify(selectedNode.parameters)
+                    ? "Save or discard changes to this tool before preparing recovery."
+                    : undefined
+                }
+                onPrepared={(original, parameters) => {
+                  const current = draft.nodes.find((node) => node.id === original.id);
+                  if (!current || JSON.stringify(current.parameters) !== JSON.stringify(original.parameters))
+                    return false;
+                  recordDraftChange(
+                    {
+                      ...draft,
+                      nodes: draft.nodes.map((node) => (node.id === original.id ? { ...node, parameters } : node)),
+                    },
+                    "Prepared plugin recovery. Save to keep it.",
+                  );
+                  return true;
+                }}
+              />
+            </PropertySection>
           </>
         )}
         <ToolCompare backend={backend} session={session} node={selectedNode} running={sessionRunning} />
@@ -701,7 +740,7 @@ export function PropertiesPanel({
             }
           >
             {/* Compressor, Gate and Limiter show their settings under the curve and in a section. */}
-            {!isDynamicsKind(selectedNode.kind) && (
+            {!isDynamicsKind(selectedNode.kind) && selectedNode.kind !== "plugin" && (
               <ProcessorParameterEditor
                 node={selectedNode}
                 processors={processors}

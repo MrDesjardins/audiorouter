@@ -1,5 +1,53 @@
 # Active plan — current priorities (2026-11-04)
 
+## Daily quality data retention — 2026-11-12
+
+Owner requires continued daily collection (ENG-01/02/04/05, NFR-04/05/06).
+The daily schedule remains enabled; Windows Actions run 43206191838 succeeded
+and exposes metrics-coverage, metrics-soak and metrics-startup artifacts.
+The repository CSV is a reviewed snapshot, not the live collection store.
+Prerequisites: GitHub Actions and its artifact/cache services; no hardware or
+driver change. Preserve unrelated local plugin and driver work.
+
+Ordered tasks: retain the cumulative trend as a downloadable artifact for 90
+days, extend proposed snapshot retention to 90 days, pin this wiring in policy
+tests, and document collection versus publication. Verify Node policy tests,
+documentation links and focused diff locally; a new nightly run must exercise
+the upload on Actions after merge. Cache eviction can still interrupt cumulative
+history; retained artifacts provide recovery evidence, not permanent storage.
+Rollback: revert only these workflow, policy and runbook changes. No PR is
+authorized. Windows local verification: `node --test
+tools/quality/policy.test.mjs` passed 62 tests; `node tools/docs/validate.mjs`
+passed 250 files / 1,449 links; `git diff --check` passed. Focused workflow,
+policy and runbook diff inspected. These edits are uncommitted on the existing
+`fix/virtual-cable-review` branch; they have not changed the live schedule.
+Next: isolate and commit this scoped change for owner review, then obtain
+explicit PR-opening approval and verify the first post-merge daily artifact.
+
+## README release badge — 2026-11-11
+
+Owner-requested documentation repair; no runtime requirement or milestone gate
+changes. GitHub's public releases API reports v0.0.28 as a prerelease. The
+original Shields release URL returns `no releases or repo not found`; the same
+URL with `?include_prereleases` returns `release: v0.0.28` (Windows PowerShell
+HTTP checks, 2026-11-11). Updated the README badge to include prereleases and
+link to the releases list, which includes preview downloads. Preserved existing
+README badge additions and all unrelated worktree edits. Verification: compare
+the live SVG titles and inspect the focused diff; no application tests needed
+for a Markdown URL change. Rollback: restore the previous badge URL and target.
+Next: commit/publish through the owner's normal review process; no PR opened.
+
+## Plugin reliability and copyable errors — 2026-11-11
+
+Owner-authorized repair: [execution plan](plugin-reliability.md). The running
+local worktree shell has neither plugin worker; preserve its live session and
+the unrelated virtual-cable work. Issue #136 lacks diagnostic details, so its
+cause remains unconfirmed. Both missing workers have been rebuilt and staged;
+Pitchproof VST2 and UADx 1176 VST3 pass offline mono/stereo processing and state
+restore. Copy error now covers global, panel and startup errors; native Windows
+clipboard and three-theme Edge checks pass. Next: owner retries Pitchproof's
+controls, Save plugin settings and live PD200X playback. No PR/release opened.
+
 ## Issue #123 validation — 2026-11-09
 
 Objective: validate the two failures in [issue #123](https://github.com/MrDesjardins/audiorouter/issues/123)
@@ -531,6 +579,9 @@ status reconciliation:
 - [Application quality](application-quality.md) — Q3.2 hosted qualification,
   then Q4–Q6 quality and release gates.
 - [Virtual cable](virtual-cable.md) — owner-run VM, signing and Stage C gates.
+- [Bug audit by feature](bug-audit-2026-11-11.md) — 27 findings from a
+  read-only audit (2026-11-11), each with its cause, fix and regression test;
+  none repaired yet, and its Coverage table lists the areas still to audit.
 - [OBS and Discord](obs-discord.md) — copied-profile and attended acceptance.
 - [Release signing](release-signing-and-publication.md) — parked on owner/provider
   signing decisions and credentials.

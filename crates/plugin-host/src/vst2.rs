@@ -28,9 +28,9 @@ pub const VST2_FLAG_CAN_REPLACING: i32 = 1 << 4;
 pub const VST2_FLAG_PROGRAM_CHUNKS: i32 = 1 << 5;
 /// `effFlagsHasEditor`: the plugin exposes a native editor.
 pub const VST2_FLAG_HAS_EDITOR: i32 = 1 << 0;
-pub const VST2_MAX_AUDIO_CHANNELS: i32 = 2;
-pub const VST2_MAX_INPUT_CHANNELS: i32 = 4;
-pub const VST2_MAX_PARAMETERS: i32 = 256;
+pub const VST2_MAX_AUDIO_CHANNELS: i32 = 64;
+pub const VST2_MAX_INPUT_CHANNELS: i32 = 64;
+pub const VST2_MAX_PARAMETERS: i32 = 65536;
 
 #[repr(C)]
 pub struct Vst2Effect {
@@ -86,16 +86,18 @@ pub type Vst2HostCallback = unsafe extern "C" fn(
 
 #[cfg(windows)]
 struct Vst2HostContext {
-    sample_rate_hz: f32,
-    block_size: i32,
+    sample_rate_bits: std::sync::atomic::AtomicU32,
+    block_size: std::sync::atomic::AtomicI32,
+    sample_position: std::sync::atomic::AtomicU64,
 }
 
 #[cfg(windows)]
 impl Default for Vst2HostContext {
     fn default() -> Self {
         Self {
-            sample_rate_hz: 48_000.0,
-            block_size: 128,
+            sample_rate_bits: std::sync::atomic::AtomicU32::new(48_000_f32.to_bits()),
+            block_size: std::sync::atomic::AtomicI32::new(128),
+            sample_position: std::sync::atomic::AtomicU64::new(0),
         }
     }
 }
@@ -209,6 +211,11 @@ mod tests {
     #[test]
     fn validates_a_bounded_stereo_replacing_effect_header() {
         assert_eq!(valid_effect().validate_audio_effect(), Ok(()));
+        let mut large = valid_effect();
+        large.num_parameters = 1024;
+        large.num_inputs = 8;
+        large.num_outputs = 8;
+        assert_eq!(large.validate_audio_effect(), Ok(()));
     }
 
     #[test]
@@ -221,12 +228,12 @@ mod tests {
         );
 
         let mut effect = valid_effect();
-        effect.num_outputs = 3;
+        effect.num_outputs = VST2_MAX_AUDIO_CHANNELS + 1;
         assert_eq!(
             effect.validate_audio_effect(),
             Err(Vst2HeaderError::InvalidChannels {
                 inputs: 2,
-                outputs: 3,
+                outputs: VST2_MAX_AUDIO_CHANNELS + 1,
             })
         );
         let mut effect = valid_effect();
@@ -263,7 +270,7 @@ const EFF_GET_CHUNK: i32 = 23;
 #[cfg(windows)]
 const EFF_SET_CHUNK: i32 = 24;
 #[cfg(windows)]
-const MAX_VST2_STATE_BYTES: usize = 512 * 1024;
+const MAX_VST2_STATE_BYTES: usize = crate::MAX_WORKER_STATE_BYTES;
 /// Marks a parameter-bank state (see `save_parameter_bank`); a plugin chunk
 /// never starts with it in practice.
 #[cfg(windows)]
@@ -299,8 +306,9 @@ mod opcode_tests {
     #[test]
     fn host_callback_reports_the_negotiated_processing_format() {
         let context = Box::new(Vst2HostContext {
-            sample_rate_hz: 44_100.0,
-            block_size: 512,
+            sample_rate_bits: std::sync::atomic::AtomicU32::new(44_100_f32.to_bits()),
+            block_size: std::sync::atomic::AtomicI32::new(512),
+            ..Default::default()
         });
         let mut effect = Vst2Effect {
             magic: VST2_EFFECT_MAGIC,
@@ -457,6 +465,15 @@ mod opcode_tests {
             library.close_editor(),
             Err(Vst2LibraryError::InvalidEditor)
         ));
+        // ReaJS advertises chunks but returns zero before a script is chosen.
+        // A parameter-bank envelope must remain a valid, restorable asset.
+        // SAFETY: this test owns the live fake effect until library is dropped.
+        unsafe {
+            (*library.effect).flags |= VST2_FLAG_PROGRAM_CHUNKS;
+        }
+        let saved = library.save_state().unwrap();
+        assert!(saved.starts_with(PARAMETER_BANK_MAGIC));
+        library.restore_state(&saved).unwrap();
         drop(library);
     }
 
@@ -652,8 +669,13 @@ impl Vst2Library {
         if self.processing_format == Some((sample_rate_bits, block_size)) {
             return Ok(());
         }
-        self.host_context.sample_rate_hz = sample_rate_hz;
-        self.host_context.block_size = block_size;
+        self.host_context.sample_rate_bits.store(
+            sample_rate_hz.to_bits(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        self.host_context
+            .block_size
+            .store(block_size, std::sync::atomic::Ordering::Relaxed);
         // SAFETY: The effect was validated at load and remains owned by this
         // handle. These setup opcodes run on the worker control thread.
         unsafe {
@@ -726,7 +748,7 @@ impl Vst2Library {
     pub fn parameter_descriptors(
         &mut self,
     ) -> Result<Vec<crate::ParameterDescriptor>, Vst2LibraryError> {
-        let count = self.parameter_count();
+        let count = self.parameter_count().min(crate::MAX_PARAMETER_DESCRIPTORS);
         let mut descriptors = Vec::with_capacity(count);
         for parameter_id in 0..count {
             let mut title = [0_u8; 64];
@@ -853,7 +875,10 @@ impl Vst2Library {
             });
         }
         if size == 0 {
-            return Ok(Vec::new());
+            // Some chunk-capable plugins (ReaJS before a script is selected)
+            // have no chunk yet. Preserve their current parameter bank instead
+            // of sending an invalid empty asset or terminating the worker.
+            return Ok(self.save_parameter_bank());
         }
         // SAFETY: The plugin reported a positive bounded byte count and a
         // non-null pointer valid for the returned chunk during this copy.
@@ -1065,13 +1090,18 @@ impl Vst2Library {
             let process = (*self.effect)
                 .process_replacing
                 .expect("validated replacing processor");
+            IN_PROCESS_CALL.store(true, std::sync::atomic::Ordering::Relaxed);
             process(
                 self.effect,
                 input_ptrs.as_ptr(),
                 output_ptrs.as_mut_ptr(),
                 inputs[0].len() as i32,
             );
+            IN_PROCESS_CALL.store(false, std::sync::atomic::Ordering::Relaxed);
         }
+        self.host_context
+            .sample_position
+            .fetch_add(inputs[0].len() as u64, std::sync::atomic::Ordering::Relaxed);
         if outputs
             .iter()
             .flat_map(|channel| channel.iter())
@@ -1126,6 +1156,50 @@ unsafe extern "C" fn host_callback(
 ) -> isize {
     match opcode {
         AUDIO_MASTER_VERSION => 2400,
+        7 => {
+            // audioMasterGetTime: ABI-owned per-thread snapshot, valid until
+            // this thread's next call. The position is shared atomically with
+            // the editor; no mutable timing storage is shared between threads.
+            HOST_TIME
+                .try_with(|time| {
+                    // SAFETY: this thread exclusively owns its TLS snapshot; the
+                    // effect user context outlives plugin callbacks. The returned
+                    // pointer remains stable for the VST2 time-info borrow.
+                    unsafe {
+                        let info = &mut *time.get();
+                        let context = if effect.is_null() || (*effect).user.is_null() {
+                            None
+                        } else {
+                            Some(&*((*effect).user as *const Vst2HostContext))
+                        };
+                        info.sample_rate = context.map_or(48_000.0, |c| {
+                            f64::from(f32::from_bits(
+                                c.sample_rate_bits
+                                    .load(std::sync::atomic::Ordering::Relaxed),
+                            ))
+                        });
+                        info.sample_pos = context.map_or(0.0, |c| {
+                            c.sample_position.load(std::sync::atomic::Ordering::Relaxed) as f64
+                        });
+                        info.ppq_pos = info.sample_pos / info.sample_rate * 2.0;
+                        info.bar_start_pos = (info.ppq_pos / 4.0).floor() * 4.0;
+                        time.get() as isize
+                    }
+                })
+                .unwrap_or(0)
+        }
+        // audioMasterGetCurrentProcessLevel: 2 (realtime) only inside a process
+        // call, 1 (user thread) otherwise. Setup, state and editor calls share
+        // the worker thread, and a plugin told "realtime" there may defer or
+        // skip its interface work.
+        23 => {
+            if IN_PROCESS_CALL.load(std::sync::atomic::Ordering::Relaxed) {
+                2
+            } else {
+                1
+            }
+        }
+        34 => 10000, // audioMasterGetVendorVersion.
         AUDIO_MASTER_GET_SAMPLE_RATE => {
             // SAFETY: Every effect reaching this callback was initialized by
             // `Vst2Library::load`, which stores a live `Vst2HostContext` in
@@ -1134,9 +1208,12 @@ unsafe extern "C" fn host_callback(
                 if effect.is_null() || (*effect).user.is_null() {
                     48_000
                 } else {
-                    (*((*effect).user as *const Vst2HostContext))
-                        .sample_rate_hz
-                        .round() as isize
+                    f32::from_bits(
+                        (*((*effect).user as *const Vst2HostContext))
+                            .sample_rate_bits
+                            .load(std::sync::atomic::Ordering::Relaxed),
+                    )
+                    .round() as isize
                 }
             }
         }
@@ -1147,11 +1224,64 @@ unsafe extern "C" fn host_callback(
                 if effect.is_null() || (*effect).user.is_null() {
                     128
                 } else {
-                    (*((*effect).user as *const Vst2HostContext)).block_size as isize
+                    (*((*effect).user as *const Vst2HostContext))
+                        .block_size
+                        .load(std::sync::atomic::Ordering::Relaxed) as isize
                 }
             }
         }
         _ => 0,
+    }
+}
+
+/// Set while a plugin's process call runs (see opcode 23 above).
+#[cfg(windows)]
+static IN_PROCESS_CALL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(windows)]
+#[repr(C)]
+struct Vst2TimeInfo {
+    sample_pos: f64,
+    sample_rate: f64,
+    nano_seconds: f64,
+    ppq_pos: f64,
+    tempo: f64,
+    bar_start_pos: f64,
+    cycle_start_pos: f64,
+    cycle_end_pos: f64,
+    time_sig_numerator: i32,
+    time_sig_denominator: i32,
+    smpte_offset: i32,
+    smpte_frame_rate: i32,
+    samples_to_next_clock: i32,
+    flags: i32,
+}
+
+#[cfg(windows)]
+thread_local! {
+    static HOST_TIME: std::cell::UnsafeCell<Vst2TimeInfo> = const { std::cell::UnsafeCell::new(Vst2TimeInfo {
+        sample_pos: 0.0, sample_rate: 48_000.0, nano_seconds: 0.0, ppq_pos: 0.0,
+        tempo: 120.0, bar_start_pos: 0.0, cycle_start_pos: 0.0, cycle_end_pos: 0.0,
+        time_sig_numerator: 4, time_sig_denominator: 4, smpte_offset: 0, smpte_frame_rate: 0,
+        samples_to_next_clock: 0, flags: 2 | 512 | 1024 | 2048 | 8192,
+    }) };
+}
+
+/// Service windows created by a plugin while it was loaded on the worker's
+/// owner thread, including licensing windows, even while the host is idle.
+#[cfg(windows)]
+pub fn pump_owner_messages() {
+    // SAFETY: Win32 fills a correctly sized local MSG; dispatch is on the
+    // window's owning thread, with no borrowed plugin buffers outstanding.
+    unsafe {
+        let mut message: NativeMessage = std::mem::zeroed();
+        while PeekMessageW(&mut message, ptr::null_mut(), 0, 0, 1) != 0 {
+            if message.message == 0x0012 {
+                continue;
+            }
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
     }
 }
 
@@ -1276,6 +1406,50 @@ impl Vst2EditorThread {
         })
     }
 
+    /// Load the plugin on a new UI thread and keep that thread for its
+    /// editor, then hand the loaded instance back for processing.
+    ///
+    /// Many VST2 plugins (JUCE-based ones among them) set up their window
+    /// system on the thread that loads them and crash with an access
+    /// violation when another thread opens their editor. Pitchproof did as
+    /// soon as its window was opened (owner report 2026-11-12). Hosts load
+    /// and show editors on one UI thread and process on another, which the
+    /// VST2 ABI allows; this does the same.
+    pub fn spawn_loading(path: &Path) -> Result<(Vst2Library, Self), Vst2LibraryError> {
+        let path = path.to_path_buf();
+        let (commands, receiver) = mpsc::channel();
+        let (exit_signal, exited) = mpsc::channel();
+        let (loaded_sender, loaded) = mpsc::channel::<Result<LoadedOnUiThread, Vst2LibraryError>>();
+        let thread = thread::Builder::new()
+            .name("audiorouter-vst2-editor".into())
+            .spawn(move || {
+                let library = match Vst2Library::load(&path) {
+                    Ok(library) => library,
+                    Err(error) => {
+                        let _ = loaded_sender.send(Err(error));
+                        let _ = exit_signal.send(());
+                        return;
+                    }
+                };
+                let access = library.editor_access();
+                if loaded_sender.send(Ok(LoadedOnUiThread(library))).is_ok() {
+                    editor_thread_main(access, receiver);
+                }
+                let _ = exit_signal.send(());
+            })
+            .map_err(|_| Vst2LibraryError::InvalidEditor)?;
+        let editor = Self {
+            commands,
+            thread: Some(thread),
+            exited,
+        };
+        match loaded.recv() {
+            Ok(Ok(LoadedOnUiThread(library))) => Ok((library, editor)),
+            Ok(Err(error)) => Err(error),
+            Err(_) => Err(Vst2LibraryError::InvalidEditor),
+        }
+    }
+
     /// Validate the request and ask the UI thread to open the editor. It
     /// does not wait for the plugin to build its window: the worker keeps
     /// processing audio meanwhile (waiting here dropped audio blocks).
@@ -1306,6 +1480,17 @@ impl Vst2EditorThread {
             .map_err(|_| "editor UI thread stopped".to_string())
     }
 }
+
+/// A plugin loaded on its UI thread, on its way to the processing thread.
+#[cfg(windows)]
+struct LoadedOnUiThread(Vst2Library);
+
+// SAFETY: ownership moves once, right after loading, from the UI thread to
+// the worker thread that processes it; the UI thread keeps only the editor
+// access, whose editor opcodes the VST2 ABI allows concurrently with
+// processing (see `Vst2EditorAccess`). No other state is shared.
+#[cfg(windows)]
+unsafe impl Send for LoadedOnUiThread {}
 
 /// How long dropping an editor thread waits for the editor to close.
 #[cfg(windows)]
@@ -1395,7 +1580,7 @@ struct NativeMessage {
 #[cfg(windows)]
 #[link(name = "kernel32")]
 unsafe extern "system" {
-    fn LoadLibraryW(name: *const u16) -> *mut c_void;
+    fn LoadLibraryExW(name: *const u16, file: *mut c_void, flags: u32) -> *mut c_void;
     fn GetProcAddress(module: *mut c_void, name: *const i8) -> *mut c_void;
     fn FreeLibrary(module: *mut c_void) -> i32;
     fn GetLastError() -> u32;
@@ -1404,7 +1589,9 @@ unsafe extern "system" {
 #[cfg(windows)]
 unsafe fn load_library_w(name: *const u16) -> *mut c_void {
     // SAFETY: Caller supplies a valid NUL-terminated UTF-16 path.
-    unsafe { LoadLibraryW(name) }
+    // Search the verified plugin's directory and Windows default safe DLL
+    // locations, never the backend's working directory.
+    unsafe { LoadLibraryExW(name, ptr::null_mut(), 0x100 | 0x1000) }
 }
 
 #[cfg(windows)]

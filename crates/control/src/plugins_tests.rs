@@ -4,6 +4,226 @@ use super::*;
 use crate::test_support::*;
 
 #[test]
+fn plugin_update_preparation_preserves_state_and_wiring_through_dispatch() {
+    let root = std::env::temp_dir().join(format!(
+        "audiorouter-plugin-update-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir(&root).unwrap();
+    let binary = root.join("effect.vst3");
+    // Metadata-only PE fixture; this regression never loads third-party code.
+    let mut pe = vec![0; 256];
+    pe[..2].copy_from_slice(b"MZ");
+    pe[0x3c..0x40].copy_from_slice(&128_u32.to_le_bytes());
+    pe[128..132].copy_from_slice(b"PE\0\0");
+    pe[132..134].copy_from_slice(&0x8664_u16.to_le_bytes());
+    std::fs::write(&binary, pe).unwrap();
+    let storage = Storage::open(root.join("state.sqlite")).unwrap();
+    let state_root = storage.plugin_state_directory().unwrap();
+    std::fs::create_dir_all(&state_root).unwrap();
+    let old_hash = "a".repeat(64);
+    let asset = audiorouter_plugin_host::PluginStateAsset::new(1, vec![7; 64]).unwrap();
+    let old_path =
+        audiorouter_plugin_host::write_state_asset(&state_root, "before-update", &asset).unwrap();
+    storage
+        .save_plugin_state(&audiorouter_storage::PluginStateRecord {
+            id: "before-update".into(),
+            plugin_id: old_hash.clone(),
+            plugin_sha256: old_hash.clone(),
+            version: 1,
+            path: old_path.to_string_lossy().into_owned(),
+            state_sha256: asset.sha256.clone(),
+            size_bytes: 64,
+        })
+        .unwrap();
+    let mut saved = session();
+    saved.nodes.push(Node { id: EntityId::new("effect"), name:"My updated effect".into(), kind:NodeKind::Plugin, type_version:1, enabled:false, bypass:false,
+        parameters:serde_json::from_value(json!({"path":binary,"format":"vst3","classId":"default","fingerprint":old_hash,"stateId":"before-update","pluginParameter:0":0.3})).unwrap(),
+        ports:vec![Port {name:"in".into(),direction:PortDirection::Input,channels:1},Port{name:"out".into(),direction:PortDirection::Output,channels:1}] });
+    let mut plane = ControlPlane::with_storage("update-test", storage);
+    plane.insert_session(saved.clone()).unwrap();
+    plane.active_session_id = Some(saved.id.clone());
+    let request = |method: &str, params| JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: method.into(),
+        params: Some(params),
+    };
+    let scan = plane.dispatch(request("plugins.scan", json!({"directory":root})));
+    assert!(scan.error.is_none(), "{:?}", scan.error);
+    let new_hash = scan.result.unwrap()["entries"][0]["identity"]["sha256"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let update_request = request(
+        "plugins.prepareUpdate",
+        json!({"nodeId":"My updated effect"}),
+    );
+    let denied = plane.dispatch_authorized(update_request.clone(), &ClientGrant::read_only());
+    assert_eq!(
+        denied.error.unwrap().data.unwrap()["code"],
+        "permissionDenied"
+    );
+    let response = plane.dispatch(update_request);
+    assert!(response.error.is_none(), "{:?}", response.error);
+    let result = response.result.unwrap();
+    assert_eq!(result["parameters"]["fingerprint"], new_hash);
+    assert_eq!(result["statePreserved"], true);
+    let new_id = result["parameters"]["stateId"].as_str().unwrap();
+    assert_ne!(new_id, "before-update");
+    assert_eq!(
+        ControlPlane::load_plugin_state_asset(plane.storage.as_ref().unwrap(), new_id, &new_hash)
+            .unwrap(),
+        asset
+    );
+    assert!(old_path.is_file());
+    assert_eq!(plane.get_session(&saved.id).unwrap(), &saved);
+    // Start from defaults is one-shot: it drops the saved-state reference and
+    // forgets the latest capture, without a marker that would also discard
+    // every capture made afterwards. The old state file stays on disk.
+    plane
+        .storage
+        .as_ref()
+        .unwrap()
+        .set_plugin_node_state(saved.id.as_str(), "effect", "before-update")
+        .unwrap();
+    let reset = plane
+        .dispatch(request(
+            "plugins.prepareUpdate",
+            json!({"nodeId":"effect","resetState":true}),
+        ))
+        .result
+        .unwrap();
+    assert!(reset["parameters"].get("stateId").is_none());
+    assert!(reset["parameters"].get("pluginParameter:0").is_none());
+    assert_eq!(reset["statePreserved"], false);
+    let storage = plane.storage.as_ref().unwrap();
+    assert_eq!(
+        storage
+            .plugin_node_state(saved.id.as_str(), "effect")
+            .unwrap(),
+        None
+    );
+    assert!(old_path.is_file());
+    storage
+        .set_plugin_node_state(saved.id.as_str(), "effect", "after-reset")
+        .unwrap();
+    assert_eq!(
+        storage
+            .plugin_node_state(saved.id.as_str(), "effect")
+            .unwrap()
+            .as_deref(),
+        Some("after-reset")
+    );
+    drop(plane);
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+/// Offline qualification of a user-installed effect, including the public
+/// dispatcher and the real isolated worker. Never opens an audio endpoint.
+#[cfg(windows)]
+#[test]
+#[ignore = "requires AUDIOROUTER_TEST_PLUGIN and both packaged plugin workers"]
+fn installed_effect_describes_processes_and_restores_state() {
+    use audiorouter_plugin_host::{
+        inspect_binary, worker_clock_tick, SupervisedWorkerProcess, WorkerFrame,
+    };
+    let path = std::path::PathBuf::from(std::env::var_os("AUDIOROUTER_TEST_PLUGIN").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    let mut plane = ControlPlane::default();
+    for (method, params) in [
+        ("plugins.scan", json!({"directory": root})),
+        ("plugins.parameters", json!({"path": path})),
+    ] {
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        });
+        assert!(response.error.is_none(), "{method}: {:?}", response.error);
+        if method == "plugins.parameters" {
+            assert!(!response.result.unwrap()["parameters"]
+                .as_array()
+                .unwrap()
+                .is_empty());
+        }
+    }
+    let kind = PluginWorkerKind::for_format(identity.format);
+    let executable = require_plugin_worker(kind).unwrap();
+    for channels in [1, 2] {
+        let spawn = || match kind {
+            PluginWorkerKind::Vst2 => SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+                &executable,
+                &identity,
+                std::slice::from_ref(&root),
+                channels,
+                48_000,
+                Instant::now(),
+            ),
+            PluginWorkerKind::Vst3 => {
+                SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
+                    &executable,
+                    &identity,
+                    std::slice::from_ref(&root),
+                    channels,
+                    48_000,
+                    Instant::now(),
+                )
+            }
+        };
+        let mut worker = spawn().unwrap();
+        let saved = worker
+            .save_state(Instant::now())
+            .expect("save installed effect state");
+        assert!(!saved.bytes.is_empty());
+        let mut peak = 0.0_f32;
+        let mut difference = 0.0_f32;
+        for block in 0..200_u64 {
+            let samples: Vec<f32> = (0..128)
+                .flat_map(|frame| {
+                    let value = 0.25
+                        * (std::f32::consts::TAU * 220.0 * (block * 128 + frame) as f32 / 48_000.0)
+                            .sin();
+                    std::iter::repeat_n(value, usize::from(channels))
+                })
+                .collect();
+            let frame = WorkerFrame::new(
+                block + 1,
+                worker_clock_tick().saturating_add(10_000),
+                channels,
+                samples.clone(),
+            )
+            .unwrap();
+            let output = worker.process(frame, vec![], Instant::now()).unwrap();
+            for (sample, input) in output.samples.into_iter().zip(samples) {
+                assert!(sample.is_finite());
+                peak = peak.max(sample.abs());
+                difference = difference.max((sample - input).abs());
+            }
+        }
+        assert!(peak > 0.001, "installed effect returned silence");
+        assert!(
+            difference > 0.001,
+            "installed effect only passed input through"
+        );
+        worker.restore_state(saved.clone(), Instant::now()).unwrap();
+        assert!(worker.shutdown().unwrap().success());
+        let mut fresh = spawn().unwrap();
+        fresh
+            .restore_state(saved, Instant::now())
+            .expect("restore into a new worker");
+        assert!(fresh.shutdown().unwrap().success());
+        eprintln!("{}: {channels} channel(s), dispatcher, 200 audio blocks, state save/restore passed; peak {peak}", path.display());
+    }
+}
+
+#[test]
 fn plugin_worker_resolves_from_the_packaged_resource_directory() {
     let root = std::env::temp_dir().join(format!(
         "audiorouter-worker-resource-{}-{}",
