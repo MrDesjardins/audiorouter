@@ -547,3 +547,14 @@ low). They remain outside the owner's explicitly restricted list; this branch
 does not update dependencies or claim those alerts are resolved. Next task:
 inspect PR checks/annotations at the latest head, repair any branch-caused
 failures, and report the result. Do not merge or remove the worktree.
+
+CI annotation inspection on initial head f89f5d0b6: check runs 131613634359,
+131613634702, 131613747661 and 131613747725 contain the hosted-runner notice
+that ubuntu-latest is moving to Ubuntu 26 (runner-images issue 14748). Retain
+this informational platform notice: these Linux jobs validate docs/policy and
+dependencies, while product qualification remains Windows; changing the
+repository-wide runner-image policy is outside the listed defect scope. The
+notice is not a compiler, application or test failure. Other inspected runs
+131613747643, 131613747664 and 131613747705 have no annotations at inspection.
+Required Windows/browser/security jobs are still pending; inspect their final
+annotations separately, without treating this interim record as passing CI.
