@@ -2,7 +2,7 @@
 
 ## Objective and authority
 
-Owner requested all three high and twelve medium findings in
+Owner requested all three high and eleven listed medium findings in
 [the audit](bug-audit-2026-11-11.md), regression tests, a new branch and a PR.
 Branch: `fix/audit-high-medium`, isolated at `target/audit-repair` from
 `a2dd275e`. The original checkout's unrelated changes are preserved.
@@ -10,9 +10,8 @@ The owner's request explicitly authorizes opening this PR after validation.
 
 Count correction (2026-11-12): the authoritative audit index has three high
 and **eleven** medium rows, despite the earlier summary saying twelve medium.
-Clarification requested asynchronously about the extra finding (suggested
-SES-4 recorder cleanup). Continue every listed high/medium repair while the
-owner decides; do not silently mark the original count achieved.
+Owner explicitly confirmed fixing only these fourteen listed findings.
+SES-4 is excluded; earlier pending-clarification entries below are historical.
 
 ## Requirements and tasks
 
@@ -293,3 +292,26 @@ post-default field assignment; moved it into the initializer and reran clean.
 Inspected the complete worker and deadline-routing diff. This proves
 bounded encoder retirement; it is not a claim about an unresponsive OS driver
 or a real disk unplug qualification.
+
+SES-2 bounded-retirement follow-up committed as `29b51272e`.
+
+STO-1: storage deletion regression failed because plugin-node bindings remained;
+the real `sessions.delete` dispatcher regression failed on the same retained
+rows. Deletion now removes bindings atomically with session/history/plans.
+The control plane collects binding/current/history state references before
+deletion, then reclaims unreferenced automatic captures and slider sidecars
+through the same helper used when replacing an automatic capture. Other
+sessions, saved versions and explicit reusable library states retain their
+assets. Cleanup uses safe IDs inside the canonical owned plugin-state folder;
+file/I/O failures or quarantined graphs conservatively retain metadata/assets.
+No recording files are deleted. The storage test enumerates session_id tables
+so a new owned table needs an explicit lifecycle decision. Both original
+failures pass; the dispatcher test also covers shared/history references and
+explicit-state preservation. Full control/storage, Clippy and formatting
+validation pending. Next: commit STO-1, then STO-2/3 and remaining route fixes.
+
+STO-1 final verification: Windows control library 385 passed / 12 explicitly
+ignored; storage library 107 passed. Both workspace and shell formatting checks
+and control/storage all-target/all-feature Clippy with denied warnings pass.
+Inspected the complete production and regression diff. No live plugin or owner
+session was touched. Next: commit STO-1 and reproduce STO-2 backup publication.

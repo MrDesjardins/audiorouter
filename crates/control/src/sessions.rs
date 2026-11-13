@@ -285,6 +285,7 @@ impl ControlPlane {
                 .iter()
                 .any(|entry| entry.session_id == id.as_str())
         {
+            let states = self.session_plugin_state_candidates(id)?;
             let deleted = self
                 .storage
                 .as_ref()
@@ -294,6 +295,7 @@ impl ControlPlane {
             self.quarantined_sessions
                 .retain(|entry| entry.session_id != id.as_str());
             self.forget_revision_notes(id);
+            self.cleanup_automatic_plugin_states(&states);
             self.events
                 .append(0, None, "session.deleted", Some(id.clone()));
             return Ok(json!({"sessionId": id, "deleted": deleted}));
@@ -351,6 +353,7 @@ impl ControlPlane {
                 "stop the native output fan-out before deleting the session".into(),
             ));
         }
+        let states = self.session_plugin_state_candidates(id)?;
         let checkpoint = self.store.clone();
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.delete_session(id) {
@@ -363,6 +366,7 @@ impl ControlPlane {
         // failed delete must preserve saved notes and the comparison timeout.
         self.clear_comparison(id);
         self.forget_revision_notes(id);
+        self.cleanup_automatic_plugin_states(&states);
         if self.active_session_id.as_ref() == Some(id) {
             // Never leave default node-targeted API/MCP calls aimed at a
             // deleted graph. Selecting a different session is deliberate.

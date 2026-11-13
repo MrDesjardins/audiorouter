@@ -2212,6 +2212,10 @@ impl Storage {
             params![id.as_str()],
         )?;
         transaction.execute(
+            "DELETE FROM plugin_node_states WHERE session_id = ?1",
+            params![id.as_str()],
+        )?;
+        transaction.execute(
             "DELETE FROM control_settings WHERE key = 'activeSessionId' AND value = ?1",
             params![id.as_str()],
         )?;
@@ -5734,6 +5738,15 @@ mod tests {
         let original = session();
         storage.save_session(&original).unwrap();
         storage
+            .set_plugin_node_state(original.id.as_str(), "fx", "state-solo")
+            .unwrap();
+        storage
+            .set_plugin_node_state(original.id.as_str(), "shared-fx", "state-shared")
+            .unwrap();
+        storage
+            .set_plugin_node_state("another-session", "fx", "state-shared")
+            .unwrap();
+        storage
             .save_graph_plan(&GraphPlanRecord {
                 id: "plan-delete".into(),
                 session_id: original.id.as_str().into(),
@@ -5747,6 +5760,29 @@ mod tests {
         assert!(storage.load_session(&original.id).unwrap().is_none());
         assert!(storage.load_history(&original.id, 10).unwrap().is_empty());
         assert!(storage.load_graph_plan("plan-delete").unwrap().is_none());
+        assert!(storage
+            .plugin_node_states(original.id.as_str())
+            .unwrap()
+            .is_empty());
+        assert!(!storage.plugin_node_state_in_use("state-solo").unwrap());
+        assert!(storage.plugin_node_state_in_use("state-shared").unwrap());
+        // Any future session-owned table requires an explicit deletion/keep
+        // decision and a fixture here, rather than silently leaking rows.
+        let mut tables = storage.connection.prepare("SELECT m.name FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' AND p.name = 'session_id' ORDER BY m.name").unwrap();
+        let tables = tables
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            tables,
+            [
+                "graph_plans",
+                "plugin_node_states",
+                "recordings",
+                "session_history"
+            ]
+        );
     }
 
     #[test]
