@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { AppLogo } from "./appLogos";
 import type { ObsChangeRequest, ObsPreview, ObsStatus } from "@audiorouter/contracts";
 import { AppStateBadge } from "./AppsPanel";
 import { obsFixes, type ObsCheck } from "./obsUsage";
@@ -277,9 +278,7 @@ export function ObsCard({
   return (
     <section className="panel app-card" aria-labelledby="app-card-obs" data-app="obs">
       <header className="app-card-heading">
-        <span className="app-monogram is-wide" aria-hidden="true">
-          OBS
-        </span>
+        <AppLogo app="obs" />
         <h3 id="app-card-obs">OBS Studio</h3>
         <AppStateBadge state={check.state} />
       </header>

@@ -118,6 +118,8 @@ describe("Mic test card", () => {
 describe("compare rules", () => {
   it("finds the tools in line and stops at sources, outputs and splits", () => {
     expect(chainOf(route, "gate").sort()).toEqual(["comp", "gate"]);
+    // In route order whichever tool is selected, so the label can name what comes before and after.
+    expect(chainOf(route, "comp")).toEqual(chainOf(route, "gate"));
     expect(canCompare(node("x", "physicalInput"))).toBe(false);
     const split: Session = {
       ...route,
@@ -193,8 +195,12 @@ describe("hold to compare", () => {
 
   it("leaves the whole chain out with the second button", () => {
     const { compareNodes } = setup();
-    fireEvent.pointerDown(screen.getByRole("button", { name: /without the chain/ }), { pointerId: 1 });
+    // The label says how many tools, and the line below names them, before and after this one.
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Hold: without all 2 tools in this line" }), {
+      pointerId: 1,
+    });
     expect(lastNodes(compareNodes).sort()).toEqual(["comp", "gate"]);
+    expect(screen.getByText(/^Leaves out, in order: /).textContent).toMatch(/(this tool)/);
   });
 
   it.each([

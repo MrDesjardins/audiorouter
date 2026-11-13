@@ -31,6 +31,9 @@ export function ToolCompare({
   const releaseTarget = useRef<{ backend: UiBackend; sessionId: string } | null>(null);
   const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chain = chainOf(session, node.id);
+  const chainNames = chain.map((id) =>
+    id === node.id ? `${node.name} (this tool)` : (session.nodes.find((item) => item.id === id)?.name ?? id),
+  );
 
   const enqueue = <T,>(send: () => Promise<T>): Promise<T> => {
     const previous = requestTail.current;
@@ -153,9 +156,16 @@ export function ToolCompare({
           {...handlers("chain")}
         >
           <Icon name="ear" size={15} />
-          Hold: without the chain
+          {chain.length < 2 ? "Hold: without the whole line" : `Hold: without all ${chain.length} tools in this line`}
         </button>
       </div>
+      {/* Says which tools the second button leaves out: those before and after this one (owner, 2026-11-12).
+          One reserved line, so the panel never moves (UI-17). */}
+      <p className="tool-compare-line muted" title={chainNames.join(" → ")}>
+        {chain.length < 2
+          ? "No other tools are connected in a line with this one."
+          : `Leaves out, in order: ${chainNames.join(" → ")}`}
+      </p>
       <p className="tool-compare-note" role="status">
         <Icon name={running && !message ? "triangle-alert" : "info"} size={15} />
         <span>

@@ -898,6 +898,8 @@ export interface DiagnosticsSnapshot {
        * Stays set until `plugins.resume` succeeds or `passThroughAllowed` is on.
        */
       silencedUnchanged?: boolean;
+      /** Why the plugin's worker stopped (one bounded line), once it has failed. */
+      failureReason?: string | null;
     } | null;
     /** Present while a Denoise or FIR Filter Hz node is learning: its current noise profile. */
     noiseProfile?: string;

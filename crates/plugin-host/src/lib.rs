@@ -4197,6 +4197,11 @@ pub struct PluginRuntimeBridge {
     failed: Arc<AtomicBool>,
     health_state: Arc<AtomicU8>,
     health_failure_count: Arc<AtomicU32>,
+    /// Why the worker stopped, kept from the first failure so the control
+    /// plane can show and log it (owner report 2026-11-12: a plugin failed
+    /// as its window opened and nothing said why). Written only by the
+    /// runtime thread, never by the audio callback.
+    failure_reason: Arc<Mutex<Option<String>>>,
     parameters: Arc<Mutex<Vec<Vec<ParameterEvent>>>>,
     active: Arc<Vec<AtomicBool>>,
     output_misses: Arc<AtomicU32>,
@@ -4223,6 +4228,41 @@ pub struct PluginRuntimeBridge {
     instance_index: usize,
     /// Member handles keep the queue owner alive; only the owner joins it.
     owner: Option<Arc<PluginRuntimeBridge>>,
+}
+
+/// Longest worker failure reason kept for telemetry and the backend log.
+const MAX_FAILURE_REASON_CHARS: usize = 300;
+
+/// One line, bounded: a worker's error text can include plugin output.
+fn bounded_failure_reason(reason: String) -> String {
+    let line: String = reason
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect();
+    let line = line.trim();
+    if line.chars().count() <= MAX_FAILURE_REASON_CHARS {
+        line.to_owned()
+    } else {
+        let mut cut: String = line.chars().take(MAX_FAILURE_REASON_CHARS - 1).collect();
+        cut.push('…');
+        cut
+    }
+}
+
+#[cfg(test)]
+mod failure_reason_tests {
+    use super::*;
+
+    #[test]
+    fn a_worker_failure_reason_is_one_bounded_line() {
+        assert_eq!(
+            bounded_failure_reason(" worker\nexited\r\twith code 5 ".into()),
+            "worker exited  with code 5"
+        );
+        let long = bounded_failure_reason("x".repeat(1_000));
+        assert_eq!(long.chars().count(), MAX_FAILURE_REASON_CHARS);
+        assert!(long.ends_with('…'));
+    }
 }
 
 /// The slider events to send with the next quantum: each member's list only
@@ -4395,6 +4435,7 @@ impl PluginRuntimeBridge {
                 failed: Arc::clone(&head.failed),
                 health_state: Arc::clone(&head.health_state),
                 health_failure_count: Arc::clone(&head.health_failure_count),
+                failure_reason: Arc::clone(&head.failure_reason),
                 parameters: Arc::clone(&head.parameters),
                 active: Arc::clone(&head.active),
                 output_misses: Arc::clone(&head.output_misses),
@@ -4484,6 +4525,16 @@ impl PluginRuntimeBridge {
         let thread_failed = Arc::clone(&failed);
         let thread_health_state = Arc::clone(&health_state);
         let thread_health_failure_count = Arc::clone(&health_failure_count);
+        let failure_reason = Arc::new(Mutex::new(None::<String>));
+        let thread_failure_reason = Arc::clone(&failure_reason);
+        // Keeps the first reason only: later failures follow from it.
+        let note_failure = move |reason: String| {
+            if let Ok(mut slot) = thread_failure_reason.lock() {
+                if slot.is_none() {
+                    *slot = Some(bounded_failure_reason(reason));
+                }
+            }
+        };
         let thread_free = Arc::clone(&free);
         let thread_input = Arc::clone(&input);
         let thread_output = Arc::clone(&output);
@@ -4520,6 +4571,7 @@ impl PluginRuntimeBridge {
                         if members > 1 {
                             if let Err(error) = worker.select_instance(index, now) {
                                 let error = format!("{error:?}");
+                                note_failure(format!("selecting plugin {index} failed: {error}"));
                                 match request {
                                     BridgeRequest::SaveState(reply) => {
                                         let _ = reply.send(Err(error));
@@ -4539,6 +4591,11 @@ impl PluginRuntimeBridge {
                                 break;
                             }
                         }
+                        let action = match &request {
+                            BridgeRequest::SaveState(_) => "saving settings",
+                            BridgeRequest::OpenEditor(..) => "opening the plugin window",
+                            BridgeRequest::CloseEditor(_) => "closing the plugin window",
+                        };
                         match request {
                             BridgeRequest::SaveState(reply) => {
                                 let _ = reply.send(
@@ -4546,11 +4603,13 @@ impl PluginRuntimeBridge {
                                 );
                             }
                             BridgeRequest::OpenEditor(authorization, reply) => {
-                                let _ = reply.send(
-                                    worker
-                                        .open_editor(&authorization, now)
-                                        .map_err(|error| format!("{error:?}")),
-                                );
+                                let opened = worker
+                                    .open_editor(&authorization, now)
+                                    .map_err(|error| format!("{error:?}"));
+                                if let Err(error) = &opened {
+                                    note_failure(format!("{action}: {error}"));
+                                }
+                                let _ = reply.send(opened);
                             }
                             BridgeRequest::CloseEditor(reply) => {
                                 let closed = worker
@@ -4576,6 +4635,13 @@ impl PluginRuntimeBridge {
                             Ordering::Release,
                         );
                         if worker.state() != WorkerState::Running {
+                            note_failure(format!(
+                                "the worker stopped while {action}{}",
+                                worker
+                                    .failure_diagnostic()
+                                    .map(|d| format!(": {d:?}"))
+                                    .unwrap_or_default()
+                            ));
                             thread_failed.store(true, Ordering::Release);
                             break;
                         }
@@ -4679,6 +4745,11 @@ impl PluginRuntimeBridge {
                             samples = result.samples;
                         }
                         Ok(result) => {
+                            note_failure(format!(
+                                "the plugin returned {} channel(s) and {} frames; expected {channels} and {frames}",
+                                result.channels,
+                                result.frame_count()
+                            ));
                             quantum.block.clear();
                             thread_failed.store(true, Ordering::Release);
                             if let Err(quantum) = thread_output.push(quantum) {
@@ -4686,7 +4757,8 @@ impl PluginRuntimeBridge {
                             }
                             samples = result.samples;
                         }
-                        Err(_) => {
+                        Err(error) => {
+                            note_failure(format!("processing audio failed: {error:?}"));
                             quantum.block.clear();
                             thread_failed.store(true, Ordering::Release);
                             if let Err(quantum) = thread_output.push(quantum) {
@@ -4724,6 +4796,13 @@ impl PluginRuntimeBridge {
                         thread_health_state
                             .store(encode_worker_state(worker.state()), Ordering::Release);
                         if worker.state() != WorkerState::Running {
+                            note_failure(format!(
+                                "the worker stopped while reading the plugin's delay{}",
+                                worker
+                                    .failure_diagnostic()
+                                    .map(|d| format!(": {d:?}"))
+                                    .unwrap_or_default()
+                            ));
                             thread_failed.store(true, Ordering::Release);
                             if let Some(diagnostic) = worker.failure_diagnostic() {
                                 thread_health_failure_count
@@ -4743,6 +4822,7 @@ impl PluginRuntimeBridge {
             failed,
             health_state,
             health_failure_count,
+            failure_reason,
             parameters,
             active,
             output_misses: Arc::new(AtomicU32::new(0)),
@@ -4761,6 +4841,14 @@ impl PluginRuntimeBridge {
 
     pub fn failed(&self) -> bool {
         self.failed.load(Ordering::Acquire)
+    }
+
+    /// Why the worker stopped, if it has (control plane only).
+    pub fn failure_reason(&self) -> Option<String> {
+        self.failure_reason
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone())
     }
 
     /// Control-plane change; the queue owner reads it between complete frames.

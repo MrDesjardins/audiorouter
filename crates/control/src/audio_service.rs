@@ -323,6 +323,29 @@ impl ControlPlane {
                     .collect::<Vec<_>>();
                 health.insert("inputs".into(), json!(inputs));
                 health.insert("outputs".into(), json!(outputs));
+                // Plugins whose worker stopped, with why: without it a failure
+                // left no trace (owner report 2026-11-12). The reason is bounded
+                // in the plugin host; paths are removed here.
+                let failed_plugins = self
+                    .plugin_bridges
+                    .lock()
+                    .ok()
+                    .map(|bridges| {
+                        bridges
+                            .iter()
+                            .filter_map(|((_, node_id), bridge)| {
+                                let bridge = bridge.upgrade().filter(|bridge| bridge.failed())?;
+                                Some(json!({
+                                    "nodeId": node_id.as_str(),
+                                    "reason": bridge.failure_reason().map(|reason| without_paths(&reason)),
+                                }))
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                if !failed_plugins.is_empty() {
+                    health.insert("failedPlugins".into(), json!(failed_plugins));
+                }
             }
         }
         if health.is_empty() {
@@ -723,3 +746,37 @@ impl ControlPlane {
 #[cfg(test)]
 #[path = "audio_service_tests.rs"]
 mod tests;
+
+/// A worker failure reason for the backend log, with every word that looks
+/// like a file path replaced, so plugin locations and user names stay out.
+#[cfg(windows)]
+fn without_paths(reason: &str) -> String {
+    reason
+        .split(' ')
+        .map(|word| {
+            if word.contains('\\') || word.contains(":/") {
+                "<path>"
+            } else {
+                word
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(all(test, windows))]
+mod without_paths_tests {
+    #[test]
+    fn a_logged_failure_reason_keeps_no_paths() {
+        assert_eq!(
+            super::without_paths(
+                r#"loading "C:\Program Files\Pitchproof\pitchproof-x64.dll" failed: code 5"#
+            ),
+            "loading <path> <path> failed: code 5"
+        );
+        assert_eq!(
+            super::without_paths("processing audio failed: Timeout"),
+            "processing audio failed: Timeout"
+        );
+    }
+}

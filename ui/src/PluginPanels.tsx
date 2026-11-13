@@ -519,7 +519,7 @@ export function PluginEditorControls({
       setMessage(
         response?.error
           ? `Editor unavailable: ${response.error.message ?? "the backend refused"}`
-          : "Editor opened in its own window. Changes apply as you make them and are kept automatically when you close the window or press Stop. The sliders below still work; the latest change wins.",
+          : "The plugin's window is open. Changes apply right away and are kept when you close it or press Stop. The sliders below still work; the latest change wins.",
       );
     } catch (error) {
       setMessage(formatUiError(error, "The plugin editor could not be opened."));
@@ -545,24 +545,23 @@ export function PluginEditorControls({
   return (
     <div className="node-binding-editor" aria-label="Plugin editor and settings">
       <div>
-        <p className="eyebrow">Plugin editor</p>
-        <strong>Your changes are kept automatically</strong>
+        <p className="eyebrow">Adjust this plugin</p>
+        <strong>{node.name}</strong>
       </div>
       <div className="actions">
         <button
           type="button"
-          className="secondary"
           disabled={busy || !running || !inShell}
           title={
             !inShell
-              ? "Editors open only in the desktop app."
+              ? "The plugin's window opens only in the desktop app."
               : !running
-                ? "Start the route first."
+                ? "Press Play first."
                 : "Open the plugin's own window"
           }
           onClick={() => void openEditor()}
         >
-          Open plugin editor
+          Open plugin window
         </button>
         <button
           type="button"
@@ -570,21 +569,23 @@ export function PluginEditorControls({
           disabled={busy || !running || !backend.savePluginState}
           title={
             !running
-              ? "Start the route first."
-              : "Keep the current settings now, without stopping. Changes are also kept automatically when you close the editor or press Stop."
+              ? "Press Play first."
+              : "Keep the current settings now. They are also kept when you close the plugin's window or press Stop."
           }
           onClick={() => void saveState()}
         >
-          Save plugin settings
+          Save settings now
         </button>
       </div>
       {message ? (
         <PanelMessage message={message} small />
       ) : (
         <small className="muted">
-          {!running
-            ? "Start the route to open the editor. Settings you change are kept automatically when you close the editor or press Stop."
-            : "Open the editor and make changes. They are kept when you close its window or press Stop."}
+          {!inShell
+            ? "The plugin's window opens only in the desktop app. You can still use the sliders below."
+            : !running
+              ? "Press Play to open the plugin's window, or use the sliders below. Your changes are kept."
+              : "Open the plugin's window, or use the sliders below. Your changes are kept."}
         </small>
       )}
     </div>
@@ -851,6 +852,7 @@ export function PluginNodeInspector({
             {health.state === "quarantined" ? "; requires deliberate retry after review" : ""}.
           </small>
         )}
+        {health?.failureReason && <small className="plugin-failure-reason">Why: {health.failureReason}</small>}
         {!health && <small>Health is only observable while the session is running with this worker bound.</small>}
         {health?.outputMisses !== undefined && (
           <small>
@@ -865,7 +867,7 @@ export function PluginNodeInspector({
       <small>
         This tool runs only this exact plugin file. If the file changes, scan and add it again from Plugin scan.
         Removing takes it and its connections out of the route; save to keep that. While the route plays, Open plugin
-        editor shows the plugin's own window; the controls below work too.
+        window shows the plugin's own window; the sliders above work too.
       </small>
     </div>
   );

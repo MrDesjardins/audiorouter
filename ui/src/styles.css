@@ -856,7 +856,8 @@ button:disabled {
   gap: 0.25rem;
   margin-bottom: 0.75rem;
 }
-.setup-panel {
+.setup-panel,
+.mic-test {
   margin-bottom: 1rem;
 }
 .setup-panel ul {
@@ -10053,4 +10054,14 @@ button.danger {
 /* Escape cancelled the connection drag: hide its preview line until release. */
 .session-flow-canvas.connection-cancelled .react-flow__connection {
   visibility: hidden;
+}
+
+/* One reserved line naming the tools "without the whole line" leaves out (UI-17). */
+.tool-compare-line {
+  margin: 0.35rem 0 0;
+  min-height: 1.4em;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

@@ -174,24 +174,24 @@ fn run() -> Result<(), String> {
     if _fixture_mode.as_deref() == Some("slow-load") {
         thread::sleep(Duration::from_secs(6));
     }
+    // Each plugin is loaded on its editor's UI thread, which later shows its
+    // window: many plugins crash when another thread opens it (2026-11-12).
     #[cfg(windows)]
-    let mut vst2_plugins: Vec<Vst2Library> = plugin_path
+    let loaded = plugin_path
         .clone()
-        .map(|path| Vst2Library::load(&path))
+        .map(|path| Vst2EditorThread::spawn_loading(&path))
         .transpose()
-        .map_err(|error| format!("VST2 load failed: {error:?}"))?
-        .into_iter()
-        .collect();
+        .map_err(|error| format!("VST2 load failed: {error:?}"))?;
+    #[cfg(windows)]
+    let (first_plugin, first_editor) = loaded.map_or((None, None), |(plugin, editor)| {
+        (Some(plugin), Some(editor))
+    });
+    #[cfg(windows)]
+    let mut vst2_plugins: Vec<Vst2Library> = first_plugin.into_iter().collect();
     #[cfg(windows)]
     // Each editor thread shows its processing instance. Declared after the
     // plugins so it is dropped (editor closed, thread joined) first.
-    let mut vst2_editors: Vec<Vst2EditorThread> = vst2_plugins
-        .first()
-        .map(|plugin| Vst2EditorThread::spawn(plugin.editor_access()))
-        .transpose()
-        .map_err(|error| format!("VST2 editor thread failed: {error:?}"))?
-        .into_iter()
-        .collect();
+    let mut vst2_editors: Vec<Vst2EditorThread> = first_editor.into_iter().collect();
     let mut selected_instance = 0;
     let mut chain_configured = false;
     #[cfg(feature = "test-fixtures")]
@@ -301,15 +301,11 @@ fn run() -> Result<(), String> {
                         }
                     }
                     for member in &plugins {
-                        let plugin = Vst2Library::load(&member.path)
+                        // Loaded on its editor's UI thread (see `spawn_loading`).
+                        let (plugin, editor) = Vst2EditorThread::spawn_loading(&member.path)
                             .map_err(|error| format!("chain member load failed: {error:?}"))?;
-                        let access = plugin.editor_access();
                         vst2_plugins.push(plugin);
-                        vst2_editors.push(
-                            Vst2EditorThread::spawn(access).map_err(|error| {
-                                format!("chain editor thread failed: {error:?}")
-                            })?,
-                        );
+                        vst2_editors.push(editor);
                     }
                 }
                 #[cfg(not(windows))]

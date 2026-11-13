@@ -1406,6 +1406,50 @@ impl Vst2EditorThread {
         })
     }
 
+    /// Load the plugin on a new UI thread and keep that thread for its
+    /// editor, then hand the loaded instance back for processing.
+    ///
+    /// Many VST2 plugins (JUCE-based ones among them) set up their window
+    /// system on the thread that loads them and crash with an access
+    /// violation when another thread opens their editor. Pitchproof did as
+    /// soon as its window was opened (owner report 2026-11-12). Hosts load
+    /// and show editors on one UI thread and process on another, which the
+    /// VST2 ABI allows; this does the same.
+    pub fn spawn_loading(path: &Path) -> Result<(Vst2Library, Self), Vst2LibraryError> {
+        let path = path.to_path_buf();
+        let (commands, receiver) = mpsc::channel();
+        let (exit_signal, exited) = mpsc::channel();
+        let (loaded_sender, loaded) = mpsc::channel::<Result<LoadedOnUiThread, Vst2LibraryError>>();
+        let thread = thread::Builder::new()
+            .name("audiorouter-vst2-editor".into())
+            .spawn(move || {
+                let library = match Vst2Library::load(&path) {
+                    Ok(library) => library,
+                    Err(error) => {
+                        let _ = loaded_sender.send(Err(error));
+                        let _ = exit_signal.send(());
+                        return;
+                    }
+                };
+                let access = library.editor_access();
+                if loaded_sender.send(Ok(LoadedOnUiThread(library))).is_ok() {
+                    editor_thread_main(access, receiver);
+                }
+                let _ = exit_signal.send(());
+            })
+            .map_err(|_| Vst2LibraryError::InvalidEditor)?;
+        let editor = Self {
+            commands,
+            thread: Some(thread),
+            exited,
+        };
+        match loaded.recv() {
+            Ok(Ok(LoadedOnUiThread(library))) => Ok((library, editor)),
+            Ok(Err(error)) => Err(error),
+            Err(_) => Err(Vst2LibraryError::InvalidEditor),
+        }
+    }
+
     /// Validate the request and ask the UI thread to open the editor. It
     /// does not wait for the plugin to build its window: the worker keeps
     /// processing audio meanwhile (waiting here dropped audio blocks).
@@ -1436,6 +1480,17 @@ impl Vst2EditorThread {
             .map_err(|_| "editor UI thread stopped".to_string())
     }
 }
+
+/// A plugin loaded on its UI thread, on its way to the processing thread.
+#[cfg(windows)]
+struct LoadedOnUiThread(Vst2Library);
+
+// SAFETY: ownership moves once, right after loading, from the UI thread to
+// the worker thread that processes it; the UI thread keeps only the editor
+// access, whose editor opcodes the VST2 ABI allows concurrently with
+// processing (see `Vst2EditorAccess`). No other state is shared.
+#[cfg(windows)]
+unsafe impl Send for LoadedOnUiThread {}
 
 /// How long dropping an editor thread waits for the editor to close.
 #[cfg(windows)]

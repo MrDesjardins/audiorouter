@@ -751,6 +751,9 @@ status reconciliation:
 - [Application quality](application-quality.md) — Q3.2 hosted qualification,
   then Q4–Q6 quality and release gates.
 - [Virtual cable](virtual-cable.md) — owner-run VM, signing and Stage C gates.
+- [Bug audit by feature](bug-audit-2026-11-11.md) — 27 findings from a
+  read-only audit (2026-11-11), each with its cause, fix and regression test;
+  none repaired yet, and its Coverage table lists the areas still to audit.
 - [OBS and Discord](obs-discord.md) — copied-profile and attended acceptance.
 - [Release signing](release-signing-and-publication.md) — parked on owner/provider
   signing decisions and credentials.

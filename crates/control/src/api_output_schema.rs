@@ -1964,7 +1964,8 @@ pub(crate) fn diagnostics_output_schema() -> Value {
                                 "outputMisses": { "type": "integer", "minimum": 0 },
                                 "inputDrops": { "type": "integer", "minimum": 0 },
                                 "unchangedAudio": { "type": "boolean" },
-                                "silencedUnchanged": { "type": "boolean" }
+                                "silencedUnchanged": { "type": "boolean" },
+                                "failureReason": { "type": ["string", "null"], "maxLength": 300 }
                             },
                             "required": ["state", "failureCount"],
                             "additionalProperties": false

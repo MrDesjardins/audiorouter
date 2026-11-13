@@ -3,7 +3,7 @@ use audiorouter_plugin_host::inspect_binary;
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::stage_engine_worker_result;
 #[cfg(all(windows, feature = "test-fixtures"))]
-use audiorouter_plugin_host::vst2::{Vst2EditorThread, Vst2Library};
+use audiorouter_plugin_host::vst2::Vst2EditorThread;
 #[cfg(feature = "test-fixtures")]
 use audiorouter_plugin_host::ParameterEvent;
 #[cfg(feature = "test-fixtures")]
@@ -2006,10 +2006,10 @@ fn vst2_editor_shows_the_processing_instance_without_blocking_its_caller() {
             std::thread::sleep(Duration::from_millis(5));
         }
     };
-    // The editor attaches to the instance that processes audio.
-    let library = Vst2Library::load(&plugin_path).expect("load VST2 fixture");
-    let editor =
-        Vst2EditorThread::spawn(library.editor_access()).expect("spawn VST2 editor thread");
+    // The editor attaches to the instance that processes audio, loaded on
+    // the editor's own UI thread as the worker does.
+    let (library, editor) =
+        Vst2EditorThread::spawn_loading(&plugin_path).expect("load VST2 fixture on its UI thread");
     let wrong_owner = editor.open(
         parent as usize,
         std::process::id().saturating_add(1),
@@ -3497,4 +3497,107 @@ fn native_vst3_fixture_signal_report() {
         .expect("restore state into a fresh instance");
     println!("state: restored into the same and a fresh instance");
     assert!(fresh.shutdown().unwrap().success());
+}
+
+/// Owner report 2026-11-12: Pitchproof's worker died ("The pipe is being
+/// closed") the moment its window opened, because the editor was opened on a
+/// thread other than the one that loaded the plugin. This pumps the parent's
+/// messages as the desktop shell does, so the plugin really builds its
+/// window, and keeps audio flowing through the worker while it is open.
+#[cfg(all(windows, feature = "test-fixtures"))]
+#[test]
+#[ignore = "requires an editor-capable local VST2 DLL and a Windows desktop"]
+fn supervised_vst2_worker_survives_its_editor_window_being_built() {
+    let plugin_path = PathBuf::from(
+        std::env::var("AUDIOROUTER_VST2_FIXTURE")
+            .expect("set AUDIOROUTER_VST2_FIXTURE for the VST2 editor acceptance"),
+    );
+    let root = plugin_path
+        .parent()
+        .expect("VST2 fixture parent")
+        .to_path_buf();
+    let identity = inspect_binary(&plugin_path, std::slice::from_ref(&root))
+        .expect("inspect VST2 fixture before spawning");
+    let parent_class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+    let parent_title: Vec<u16> = "AudioRouter VST2 editor build\0".encode_utf16().collect();
+    // SAFETY: The class/title buffers are NUL-terminated and live through the
+    // synchronous Win32 call. A zero style keeps this parent hidden.
+    let parent = unsafe {
+        CreateWindowExW(
+            0,
+            parent_class.as_ptr(),
+            parent_title.as_ptr(),
+            0,
+            0,
+            0,
+            1,
+            1,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    assert!(!parent.is_null(), "hidden editor parent creation failed");
+    // Mono, as the UI creates plugin nodes.
+    let mut worker = SupervisedWorkerProcess::spawn_verified(
+        fixture_worker_path(),
+        &identity,
+        std::slice::from_ref(&root),
+        1,
+        Instant::now(),
+    )
+    .expect("spawn VST2 worker");
+    let mut sequence = 1_u64;
+    let mut process = |worker: &mut SupervisedWorkerProcess, label: &str| {
+        let frame = WorkerFrame::new(
+            sequence,
+            worker_clock_tick().saturating_add(10_000),
+            1,
+            vec![0.25; 128],
+        )
+        .unwrap();
+        sequence += 1;
+        worker
+            .process(frame, Vec::new(), Instant::now())
+            .unwrap_or_else(|error| panic!("worker stopped {label}: {error:?}"));
+    };
+    for _ in 0..10 {
+        process(&mut worker, "before the editor opened");
+    }
+    let authorization = audiorouter_plugin_host::EditorParentAuthorizationIssuer::from_key([7; 32])
+        .issue(parent as u64, std::process::id())
+        .expect("editor authorization");
+    worker
+        .open_editor(&authorization, Instant::now())
+        .expect("open the plugin window");
+    // Pump the parent's messages so the plugin builds its window, and keep
+    // processing meanwhile, for about a second.
+    let until = Instant::now() + Duration::from_secs(1);
+    let mut message = [0_usize; 6];
+    while Instant::now() < until {
+        // SAFETY: the message buffer outlives each synchronous call.
+        unsafe {
+            while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, 1) != 0 {
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+        }
+        process(&mut worker, "while its window was open");
+        std::thread::sleep(Duration::from_millis(3));
+    }
+    worker
+        .close_editor(Instant::now())
+        .expect("close the plugin window");
+    for _ in 0..10 {
+        process(&mut worker, "after the editor closed");
+    }
+    assert_eq!(
+        worker.state(),
+        audiorouter_plugin_host::WorkerState::Running
+    );
+    assert!(worker.shutdown().unwrap().success());
+    // SAFETY: The handle was returned by CreateWindowExW and the worker is
+    // gone before the parent is destroyed.
+    unsafe { assert_ne!(DestroyWindow(parent), 0) };
 }

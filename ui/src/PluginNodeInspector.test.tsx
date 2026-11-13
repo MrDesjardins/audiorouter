@@ -158,6 +158,23 @@ describe("PluginNodeInspector unchanged-audio guard", () => {
     expect(screen.queryByRole("alert", { name: "Plugin worker health" })).toBeNull();
   });
 
+  it("says why the worker failed (owner report 2026-11-12)", () => {
+    render(
+      <PluginNodeInspector
+        node={plugin()}
+        disabled={false}
+        onUnload={() => {}}
+        snapshot={snapshot({
+          state: "failed",
+          failureCount: 1,
+          failureReason: "processing audio failed: Timeout",
+        })}
+      />,
+    );
+    const health = screen.getByRole("alert", { name: "Plugin worker health" });
+    expect(within(health).getByText("Why: processing audio failed: Timeout")).toBeTruthy();
+  });
+
   it("keeps Retry out of reach while the plugin is not muted", () => {
     const { container } = render(
       <PluginNodeInspector

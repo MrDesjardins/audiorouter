@@ -328,3 +328,14 @@ belongs to this repair. Temporary WER, method logging and debugger-job
 instrumentation were removed afterward, restoring `ci.yml` and the fixture to
 the base revision. Revert only the schema wrapper/helper if needed; generated
 schemas and plugin behavior are unchanged.
+
+### Owner session 2026-11-12: Radio Voice route, plugin window crash, panel wording
+
+Owner reports, reproduced from the owner's saved session ("PD200X Radio Voice": stereo mic → one-input Mixer → mono Pitchproof VST2 → EQ → CABLE-A, headphones, Recorder).
+
+1. **"path 1 ... is not supported".** `harmonize_chain_widths` narrowed the chain to the plugin's mono width but left its stereo Mixer, and a Mixer path runs its chain at the Mixer's width. A Mixer whose only output feeds the run now takes the run's width. Regression: the owner's route in `a_stereo_built_in_tool_in_a_mono_plugin_chain_runs_at_the_chain_width` (failed with the owner's exact error without the fix).
+2. **Worker failed when "Open plugin window" was pressed.** The plugin was loaded on the worker thread and its editor opened from a separate UI thread; Pitchproof crashes (0xC0000005) unless the loading thread opens its window. VST2 plugins are now loaded on their editor's UI thread (`Vst2EditorThread::spawn_loading`) and handed to the worker for processing. Regression: `supervised_vst2_worker_survives_its_editor_window_being_built` (opt-in, `AUDIOROUTER_VST2_FIXTURE`), which pumps the parent's messages so the window is really built; it fails with exit code -1073741819 without the fix. All four opt-in editor tests pass with Pitchproof and ReaComp. Owner confirmed in the built app.
+3. **No failure reason anywhere.** The plugin runtime now keeps the first worker failure reason (one bounded line): `plugin.failureReason` in telemetry (schema and contract), "Why:" in the plugin health box, and `failedPlugins` with paths removed in the backend `audioHealth` record.
+4. **UI:** plugin Properties lead with "Adjust this plugin", "Open plugin window" and the plugin's sliders (were at the bottom); recovery moved into a closed "After a plugin update" section; "Press Play" replaces "Start the route". Compare by ear: "Hold: without all N tools in this line" plus a reserved line naming them in route order. Apps cards show the Discord and OBS Studio marks (Simple Icons 13.21.0, CC0) instead of letters.
+
+Not done: guide videos for the plugin panel's new layout, three-theme screenshots of the changed panels.
