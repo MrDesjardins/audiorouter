@@ -130,3 +130,12 @@ After merge, verify the first trusted cache save and
 the scheduled full inventory. The schedule activates only after merge. Keep the
 plan active until these rollout observations exist; no release/hardware gate is
 waived and no branch protection was modified.
+
+## Owner-requested main update — 2026-11-12
+
+Merged main `32f548267` (PR #142 audit repairs) into improve/ci-speed without
+conflicts, merge commit `8fc49b6961558d13e76e4b8ef8e159bcfae74533`.
+Windows checks after merge: all 80 policy/runner tests, documentation validation
+(262 files / 1,479 links), Actionlint and diff checks pass. No additional product
+edits were made. Earlier full-run evidence applies to its recorded SHA; fresh
+PR #143 CI must qualify this updated head. Next: push and review current-head CI.
