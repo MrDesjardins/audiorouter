@@ -487,68 +487,38 @@ impl ControlPlane {
         if let Some(previous) = self.lookup_idempotent_result(&scoped_key, &request_hash)? {
             return Ok(previous);
         }
+        let deadline = self.recorder_shutdown_deadline();
         #[cfg(windows)]
         {
             self.sleep_route_recovery = None;
         }
 
-        let node_ids = self
-            .recorder_node_sessions
-            .keys()
-            .cloned()
-            .collect::<Vec<_>>();
-        let mut finalized_recorders = Vec::new();
-        for node_id in node_ids {
-            let state = self
-                .recorder_node_states
-                .get(&node_id)
-                .map(|recorder| recorder.state())
-                .ok_or_else(|| {
-                    ControlError::InvalidRequest("recorder node state is missing".into())
-                })?;
-            match state {
-                RecorderState::Recording | RecorderState::Paused => {
-                    let frame = self
-                        .recorder_node_states
-                        .get(&node_id)
-                        .and_then(|recorder| {
-                            let checkpoint = recorder.checkpoint();
-                            checkpoint.stop_frame.or(checkpoint.last_frame)
-                        })
-                        .ok_or_else(|| {
-                            ControlError::InvalidRequest(
-                                "active recorder has no committed frame boundary".into(),
-                            )
-                        })?;
-                    finalized_recorders.push(self.control_recorder_node(
-                        &node_id,
-                        "recorders.stop",
-                        Some(frame),
-                    )?);
-                }
-                RecorderState::Idle | RecorderState::Armed | RecorderState::Completed => {
-                    self.recorder_node_workers.remove(&node_id);
-                    self.sync_recorder_inlet(&node_id);
-                    self.recorder_node_states.remove(&node_id);
-                    self.recorder_node_sessions.remove(&node_id);
-                }
-                RecorderState::Stopping | RecorderState::Failed => {
-                    return Err(ControlError::InvalidRequest(
-                        "recorder node requires explicit recovery before quit".into(),
-                    ));
-                }
-            }
-        }
-
-        let running_sessions = self
-            .runtimes
+        let session_ids = self
+            .store
+            .sessions(audiorouter_domain::MAX_SESSIONS_GLOBAL)
             .iter()
-            .filter(|(_, runtime)| runtime.state() == RuntimeState::Running)
-            .map(|(id, _)| id.clone())
+            .map(|session| session.id.clone())
             .collect::<Vec<_>>();
-        let mut stopped_sessions = Vec::with_capacity(running_sessions.len());
-        for session_id in running_sessions {
-            stopped_sessions.push(self.session_stop(&session_id)?);
+        // Silence every route before any recorder can wait on disk. A failed
+        // native stop must not skip the remaining sessions either.
+        let mut audio_results = Vec::new();
+        for session_id in &session_ids {
+            self.capture_playing_plugin_states(session_id);
+            audio_results.push((session_id.clone(), self.stop_session_audio(session_id)));
+        }
+        let mut finalized_recorders = Vec::new();
+        let mut stopped_sessions = Vec::new();
+        for (session_id, audio_result) in audio_results {
+            let recorders = self.finalize_session_recorders(&session_id, deadline);
+            finalized_recorders.extend(recorders.iter().cloned());
+            let mut stopped = audio_result.unwrap_or_else(|error| {
+                json!({
+                    "sessionId": session_id, "state": "stopped", "runtime": "native",
+                    "reason": control_error_message(&error)
+                })
+            });
+            stopped["recorders"] = json!(recorders);
+            stopped_sessions.push(stopped);
         }
         let result = json!({
             "state": "stopped",

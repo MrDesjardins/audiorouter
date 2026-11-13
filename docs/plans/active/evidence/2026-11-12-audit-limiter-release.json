@@ -1,0 +1,11 @@
+{
+  "id": "limiter--releaseMs",
+  "status": "complete",
+  "kind": "limiter",
+  "parameter": "releaseMs",
+  "sourceHash": "026e76c5d20692e2f128f7b4cf5133b6442f2dce95d96dc02f86e2201af5a613",
+  "eventAtSeconds": 3.224036400000001,
+  "frameRate": 15,
+  "frames": 120,
+  "pageErrors": []
+}

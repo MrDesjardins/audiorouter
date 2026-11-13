@@ -1579,6 +1579,7 @@ fn recovery_safe_mode(database: &std::path::Path) -> Option<bool> {
 #[cfg(windows)]
 fn log_storage_failure(operation: &'static str, error: &audiorouter_storage::StorageError) {
     let category = match error {
+        audiorouter_storage::StorageError::NewerSchema { .. } => "newerSchema",
         audiorouter_storage::StorageError::CorruptDatabase(_) => "corruptDatabase",
         audiorouter_storage::StorageError::Sql(_) => "sql",
         audiorouter_storage::StorageError::Io(_) => "io",
@@ -1597,6 +1598,27 @@ fn log_storage_failure(operation: &'static str, error: &audiorouter_storage::Sto
             serde_json::json!({"state": format!("{operation}:{category}")}),
         )),
     );
+}
+
+#[cfg(any(windows, test))]
+fn database_open_error(error: audiorouter_storage::StorageError) -> String {
+    match error {
+        audiorouter_storage::StorageError::NewerSchema { found, supported } => format!(
+            "This database was written by a newer AudioRouter (schema {found}; this app supports {supported}). Update AudioRouter to open it."
+        ),
+        error => format!("backend database open failed: {error:?}"),
+    }
+}
+
+#[test]
+fn newer_database_requests_update_instead_of_corruption_recovery() {
+    let message = database_open_error(audiorouter_storage::StorageError::NewerSchema {
+        found: 99,
+        supported: 4,
+    });
+    assert!(message.contains("written by a newer AudioRouter"));
+    assert!(message.contains("Update AudioRouter"));
+    assert!(!message.contains("corrupt"));
 }
 
 fn default_desktop_session() -> Session {
@@ -1766,7 +1788,7 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                         Storage::open_checked(&database)
                     }
                     .inspect_err(|error| log_storage_failure("backendOpen", error))
-                    .map_err(|error| format!("backend database open failed: {error:?}"))?;
+                    .map_err(database_open_error)?;
                     integrity_checked = true;
                     let sid = audiorouter_transport::current_user_sid().map_err(|error| {
                         format!("current user identity lookup failed: {error:?}")
@@ -1815,14 +1837,8 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             Err(error) => eprintln!("AudioRouter startup registration unavailable: {error}"),
                         }
                     }
-                    let session_id = EntityId::new(DESKTOP_SESSION_ID);
-                    if plane.get_session(&session_id).is_err() {
-                        plane
-                            .insert_session(default_desktop_session())
-                            .map_err(|error| {
-                                format!("default desktop session creation failed: {error:?}")
-                            })?;
-                    }
+                    let session_id = plane.ensure_default_session(default_desktop_session())
+                        .map_err(|error| format!("default desktop session creation failed: {error:?}"))?;
                     if !safe_mode && std::env::var_os("AUDIOROUTER_CAPTURE_ENDPOINT_ID").is_some() {
                         match prepare_configured_native_worker(&mut plane, session_id.clone()) {
                             Ok(true) => eprintln!("AudioRouter native endpoint worker prepared; session start remains explicit"),

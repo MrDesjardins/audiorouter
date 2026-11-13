@@ -5,6 +5,46 @@ use audiorouter_engine::{AudioBlock, BlockMeter, FixedDelay, GainRamp, Streaming
 
 const FRAMES: usize = 128;
 
+#[test]
+fn limiter_stage_matches_frame_major_stereo_reference() {
+    use audiorouter_dsp::{LimiterParams, PeakLimiter};
+    use audiorouter_engine::{compile_session, RuntimeGeneration};
+    let mut reference = PeakLimiter::new_at_sample_rate(
+        LimiterParams {
+            ceiling_db: -6.0,
+            lookahead_ms: 2.5,
+            release_ms: 70.0,
+        },
+        48_000.0,
+        2,
+    )
+    .unwrap();
+    let session = serde_json::from_value(serde_json::json!({
+        "id": "limiter-reference", "name": "Limiter reference", "schemaVersion": 1, "revision": 0,
+        "nodes": [{"id": "limiter", "kind": "limiter", "name": "Limiter", "enabled": true, "bypass": false,
+            "parameters": {"ceilingDb": -6.0, "lookaheadMs": 2.5, "releaseMs": 70.0},
+            "ports": [{"name": "in", "direction": "input", "channels": 2}, {"name": "out", "direction": "output", "channels": 2}]}],
+        "edges": []
+    })).unwrap();
+    let graph = compile_session(&session, RuntimeGeneration::new(1)).unwrap();
+    for quantum in 0..8 {
+        let mut actual = block(2, FRAMES, 300 + quantum);
+        let mut interleaved = vec![0.0; FRAMES * 2];
+        actual.copy_to_interleaved(&mut interleaved).unwrap();
+        reference.process_interleaved(&mut interleaved);
+        graph.process(&mut actual);
+        for frame in 0..FRAMES {
+            for channel in 0..2 {
+                assert_eq!(
+                    get(&actual, channel, frame).to_bits(),
+                    interleaved[frame * 2 + channel].to_bits(),
+                    "q={quantum} frame={frame} channel={channel}"
+                );
+            }
+        }
+    }
+}
+
 fn awkward(seed: u32, index: usize) -> f32 {
     let mut x = seed
         .wrapping_mul(2_654_435_761)

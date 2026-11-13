@@ -25,6 +25,7 @@ impl ControlPlane {
             "reason": reason,
             "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
             "sessionCount": session_count,
+            "quarantinedSessions": self.quarantined_sessions,
             "activeSessionCount": active_session_ids.len(),
             "activeSessionIds": active_session_ids,
             "privacyMute": {

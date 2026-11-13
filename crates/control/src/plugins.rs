@@ -1687,19 +1687,112 @@ impl ControlPlane {
             .map_err(storage_error)?;
         // Drop the automatic capture this one replaces, unless another node
         // (for example a duplicated session) still restores it.
-        if let Some(previous) =
-            replaced.filter(|previous| previous.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX))
-        {
-            if !storage
-                .plugin_node_state_in_use(&previous)
-                .map_err(storage_error)?
-            {
-                let _ = storage.remove_plugin_state(&previous);
-                let _ = std::fs::remove_file(root.join(format!("{previous}.bin")));
-                let _ = std::fs::remove_file(plugin_slider_snapshot_path(&root, &previous));
-            }
+        if let Some(previous) = replaced {
+            self.cleanup_automatic_plugin_states(&[previous]);
         }
         Ok((state_id, asset.bytes.len()))
+    }
+
+    pub(crate) fn session_plugin_state_candidates(
+        &self,
+        session_id: &EntityId,
+    ) -> Result<Vec<String>, ControlError> {
+        let mut states = self
+            .storage
+            .as_ref()
+            .map(|storage| storage.plugin_node_states(session_id.as_str()))
+            .transpose()
+            .map_err(storage_error)?
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(_, id)| id)
+            .collect::<Vec<_>>();
+        let history = self.store.history(session_id, MAX_GRAPH_HISTORY_ITEMS);
+        for saved in self
+            .store
+            .session(session_id)
+            .cloned()
+            .into_iter()
+            .chain(history)
+        {
+            for node in saved.nodes {
+                if let Some(id) = node.parameters.get("stateId").and_then(Value::as_str) {
+                    states.push(id.to_owned());
+                }
+            }
+        }
+        states.sort_unstable();
+        states.dedup();
+        Ok(states)
+    }
+
+    /// Reclaim only backend-owned captures after their references disappear.
+    /// Explicit library states and unverifiable quarantined graphs are kept.
+    /// File failures retain the metadata rather than losing the cleanup record.
+    pub(crate) fn cleanup_automatic_plugin_states(&self, candidates: &[String]) {
+        if !self.quarantined_sessions.is_empty()
+            || !candidates
+                .iter()
+                .any(|id| id.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX))
+        {
+            return;
+        }
+        let Some(storage) = &self.storage else {
+            return;
+        };
+        let Ok(records) = storage.list_plugin_states(None) else {
+            return;
+        };
+        let Some(root) = storage.plugin_state_directory() else {
+            return;
+        };
+        let Some(parent) = storage
+            .session_inventory_path()
+            .and_then(std::path::Path::parent)
+        else {
+            return;
+        };
+        let (Ok(root), Ok(parent)) = (root.canonicalize(), parent.canonicalize()) else {
+            return;
+        };
+        if root != parent.join("plugin-states") {
+            return;
+        }
+        let mut protected = std::collections::HashSet::new();
+        for session in self.store.sessions(audiorouter_domain::MAX_SESSIONS_GLOBAL) {
+            let history = self.store.history(&session.id, MAX_GRAPH_HISTORY_ITEMS);
+            for saved in std::iter::once(session).chain(history) {
+                for node in saved.nodes {
+                    if let Some(id) = node.parameters.get("stateId").and_then(Value::as_str) {
+                        protected.insert(id.to_owned());
+                    }
+                }
+            }
+        }
+        let remove = |path: std::path::PathBuf| match std::fs::remove_file(path) {
+            Ok(()) => true,
+            Err(error) => error.kind() == std::io::ErrorKind::NotFound,
+        };
+        for record in records {
+            let id = &record.id;
+            if !candidates.contains(id)
+                || !id.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX)
+                || !id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+                || protected.contains(id)
+                || !matches!(storage.plugin_node_state_in_use(id), Ok(false))
+            {
+                continue;
+            }
+            // Derive names inside the owned directory; never follow a stored
+            // arbitrary path when deleting an automatic capture.
+            if remove(root.join(format!("{id}.bin")))
+                && remove(plugin_slider_snapshot_path(&root, id))
+            {
+                let _ = storage.remove_plugin_state(id);
+            }
+        }
     }
 
     /// Open or close a playing plugin's native editor. The parent window must
@@ -1876,3 +1969,7 @@ fn plugin_sliders_to_apply(
 #[cfg(test)]
 #[path = "plugins_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "plugin_state_cleanup_tests.rs"]
+mod state_cleanup_tests;

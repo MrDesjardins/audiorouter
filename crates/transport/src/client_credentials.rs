@@ -169,6 +169,16 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "requires a real OneDrive placeholder root; metadata-only qualification"]
+    fn real_onedrive_root_is_accepted_by_credential_path_policy() {
+        let root = std::path::PathBuf::from(
+            std::env::var_os("OneDrive").expect("OneDrive must be configured"),
+        );
+        check_path(&root.join("audiorouter-policy-probe.dpapi")).unwrap();
+        assert!(!root.join("audiorouter-policy-probe.dpapi").exists());
+    }
+
+    #[test]
     fn credentials_are_dpapi_protected_identity_bound_and_corruption_fails_closed() {
         let id = format!(
             "credential-test-{}-{}",

@@ -40,6 +40,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         let request: JsonRpcRequest = serde_json::from_slice(&line)?;
         let method = request.method.as_str();
+        if method == "fixture.corruptSessionForStartup" {
+            let id = request
+                .params
+                .as_ref()
+                .and_then(|params| params["sessionId"].as_str())
+                .filter(|id| !id.is_empty() && id.len() <= audiorouter_domain::MAX_ENTITY_ID_BYTES)
+                .ok_or("bounded fixture session required")?;
+            // Test-only fault injection into this process's disposable database.
+            // Never accepts a path, SQL text or an arbitrary replacement value.
+            let connection = rusqlite::Connection::open(directory.join("fixture.sqlite"))?;
+            let changed = connection.execute(
+                "UPDATE sessions SET document = 'not json' WHERE id = ?1",
+                [id],
+            )?;
+            if changed != 1 {
+                return Err("fixture session not found".into());
+            }
+            serde_json::to_writer(
+                &mut output,
+                &json!({"jsonrpc": "2.0", "id": request.id, "result": {"corrupted": true}}),
+            )?;
+            output.write_all(b"\n")?;
+            output.flush()?;
+            continue;
+        }
         if method == "fixture.recordSyntheticQuantum" {
             use audiorouter_engine::AudioTap;
             let params = request

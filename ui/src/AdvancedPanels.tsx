@@ -531,14 +531,50 @@ export function SessionTransferPanel({
   backend,
   session,
   onImported,
+  quarantinedSessions = [],
+  onRecovered,
 }: {
   backend: UiBackend;
   session: import("@audiorouter/contracts").Session;
   onImported: (session: import("@audiorouter/contracts").Session) => void;
+  quarantinedSessions?: import("@audiorouter/contracts").QuarantinedSession[];
+  onRecovered?: () => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   const [plan, setPlan] = useState<import("@audiorouter/contracts").SessionImportPlanResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const exportOriginal = async (id: string) => {
+    setBusy(true);
+    try {
+      if (!backend.exportRawSession) throw new Error("Reconnect to export the original session.");
+      const { document: original } = await backend.exportRawSession(id);
+      const url = URL.createObjectURL(new Blob([original], { type: "text/plain;charset=utf-8" }));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "audiorouter-unavailable-session.txt";
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMessage("Exported the original saved text. Keep it for repair; it has not been validated for import.");
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to export the original session."));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const deleteUnavailable = async (id: string) => {
+    setBusy(true);
+    try {
+      await backend.deleteSession(id, uiIdempotencyKey("delete-unavailable"));
+      setPendingDelete(null);
+      setMessage("Deleted the unavailable session. Recordings were kept.");
+      onRecovered?.();
+    } catch (error) {
+      setMessage(formatUiError(error, "Unable to delete the unavailable session."));
+    } finally {
+      setBusy(false);
+    }
+  };
   const importRequest = useRef(0);
   const readFileText = (file: File) =>
     typeof file.text === "function"
@@ -654,6 +690,59 @@ export function SessionTransferPanel({
         </p>
       )}
       <PanelMessage message={message} />
+      {quarantinedSessions.length > 0 && (
+        <section aria-label="Unavailable sessions">
+          <h3>Unavailable sessions</h3>
+          <p>These sessions could not be loaded. Their original data is kept. Export a copy before deleting one.</p>
+          <ul>
+            {quarantinedSessions.map((item) => (
+              <li key={item.sessionId}>
+                <strong>{item.sessionId}</strong>
+                <p>{item.reason}</p>
+                <div className="actions">
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy || !backend.connected || !backend.exportRawSession}
+                    onClick={() => void exportOriginal(item.sessionId)}
+                  >
+                    Export original file
+                  </button>
+                  {pendingDelete === item.sessionId ? (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy || !backend.connected}
+                        onClick={() => void deleteUnavailable(item.sessionId)}
+                      >
+                        Confirm deletion
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => setPendingDelete(null)}
+                      >
+                        Keep session
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy || !backend.connected}
+                      onClick={() => setPendingDelete(item.sessionId)}
+                    >
+                      Delete unavailable session
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </section>
   );
 }

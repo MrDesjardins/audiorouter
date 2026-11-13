@@ -4,6 +4,60 @@ use super::*;
 use crate::test_support::*;
 
 #[test]
+fn media_references_prevent_deleting_board_sounds_and_impulses() {
+    for (kind, parameters) in [
+        (NodeKind::Soundboard, json!({"slot1MediaId": "used"})),
+        (
+            NodeKind::Soundboard,
+            json!({"slot2Set": ["lib:fixture", "used"]}),
+        ),
+        (NodeKind::FirFilter, json!({"mediaId": "used"})),
+    ] {
+        let storage = Storage::open_memory().unwrap();
+        storage
+            .store_audio_media("used", "sound.wav", "wav", &tiny_test_wav(), None)
+            .unwrap();
+        let mut plane = ControlPlane::with_storage("media-references", storage);
+        let mut saved = session();
+        let mut node = saved.nodes[0].clone();
+        node.id = EntityId::new("media-user");
+        node.kind = kind;
+        node.parameters = serde_json::from_value(parameters).unwrap();
+        if kind == NodeKind::FirFilter {
+            let mut input = node.ports[0].clone();
+            input.direction = PortDirection::Input;
+            input.name = "in".into();
+            node.ports.push(input);
+        }
+        // Disabled nodes still own their saved assets.
+        node.enabled = false;
+        saved.nodes.push(node);
+        plane.insert_session(saved).unwrap();
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "audioMedia.delete".into(),
+            params: Some(json!({"mediaId": "used"})),
+        });
+        assert!(
+            response
+                .error
+                .expect("referenced media must be retained")
+                .message
+                .contains("still referenced"),
+            "{kind:?}"
+        );
+        assert!(plane
+            .storage
+            .as_ref()
+            .unwrap()
+            .load_audio_media("used")
+            .unwrap()
+            .is_some());
+    }
+}
+
+#[test]
 fn test_signal_transport_controls_only_the_prepared_source() {
     let mut plane = ControlPlane::default();
     let owned = session();
