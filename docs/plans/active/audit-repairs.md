@@ -315,3 +315,40 @@ ignored; storage library 107 passed. Both workspace and shell formatting checks
 and control/storage all-target/all-feature Clippy with denied warnings pass.
 Inspected the complete production and regression diff. No live plugin or owner
 session was touched. Next: commit STO-1 and reproduce STO-2 backup publication.
+
+STO-1 committed as `a092ae1ab`. STO-3 regression reproduced the incorrect
+CorruptDatabase result for version 99. The original migration guard conflated
+an unsupported future format with malformed metadata. Storage now distinguishes
+NewerSchema and checks it before journal-mode changes, including checked opens.
+The regression verifies both open paths leave original bytes unchanged. Negative
+versions remain corruption. Control and shell map the new category to an app
+update instruction; the shell log category is newerSchema. Focused storage test
+passes; shell message qualification and broader checks are pending. Rollback:
+revert this focused repair; no data migration or contract shape changes.
+
+STO-3 evidence: full control 386 passed / 12 ignored; storage 107 passed.
+Storage/control all-target/all-feature Clippy and default-feature shell Clippy
+pass. Shell update-message test passes. This is native shell-unit evidence,
+not an attended rollback launch; no owner database was opened.
+
+STO-2: injected write failure reproduced a partial final-name file. The old
+online-copy helper wrote directly to the retention candidate and only cleaned
+oversized copies. It now reserves a same-directory .partial file with create_new,
+copies, checks size and SQLite integrity, syncs, then publishes without replacing
+an existing destination. Windows uses MoveFileExW without REPLACE_EXISTING;
+portable publication uses an atomic hard link followed by staging cleanup.
+Ordinary errors remove only the owned staging name; crash leftovers cannot match
+the completed-backup retention pattern. The first Windows run exposed that
+sync_all needs write access; corrected the staging sync handle and reran.
+All ten backup tests pass, including partial failure, invalid successful copy,
+a competing destination appearing before publication, live roundtrip, restore
+and a library exceeding the configuration-only budget. No API shape changes.
+Next: finish broader checks and inspect/commit STO-2/3; then ENG-1, STO-4,
+SES-3 and SIM-1, Limiter guides and the full PR gate.
+
+STO-2/3 final local check: control 386 passed / 12 ignored; storage 109 passed.
+Storage/control all-target/all-feature Clippy, both format checks, diff check
+and docs acceptance (259 files / 1,464 links) pass. Inspected all changed code
+and fault-injection cases. Updated the headless recovery runbook. These two
+storage repairs share this commit; no schema migration or public API was added.
+Full shell all-feature checks and attended behavior remain in the branch gate.

@@ -214,7 +214,13 @@ destinations. Backup opens the source database read-only: it checks it but
 never migrates or changes it, and it refuses a database that does not exist.
 A backup includes imported audio, so it may be up to 612 MiB (100 MiB of
 configuration plus the 512 MiB audio library limit).
+Backup verifies and syncs a staging copy before publishing its final name.
+An interrupted `.partial` file is not a completed backup and does not count
+toward retention. Publication refuses a destination created by another process.
 Restore validates SQLite integrity before writing the new file.
+If an older AudioRouter cannot open a newer database schema, update the app.
+That compatibility error does not mean the database is corrupt; keep the
+original file rather than replacing it through corruption recovery.
 The explicit retention command removes only direct files named
 audiorouter-backup-*.sqlite beyond the newest ten lexically timestamped
 names; pre-migration backups and unrelated files are preserved. It never

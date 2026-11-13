@@ -4,6 +4,17 @@ use super::*;
 use crate::test_support::*;
 
 #[test]
+fn newer_schema_is_an_update_requirement_not_corruption() {
+    let error = storage_error(StorageError::NewerSchema {
+        found: 99,
+        supported: 4,
+    });
+    assert!(
+        matches!(error, ControlError::Storage(message) if message.contains("update AudioRouter") && message.contains("99"))
+    );
+}
+
+#[test]
 fn invalid_session_and_history_are_isolated_during_backend_startup() {
     let path = std::env::temp_dir().join(format!(
         "audiorouter-quarantine-{}.sqlite",

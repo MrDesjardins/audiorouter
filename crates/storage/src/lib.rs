@@ -64,6 +64,7 @@ pub enum StorageError {
     InvalidJournal(String),
     JournalLimitReached,
     CorruptDatabase(String),
+    NewerSchema { found: i64, supported: i64 },
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
     InvalidBackupPath(String),
@@ -103,6 +104,21 @@ pub const MAX_SCHEMA_VERSION: i64 = 4;
 pub const MAX_SESSION_HISTORY_ITEMS: usize = 101;
 /// Maximum number of directory entries inspected by recovery retention.
 pub const MAX_RECOVERY_DIRECTORY_ENTRIES: usize = 1_024;
+
+fn validate_schema_version(version: i64) -> Result<(), StorageError> {
+    if version > MAX_SCHEMA_VERSION {
+        return Err(StorageError::NewerSchema {
+            found: version,
+            supported: MAX_SCHEMA_VERSION,
+        });
+    }
+    if version < 0 {
+        return Err(StorageError::CorruptDatabase(format!(
+            "invalid schema migration version {version}"
+        )));
+    }
+    Ok(())
+}
 
 fn validate_recording_id(recording_id: &str) -> Result<(), StorageError> {
     if recording_id.is_empty() || recording_id.len() > MAX_RECORDING_ID_BYTES {
@@ -186,14 +202,96 @@ fn backup_connection(
             maximum: MAX_BACKUP_BYTES as usize,
         });
     }
-    connection
-        .backup(
-            rusqlite::MAIN_DB,
-            destination,
-            None::<fn(rusqlite::backup::Progress)>,
-        )
-        .map_err(StorageError::Sql)?;
-    validate_backup_size(destination)
+    write_backup(destination, |path| {
+        connection
+            .backup(
+                rusqlite::MAIN_DB,
+                path,
+                None::<fn(rusqlite::backup::Progress)>,
+            )
+            .map_err(StorageError::Sql)
+    })
+}
+
+fn write_backup(
+    destination: &std::path::Path,
+    write: impl FnOnce(&std::path::Path) -> Result<(), StorageError>,
+) -> Result<(), StorageError> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let parent = destination.parent().ok_or_else(|| {
+        StorageError::InvalidBackupPath("backup requires a parent directory".into())
+    })?;
+    let (staging, file) = loop {
+        let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = parent.join(format!(
+            ".audiorouter-backup-{}-{serial}.partial",
+            std::process::id()
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => break (path, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    drop(file);
+    // Only this newly reserved path is cleaned. A competing destination must
+    // never be removed or overwritten, including on publication failure.
+    let result = (|| {
+        write(&staging)?;
+        validate_backup_size(&staging)?;
+        let copy =
+            Connection::open_with_flags(&staging, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let integrity: String = copy.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+        if integrity != "ok" {
+            return Err(StorageError::CorruptDatabase(integrity));
+        }
+        drop(copy);
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&staging)?
+            .sync_all()?;
+        publish_backup(&staging, destination)?;
+        Ok(())
+    })();
+    let _ = std::fs::remove_file(&staging);
+    result
+}
+
+#[cfg(windows)]
+fn publish_backup(source: &std::path::Path, destination: &std::path::Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn MoveFileExW(source: *const u16, destination: *const u16, flags: u32) -> i32;
+    }
+    let source = source
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let destination = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    // SAFETY: both buffers are owned, NUL-terminated and live through the call.
+    // Same-directory move, with WRITE_THROUGH only: omitting REPLACE_EXISTING
+    // atomically refuses a competing destination on NTFS and FAT filesystems.
+    if unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 8) } == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn publish_backup(source: &std::path::Path, destination: &std::path::Path) -> std::io::Result<()> {
+    // hard_link atomically creates a new name and refuses an existing one.
+    // The caller then removes its staging name, even if that cleanup fails.
+    std::fs::hard_link(source, destination)
 }
 
 fn validate_backup_size(destination: &std::path::Path) -> Result<(), StorageError> {
@@ -950,7 +1048,8 @@ impl Storage {
             memory_uri: None,
         };
         storage.connection.busy_timeout(BUSY_TIMEOUT)?;
-        if full_check || storage.needs_migration()? {
+        let needs_migration = storage.needs_migration()?;
+        if full_check || needs_migration {
             storage.check_integrity()?;
         }
         storage.use_write_ahead_log();
@@ -984,6 +1083,7 @@ impl Storage {
                 |row| row.get(0),
             )
             .map_err(corrupt)?;
+        validate_schema_version(version)?;
         Ok(version < MAX_SCHEMA_VERSION)
     }
 
@@ -1303,11 +1403,7 @@ impl Storage {
                 [],
                 |row| row.get(0),
             )?;
-            if !(0..=MAX_SCHEMA_VERSION).contains(&version) {
-                return Err(StorageError::CorruptDatabase(format!(
-                    "unsupported schema migration version {version}"
-                )));
-            }
+            validate_schema_version(version)?;
         }
         self.connection.execute_batch(
             "PRAGMA foreign_keys = ON;
@@ -5428,12 +5524,27 @@ mod tests {
                 )
                 .unwrap();
         }
+        let original_bytes = std::fs::read(&path).unwrap();
         let result = Storage::open(&path);
+        assert!(
+            !matches!(&result, Err(StorageError::CorruptDatabase(_))),
+            "a newer schema needs an app update, not corrupt-database recovery"
+        );
         assert!(matches!(
             result,
-            Err(StorageError::CorruptDatabase(message))
-                if message == "unsupported schema migration version 99"
+            Err(StorageError::NewerSchema {
+                found: 99,
+                supported: MAX_SCHEMA_VERSION
+            })
         ));
+        assert!(matches!(
+            Storage::open_checked(&path),
+            Err(StorageError::NewerSchema {
+                found: 99,
+                supported: MAX_SCHEMA_VERSION
+            })
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), original_bytes);
         let connection = Connection::open(&path).unwrap();
         let table_count: i64 = connection
             .query_row(
@@ -6550,6 +6661,62 @@ mod tests {
         drop(storage);
         let _ = std::fs::remove_file(source);
         let _ = std::fs::remove_file(destination);
+    }
+
+    #[test]
+    fn failed_backup_never_publishes_a_partial_retention_candidate() {
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-backup-failure-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let destination = root.join("audiorouter-backup-failed.sqlite");
+        let result = write_backup(&destination, |path| {
+            std::fs::write(path, b"partially copied database")?;
+            Err(StorageError::Io(std::io::Error::other(
+                "injected disk failure",
+            )))
+        });
+        assert!(result.is_err());
+        assert!(
+            !destination.exists(),
+            "failed output must never enter retention"
+        );
+        assert_eq!(
+            std::fs::read_dir(&root).unwrap().count(),
+            0,
+            "ordinary failures clean staging files"
+        );
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn backup_publication_preserves_competing_destination_and_rejects_invalid_copy() {
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-backup-publish-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let destination = root.join("audiorouter-backup-race.sqlite");
+        let result = write_backup(&destination, |path| {
+            let connection = Connection::open(path)?;
+            connection.execute_batch("CREATE TABLE fixture(value INTEGER);")?;
+            drop(connection);
+            // Another actor wins after destination validation, before publish.
+            std::fs::write(&destination, b"another actor's backup")?;
+            Ok(())
+        });
+        assert!(result.is_err());
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"another actor's backup"
+        );
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_file(&destination).unwrap();
+        assert!(write_backup(&destination, |path| {
+            std::fs::write(path, b"not a SQLite database")?;
+            Ok(())
+        })
+        .is_err());
+        assert!(!destination.exists());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        std::fs::remove_dir(root).unwrap();
     }
 
     #[test]

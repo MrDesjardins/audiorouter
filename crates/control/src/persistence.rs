@@ -98,6 +98,9 @@ pub(crate) fn suggested_recording_root() -> Option<std::path::PathBuf> {
 
 pub(crate) fn storage_error(error: StorageError) -> ControlError {
     match error {
+        StorageError::NewerSchema { found, supported } => ControlError::Storage(format!(
+            "database schema {found} is newer than supported schema {supported}; update AudioRouter to open this database"
+        )),
         StorageError::CorruptDatabase(_) => {
             ControlError::CorruptDatabase("database integrity check failed".into())
         }
