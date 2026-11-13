@@ -146,7 +146,7 @@ pub(crate) fn start_plugin_bridges(
 ) -> Result<Vec<(EntityId, Arc<audiorouter_plugin_host::PluginRuntimeBridge>)>, ControlError> {
     let mut prepared = HashMap::new();
     for request in requests {
-        let verified = audiorouter_plugin_host::inspect_binary(
+        let mut verified = audiorouter_plugin_host::inspect_binary(
             &request.scanned_path,
             std::slice::from_ref(&request.configured_root),
         )
@@ -157,6 +157,29 @@ pub(crate) fn start_plugin_bridges(
             return Err(ControlError::InvalidRequest(
                 "plugin fingerprint changed since scan".into(),
             ));
+        }
+        if verified.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+            if let Some(class_id) = session
+                .nodes
+                .iter()
+                .find(|node| node.id == request.node_id)
+                .and_then(|node| node.parameters.get("classId"))
+                .and_then(Value::as_str)
+                .filter(|id| *id != "default")
+            {
+                let index = verified
+                    .metadata
+                    .class_ids
+                    .iter()
+                    .position(|id| id.eq_ignore_ascii_case(class_id))
+                    .ok_or_else(|| {
+                        ControlError::InvalidRequest(
+                            "Selected VST3 class is no longer listed by this plugin; scan it again"
+                                .into(),
+                        )
+                    })?;
+                verified.metadata.class_ids.swap(0, index);
+            }
         }
         prepared.insert(
             request.node_id,
@@ -187,8 +210,22 @@ pub(crate) fn start_plugin_bridges(
             .map(|id| prepared.get(id).expect("prepared plugin group"))
             .collect::<Vec<_>>();
         let (verified, configured_root, channels, _, _) = members[0];
-        let worker_executable =
-            require_plugin_worker(PluginWorkerKind::for_format(verified.format))?;
+        let node = session
+            .nodes
+            .iter()
+            .find(|node| node.id == group[0])
+            .expect("prepared plugin node");
+        let not_ready = |message: String| ControlError::NodeNotReady {
+            node_id: node.id.as_str().to_owned(),
+            message: format!("\"{}\" cannot play: {message}", node.name),
+        };
+        let worker_executable = require_plugin_worker(PluginWorkerKind::for_format(
+            verified.format,
+        ))
+        .map_err(|error| match error {
+            ControlError::InvalidRequest(message) => not_ready(message),
+            other => other,
+        })?;
         let worker_executable = worker_executable.as_path();
         let mut worker = if members.len() > 1 {
             let plugins = members.iter().map(|(identity, root, _, _, _)| audiorouter_plugin_host::WorkerChainPlugin {
@@ -224,7 +261,7 @@ pub(crate) fn start_plugin_bridges(
                 Instant::now(),
             )
         }
-        .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
+        .map_err(|error| not_ready(format!("Plugin worker launch failed: {error}")))?;
         for (index, (_, _, _, state, _)) in members.iter().enumerate() {
             if let Some(asset) = state {
                 if members.len() > 1 {
@@ -239,8 +276,8 @@ pub(crate) fn start_plugin_bridges(
                 worker
                     .restore_state(asset.clone(), Instant::now())
                     .map_err(|error| {
-                        ControlError::InvalidRequest(format!(
-                            "plugin state restore failed: {error:?}"
+                        not_ready(format!(
+                            "Plugin state restore failed: {error}. Start from defaults is available in Properties; your previous state files are kept"
                         ))
                     })?;
             }
@@ -722,6 +759,41 @@ mod plugin_inventory_tests {
         let _ = std::fs::remove_file(&database);
         let _ = std::fs::remove_dir_all(&folder);
     }
+
+    /// A plugin folder reached through a link (for example one on another
+    /// drive) is scanned under its real folder, and listing with the link's
+    /// own spelling finds that scan. Skipped where the PC cannot create links.
+    #[cfg(windows)]
+    #[test]
+    fn a_scanned_folder_behind_a_link_is_listed_under_the_link_spelling() {
+        let unique = format!("{}-{:?}", std::process::id(), std::thread::current().id())
+            .replace(['(', ')'], "");
+        let base = std::env::temp_dir().join(format!("audiorouter-plugin-link-{unique}"));
+        let _ = std::fs::remove_dir_all(&base);
+        let target = base.join("real");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("effect.dll"), b"not a plugin").unwrap();
+        let link = base.join("link");
+        if std::os::windows::fs::symlink_dir(&target, &link).is_ok() {
+            let typed = link.to_string_lossy().into_owned();
+            let mut plane = ControlPlane::default();
+            let scanned = plane
+                .dispatch_plugins_scan(Some(json!({ "directory": typed })))
+                .unwrap();
+            assert_eq!(scanned["entries"].as_array().unwrap().len(), 1);
+            let path = scanned["entries"][0]["path"].as_str().unwrap();
+            assert!(
+                !path.starts_with(r"\\?\") && !path.starts_with(&typed),
+                "{path}"
+            );
+            let listed = plane
+                .dispatch_plugins_list(Some(json!({ "directory": typed })))
+                .unwrap();
+            assert_eq!(listed["entries"], scanned["entries"]);
+            let _ = std::fs::remove_dir(&link);
+        }
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }
 
 #[cfg(test)]
@@ -963,7 +1035,13 @@ impl ControlPlane {
                     let captured_sliders = latest
                         .as_ref()
                         .and(latest_id.as_deref())
-                        .and_then(|id| Self::plugin_slider_snapshot(storage, id));
+                        .and_then(|id| Self::plugin_slider_snapshot(storage, id))
+                        .or_else(|| {
+                            node.parameters
+                                .get("stateId")
+                                .and_then(Value::as_str)
+                                .and_then(|id| Self::plugin_slider_snapshot(storage, id))
+                        });
                     let state = match latest {
                         Some(state) => Some(state),
                         None => node
@@ -1025,6 +1103,116 @@ impl ControlPlane {
             .collect())
     }
 
+    /// Explicit update preparation keeps authoring separate from activation.
+    /// Old state is never relabelled in place or applied to an unscanned binary.
+    pub(crate) fn dispatch_plugins_prepare_update(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Value, ControlError> {
+        let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        let node = self
+            .get_session(&session_id)?
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id && node.kind == NodeKind::Plugin)
+            .cloned()
+            .ok_or_else(|| ControlError::InvalidRequest("nodeId must name a plugin".into()))?;
+        let path = node
+            .parameters
+            .get("path")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ControlError::InvalidRequest("plugin path is missing".into()))?;
+        let previous = node
+            .parameters
+            .get("fingerprint")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let (identity, _) = self.scanned_plugin_identity(path)?;
+        let expected_format = match identity.format {
+            audiorouter_plugin_host::PluginFormat::Vst2 => "vst2",
+            audiorouter_plugin_host::PluginFormat::Vst3 => "vst3",
+            audiorouter_plugin_host::PluginFormat::Unknown => "unknown",
+        };
+        if node.parameters.get("format").and_then(Value::as_str) != Some(expected_format) {
+            return Err(ControlError::InvalidRequest(
+                "The plugin format changed; choose and add the intended plugin explicitly".into(),
+            ));
+        }
+        let mut parameters = node.parameters.clone();
+        parameters.insert("fingerprint".into(), json!(identity.sha256));
+        let reset = params
+            .as_ref()
+            .and_then(|value| value.get("resetState"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let mut preserved = false;
+        if reset {
+            // Start from defaults once: drop the saved-state reference and
+            // forget the latest capture (its file is kept). Settings made
+            // after this are captured and restored as usual; a permanent
+            // "ignore captures" marker would discard them at every Play.
+            parameters.retain(|name, _| name != "stateId" && !name.starts_with("pluginParameter:"));
+            if let Some(storage) = &self.storage {
+                storage
+                    .clear_plugin_node_state(session_id.as_str(), node_id.as_str())
+                    .map_err(storage_error)?;
+            }
+        } else if let Some(storage) = &self.storage {
+            let captured = storage
+                .plugin_node_state(session_id.as_str(), node_id.as_str())
+                .map_err(storage_error)?;
+            let state_id = captured
+                .as_deref()
+                .or_else(|| node.parameters.get("stateId").and_then(Value::as_str));
+            if let Some(state_id) = state_id {
+                let asset = Self::load_plugin_state_asset(storage, state_id, previous)?;
+                let root = storage.plugin_state_directory().ok_or_else(|| {
+                    ControlError::InvalidRequest("plugin state storage is unavailable".into())
+                })?;
+                let id = format!(
+                    "plugin-update-{}-{}",
+                    &asset.sha256[..16],
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map_or(0, |duration| duration.as_nanos())
+                );
+                let state_path = audiorouter_plugin_host::write_state_asset(&root, &id, &asset)
+                    .map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "Could not preserve plugin state: {error:?}"
+                        ))
+                    })?;
+                if let Some(sliders) = Self::plugin_slider_snapshot(storage, state_id) {
+                    std::fs::write(
+                        plugin_slider_snapshot_path(&root, &id),
+                        Value::Object(sliders).to_string(),
+                    )
+                    .map_err(|error| {
+                        ControlError::InvalidRequest(format!(
+                            "Could not preserve plugin slider snapshot: {error}"
+                        ))
+                    })?;
+                }
+                storage
+                    .save_plugin_state(&audiorouter_storage::PluginStateRecord {
+                        id: id.clone(),
+                        plugin_id: identity.sha256.clone(),
+                        plugin_sha256: identity.sha256.clone(),
+                        version: asset.version,
+                        path: state_path.to_string_lossy().into_owned(),
+                        state_sha256: asset.sha256,
+                        size_bytes: asset.bytes.len() as u64,
+                    })
+                    .map_err(storage_error)?;
+                parameters.insert("stateId".into(), json!(id));
+                preserved = true;
+            }
+        }
+        Ok(
+            json!({"sessionId": session_id, "nodeId": node_id, "parameters": parameters, "previousFingerprint": previous, "statePreserved": preserved}),
+        )
+    }
+
     /// `plugins.resume`: the deliberate Retry after a plugin was silenced for
     /// passing a recording device's audio through unchanged. The target is
     /// already resolved (`resolve_node_target`).
@@ -1077,8 +1265,8 @@ impl ControlPlane {
     ) -> Option<serde_json::Map<String, Value>> {
         let root = storage.plugin_state_directory()?;
         let path = plugin_slider_snapshot_path(&root, state_id);
-        // Bounded: at most 256 numeric sliders.
-        if std::fs::metadata(&path).ok()?.len() > 64 * 1024 {
+        // Bounded independently from opaque state: up to 4096 numeric sliders.
+        if std::fs::metadata(&path).ok()?.len() > 512 * 1024 {
             return None;
         }
         match serde_json::from_slice(&std::fs::read(path).ok()?).ok()? {
@@ -1135,6 +1323,16 @@ impl ControlPlane {
                 "directory path must be absolute".into(),
             ));
         }
+        // The caller's spelling is kept unless the folder is reached through a
+        // junction or link; then the resolved folder is the key and the grant.
+        let resolved_root =
+            audiorouter_plugin_host::resolve_scan_root(root).map_err(ControlError::PluginScan)?;
+        let directory = if resolved_root == root {
+            directory.to_owned()
+        } else {
+            resolved_root.to_string_lossy().into_owned()
+        };
+        let root = resolved_root.as_path();
         let entries = self
             .while_servicing_audio(|| audiorouter_plugin_host::scan_directory(root))
             .map_err(ControlError::PluginScan)?;
@@ -1194,9 +1392,19 @@ impl ControlPlane {
                 "directory path must be absolute".into(),
             ));
         }
+        // A scan of a folder reached through a junction is remembered under
+        // the resolved folder; accept the spelling the caller scanned with.
+        let resolved = audiorouter_plugin_host::resolve_scan_root(std::path::Path::new(directory))
+            .ok()
+            .map(|path| path.to_string_lossy().into_owned());
         Ok(self
             .plugin_inventories
             .get(directory)
+            .or_else(|| {
+                resolved
+                    .as_deref()
+                    .and_then(|key| self.plugin_inventories.get(key))
+            })
             .cloned()
             .unwrap_or_else(|| json!({ "directory": directory, "entries": [] })))
     }
@@ -1479,19 +1687,112 @@ impl ControlPlane {
             .map_err(storage_error)?;
         // Drop the automatic capture this one replaces, unless another node
         // (for example a duplicated session) still restores it.
-        if let Some(previous) =
-            replaced.filter(|previous| previous.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX))
-        {
-            if !storage
-                .plugin_node_state_in_use(&previous)
-                .map_err(storage_error)?
-            {
-                let _ = storage.remove_plugin_state(&previous);
-                let _ = std::fs::remove_file(root.join(format!("{previous}.bin")));
-                let _ = std::fs::remove_file(plugin_slider_snapshot_path(&root, &previous));
-            }
+        if let Some(previous) = replaced {
+            self.cleanup_automatic_plugin_states(&[previous]);
         }
         Ok((state_id, asset.bytes.len()))
+    }
+
+    pub(crate) fn session_plugin_state_candidates(
+        &self,
+        session_id: &EntityId,
+    ) -> Result<Vec<String>, ControlError> {
+        let mut states = self
+            .storage
+            .as_ref()
+            .map(|storage| storage.plugin_node_states(session_id.as_str()))
+            .transpose()
+            .map_err(storage_error)?
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(_, id)| id)
+            .collect::<Vec<_>>();
+        let history = self.store.history(session_id, MAX_GRAPH_HISTORY_ITEMS);
+        for saved in self
+            .store
+            .session(session_id)
+            .cloned()
+            .into_iter()
+            .chain(history)
+        {
+            for node in saved.nodes {
+                if let Some(id) = node.parameters.get("stateId").and_then(Value::as_str) {
+                    states.push(id.to_owned());
+                }
+            }
+        }
+        states.sort_unstable();
+        states.dedup();
+        Ok(states)
+    }
+
+    /// Reclaim only backend-owned captures after their references disappear.
+    /// Explicit library states and unverifiable quarantined graphs are kept.
+    /// File failures retain the metadata rather than losing the cleanup record.
+    pub(crate) fn cleanup_automatic_plugin_states(&self, candidates: &[String]) {
+        if !self.quarantined_sessions.is_empty()
+            || !candidates
+                .iter()
+                .any(|id| id.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX))
+        {
+            return;
+        }
+        let Some(storage) = &self.storage else {
+            return;
+        };
+        let Ok(records) = storage.list_plugin_states(None) else {
+            return;
+        };
+        let Some(root) = storage.plugin_state_directory() else {
+            return;
+        };
+        let Some(parent) = storage
+            .session_inventory_path()
+            .and_then(std::path::Path::parent)
+        else {
+            return;
+        };
+        let (Ok(root), Ok(parent)) = (root.canonicalize(), parent.canonicalize()) else {
+            return;
+        };
+        if root != parent.join("plugin-states") {
+            return;
+        }
+        let mut protected = std::collections::HashSet::new();
+        for session in self.store.sessions(audiorouter_domain::MAX_SESSIONS_GLOBAL) {
+            let history = self.store.history(&session.id, MAX_GRAPH_HISTORY_ITEMS);
+            for saved in std::iter::once(session).chain(history) {
+                for node in saved.nodes {
+                    if let Some(id) = node.parameters.get("stateId").and_then(Value::as_str) {
+                        protected.insert(id.to_owned());
+                    }
+                }
+            }
+        }
+        let remove = |path: std::path::PathBuf| match std::fs::remove_file(path) {
+            Ok(()) => true,
+            Err(error) => error.kind() == std::io::ErrorKind::NotFound,
+        };
+        for record in records {
+            let id = &record.id;
+            if !candidates.contains(id)
+                || !id.starts_with(AUTOMATIC_PLUGIN_STATE_PREFIX)
+                || !id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+                || protected.contains(id)
+                || !matches!(storage.plugin_node_state_in_use(id), Ok(false))
+            {
+                continue;
+            }
+            // Derive names inside the owned directory; never follow a stored
+            // arbitrary path when deleting an automatic capture.
+            if remove(root.join(format!("{id}.bin")))
+                && remove(plugin_slider_snapshot_path(&root, id))
+            {
+                let _ = storage.remove_plugin_state(id);
+            }
+        }
     }
 
     /// Open or close a playing plugin's native editor. The parent window must
@@ -1553,7 +1854,25 @@ impl ControlPlane {
             .and_then(Value::as_str)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| ControlError::InvalidRequest("path is required".into()))?;
-        let (identity, root) = self.scanned_plugin_identity(path)?;
+        let (mut identity, root) = self.scanned_plugin_identity(path)?;
+        if let Some(class_id) = params
+            .as_ref()
+            .and_then(|value| value.get("classId"))
+            .and_then(Value::as_str)
+            .filter(|id| *id != "default")
+        {
+            let index = identity
+                .metadata
+                .class_ids
+                .iter()
+                .position(|id| id.eq_ignore_ascii_case(class_id))
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "classId is not an audio effect listed by the scanned module".into(),
+                    )
+                })?;
+            identity.metadata.class_ids.swap(0, index);
+        }
         let executable = require_plugin_worker(PluginWorkerKind::for_format(identity.format))?;
         let worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
             #[cfg(windows)]
@@ -1650,3 +1969,7 @@ fn plugin_sliders_to_apply(
 #[cfg(test)]
 #[path = "plugins_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "plugin_state_cleanup_tests.rs"]
+mod state_cleanup_tests;

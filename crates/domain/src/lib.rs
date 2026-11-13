@@ -938,7 +938,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 147] = [
+pub const API_METHODS: [ApiMethodSpec; 148] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1412,6 +1412,11 @@ pub const API_METHODS: [ApiMethodSpec; 147] = [
         side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
+        name: "plugins.prepareUpdate",
+        permission: PermissionScope::PluginScan,
+        side_effect: SideEffectClass::Mutating,
+    },
+    ApiMethodSpec {
         name: "plugins.openEditor",
         permission: PermissionScope::PluginScan,
         side_effect: SideEffectClass::ExternalOperation,
@@ -1723,6 +1728,82 @@ pub struct Node {
     pub ports: Vec<Port>,
 }
 
+impl Node {
+    /// Stored audio owned by this node, including disabled/bypassed settings.
+    /// Library references and category names refer to installed files rather
+    /// than database rows. Keep this exhaustive when adding a node kind.
+    pub fn audio_media_ids(&self) -> Vec<&str> {
+        let mut ids = Vec::new();
+        match self.kind {
+            NodeKind::AudioFile | NodeKind::FirFilter => {
+                if let Some(id) = self
+                    .parameters
+                    .get("mediaId")
+                    .and_then(serde_json::Value::as_str)
+                {
+                    ids.push(id);
+                }
+            }
+            NodeKind::Soundboard => {
+                for slot in 1..=SOUNDBOARD_SLOTS {
+                    if let Some(id) = self
+                        .parameters
+                        .get(&format!("slot{slot}MediaId"))
+                        .and_then(serde_json::Value::as_str)
+                    {
+                        ids.push(id);
+                    }
+                    if let Some(set) = self
+                        .parameters
+                        .get(&format!("slot{slot}Set"))
+                        .and_then(serde_json::Value::as_array)
+                    {
+                        ids.extend(set.iter().filter_map(serde_json::Value::as_str));
+                    }
+                }
+            }
+            NodeKind::PhysicalInput
+            | NodeKind::ApplicationCapture
+            | NodeKind::EndpointLoopback
+            | NodeKind::PhysicalOutput
+            | NodeKind::VirtualRenderSource
+            | NodeKind::VirtualCaptureSink
+            | NodeKind::TestSignal
+            | NodeKind::Mixer
+            | NodeKind::Gain
+            | NodeKind::Mute
+            | NodeKind::Meter
+            | NodeKind::ParametricEq
+            | NodeKind::Compressor
+            | NodeKind::Gate
+            | NodeKind::Limiter
+            | NodeKind::Delay
+            | NodeKind::GraphicEq
+            | NodeKind::Pitch
+            | NodeKind::Recorder
+            | NodeKind::Plugin
+            | NodeKind::Volume
+            | NodeKind::BassTreble
+            | NodeKind::Dehum
+            | NodeKind::Declick
+            | NodeKind::InputSwitch
+            | NodeKind::OutputSwitch
+            | NodeKind::Denoise
+            | NodeKind::SpeechDenoise
+            | NodeKind::SpectralGate
+            | NodeKind::TimeShift
+            | NodeKind::NetworkSend
+            | NodeKind::NetworkReceive
+            | NodeKind::Duck
+            | NodeKind::FunVoiceChanger => {}
+        }
+        ids.retain(|id| !id.is_empty() && !id.starts_with(SOUND_LIBRARY_PREFIX));
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    }
+}
+
 fn current_node_type_version() -> u32 {
     1
 }
@@ -1748,6 +1829,16 @@ pub struct Session {
     pub revision: u64,
     pub nodes: Vec<Node>,
     pub edges: Vec<Edge>,
+}
+
+impl Session {
+    /// Unique stored audio references for retention, bundles and deletion.
+    pub fn audio_media_ids(&self) -> Vec<&str> {
+        let mut ids: Vec<_> = self.nodes.iter().flat_map(Node::audio_media_ids).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    }
 }
 
 /// A known virtual-bus boundary between two sessions. The producer is the

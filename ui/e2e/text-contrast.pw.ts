@@ -1,6 +1,6 @@
 import { DEFAULT_CUSTOM_THEME } from "../src/customTheme";
 import { expect, test } from "./browser-test";
-import { backToRoute, openSettings, setColorTheme } from "./workbench";
+import { backToRoute, openSettings, setColorTheme, settingsPageNames } from "./workbench";
 import { lowContrastText } from "./ui-audits";
 
 // "custom" is the starting custom palette, imported the way a user would load a theme file.
@@ -28,7 +28,7 @@ for (const theme of ["dark", "light", "high-contrast", "custom"]) {
     }
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     const list = page.getByRole("tablist", { name: "Settings pages" });
-    for (const name of (await list.getByRole("tab").allInnerTexts()).map((value) => value.trim())) {
+    for (const name of await settingsPageNames(page)) {
       const tab = list.getByRole("tab", { name, exact: true });
       await tab.click();
       await expect(tab).toHaveAttribute("aria-selected", "true");

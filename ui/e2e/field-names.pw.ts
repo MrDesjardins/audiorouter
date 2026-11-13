@@ -1,6 +1,6 @@
 import { expect, test } from "./browser-test";
 import { unnamedFields } from "./ui-audits";
-import { fitCanvas } from "./workbench";
+import { fitCanvas, settingsPageNames } from "./workbench";
 
 test("every field on the panels and Settings pages has an accessible name", async ({ page }) => {
   // Walks about 35 cards and 15 Settings pages: about 15 s alone, more beside other workers.
@@ -39,7 +39,7 @@ test("every field on the panels and Settings pages has an accessible name", asyn
   }
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   const list = page.getByRole("tablist", { name: "Settings pages" });
-  for (const name of (await list.getByRole("tab").allInnerTexts()).map((value) => value.trim())) {
+  for (const name of await settingsPageNames(page)) {
     const tab = list.getByRole("tab", { name, exact: true });
     await tab.click();
     await expect(tab).toHaveAttribute("aria-selected", "true");

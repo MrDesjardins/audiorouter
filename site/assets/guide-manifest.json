@@ -257,7 +257,7 @@
       "kind": "plugin",
       "title": "VST Plugin",
       "path": "tools/plugin.html",
-      "propertyCount": 3,
+      "propertyCount": 4,
       "audioRelevant": false
     },
     {

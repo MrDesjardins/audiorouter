@@ -25,7 +25,8 @@ per-user NSIS installer containing:
 | --- | --- |
 | Desktop app: window, tray, embedded UI and the audio/control backend (one process, `audiorouter-shell.exe`) | install folder |
 | `audiorouter-cli.exe` (CLI and MCP server) | install folder (resource) |
-| `audiorouter-plugin-worker.exe` (isolated VST host) | install folder (resource) |
+| `audiorouter-plugin-worker.exe` (isolated VST2 host) | install folder (resource) |
+| `audiorouter-vst3-worker.exe` (isolated VST3 host) | install folder (resource) |
 | Stream Deck plugin (`com.mrdesjardins.audiorouter.streamDeckPlugin`) | install folder (resource); **API → Install Stream Deck plugin** hands it to the Stream Deck app |
 | Optional verified OpenAI tunnel runtime and notices (from 0.0.16) | install folder; started only through explicit MCP setup |
 
@@ -94,7 +95,11 @@ The intended official release remains maintainer-driven. A maintainer will
 explicitly run a release script or manually dispatch a GitHub Actions
 workflow. It will build and verify assets and create a GitHub **draft** release
 for human review. Publishing the release remains a separate manual action.
-No push-triggered publication or automatic updater is planned. Each release
+No push-triggered publication or automatic updater is planned. The app does
+show an optional new-version notice from the public GitHub release list
+(UI-18), but that check only opens the release page; it never downloads or
+installs an update. A real updater remains future work in
+[the Tauri auto-update plan](../plans/future/auto-update-tauri.md). Each release
 candidate should include a setup package, release notes, checksums, a
 provenance manifest, SBOMs, and third-party notices. Drafts and source ZIPs
 are not equivalent to an installed application.

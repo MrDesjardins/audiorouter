@@ -16,7 +16,23 @@ is the minimum backend scope; a client name or MCP annotation never grants it.
 
 ## Methods
 
-The current catalog contains 147 methods, including backend-owned quit/finalize,
+`status.get` and `system.diagnostics` include `quarantinedSessions` when saved
+session data cannot be loaded. Those rows stay intact and never play.
+`sessions.export` with `raw: true` returns `{ sessionId, document }`, preserving
+the stored text for repair. The default MCP `export_session` tool accepts the
+same option. Ordinary export still returns a validated graph. Delete a
+quarantined row deliberately through `sessions.delete`; recordings remain.
+
+`sessions.stop` and `system.quit` stop audio before finalizing files. Their
+`recorders` arrays report each recorder's `state`, `fileFinalized` and
+`recoverable` flags, optional `nodeId`, and a `reason` on failure. A recorder
+failure preserves its recovery evidence and does not refuse shutdown. Quit
+stops every route before attempting any file finalization.
+Encoder reply waits share one shutdown deadline. A timed-out writer is
+reported failed/recoverable; its thread keeps the file until the I/O returns,
+and shutdown does not wait indefinitely for that thread to exit.
+
+The current catalog contains 148 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -127,6 +143,7 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `plugins.list` | `pluginScan` | read-only |
 | `plugins.inventory` | `pluginScan` | read-only; every remembered scan (one per folder), persisted across restarts; never scans or loads plugin code |
 | `plugins.saveState` | `pluginScan` | mutating; captures a playing plugin node's opaque state, stores it under the database's `plugin-states` folder, and returns a `stateId` to set on the node |
+| `plugins.prepareUpdate` | `pluginScan` | mutating; optional `sessionId`, `nodeId` as ID or exact name; prepares parameters for a currently scanned vendor update while keeping old state assets. `resetState: true` explicitly prepares factory defaults. Apply returned parameters through ordinary graph plan/commit; preparation changes no route or audio. |
 | `plugins.openEditor` | `pluginScan` | external operation; opens a playing VST3 or VST2 plugin's own editor inside a parent window owned by `ownerProcessId` (the desktop shell) |
 | `plugins.closeEditor` | `pluginScan` | external operation; closes the editor and applies its edits to the instance that processes audio |
 | `plugins.resume` | `sessionControl` | mutating; `nodeId` (ID or exact name) selects a plugin in a playing route, `sessionId` defaults to the active session; Retry after the plugin was silenced for passing a recording device's audio through unchanged (`plugin.silencedUnchanged`); `resumed` is false, and the plugin stays silent, while it still passes audio through |
@@ -182,15 +199,15 @@ Finalized node-targeted recording rows from `recordings.list` and
 | `sessions.delete` | `graphWrite` | mutating; requires an idempotency key |
 | `sessions.play` | `deviceAdministration` | external operation; prepares the devices saved on the nodes and starts, like Play; sessionId defaults to the active session |
 | `sessions.togglePlay` | `deviceAdministration` | external operation; stops if playing, otherwise plays |
-| `sessions.summary` | `read` | read-only; nodes with readable settings, connections by name, playing and mute state |
+| `sessions.summary` | `read` | read-only; nodes with readable settings, connections by name with `fromOutput` and `toInput` ports, playing and mute state |
 | `safety.togglePrivacyMute` | `sessionControl` | mutating; flips privacy mute and returns the new state |
 | `nodes.catalog` | `read` | read-only; addable kinds with plain descriptions, inputs, outputs and settings |
 | `nodes.set` | `graphWrite` | mutating; node by ID or name; parameters, enabled, bypass or name; applied live and saved |
 | `nodes.toggle` | `graphWrite` | mutating; flips enabled, bypass, an on/off or a two-choice setting |
-| `nodes.add` | `graphWrite` | mutating; adds a kind, optionally between two nodes or after one |
-| `nodes.remove` | `graphWrite` | mutating; removes a node and by default reconnects its neighbours |
-| `connections.add` | `graphWrite` | mutating; connects two nodes by name; refuses an occupied single input |
-| `connections.remove` | `graphWrite` | mutating; removes the connection between two nodes |
+| `nodes.add` | `graphWrite` | mutating; adds a kind, optionally between two nodes or after one, preserving the replaced connection's ports, mapping, enabled state and Mixer input volume |
+| `nodes.remove` | `graphWrite` | mutating; removes a node and by default bridges a single incoming/outgoing pair, preserving ports and Mixer volume and composing its edge mappings |
+| `connections.add` | `graphWrite` | mutating; connects nodes by name or ID, with optional `fromOutput` and `toInput` port names; defaults to the first output and first free input; refuses an occupied single input |
+| `connections.remove` | `graphWrite` | mutating; removes connections between nodes, optionally limited by `fromOutput` and `toInput` port names |
 | `meters.levels` | `read` | read-only; peak/RMS dBFS, clipping and reduction per playing node |
 | `graph.plan` | `graphWrite` | plan-only |
 | `graph.commit` | `graphWrite` | mutating; requires an idempotency key |

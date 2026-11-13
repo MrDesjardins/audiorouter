@@ -3,13 +3,25 @@
 use super::*;
 
 pub(crate) fn method_output_schema(name: &str) -> Value {
+    // Keep the comprehensive match in a separate, uninlined function. A debug
+    // build otherwise reserves every arm's temporaries in the caller's frame
+    // (over 400 KiB), which can exhaust a Windows main thread's stack during
+    // discovery. This wrapper must remain tiny and produce identical schemas.
+    method_output_schema_impl(name)
+}
+
+#[inline(never)]
+fn method_output_schema_impl(name: &str) -> Value {
     match name {
         "system.quit" => json!({
             "type": "object",
             "properties": {
                 "state": { "const": "stopped" },
-                "sessions": { "type": "array", "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS },
-                "recorders": { "type": "array", "maxItems": MAX_ACTIVE_RECORDERS }
+                "sessions": { "type": "array", "maxItems": audiorouter_domain::MAX_SESSIONS_GLOBAL,
+                    "items": method_output_schema("sessions.stop") },
+                "recorders": { "type": "array",
+                    "maxItems": audiorouter_domain::MAX_SESSIONS_GLOBAL * (audiorouter_domain::MAX_NODES_PER_SESSION + 1),
+                    "items": method_output_schema("sessions.stop")["properties"]["recorders"]["items"].clone() }
             },
             "required": ["state", "sessions", "recorders"],
             "additionalProperties": false
@@ -417,7 +429,13 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "additionalProperties": false
             })
         }
-        "sessions.get" | "sessions.export" => session_item_schema(),
+        "sessions.get" => session_item_schema(),
+        "sessions.export" => json!({"oneOf": [session_item_schema(), {
+            "type": "object", "properties": {
+                "sessionId": {"type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES},
+                "document": {"type": "string", "maxLength": audiorouter_storage::MAX_SESSION_DOCUMENT_BYTES}
+            }, "required": ["sessionId", "document"], "additionalProperties": false
+        }]}),
         "sessions.approveExport" => json!({
             "type": "object",
             "properties": { "approved": { "const": true }, "expiresInMs": { "const": 300000 } },
@@ -598,16 +616,19 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "stopped" },
                 "runtime": { "enum": ["fake", "native"] },
+                "reason": { "type": "string" },
                 "recorders": {
                     "type": "array",
-                    "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+                    "maxItems": audiorouter_domain::MAX_NODES_PER_SESSION + 1,
                     "items": {
                         "type": "object",
                         "properties": {
                             "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                            "state": { "const": "completed" },
-                            "fileFinalized": { "const": true },
-                            "recoverable": { "const": false }
+                            "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                            "state": { "enum": ["idle", "armed", "completed", "failed"] },
+                            "fileFinalized": { "type": "boolean" },
+                            "recoverable": { "type": "boolean" },
+                            "reason": { "type": "string" }
                         },
                         "required": ["sessionId", "state", "fileFinalized", "recoverable"],
                         "additionalProperties": false
@@ -1082,6 +1103,13 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
             "required": ["sessionId", "nodeId", "stateId", "sizeBytes"],
             "additionalProperties": false
         }),
+        "plugins.prepareUpdate" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string" }, "nodeId": { "type": "string" },
+                "parameters": { "type": "object" }, "previousFingerprint": { "type": "string" },
+                "statePreserved": { "type": "boolean" }
+            }, "required": ["sessionId", "nodeId", "parameters", "previousFingerprint", "statePreserved"], "additionalProperties": false
+        }),
         "plugins.resume" => json!({
             "type": "object",
             "properties": {
@@ -1108,51 +1136,13 @@ pub(crate) fn method_output_schema(name: &str) -> Value {
                 "inventories": {
                     "type": "array",
                     "maxItems": MAX_PLUGIN_INVENTORY_ROOTS,
-                    "items": method_output_schema("plugins.list")
+                    "items": plugin_scan_output_schema()
                 }
             },
             "required": ["inventories"],
             "additionalProperties": false
         }),
-        "plugins.scan" | "plugins.list" | "plugins.retry" => json!({
-            "type": "object",
-            "properties": {
-                "directory": { "type": "string", "minLength": 1 },
-                "entries": {
-                    "type": "array",
-                    "maxItems": audiorouter_plugin_host::MAX_SCAN_CANDIDATES,
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "path": { "type": "string", "minLength": 1 },
-                            "identity": {
-                                "type": ["object", "null"],
-                                "properties": {
-                                    "path": { "type": "string", "minLength": 1 },
-                                    "binaryPath": { "type": "string", "minLength": 1 },
-                                    "format": { "enum": ["vst3", "vst2", "unknown"] },
-                                    "architecture": { "enum": ["x64", "x86", "arm64", "unknown"] },
-                                    "fileBytes": { "type": "integer", "minimum": 1, "maximum": audiorouter_plugin_host::MAX_PLUGIN_BYTES },
-                                    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-                                    "vendor": { "type": ["string", "null"], "maxLength": 128 },
-                                    "version": { "type": ["string", "null"], "maxLength": 128 },
-                                    "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                                    "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat", "unsupportedInstrument"] }
-                                },
-                                "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
-                                "additionalProperties": false
-                            },
-                            "error": { "type": ["string", "null"] },
-                            "errorCode": { "enum": ["outsideConfiguredRoot", "unsupportedExtension", "missing", "tooLarge", "notPe", "unsupportedArchitecture", "cancelled", "deadlineExceeded", "io", null] }
-                        },
-                        "required": ["path", "identity", "error", "errorCode"],
-                        "additionalProperties": false
-                    }
-                }
-            },
-            "required": ["directory", "entries"],
-            "additionalProperties": false
-        }),
+        "plugins.scan" | "plugins.list" | "plugins.retry" => plugin_scan_output_schema(),
         "plugins.inspect" => json!({
             "type": "object",
             "properties": {
@@ -1776,6 +1766,14 @@ pub(crate) fn obs_status_output_schema() -> Value {
     })
 }
 
+fn quarantined_sessions_schema() -> Value {
+    json!({"type": "array", "maxItems": audiorouter_domain::MAX_SESSIONS_GLOBAL,
+        "items": {"type": "object", "properties": {
+            "sessionId": {"type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES},
+            "reason": {"type": "string"}
+        }, "required": ["sessionId", "reason"], "additionalProperties": false}})
+}
+
 pub(crate) fn status_output_schema() -> Value {
     json!({
         "type": "object",
@@ -1786,6 +1784,7 @@ pub(crate) fn status_output_schema() -> Value {
             "reason": { "type": "string", "minLength": 1 },
             "storage": { "enum": ["memory", "sqlite"] },
             "sessionCount": { "type": "integer", "minimum": 0 },
+            "quarantinedSessions": quarantined_sessions_schema(),
             "activeSessionCount": { "type": "integer", "minimum": 0 },
             "activeSessionIds": {
                 "type": "array",
@@ -1837,6 +1836,7 @@ pub(crate) fn diagnostics_output_schema() -> Value {
         "properties": {
             "build": { "type": "string" },
             "backend": { "const": "control-plane" },
+            "quarantinedSessions": quarantined_sessions_schema(),
             "storage": { "enum": ["memory", "sqlite"] },
             "audio": {
                 "type": "object",
@@ -2387,6 +2387,52 @@ pub(crate) fn processor_item_schema() -> Value {
             }
         },
         "required": ["id", "version", "category", "availability", "latencySamples", "parameters"],
+        "additionalProperties": false
+    })
+}
+
+/// Shared by scan/list/retry and inventory. Keeping this out of the large
+/// dispatcher match also avoids two 400 KiB debug frames when inventory nests
+/// the list schema.
+#[inline(never)]
+fn plugin_scan_output_schema() -> Value {
+    json!({
+        "type": "object",
+        "properties": {
+            "directory": { "type": "string", "minLength": 1 },
+            "entries": {
+                "type": "array",
+                "maxItems": audiorouter_plugin_host::MAX_SCAN_CANDIDATES,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string", "minLength": 1 },
+                        "identity": {
+                            "type": ["object", "null"],
+                            "properties": {
+                                "path": { "type": "string", "minLength": 1 },
+                                "binaryPath": { "type": "string", "minLength": 1 },
+                                "format": { "enum": ["vst3", "vst2", "unknown"] },
+                                "architecture": { "enum": ["x64", "x86", "arm64", "unknown"] },
+                                "fileBytes": { "type": "integer", "minimum": 1, "maximum": audiorouter_plugin_host::MAX_PLUGIN_BYTES },
+                                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                                "vendor": { "type": ["string", "null"], "maxLength": 128 },
+                                "version": { "type": ["string", "null"], "maxLength": 128 },
+                                "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
+                                "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat", "unsupportedInstrument"] }
+                            },
+                            "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
+                            "additionalProperties": false
+                        },
+                        "error": { "type": ["string", "null"] },
+                        "errorCode": { "enum": ["outsideConfiguredRoot", "unsupportedExtension", "missing", "tooLarge", "notPe", "unsupportedArchitecture", "cancelled", "deadlineExceeded", "io", null] }
+                    },
+                    "required": ["path", "identity", "error", "errorCode"],
+                    "additionalProperties": false
+                }
+            }
+        },
+        "required": ["directory", "entries"],
         "additionalProperties": false
     })
 }

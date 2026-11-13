@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ApplicationInfo, Session } from "@audiorouter/contracts";
+import type { ApplicationInfo, PluginScanEntry, Session } from "@audiorouter/contracts";
 import {
   addSourceToOccupiedOutput,
   appendApplicationCaptureGroup,
@@ -929,7 +929,7 @@ describe("pluginCatalog", () => {
     sha256: string,
     format: "vst3" | "vst2",
     compatibility: "supportedVst3X64" | "supportedVst2X64Gated" | "unsupportedFormat",
-  ) => ({
+  ): PluginScanEntry => ({
     path,
     identity: {
       path,
@@ -968,6 +968,15 @@ describe("pluginCatalog", () => {
       ["ReaEQ", "VST2", "C:\\A"],
     ]);
     expect(STANDARD_PLUGIN_FOLDERS).toContain("C:\\Program Files\\Common Files\\VST3");
+  });
+  it("keeps each scanned VST3 effect class selectable in the library", () => {
+    const module = entry("C:\\B\\shell.vst3", "cc", "vst3", "supportedVst3X64");
+    const identity = module.identity;
+    if (!identity) throw new Error("test fixture must have a plugin identity");
+    identity.classIds = ["A".repeat(32), "B".repeat(32)];
+    const catalog = pluginCatalog([{ directory: "C:\\B", entries: [module] }]);
+    expect(catalog).toHaveLength(2);
+    expect(catalog.map((item) => item.entry.identity?.classIds[0])).toEqual(identity.classIds);
   });
 });
 

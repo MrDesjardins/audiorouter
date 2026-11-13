@@ -635,6 +635,7 @@ impl ControlPlane {
             RuntimeGeneration::new(generation),
             sample_rate_hz,
             &plugin_stages,
+            flags_only,
         )?;
 
         let capture_bus_ids = session_virtual_capture_bus_ids(&session);
@@ -715,6 +716,7 @@ impl ControlPlane {
             RuntimeGeneration::new(generation),
             sample_rate_hz,
             &plugin_stages,
+            false,
         )?;
         let recorder_node_ids = session
             .nodes

@@ -132,6 +132,13 @@ fn text_param<'v>(params: &'v Value, name: &str) -> Result<&'v str, ControlError
         .ok_or_else(|| ControlError::InvalidRequest(format!("{name} is required")))
 }
 
+fn optional_text_param<'v>(params: &'v Value, name: &str) -> Result<Option<&'v str>, ControlError> {
+    params
+        .get(name)
+        .map(|_| text_param(params, name))
+        .transpose()
+}
+
 /// Find a node by ID, then by exact name ignoring case.
 pub(crate) fn resolve_node<'s>(
     session: &'s Session,
@@ -177,6 +184,39 @@ pub(crate) fn connect(
     from: &EntityId,
     to: &EntityId,
 ) -> Result<EntityId, ControlError> {
+    connect_ports(session, from, to, None, None)
+}
+
+fn named_port<'a>(
+    node: &'a Node,
+    direction: PortDirection,
+    name: &str,
+) -> Result<&'a Port, ControlError> {
+    node.ports
+        .iter()
+        .find(|port| port.direction == direction && port.name == name)
+        .ok_or_else(|| {
+            ControlError::InvalidRequest(format!(
+                "\"{}\" has no {:?} port \"{name}\"; ports: {}",
+                node.name,
+                direction,
+                node.ports
+                    .iter()
+                    .filter(|port| port.direction == direction)
+                    .map(|port| port.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ))
+        })
+}
+
+fn connect_ports(
+    session: &mut Session,
+    from: &EntityId,
+    to: &EntityId,
+    from_output: Option<&str>,
+    to_input: Option<&str>,
+) -> Result<EntityId, ControlError> {
     let source = session
         .nodes
         .iter()
@@ -189,21 +229,29 @@ pub(crate) fn connect(
         .find(|node| node.id == *to)
         .cloned()
         .ok_or_else(|| ControlError::InvalidRequest("target node is missing".into()))?;
-    let output = source
-        .ports
-        .iter()
-        .find(|port| port.direction == PortDirection::Output)
-        .ok_or_else(|| {
-            ControlError::InvalidRequest(format!(
-                "\"{}\" has no output to connect from",
-                source.name
-            ))
-        })?;
-    if session
-        .edges
-        .iter()
-        .any(|edge| edge.source_node == *from && edge.destination_node == *to)
-    {
+    let output = if let Some(name) = from_output {
+        named_port(&source, PortDirection::Output, name)?
+    } else {
+        source
+            .ports
+            .iter()
+            .find(|port| port.direction == PortDirection::Output)
+            .ok_or_else(|| {
+                ControlError::InvalidRequest(format!(
+                    "\"{}\" has no output to connect from",
+                    source.name
+                ))
+            })?
+    };
+    if let Some(name) = to_input {
+        named_port(&target, PortDirection::Input, name)?;
+    }
+    if session.edges.iter().any(|edge| {
+        edge.source_node == *from
+            && edge.source_port == output.name
+            && edge.destination_node == *to
+            && to_input.is_none_or(|name| edge.destination_port == name)
+    }) {
         return Err(ControlError::InvalidRequest(format!(
             "\"{}\" is already connected to \"{}\"",
             source.name, target.name
@@ -213,6 +261,7 @@ pub(crate) fn connect(
         .ports
         .iter()
         .filter(|port| port.direction == PortDirection::Input)
+        .filter(|port| to_input.is_none_or(|name| port.name == name))
         .find(|port| target.kind == NodeKind::Mixer || !session.edges.iter().any(|edge| edge.destination_node == *to && edge.destination_port == port.name))
         .ok_or_else(|| {
             ControlError::InvalidRequest(format!(
@@ -237,6 +286,162 @@ pub(crate) fn connect(
         enabled: true,
     });
     Ok(id)
+}
+
+fn move_mixer_volume(session: &mut Session, target: &EntityId, old: &EntityId, new: &EntityId) {
+    if let Some(mixer) = session
+        .nodes
+        .iter_mut()
+        .find(|node| node.id == *target && node.kind == NodeKind::Mixer)
+    {
+        let prefix = audiorouter_domain::MIXER_INPUT_VOLUME_PREFIX;
+        let volume = mixer
+            .parameters
+            .remove(&format!("{prefix}{}", old.as_str()));
+        // An absent old key means 100%, not a stale value under the new ID.
+        mixer
+            .parameters
+            .remove(&format!("{prefix}{}", new.as_str()));
+        if let Some(volume) = volume {
+            mixer
+                .parameters
+                .insert(format!("{prefix}{}", new.as_str()), volume);
+        }
+    }
+}
+
+fn insert_on_edge(
+    session: &mut Session,
+    original: &Edge,
+    inserted: &EntityId,
+) -> Result<(), ControlError> {
+    session.edges.retain(|edge| edge.id != original.id);
+    let before = connect_ports(
+        session,
+        &original.source_node,
+        inserted,
+        Some(&original.source_port),
+        None,
+    )?;
+    let after = connect_ports(
+        session,
+        inserted,
+        &original.destination_node,
+        None,
+        Some(&original.destination_port),
+    )?;
+    let downstream = session
+        .edges
+        .iter_mut()
+        .find(|edge| edge.id == after)
+        .unwrap();
+    if downstream.matrix.len() == original.matrix.len() {
+        downstream.matrix.clone_from(&original.matrix);
+    } else {
+        // If channel conversion moved to the downstream edge, the old matrix
+        // still fits the upstream edge (for example stereo -> mono tool).
+        let upstream = session
+            .edges
+            .iter_mut()
+            .find(|edge| edge.id == before)
+            .unwrap();
+        if upstream.matrix.len() == original.matrix.len() {
+            upstream.matrix.clone_from(&original.matrix);
+        } else {
+            // Neither side has the old shape (mono -> stereo tool -> mono).
+            // Apply the original mapping after the tool's dry conversion back
+            // to the source shape, rather than discarding its coefficients.
+            let source = resolve_node(session, original.source_node.as_str())?;
+            let source_channels =
+                named_port(source, PortDirection::Output, &original.source_port)?.channels;
+            let tool = resolve_node(session, inserted.as_str())?;
+            let tool_channels = tool
+                .ports
+                .iter()
+                .find(|port| port.direction == PortDirection::Output)
+                .unwrap()
+                .channels;
+            let conversion = channel_matrix(tool_channels, source_channels);
+            let rows = original.matrix.len() / usize::from(source_channels);
+            let columns = usize::from(tool_channels);
+            let middle = usize::from(source_channels);
+            let mut matrix = vec![0.0; rows * columns];
+            for row in 0..rows {
+                for column in 0..columns {
+                    for inner in 0..middle {
+                        matrix[row * columns + column] += original.matrix[row * middle + inner]
+                            * conversion[inner * columns + column];
+                    }
+                }
+            }
+            session
+                .edges
+                .iter_mut()
+                .find(|edge| edge.id == after)
+                .unwrap()
+                .matrix = matrix;
+        }
+    }
+    for edge in session
+        .edges
+        .iter_mut()
+        .filter(|edge| edge.id == before || edge.id == after)
+    {
+        edge.enabled = original.enabled;
+    }
+    move_mixer_volume(
+        session,
+        &original.destination_node,
+        &original.source_node,
+        inserted,
+    );
+    Ok(())
+}
+
+fn bridge_edges(
+    session: &mut Session,
+    incoming: &Edge,
+    outgoing: &Edge,
+    removed: &Node,
+) -> Result<(), ControlError> {
+    let input_channels = usize::from(
+        named_port(removed, PortDirection::Input, &incoming.destination_port)?.channels,
+    );
+    let output_channels =
+        usize::from(named_port(removed, PortDirection::Output, &outgoing.source_port)?.channels);
+    let source_channels = incoming.matrix.len() / input_channels;
+    let destination_channels = outgoing.matrix.len() / output_channels;
+    let dry = channel_matrix(input_channels as u8, output_channels as u8);
+    let mut matrix = vec![0.0; source_channels * destination_channels];
+    for destination in 0..destination_channels {
+        for source in 0..source_channels {
+            for output in 0..output_channels {
+                for input in 0..input_channels {
+                    matrix[destination * source_channels + source] += outgoing.matrix
+                        [destination * output_channels + output]
+                        * dry[output * input_channels + input]
+                        * incoming.matrix[input * source_channels + source];
+                }
+            }
+        }
+    }
+    let id = connect_ports(
+        session,
+        &incoming.source_node,
+        &outgoing.destination_node,
+        Some(&incoming.source_port),
+        Some(&outgoing.destination_port),
+    )?;
+    let bridge = session.edges.iter_mut().find(|edge| edge.id == id).unwrap();
+    bridge.matrix = matrix;
+    bridge.enabled = incoming.enabled && outgoing.enabled;
+    move_mixer_volume(
+        session,
+        &outgoing.destination_node,
+        &removed.id,
+        &incoming.source_node,
+    );
+    Ok(())
 }
 
 fn display_value(value: &Value, unit: Option<&str>) -> String {
@@ -438,7 +643,7 @@ impl ControlPlane {
         let connections = session
             .edges
             .iter()
-            .map(|edge| json!({ "id": edge.id, "from": name_of(&edge.source_node), "to": name_of(&edge.destination_node), "toInput": edge.destination_port, "enabled": edge.enabled }))
+            .map(|edge| json!({ "id": edge.id, "from": name_of(&edge.source_node), "to": name_of(&edge.destination_node), "fromOutput": edge.source_port, "toInput": edge.destination_port, "enabled": edge.enabled }))
             .collect::<Vec<_>>();
         Ok(json!({
             "sessionId": session.id,
@@ -647,33 +852,32 @@ impl ControlPlane {
                     let to = resolve_node(&current, text_param(between, "to")?)?
                         .id
                         .clone();
-                    let before = candidate.edges.len();
-                    candidate
+                    let replaced = candidate
                         .edges
-                        .retain(|edge| !(edge.source_node == from && edge.destination_node == to));
-                    if candidate.edges.len() == before {
+                        .iter()
+                        .filter(|edge| edge.source_node == from && edge.destination_node == to)
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    if replaced.is_empty() {
                         return Err(ControlError::InvalidRequest(
                             "those two nodes are not connected; use after, or connect them first"
                                 .into(),
                         ));
                     }
-                    connect(&mut candidate, &from, &id)?;
-                    connect(&mut candidate, &id, &to)?;
+                    let [original] = replaced.as_slice() else {
+                        return Err(ControlError::InvalidRequest("these nodes have several connections; choose and reconnect their ports explicitly".into()));
+                    };
+                    insert_on_edge(&mut candidate, original, &id)?;
                 } else if let Some(after) = params.get("after").and_then(Value::as_str) {
                     let from = resolve_node(&current, after)?.id.clone();
                     let outgoing = candidate
                         .edges
                         .iter()
                         .filter(|edge| edge.source_node == from)
-                        .map(|edge| edge.destination_node.clone())
+                        .cloned()
                         .collect::<Vec<_>>();
-                    if let [to] = outgoing.as_slice() {
-                        let to = to.clone();
-                        candidate.edges.retain(|edge| {
-                            !(edge.source_node == from && edge.destination_node == to)
-                        });
-                        connect(&mut candidate, &from, &id)?;
-                        connect(&mut candidate, &id, &to)?;
+                    if let [original] = outgoing.as_slice() {
+                        insert_on_edge(&mut candidate, original, &id)?;
                     } else {
                         connect(&mut candidate, &from, &id)?;
                     }
@@ -685,14 +889,14 @@ impl ControlPlane {
                 let incoming = current
                     .edges
                     .iter()
-                    .filter(|edge| edge.destination_node == node.id && edge.enabled)
-                    .map(|edge| edge.source_node.clone())
+                    .filter(|edge| edge.destination_node == node.id)
+                    .cloned()
                     .collect::<Vec<_>>();
                 let outgoing = current
                     .edges
                     .iter()
-                    .filter(|edge| edge.source_node == node.id && edge.enabled)
-                    .map(|edge| edge.destination_node.clone())
+                    .filter(|edge| edge.source_node == node.id)
+                    .cloned()
                     .collect::<Vec<_>>();
                 candidate
                     .nodes
@@ -706,7 +910,8 @@ impl ControlPlane {
                     .unwrap_or(true);
                 let mut bridged = false;
                 if let ([from], [to], true) = (incoming.as_slice(), outgoing.as_slice(), bridge) {
-                    bridged = connect(&mut candidate, from, to).is_ok();
+                    bridge_edges(&mut candidate, from, to, &node)?;
+                    bridged = true;
                 }
                 detail = json!({ "nodeId": node.id, "name": node.name, "bridged": bridged });
             }
@@ -717,7 +922,13 @@ impl ControlPlane {
                 let to = resolve_node(&current, text_param(params, "to")?)?
                     .id
                     .clone();
-                let edge = connect(&mut candidate, &from, &to)?;
+                let edge = connect_ports(
+                    &mut candidate,
+                    &from,
+                    &to,
+                    optional_text_param(params, "fromOutput")?,
+                    optional_text_param(params, "toInput")?,
+                )?;
                 detail = json!({ "connectionId": edge });
             }
             "connections.remove" => {
@@ -728,9 +939,28 @@ impl ControlPlane {
                     .id
                     .clone();
                 let before = candidate.edges.len();
-                candidate
-                    .edges
-                    .retain(|edge| !(edge.source_node == from && edge.destination_node == to));
+                let from_output = optional_text_param(params, "fromOutput")?;
+                let to_input = optional_text_param(params, "toInput")?;
+                if let Some(name) = from_output {
+                    named_port(
+                        resolve_node(&current, from.as_str())?,
+                        PortDirection::Output,
+                        name,
+                    )?;
+                }
+                if let Some(name) = to_input {
+                    named_port(
+                        resolve_node(&current, to.as_str())?,
+                        PortDirection::Input,
+                        name,
+                    )?;
+                }
+                candidate.edges.retain(|edge| {
+                    !(edge.source_node == from
+                        && edge.destination_node == to
+                        && from_output.is_none_or(|name| edge.source_port == name)
+                        && to_input.is_none_or(|name| edge.destination_port == name))
+                });
                 if candidate.edges.len() == before {
                     return Err(ControlError::InvalidRequest(
                         "those two nodes are not connected".into(),

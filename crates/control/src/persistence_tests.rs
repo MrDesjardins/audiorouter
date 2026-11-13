@@ -4,6 +4,175 @@ use super::*;
 use crate::test_support::*;
 
 #[test]
+fn newer_schema_is_an_update_requirement_not_corruption() {
+    let error = storage_error(StorageError::NewerSchema {
+        found: 99,
+        supported: 4,
+    });
+    assert!(
+        matches!(error, ControlError::Storage(message) if message.contains("update AudioRouter") && message.contains("99"))
+    );
+}
+
+#[test]
+fn invalid_session_and_history_are_isolated_during_backend_startup() {
+    let path = std::env::temp_dir().join(format!(
+        "audiorouter-quarantine-{}.sqlite",
+        std::process::id()
+    ));
+    let storage = Storage::open(&path).unwrap();
+    let healthy = session();
+    storage.save_session(&healthy).unwrap();
+    storage.save_privacy_mute(true).unwrap();
+    let injector = rusqlite::Connection::open(&path).unwrap();
+    injector
+        .execute(
+            "INSERT INTO sessions(id, revision, document) VALUES ('broken', 0, 'not json')",
+            [],
+        )
+        .unwrap();
+    injector.execute("INSERT INTO session_history(session_id, revision, document) VALUES (?1, 99, 'not json')", [healthy.id.as_str()]).unwrap();
+    let mut invalid_domain = healthy.clone();
+    invalid_domain.id = EntityId::new("invalid-domain");
+    invalid_domain.name = "x".repeat(257);
+    injector
+        .execute(
+            "INSERT INTO sessions(id, revision, document) VALUES (?1, 0, ?2)",
+            rusqlite::params![
+                invalid_domain.id.as_str(),
+                serde_json::to_string(&invalid_domain).unwrap()
+            ],
+        )
+        .unwrap();
+    let mut plane = ControlPlane::try_with_storage("quarantine", storage)
+        .expect("one invalid graph must not disable healthy sessions");
+    let listed = plane
+        .dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: "sessions.list".into(),
+            params: None,
+        })
+        .result
+        .unwrap();
+    assert_eq!(listed["items"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["items"][0]["id"], healthy.id.as_str());
+    let status = plane.status_snapshot().unwrap();
+    assert_eq!(status["quarantinedSessions"][0]["sessionId"], "broken");
+    assert_eq!(status["quarantinedSessions"].as_array().unwrap().len(), 2);
+    assert_eq!(plane.get_session(&healthy.id).unwrap(), &healthy);
+    assert!(status["activeSessionIds"].as_array().unwrap().is_empty());
+    assert_eq!(status["privacyMute"]["muted"], true);
+    let mut replacement = healthy.clone();
+    replacement.id = EntityId::new("broken");
+    assert!(
+        plane.insert_session(replacement).is_err(),
+        "a hidden quarantined row must not be overwritten by creation"
+    );
+    let mut fallback = healthy.clone();
+    fallback.id = EntityId::new("broken");
+    let fallback_id = plane.ensure_default_session(fallback.clone()).unwrap();
+    assert_eq!(fallback_id.as_str(), "broken-recovery-1");
+    assert_eq!(plane.ensure_default_session(fallback).unwrap(), fallback_id);
+    let original: String = injector
+        .query_row(
+            "SELECT document FROM sessions WHERE id = 'broken'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(
+        original, "not json",
+        "startup must preserve the original bytes"
+    );
+    let request = |method: &str, params: Value| JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: method.into(),
+        params: Some(params),
+    };
+    let diagnostics = plane
+        .dispatch(request("system.diagnostics", json!({})))
+        .result
+        .unwrap();
+    assert_eq!(
+        diagnostics["quarantinedSessions"],
+        status["quarantinedSessions"]
+    );
+    let exported = plane
+        .dispatch(request(
+            "sessions.export",
+            json!({"sessionId": "broken", "raw": true}),
+        ))
+        .result
+        .unwrap();
+    assert_eq!(exported["document"], original);
+    assert!(plane
+        .dispatch(request(
+            "sessions.start",
+            json!({"sessionId": "broken", "idempotencyKey": "never-play"})
+        ))
+        .error
+        .is_some());
+    let deleted = plane
+        .dispatch(request(
+            "sessions.delete",
+            json!({"sessionId": "broken", "idempotencyKey": "delete"}),
+        ))
+        .result
+        .unwrap();
+    assert_eq!(deleted["deleted"], true);
+    let deleted = plane
+        .dispatch(request(
+            "sessions.delete",
+            json!({"sessionId": "invalid-domain", "idempotencyKey": "delete-domain"}),
+        ))
+        .result
+        .unwrap();
+    assert_eq!(deleted["deleted"], true);
+    assert!(plane.status_snapshot().unwrap()["quarantinedSessions"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert_eq!(plane.get_session(&healthy.id).unwrap(), &healthy);
+    drop((plane, injector));
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn full_quarantined_inventory_still_allows_a_recovery_workspace() {
+    let path = std::env::temp_dir().join(format!(
+        "audiorouter-full-quarantine-{}.sqlite",
+        std::process::id()
+    ));
+    let storage = Storage::open(&path).unwrap();
+    let injector = rusqlite::Connection::open(&path).unwrap();
+    for index in 0..audiorouter_domain::MAX_SESSIONS_GLOBAL {
+        injector
+            .execute(
+                "INSERT INTO sessions(id, revision, document) VALUES (?1, 0, 'not json')",
+                [format!("broken-{index}")],
+            )
+            .unwrap();
+    }
+    let mut plane = ControlPlane::try_with_storage("quarantine-full", storage).unwrap();
+    let id = plane
+        .ensure_default_session(session())
+        .expect("recovery must not require a free durable session slot");
+    assert!(plane.get_session(&id).is_ok());
+    assert_eq!(
+        plane.storage.as_ref().unwrap().count_sessions().unwrap(),
+        audiorouter_domain::MAX_SESSIONS_GLOBAL
+    );
+    assert_eq!(
+        plane.quarantined_sessions.len(),
+        audiorouter_domain::MAX_SESSIONS_GLOBAL
+    );
+    drop((plane, injector));
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
 fn timestamped_plan_id_allocator_skips_collisions_and_bounds_exhaustion() {
     for prefix in ["startup-plan", "virtual-plan"] {
         let occupied = EntityId::new(format!("{prefix}-123-1"));
@@ -225,6 +394,77 @@ fn graph_plan_persistence_failure_rolls_back_the_in_memory_plan() {
             audiorouter_domain::StoreError::PlanNotFound
         ))
     ));
+}
+
+#[test]
+fn graph_plan_cleanup_failure_does_not_hide_a_durable_commit() {
+    let path = std::env::temp_dir().join(format!(
+        "audiorouter-plan-cleanup-{}-{}.sqlite",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let mut plane = ControlPlane::with_storage("cleanup-fault", Storage::open(&path).unwrap());
+    let original = session();
+    plane.insert_session(original.clone()).unwrap();
+    plane.session_start(&original.id).unwrap();
+    let mut candidate = original.clone();
+    candidate.name = "Durably saved".into();
+    let plan = plane.plan_graph(&original.id, 0, candidate).unwrap();
+    let injector = rusqlite::Connection::open(&path).unwrap();
+    injector.execute_batch("CREATE TRIGGER reject_plan_cleanup BEFORE DELETE ON graph_plans BEGIN SELECT RAISE(ABORT, 'injected cleanup failure'); END;").unwrap();
+    let request = |key: &str| JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "graph.commit".into(),
+        params: Some(json!({"planId": plan, "baseRevision": 0, "idempotencyKey": key})),
+    };
+    let response = plane.dispatch(request("cleanup-commit"));
+    assert!(response.error.is_none(), "{response:?}");
+    assert_eq!(response.result.unwrap()["revision"], 1);
+    assert_eq!(
+        plane.get_session(&original.id).unwrap().name,
+        "Durably saved"
+    );
+    let events = plane.events.since(0, 100).unwrap();
+    assert!(events
+        .iter()
+        .any(|event| event.category == "graph.committed"));
+    assert!(events
+        .iter()
+        .any(|event| event.category == "runtime.activated"));
+    let versions = plane
+        .dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(2)),
+            method: "graph.versions".into(),
+            params: Some(json!({"sessionId": original.id})),
+        })
+        .result
+        .unwrap();
+    assert!(versions["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item["revision"] == 1 && item["savedAtMs"].as_u64().is_some()));
+    assert!(
+        injector
+            .query_row(
+                "SELECT COUNT(*) FROM graph_plans WHERE id = ?1",
+                [plan.as_str()],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap()
+            > 0
+    );
+    assert!(plane.dispatch(request("cleanup-commit")).error.is_none());
+    assert!(plane.dispatch(request("cleanup-other-key")).error.is_some());
+    assert_eq!(plane.get_session(&original.id).unwrap().revision, 1);
+    drop(injector);
+    drop(plane);
+    std::fs::remove_file(path).unwrap();
 }
 
 #[test]

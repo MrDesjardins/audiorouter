@@ -95,6 +95,30 @@ fn going_back_is_a_new_save_and_keeps_later_versions() {
 }
 
 #[test]
+fn refused_delete_preserves_saved_version_notes() {
+    let mut plane = ControlPlane::with_storage("test", Storage::open_memory().unwrap());
+    let id = session_with_goal(&mut plane);
+    save_renamed(&mut plane, &id, "Keep my notes");
+    let before = call(&mut plane, "graph.versions", json!({ "sessionId": id })).unwrap();
+    plane.session_start(&EntityId::new(&id)).unwrap();
+    let error = call(
+        &mut plane,
+        "sessions.delete",
+        json!({ "sessionId": id, "idempotencyKey": "refused-delete" }),
+    )
+    .unwrap_err();
+    assert!(error.contains("stop the session"), "{error}");
+    let after = call(&mut plane, "graph.versions", json!({ "sessionId": id })).unwrap();
+    assert_eq!(after, before);
+    // Reopening must retain the durable note too, not just its cached copy.
+    let mut reopened = ControlPlane::with_storage("test", plane.storage.take().unwrap());
+    assert_eq!(
+        call(&mut reopened, "graph.versions", json!({ "sessionId": id })).unwrap(),
+        before
+    );
+}
+
+#[test]
 fn an_unknown_or_current_version_is_refused_in_plain_words() {
     let mut plane = ControlPlane::new("test");
     let id = session_with_goal(&mut plane);

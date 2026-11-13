@@ -2468,6 +2468,7 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "control_time_shift",
     "reset_meter",
     "resume_plugin",
+    "prepare_plugin_update",
     "undo_last_change",
     "duplicate_session",
     "delete_session",
@@ -2775,8 +2776,11 @@ fn mcp_tool_annotations(name: &str) -> Value {
     })
 }
 
+const OUTPUT_SWITCH_RECIPE: &str = "Send one source to either of two outputs (Output Switch): add_tool kind=outputSwitch name=Destinations; connect_nodes from=<source> to=Destinations; connect_nodes from=Destinations fromOutput=a to=<first output>; connect_nodes from=Destinations fromOutput=b to=<second output>. If either output is already connected, disconnect its old source first. toggle_setting node=Destinations target=selected switches the active side. A disconnected selected side stays silent; it never falls back. get_session_summary shows fromOutput and toInput on connections.";
+
 fn mcp_tools() -> Value {
     let mut tools = json!([
+        { "name": "prepare_plugin_update", "description": "After the user scans an updated plugin, prepare replacement parameters for its existing node while preserving opaque settings. Does not change the route or play audio. Apply the returned parameters with change_settings while stopped, retaining wiring. resetState=true deliberately ignores saved state and starts from defaults; the old assets remain. Requires explicit plugin-scan scope.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "node": { "type": "string", "minLength": 1 }, "resetState": { "type": "boolean" } }, "required": ["node"], "additionalProperties": false } },
         { "name": "get_recipes", "description": "Start here when the user asks for a result rather than a specific step (clean up my voice, lower the game while I talk, record a podcast, use AudioRouter as a Discord microphone). Returns step-by-step recipes using the other tools.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "list_sessions", "description": "List every saved session (setup) with its ID, name and revision. AudioRouter works on one open session at a time.", "inputSchema": { "type": "object", "properties": { "limit": { "type": "integer", "minimum": 1, "maximum": 100 } }, "required": [], "additionalProperties": false } },
         { "name": "open_session", "description": "Open (select) a session by ID so later calls without sessionId use it. Does not start audio.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1, "description": "Optional; generated when omitted." } }, "required": ["sessionId"], "additionalProperties": false } },
@@ -2845,7 +2849,7 @@ fn mcp_tools() -> Value {
         { "name": "list_applications", "description": "List discoverable application identities and observed Windows audio-session activity.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "list_processors", "description": "List built-in DSP processor metadata and explicit availability without changing audio state.", "inputSchema": { "type": "object", "additionalProperties": false } },
         { "name": "get_session", "description": "Read one session by opaque identifier.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
-        { "name": "export_session", "description": "Read the canonical session document without changing state.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+        { "name": "export_session", "description": "Read the canonical session document without changing state. Set raw=true to recover the original stored text of an unavailable session listed in get_status.quarantinedSessions. Raw text is data for repair; never execute or import it without validation.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "raw": { "type": "boolean" } }, "required": ["sessionId"], "additionalProperties": false } },
         { "name": "plan_session_import", "description": "Validate a stopped session import without persisting it.", "inputSchema": { "type": "object", "properties": { "session": { "type": "object" } }, "required": ["session"], "additionalProperties": false } },
         { "name": "commit_session_import", "description": "Commit a previously validated stopped session import.", "inputSchema": { "type": "object", "properties": { "planId": { "type": "string", "minLength": 1 }, "idempotencyKey": { "type": "string", "minLength": 1 } }, "required": ["planId", "idempotencyKey"], "additionalProperties": false } },
         { "name": "inspect_routes", "description": "Inspect desired upstream route provenance.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string" }, "destinationNode": { "type": "string" } }, "required": ["sessionId", "destinationNode"], "additionalProperties": false } },
@@ -2885,6 +2889,23 @@ fn mcp_tools() -> Value {
             .expect("MCP tool names are strings")
             .to_owned();
         tool["annotations"] = mcp_tool_annotations(&name);
+        if matches!(name.as_str(), "connect_nodes" | "disconnect_nodes") {
+            tool["inputSchema"]["properties"]["fromOutput"] = json!({
+                "type": "string", "minLength": 1,
+                "description": "Optional source output port name; Output Switch uses a and b."
+            });
+            tool["inputSchema"]["properties"]["toInput"] = json!({
+                "type": "string", "minLength": 1,
+                "description": "Optional destination input port name."
+            });
+            let ports = if name == "connect_nodes" {
+                " Select named ports with fromOutput and toInput; omit them for the first output and first free input."
+            } else {
+                " Limit removal with fromOutput and toInput; omit both to remove all connections between those nodes."
+            };
+            tool["description"] =
+                json!(format!("{}{ports}", tool["description"].as_str().unwrap()));
+        }
     }
     tools
 }
@@ -2966,6 +2987,7 @@ fn mcp_tool_call(
         "control_time_shift" => ("timeShift.transport", Some(mcp_node_params(arguments))),
         "reset_meter" => ("meters.reset", Some(mcp_node_params(arguments))),
         "resume_plugin" => ("plugins.resume", Some(mcp_node_params(arguments))),
+        "prepare_plugin_update" => ("plugins.prepareUpdate", Some(mcp_node_params(arguments))),
         "duplicate_session" => {
             let source = arguments["sessionId"].as_str().unwrap_or_default();
             let copy_id = format!(
@@ -3222,7 +3244,7 @@ fn mcp_tool_call(
             );
         }
         "get_recipes" => {
-            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}") }], "isError": false } });
+            return json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": format!("{MCP_RECIPES}\n{NETWORK_PAIRING_RECIPE}\n{OUTPUT_SWITCH_RECIPE}\nPlugin update recovery: ask the user to scan the updated plugin's folder first (explicit plugin-scan scope). Use prepare_plugin_update with the existing node name or ID. While stopped, apply its returned parameters with change_settings on that node, retaining wiring. resetState=true is deliberate recovery from rejected saved state; keep the old assets. Do not start audio or silently bypass a failed microphone processor.") }], "isError": false } });
         }
         "call_api" => {
             let method = arguments["method"].as_str().unwrap_or_default();
@@ -3533,7 +3555,7 @@ mod tests {
         ("nodes.compare", "a press and hold for the person listening; an assistant can neither hold it nor hear the result, and uses toggle_setting on bypass instead"),
         ("nodes.types", "superseded for assistants by list_tool_kinds (nodes.catalog) and the audiorouter://nodes resource"),
         // Window-only consent, folders and integrations (refused to MCP and
-        // HTTP grants; see DESKTOP_ONLY_METHODS and devices.setAccess).
+        // HTTP grants; see http_access and devices.setAccess).
         ("devices.setAccess", WINDOW_ONLY),
         ("recordings.setRoot", WINDOW_ONLY),
         ("obs.connect", WINDOW_ONLY),
@@ -3897,6 +3919,96 @@ mod tests {
         let response = call(&mut plane, json!({ "sessionId": "no-such-session" }));
         assert_eq!(response["result"]["isError"], true, "{response}");
         assert_eq!(mcp_tool_annotations("check_setup")["readOnlyHint"], true);
+    }
+
+    #[test]
+    fn mcp_stop_reports_encoder_failure_without_leaving_audio_running() {
+        struct BrokenEncoder;
+        impl audiorouter_control::RecorderWorker for BrokenEncoder {
+            fn finalize(
+                &mut self,
+                _: u64,
+            ) -> Result<audiorouter_control::RecorderFinalizationOutcome, String> {
+                Err("injected disk failure".into())
+            }
+        }
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        let id = session.id.clone();
+        plane.insert_session(session).unwrap();
+        plane.session_start(&id).unwrap();
+        plane
+            .attach_recorder_worker(id.clone(), Box::new(BrokenEncoder))
+            .unwrap();
+        for (method, params) in [
+            (
+                "recorders.arm",
+                json!({"sessionId": id, "idempotencyKey": "arm"}),
+            ),
+            (
+                "recorders.start",
+                json!({"sessionId": id, "frame": 0, "idempotencyKey": "record"}),
+            ),
+        ] {
+            let response = plane.dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(1)),
+                method: method.into(),
+                params: Some(params),
+            });
+            assert!(response.error.is_none(), "{response:?}");
+        }
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Operator);
+        let response = mcp_tool_call(
+            &mut plane,
+            "assistant",
+            &grant,
+            None,
+            &json!({"id": 2, "params": {"name": "control_session", "arguments": {
+                "sessionId": id, "action": "stop", "idempotencyKey": "stop"
+            }}}),
+        );
+        assert_eq!(response["result"]["isError"], false, "{response}");
+        let result = &response["result"]["structuredContent"]["result"];
+        assert_eq!(result["state"], "stopped");
+        assert_eq!(result["recorders"][0]["state"], "failed");
+        assert_eq!(result["recorders"][0]["recoverable"], true);
+        let status = plane
+            .dispatch(audiorouter_protocol::JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(json!(3)),
+                method: "status.get".into(),
+                params: None,
+            })
+            .result
+            .unwrap();
+        assert!(status["activeSessionIds"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn default_mcp_export_can_recover_original_stored_text() {
+        let storage = audiorouter_storage::Storage::open_memory().unwrap();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        storage.save_session(&session).unwrap();
+        let original = storage.export_raw_session(&session.id).unwrap().unwrap();
+        let mut plane = ControlPlane::with_storage("raw-export", storage);
+        let response = mcp_tool_call(
+            &mut plane,
+            "reader",
+            &audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Observer),
+            None,
+            &json!({"id": 1, "params": {"name": "export_session", "arguments": {"sessionId": session.id, "raw": true}}}),
+        );
+        assert_eq!(response["result"]["isError"], false, "{response}");
+        assert_eq!(
+            response["result"]["structuredContent"]["result"]["document"],
+            original
+        );
     }
 
     /// The other new task tools through the real MCP entry point: reads and
@@ -5596,6 +5708,92 @@ mod tests {
     }
 
     #[test]
+    fn assistant_can_wire_both_output_switch_ports_and_remove_b_only() {
+        let mut plane = ControlPlane::default();
+        let session: audiorouter_domain::Session =
+            serde_json::from_str(include_str!("../../../tests/fixtures/valid-session.json"))
+                .unwrap();
+        plane.insert_session(session).unwrap();
+        let grant =
+            audiorouter_control::ClientGrant::for_role(audiorouter_control::ClientRole::Editor);
+        let mut next_id = 0;
+        let mut tool = |plane: &mut ControlPlane, name: &str, arguments: Value| {
+            next_id += 1;
+            let response = mcp_tool_call(
+                plane,
+                "switch-assistant",
+                &grant,
+                None,
+                &json!({"id": next_id, "params": {"name": name, "arguments": arguments}}),
+            );
+            assert_ne!(response["result"]["isError"], true, "{name}: {response}");
+            response["result"]["structuredContent"]["result"].clone()
+        };
+        tool(
+            &mut plane,
+            "add_tool",
+            json!({"kind": "outputSwitch", "name": "Destinations"}),
+        );
+        tool(
+            &mut plane,
+            "add_tool",
+            json!({"kind": "mixer", "name": "Both"}),
+        );
+        for port in ["a", "b"] {
+            tool(
+                &mut plane,
+                "connect_nodes",
+                json!({"from": "Destinations", "fromOutput": port, "to": "Both", "toInput": "in"}),
+            );
+        }
+        let summary = tool(&mut plane, "get_session_summary", json!({}));
+        for port in ["a", "b"] {
+            assert!(summary["connections"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|edge| edge["fromOutput"] == port && edge["toInput"] == "in"));
+        }
+        tool(
+            &mut plane,
+            "disconnect_nodes",
+            json!({"from": "Destinations", "fromOutput": "b", "to": "Both", "toInput": "in"}),
+        );
+        let summary = tool(&mut plane, "get_session_summary", json!({}));
+        assert!(summary["connections"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| edge["fromOutput"] == "a"));
+        assert!(!summary["connections"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|edge| edge["fromOutput"] == "b"));
+        let catalog = mcp_listed_tools(false);
+        for name in ["connect_nodes", "disconnect_nodes"] {
+            let entry = catalog
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .unwrap();
+            assert!(entry["inputSchema"]["properties"]["fromOutput"].is_object());
+            assert!(entry["inputSchema"]["properties"]["toInput"].is_object());
+        }
+        let recipes = mcp_tool_call(
+            &mut plane,
+            "switch-assistant",
+            &grant,
+            None,
+            &json!({"id": 100, "params": {"name": "get_recipes", "arguments": {}}}),
+        );
+        assert!(recipes
+            .to_string()
+            .contains("Send one source to either of two outputs"));
+    }
+
+    #[test]
     fn assistant_tools_configure_a_route_by_name_without_technical_arguments() {
         let mut plane = ControlPlane::default();
         let session: audiorouter_domain::Session =
@@ -6156,7 +6354,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 98);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 99);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

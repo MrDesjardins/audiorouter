@@ -605,7 +605,7 @@ fn recorder_api_reports_failed_finalization_without_stopping_audio() {
 }
 
 #[test]
-fn session_stop_refuses_to_orphan_an_active_recorder() {
+fn session_stop_preserves_recovery_evidence_for_a_missing_recorder_worker() {
     let mut plane = ControlPlane::default();
     let original = session();
     plane.insert_session(original.clone()).unwrap();
@@ -615,12 +615,11 @@ fn session_stop_refuses_to_orphan_an_active_recorder() {
     recorder.start(128).unwrap();
     plane.recorders.insert(original.id.clone(), recorder);
 
-    assert!(matches!(
-        plane.session_stop(&original.id),
-        Err(ControlError::InvalidRequest(message))
-            if message == "finalize the active recorder before stopping the session"
-    ));
-    assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Running);
+    let stopped = plane.session_stop(&original.id).unwrap();
+    assert_eq!(stopped["recorders"][0]["state"], "failed");
+    assert_eq!(stopped["recorders"][0]["recoverable"], true);
+    assert_eq!(plane.recorders[&original.id].state(), RecorderState::Failed);
+    assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Stopped);
 }
 
 #[test]

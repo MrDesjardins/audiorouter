@@ -3,7 +3,7 @@
 use super::*;
 
 pub(crate) struct ExportApproval {
-    pub(super) created: Instant,
+    pub(super) expires_at: Instant,
     replace: bool,
     existing: Option<(u64, std::time::SystemTime)>,
 }
@@ -148,6 +148,13 @@ pub(crate) fn session_file_path(
 
 impl ControlPlane {
     pub fn insert_session(&mut self, session: Session) -> Result<(), ControlError> {
+        if self
+            .quarantined_sessions
+            .iter()
+            .any(|entry| entry.session_id == session.id.as_str())
+        {
+            return Err(ControlError::InvalidRequest("This ID belongs to an unavailable saved session. Export or delete its original data before reusing the ID.".into()));
+        }
         let checkpoint = self.store.clone();
         self.store
             .insert_session(session.clone())
@@ -168,6 +175,61 @@ impl ControlPlane {
             Some(session.id.clone()),
         );
         Ok(())
+    }
+
+    /// Shell bootstrap must never upsert over a quarantined default graph.
+    /// Keep its original row and give the empty fallback a distinct ID.
+    pub fn ensure_default_session(
+        &mut self,
+        mut fallback: Session,
+    ) -> Result<EntityId, ControlError> {
+        if self.store.session(&fallback.id).is_some() {
+            return Ok(fallback.id);
+        }
+        let original_id = fallback.id.clone();
+        for suffix in 0..=audiorouter_domain::MAX_SESSIONS_GLOBAL {
+            let candidate = if suffix == 0 {
+                original_id.clone()
+            } else {
+                EntityId::new(format!("{}-recovery-{suffix}", original_id.as_str()))
+            };
+            if self.store.session(&candidate).is_some() {
+                return Ok(candidate);
+            }
+            if !self
+                .quarantined_sessions
+                .iter()
+                .any(|entry| entry.session_id == candidate.as_str())
+            {
+                fallback.id = candidate.clone();
+                if !self.quarantined_sessions.is_empty()
+                    && self
+                        .storage
+                        .as_ref()
+                        .map(|storage| storage.count_sessions())
+                        .transpose()
+                        .map_err(storage_error)?
+                        .is_some_and(|count| count >= audiorouter_domain::MAX_SESSIONS_GLOBAL)
+                {
+                    // A full inventory of preserved bad rows must not prevent
+                    // the window from opening recovery. This empty workspace
+                    // is temporary until the user frees a durable slot.
+                    fallback.name = "Recovery workspace (not saved)".into();
+                    self.store
+                        .insert_session(fallback)
+                        .map_err(ControlError::from)?;
+                    if self.active_session_id.is_none() {
+                        self.active_session_id = Some(candidate.clone());
+                    }
+                } else {
+                    self.insert_session(fallback)?;
+                }
+                return Ok(candidate);
+            }
+        }
+        Err(ControlError::InvalidRequest(
+            "No unused session ID is available for recovery.".into(),
+        ))
     }
 
     pub fn create_session(&mut self, session: Session) -> Result<Value, ControlError> {
@@ -217,9 +279,28 @@ impl ControlPlane {
     }
 
     pub fn delete_session(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        if self.store.session(id).is_none()
+            && self
+                .quarantined_sessions
+                .iter()
+                .any(|entry| entry.session_id == id.as_str())
+        {
+            let states = self.session_plugin_state_candidates(id)?;
+            let deleted = self
+                .storage
+                .as_ref()
+                .ok_or_else(|| ControlError::Storage("persistent storage is unavailable".into()))?
+                .delete_session(id)
+                .map_err(storage_error)?;
+            self.quarantined_sessions
+                .retain(|entry| entry.session_id != id.as_str());
+            self.forget_revision_notes(id);
+            self.cleanup_automatic_plugin_states(&states);
+            self.events
+                .append(0, None, "session.deleted", Some(id.clone()));
+            return Ok(json!({"sessionId": id, "deleted": deleted}));
+        }
         self.ensure_session_loaded(id)?;
-        self.clear_comparison(id);
-        self.forget_revision_notes(id);
         let session = self.get_session(id)?.clone();
         if self
             .runtimes
@@ -272,6 +353,7 @@ impl ControlPlane {
                 "stop the native output fan-out before deleting the session".into(),
             ));
         }
+        let states = self.session_plugin_state_candidates(id)?;
         let checkpoint = self.store.clone();
         if let Some(storage) = &self.storage {
             if let Err(error) = storage.delete_session(id) {
@@ -280,6 +362,11 @@ impl ControlPlane {
             }
         }
         self.store.remove_session(id).map_err(ControlError::from)?;
+        // All refusals and the durable delete precede transient cleanup: a
+        // failed delete must preserve saved notes and the comparison timeout.
+        self.clear_comparison(id);
+        self.forget_revision_notes(id);
+        self.cleanup_automatic_plugin_states(&states);
         if self.active_session_id.as_ref() == Some(id) {
             // Never leave default node-targeted API/MCP calls aimed at a
             // deleted graph. Selecting a different session is deliberate.
@@ -364,6 +451,13 @@ impl ControlPlane {
         cursor: Option<&str>,
         limit: usize,
     ) -> Result<Value, ControlError> {
+        if cursor.is_some_and(|cursor| {
+            cursor.is_empty() || cursor.len() > audiorouter_domain::MAX_ENTITY_ID_BYTES
+        }) {
+            return Err(ControlError::InvalidRequest(
+                "invalid session cursor".into(),
+            ));
+        }
         if !(1..=MAX_SESSION_LIST_ITEMS).contains(&limit) {
             return Err(ControlError::InvalidRequest(
                 "limit must be between 1 and 500".into(),
@@ -376,8 +470,12 @@ impl ControlPlane {
         let mut by_id = BTreeMap::<String, Session>::new();
         if let Some(storage) = &self.storage {
             for session in storage
-                .list_sessions_after(cursor, limit)
+                .session_inventory()
                 .map_err(storage_error)?
+                .sessions
+                .into_iter()
+                .filter(|session| cursor.is_none_or(|cursor| session.id.as_str() > cursor))
+                .take(limit)
             {
                 by_id.insert(session.id.as_str().to_owned(), session);
             }
@@ -511,199 +609,120 @@ impl ControlPlane {
             .start()
             .map_err(|_| ControlError::InvalidRequest("session was not prepared".into()))?;
 
-        // A session with an explicitly attached endpoint pair must cross the
-        // native boundary as part of the same start operation.  Previously we
-        // left the native worker stopped and reported the fake runtime as
-        // running, which made the control plane appear healthy while no
-        // samples could reach the endpoint.  Prepare and publish the graph
-        // before starting the worker; any failure rolls back the runtime and
-        // selected bridge generation so the session cannot be half-started.
-        #[cfg(windows)]
-        if self.native_multi_input_worker_session.as_ref() == Some(id)
-            && self.native_multi_input_worker.is_some()
-        {
-            let branch_node_ids = self
-                .native_multi_input_worker
-                .as_ref()
-                .expect("multi-input worker is attached")
-                .output_node_ids()
-                .to_vec();
-            let capture_bus_ids = session_virtual_capture_bus_ids(&session);
-            if let Err(error) = self
-                .prepare_virtual_route_bridges(id, generation, &capture_bus_ids)
-                .and_then(|_| {
-                    self.bind_native_multi_input_branches(id, generation, &branch_node_ids)
-                        .map(|_| ())
-                })
-                .and_then(|_| self.start_native_multi_input_worker())
-            {
-                let _ = self
-                    .native_multi_input_worker
-                    .as_mut()
-                    .expect("multi-input worker is attached")
-                    .stop();
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                self.native_endpoint_taps = None;
-                self.native_render_source_taps = None;
-                return Err(error);
+        // Every fallible activation step must stay inside this boundary.
+        // In particular, application maintenance must not bypass rollback.
+        let activation = (|| -> Result<(), ControlError> {
+            #[cfg(test)]
+            if std::mem::take(&mut self.fail_next_session_activation) {
+                return Err(ControlError::InvalidRequest(
+                    "injected activation failure".into(),
+                ));
             }
-        }
 
-        // A cable-to-cable route opens its two leases now; a failure leaves
-        // nothing open and the session stopped.
-        #[cfg(windows)]
-        if self.cable_route_prepared_for(id) {
-            if let Err(error) = self.start_cable_route(id, &session, generation) {
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                return Err(error);
-            }
-        }
-
-        if native_endpoint_attached {
-            let sample_rate_hz = self
-                .native_endpoint_worker_for_session(id)
-                .expect("native_attached implies an endpoint worker")
-                .bridge()
-                .sample_rate_hz();
-            let activated = if candidate.is_some() {
-                self.activate_native_graph_candidate(id, generation, sample_rate_hz, Some(&session))
-            } else {
-                self.activate_native_graph(id, generation, sample_rate_hz)
-            };
-            if let Err(error) = activated {
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
-                    *taps = None;
-                }
-                self.native_render_source_taps = None;
-                return Err(error);
-            }
+            // A session with an explicitly attached endpoint pair must cross the
+            // native boundary as part of the same start operation.  Previously we
+            // left the native worker stopped and reported the fake runtime as
+            // running, which made the control plane appear healthy while no
+            // samples could reach the endpoint.  Prepare and publish the graph
+            // before starting the worker; any failure rolls back the runtime and
+            // selected bridge generation so the session cannot be half-started.
             #[cfg(windows)]
-            let application_waiting = self
-                .application_capture_runtime
-                .as_ref()
-                .is_some_and(|binding| binding.session_id == *id)
-                && self.maintain_application_capture(id, true)?;
-            #[cfg(not(windows))]
-            let application_waiting = false;
-            if !application_waiting {
-                let start_result = self
-                    .native_endpoint_worker_for_session_mut(id)
+            if self.native_multi_input_worker_session.as_ref() == Some(id)
+                && self.native_multi_input_worker.is_some()
+            {
+                let branch_node_ids = self
+                    .native_multi_input_worker
+                    .as_ref()
+                    .expect("multi-input worker is attached")
+                    .output_node_ids()
+                    .to_vec();
+                let capture_bus_ids = session_virtual_capture_bus_ids(&session);
+                self.prepare_virtual_route_bridges(id, generation, &capture_bus_ids)?;
+                self.bind_native_multi_input_branches(id, generation, &branch_node_ids)?;
+                self.start_native_multi_input_worker()?;
+            }
+
+            // A cable-to-cable route opens its two leases now; a failure leaves
+            // nothing open and the session stopped.
+            #[cfg(windows)]
+            if self.cable_route_prepared_for(id) {
+                self.start_cable_route(id, &session, generation)?;
+            }
+
+            if native_endpoint_attached {
+                let sample_rate_hz = self
+                    .native_endpoint_worker_for_session(id)
                     .expect("native_attached implies an endpoint worker")
-                    .start()
-                    .map_err(audio_control_error);
-                if let Err(error) = start_result {
-                    if let Some(runtime) = self.runtimes.get_mut(id) {
-                        runtime.stop();
-                    }
-                    self.deactivate_virtual_route_bridges(id);
-                    if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
-                        *taps = None;
-                    }
-                    self.native_render_source_taps = None;
-                    return Err(error);
-                }
+                    .bridge()
+                    .sample_rate_hz();
+                let activated = if candidate.is_some() {
+                    self.activate_native_graph_candidate(
+                        id,
+                        generation,
+                        sample_rate_hz,
+                        Some(&session),
+                    )
+                } else {
+                    self.activate_native_graph(id, generation, sample_rate_hz)
+                };
+                activated?;
                 #[cfg(windows)]
-                if self
+                let application_waiting = self
                     .application_capture_runtime
                     .as_ref()
                     .is_some_and(|binding| binding.session_id == *id)
-                {
-                    self.set_application_capture_state(
+                    && self.maintain_application_capture(id, true)?;
+                #[cfg(not(windows))]
+                let application_waiting = false;
+                if !application_waiting {
+                    self.native_endpoint_worker_for_session_mut(id)
+                        .expect("native_attached implies an endpoint worker")
+                        .start()
+                        .map_err(audio_control_error)?;
+                    #[cfg(windows)]
+                    if self
+                        .application_capture_runtime
+                        .as_ref()
+                        .is_some_and(|binding| binding.session_id == *id)
+                    {
+                        self.set_application_capture_state(
                         "connected",
                         "Connected to this application. Audio flow appears when the app produces sound.",
                     );
+                    }
+                }
+                #[cfg(windows)]
+                if self.native_output_fanout_session.as_ref() == Some(id)
+                    && self.native_output_fanout.is_some()
+                {
+                    self.start_native_output_fanout()?;
                 }
             }
             #[cfg(windows)]
-            if self.native_output_fanout_session.as_ref() == Some(id)
-                && self.native_output_fanout.is_some()
+            if !native_endpoint_attached
+                && self.native_duplex_worker_session.as_ref() == Some(id)
+                && self.native_duplex_worker.is_some()
             {
-                if let Err(error) = self.start_native_output_fanout() {
-                    let _ = self
-                        .native_endpoint_worker_for_session_mut(id)
-                        .expect("native_attached implies an endpoint worker")
-                        .stop();
-                    if let Some(runtime) = self.runtimes.get_mut(id) {
-                        runtime.stop();
-                    }
-                    self.deactivate_virtual_route_bridges(id);
-                    if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
-                        *taps = None;
-                    }
-                    return Err(error);
-                }
+                self.start_native_duplex_worker()?;
             }
-        }
-        #[cfg(windows)]
-        if !native_endpoint_attached
-            && self.native_duplex_worker_session.as_ref() == Some(id)
-            && self.native_duplex_worker.is_some()
-        {
-            if let Err(error) = self.start_native_duplex_worker() {
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                return Err(error);
-            }
-        }
-        #[cfg(windows)]
-        if self.native_render_source_worker_session.as_ref() == Some(id)
-            && self.native_render_source_worker.is_some()
-        {
-            let sample_rate_hz = self
-                .native_render_source_worker
-                .as_ref()
-                .expect("native render-source worker is attached")
-                .bridge()
-                .sample_rate_hz();
-            if let Err(error) =
-                self.activate_native_render_source_graph(id, generation, sample_rate_hz)
+            #[cfg(windows)]
+            if self.native_render_source_worker_session.as_ref() == Some(id)
+                && self.native_render_source_worker.is_some()
             {
-                let _ = self
-                    .native_duplex_worker
-                    .as_mut()
-                    .filter(|_| self.native_duplex_worker_session.as_ref() == Some(id))
-                    .map(audiorouter_windows_audio::NativeBridgeDuplexWorker::stop);
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                self.native_endpoint_taps = None;
-                return Err(error);
+                let sample_rate_hz = self
+                    .native_render_source_worker
+                    .as_ref()
+                    .expect("native render-source worker is attached")
+                    .bridge()
+                    .sample_rate_hz();
+                self.activate_native_render_source_graph(id, generation, sample_rate_hz)?;
+                self.start_native_render_source_worker()?;
             }
-            if let Err(error) = self.start_native_render_source_worker() {
-                let _ = self
-                    .native_duplex_worker
-                    .as_mut()
-                    .filter(|_| self.native_duplex_worker_session.as_ref() == Some(id))
-                    .map(audiorouter_windows_audio::NativeBridgeDuplexWorker::stop);
-                let _ = self
-                    .native_endpoint_worker
-                    .as_mut()
-                    .filter(|_| self.native_endpoint_session.as_ref() == Some(id))
-                    .map(audiorouter_windows_audio::NativeAudioWorker::stop);
-                let _ = self
-                    .native_output_fanout
-                    .as_mut()
-                    .filter(|_| self.native_output_fanout_session.as_ref() == Some(id))
-                    .map(audiorouter_windows_audio::WasapiOutputFanout::stop);
-                if let Some(runtime) = self.runtimes.get_mut(id) {
-                    runtime.stop();
-                }
-                self.deactivate_virtual_route_bridges(id);
-                self.native_endpoint_taps = None;
-                return Err(error);
-            }
+            Ok(())
+        })();
+        if let Err(error) = activation {
+            self.rollback_session_start(id);
+            return Err(error);
         }
         self.events
             .append(session.revision, None, "runtime.started", Some(id.clone()));
@@ -717,122 +736,192 @@ impl ControlPlane {
         }))
     }
 
+    fn rollback_session_start(&mut self, id: &EntityId) {
+        // Stop visits every worker even when one stop fails. Preserve the
+        // activation error, rather than hiding it behind a cleanup failure.
+        let _ = self.stop_session_audio(id);
+        if let Some(taps) = self.native_endpoint_taps_for_session_mut(id) {
+            *taps = None;
+        }
+        self.native_render_source_taps = None;
+    }
+
     pub fn session_stop(&mut self, id: &EntityId) -> Result<Value, ControlError> {
         self.ensure_session_loaded(id)?;
-        #[cfg(windows)]
-        self.cancel_sleep_route_recovery(id);
+        let deadline = self.recorder_shutdown_deadline();
         // Plugins lose their settings when their workers stop; keep them.
         self.capture_playing_plugin_states(id);
+        // File work can fail or wait on storage. Retire every audio worker
+        // first, then report each recorder independently of that boundary.
+        let audio_result = self.stop_session_audio(id);
+        let recorder_outcomes = self.finalize_session_recorders(id, deadline);
+        let mut result = audio_result?;
+        result["recorders"] = json!(recorder_outcomes);
+        Ok(result)
+    }
+
+    pub(crate) fn recorder_shutdown_deadline(&self) -> Instant {
+        let budget = Duration::from_secs(10);
+        #[cfg(test)]
+        let budget = self.recorder_shutdown_budget.unwrap_or(budget);
+        Instant::now() + budget
+    }
+
+    pub(crate) fn finalize_session_recorders(
+        &mut self,
+        id: &EntityId,
+        deadline: Instant,
+    ) -> Vec<Value> {
         let recorder_node_ids = self
-            .get_session(id)?
-            .nodes
+            .recorder_node_sessions
             .iter()
-            .filter(|node| {
-                node.kind == NodeKind::Recorder && self.recorder_node_workers.contains_key(&node.id)
-            })
-            .map(|node| node.id.clone())
+            .filter(|(_, session)| *session == id)
+            .map(|(node, _)| node.clone())
             .collect::<Vec<_>>();
+        let mut outcomes = Vec::new();
         for node_id in recorder_node_ids {
-            self.stop_node_recording(&node_id)?;
-        }
-        let has_node_worker = self
-            .get_session(id)?
-            .nodes
-            .iter()
-            .filter(|node| node.kind == NodeKind::Recorder)
-            .any(|node| self.recorder_node_workers.contains_key(&node.id));
-        if has_node_worker {
-            return Err(ControlError::InvalidRequest(
-                "node-keyed recorder lifecycle must be finalized before stopping the session"
-                    .into(),
-            ));
-        }
-        let mut recorder_outcomes = Vec::new();
-        let active_frame = self
-            .recorders
-            .get(id)
-            .filter(|recorder| {
-                matches!(
-                    recorder.state(),
-                    RecorderState::Recording | RecorderState::Paused | RecorderState::Stopping
-                )
-            })
-            .map(|recorder| {
-                let checkpoint = recorder.checkpoint();
-                checkpoint
-                    .stop_frame
-                    .or(checkpoint.last_frame)
-                    .ok_or_else(|| {
-                        ControlError::InvalidRequest(
-                            "active recorder has no committed frame boundary".into(),
-                        )
-                    })
-            })
-            .transpose()?;
-        if let Some(frame) = active_frame {
-            let mut recorder_candidate = self.recorders.get(id).cloned().ok_or_else(|| {
-                ControlError::InvalidRequest("active recorder disappeared".into())
-            })?;
-            let boundary_result = if recorder_candidate.state() == RecorderState::Stopping {
-                recorder_candidate.complete()
-            } else {
-                recorder_candidate.stop(frame)
-            };
-            boundary_result.map_err(|error| {
-                ControlError::InvalidRequest(format!(
-                    "recorder boundary finalization failed: {error:?}"
-                ))
-            })?;
-            let worker = self.recorder_workers.get_mut(id).ok_or_else(|| {
-                ControlError::InvalidRequest(
-                    "finalize the active recorder before stopping the session".into(),
-                )
-            })?;
-            let outcome = worker.finalize(frame).map_err(|error| {
-                ControlError::InvalidRequest(format!("recorder finalization failed: {error}"))
-            })?;
-            if outcome.state != "completed" || !outcome.file_finalized || outcome.recoverable {
-                return Err(ControlError::InvalidRequest(
-                    "recorder finalization did not produce a completed file".into(),
-                ));
+            if let Some(worker) = self.recorder_node_workers.get_mut(&node_id) {
+                worker.set_shutdown_deadline(deadline);
             }
-            let finalized_recordings = worker.finalized_recordings();
-            self.recorders.insert(id.clone(), recorder_candidate);
-            let checkpoint = self
-                .recorders
-                .get(id)
-                .expect("recorder candidate inserted above")
-                .checkpoint();
-            if let Some(storage) = &self.storage {
-                storage
-                    .save_recording_checkpoint(id.as_str(), &checkpoint)
-                    .map_err(storage_error)?;
-                for recording in &finalized_recordings {
-                    storage.save_recording(recording).map_err(storage_error)?;
+            match self.stop_node_recording(&node_id) {
+                Ok(outcome) => {
+                    let mut summary = json!({"sessionId": id, "nodeId": node_id,
+                        "state": outcome["state"],
+                        "fileFinalized": matches!(outcome["state"].as_str(), Some("completed" | "failed")),
+                        "recoverable": false});
+                    if let Some(reason) = outcome.get("reason") {
+                        summary["reason"] = reason.clone();
+                    }
+                    outcomes.push(summary);
+                }
+                Err(error) => {
+                    // Drop encoder ownership, not its recoverable file or
+                    // failed checkpoint. Repeated Stop must remain usable.
+                    self.recorder_node_workers.remove(&node_id);
+                    self.sync_recorder_inlet(&node_id);
+                    if let Some(state) = self.recorder_node_states.get_mut(&node_id) {
+                        state.fail();
+                        if let Some(storage) = &self.storage {
+                            let _ = storage
+                                .save_recording_checkpoint(node_id.as_str(), &state.checkpoint());
+                        }
+                    }
+                    outcomes.push(json!({"sessionId": id, "nodeId": node_id,
+                        "state": "failed", "fileFinalized": false, "recoverable": true,
+                        "reason": control_error_message(&error)}));
                 }
             }
-            self.events.append(
-                self.get_session(id)?.revision,
-                None,
-                "recorder.changed",
-                Some(id.clone()),
-            );
-            self.recorder_workers.remove(id);
-            recorder_outcomes.push(json!({
-                "sessionId": id,
-                "state": "completed",
-                "fileFinalized": true,
-                "recoverable": false
-            }));
         }
+        let legacy_result = (|| -> Result<Vec<Value>, ControlError> {
+            let mut recorder_outcomes = Vec::new();
+            let active_frame = self
+                .recorders
+                .get(id)
+                .filter(|recorder| {
+                    matches!(
+                        recorder.state(),
+                        RecorderState::Recording
+                            | RecorderState::Paused
+                            | RecorderState::Stopping
+                            | RecorderState::Failed
+                    )
+                })
+                .map(|recorder| {
+                    let checkpoint = recorder.checkpoint();
+                    checkpoint
+                        .stop_frame
+                        .or(checkpoint.last_frame)
+                        .ok_or_else(|| {
+                            ControlError::InvalidRequest(
+                                "active recorder has no committed frame boundary".into(),
+                            )
+                        })
+                })
+                .transpose()?;
+            if let Some(frame) = active_frame {
+                let mut recorder_candidate = self.recorders.get(id).cloned().ok_or_else(|| {
+                    ControlError::InvalidRequest("active recorder disappeared".into())
+                })?;
+                let boundary_result = if recorder_candidate.state() == RecorderState::Stopping {
+                    recorder_candidate.complete()
+                } else {
+                    recorder_candidate.stop(frame)
+                };
+                boundary_result.map_err(|error| {
+                    ControlError::InvalidRequest(format!(
+                        "recorder boundary finalization failed: {error:?}"
+                    ))
+                })?;
+                let worker = self.recorder_workers.get_mut(id).ok_or_else(|| {
+                    ControlError::InvalidRequest(
+                        "finalize the active recorder before stopping the session".into(),
+                    )
+                })?;
+                worker.set_shutdown_deadline(deadline);
+                let outcome = worker.finalize(frame).map_err(|error| {
+                    ControlError::InvalidRequest(format!("recorder finalization failed: {error}"))
+                })?;
+                if outcome.state != "completed" || !outcome.file_finalized || outcome.recoverable {
+                    return Err(ControlError::InvalidRequest(
+                        "recorder finalization did not produce a completed file".into(),
+                    ));
+                }
+                let finalized_recordings = worker.finalized_recordings();
+                self.recorders.insert(id.clone(), recorder_candidate);
+                let checkpoint = self
+                    .recorders
+                    .get(id)
+                    .expect("recorder candidate inserted above")
+                    .checkpoint();
+                if let Some(storage) = &self.storage {
+                    storage
+                        .save_recording_checkpoint(id.as_str(), &checkpoint)
+                        .map_err(storage_error)?;
+                    for recording in &finalized_recordings {
+                        storage.save_recording(recording).map_err(storage_error)?;
+                    }
+                }
+                self.events.append(
+                    self.get_session(id)?.revision,
+                    None,
+                    "recorder.changed",
+                    Some(id.clone()),
+                );
+                self.recorder_workers.remove(id);
+                recorder_outcomes.push(json!({
+                    "sessionId": id,
+                    "state": "completed",
+                    "fileFinalized": true,
+                    "recoverable": false
+                }));
+            }
+            Ok(recorder_outcomes)
+        })();
+        match legacy_result {
+            Ok(legacy) => outcomes.extend(legacy),
+            Err(error) => {
+                self.recorder_workers.remove(id);
+                if let Some(recorder) = self.recorders.get_mut(id) {
+                    recorder.fail();
+                    if let Some(storage) = &self.storage {
+                        let _ =
+                            storage.save_recording_checkpoint(id.as_str(), &recorder.checkpoint());
+                    }
+                }
+                outcomes.push(json!({"sessionId": id, "state": "failed",
+                    "fileFinalized": false, "recoverable": true, "reason": control_error_message(&error)}));
+            }
+        }
+        outcomes
+    }
 
-        // A session stop is also the native endpoint shutdown boundary. The
-        // worker is deliberately stopped only after recorder finalization so
-        // a failed recorder operation leaves the session and its endpoint
-        // available for explicit recovery. Once this point is reached, stop
-        // the exact bound worker before retiring the runtime generation; even
-        // a worker stop error must not leave an audio client running against
-        // a session that is reported stopped.
+    /// Stop all audio even when one native stop reports an error. Kept
+    /// separate so Quit can silence every session before any file work.
+    pub(crate) fn stop_session_audio(&mut self, id: &EntityId) -> Result<Value, ControlError> {
+        self.ensure_session_loaded(id)?;
+        self.clear_comparison(id);
+        #[cfg(windows)]
+        self.cancel_sleep_route_recovery(id);
         let native_attached = self.native_endpoint_session_is_attached(id) || {
             #[cfg(windows)]
             {
@@ -954,7 +1043,7 @@ impl ControlPlane {
             "sessionId": id,
             "state": "stopped",
             "runtime": if native_attached { "native" } else { "fake" },
-            "recorders": recorder_outcomes
+            "recorders": []
         }))
     }
 
@@ -1029,7 +1118,24 @@ impl ControlPlane {
         &mut self,
         params: Option<Value>,
     ) -> Result<Value, ControlError> {
+        let raw = params
+            .as_ref()
+            .and_then(|params| params.get("raw"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let id = session_id_from_params(params)?;
+        if raw {
+            let document = self
+                .storage
+                .as_ref()
+                .ok_or_else(|| {
+                    ControlError::InvalidRequest("raw export requires persistent storage".into())
+                })?
+                .export_raw_session(&id)
+                .map_err(storage_error)?
+                .ok_or_else(|| ControlError::InvalidRequest("session not found".into()))?;
+            return Ok(json!({"sessionId": id, "document": document}));
+        }
         self.ensure_session_loaded(&id)?;
         serde_json::to_value(self.get_session(&id)?)
             .map_err(|error| ControlError::Json(error.to_string()))
@@ -1051,15 +1157,16 @@ impl ControlPlane {
                 "Confirm replacement in the Save dialog.".into(),
             ));
         }
+        let now = Instant::now();
         self.session_export_approvals
-            .retain(|_, approval| approval.created.elapsed() < Duration::from_secs(300));
+            .retain(|_, approval| approval.expires_at > now);
         if self.session_export_approvals.len() >= 16 {
             self.session_export_approvals.clear();
         }
         self.session_export_approvals.insert(
             path,
             ExportApproval {
-                created: Instant::now(),
+                expires_at: now + Duration::from_secs(300),
                 replace,
                 existing,
             },
@@ -1087,7 +1194,7 @@ impl ControlPlane {
                 "Choose this export destination in the Save dialog first.".into(),
             )
         })?;
-        if approval.created.elapsed() >= Duration::from_secs(300)
+        if approval.expires_at <= Instant::now()
             || (replace && !approval.replace)
             || export_fingerprint(&path)? != approval.existing
         {

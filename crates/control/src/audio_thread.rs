@@ -522,6 +522,26 @@ impl MultiInputWorkerHandle {
         self.with(NativeMultiInputWorker::input_trimmed_packets)
     }
 
+    pub(crate) fn input_slipped_frames(&self) -> Vec<u64> {
+        self.with(NativeMultiInputWorker::input_slipped_frames)
+    }
+
+    pub(crate) fn take_input_max_packet_gap_ms(&self) -> Vec<f64> {
+        self.with(NativeMultiInputWorker::take_input_max_packet_gap_ms)
+    }
+
+    pub(crate) fn output_slipped_frames(&self) -> Vec<u64> {
+        self.with(NativeMultiInputWorker::output_slipped_frames)
+    }
+
+    pub(crate) fn output_latency_trims(&self) -> Vec<u64> {
+        self.with(NativeMultiInputWorker::output_latency_trims)
+    }
+
+    pub(crate) fn output_target_ms(&self) -> Vec<f64> {
+        self.with(NativeMultiInputWorker::output_target_ms)
+    }
+
     pub(crate) fn output_underruns(&self) -> u64 {
         self.with(NativeMultiInputWorker::output_underruns)
     }

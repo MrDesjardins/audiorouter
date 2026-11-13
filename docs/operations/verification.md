@@ -37,9 +37,33 @@ checks explicitly; it cannot count as a complete full run.
 
 The classifier conservatively selects every area for an unknown executable or
 build surface. Contract changes select backend, UI and Stream Deck consumers;
-backend changes select browser integration. Documentation validation and policy
-tests always run. Main pushes and manual CI runs select all areas. PR CI compares
+backend changes select browser integration. Documentation assets select only
+documentation validation; policy tests always run. Main pushes select affected
+areas; scheduled and manual CI runs select all areas. PR CI compares
 the tested merge commit with its first parent, the current base tip.
+
+CI runs Linux UI checks independently of Windows Rust/native and installer
+checks. Ordinary shell source changes run Rust and backend browser checks;
+packaging manifests/build scripts, npm manifests/locks, release tools and
+drivers also select installer verification. Unknown paths select everything.
+Named ancillary workflow edits select policy tests and checksum-pinned
+actionlint syntax/expression validation of all workflows; manual-release selects
+release verification. The daily full CI at 03:47 UTC complements the existing
+03:17 UTC coverage/soak/startup workflow without narrowing either inventory.
+
+Browser preparation builds the current backend fixture and bundled UI once,
+qualifies both guards, and transfers only those generated files to four Windows
+runners. Each shard retains one worker and the existing flaky-test failure
+policy. UI changes run every spec; backend-only changes follow local helper
+imports to select real-backend specs, conservatively including unfamiliar
+imports. Nightly/manual runs always run all specs. This subset may defer an
+unmodeled backend/UI interaction until nightly; it does not replace full
+release acceptance. Shard failures retain separate reports, traces and images.
+
+Rust caches restore by Windows architecture, pinned toolchain, lock hashes and
+job. Only successful trusted main runs save them; PRs never save. Cache eviction
+can reduce speed and must not change selected checks. Hosted timings and cache
+size must be measured after rollout; no speed estimate is acceptance evidence.
 
 ## Results and evidence
 
@@ -98,6 +122,16 @@ The nightly quality job publishes proposed README/history files as the
 submit those files in a reviewed documentation PR. It no longer pushes to main.
 Coverage and short soak metrics remain reports with their existing measured
 scope; they do not waive release gates in [M08](../milestones/M08-release.md).
+
+Daily collection runs at 03:17 UTC (GitHub may delay scheduled starts), separately
+from publication of the reviewed repository snapshot. The trend job records
+available coverage, soak and startup metrics even when another measurement job
+fails; missing values remain empty. It carries cumulative history through the
+Actions cache and uploads `quality-history-collected` for 90 days on each run.
+The proposed `quality-history-update` snapshot is also retained for 90 days.
+Download retained history before it expires; cache eviction can break continuity,
+and neither cache nor artifacts are permanent archival storage. A stale
+`docs/quality-history.csv` does not mean daily collection stopped.
 
 Rollback: revert a scoped tooling/workflow commit. Before changing rules, save
 the existing ruleset; retain working protections until the replacement check

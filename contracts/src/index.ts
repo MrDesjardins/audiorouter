@@ -245,7 +245,7 @@ export interface SessionSummary {
   playing: boolean;
   privacyMuted: boolean;
   nodes: Array<{ id: EntityId; name: string; kind: NodeKind; enabled: boolean; bypass: boolean; settings: Record<string, string> }>;
-  connections: Array<{ id: EntityId; from: string; to: string; toInput: string; enabled: boolean }>;
+  connections: Array<{ id: EntityId; from: string; to: string; fromOutput: string; toInput: string; enabled: boolean }>;
 }
 
 /** One-click recording on a Recorder node (Record button, StreamDeck, MCP). */
@@ -767,6 +767,7 @@ export interface StatusSnapshot {
   reason: string;
   storage: "memory" | "sqlite";
   sessionCount: number;
+  quarantinedSessions?: QuarantinedSession[];
   activeSessionCount: number;
   activeSessionIds: EntityId[];
   privacyMute: {
@@ -812,6 +813,7 @@ export interface SetupCheckResult {
 export interface DiagnosticsSnapshot {
   build: string;
   backend: "control-plane";
+  quarantinedSessions?: QuarantinedSession[];
   storage: "memory" | "sqlite";
   audio: { state: "available" | "unavailable"; reason: string };
   nativeAdapter: "implemented-not-activated" | "configured-stopped" | "running";
@@ -1047,6 +1049,16 @@ export interface SessionFileExportResult {
   bytes: number;
 }
 
+export interface QuarantinedSession {
+  sessionId: EntityId;
+  reason: string;
+}
+
+export interface RawSessionExport {
+  sessionId: EntityId;
+  document: string;
+}
+
 /** A `.audiorouter` file imported as a new stopped session. */
 export interface SessionFileImportResult extends SessionCreateResult {
   /** The file's session ID was already used here, so it got a new one. */
@@ -1087,18 +1099,23 @@ export interface SessionStopResult {
   sessionId: EntityId;
   state: "stopped";
   runtime: "fake" | "native";
-  recorders: Array<{
-    sessionId: EntityId;
-    state: "completed";
-    fileFinalized: true;
-    recoverable: false;
-  }>;
+  reason?: string;
+  recorders: RecorderShutdownOutcome[];
+}
+
+export interface RecorderShutdownOutcome {
+  sessionId: EntityId;
+  nodeId?: EntityId;
+  state: "idle" | "armed" | "completed" | "failed";
+  fileFinalized: boolean;
+  recoverable: boolean;
+  reason?: string;
 }
 
 export interface SystemQuitResult {
   state: "stopped";
   sessions: SessionStopResult[];
-  recorders: RecorderLifecycleResult[];
+  recorders: RecorderShutdownOutcome[];
 }
 
 export interface GraphUndoPlanResult {
@@ -1521,6 +1538,7 @@ export type ImplementedMethod =
   | "plugins.retry"
   | "plugins.inspect"
   | "plugins.parameters"
+  | "plugins.prepareUpdate"
   | "virtualDevices.list"
   | "virtualDevices.plan"
   | "virtualDevices.apply"
@@ -1646,8 +1664,8 @@ export type MethodParams = {
   "nodes.toggle": { sessionId?: EntityId; node: string; target: string; idempotencyKey: string };
   "nodes.add": { sessionId?: EntityId; kind: NodeKind; name?: string; parameters?: Record<string, boolean | number | string>; between?: { from: string; to: string }; after?: string; idempotencyKey: string };
   "nodes.remove": { sessionId?: EntityId; node: string; bridge?: boolean; idempotencyKey: string };
-  "connections.add": { sessionId?: EntityId; from: string; to: string; idempotencyKey: string };
-  "connections.remove": { sessionId?: EntityId; from: string; to: string; idempotencyKey: string };
+  "connections.add": { sessionId?: EntityId; from: string; to: string; fromOutput?: string; toInput?: string; idempotencyKey: string };
+  "connections.remove": { sessionId?: EntityId; from: string; to: string; fromOutput?: string; toInput?: string; idempotencyKey: string };
   "meters.levels": { sessionId?: EntityId };
   "recorders.stopRecording": { sessionId?: EntityId; nodeId: EntityId; idempotencyKey: string };
   "devices.getAccess": Record<string, never> | undefined;
@@ -1700,7 +1718,8 @@ export type MethodParams = {
   "plugins.resume": { sessionId?: EntityId; nodeId: EntityId };
   "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
-  "plugins.parameters": { path: string };
+  "plugins.parameters": { path: string; classId?: string };
+  "plugins.prepareUpdate": { sessionId?: EntityId; nodeId: EntityId; resetState?: boolean };
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };
   "virtualDevices.apply": { planId: EntityId; idempotencyKey: string };
@@ -1744,7 +1763,7 @@ export type MethodParams = {
     frequenciesHz: number[];
   };
   "sessions.get": { sessionId: EntityId };
-  "sessions.export": { sessionId: EntityId };
+  "sessions.export": { sessionId: EntityId; raw?: boolean };
   "sessions.exportFile": { sessionId: EntityId; path: string; replace?: boolean };
   "sessions.approveExport": { path: string; replace?: boolean };
   "sessions.importFile": { path: string };
@@ -1911,6 +1930,7 @@ export type MethodResult = {
   "plugins.retry": PluginScanResult;
   "plugins.inspect": PluginScanEntry;
   "plugins.parameters": PluginParametersResult;
+  "plugins.prepareUpdate": { sessionId: EntityId; nodeId: EntityId; parameters: Node["parameters"]; previousFingerprint: string; statePreserved: boolean };
   "virtualDevices.list": VirtualDeviceInfo[] | VirtualDeviceListPage;
   "virtualDevices.plan": VirtualDevicePlanResult;
   "virtualDevices.apply": VirtualDeviceApplyResult;
@@ -1937,7 +1957,7 @@ export type MethodResult = {
   "processors.list": DiscoveryDocument["processors"];
   "processors.response": { frequenciesHz: number[]; magnitudeDb: number[] };
   "sessions.get": Session;
-  "sessions.export": Session;
+  "sessions.export": Session | RawSessionExport;
   "sessions.exportFile": SessionFileExportResult;
   "sessions.approveExport": { approved: true; expiresInMs: 300000 };
   "sessions.importFile": SessionFileImportResult;

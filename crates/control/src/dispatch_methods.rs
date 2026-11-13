@@ -172,7 +172,8 @@ method_table! {
         "soundboard.status" => dispatch_soundboard_status,
         "timeShift.transport" => dispatch_time_shift_transport,
         "meters.reset" => dispatch_meter_reset,
-        "plugins.resume" => dispatch_plugins_resume
+        "plugins.resume" => dispatch_plugins_resume,
+        "plugins.prepareUpdate" => dispatch_plugins_prepare_update
     }
     custom {
         "system.describe" => |plane, _, _| Ok(plane.describe()),
@@ -225,6 +226,7 @@ impl ControlPlane {
         Ok(json!({
             "build": self.build,
             "backend": "control-plane",
+            "quarantinedSessions": self.quarantined_sessions,
             "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
             "audio": { "state": audio, "reason": audio_reason },
             "nativeAdapter": self.native_adapter_state(),

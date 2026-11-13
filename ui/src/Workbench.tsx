@@ -115,7 +115,7 @@ export const SETTINGS_PAGE_KEYWORDS: Record<SettingsPage, string> = {
   uiOptions: "theme dark light high contrast colors look animation",
   startup: "sign in login autostart autoplay tray",
   shortcuts: "keys keyboard hotkey shortcut chord",
-  versions: "update release upgrade",
+  versions: "update release upgrade prerelease channel check now",
   help: "guide manual how to learn",
   mcp: "ai assistant claude chatgpt llm",
   api: "rest http token stream deck script",

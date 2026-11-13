@@ -41,7 +41,7 @@ import { NetworkNodeEditor } from "./NetworkNodeEditor";
 import { EqSpectrumContext } from "./AdvancedEqEditor";
 import { writeEndpointBindingHint } from "./endpointBinding";
 import { recorderHasCaptureSource } from "./RecordingPanels";
-import { PluginEditorControls, PluginNodeInspector } from "./PluginPanels";
+import { PluginEditorControls, PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
 import {
   ApplicationCaptureBinding,
   CableBinding,
@@ -634,6 +634,31 @@ export function PropertiesPanel({
               onRemove={(names) =>
                 recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)
               }
+            />
+            <PluginRecoveryControls
+              node={selectedNode}
+              backend={backend}
+              sessionId={session.id}
+              running={sessionRunning}
+              disabledReason={
+                JSON.stringify(session.nodes.find((node) => node.id === selectedNode.id)?.parameters) !==
+                JSON.stringify(selectedNode.parameters)
+                  ? "Save or discard changes to this tool before preparing recovery."
+                  : undefined
+              }
+              onPrepared={(original, parameters) => {
+                const current = draft.nodes.find((node) => node.id === original.id);
+                if (!current || JSON.stringify(current.parameters) !== JSON.stringify(original.parameters))
+                  return false;
+                recordDraftChange(
+                  {
+                    ...draft,
+                    nodes: draft.nodes.map((node) => (node.id === original.id ? { ...node, parameters } : node)),
+                  },
+                  "Prepared plugin recovery. Save to keep it.",
+                );
+                return true;
+              }}
             />
           </>
         )}

@@ -152,12 +152,49 @@ impl ControlPlane {
         Ok(media)
     }
 
+    pub(crate) fn source_transport_handles(
+        &self,
+        session: &EntityId,
+    ) -> HashMap<EntityId, audiorouter_engine::SourceTransport> {
+        use audiorouter_engine::SourceTransport;
+        self.test_signal_sources
+            .iter()
+            .filter(|((owner, _), _)| owner == session)
+            .map(|((_, node), source)| {
+                (
+                    node.clone(),
+                    SourceTransport::TestSignal(Arc::clone(source)),
+                )
+            })
+            .chain(
+                self.audio_file_sources
+                    .iter()
+                    .filter(|((owner, _), _)| owner == session)
+                    .map(|((_, node), source)| {
+                        (node.clone(), SourceTransport::AudioFile(Arc::clone(source)))
+                    }),
+            )
+            .chain(
+                self.soundboard_sources
+                    .iter()
+                    .filter(|((owner, _), _)| owner == session)
+                    .map(|((_, node), source)| {
+                        (
+                            node.clone(),
+                            SourceTransport::Soundboard(Arc::clone(source)),
+                        )
+                    }),
+            )
+            .collect()
+    }
+
     pub(crate) fn compile_session_graph_with_audio(
         &mut self,
         session: &Session,
         generation: RuntimeGeneration,
         sample_rate_hz: u32,
         plugins: &HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>,
+        flags_only: bool,
     ) -> Result<audiorouter_engine::RuntimeGraph, ControlError> {
         let media = self.session_audio_media(session, sample_rate_hz)?;
         // The application (process-loopback) worker opens no physical capture,
@@ -175,7 +212,7 @@ impl ControlPlane {
         } else {
             std::borrow::Cow::Borrowed(session)
         };
-        let graph = audiorouter_engine::compile_session_at_sample_rate_with_plugins_and_audio(
+        let mut graph = audiorouter_engine::compile_session_at_sample_rate_with_plugins_and_audio(
             pruned.as_ref(),
             generation,
             sample_rate_hz,
@@ -185,6 +222,9 @@ impl ControlPlane {
         .map_err(|error| {
             ControlError::InvalidRequest(format!("native graph rejected: {error:?}"))
         })?;
+        if flags_only {
+            graph.retain_unchanged_source_transports(&self.source_transport_handles(&session.id));
+        }
         self.audio_file_sources
             .retain(|(owner_session, _), _| owner_session != &session.id);
         self.soundboard_sources
@@ -524,12 +564,7 @@ impl ControlPlane {
             .store
             .sessions(audiorouter_domain::MAX_SESSIONS_GLOBAL)
             .iter()
-            .any(|session| {
-                session.nodes.iter().any(|node| {
-                    node.kind == NodeKind::AudioFile
-                        && node.parameters.get("mediaId").and_then(Value::as_str) == Some(media_id)
-                })
-            });
+            .any(|session| session.audio_media_ids().contains(&media_id));
         if referenced {
             return Err(ControlError::InvalidRequest(
                 "audio media is still referenced by a session".into(),

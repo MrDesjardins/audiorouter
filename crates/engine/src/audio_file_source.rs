@@ -166,6 +166,9 @@ pub fn decode_audio<R: Read + Seek + MediaSource + 'static>(
         return Err(AudioFileDecodeError::TooLong);
     }
     let resampled = resample_linear(&decoded, channels, rate, target_sample_rate_hz)?;
+    if resampled.is_empty() {
+        return Err(AudioFileDecodeError::Empty);
+    }
     Ok(DecodedAudio {
         channels,
         sample_rate_hz: target_sample_rate_hz,
@@ -398,6 +401,14 @@ mod tests {
             wav.extend_from_slice(&sample.to_le_bytes());
         }
         wav
+    }
+
+    #[test]
+    fn downsampling_a_tiny_file_cannot_return_zero_frames() {
+        assert_eq!(
+            decode_audio_bytes(wav_mono_16(&[4096], 96_000), "wav", 48_000),
+            Err(AudioFileDecodeError::Empty)
+        );
     }
 
     #[test]

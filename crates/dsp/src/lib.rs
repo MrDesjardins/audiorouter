@@ -1408,8 +1408,20 @@ pub struct PeakLimiter {
     delay: Vec<Vec<f32>>,
     cursor: Vec<usize>,
     gain: f32,
+    /// Monotonic deque of gain constraints for the inclusive lookahead
+    /// window. Storage is prepared once; callback pushes/pops never allocate.
+    gain_window: Vec<LimiterGainConstraint>,
+    gain_window_head: usize,
+    gain_window_len: usize,
+    frame: u64,
     input_level: [LevelFollower; 2],
     output_level: [LevelFollower; 2],
+}
+
+#[derive(Clone, Copy, Debug)]
+struct LimiterGainConstraint {
+    frame: u64,
+    gain: f32,
 }
 
 impl PeakLimiter {
@@ -1452,6 +1464,16 @@ impl PeakLimiter {
             delay: vec![vec![0.0; lookahead_frames.max(1)]; channels],
             cursor: vec![0; channels],
             gain: 1.0,
+            gain_window: vec![
+                LimiterGainConstraint {
+                    frame: 0,
+                    gain: 1.0
+                };
+                lookahead_frames + 1
+            ],
+            gain_window_head: 0,
+            gain_window_len: 0,
+            frame: 0,
             input_level: [LevelFollower::new(); 2],
             output_level: [LevelFollower::new(); 2],
         })
@@ -1480,6 +1502,9 @@ impl PeakLimiter {
         }
         self.cursor.fill(0);
         self.gain = 1.0;
+        self.gain_window_head = 0;
+        self.gain_window_len = 0;
+        self.frame = 0;
         self.input_level = [LevelFollower::new(); 2];
         self.output_level = [LevelFollower::new(); 2];
     }
@@ -1505,9 +1530,14 @@ impl PeakLimiter {
         let mut input_peaks = [0.0_f32; 2];
         let mut output_peaks = [0.0_f32; 2];
         for values in samples.chunks_exact_mut(self.channels) {
+            let peak = values
+                .iter()
+                .map(|sample| finite_or_zero(*sample).abs())
+                .fold(0.0, f32::max);
+            self.update_gain(peak);
             for (channel, sample) in values.iter_mut().enumerate() {
                 let input = *sample;
-                *sample = self.process_one(channel, input);
+                *sample = self.process_delayed(channel, input);
                 if let (Some(input_peak), Some(output_peak)) =
                     (input_peaks.get_mut(channel), output_peaks.get_mut(channel))
                 {
@@ -1527,7 +1557,43 @@ impl PeakLimiter {
         );
     }
 
+    /// Linked stereo: detect both inputs and advance the shared envelope once
+    /// per frame. Delay and gain remain identical across channel planes.
+    pub fn process_planar_linked(&mut self, left: &mut [f32], right: &mut [f32]) {
+        if self.channels != 2 || left.len() != right.len() {
+            left.fill(0.0);
+            right.fill(0.0);
+            return;
+        }
+        let frames = left.len();
+        let mut input_peaks = [0.0_f32; 2];
+        let mut output_peaks = [0.0_f32; 2];
+        for (left, right) in left.iter_mut().zip(right.iter_mut()) {
+            let inputs = [finite_or_zero(*left), finite_or_zero(*right)];
+            self.update_gain(inputs[0].abs().max(inputs[1].abs()));
+            *left = self.process_delayed(0, inputs[0]);
+            *right = self.process_delayed(1, inputs[1]);
+            input_peaks[0] = input_peaks[0].max(inputs[0].abs());
+            input_peaks[1] = input_peaks[1].max(inputs[1].abs());
+            output_peaks[0] = output_peaks[0].max(left.abs());
+            output_peaks[1] = output_peaks[1].max(right.abs());
+        }
+        observe_levels(
+            &mut self.input_level,
+            &mut self.output_level,
+            input_peaks,
+            output_peaks,
+            frames,
+            self.sample_rate,
+        );
+    }
+
+    /// Mono only; use a frame-major entry point for a stereo limiter.
     pub fn process_channel(&mut self, channel: usize, samples: &mut [f32]) {
+        if self.channels != 1 || channel != 0 {
+            samples.fill(0.0);
+            return;
+        }
         let mut input_peak = 0.0_f32;
         let mut output_peak = 0.0_f32;
         for sample in samples.iter_mut() {
@@ -1548,20 +1614,53 @@ impl PeakLimiter {
     }
 
     fn process_one(&mut self, channel: usize, sample: f32) -> f32 {
+        self.update_gain(finite_or_zero(sample).abs());
+        self.process_delayed(channel, sample)
+    }
+
+    fn update_gain(&mut self, peak: f32) {
+        let desired_gain = if peak > self.ceiling_linear {
+            self.ceiling_linear / peak
+        } else {
+            1.0
+        };
+        let capacity = self.gain_window.len();
+        // Include the sample leaving this frame, not just future samples:
+        // a peak remains constrained through its actual output boundary.
+        while self.gain_window_len > 0
+            && self
+                .frame
+                .wrapping_sub(self.gain_window[self.gain_window_head].frame)
+                > self.lookahead_frames as u64
+        {
+            self.gain_window_head = (self.gain_window_head + 1) % capacity;
+            self.gain_window_len -= 1;
+        }
+        while self.gain_window_len > 0 {
+            let back = (self.gain_window_head + self.gain_window_len - 1) % capacity;
+            if self.gain_window[back].gain < desired_gain {
+                break;
+            }
+            self.gain_window_len -= 1;
+        }
+        let next = (self.gain_window_head + self.gain_window_len) % capacity;
+        self.gain_window[next] = LimiterGainConstraint {
+            frame: self.frame,
+            gain: desired_gain,
+        };
+        self.gain_window_len += 1;
+        let required = self.gain_window[self.gain_window_head].gain;
+        self.gain =
+            (self.gain + (1.0 - self.gain) * (1.0 - self.release_coefficient)).min(required);
+        self.frame = self.frame.wrapping_add(1);
+    }
+
+    fn process_delayed(&mut self, channel: usize, sample: f32) -> f32 {
         let Some(delay) = self.delay.get_mut(channel) else {
             return 0.0;
         };
         let cursor = &mut self.cursor[channel];
         let input = if sample.is_finite() { sample } else { 0.0 };
-        let desired_gain = if input.abs() > self.ceiling_linear {
-            self.ceiling_linear / input.abs()
-        } else {
-            1.0
-        };
-        self.gain = self.gain.min(desired_gain);
-        if desired_gain >= self.gain {
-            self.gain += (1.0 - self.gain) * (1.0 - self.release_coefficient);
-        }
         let output = if self.lookahead_frames == 0 {
             input
         } else {
@@ -2706,8 +2805,7 @@ mod tests {
         .unwrap();
         let mut left = [1.0_f32; 128];
         let mut right = [0.1_f32; 128];
-        limiter.process_channel(0, &mut left);
-        limiter.process_channel(1, &mut right);
+        limiter.process_planar_linked(&mut left, &mut right);
         assert!(limiter.input_level_db(0).abs() < 1.0e-4);
         assert!(limiter.output_level_db(0) <= -6.0 + 1.0e-3);
         assert!((limiter.input_level_db(1) + 20.0).abs() < 1.0e-3);
@@ -2813,6 +2911,127 @@ mod tests {
         let mut quiet = [0.01];
         gate.process_interleaved(&mut quiet);
         assert!(!gate.is_open());
+    }
+
+    #[test]
+    fn limiter_linked_stereo_has_one_gain_and_the_mono_release_time() {
+        let params = LimiterParams {
+            ceiling_db: -6.0,
+            lookahead_ms: 0.0,
+            release_ms: 100.0,
+        };
+        let mut mono = PeakLimiter::new_at_sample_rate(params, 48_000.0, 1).unwrap();
+        let mut stereo = PeakLimiter::new_at_sample_rate(params, 48_000.0, 2).unwrap();
+        mono.process_interleaved(&mut [1.0]);
+        stereo.process_interleaved(&mut [1.0, 1.0]);
+        let initial = mono.gain;
+        for _ in 0..4800 {
+            let mut left_right = [0.2, 0.2];
+            let mut one = [0.2];
+            stereo.process_interleaved(&mut left_right);
+            mono.process_interleaved(&mut one);
+            assert_eq!(left_right[0], left_right[1], "stereo image must not move");
+            assert_eq!(
+                left_right[0], one[0],
+                "release is measured in frames, not channel samples"
+            );
+        }
+        let recovered = (mono.gain - initial) / (1.0 - initial);
+        assert!((recovered - (1.0 - (-1.0_f32).exp())).abs() < 0.02);
+    }
+
+    #[test]
+    fn limiter_lookahead_preserves_peak_gain_until_the_peak_is_output() {
+        for rate in [8_000.0, 48_000.0, 192_000.0] {
+            for lookahead_ms in [0.0, 5.0, 10.0] {
+                let mut limiter = PeakLimiter::new_at_sample_rate(
+                    LimiterParams {
+                        ceiling_db: -6.0,
+                        lookahead_ms,
+                        release_ms: 10.0,
+                    },
+                    rate,
+                    2,
+                )
+                .unwrap();
+                let delay = limiter.lookahead_frames();
+                for frame in 0..=delay {
+                    let mut stereo = [0.1, if frame == 0 { 1.0 } else { 0.2 }];
+                    limiter.process_interleaved(&mut stereo);
+                    if frame == delay {
+                        // The quiet channel measures applied gain without the
+                        // ceiling clamp being able to disguise early release.
+                        assert!(
+                            (stereo[0] / 0.1 - limiter.ceiling_linear).abs() < 1.0e-6,
+                            "rate={rate} lookahead={lookahead_ms} gain={}",
+                            stereo[0] / 0.1
+                        );
+                        assert!((stereo[1] - limiter.ceiling_linear).abs() < 1.0e-6);
+                    }
+                }
+                limiter.process_interleaved(&mut [0.1, 0.2]);
+                assert!(
+                    limiter.gain > limiter.ceiling_linear,
+                    "release resumes after the peak leaves"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn limiter_gain_matches_the_minimum_constraint_of_all_pending_samples() {
+        let mut limiter = PeakLimiter::new_at_sample_rate(
+            LimiterParams {
+                ceiling_db: -6.0,
+                lookahead_ms: 10.0,
+                release_ms: 10.0,
+            },
+            8_000.0,
+            1,
+        )
+        .unwrap();
+        let delay = limiter.lookahead_frames();
+        let mut inputs = vec![0.2_f32; delay * 3 + 20];
+        inputs[0] = 1.0;
+        inputs[delay - 1] = 0.99;
+        inputs[delay * 2 + 5] = -0.9;
+        // Increasing required gains fill the entire monotonic queue before
+        // expiry; periodic larger peaks then exercise popping from the back.
+        inputs.extend((0..delay * 3).map(|frame| 1.2 - (frame % (delay + 1)) as f32 * 0.003));
+        let buffer = limiter.gain_window.as_ptr();
+        let mut gain = 1.0;
+        for (frame, input) in inputs.iter().enumerate() {
+            // Deliberately slow reference: the constraint includes every
+            // input still pending and the one leaving the delay this frame.
+            let peak = inputs[frame.saturating_sub(delay)..=frame]
+                .iter()
+                .map(|value| value.abs())
+                .fold(0.0, f32::max);
+            let required = if peak > limiter.ceiling_linear {
+                limiter.ceiling_linear / peak
+            } else {
+                1.0
+            };
+            gain = (gain + (1.0 - gain) * (1.0 - limiter.release_coefficient)).min(required);
+            let mut actual = [*input];
+            limiter.process_channel(0, &mut actual);
+            assert_eq!(limiter.gain, gain, "frame {frame}");
+            let delayed = if frame < delay {
+                0.0
+            } else {
+                inputs[frame - delay]
+            };
+            assert!(
+                (actual[0] - delayed * gain).abs() < 1.0e-6,
+                "the clamp must only be a numeric guard"
+            );
+            assert!(limiter.gain_window_len <= limiter.gain_window.len());
+        }
+        assert_eq!(limiter.gain_window.as_ptr(), buffer);
+        limiter.reset();
+        assert_eq!(limiter.gain_window.as_ptr(), buffer);
+        assert_eq!(limiter.gain_window_len, 0);
+        assert_eq!(limiter.gain, 1.0);
     }
 
     #[test]

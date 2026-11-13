@@ -26,16 +26,43 @@ export function ToolCompare({
   const [held, setHeld] = useState<"tool" | "chain" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const holding = useRef(false);
+  const requestTail = useRef<Promise<unknown> | null>(null);
+  const holdSequence = useRef(0);
+  const releaseTarget = useRef<{ backend: UiBackend; sessionId: string } | null>(null);
+  const expiryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chain = chainOf(session, node.id);
+
+  const enqueue = <T,>(send: () => Promise<T>): Promise<T> => {
+    const previous = requestTail.current;
+    const next = previous ? previous.catch(() => {}).then(send) : send();
+    requestTail.current = next;
+    const settled = () => {
+      if (requestTail.current === next) requestTail.current = null;
+    };
+    void next.then(settled, settled);
+    return next;
+  };
 
   const release = () => {
     if (!holding.current) return;
+    if (expiryTimer.current !== null) clearTimeout(expiryTimer.current);
+    expiryTimer.current = null;
     holding.current = false;
+    const sequence = ++holdSequence.current;
+    const target = releaseTarget.current;
+    releaseTarget.current = null;
     setHeld(null);
     setComparing([]);
-    void backend
-      .compareNodes?.({ sessionId: session.id, nodes: [], idempotencyKey: uiIdempotencyKey("compare-release") })
-      .catch((error) => setMessage(formatUiError(error, "Could not end the comparison.")));
+    if (!target?.backend.compareNodes) return;
+    void enqueue(() =>
+      target.backend.compareNodes!({
+        sessionId: target.sessionId,
+        nodes: [],
+        idempotencyKey: uiIdempotencyKey("compare-release"),
+      }),
+    ).catch((error) => {
+      if (holdSequence.current === sequence) setMessage(formatUiError(error, "Could not end the comparison."));
+    });
   };
   const releaseFromEffect = useEffectEvent(release);
   useEffect(() => {
@@ -50,22 +77,33 @@ export function ToolCompare({
   }, []);
   // Choosing another tool leaves this panel's comparison behind.
   const nodeId = node.id;
-  useEffect(() => () => releaseFromEffect(), [nodeId]);
+  const sessionId = session.id;
+  useEffect(() => () => releaseFromEffect(), [nodeId, sessionId]);
 
   const hold = (which: "tool" | "chain") => {
     if (!running || holding.current || !backend.compareNodes) return;
     holding.current = true;
+    const sequence = ++holdSequence.current;
+    releaseTarget.current = { backend, sessionId: session.id };
     setHeld(which);
     setMessage(null);
     const nodes = which === "tool" ? [node.id] : chain;
     setComparing(nodes);
-    void backend
-      .compareNodes({
+    void enqueue(() =>
+      backend.compareNodes!({
         sessionId: session.id,
         nodes,
         idempotencyKey: uiIdempotencyKey("compare-hold"),
+      }),
+    )
+      .then((result) => {
+        if (holdSequence.current !== sequence || !holding.current || result.expiresInMs <= 0) return;
+        expiryTimer.current = setTimeout(() => {
+          if (holdSequence.current === sequence) release();
+        }, result.expiresInMs);
       })
       .catch((error) => {
+        if (holdSequence.current !== sequence) return;
         holding.current = false;
         setHeld(null);
         setComparing([]);

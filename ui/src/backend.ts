@@ -340,7 +340,12 @@ export interface UiBackend {
   savePluginState?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.saveState"]>;
   retryPlugins(directory: string, idempotencyKey: string): Promise<PluginScanResult>;
   inspectPlugin(path: string): Promise<PluginScanEntry>;
-  describePluginParameters(path: string): Promise<PluginParametersResult>;
+  describePluginParameters(path: string, classId?: string): Promise<PluginParametersResult>;
+  preparePluginUpdate(
+    nodeId: string,
+    sessionId?: string,
+    resetState?: boolean,
+  ): Promise<import("@audiorouter/contracts").MethodResult["plugins.prepareUpdate"]>;
   listVirtualDevices(): Promise<VirtualDeviceInfo[]>;
   planVirtualDevice(operation: VirtualDeviceOperation): Promise<VirtualDevicePlanResult>;
   applyVirtualDevice(planId: string, idempotencyKey: string): Promise<VirtualDeviceApplyResult>;
@@ -447,6 +452,7 @@ export interface UiBackend {
   resetMeter?(sessionId: string, nodeId: string): Promise<{ sessionId: string; nodeId: string; reset: boolean }>;
   stopSession(sessionId: string, idempotencyKey?: string): Promise<SessionStopResult>;
   exportSession(sessionId: string): Promise<Session>;
+  exportRawSession?(sessionId: string): Promise<import("@audiorouter/contracts").RawSessionExport>;
   exportSessionFile(sessionId: string, path: string, replace?: boolean): Promise<SessionFileExportResult>;
   importSessionFile(path: string): Promise<SessionFileImportResult>;
   planSessionImport(session: Session): Promise<SessionImportPlanResult>;
@@ -638,6 +644,9 @@ export function createDisconnectedBackend(session: Session = demoSession): UiBac
     },
     async describePluginParameters() {
       throw new Error("The backend is disconnected; plugin parameter discovery is unavailable.");
+    },
+    async preparePluginUpdate() {
+      throw new Error("Plugin recovery requires the connected native backend.");
     },
     async listVirtualDevices() {
       return [];
@@ -1071,8 +1080,11 @@ export function createLiveBackend(
     async inspectPlugin(path) {
       return client.request("plugins.inspect", { path });
     },
-    async describePluginParameters(path) {
-      return client.request("plugins.parameters", { path });
+    async describePluginParameters(path, classId) {
+      return client.request("plugins.parameters", { path, ...(classId && classId !== "default" ? { classId } : {}) });
+    },
+    async preparePluginUpdate(nodeId, sessionId, resetState = false) {
+      return client.request("plugins.prepareUpdate", { nodeId, sessionId, resetState });
     },
     async listVirtualDevices() {
       return collectPagedRows((cursor) =>
@@ -1281,7 +1293,14 @@ export function createLiveBackend(
       });
     },
     async exportSession(exportSessionId) {
-      return client.request("sessions.export", { sessionId: exportSessionId });
+      const result = await client.request("sessions.export", { sessionId: exportSessionId });
+      if ("document" in result) throw new Error("Expected a validated session document.");
+      return result;
+    },
+    async exportRawSession(exportSessionId) {
+      const result = await client.request("sessions.export", { sessionId: exportSessionId, raw: true });
+      if (!("document" in result)) throw new Error("Expected the original stored session text.");
+      return result;
     },
     async exportSessionFile(exportSessionId, path, replace) {
       return client.request("sessions.exportFile", {

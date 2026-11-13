@@ -172,7 +172,10 @@ file.
    and VST3 plugins `audiorouter-vst3-worker.exe` beside the app. Reinstall
    AudioRouter; developers build both beside the shell (see the
    [quickstart](quickstart.md)).
-5. **Logs.** Open **Logs** for the exact error.
+5. **Copy the error.** Use **Copy error** on the error message to copy its
+   full text, including paths that may be clipped on screen. If clipboard
+   access is blocked, select the supplied text field and press Ctrl+C.
+   **Logs and support** also offers a support bundle for a bug report.
 
 ### The sound is late or out of sync
 

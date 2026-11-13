@@ -155,6 +155,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "plugins.closeEditor" => "Close a plugin node editor. The editor shows the instance that processes audio, so edits already apply live.",
         "plugins.resume" => "Retry a plugin in a playing route that was silenced because it passed a recording device's audio through unchanged (for example an unlicensed plugin). Audio resumes only if the plugin has changed audio since; otherwise it stays silent and resumed is false.",
         "plugins.parameters" => "Load one currently scanned plugin in its isolated worker and return bounded parameter descriptors.",
+        "plugins.prepareUpdate" => "Prepare replacement node parameters from a current scan after a vendor update, retaining the old state asset. Does not change a route or start audio: apply the returned parameters through graph plan/commit. resetState deliberately starts from defaults instead.",
         "virtualDevices.list" => "List managed virtual bus desired state without activating endpoints.",
         "virtualDevices.plan" => "Validate a managed virtual bus lifecycle change without applying it.",
         "virtualDevices.apply" => "Apply a validated virtual bus lifecycle plan to desired state.",
@@ -182,7 +183,7 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "processors.list" => "List built-in DSP processor metadata and availability.",
         "processors.response" => "Evaluate a bounded parametric-EQ magnitude response using the DSP coefficient path.",
         "sessions.get" => "Return one session resource by opaque identifier.",
-        "sessions.export" => "Export one persisted canonical session document without changing state.",
+        "sessions.export" => "Export one canonical session document without changing state; raw=true returns the original stored text for recovery, including quarantined sessions, without validating or executing it.",
         "sessions.exportFile" => "Export to the exact local destination approved by the desktop Save dialog in the last five minutes; consumes that approval. Desktop only.",
         "sessions.approveExport" => "Approve one local export destination and optional replacement after the native Save dialog. Desktop only; not available to HTTP or MCP clients.",
         "sessions.importFile" => "Import a .audiorouter session file as a new stopped session.",
@@ -219,8 +220,8 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "nodes.toggle" => "Flip one node's enabled, bypass, an on/off setting or a two-choice setting (for example an Input or Output Switch between A and B). Applied live and saved.",
         "nodes.add" => "Add a tool or device by kind (see nodes.catalog), optionally between two connected nodes or after a node. Saved.",
         "nodes.remove" => "Remove a node by ID or name; by default its upstream and downstream nodes are reconnected. Saved.",
-        "connections.add" => "Connect two nodes by ID or name (first output to the first free input). Saved.",
-        "connections.remove" => "Remove the connection between two nodes. Saved.",
+        "connections.add" => "Connect two nodes by ID or name. Optionally select fromOutput and toInput by port name; defaults to the first output and first free input. Saved.",
+        "connections.remove" => "Remove connections between two nodes, optionally limited by fromOutput and toInput port names. Saved.",
         "meters.levels" => "Current level of each playing node (peak and RMS dBFS, clipping, and reduction for Gate, Compressor, Limiter and Duck).",
         _ => "Invoke an AudioRouter control-plane method.",
     }
@@ -676,7 +677,8 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         ),
         "plugins.parameters" => object_schema(
             json!({
-                "path": { "type": "string", "minLength": 1 }
+                "path": { "type": "string", "minLength": 1 },
+                "classId": { "type": "string", "minLength": 1, "description": "Optional audio-effect class ID from the scan; selects an effect in a multi-effect VST3 module." }
             }),
             &["path"],
         ),
@@ -684,6 +686,12 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             json!({
                 "sessionId": target_session(),
                 "nodeId": target_node()
+            }),
+            &["nodeId"],
+        ),
+        "plugins.prepareUpdate" => object_schema(
+            json!({
+                "sessionId": target_session(), "nodeId": target_node(), "resetState": { "type": "boolean" }
             }),
             &["nodeId"],
         ),
@@ -822,7 +830,8 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             &["sessionId"],
         ),
         "sessions.export" => object_schema(
-            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                "raw": { "type": "boolean", "description": "Export the original stored text for recovery, including quarantined sessions; never executes it." } }),
             &["sessionId"],
         ),
         "sessions.approveExport" => object_schema(
@@ -1070,12 +1079,8 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
             json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "node": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Node ID or exact name." }, "bridge": { "type": "boolean", "description": "Reconnect its neighbours (default true)." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
             &["node", "idempotencyKey"],
         ),
-        "connections.add" => object_schema(
-            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
-            &["from", "to", "idempotencyKey"],
-        ),
-        "connections.remove" => object_schema(
-            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
+        "connections.add" | "connections.remove" => object_schema(
+            json!({ "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Defaults to the active session." }, "from": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Source node ID or name." }, "to": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Destination node ID or name." }, "fromOutput": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Optional source output port name, such as a or b." }, "toInput": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES, "description": "Optional destination input port name." }, "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": audiorouter_storage::MAX_IDEMPOTENCY_KEY_BYTES } }),
             &["from", "to", "idempotencyKey"],
         ),
         "obs.connect" => object_schema(

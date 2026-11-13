@@ -29,6 +29,19 @@ type PendingRequest = {
   timeout: ReturnType<typeof setTimeout>;
 };
 
+/**
+ * Requests that load or scan third-party plugins can legitimately take far
+ * longer than an ordinary call: the backend allows a plugin 30 s to load,
+ * restore or save, and a scan hashes every binary. Give them the transport's
+ * upper bound, so the UI does not report a timeout while the backend is still
+ * working.
+ */
+export const SLOW_REQUEST_TIMEOUT_MS = 60_000;
+export function requestTimeoutMs(method: string, ordinaryMs: number): number {
+  const slow = method.startsWith("plugins.") || method.endsWith(".prepare");
+  return slow ? Math.max(ordinaryMs, SLOW_REQUEST_TIMEOUT_MS) : ordinaryMs;
+}
+
 function requestKey(id: JsonRpcRequest["id"]): string {
   return `${typeof id}:${String(id)}`;
 }
@@ -63,10 +76,13 @@ export class WebView2RpcTransport implements RpcTransport {
     const key = requestKey(request.id);
     if (this.pending.has(key)) return Promise.reject(new Error("WebView2 request ID is already pending"));
     return new Promise<JsonRpcResponse>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pending.delete(key);
-        reject(new Error("WebView2 request timed out"));
-      }, this.timeoutMs);
+      const timeout = setTimeout(
+        () => {
+          this.pending.delete(key);
+          reject(new Error("WebView2 request timed out"));
+        },
+        requestTimeoutMs(request.method, this.timeoutMs),
+      );
       this.pending.set(key, { resolve, reject, timeout });
       try {
         this.webview.postMessage({ type: "audiorouter.rpc.request", request });
@@ -150,7 +166,10 @@ export class TauriRpcTransport implements RpcTransport {
     }
     let timeout: ReturnType<typeof setTimeout>;
     const timeoutPromise = new Promise<JsonRpcResponse>((_, reject) => {
-      timeout = setTimeout(() => reject(new Error("Tauri request timed out")), this.timeoutMs);
+      timeout = setTimeout(
+        () => reject(new Error("Tauri request timed out")),
+        requestTimeoutMs(request.method, this.timeoutMs),
+      );
     });
     return Promise.race([
       invocation.then((response) => {

@@ -25,6 +25,7 @@ impl ControlPlane {
             "reason": reason,
             "storage": if self.storage.is_some() { "sqlite" } else { "memory" },
             "sessionCount": session_count,
+            "quarantinedSessions": self.quarantined_sessions,
             "activeSessionCount": active_session_ids.len(),
             "activeSessionIds": active_session_ids,
             "privacyMute": {
@@ -231,7 +232,7 @@ impl ControlPlane {
                 .unwrap_or(generation);
             let media =
                 self.session_audio_media(&session, audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ)?;
-            let compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
+            let mut compiled = audiorouter_engine::compile_native_paths_with_plugins_and_audio(
                 &session,
                 RuntimeGeneration::new(worker_generation),
                 &plugin_stages,
@@ -240,6 +241,10 @@ impl ControlPlane {
             .map_err(|error| {
                 ControlError::InvalidRequest(format!("multi-input graph rejected: {error:?}"))
             })?;
+            if flags_only {
+                compiled
+                    .retain_unchanged_source_transports(&self.source_transport_handles(session_id));
+            }
             self.native_multi_input_worker
                 .as_mut()
                 .expect("attached above")

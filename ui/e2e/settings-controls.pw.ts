@@ -11,7 +11,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
           {
             tag_name: "v99.0.0",
             draft: false,
-            html_url: "https://github.com/MrDesjardins/audiorouter/releases/tag/v99.0.0",
+            prerelease: true,
+            assets: [{ name: "AudioRouter_99.0.0_x64-setup.exe" }],
           },
         ],
       });
@@ -22,18 +23,21 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     const toggle = panel.getByRole("checkbox", { name: "Check GitHub once a day for a newer version", exact: true });
     await expect(toggle).not.toBeChecked();
     await expect(panel.locator(".setting-toggle-state")).toHaveText("Off");
+    await expect(panel.getByText("Checking is off.", { exact: true })).toBeVisible();
     const height = await panel.evaluate((element) => element.getBoundingClientRect().height);
     await toggle.focus();
     await toggle.press("Space");
     await expect(panel.locator(".setting-toggle-state")).toHaveText("On");
     await expect(toggle).toHaveAccessibleDescription("On");
-    await expect(panel.getByRole("button", { name: "Open the 99.0.0 release page", exact: true })).toBeEnabled();
+    await expect(panel.getByText("Version 99.0.0 is available.")).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Open release page", exact: true })).toBeEnabled();
     expect(await panel.evaluate((element) => element.getBoundingClientRect().height)).toBe(height);
     await page.setViewportSize({ width: 640, height: 690 });
     const narrowHeight = await panel.evaluate((element) => element.getBoundingClientRect().height);
     await toggle.press("Space");
     await expect(panel.locator(".setting-toggle-state")).toHaveText("Off");
-    await expect(panel.getByRole("button", { name: "No release to open", exact: true })).toBeDisabled();
+    await expect(panel.getByText("Checking is off.", { exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "Open release page", exact: true })).toBeDisabled();
     expect(await panel.evaluate((element) => element.getBoundingClientRect().height)).toBe(narrowHeight);
     await panel.screenshot({ path: `../target/ui-quality-review/round-25/updates-${theme}.png` });
   });

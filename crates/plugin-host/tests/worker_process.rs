@@ -122,6 +122,38 @@ fn disposable_worker_process_round_trips_control_and_audio_frames() {
     );
 }
 
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn plugin_initialization_has_a_longer_deadline_than_audio_exchange() {
+    let started = Instant::now();
+    let worker =
+        WorkerProcess::spawn_fixture(fixture_worker_path(), &"d".repeat(64), 1, "slow-load")
+            .unwrap();
+    assert!(started.elapsed() >= Duration::from_secs(6));
+    assert!(worker.shutdown().unwrap().success());
+}
+
+#[cfg(feature = "test-fixtures")]
+#[test]
+fn a_declined_state_save_keeps_a_healthy_worker_processing() {
+    let mut worker =
+        WorkerProcess::spawn_fixture(fixture_worker_path(), &"d".repeat(64), 1, "state-refused")
+            .unwrap();
+    assert!(matches!(
+        worker.save_state(),
+        Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(_))
+    ));
+    let frame = WorkerFrame::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        1,
+        vec![0.25; 128],
+    )
+    .unwrap();
+    assert_eq!(worker.process(frame.clone(), vec![]).unwrap(), frame);
+    assert!(worker.shutdown().unwrap().success());
+}
+
 #[cfg(all(windows, feature = "test-fixtures"))]
 fn chain_fixture(name: &str) -> audiorouter_plugin_host::WorkerChainPlugin {
     let root = PathBuf::from(
@@ -2504,7 +2536,7 @@ fn disposable_worker_rejects_a_runtime_sample_rate_change() {
 }
 
 #[test]
-fn disposable_worker_fails_closed_when_state_is_unavailable() {
+fn disposable_worker_declines_unavailable_state_without_stopping_audio() {
     let hash = "6".repeat(64);
     let worker_path =
         std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
@@ -2524,10 +2556,18 @@ fn disposable_worker_fails_closed_when_state_is_unavailable() {
     let mut worker = WorkerProcess::spawn(worker_path, &hash, 1).expect("spawn worker client");
     assert!(matches!(
         worker.save_state(),
-        Err(audiorouter_plugin_host::WorkerProcessError::Protocol(code))
+        Err(audiorouter_plugin_host::WorkerProcessError::UnsupportedFeature(code))
             if code == "stateUnavailable"
     ));
-    assert!(!worker.shutdown().unwrap().success());
+    let frame = WorkerFrame::new(
+        1,
+        worker_clock_tick().saturating_add(10_000),
+        1,
+        vec![0.25; 128],
+    )
+    .unwrap();
+    assert_eq!(worker.process(frame.clone(), vec![]).unwrap(), frame);
+    assert!(worker.shutdown().unwrap().success());
 }
 
 #[test]
