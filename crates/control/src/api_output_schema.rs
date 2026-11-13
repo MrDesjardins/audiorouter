@@ -17,8 +17,11 @@ fn method_output_schema_impl(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "state": { "const": "stopped" },
-                "sessions": { "type": "array", "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS },
-                "recorders": { "type": "array", "maxItems": MAX_ACTIVE_RECORDERS }
+                "sessions": { "type": "array", "maxItems": audiorouter_domain::MAX_SESSIONS_GLOBAL,
+                    "items": method_output_schema("sessions.stop") },
+                "recorders": { "type": "array",
+                    "maxItems": audiorouter_domain::MAX_SESSIONS_GLOBAL * (audiorouter_domain::MAX_NODES_PER_SESSION + 1),
+                    "items": method_output_schema("sessions.stop")["properties"]["recorders"]["items"].clone() }
             },
             "required": ["state", "sessions", "recorders"],
             "additionalProperties": false
@@ -426,7 +429,13 @@ fn method_output_schema_impl(name: &str) -> Value {
                 "additionalProperties": false
             })
         }
-        "sessions.get" | "sessions.export" => session_item_schema(),
+        "sessions.get" => session_item_schema(),
+        "sessions.export" => json!({"oneOf": [session_item_schema(), {
+            "type": "object", "properties": {
+                "sessionId": {"type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES},
+                "document": {"type": "string", "maxLength": audiorouter_storage::MAX_SESSION_DOCUMENT_BYTES}
+            }, "required": ["sessionId", "document"], "additionalProperties": false
+        }]}),
         "sessions.approveExport" => json!({
             "type": "object",
             "properties": { "approved": { "const": true }, "expiresInMs": { "const": 300000 } },
@@ -607,16 +616,19 @@ fn method_output_schema_impl(name: &str) -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
                 "state": { "const": "stopped" },
                 "runtime": { "enum": ["fake", "native"] },
+                "reason": { "type": "string" },
                 "recorders": {
                     "type": "array",
-                    "maxItems": audiorouter_domain::MAX_ACTIVE_SESSIONS,
+                    "maxItems": audiorouter_domain::MAX_NODES_PER_SESSION + 1,
                     "items": {
                         "type": "object",
                         "properties": {
                             "sessionId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
-                            "state": { "const": "completed" },
-                            "fileFinalized": { "const": true },
-                            "recoverable": { "const": false }
+                            "nodeId": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES },
+                            "state": { "enum": ["idle", "armed", "completed", "failed"] },
+                            "fileFinalized": { "type": "boolean" },
+                            "recoverable": { "type": "boolean" },
+                            "reason": { "type": "string" }
                         },
                         "required": ["sessionId", "state", "fileFinalized", "recoverable"],
                         "additionalProperties": false
@@ -1754,6 +1766,14 @@ pub(crate) fn obs_status_output_schema() -> Value {
     })
 }
 
+fn quarantined_sessions_schema() -> Value {
+    json!({"type": "array", "maxItems": audiorouter_domain::MAX_SESSIONS_GLOBAL,
+        "items": {"type": "object", "properties": {
+            "sessionId": {"type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES},
+            "reason": {"type": "string"}
+        }, "required": ["sessionId", "reason"], "additionalProperties": false}})
+}
+
 pub(crate) fn status_output_schema() -> Value {
     json!({
         "type": "object",
@@ -1764,6 +1784,7 @@ pub(crate) fn status_output_schema() -> Value {
             "reason": { "type": "string", "minLength": 1 },
             "storage": { "enum": ["memory", "sqlite"] },
             "sessionCount": { "type": "integer", "minimum": 0 },
+            "quarantinedSessions": quarantined_sessions_schema(),
             "activeSessionCount": { "type": "integer", "minimum": 0 },
             "activeSessionIds": {
                 "type": "array",
@@ -1815,6 +1836,7 @@ pub(crate) fn diagnostics_output_schema() -> Value {
         "properties": {
             "build": { "type": "string" },
             "backend": { "const": "control-plane" },
+            "quarantinedSessions": quarantined_sessions_schema(),
             "storage": { "enum": ["memory", "sqlite"] },
             "audio": {
                 "type": "object",

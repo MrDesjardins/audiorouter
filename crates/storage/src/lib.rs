@@ -37,6 +37,18 @@ pub const MAX_OPERATION_JOURNAL_ENTRIES: usize = 4_096;
 pub const MAX_AUDIO_MEDIA_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_AUDIO_MEDIA_TOTAL_BYTES: u64 = 512 * 1024 * 1024;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuarantinedSession {
+    pub session_id: String,
+    pub reason: String,
+}
+
+pub struct SessionInventory {
+    pub sessions: Vec<Session>,
+    pub quarantined: Vec<QuarantinedSession>,
+}
+
 #[derive(Debug)]
 pub enum StorageError {
     Sql(rusqlite::Error),
@@ -52,6 +64,7 @@ pub enum StorageError {
     InvalidJournal(String),
     JournalLimitReached,
     CorruptDatabase(String),
+    NewerSchema { found: i64, supported: i64 },
     IdempotencyConflict,
     DocumentTooLarge { bytes: usize, maximum: usize },
     InvalidBackupPath(String),
@@ -91,6 +104,21 @@ pub const MAX_SCHEMA_VERSION: i64 = 4;
 pub const MAX_SESSION_HISTORY_ITEMS: usize = 101;
 /// Maximum number of directory entries inspected by recovery retention.
 pub const MAX_RECOVERY_DIRECTORY_ENTRIES: usize = 1_024;
+
+fn validate_schema_version(version: i64) -> Result<(), StorageError> {
+    if version > MAX_SCHEMA_VERSION {
+        return Err(StorageError::NewerSchema {
+            found: version,
+            supported: MAX_SCHEMA_VERSION,
+        });
+    }
+    if version < 0 {
+        return Err(StorageError::CorruptDatabase(format!(
+            "invalid schema migration version {version}"
+        )));
+    }
+    Ok(())
+}
 
 fn validate_recording_id(recording_id: &str) -> Result<(), StorageError> {
     if recording_id.is_empty() || recording_id.len() > MAX_RECORDING_ID_BYTES {
@@ -174,14 +202,96 @@ fn backup_connection(
             maximum: MAX_BACKUP_BYTES as usize,
         });
     }
-    connection
-        .backup(
-            rusqlite::MAIN_DB,
-            destination,
-            None::<fn(rusqlite::backup::Progress)>,
-        )
-        .map_err(StorageError::Sql)?;
-    validate_backup_size(destination)
+    write_backup(destination, |path| {
+        connection
+            .backup(
+                rusqlite::MAIN_DB,
+                path,
+                None::<fn(rusqlite::backup::Progress)>,
+            )
+            .map_err(StorageError::Sql)
+    })
+}
+
+fn write_backup(
+    destination: &std::path::Path,
+    write: impl FnOnce(&std::path::Path) -> Result<(), StorageError>,
+) -> Result<(), StorageError> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let parent = destination.parent().ok_or_else(|| {
+        StorageError::InvalidBackupPath("backup requires a parent directory".into())
+    })?;
+    let (staging, file) = loop {
+        let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = parent.join(format!(
+            ".audiorouter-backup-{}-{serial}.partial",
+            std::process::id()
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => break (path, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    drop(file);
+    // Only this newly reserved path is cleaned. A competing destination must
+    // never be removed or overwritten, including on publication failure.
+    let result = (|| {
+        write(&staging)?;
+        validate_backup_size(&staging)?;
+        let copy =
+            Connection::open_with_flags(&staging, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let integrity: String = copy.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+        if integrity != "ok" {
+            return Err(StorageError::CorruptDatabase(integrity));
+        }
+        drop(copy);
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&staging)?
+            .sync_all()?;
+        publish_backup(&staging, destination)?;
+        Ok(())
+    })();
+    let _ = std::fs::remove_file(&staging);
+    result
+}
+
+#[cfg(windows)]
+fn publish_backup(source: &std::path::Path, destination: &std::path::Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn MoveFileExW(source: *const u16, destination: *const u16, flags: u32) -> i32;
+    }
+    let source = source
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let destination = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    // SAFETY: both buffers are owned, NUL-terminated and live through the call.
+    // Same-directory move, with WRITE_THROUGH only: omitting REPLACE_EXISTING
+    // atomically refuses a competing destination on NTFS and FAT filesystems.
+    if unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 8) } == 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn publish_backup(source: &std::path::Path, destination: &std::path::Path) -> std::io::Result<()> {
+    // hard_link atomically creates a new name and refuses an existing one.
+    // The caller then removes its staging name, even if that cleanup fails.
+    std::fs::hard_link(source, destination)
 }
 
 fn validate_backup_size(destination: &std::path::Path) -> Result<(), StorageError> {
@@ -218,11 +328,7 @@ fn keep_session_audio_media(
     transaction: &Transaction<'_>,
     session: &Session,
 ) -> Result<(), StorageError> {
-    for media_id in session
-        .nodes
-        .iter()
-        .filter_map(|node| node.parameters.get("mediaId")?.as_str())
-    {
+    for media_id in session.audio_media_ids() {
         transaction.execute(
             "UPDATE audio_media SET expires_at = NULL WHERE id = ?1 AND expires_at IS NOT NULL",
             params![media_id],
@@ -942,7 +1048,8 @@ impl Storage {
             memory_uri: None,
         };
         storage.connection.busy_timeout(BUSY_TIMEOUT)?;
-        if full_check || storage.needs_migration()? {
+        let needs_migration = storage.needs_migration()?;
+        if full_check || needs_migration {
             storage.check_integrity()?;
         }
         storage.use_write_ahead_log();
@@ -976,6 +1083,7 @@ impl Storage {
                 |row| row.get(0),
             )
             .map_err(corrupt)?;
+        validate_schema_version(version)?;
         Ok(version < MAX_SCHEMA_VERSION)
     }
 
@@ -1295,11 +1403,7 @@ impl Storage {
                 [],
                 |row| row.get(0),
             )?;
-            if !(0..=MAX_SCHEMA_VERSION).contains(&version) {
-                return Err(StorageError::CorruptDatabase(format!(
-                    "unsupported schema migration version {version}"
-                )));
-            }
+            validate_schema_version(version)?;
         }
         self.connection.execute_batch(
             "PRAGMA foreign_keys = ON;
@@ -2204,6 +2308,10 @@ impl Storage {
             params![id.as_str()],
         )?;
         transaction.execute(
+            "DELETE FROM plugin_node_states WHERE session_id = ?1",
+            params![id.as_str()],
+        )?;
+        transaction.execute(
             "DELETE FROM control_settings WHERE key = 'activeSessionId' AND value = ?1",
             params![id.as_str()],
         )?;
@@ -2901,6 +3009,80 @@ impl Storage {
         self.list_sessions_after(None, limit)
     }
 
+    /// Isolate invalid graph documents without weakening strict single-row
+    /// reads or treating database I/O failures as an empty successful setup.
+    /// Original rows remain untouched for export, repair or deliberate delete.
+    pub fn session_inventory(&self) -> Result<SessionInventory, StorageError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT id FROM sessions ORDER BY id LIMIT ?1")?;
+        let ids = statement
+            .query_map(
+                [audiorouter_domain::MAX_SESSIONS_GLOBAL as i64 + 1],
+                |row| row.get::<_, String>(0),
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        if ids.len() > audiorouter_domain::MAX_SESSIONS_GLOBAL {
+            return Err(StorageError::InvalidSession(
+                "stored session inventory exceeds the global limit".into(),
+            ));
+        }
+        let mut inventory = SessionInventory {
+            sessions: Vec::new(),
+            quarantined: Vec::new(),
+        };
+        for id in ids {
+            match self.load_session(&EntityId::new(&id)) {
+                Ok(Some(session)) => inventory.sessions.push(session),
+                Ok(None) => {}
+                Err(
+                    StorageError::InvalidSession(_)
+                    | StorageError::Json(_)
+                    | StorageError::DocumentTooLarge { .. },
+                ) => {
+                    inventory.quarantined.push(QuarantinedSession { session_id: id,
+                        reason: "This saved session cannot be read by this version of AudioRouter. Its original data has been kept.".into() });
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(inventory)
+    }
+
+    /// History is advisory recovery data. Skip only invalid documents; an
+    /// unreadable database still fails. The validated current row is loaded
+    /// independently, so a damaged history tail cannot replace that graph.
+    pub fn load_usable_history(&self, id: &EntityId) -> Result<Vec<Session>, StorageError> {
+        validate_session_id(id)?;
+        let mut statement = self.connection.prepare(
+            "SELECT revision, document FROM session_history WHERE session_id = ?1 ORDER BY revision DESC LIMIT ?2")?;
+        let rows = statement
+            .query_map(
+                params![id.as_str(), MAX_SESSION_HISTORY_ITEMS as i64],
+                |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut history = Vec::new();
+        for (revision, document) in rows {
+            let validated = (|| {
+                let session = Self::deserialize_validated_session(&document)?;
+                Self::validate_stored_session_identity(id.as_str(), &session)?;
+                Self::validate_stored_session_revision(revision, &session)?;
+                Ok::<_, StorageError>(session)
+            })();
+            match validated {
+                Ok(session) => history.push(session),
+                Err(
+                    StorageError::InvalidSession(_)
+                    | StorageError::Json(_)
+                    | StorageError::DocumentTooLarge { .. },
+                ) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(history)
+    }
+
     pub fn count_sessions(&self) -> Result<usize, StorageError> {
         let count = self
             .connection
@@ -2966,6 +3148,29 @@ impl Storage {
             .transpose()
     }
 
+    /// Explicit recovery export: return the stored text without parsing or
+    /// rewriting it. This never admits the document to an executable graph.
+    pub fn export_raw_session(&self, id: &EntityId) -> Result<Option<String>, StorageError> {
+        validate_session_id(id)?;
+        let document: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT document FROM sessions WHERE id = ?1",
+                [id.as_str()],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if let Some(document) = &document {
+            if document.len() > MAX_SESSION_DOCUMENT_BYTES {
+                return Err(StorageError::DocumentTooLarge {
+                    bytes: document.len(),
+                    maximum: MAX_SESSION_DOCUMENT_BYTES,
+                });
+            }
+        }
+        Ok(document)
+    }
+
     /// Export a stopped session document as a v1 `.audiorouter` ZIP bundle.
     /// The destination must be an absolute, new regular file; this method
     /// never overwrites a file or follows a destination symbolic link.
@@ -3026,11 +3231,7 @@ impl Storage {
         };
         let state_records = self.list_plugin_states(None)?;
         for node in &exported_session.nodes {
-            if let Some(id) = node
-                .parameters
-                .get("mediaId")
-                .and_then(|value| value.as_str())
-            {
+            for id in node.audio_media_ids() {
                 if safe_id(id) && !media.iter().any(|entry: &BundleMedia| entry.id == id) {
                     if let Some((file_name, format, bytes)) = self.load_audio_media(id)? {
                         let path = format!("media/{id}");
@@ -3342,28 +3543,28 @@ impl Storage {
             })?;
             report.plugin_states_restored += 1;
         }
+        let missing_media = session
+            .audio_media_ids()
+            .into_iter()
+            .filter(|id| {
+                !media.iter().any(|(entry, _)| entry.id == *id)
+                    && self.load_audio_media(id).ok().flatten().is_none()
+            })
+            .count();
         let referenced = session
             .nodes
             .iter()
             .filter(|node| {
                 node.parameters
-                    .get("mediaId")
+                    .get("stateId")
                     .and_then(|value| value.as_str())
                     .is_some_and(|id| {
-                        !media.iter().any(|(entry, _)| entry.id == id)
-                            && self.load_audio_media(id).ok().flatten().is_none()
+                        !plugin_states.iter().any(|(state, _)| state.id == id)
+                            && !existing_states.iter().any(|record| record.id == id)
                     })
-                    || node
-                        .parameters
-                        .get("stateId")
-                        .and_then(|value| value.as_str())
-                        .is_some_and(|id| {
-                            !plugin_states.iter().any(|(state, _)| state.id == id)
-                                && !existing_states.iter().any(|record| record.id == id)
-                        })
             })
             .count();
-        report.missing_assets += referenced;
+        report.missing_assets += missing_media + referenced;
         Ok((session, report))
     }
 
@@ -5323,12 +5524,27 @@ mod tests {
                 )
                 .unwrap();
         }
+        let original_bytes = std::fs::read(&path).unwrap();
         let result = Storage::open(&path);
+        assert!(
+            !matches!(&result, Err(StorageError::CorruptDatabase(_))),
+            "a newer schema needs an app update, not corrupt-database recovery"
+        );
         assert!(matches!(
             result,
-            Err(StorageError::CorruptDatabase(message))
-                if message == "unsupported schema migration version 99"
+            Err(StorageError::NewerSchema {
+                found: 99,
+                supported: MAX_SCHEMA_VERSION
+            })
         ));
+        assert!(matches!(
+            Storage::open_checked(&path),
+            Err(StorageError::NewerSchema {
+                found: 99,
+                supported: MAX_SCHEMA_VERSION
+            })
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), original_bytes);
         let connection = Connection::open(&path).unwrap();
         let table_count: i64 = connection
             .query_row(
@@ -5633,6 +5849,15 @@ mod tests {
         let original = session();
         storage.save_session(&original).unwrap();
         storage
+            .set_plugin_node_state(original.id.as_str(), "fx", "state-solo")
+            .unwrap();
+        storage
+            .set_plugin_node_state(original.id.as_str(), "shared-fx", "state-shared")
+            .unwrap();
+        storage
+            .set_plugin_node_state("another-session", "fx", "state-shared")
+            .unwrap();
+        storage
             .save_graph_plan(&GraphPlanRecord {
                 id: "plan-delete".into(),
                 session_id: original.id.as_str().into(),
@@ -5646,6 +5871,29 @@ mod tests {
         assert!(storage.load_session(&original.id).unwrap().is_none());
         assert!(storage.load_history(&original.id, 10).unwrap().is_empty());
         assert!(storage.load_graph_plan("plan-delete").unwrap().is_none());
+        assert!(storage
+            .plugin_node_states(original.id.as_str())
+            .unwrap()
+            .is_empty());
+        assert!(!storage.plugin_node_state_in_use("state-solo").unwrap());
+        assert!(storage.plugin_node_state_in_use("state-shared").unwrap());
+        // Any future session-owned table requires an explicit deletion/keep
+        // decision and a fixture here, rather than silently leaking rows.
+        let mut tables = storage.connection.prepare("SELECT m.name FROM sqlite_master m JOIN pragma_table_info(m.name) p WHERE m.type = 'table' AND p.name = 'session_id' ORDER BY m.name").unwrap();
+        let tables = tables
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            tables,
+            [
+                "graph_plans",
+                "plugin_node_states",
+                "recordings",
+                "session_history"
+            ]
+        );
     }
 
     #[test]
@@ -6233,6 +6481,53 @@ mod tests {
     }
 
     #[test]
+    fn soundboard_media_is_kept_and_carried_in_bundles() {
+        let source = Storage::open_memory().unwrap();
+        for id in ["pad", "set"] {
+            source
+                .store_audio_media(id, "sound.wav", "wav", b"sound", Some(i64::MAX))
+                .unwrap();
+        }
+        let mut original = session();
+        original.nodes[0].kind = NodeKind::Soundboard;
+        original.nodes[0].parameters = serde_json::from_value(serde_json::json!({
+            "slot1MediaId": "pad", "slot2Set": ["set", "lib:fixture"],
+            "slot3MediaId": "missing"
+        }))
+        .unwrap();
+        source.save_session(&original).unwrap();
+        for id in ["pad", "set"] {
+            let expiry: Option<i64> = source
+                .connection
+                .query_row(
+                    "SELECT expires_at FROM audio_media WHERE id = ?1",
+                    [id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(expiry, None, "{id}");
+        }
+        let prepared = source.prepare_bundle_export(&original.id).unwrap();
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-board-bundle-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let bundle = root.join("board.audiorouter");
+        prepared.write(&bundle).unwrap();
+        let target = Storage::open_memory().unwrap();
+        let staged = Storage::stage_session_bundle(&bundle, root.join("staging")).unwrap();
+        let (_, report) = target.restore_session_bundle(staged).unwrap();
+        assert_eq!(report.media_restored, 2);
+        assert_eq!(report.missing_assets, 1);
+        for id in ["pad", "set"] {
+            assert!(target.load_audio_media(id).unwrap().is_some(), "{id}");
+        }
+        std::fs::remove_file(bundle).unwrap();
+        // Only files owned by this test are removed; no recursive traversal.
+        std::fs::remove_dir(root.join("staging")).unwrap();
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
     fn bundle_export_round_trips_and_never_overwrites() {
         let suffix = format!("audiorouter-bundle-export-{}", std::process::id());
         let bundle = std::env::temp_dir().join(format!("{suffix}.audiorouter"));
@@ -6369,6 +6664,62 @@ mod tests {
     }
 
     #[test]
+    fn failed_backup_never_publishes_a_partial_retention_candidate() {
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-backup-failure-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let destination = root.join("audiorouter-backup-failed.sqlite");
+        let result = write_backup(&destination, |path| {
+            std::fs::write(path, b"partially copied database")?;
+            Err(StorageError::Io(std::io::Error::other(
+                "injected disk failure",
+            )))
+        });
+        assert!(result.is_err());
+        assert!(
+            !destination.exists(),
+            "failed output must never enter retention"
+        );
+        assert_eq!(
+            std::fs::read_dir(&root).unwrap().count(),
+            0,
+            "ordinary failures clean staging files"
+        );
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn backup_publication_preserves_competing_destination_and_rejects_invalid_copy() {
+        let root =
+            std::env::temp_dir().join(format!("audiorouter-backup-publish-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let destination = root.join("audiorouter-backup-race.sqlite");
+        let result = write_backup(&destination, |path| {
+            let connection = Connection::open(path)?;
+            connection.execute_batch("CREATE TABLE fixture(value INTEGER);")?;
+            drop(connection);
+            // Another actor wins after destination validation, before publish.
+            std::fs::write(&destination, b"another actor's backup")?;
+            Ok(())
+        });
+        assert!(result.is_err());
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"another actor's backup"
+        );
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_file(&destination).unwrap();
+        assert!(write_backup(&destination, |path| {
+            std::fs::write(path, b"not a SQLite database")?;
+            Ok(())
+        })
+        .is_err());
+        assert!(!destination.exists());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        std::fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
     fn backup_size_validation_removes_oversized_output() {
         let destination = std::env::temp_dir().join(format!(
             "audiorouter-storage-oversized-backup-{}.sqlite",
@@ -6386,6 +6737,30 @@ mod tests {
                     && maximum == MAX_BACKUP_BYTES as usize
         ));
         assert!(!destination.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires a real OneDrive placeholder root; metadata-only qualification"]
+    fn real_onedrive_root_is_accepted_by_storage_path_policies() {
+        let root = std::path::PathBuf::from(
+            std::env::var_os("OneDrive").expect("OneDrive must be configured"),
+        );
+        assert!(!path_has_reparse_ancestor(&root));
+        let destination = root.join(format!(
+            "audiorouter-policy-probe-{}.sqlite",
+            std::process::id()
+        ));
+        validate_backup_destination(&destination, None).unwrap();
+        validate_bundle_destination(&root.join(format!(
+            "audiorouter-policy-probe-{}.audiorouter",
+            std::process::id()
+        )))
+        .unwrap();
+        assert!(
+            !destination.exists(),
+            "policy qualification must not create files"
+        );
     }
 
     #[test]

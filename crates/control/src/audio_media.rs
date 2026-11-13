@@ -564,12 +564,7 @@ impl ControlPlane {
             .store
             .sessions(audiorouter_domain::MAX_SESSIONS_GLOBAL)
             .iter()
-            .any(|session| {
-                session.nodes.iter().any(|node| {
-                    node.kind == NodeKind::AudioFile
-                        && node.parameters.get("mediaId").and_then(Value::as_str) == Some(media_id)
-                })
-            });
+            .any(|session| session.audio_media_ids().contains(&media_id));
         if referenced {
             return Err(ControlError::InvalidRequest(
                 "audio media is still referenced by a session".into(),

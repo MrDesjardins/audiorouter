@@ -308,6 +308,7 @@ pub const AUDIO_SERVICE_LATE_GAP: std::time::Duration = std::time::Duration::fro
 
 pub struct ControlPlane {
     store: GraphStore,
+    quarantined_sessions: Vec<audiorouter_storage::QuarantinedSession>,
     /// Opt-in verbose logging window (`diagnostics.setVerbose`). Read by the
     /// transport's logger; never touches audio.
     verbose_diagnostics: audiorouter_protocol::diagnostics::VerboseDiagnostics,
@@ -316,6 +317,10 @@ pub struct ControlPlane {
     runtimes: HashMap<EntityId, FakeRuntime>,
     recorders: HashMap<EntityId, RecorderController>,
     recorder_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
+    #[cfg(test)]
+    recorder_shutdown_budget: Option<Duration>,
+    #[cfg(test)]
+    fail_next_session_activation: bool,
     recorder_node_workers: HashMap<EntityId, Box<dyn RecorderWorker>>,
     /// Stable realtime inlet per Recorder node. Playback binds the inlet, so
     /// a route with a Recorder always plays; Record attaches a file worker
@@ -514,12 +519,17 @@ impl ControlPlane {
     pub fn new(build: impl Into<String>) -> Self {
         Self {
             store: GraphStore::default(),
+            quarantined_sessions: Vec::new(),
             verbose_diagnostics: Default::default(),
             active_session_id: None,
             build: build.into(),
             runtimes: HashMap::new(),
             recorders: HashMap::new(),
             recorder_workers: HashMap::new(),
+            #[cfg(test)]
+            recorder_shutdown_budget: None,
+            #[cfg(test)]
+            fail_next_session_activation: false,
             recorder_node_workers: HashMap::new(),
             recorder_inlets: Default::default(),
             recorder_node_states: HashMap::new(),

@@ -325,6 +325,32 @@ fn a_comparison_marks_only_the_chosen_tools_and_is_never_saved() {
 }
 
 #[test]
+fn refused_delete_preserves_the_comparison_timeout() {
+    let mut plane = ControlPlane::new("test");
+    let id = goal_session(&mut plane);
+    plane.session_start(&id).unwrap();
+    let expires_at = Instant::now() + MAX_HOLD;
+    // Seed the hold without a native device; deletion still uses real dispatch.
+    plane.comparison.insert(
+        id.clone(),
+        Comparison {
+            nodes: vec![EntityId::new("gate")],
+            expires_at,
+        },
+    );
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "sessions.delete".into(),
+        params: Some(json!({ "sessionId": id, "idempotencyKey": "delete" })),
+    });
+    assert!(response.error.is_some());
+    assert_eq!(plane.comparison[&id].expires_at, expires_at);
+    plane.expire_comparison(expires_at);
+    assert!(!plane.comparison.contains_key(&id));
+}
+
+#[test]
 fn a_hold_that_is_never_released_ends_by_itself() {
     let mut plane = ControlPlane::new("test");
     let id = goal_session(&mut plane);

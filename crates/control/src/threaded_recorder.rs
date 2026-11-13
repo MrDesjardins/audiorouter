@@ -1,6 +1,6 @@
 //! File encoder ownership off the native audio service thread (REC-01/08).
 use super::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, SyncSender};
 
 type Command = Box<dyn FnOnce(&mut dyn RecorderWorker) + Send>;
@@ -14,6 +14,9 @@ pub(super) struct ThreadedRecorderWorker {
     failures: mpsc::Receiver<String>,
     failure: Option<String>,
     finalized: Vec<FinalizedRecording>,
+    stop: Arc<AtomicBool>,
+    finished: mpsc::Receiver<()>,
+    shutdown_deadline: Option<Instant>,
 }
 
 impl ThreadedRecorderWorker {
@@ -31,12 +34,18 @@ impl ThreadedRecorderWorker {
         let (failed, failures) = mpsc::sync_channel(1);
         let drained = Arc::new(AtomicUsize::new(0));
         let progress = drained.clone();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopping = stop.clone();
+        let (completed, finished) = mpsc::sync_channel(1);
         let thread = std::thread::Builder::new()
             .name("audiorouter-recorder".into())
             .spawn(move || {
                 let mut faulted = false;
                 let mut made_progress = false;
                 loop {
+                    if stopping.load(Ordering::Acquire) {
+                        break;
+                    }
                     // Do not sleep between batches while audio is queued: a
                     // one-chunk API budget must not throttle encoder throughput.
                     let wait = if made_progress {
@@ -45,9 +54,17 @@ impl ThreadedRecorderWorker {
                         Duration::from_millis(2)
                     };
                     match receive.recv_timeout(wait) {
-                        Ok(command) => command(worker.as_mut()),
+                        Ok(command) => {
+                            if stopping.load(Ordering::Acquire) {
+                                break;
+                            }
+                            command(worker.as_mut());
+                        }
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,
                         Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    }
+                    if stopping.load(Ordering::Acquire) {
+                        break;
                     }
                     made_progress = false;
                     if !faulted {
@@ -63,6 +80,8 @@ impl ThreadedRecorderWorker {
                         }
                     }
                 }
+                drop(worker);
+                let _ = completed.try_send(());
             })
             .map_err(|error| format!("recorder worker start failed: {error}"))?;
         Ok(Self {
@@ -74,6 +93,9 @@ impl ThreadedRecorderWorker {
             failures,
             failure: None,
             finalized: Vec::new(),
+            stop,
+            finished,
+            shutdown_deadline: None,
         })
     }
 
@@ -83,21 +105,46 @@ impl ThreadedRecorderWorker {
         &mut self,
         operation: impl FnOnce(&mut dyn RecorderWorker) -> R + Send + 'static,
     ) -> Result<R, String> {
+        let wait = self
+            .shutdown_deadline
+            .map_or(Duration::from_secs(10), |deadline| {
+                deadline.saturating_duration_since(Instant::now())
+            });
+        if wait.is_zero() {
+            return Err(self.timeout());
+        }
         let (reply, response) = mpsc::sync_channel(1);
         self.commands
             .as_ref()
             .ok_or("recorder worker stopped")?
-            .send(Box::new(move |worker| {
+            .try_send(Box::new(move |worker| {
                 let _ = reply.send(operation(worker));
             }))
-            .map_err(|_| "recorder worker stopped".to_owned())?;
-        response
-            .recv()
-            .map_err(|_| "recorder worker stopped before replying".to_owned())
+            .map_err(|_| "recorder worker stopped or command queue is busy".to_owned())?;
+        match response.recv_timeout(wait) {
+            Ok(response) => Ok(response),
+            Err(mpsc::RecvTimeoutError::Timeout) => Err(self.timeout()),
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                Err("recorder worker stopped before replying".into())
+            }
+        }
+    }
+
+    fn timeout(&mut self) -> String {
+        self.queue.close_tap_admission();
+        self.stop.store(true, Ordering::Release);
+        self.commands.take();
+        let message =
+            "recorder command timed out; recorded prefix retained for recovery".to_owned();
+        self.failure = Some(message.clone());
+        message
     }
 }
 
 impl RecorderWorker for ThreadedRecorderWorker {
+    fn set_shutdown_deadline(&mut self, deadline: Instant) {
+        self.shutdown_deadline = Some(deadline);
+    }
     fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> {
         Some(self.queue.clone())
     }
@@ -183,11 +230,24 @@ impl RecorderWorker for ThreadedRecorderWorker {
 
 impl Drop for ThreadedRecorderWorker {
     fn drop(&mut self) {
-        // Lifecycle/control ownership only. Dropping the sender lets the writer
-        // finish its current bounded batch and release the file on its own thread.
+        // An OS write can stall indefinitely. Cancel pending commands and
+        // leave file ownership on that thread until it unblocks; never turn
+        // Drop into an unbounded second wait after a finalization timeout.
+        self.queue.close_tap_admission();
+        self.stop.store(true, Ordering::Release);
         self.commands.take();
+        let wait = self
+            .shutdown_deadline
+            .map_or(Duration::from_millis(50), |deadline| {
+                deadline
+                    .saturating_duration_since(Instant::now())
+                    .min(Duration::from_millis(50))
+            });
+        let _ = self.finished.recv_timeout(wait);
         if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
+            if thread.is_finished() {
+                let _ = thread.join();
+            }
         }
     }
 }
@@ -208,6 +268,175 @@ mod tests {
             self.release();
         }
     }
+    #[test]
+    fn a_stalled_finalize_and_worker_drop_return_before_storage_unblocks() {
+        struct Stalled {
+            queue: Arc<RecordingQueue>,
+            entered: SyncSender<()>,
+            release: mpsc::Receiver<()>,
+            dropped: SyncSender<()>,
+        }
+        impl Drop for Stalled {
+            fn drop(&mut self) {
+                let _ = self.dropped.try_send(());
+            }
+        }
+        impl RecorderWorker for Stalled {
+            fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> {
+                Some(self.queue.clone())
+            }
+            fn finalize(&mut self, _: u64) -> Result<RecorderFinalizationOutcome, String> {
+                self.entered.send(()).unwrap();
+                self.release.recv().unwrap();
+                Ok(RecorderFinalizationOutcome {
+                    state: "completed".into(),
+                    file_finalized: true,
+                    recoverable: false,
+                })
+            }
+        }
+        let (entered, entering) = mpsc::sync_channel(1);
+        let (release, blocked) = mpsc::sync_channel(1);
+        let mut release = ReleaseOnDrop(Some(release));
+        let (dropped, dropping) = mpsc::sync_channel(1);
+        let (answer, result) = mpsc::sync_channel(1);
+        let caller = std::thread::spawn(move || {
+            let mut worker = ThreadedRecorderWorker::new(
+                Box::new(Stalled {
+                    queue: Arc::new(RecordingQueue::new(4).unwrap()),
+                    entered,
+                    release: blocked,
+                    dropped,
+                }),
+                4,
+            )
+            .unwrap();
+            worker.set_shutdown_deadline(Instant::now() + Duration::from_millis(50));
+            let outcome = worker.finalize(0);
+            drop(worker);
+            answer.send(outcome).unwrap();
+        });
+        entering.recv_timeout(Duration::from_secs(2)).unwrap();
+        // A rescue always unblocks the fake, so the regression fails rather
+        // than hanging the test process on the old unbounded wait/join.
+        let outcome = result.recv_timeout(Duration::from_secs(2));
+        release.release();
+        caller.join().unwrap();
+        let failure = outcome
+            .expect("shutdown must return while the file worker is still blocked")
+            .unwrap_err();
+        assert!(failure.contains("timed out"), "{failure}");
+        dropping.recv_timeout(Duration::from_secs(2)).unwrap();
+    }
+
+    #[test]
+    fn dispatcher_stop_and_quit_retire_multiple_stalled_encoders() {
+        struct Stalled {
+            queue: Arc<RecordingQueue>,
+            tap: Arc<dyn AudioTap>,
+            release: mpsc::Receiver<()>,
+        }
+        impl RecorderWorker for Stalled {
+            fn shared_recording_queue(&self) -> Option<Arc<RecordingQueue>> {
+                Some(self.queue.clone())
+            }
+            fn shared_audio_tap(&self) -> Option<Arc<dyn AudioTap>> {
+                Some(self.tap.clone())
+            }
+            fn finalize(&mut self, _: u64) -> Result<RecorderFinalizationOutcome, String> {
+                self.release.recv().unwrap();
+                Ok(RecorderFinalizationOutcome {
+                    state: "completed".into(),
+                    file_finalized: true,
+                    recoverable: false,
+                })
+            }
+        }
+        for method in ["sessions.stop", "system.quit"] {
+            let mut releases = Vec::new();
+            let mut blocked = Vec::new();
+            for _ in 0..2 {
+                let (release, receive) = mpsc::sync_channel(1);
+                releases.push(ReleaseOnDrop(Some(release)));
+                blocked.push(receive);
+            }
+            let (answer, result) = mpsc::sync_channel(1);
+            let caller = std::thread::spawn(move || {
+                let mut plane = ControlPlane {
+                    recorder_shutdown_budget: Some(Duration::from_millis(50)),
+                    ..ControlPlane::default()
+                };
+                let mut saved = crate::test_support::session();
+                for id in ["recorder-a", "recorder-b"] {
+                    saved.nodes.push(audiorouter_domain::Node {
+                        id: EntityId::new(id),
+                        kind: NodeKind::Recorder,
+                        type_version: 1,
+                        name: id.into(),
+                        enabled: true,
+                        bypass: false,
+                        parameters: Default::default(),
+                        ports: vec![],
+                    });
+                }
+                let id = saved.id.clone();
+                plane.insert_session(saved).unwrap();
+                plane.session_start(&id).unwrap();
+                for (name, release) in ["recorder-a", "recorder-b"].into_iter().zip(blocked) {
+                    let queue = Arc::new(RecordingQueue::new(4).unwrap());
+                    let tap: Arc<dyn AudioTap> = Arc::new(RecorderAudioTap::new(queue.clone()));
+                    let worker = ThreadedRecorderWorker::new(
+                        Box::new(Stalled {
+                            queue,
+                            tap,
+                            release,
+                        }),
+                        4,
+                    )
+                    .unwrap();
+                    let node = EntityId::new(name);
+                    plane
+                        .attach_recorder_worker_to_node(&id, node.clone(), Box::new(worker))
+                        .unwrap();
+                    plane
+                        .control_recorder_node(&node, "recorders.arm", None)
+                        .unwrap();
+                    plane
+                        .control_recorder_node(&node, "recorders.start", Some(0))
+                        .unwrap();
+                }
+                let params = if method == "sessions.stop" {
+                    json!({"sessionId": id, "idempotencyKey": "stop"})
+                } else {
+                    json!({"idempotencyKey": "quit"})
+                };
+                let response = plane.dispatch(JsonRpcRequest {
+                    jsonrpc: "2.0".into(),
+                    id: Some(json!(1)),
+                    method: method.into(),
+                    params: Some(params),
+                });
+                answer.send(json!({"result": response.result, "active": plane.status_snapshot().unwrap()["activeSessionIds"],
+                    "workers": plane.recorder_node_workers.len()})).unwrap();
+            });
+            let response = result.recv_timeout(Duration::from_secs(2));
+            for release in &mut releases {
+                release.release();
+            }
+            caller.join().unwrap();
+            let response = response
+                .expect("actual Stop/Quit dispatch must return before either encoder is released");
+            assert_eq!(response["result"]["state"], "stopped", "{response}");
+            assert_eq!(response["active"], json!([]));
+            assert_eq!(response["workers"], 0);
+            let recorders = response["result"]["recorders"].as_array().unwrap();
+            assert_eq!(recorders.len(), 2);
+            assert!(recorders
+                .iter()
+                .all(|recorder| recorder["state"] == "failed" && recorder["recoverable"] == true));
+        }
+    }
+
     #[test]
     fn blocked_file_writer_overflow_keeps_a_playable_prefix_and_fails_only_recording() {
         struct BlockedFile {

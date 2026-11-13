@@ -3,6 +3,59 @@
 use super::*;
 use crate::test_support::*;
 
+#[cfg(windows)]
+#[test]
+#[ignore = "requires a real OneDrive placeholder root; metadata-only qualification"]
+fn real_onedrive_root_is_accepted_by_session_export_policy() {
+    let root = std::path::PathBuf::from(
+        std::env::var_os("OneDrive").expect("OneDrive must be configured"),
+    );
+    let destination = root.join(format!(
+        "audiorouter-policy-probe-{}.audiorouter",
+        std::process::id()
+    ));
+    assert_eq!(
+        local_export_path(Some(&json!({"path": destination}))).unwrap(),
+        root.canonicalize()
+            .unwrap()
+            .join(destination.file_name().unwrap())
+    );
+    assert!(!destination.exists());
+}
+
+#[test]
+fn failed_start_rolls_back_running_status_and_can_be_retried() {
+    let mut plane = ControlPlane {
+        fail_next_session_activation: true,
+        ..ControlPlane::default()
+    };
+    let original = session();
+    plane.insert_session(original.clone()).unwrap();
+    let call = |plane: &mut ControlPlane, method: &str, params: Value| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        })
+    };
+    let failed = call(
+        &mut plane,
+        "sessions.start",
+        json!({"sessionId": original.id, "idempotencyKey": "failed-start"}),
+    );
+    assert!(failed.error.is_some());
+    let status = call(&mut plane, "status.get", json!({})).result.unwrap();
+    assert_eq!(status["activeSessionCount"], 0);
+    assert_eq!(plane.runtimes[&original.id].state(), RuntimeState::Stopped);
+    let retry = call(
+        &mut plane,
+        "sessions.start",
+        json!({"sessionId": original.id, "idempotencyKey": "retry-start"}),
+    );
+    assert_eq!(retry.result.unwrap()["state"], "running");
+}
+
 #[test]
 fn refused_or_failed_delete_preserves_saved_version_notes() {
     let path = std::env::temp_dir().join(format!(

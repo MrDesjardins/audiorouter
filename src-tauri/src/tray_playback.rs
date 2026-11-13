@@ -112,7 +112,17 @@ pub fn autoplay(
     delay: std::time::Duration,
 ) -> Result<String, String> {
     for attempt in 0..attempts {
-        if call("status.get", json!({})).is_ok() {
+        if let Ok(status) = call("status.get", json!({})) {
+            if status
+                .get("quarantinedSessions")
+                .and_then(Value::as_array)
+                .is_some_and(|sessions| !sessions.is_empty())
+            {
+                return Err(
+                    "Autoplay paused: unavailable saved sessions need recovery in AudioRouter."
+                        .into(),
+                );
+            }
             return play_saved_session(call);
         }
         if attempt + 1 < attempts {
@@ -241,6 +251,27 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn autoplay_does_not_play_a_fallback_after_session_quarantine() {
+        let mut methods = Vec::new();
+        let result = autoplay(
+            &mut |method, _| {
+                methods.push(method.to_owned());
+                if method == "status.get" {
+                    Ok(
+                        json!({"quarantinedSessions": [{"sessionId": "saved-active", "reason": "invalid session"}]}),
+                    )
+                } else {
+                    Err("Unexpected playback while recovering sessions".into())
+                }
+            },
+            1,
+            std::time::Duration::ZERO,
+        );
+        assert!(result.unwrap_err().contains("unavailable saved sessions"));
+        assert_eq!(methods, ["status.get"]);
     }
 
     #[test]

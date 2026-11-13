@@ -169,7 +169,8 @@ pub(crate) fn validate_method_params(
     };
     let allowed: &[&str] = match method {
         "meters.reset" => &["sessionId", "nodeId"],
-        "sessions.get" | "sessions.export" => &["sessionId"],
+        "sessions.get" => &["sessionId"],
+        "sessions.export" => &["sessionId", "raw"],
         "sessions.exportFile" => &["sessionId", "path", "replace"],
         "sessions.approveExport" => &["path", "replace"],
         "sessions.importFile" => &["path"],
