@@ -1,5 +1,18 @@
 # Active plan — current priorities (2026-11-04)
 
+## Update-check hardening — 2026-11-11
+
+Owner requested improvements 1–6 to the existing read-only new-version notice
+and a future plan for a real auto-updater. See the
+[execution plan](update-check-hardening.md) and the
+[Tauri auto-update future plan](../future/auto-update-tauri.md). Work is on
+branch `improve/update-check` in an isolated worktree; `fix/virtual-cable-review`
+and its changes were not touched. Scope: daily recheck while running, bounded
+offline/rate-limited retries, Check now and honest status, newest-first release
+page with the expected installer asset, stable/prerelease channel preference,
+and clearing the cached result when checking is off. No download or install is
+added. Validation and limitations are recorded in the execution plan.
+
 ## README release badge — 2026-11-11
 
 Owner-requested documentation repair; no runtime requirement or milestone gate
