@@ -428,3 +428,35 @@ pass. Final review also prevents a stale new-ID Mixer volume from overriding
 the old input's implicit 100% default. Focused simple tests pass again after
 that adjustment. Complete helper/callsite/test diff inspected. Next: commit
 SIM-1, then STO-4 (last listed repair), guides and full branch qualification.
+
+SIM-1 committed as `b11fcdfae`.
+
+### STO-4 qualification: not reproduced on this Windows environment
+
+Real OneDrive root metadata reports cloud tag `0x9000701a` through fsutil and
+ReparsePoint through PowerShell. However, Rust 1.96's symlink_metadata returns
+attributes `0x31` for that same root, without the reparse bit. The unchanged
+RecordingPathPolicy::new therefore accepts it. The suspected failure was based
+on native attribute inspection, not the attributes the application receives.
+Do not relax security checks based on that inference. Added opt-in, explicitly
+ignored-by-default metadata-only qualification tests for recording, storage
+backup/bundle paths, session export and credential ancestors. These inspect
+the real configured root and never create/read user files or credentials.
+Recording and storage probes pass; control/transport probes are running.
+These results do not prove every cloud provider, cloud state, OneDrive-backed
+known folder, attended record/rename workflow or Windows version. No owning
+policy change is justified by the available reproduction. Keep junction and
+symlink defenses unchanged. If a real owner failure is reported, capture the
+exact Rust metadata and tag at that failing path before revisiting the policy.
+This resolves the audit's explicitly reproduction-dependent finding as
+unconfirmed, rather than claiming a fix to a demonstrated cloud defect.
+
+STO-4 final evidence: all four opt-in policy probes pass. Session-export probe
+first compared a canonical extended Windows path with its plain spelling;
+fixed the test expectation, without changing production policy. Recording,
+storage, control and transport all-target/all-feature Clippy passes. Both
+format checks and documentation acceptance are checked before commit. No
+real recording, personal file write, cloud upload or credential access occurred.
+Next: refresh Limiter production-audio Properties clips with the existing
+portrait capture pipeline, verify Firefox playback, then complete branch-wide
+tests/builds/visual qualification and create the authorized PR.

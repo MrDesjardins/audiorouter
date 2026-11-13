@@ -6739,6 +6739,30 @@ mod tests {
         assert!(!destination.exists());
     }
 
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "requires a real OneDrive placeholder root; metadata-only qualification"]
+    fn real_onedrive_root_is_accepted_by_storage_path_policies() {
+        let root = std::path::PathBuf::from(
+            std::env::var_os("OneDrive").expect("OneDrive must be configured"),
+        );
+        assert!(!path_has_reparse_ancestor(&root));
+        let destination = root.join(format!(
+            "audiorouter-policy-probe-{}.sqlite",
+            std::process::id()
+        ));
+        validate_backup_destination(&destination, None).unwrap();
+        validate_bundle_destination(&root.join(format!(
+            "audiorouter-policy-probe-{}.audiorouter",
+            std::process::id()
+        )))
+        .unwrap();
+        assert!(
+            !destination.exists(),
+            "policy qualification must not create files"
+        );
+    }
+
     #[test]
     fn diagnostic_inventory_is_read_only_and_never_migrates_or_creates() {
         let path = std::env::temp_dir().join(format!(

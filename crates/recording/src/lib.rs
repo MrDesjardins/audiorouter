@@ -120,6 +120,26 @@ impl RecordingPathPolicy {
 }
 
 #[cfg(windows)]
+#[test]
+#[ignore = "requires a real OneDrive placeholder root; metadata-only qualification"]
+fn real_onedrive_root_is_an_approved_local_recording_directory() {
+    let root = std::path::PathBuf::from(
+        std::env::var_os("OneDrive").expect("OneDrive must be configured"),
+    );
+    use std::os::windows::fs::MetadataExt;
+    eprintln!(
+        "Rust OneDrive metadata attributes: {:#x}",
+        std::fs::symlink_metadata(&root).unwrap().file_attributes()
+    );
+    let result = RecordingPathPolicy::new(&root);
+    assert!(
+        result.is_ok(),
+        "OneDrive policy rejected local root: {:?}",
+        result.err()
+    );
+}
+
+#[cfg(windows)]
 fn is_reparse_point(metadata: &std::fs::Metadata) -> bool {
     use std::os::windows::fs::MetadataExt;
 

@@ -3,6 +3,26 @@
 use super::*;
 use crate::test_support::*;
 
+#[cfg(windows)]
+#[test]
+#[ignore = "requires a real OneDrive placeholder root; metadata-only qualification"]
+fn real_onedrive_root_is_accepted_by_session_export_policy() {
+    let root = std::path::PathBuf::from(
+        std::env::var_os("OneDrive").expect("OneDrive must be configured"),
+    );
+    let destination = root.join(format!(
+        "audiorouter-policy-probe-{}.audiorouter",
+        std::process::id()
+    ));
+    assert_eq!(
+        local_export_path(Some(&json!({"path": destination}))).unwrap(),
+        root.canonicalize()
+            .unwrap()
+            .join(destination.file_name().unwrap())
+    );
+    assert!(!destination.exists());
+}
+
 #[test]
 fn failed_start_rolls_back_running_status_and_can_be_retried() {
     let mut plane = ControlPlane {
