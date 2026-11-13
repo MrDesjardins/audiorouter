@@ -99,6 +99,16 @@ submit those files in a reviewed documentation PR. It no longer pushes to main.
 Coverage and short soak metrics remain reports with their existing measured
 scope; they do not waive release gates in [M08](../milestones/M08-release.md).
 
+Daily collection runs at 03:17 UTC (GitHub may delay scheduled starts), separately
+from publication of the reviewed repository snapshot. The trend job records
+available coverage, soak and startup metrics even when another measurement job
+fails; missing values remain empty. It carries cumulative history through the
+Actions cache and uploads `quality-history-collected` for 90 days on each run.
+The proposed `quality-history-update` snapshot is also retained for 90 days.
+Download retained history before it expires; cache eviction can break continuity,
+and neither cache nor artifacts are permanent archival storage. A stale
+`docs/quality-history.csv` does not mean daily collection stopped.
+
 Rollback: revert a scoped tooling/workflow commit. Before changing rules, save
 the existing ruleset; retain working protections until the replacement check
 has demonstrated a successful current run. Never bypass a failed product check

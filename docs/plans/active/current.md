@@ -1,5 +1,25 @@
 # Active plan — current priorities (2026-11-04)
 
+## Daily quality data retention — 2026-11-12
+
+Owner requires continued daily collection and explicitly approved opening this
+PR (ENG-01/02/04/05, NFR-04/05/06). Windows Actions run 43206191838 succeeded
+with coverage, soak and startup artifacts. Daily scheduling is already enabled;
+the repository CSV remains a reviewed snapshot. No runtime, hardware, driver,
+credentials or branch-protection changes are needed.
+
+Tasks: retain cumulative cached trend history as a separate 90-day artifact,
+extend proposed snapshot retention to 90 days, add policy regression coverage,
+and document collection versus publication. Work is isolated on
+`fix/daily-quality-retention` from current main; unrelated local work is excluded.
+Validation on Windows: `node --test tools/quality/policy.test.mjs` passed all
+62 tests; `node tools/docs/validate.mjs` passed 259 files / 1,474 links;
+`git diff --check` passed. Complete four-file diff inspected before commit.
+Risk: cache eviction can interrupt cumulative history; artifacts expire and are
+recovery evidence rather than permanent storage. Rollback: revert this scoped
+workflow, policy and runbook change. Next: open the authorized PR; hosted CI
+and the first post-merge daily history upload remain unverified locally.
+
 ## Update-check hardening — 2026-11-11
 
 Owner requested improvements 1–6 to the existing read-only new-version notice
