@@ -100,12 +100,12 @@ describe("useUpdateCheck", () => {
 
   it("checks a stale cache and shows the newest installer release", async () => {
     writeCache({ checkedAt: start - CHECK_INTERVAL_MS - 1 });
-    const fetcher = vi.fn(async () => response([release("0.0.28"), release("0.0.27")]));
+    const fetcher = vi.fn(async () => response([release("9.0.2"), release("9.0.1")]));
     const { result } = renderHook(() => useUpdateCheck(true, "prerelease", fetcher));
     expect(result.current.status).toBe("checking");
     await settle();
     expect(result.current.status).toBe("available");
-    expect(result.current.update?.version).toBe("0.0.28");
+    expect(result.current.update?.version).toBe("9.0.2");
     expect(result.current.nextCheckAt).toBe(start + CHECK_INTERVAL_MS);
     expect(result.current.failure).toBeNull();
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -143,7 +143,7 @@ describe("useUpdateCheck", () => {
     const fetcher = vi
       .fn()
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockResolvedValueOnce(response([release("0.0.28")]));
+      .mockResolvedValueOnce(response([release("9.0.2")]));
     const { result } = renderHook(() => useUpdateCheck(true, "prerelease", fetcher));
     await settle();
     expect(result.current.status).toBe("failed");
@@ -159,7 +159,7 @@ describe("useUpdateCheck", () => {
 
   it("checks immediately on demand, even with a fresh cache", async () => {
     writeCache({ checkedAt: start });
-    const fetcher = vi.fn(async () => response([release("0.0.28")]));
+    const fetcher = vi.fn(async () => response([release("9.0.2")]));
     const { result } = renderHook(() => useUpdateCheck(true, "prerelease", fetcher));
     expect(fetcher).not.toHaveBeenCalled();
     act(() => result.current.checkNow());
@@ -172,7 +172,7 @@ describe("useUpdateCheck", () => {
     const fetcher = vi
       .fn()
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockResolvedValueOnce(response([release("0.0.28")]));
+      .mockResolvedValueOnce(response([release("9.0.2")]));
     const { result } = renderHook(() => useUpdateCheck(true, "prerelease", fetcher));
     await settle();
     expect(result.current.status).toBe("failed");
@@ -211,17 +211,17 @@ describe("useUpdateCheck", () => {
   });
 
   it("applies the release-channel preference and rechecks on change", async () => {
-    const fetcher = vi.fn(async () => response([release("0.0.28", true), release("0.0.27", false)]));
+    const fetcher = vi.fn(async () => response([release("9.0.2", true), release("9.0.1", false)]));
     const { result, rerender } = renderHook(
       ({ channel }: { channel: "prerelease" | "stable" }) => useUpdateCheck(true, channel, fetcher),
       { initialProps: { channel: "prerelease" } },
     );
     await settle();
-    expect(result.current.update?.version).toBe("0.0.28");
+    expect(result.current.update?.version).toBe("9.0.2");
     rerender({ channel: "stable" });
     await settle();
     expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(result.current.update?.version).toBe("0.0.27");
+    expect(result.current.update?.version).toBe("9.0.1");
   });
 
   it("resumes a saved retry window without an extra request", async () => {
@@ -258,7 +258,7 @@ describe("useUpdateCheck", () => {
     rerender({ enabled: false });
     expect(result.current.status).toBe("off");
     await act(async () => {
-      resolveFetch(response([release("0.0.28")]));
+      resolveFetch(response([release("9.0.2")]));
       await Promise.resolve();
     });
     await settle();
@@ -276,7 +276,7 @@ describe("useUpdateCheck", () => {
             resolveFirst = resolve;
           }),
       )
-      .mockResolvedValueOnce(response([release("0.0.28")]));
+      .mockResolvedValueOnce(response([release("9.0.2")]));
     const { result, rerender } = renderHook(
       ({ enabled }: { enabled: boolean }) => useUpdateCheck(enabled, "prerelease", fetcher),
       { initialProps: { enabled: true } },
@@ -289,11 +289,11 @@ describe("useUpdateCheck", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(result.current.status).toBe("available");
     await act(async () => {
-      resolveFirst(response([release("0.0.29")]));
+      resolveFirst(response([release("9.0.3")]));
       await Promise.resolve();
     });
     await settle();
-    expect(result.current.update?.version).toBe("0.0.28");
+    expect(result.current.update?.version).toBe("9.0.2");
   });
 
   it("honours a rate-limit retry delay", async () => {
