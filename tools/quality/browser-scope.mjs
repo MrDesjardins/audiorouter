@@ -17,7 +17,9 @@ export function backendSpecs(directory) {
       return !target || visit(target, seen);
     });
   };
-  const selected = readdirSync(directory).filter(file => file.endsWith('.pw.ts') && visit(resolve(directory, file)));
+  const selected = readdirSync(directory, { recursive: true })
+    .filter(file => file.endsWith('.pw.ts') && visit(resolve(directory, file)))
+    .map(file => file.replaceAll('\\', '/'));
   if (!selected.length) throw Error('Backend browser selection is empty');
   return selected;
 }

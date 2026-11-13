@@ -44,11 +44,15 @@ test('backend browser selection follows helpers, cycles and unknown imports', ()
       'dynamic.pw.ts': 'const test = import("./real-backend");',
       'cycle.ts': 'import "./cycle";',
       'cycle.pw.ts': 'import "./cycle";',
+      'nested/backend.pw.ts': 'import { test } from "../real-backend";',
     };
+    mkdirSync(join(root, 'nested'));
     for (const [name, source] of Object.entries(files)) writeFileSync(join(root, name), source);
-    assert.deepEqual(backendSpecs(root).sort(), ['direct.pw.ts', 'dynamic.pw.ts', 'indirect.pw.ts', 'unknown.pw.ts']);
+    assert.deepEqual(backendSpecs(root).sort(), ['direct.pw.ts', 'dynamic.pw.ts', 'indirect.pw.ts', 'nested/backend.pw.ts', 'unknown.pw.ts']);
   } finally {
     // This fixture contains only files written above, never node_modules/junctions.
+    unlinkSync(join(root, 'nested/backend.pw.ts'));
+    rmdirSync(join(root, 'nested'));
     for (const name of readdirSync(root)) unlinkSync(join(root, name));
     rmdirSync(root);
   }
