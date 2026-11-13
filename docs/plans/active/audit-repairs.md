@@ -523,3 +523,17 @@ Rollback remains reverting the focused commits; no migration is required.
 Next: commit guide/evidence refresh, inspect complete branch diff, fetch main,
 push `fix/audit-high-medium`, create PR and read its check annotations. Do not
 mark merge-ready while required CI is unresolved.
+
+Final integration: fetched and cleanly merged `origin/main` at `0f63709a6`
+(the separate update-check improvement). No backend code changed in that merge.
+Repeated UI format/lint/typecheck/build and full tests: 117 files / 1,052 tests
+pass. Main chunk is now 621.35 kB; the advisory and scope decision above remain.
+Repeated real-backend recovery journeys 3/3 pass. Rebuilt custom-protocol shell
+after merged UI, and repeated isolated fresh-install native test: pass, first
+status response 103 ms. Contracts drift, both format checks, diff check and docs
+acceptance (261 files / 1,478 links) pass. Earlier workspace/backend and shell
+unit/Clippy evidence remains applicable: that source was unchanged by the merge.
+Guide refresh/evidence committed as `38a3e82d8`. No personal work was imported.
+Local implementation and validation are complete; next action is the authorized
+PR creation, then check annotations and required CI. The unrelated pending
+plugin.recovery guide coverage is explicitly retained as a separate owner task.
