@@ -34,8 +34,8 @@ Risks: nightly can detect packaging or unmodeled browser coupling later than a
 PR. Four runners increase concurrency demand. Cache eviction reduces speed,
 never correctness. Artifacts include only generated fixtures, no user data.
 Rollback: revert these scoped commits; existing Quality gate name stays stable.
-Next: run the branch's manual full CI, inspect every job/annotation and record
-hosted results before requesting PR-opening approval. One cohesive branch
+Next: obtain PR-opening approval, then verify current-base CI and the first
+post-merge trusted cache/nightly runs. One cohesive branch
 keeps the classifier, gate and renamed jobs compatible throughout rollout.
 
 ## Local evidence — Windows, 2026-11-12
@@ -67,8 +67,9 @@ selector path; the config now resolves both specs and assets relative to its
 own URL. Discovery passes from the root and the real UI working directory.
 The local terminal inherited conflicting NO_COLOR/FORCE_COLOR values; the
 browser command now removes NO_COLOR when FORCE_COLOR is set for its children.
-No Rust product code changed. Hosted Linux UI, artifact transfer, cache size,
-installer/full inventory and end-to-end Actions timing remain unmeasured.
+No Rust product code changed. Hosted Linux UI, artifact transfer,
+installer/full inventory and Actions timing were pending at this local
+checkpoint; the passing hosted evidence follows. Cache size remains unmeasured.
 
 ## Hosted qualification — passed
 
