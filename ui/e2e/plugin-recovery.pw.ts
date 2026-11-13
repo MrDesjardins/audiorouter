@@ -40,6 +40,8 @@ for (const theme of ["dark", "light", "high-contrast"]) {
     await page.getByTestId("rf__node-plugin-1").locator(".flow-node-title").click();
     await page.getByRole("tab", { name: "Properties", exact: true }).click();
 
+    // Recovery lives in a closed "After a plugin update" section, below adjusting the plugin (2026-11-12).
+    await page.locator("summary", { hasText: "After a plugin update" }).click();
     const recovery = page.getByLabel("Plugin recovery", { exact: true });
     await recovery.scrollIntoViewIfNeeded();
     const useScanned = recovery.getByRole("button", { name: "Use scanned version", exact: true });
