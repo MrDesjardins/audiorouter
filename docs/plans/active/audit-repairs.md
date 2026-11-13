@@ -537,3 +537,13 @@ Guide refresh/evidence committed as `38a3e82d8`. No personal work was imported.
 Local implementation and validation are complete; next action is the authorized
 PR creation, then check annotations and required CI. The unrelated pending
 plugin.recovery guide coverage is explicitly retained as a separate owner task.
+
+PR opened with the owner's explicit authorization:
+[PR #142](https://github.com/MrDesjardins/audiorouter/pull/142), branch
+`fix/audit-high-medium`, initial PR head `b631a2d8a`. Initial check inventory
+shows CI queued/running and zero annotations. No merge-readiness claim yet.
+The push also reports two default-branch dependency alerts (one moderate, one
+low). They remain outside the owner's explicitly restricted list; this branch
+does not update dependencies or claim those alerts are resolved. Next task:
+inspect PR checks/annotations at the latest head, repair any branch-caused
+failures, and report the result. Do not merge or remove the worktree.

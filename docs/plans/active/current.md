@@ -179,7 +179,8 @@ after real OneDrive metadata-only policy probes, so security checks remain.
 Workspace tests, Clippy, UI tests/build, native shell tests and fresh-profile
 launch, three-theme recovery journeys and Limiter Firefox clips pass. See the
 execution plan for exact evidence and limitations. Next: final diff/commit,
-push and create the explicitly authorized PR; inspect CI annotations afterward.
+PR is open: [#142](https://github.com/MrDesjardins/audiorouter/pull/142).
+Next: inspect required CI and check annotations; do not merge or clean worktrees.
 
 ## Issue #123 validation — 2026-11-09
 
