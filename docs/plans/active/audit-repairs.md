@@ -352,3 +352,25 @@ and docs acceptance (259 files / 1,464 links) pass. Inspected all changed code
 and fault-injection cases. Updated the headless recovery runbook. These two
 storage repairs share this commit; no schema migration or public API was added.
 Full shell all-feature checks and attended behavior remain in the branch gate.
+
+STO-2/3 committed as `9458e75c8`.
+
+ENG-1: added a direct Mixer -> Duck -> output test through the named mixer
+compiler for every flag pattern, including actual block processing. It passes
+with the original post-convergence Duck omission too: the branch compiler
+consumes the remaining processor. This disproves the proposed observable
+failure for this route; retain the audit's authorized structural fix. All
+three duplicate chain lists now call one exhaustive classification, so adding
+a kind forces a deliberate compiler decision. Disabled-node handling is also
+exhaustive: endpoints/generators/Mixers silence; processors, Recorder and
+switches preserve their existing dry behavior. No tool setting changed.
+The previous divergence arose from independently maintained topology lists;
+compiler exhaustiveness prevents recurrence. Source/tool suites and engine
+checks are running; full engine Clippy/format and diff review remain before
+commit. No physical audio or native endpoint qualification is claimed.
+
+ENG-1 verification: engine library 181 passed / 1 ignored; source combinations
+5/5 and tool combinations 5/5 pass, including callback allocation coverage.
+Engine all-target/all-feature Clippy, both formatting checks and diff checks
+pass. Complete focused diff inspected. Next: STO-4 path policy, SES-3 startup
+rollback and SIM-1 rewiring, then guide refresh and full branch qualification.

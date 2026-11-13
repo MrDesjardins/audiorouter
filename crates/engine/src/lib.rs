@@ -6119,58 +6119,8 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
                 .iter()
                 .find(|node| node.id == edge.destination_node)
                 .unwrap();
-            if (source.bypass
-                && !matches!(
-                    source.kind,
-                    NodeKind::Gain
-                        | NodeKind::Volume
-                        | NodeKind::BassTreble
-                        | NodeKind::Dehum
-                        | NodeKind::Declick
-                        | NodeKind::Denoise
-                        | NodeKind::SpeechDenoise
-                        | NodeKind::FirFilter
-                        | NodeKind::SpectralGate
-                        | NodeKind::FunVoiceChanger
-                        | NodeKind::TimeShift
-                        | NodeKind::Mute
-                        | NodeKind::Meter
-                        | NodeKind::ParametricEq
-                        | NodeKind::Compressor
-                        | NodeKind::Gate
-                        | NodeKind::Limiter
-                        | NodeKind::Delay
-                        | NodeKind::GraphicEq
-                        | NodeKind::Pitch
-                        | NodeKind::Plugin
-                        | NodeKind::Duck
-                ))
-                || (destination.bypass
-                    && !matches!(
-                        destination.kind,
-                        NodeKind::Gain
-                            | NodeKind::Volume
-                            | NodeKind::BassTreble
-                            | NodeKind::Dehum
-                            | NodeKind::Declick
-                            | NodeKind::Denoise
-                            | NodeKind::SpeechDenoise
-                            | NodeKind::FirFilter
-                            | NodeKind::SpectralGate
-                            | NodeKind::FunVoiceChanger
-                            | NodeKind::TimeShift
-                            | NodeKind::Mute
-                            | NodeKind::Meter
-                            | NodeKind::ParametricEq
-                            | NodeKind::Compressor
-                            | NodeKind::Gate
-                            | NodeKind::Limiter
-                            | NodeKind::Delay
-                            | NodeKind::GraphicEq
-                            | NodeKind::Pitch
-                            | NodeKind::Plugin
-                            | NodeKind::Duck
-                    ))
+            if (source.bypass && !is_chain_processor(source.kind))
+                || (destination.bypass && !is_chain_processor(destination.kind))
             {
                 return Err(GraphCompileError::UnsupportedTopology);
             }
@@ -6280,21 +6230,7 @@ pub fn compile_session_at_sample_rate_with_plugins_and_audio(
             push_stage!(node_id, ProcessingStage::ChannelMatrix { coefficients });
         }
         if !node.enabled {
-            if matches!(
-                node.kind,
-                NodeKind::PhysicalInput
-                    | NodeKind::ApplicationCapture
-                    | NodeKind::EndpointLoopback
-                    | NodeKind::PhysicalOutput
-                    | NodeKind::VirtualRenderSource
-                    | NodeKind::VirtualCaptureSink
-                    | NodeKind::NetworkSend
-                    | NodeKind::NetworkReceive
-                    | NodeKind::TestSignal
-                    | NodeKind::AudioFile
-                    | NodeKind::Soundboard
-                    | NodeKind::Mixer
-            ) {
+            if disabled_node_mutes(node.kind) {
                 push_stage!(node_id, ProcessingStage::Mute { muted: true });
             }
             // A disabled compatible processor uses its defined dry bypass.
@@ -7632,30 +7568,7 @@ fn compile_path_graph(
             .iter()
             .find(|node| node.id == edge.destination_node)
             .ok_or(GraphCompileError::UnsupportedTopology)?;
-        if !matches!(
-            destination.kind,
-            NodeKind::Gain
-                | NodeKind::Volume
-                | NodeKind::BassTreble
-                | NodeKind::Dehum
-                | NodeKind::Declick
-                | NodeKind::Denoise
-                | NodeKind::SpeechDenoise
-                | NodeKind::FirFilter
-                | NodeKind::SpectralGate
-                | NodeKind::FunVoiceChanger
-                | NodeKind::TimeShift
-                | NodeKind::Mute
-                | NodeKind::Meter
-                | NodeKind::ParametricEq
-                | NodeKind::Compressor
-                | NodeKind::Gate
-                | NodeKind::Limiter
-                | NodeKind::Delay
-                | NodeKind::GraphicEq
-                | NodeKind::Pitch
-                | NodeKind::Plugin
-        ) {
+        if !is_chain_processor(destination.kind) {
             break;
         }
         if edge.source_port != branch_source_port
@@ -8802,34 +8715,95 @@ pub fn renders_own_audio(kind: audiorouter_domain::NodeKind) -> bool {
     }
 }
 
+/// Disabled endpoints/generators and Mixers silence their route. A disabled
+/// Recorder keeps its dry monitoring path without recording; disabled switches
+/// use the dry path already selected by the route compiler.
+fn disabled_node_mutes(kind: audiorouter_domain::NodeKind) -> bool {
+    use audiorouter_domain::NodeKind;
+    match kind {
+        NodeKind::PhysicalInput
+        | NodeKind::ApplicationCapture
+        | NodeKind::EndpointLoopback
+        | NodeKind::PhysicalOutput
+        | NodeKind::VirtualRenderSource
+        | NodeKind::VirtualCaptureSink
+        | NodeKind::NetworkSend
+        | NodeKind::NetworkReceive
+        | NodeKind::TestSignal
+        | NodeKind::AudioFile
+        | NodeKind::Soundboard
+        | NodeKind::Mixer => true,
+        NodeKind::Gain
+        | NodeKind::Volume
+        | NodeKind::BassTreble
+        | NodeKind::Dehum
+        | NodeKind::Declick
+        | NodeKind::Denoise
+        | NodeKind::SpeechDenoise
+        | NodeKind::FirFilter
+        | NodeKind::SpectralGate
+        | NodeKind::FunVoiceChanger
+        | NodeKind::TimeShift
+        | NodeKind::Mute
+        | NodeKind::Meter
+        | NodeKind::ParametricEq
+        | NodeKind::Compressor
+        | NodeKind::Gate
+        | NodeKind::Limiter
+        | NodeKind::Delay
+        | NodeKind::GraphicEq
+        | NodeKind::Pitch
+        | NodeKind::Plugin
+        | NodeKind::Duck
+        | NodeKind::Recorder
+        | NodeKind::InputSwitch
+        | NodeKind::OutputSwitch => false,
+    }
+}
+
 /// Processor kinds that may sit in a linear chain before or after a Mixer.
+/// Exhaustive so every new kind must declare its routing behavior here.
 fn is_chain_processor(kind: audiorouter_domain::NodeKind) -> bool {
     use audiorouter_domain::NodeKind;
-    matches!(
-        kind,
+    match kind {
         NodeKind::Gain
-            | NodeKind::Volume
-            | NodeKind::BassTreble
-            | NodeKind::Dehum
-            | NodeKind::Declick
-            | NodeKind::Denoise
-            | NodeKind::SpeechDenoise
-            | NodeKind::FirFilter
-            | NodeKind::SpectralGate
-            | NodeKind::FunVoiceChanger
-            | NodeKind::TimeShift
-            | NodeKind::Mute
-            | NodeKind::Meter
-            | NodeKind::ParametricEq
-            | NodeKind::Compressor
-            | NodeKind::Gate
-            | NodeKind::Limiter
-            | NodeKind::Delay
-            | NodeKind::GraphicEq
-            | NodeKind::Pitch
-            | NodeKind::Plugin
-            | NodeKind::Duck
-    )
+        | NodeKind::Volume
+        | NodeKind::BassTreble
+        | NodeKind::Dehum
+        | NodeKind::Declick
+        | NodeKind::Denoise
+        | NodeKind::SpeechDenoise
+        | NodeKind::FirFilter
+        | NodeKind::SpectralGate
+        | NodeKind::FunVoiceChanger
+        | NodeKind::TimeShift
+        | NodeKind::Mute
+        | NodeKind::Meter
+        | NodeKind::ParametricEq
+        | NodeKind::Compressor
+        | NodeKind::Gate
+        | NodeKind::Limiter
+        | NodeKind::Delay
+        | NodeKind::GraphicEq
+        | NodeKind::Pitch
+        | NodeKind::Plugin
+        | NodeKind::Duck => true,
+        NodeKind::PhysicalInput
+        | NodeKind::ApplicationCapture
+        | NodeKind::EndpointLoopback
+        | NodeKind::PhysicalOutput
+        | NodeKind::VirtualRenderSource
+        | NodeKind::VirtualCaptureSink
+        | NodeKind::NetworkSend
+        | NodeKind::NetworkReceive
+        | NodeKind::TestSignal
+        | NodeKind::AudioFile
+        | NodeKind::Soundboard
+        | NodeKind::Mixer
+        | NodeKind::Recorder
+        | NodeKind::InputSwitch
+        | NodeKind::OutputSwitch => false,
+    }
 }
 
 /// Compile the supported fan-out topology: one enabled source and multiple
