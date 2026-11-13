@@ -856,7 +856,8 @@ button:disabled {
   gap: 0.25rem;
   margin-bottom: 0.75rem;
 }
-.setup-panel {
+.setup-panel,
+.mic-test {
   margin-bottom: 1rem;
 }
 .setup-panel ul {
