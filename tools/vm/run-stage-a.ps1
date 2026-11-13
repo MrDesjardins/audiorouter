@@ -495,6 +495,11 @@ function Step-Remove([string] $P) {
         $run = Invoke-VmCheck 'remove'
         $verdict = if ($run.Code -eq 0) { 'PASS' } else { 'FAIL' }
         Add-Result "${P}remove" $verdict 'driver uninstalled with the helper'
+        # Exit 5 leaves the removal pending until a restart; the next session's
+        # install then fails (exit 4, state needsRestart), as in the 2026-11-12 run.
+        if ($run.Code -eq 0 -and (($run.Checks | Select-Object -First 1).detail -like 'exit 5*')) {
+            Complete-AndRestart "${P}remove" 'Windows needs a restart to finish removing the driver.'
+        }
     }
 }
 function Step-NoBugcheck([string] $P) {
