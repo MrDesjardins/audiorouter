@@ -42,7 +42,8 @@ not run.
 | P1 instrument detection | load-time refusal done (`effFlagsIsSynth`, unit tests pass, Clippy clean); not run against the real BC Synth (demo popup); scan-time classification via a per-fingerprint cache and the VST3 worker unchanged |
 | P8a 32-bit | done: VST2 and VST3 exercised with real 32-bit plugins (ReaPlugs, Pitchproof, Dragonfly); release exe/installer not rebuilt |
 | P0 census | tool written; first corpus run (Dragonfly, ReaPlugs, Pitchproof, UADx) all pass; wider corpus pending |
-| everything else | not started |
+| P8b instruments and MIDI | engine, control plane, API and MCP, scan flip, UI picker and Properties keyboard committed on this branch; see [the design](vst-midi-instruments-design.md). Not yet run with a real hardware keyboard, a rebuilt exe, or recorded guides |
+| everything else | not started (see the open list below) |
 
 Related: [issue #136 plan](issue-136-vst-experience.md),
 [chain matrix](issue-136-vst2-chain-matrix.md). Requirements touched:
