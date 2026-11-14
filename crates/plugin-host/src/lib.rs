@@ -811,7 +811,15 @@ fn resolve_binary_path(path: &Path) -> Result<PathBuf, InspectionError> {
     if !path.is_dir() {
         return Ok(path.to_path_buf());
     }
-    let contents = path.join("Contents").join("x86_64-win");
+    // 64-bit bundles keep their binary in `x86_64-win`, 32-bit ones in
+    // `x86-win` (VST3 bundle layout). Prefer the 64-bit folder.
+    let contents = [
+        path.join("Contents").join("x86_64-win"),
+        path.join("Contents").join("x86-win"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.is_dir())
+    .unwrap_or_else(|| path.join("Contents").join("x86_64-win"));
     let entries = fs::read_dir(&contents).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             InspectionError::Missing
@@ -7954,6 +7962,41 @@ mod tests {
         assert!(entries
             .iter()
             .any(|entry| entry.path.ends_with("bundle.vst3")));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Regression (2026-11-13): a 32-bit VST3 bundle keeps its binary in
+    /// `Contents/x86-win`, which inspection did not look in ("Missing").
+    #[test]
+    fn inspects_a_32_bit_vst3_bundle_under_x86_win_contents() {
+        let root = temp_root();
+        let bundle = root.join("effect32.vst3");
+        let binary_dir = bundle.join("Contents").join("x86-win");
+        fs::create_dir_all(&binary_dir).unwrap();
+        fs::write(
+            binary_dir.join("effect32.vst3"),
+            pe_x86_with_export(b"GetPluginFactory"),
+        )
+        .unwrap();
+        let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.format, PluginFormat::Vst3);
+        assert_eq!(identity.architecture, PeArchitecture::X86);
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst3X86
+        );
+        // A bundle with both keeps using the 64-bit binary.
+        let both = root.join("both.vst3");
+        for (folder, bytes) in [
+            ("x86-win", pe_x86_with_export(b"GetPluginFactory")),
+            ("x86_64-win", pe_x64()),
+        ] {
+            let directory = both.join("Contents").join(folder);
+            fs::create_dir_all(&directory).unwrap();
+            fs::write(directory.join("both.vst3"), bytes).unwrap();
+        }
+        let identity = inspect_binary(&both, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.architecture, PeArchitecture::X64);
         fs::remove_dir_all(root).unwrap();
     }
 

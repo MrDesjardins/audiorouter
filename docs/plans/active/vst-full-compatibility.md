@@ -40,7 +40,8 @@ not run.
 | #136 fixes + chain matrix | committed `268fa0146` |
 | Spec revision (D3) | done in the same change as this page |
 | P1 instrument detection | load-time refusal done (`effFlagsIsSynth`, unit tests pass, Clippy clean); not run against the real BC Synth (demo popup); scan-time classification via a per-fingerprint cache and the VST3 worker unchanged |
-| P8a 32-bit | done for VST2 (exercised with real 32-bit ReaPlugs); VST3 x86 worker built but untested; see P8a results |
+| P8a 32-bit | done: VST2 and VST3 exercised with real 32-bit plugins (ReaPlugs, Pitchproof, Dragonfly); release exe/installer not rebuilt |
+| P0 census | tool written; first corpus run (Dragonfly, ReaPlugs, Pitchproof, UADx) all pass; wider corpus pending |
 | everything else | not started |
 
 Related: [issue #136 plan](issue-136-vst-experience.md),
@@ -263,3 +264,32 @@ Not done / not proven:
   only x64 plugins; each x86 plugin runs in its own worker.
 - Instrument classification for x86 VST3/UA bundles uses the same metadata
   path as x64.
+
+## P0 census, first results (2026-11-13)
+
+Tool: `plugin_census` in `crates/control/src/plugin_census_tests.rs` (opt-in,
+Windows). It walks folders of VST2 DLLs and VST3 bundles, 64-bit and 32-bit,
+and drives each supported effect through the dispatcher (`plugins.scan`,
+`plugins.parameters`) and the real worker for its format and bitness: start,
+100 blocks, save state, restore, restore into a fresh worker, at mono and
+stereo. Nothing is asserted, so one bad plugin does not hide the others; the
+report is JSON plus a markdown table. It opens no audio device or editor.
+
+Corpus so far (all free): Dragonfly Reverb 3.2.10 (Early, Hall, Plate, Room as
+VST2 and VST3, 64-bit and 32-bit), ReaPlugs 2.36 (64-bit installed, 32-bit in a
+temp folder), Pitchproof (x64 and x86 VST2), UADx free titles (VST3 x64).
+Not run: Blue Cat (demo dialog), the rest of the planned corpus (Melda,
+TDR, Valhalla, Voxengo, Airwindows, Surge XT, Chow).
+
+Result: all 16 Dragonfly builds (4 effects x VST2/VST3 x x64/x86), the UADx
+effects, Pitchproof x64 and x86 and the ReaPlugs started, processed, saved
+state and restored at mono and stereo. Notes: ReaComp, ReaDelay, ReaEQ,
+ReaGate and ReaXcomp are reported "pass-through" because their default
+settings do not change a quiet tone (not a defect); PolyMAX is an instrument
+(refused).
+
+Defect found by the census: 32-bit VST3 bundles keep their binary in
+`Contents/x86-win`, which both inspection (`resolve_binary_path`) and the VST3
+worker (`resolve_binary`) did not look in ("Missing"). Fixed in both;
+regression `inspects_a_32_bit_vst3_bundle_under_x86_win_contents`; verified by
+loading the four 32-bit Dragonfly VST3 effects in the 32-bit VST3 worker.

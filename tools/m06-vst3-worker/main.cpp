@@ -468,7 +468,13 @@ private:
 
 static fs::path resolve_binary(const fs::path& supplied) {
     if (!fs::is_directory(supplied)) return supplied;
+    // The VST3 bundle layout names the folder by architecture; this worker only
+    // ever loads binaries of its own bitness (a 32-bit build hosts x86-win).
+#if defined(_WIN64)
     const auto contents = supplied / "Contents" / "x86_64-win";
+#else
+    const auto contents = supplied / "Contents" / "x86-win";
+#endif
     fs::path result;
     for (const auto& entry : fs::directory_iterator(contents)) {
         if (entry.is_regular_file() && entry.path().extension() == L".vst3") {
@@ -476,7 +482,7 @@ static fs::path resolve_binary(const fs::path& supplied) {
             result = entry.path();
         }
     }
-    if (result.empty()) throw std::runtime_error("VST3 bundle has no x64 binary");
+    if (result.empty()) throw std::runtime_error("VST3 bundle has no binary for this worker's architecture");
     return result;
 }
 

@@ -2007,3 +2007,7 @@ mod tests;
 #[cfg(test)]
 #[path = "plugin_state_cleanup_tests.rs"]
 mod state_cleanup_tests;
+
+#[cfg(all(test, windows))]
+#[path = "plugin_census_tests.rs"]
+mod census_tests;
