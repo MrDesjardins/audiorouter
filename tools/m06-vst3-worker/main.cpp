@@ -40,6 +40,8 @@
 #include "pluginterfaces/vst/ivsthostapplication.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
+#include "pluginterfaces/vst/ivstevents.h"
+#include "pluginterfaces/vst/ivstmidicontrollers.h"
 #include "pluginterfaces/vst/vstspeaker.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "host-support.h"
@@ -405,6 +407,76 @@ static uint64_t required_uint_field(const std::string& json, const std::string& 
     return parse_uint(json, position);
 }
 
+// One MIDI channel-voice message for an instrument (worker protocol "Midi").
+struct MidiEvent {
+    std::size_t offset;
+    uint8_t status;
+    uint8_t data1;
+    uint8_t data2;
+};
+// Aligned with MAX_MIDI_EVENTS_PER_BLOCK in the Rust worker contract.
+constexpr std::size_t kMaxMidiEvents = 256;
+
+static std::vector<MidiEvent> parse_midi_events(const std::string& json) {
+    const std::string key = "\"events\":[";
+    const auto array = json.find(key);
+    if (array == std::string::npos) throw protocol_error("missing MIDI event array");
+    auto position = array + key.size();
+    std::vector<MidiEvent> events;
+    while (position < json.size() && json[position] != ']') {
+        if (json[position] != '{') {
+            ++position;
+            continue;
+        }
+        auto cursor = find_required(json, "\"sample_offset\":", position);
+        const auto offset = parse_uint(json, cursor);
+        cursor = find_required(json, "\"status\":", cursor);
+        const auto status = parse_uint(json, cursor);
+        cursor = find_required(json, "\"data1\":", cursor);
+        const auto data1 = parse_uint(json, cursor);
+        cursor = find_required(json, "\"data2\":", cursor);
+        const auto data2 = parse_uint(json, cursor);
+        if (offset >= kMaxFrames || status < 0x80 || status > 0xEF || data1 > 0x7F || data2 > 0x7F) {
+            throw protocol_error("MIDI event is outside the bounded contract");
+        }
+        events.push_back({static_cast<std::size_t>(offset), static_cast<uint8_t>(status),
+                          static_cast<uint8_t>(data1), static_cast<uint8_t>(data2)});
+        if (events.size() > kMaxMidiEvents) {
+            throw protocol_error("MIDI event count exceeds the bounded contract");
+        }
+        const auto close = json.find('}', cursor);
+        if (close == std::string::npos) throw protocol_error("MIDI event is unterminated");
+        position = close + 1;
+    }
+    if (position >= json.size()) throw protocol_error("MIDI event array is unterminated");
+    return events;
+}
+
+// The input event list handed to an instrument's process call.
+class EventList final : public Vst::IEventList {
+public:
+    tresult PLUGIN_API queryInterface(const TUID iid, void** object) override {
+        return host_query<Vst::IEventList>(this, iid, object, Vst::IEventList_iid);
+    }
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+    int32 PLUGIN_API getEventCount() override { return static_cast<int32>(events_.size()); }
+    tresult PLUGIN_API getEvent(int32 index, Vst::Event& event) override {
+        if (index < 0 || static_cast<std::size_t>(index) >= events_.size()) return kInvalidArgument;
+        event = events_[static_cast<std::size_t>(index)];
+        return kResultOk;
+    }
+    tresult PLUGIN_API addEvent(Vst::Event& event) override {
+        if (events_.size() >= kMaxMidiEvents) return kOutOfMemory;
+        events_.push_back(event);
+        return kResultOk;
+    }
+    void clear() { events_.clear(); }
+
+private:
+    std::vector<Vst::Event> events_;
+};
+
 class ParameterQueue final : public Vst::IParamValueQueue {
 public:
     explicit ParameterQueue(Vst::ParamID id) : id_(id) {}
@@ -692,14 +764,18 @@ class Vst3Effect final {
 public:
     Vst3Effect(const fs::path& supplied, double sample_rate,
                const std::vector<uint16_t>& input_channels,
-               const std::vector<uint16_t>& output_channels, const std::string& class_id = {})
-        : requested_input_channels_(input_channels), requested_output_channels_(output_channels) {
+               const std::vector<uint16_t>& output_channels, const std::string& class_id = {},
+               bool instrument = false)
+        : requested_input_channels_(input_channels), requested_output_channels_(output_channels),
+          instrument_(instrument) {
         context_.sampleRate = sample_rate;
         context_.tempo = 120.0;
         context_.timeSigNumerator = 4;
         context_.timeSigDenominator = 4;
         context_.state = Vst::ProcessContext::kPlaying | Vst::ProcessContext::kTempoValid | Vst::ProcessContext::kTimeSigValid | Vst::ProcessContext::kProjectTimeMusicValid;
-        if (input_channels.empty() || output_channels.empty() || input_channels.size() > 4 ||
+        // An instrument has no audio input; an effect needs at least one.
+        if ((input_channels.empty() && !instrument) || output_channels.empty() ||
+            input_channels.size() > 4 ||
             output_channels.size() > 4 ||
             std::accumulate(input_channels.begin(), input_channels.end(), std::size_t{0}) > 8 ||
             std::accumulate(output_channels.begin(), output_channels.end(), std::size_t{0}) > 8) {
@@ -751,14 +827,19 @@ public:
             if (std::strcmp(info.category, kVstAudioEffectClass) != 0) continue;
             if (!requested_class.empty() && !class_id_matches(info.cid, requested_class)) continue;
             // Instruments share the audio-module category; their
-            // sub-categories say "Instrument". AudioRouter has no MIDI input.
+            // sub-categories say "Instrument". An effect worker skips them
+            // and an instrument worker skips everything else.
             PClassInfo2 info2{};
-            if (factory2 && factory2->getClassInfo2(index, &info2) == kResultOk &&
-                std::strstr(info2.subCategories, "Instrument") != nullptr) {
-                found_instrument = true;
+            const bool is_instrument_class =
+                factory2 && factory2->getClassInfo2(index, &info2) == kResultOk &&
+                std::strstr(info2.subCategories, "Instrument") != nullptr;
+            if (is_instrument_class != instrument) {
+                if (is_instrument_class) found_instrument = true;
+                else found_audio_class = true;
                 continue;
             }
-            found_audio_class = true;
+            found_audio_class = instrument ? found_audio_class : true;
+            found_instrument = instrument ? true : found_instrument;
             if (factory_->createInstance(info.cid, Vst::IComponent_iid,
                                          reinterpret_cast<void**>(&component_)) != kResultOk) {
                 class_failures << " class " << index << " (" << info.name
@@ -791,11 +872,16 @@ public:
         }
         if (factory2) factory2->release();
         if (!component_) {
-            if (!found_audio_class && found_instrument) {
-                throw std::runtime_error(
-                    "VST3 plugin is an instrument; AudioRouter hosts audio effects only");
+            if (instrument && !found_instrument) {
+                throw std::runtime_error(found_audio_class
+                                             ? "VST3 plugin is an effect, not an instrument"
+                                             : "VST3 factory has no instrument class");
             }
-            if (!found_audio_class) {
+            if (!instrument && !found_audio_class && found_instrument) {
+                throw std::runtime_error(
+                    "VST3 plugin is an instrument; AudioRouter hosts audio effects only (no MIDI input yet)");
+            }
+            if (!found_audio_class && !instrument) {
                 throw std::runtime_error("VST3 factory has no audio effect class");
             }
             throw std::runtime_error("VST3 audio effect classes were unusable:" +
@@ -838,13 +924,21 @@ public:
         }
         require_result("processor interface", component_->queryInterface(
             Vst::IAudioProcessor_iid, reinterpret_cast<void**>(&processor_)));
+        if (instrument_ && controller_) {
+            // Optional: lets controller changes (pitch bend, CC) reach the plugin.
+            controller_->queryInterface(Vst::IMidiMapping::iid,
+                                        reinterpret_cast<void**>(&midi_mapping_));
+        }
         // A single-stream node is mono or stereo, and so is almost every
         // effect, but not always the same way (UADx effects are stereo-only).
         // Ask for the node's layout; if the plugin keeps its own, adapt
         // between them in process().
         auto effective_inputs = input_channels;
         auto effective_outputs = output_channels;
-        if (input_channels.size() == 1 && output_channels.size() == 1) {
+        if (instrument && output_channels.size() == 1) {
+            negotiate_main_output(output_channels[0]);
+            effective_outputs[0] = plugin_output_channels_;
+        } else if (input_channels.size() == 1 && output_channels.size() == 1) {
             negotiate_main_bus(input_channels[0], output_channels[0]);
             effective_inputs[0] = plugin_input_channels_;
             effective_outputs[0] = plugin_output_channels_;
@@ -885,6 +979,10 @@ public:
             require_notification("optional output bus deactivation", component_->activateBus(
                 Vst::kAudio, Vst::kOutput, bus, false));
         }
+        if (instrument && component_->getBusCount(Vst::kEvent, Vst::kInput) > 0) {
+            require_notification("event input bus activation",
+                                 component_->activateBus(Vst::kEvent, Vst::kInput, 0, true));
+        }
         Vst::ProcessSetup setup{};
         setup.processMode = Vst::kRealtime;
         setup.symbolicSampleSize = Vst::kSample32;
@@ -906,6 +1004,7 @@ public:
         }
         if (component_connection_) component_connection_->release();
         if (controller_connection_) controller_connection_->release();
+        if (midi_mapping_) midi_mapping_->release();
         if (processor_) processor_->release();
         if (controller_) {
             if (controller_initialized_) controller_->terminate();
@@ -1199,6 +1298,168 @@ private:
         plugin_output_channels_ = static_cast<uint16_t>(output_info.channelCount);
     }
 
+    // Instrument: sets plugin_output_channels_ for the main output bus.
+    void negotiate_main_output(uint16_t requested_output) {
+        Vst::BusInfo output_info{};
+        require_result("output bus info", component_->getBusInfo(Vst::kAudio, Vst::kOutput, 0, output_info));
+        if (output_info.channelCount != requested_output) {
+            std::vector<Vst::SpeakerArrangement> inputs(
+                static_cast<std::size_t>(component_->getBusCount(Vst::kAudio, Vst::kInput)));
+            std::vector<Vst::SpeakerArrangement> outputs(
+                static_cast<std::size_t>(component_->getBusCount(Vst::kAudio, Vst::kOutput)));
+            for (std::size_t bus = 0; bus < inputs.size(); ++bus) {
+                processor_->getBusArrangement(Vst::kInput, static_cast<int32>(bus), inputs[bus]);
+            }
+            for (std::size_t bus = 0; bus < outputs.size(); ++bus) {
+                processor_->getBusArrangement(Vst::kOutput, static_cast<int32>(bus), outputs[bus]);
+            }
+            outputs[0] = arrangement_for(requested_output);
+            // A refusal is normal; the plugin then keeps its own layout.
+            processor_->setBusArrangements(inputs.data(), static_cast<int32>(inputs.size()),
+                                           outputs.data(), static_cast<int32>(outputs.size()));
+            require_result("output bus info", component_->getBusInfo(Vst::kAudio, Vst::kOutput, 0, output_info));
+        }
+        if (output_info.channelCount < 1 || output_info.channelCount > 2) {
+            throw std::runtime_error("native VST3 instrument main output is neither mono nor stereo (" +
+                                     std::to_string(output_info.channelCount) + " out)");
+        }
+        plugin_output_channels_ = static_cast<uint16_t>(output_info.channelCount);
+    }
+
+    // Translates one MIDI message for the segment that starts at the current
+    // cut: notes become events, pitch bend / CC / pressure become a
+    // controller change when the plugin maps that controller.
+    void queue_midi(const MidiEvent& message) {
+        const auto kind = static_cast<uint8_t>(message.status & 0xF0);
+        const auto channel = static_cast<int16>(message.status & 0x0F);
+        if (kind == 0x90 || kind == 0x80) {
+            Vst::Event event{};
+            event.busIndex = 0;
+            event.sampleOffset = 0;
+            event.ppqPosition = 0.0;
+            event.flags = Vst::Event::kIsLive;
+            if (kind == 0x90 && message.data2 > 0) {
+                event.type = Vst::Event::kNoteOnEvent;
+                event.noteOn.channel = channel;
+                event.noteOn.pitch = message.data1;
+                event.noteOn.tuning = 0.0f;
+                event.noteOn.velocity = static_cast<float>(message.data2) / 127.0f;
+                event.noteOn.length = 0;
+                event.noteOn.noteId = -1;
+            } else {
+                event.type = Vst::Event::kNoteOffEvent;
+                event.noteOff.channel = channel;
+                event.noteOff.pitch = message.data1;
+                event.noteOff.velocity = static_cast<float>(message.data2) / 127.0f;
+                event.noteOff.noteId = -1;
+                event.noteOff.tuning = 0.0f;
+            }
+            if (events_.addEvent(event) != kResultOk) throw protocol_error("MIDI event list is full");
+            return;
+        }
+        int32 controller = -1;
+        double value = 0.0;
+        if (kind == 0xB0) {
+            controller = message.data1;
+            value = static_cast<double>(message.data2) / 127.0;
+        } else if (kind == 0xE0) {
+            controller = Vst::kPitchBend;
+            value = static_cast<double>(message.data1 | (message.data2 << 7)) / 16383.0;
+        } else if (kind == 0xD0) {
+            controller = Vst::kAfterTouch;
+            value = static_cast<double>(message.data1) / 127.0;
+        }
+        if (controller < 0 || !midi_mapping_) return;
+        Vst::ParamID id = 0;
+        if (midi_mapping_->getMidiControllerAssignment(0, channel, static_cast<Vst::CtrlNumber>(controller), id) != kResultTrue) {
+            return;
+        }
+        int32 queue_index = -1;
+        auto* queue = changes_.addParameterData(id, queue_index);
+        if (!queue) throw protocol_error("parameter queue limit exceeded");
+        int32 point_index = -1;
+        queue->addPoint(0, value, point_index);
+    }
+
+public:
+    // Instrument: the block is cut at every parameter and MIDI offset; the
+    // events at a cut are delivered with the segment that starts there.
+    std::vector<float> process_instrument(const std::vector<float>& samples, uint16_t channels,
+                                          const std::vector<ParameterEvent>& events,
+                                          const std::vector<MidiEvent>& midi) {
+        if (!instrument_) throw protocol_error("MIDI sent to an effect worker");
+        if (samples.size() % channels != 0) throw protocol_error("interleaved sample shape is invalid");
+        const auto frames = samples.size() / channels;
+        if (frames == 0 || frames > kMaxFrames) throw protocol_error("frame count is invalid");
+        std::vector<std::size_t> cuts{0};
+        for (const auto& event : events) {
+            if (event.offset >= frames) throw protocol_error("parameter offset exceeds frame count");
+            cuts.push_back(event.offset);
+        }
+        for (const auto& message : midi) {
+            if (message.offset >= frames) throw protocol_error("MIDI offset exceeds frame count");
+            cuts.push_back(message.offset);
+        }
+        std::sort(cuts.begin(), cuts.end());
+        cuts.erase(std::unique(cuts.begin(), cuts.end()), cuts.end());
+        std::vector<std::vector<float>> output(plugin_output_channels_, std::vector<float>(frames));
+        for (std::size_t cut = 0; cut < cuts.size(); ++cut) {
+            const auto start = cuts[cut];
+            const auto end = cut + 1 < cuts.size() ? cuts[cut + 1] : frames;
+            for (const auto& event : events) {
+                if (event.offset != start) continue;
+                int32 queue_index = -1;
+                auto* queue = changes_.addParameterData(event.id, queue_index);
+                if (!queue) throw protocol_error("parameter queue limit exceeded");
+                int32 point_index = -1;
+                if (queue->addPoint(0, event.value, point_index) != kResultOk) {
+                    throw protocol_error("parameter event could not be queued");
+                }
+            }
+            for (const auto& message : midi) {
+                if (message.offset == start) queue_midi(message);
+            }
+            std::vector<Vst::Sample32*> outputs;
+            for (auto& channel : output) outputs.push_back(&channel[start]);
+            Vst::AudioBusBuffers output_bus{};
+            output_bus.numChannels = static_cast<int32>(outputs.size());
+            output_bus.channelBuffers32 = outputs.data();
+            Vst::ProcessData data{};
+            data.processMode = Vst::kRealtime;
+            data.symbolicSampleSize = Vst::kSample32;
+            data.numSamples = static_cast<int32>(end - start);
+            data.numInputs = 0;
+            data.numOutputs = 1;
+            data.inputs = nullptr;
+            data.outputs = &output_bus;
+            data.inputParameterChanges = changes_.getParameterCount() > 0 ? &changes_ : nullptr;
+            data.inputEvents = events_.getEventCount() > 0 ? &events_ : nullptr;
+            data.processContext = &context_;
+            const auto result = processor_->process(data);
+            events_.clear();
+            if (result != kResultFalse) require_result("VST3 instrument process", result);
+            advance_context(end - start);
+            changes_ = ParameterChanges{};
+        }
+        std::vector<float> result(samples.size());
+        for (std::size_t frame = 0; frame < frames; ++frame) {
+            for (uint16_t channel = 0; channel < channels; ++channel) {
+                float sample;
+                if (plugin_output_channels_ == channels) {
+                    sample = output[channel][frame];
+                } else if (plugin_output_channels_ == 2) {
+                    sample = 0.5f * (output[0][frame] + output[1][frame]);
+                } else {
+                    sample = output[0][frame];
+                }
+                if (!std::isfinite(sample)) throw std::runtime_error("VST3 produced non-finite output");
+                result[frame * channels + channel] = sample;
+            }
+        }
+        return result;
+    }
+
+private:
     void process_segment(const std::vector<std::vector<float>>& input,
                          std::vector<std::vector<float>>& output, std::size_t start, std::size_t end,
                          const std::vector<ParameterEvent>& events, std::size_t& event_index) {
@@ -1317,6 +1578,9 @@ private:
     uint16_t plugin_input_channels_ = 0;
     uint16_t plugin_output_channels_ = 0;
     ParameterChanges changes_;
+    bool instrument_ = false;
+    Vst::IMidiMapping* midi_mapping_ = nullptr;
+    EventList events_;
 };
 
 static std::string quote_json(const std::string& value) {
@@ -1717,6 +1981,8 @@ struct Arguments {
     double sample_rate = 0.0;
     std::vector<uint16_t> input_buses;
     std::vector<uint16_t> output_buses;
+    // Hosts an instrument played with MIDI instead of an effect.
+    bool instrument = false;
 };
 
 static std::vector<uint16_t> parse_bus_list(const std::wstring& value) {
@@ -1756,6 +2022,7 @@ static Arguments parse_arguments(int argc, wchar_t** argv) {
         else if (argument == L"--sample-rate" && index + 1 < argc) result.sample_rate = std::stod(argv[++index]);
         else if (argument == L"--input-buses" && index + 1 < argc) result.input_buses = parse_bus_list(argv[++index]);
         else if (argument == L"--output-buses" && index + 1 < argc) result.output_buses = parse_bus_list(argv[++index]);
+        else if (argument == L"--instrument") result.instrument = true;
         else throw std::runtime_error("unknown or incomplete worker argument");
     }
     if (result.plugin.empty() || result.channels < 1 || result.channels > 2 ||
@@ -1764,6 +2031,9 @@ static Arguments parse_arguments(int argc, wchar_t** argv) {
     }
     if (result.input_buses.empty() != result.output_buses.empty()) {
         throw std::runtime_error("input and output bus lists must be supplied together");
+    }
+    if (result.instrument && !result.input_buses.empty()) {
+        throw std::runtime_error("an instrument worker is single-stream");
     }
     return result;
 }
@@ -1935,15 +2205,34 @@ static bool is_audio_message(const std::string& json) {
     return json.rfind("{\"type\":\"Process", 0) == 0;
 }
 
+// One-way MIDI for the next Process message (instrument workers).
+static bool is_midi_message(const std::string& json) {
+    return json.rfind("{\"type\":\"Midi\"", 0) == 0;
+}
+
 // Reads every host message. Audio is processed here, so a busy plugin window
 // never delays a quantum; everything else is answered by the UI thread.
 static int audio_thread_main(const Arguments& arguments, const std::vector<uint16_t>& input_buses,
                              const std::vector<uint16_t>& output_buses, bool multi_bus) {
     AudioThreadScheduling scheduling;
     auto& effect = *g_ui.effect;
+    std::vector<MidiEvent> pending_midi;
     while (true) {
         const auto payload = read_frame();
         const std::string json(payload.begin(), payload.end());
+        if (is_midi_message(json)) {
+            // No reply. An effect worker drops the events; an instrument
+            // keeps the newest ones so a backlog cannot build up.
+            if (arguments.instrument) {
+                auto more = parse_midi_events(json);
+                pending_midi.insert(pending_midi.end(), more.begin(), more.end());
+                if (pending_midi.size() > kMaxMidiEvents) {
+                    pending_midi.erase(pending_midi.begin(),
+                                       pending_midi.end() - static_cast<std::ptrdiff_t>(kMaxMidiEvents));
+                }
+            }
+            continue;
+        }
         if (g_latency_restart_failed.load(std::memory_order_acquire)) {
             throw std::runtime_error("VST3 latency restart failed");
         }
@@ -2027,9 +2316,12 @@ static int audio_thread_main(const Arguments& arguments, const std::vector<uint1
             const auto channels = required_uint_field(json, "\"channels\":");
             if (channels != arguments.channels || channels > 2) throw protocol_error("channel mismatch");
             const auto samples = parse_samples(json);
+            const auto block_midi = std::exchange(pending_midi, {});
             const auto output = [&] {
                 std::lock_guard<std::mutex> processing(g_processing_mutex);
-                return effect.process(samples, arguments.channels, events);
+                return arguments.instrument
+                           ? effect.process_instrument(samples, arguments.channels, events, block_midi)
+                           : effect.process(samples, arguments.channels, events);
             }();
             write_frame(processed_message(sequence, deadline, arguments.channels, output));
         }
@@ -2117,7 +2409,9 @@ int wmain(int argc, wchar_t** argv) {
                                       : arguments.output_buses;
         int exit_code = 1;
         {
-            Vst3Effect effect(arguments.plugin, arguments.sample_rate, input_buses, output_buses, arguments.class_id);
+            Vst3Effect effect(arguments.plugin, arguments.sample_rate,
+                              arguments.instrument ? std::vector<uint16_t>{} : input_buses, output_buses,
+                              arguments.class_id, arguments.instrument);
             const auto multi_bus = !arguments.input_buses.empty();
             if (multi_bus) {
                 write_frame(hello_buses_message(arguments.hash, input_buses, output_buses));

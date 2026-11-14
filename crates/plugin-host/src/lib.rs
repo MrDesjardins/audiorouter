@@ -5673,6 +5673,32 @@ impl WorkerProcess {
         )
     }
 
+    /// Spawn the native VST3 worker for an *instrument* (see
+    /// `spawn_vst2_instrument`). `class_id` is the 32-digit class to load, or
+    /// the first instrument class of the module when `None`.
+    #[cfg(windows)]
+    pub fn spawn_vst3_instrument(
+        executable: impl AsRef<Path>,
+        plugin_path: impl AsRef<Path>,
+        plugin_sha256: &str,
+        class_id: Option<&str>,
+        channels: u16,
+        sample_rate_hz: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Self::spawn_inner_with_class(
+            executable,
+            plugin_sha256,
+            channels,
+            sample_rate_hz,
+            None,
+            None,
+            Some(plugin_path.as_ref()),
+            None,
+            class_id,
+            true,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn spawn_inner_with_class(
         executable: impl AsRef<Path>,
