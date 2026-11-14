@@ -1,5 +1,21 @@
 # Active plan — current priorities (2026-11-04)
 
+## Issue #136 VST experience — 2026-11-13
+
+Documentation-only execution plan on isolated branch
+`feature/vst-plugin-experience` from current `origin/main` at
+`7d70d502`. The report partially improved on v0.0.29 but still describes
+native-editor sizing/crashes, automatic Mixer insertion during an attempted
+plugin connection/sidechain, and a need to configure while stopped. These
+reports remain unreproduced; plugin/OS/scaling details and support bundle are
+not available. The plan traces PLUG-01–07, GRAPH-01–15, DSP-19, UI/API/MCP,
+state, security, quality and M05/M06/M07/M08 gates, including explicit VST3
+auxiliary-bus vs. VST2 single-stream boundaries and concrete editor, stopped
+setup, serial-vs-sum, and sidechain acceptance. See the
+[issue #136 execution plan](issue-136-vst-experience.md) for decisions,
+test matrix, prerequisites, failure containment, rollback and the exact next
+action. No implementation or reproduction claim is made.
+
 ## CI speed — 2026-11-12
 
 Owner approved all phases of affected-area selection, daily full CI, four

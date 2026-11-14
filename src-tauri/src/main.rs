@@ -991,10 +991,13 @@ fn open_plugin_editor(
             &format!("{title} — AudioRouter"),
             800,
             600,
-            Box::new(move || {
+            std::sync::Arc::new(move || {
                 if close_opened.load(std::sync::atomic::Ordering::Acquire) {
                     let response = forward_rpc_request(&close_request, &close_pipe);
                     log_shell_rpc(&close_request, &response);
+                    response.is_ok_and(|result| result.error.is_none())
+                } else {
+                    true
                 }
             }),
         )?;

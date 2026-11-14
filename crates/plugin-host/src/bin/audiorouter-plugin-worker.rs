@@ -31,6 +31,10 @@ type WorkerArguments = (
 
 fn main() -> ExitCode {
     suppress_windows_fault_reporting_ui();
+    // Before any plugin is loaded: editors then draw in real pixels and
+    // report sizes that fit the shell's window on a scaled display.
+    #[cfg(windows)]
+    audiorouter_plugin_host::vst2::enable_per_monitor_dpi_awareness();
     match run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

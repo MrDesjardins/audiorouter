@@ -89,6 +89,9 @@ struct Vst2HostContext {
     sample_rate_bits: std::sync::atomic::AtomicU32,
     block_size: std::sync::atomic::AtomicI32,
     sample_position: std::sync::atomic::AtomicU64,
+    /// The shell window the editor is shown in (0 while closed), so the
+    /// plugin can ask for a new size (`audioMasterSizeWindow`).
+    editor_parent: std::sync::atomic::AtomicUsize,
 }
 
 #[cfg(windows)]
@@ -98,6 +101,7 @@ impl Default for Vst2HostContext {
             sample_rate_bits: std::sync::atomic::AtomicU32::new(48_000_f32.to_bits()),
             block_size: std::sync::atomic::AtomicI32::new(128),
             sample_position: std::sync::atomic::AtomicU64::new(0),
+            editor_parent: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 }
@@ -281,6 +285,11 @@ const AUDIO_MASTER_VERSION: i32 = 1;
 const AUDIO_MASTER_GET_SAMPLE_RATE: i32 = 10;
 #[cfg(windows)]
 const AUDIO_MASTER_GET_BLOCK_SIZE: i32 = 11;
+#[cfg(windows)]
+const AUDIO_MASTER_SIZE_WINDOW: i32 = 15;
+/// Largest editor side accepted from a plugin, in pixels.
+#[cfg(windows)]
+const MAX_EDITOR_SIDE: i32 = 4096;
 
 #[cfg(all(test, windows))]
 mod opcode_tests {
@@ -337,7 +346,7 @@ mod opcode_tests {
         let effect = &mut effect as *mut Vst2Effect;
 
         assert_eq!(
-            // SAFETY: `effect` points to the live local AEffect above, whose `user`
+            // SAFETY: `effect` points to the live local AEffect above, whose host
             // field points to the boxed `context` that outlives both calls; the opcode
             // ignores the remaining arguments, including the null pointer.
             unsafe {
@@ -514,8 +523,8 @@ mod opcode_tests {
         let input = [0.0; 4];
         let mut output = [0.0; 4];
         let inputs = [&input[..]];
-        let mut outputs = [&mut output[..]];
 
+        let mut outputs = [&mut output[..]];
         assert!(matches!(
             library.process_replacing(&inputs, &mut outputs),
             Err(Vst2LibraryError::NonFiniteOutput)
@@ -569,8 +578,9 @@ pub struct Vst2Library {
     effect: *mut Vst2Effect,
     processing_format: Option<(u32, i32)>,
     editor_open: bool,
-    // Declared last so the context outlives the effect/module cleanup. The
-    // VST2 ABI reserves `AEffect::user` for host-owned instance data.
+    // Declared last so the context outlives the effect/module cleanup. VST2
+    // reserves AEffect::user for host-owned instance data; resvd1/resvd2
+    // remain reserved by the ABI and are not repurposed.
     host_context: Box<Vst2HostContext>,
 }
 
@@ -1149,29 +1159,41 @@ impl Drop for Vst2Library {
 unsafe extern "C" fn host_callback(
     effect: *mut Vst2Effect,
     opcode: i32,
-    _: i32,
-    _: isize,
+    index: i32,
+    value: isize,
     _: *mut c_void,
     _: f32,
 ) -> isize {
+    // SAFETY: a non-null effect reaching this callback is the plugin's live
+    // AEffect; see `host_context_of` for its host field.
+    let context = unsafe { host_context_of(effect) };
     match opcode {
         AUDIO_MASTER_VERSION => 2400,
+        AUDIO_MASTER_SIZE_WINDOW => {
+            // The plugin's editor changed size (index: width, value: height).
+            let parent = context.map_or(0, |context| {
+                context
+                    .editor_parent
+                    .load(std::sync::atomic::Ordering::Acquire)
+            });
+            match (i32::try_from(value), parent) {
+                (Ok(height), parent) if parent != 0 => {
+                    isize::from(fit_parent_window(parent, index, height))
+                }
+                _ => 0,
+            }
+        }
         7 => {
             // audioMasterGetTime: ABI-owned per-thread snapshot, valid until
             // this thread's next call. The position is shared atomically with
             // the editor; no mutable timing storage is shared between threads.
             HOST_TIME
                 .try_with(|time| {
-                    // SAFETY: this thread exclusively owns its TLS snapshot; the
-                    // effect user context outlives plugin callbacks. The returned
-                    // pointer remains stable for the VST2 time-info borrow.
+                    // SAFETY: this thread exclusively owns its TLS snapshot. The
+                    // returned pointer remains stable for the VST2 time-info
+                    // borrow.
                     unsafe {
                         let info = &mut *time.get();
-                        let context = if effect.is_null() || (*effect).user.is_null() {
-                            None
-                        } else {
-                            Some(&*((*effect).user as *const Vst2HostContext))
-                        };
                         info.sample_rate = context.map_or(48_000.0, |c| {
                             f64::from(f32::from_bits(
                                 c.sample_rate_bits
@@ -1200,37 +1222,104 @@ unsafe extern "C" fn host_callback(
             }
         }
         34 => 10000, // audioMasterGetVendorVersion.
-        AUDIO_MASTER_GET_SAMPLE_RATE => {
-            // SAFETY: Every effect reaching this callback was initialized by
-            // `Vst2Library::load`, which stores a live `Vst2HostContext` in
-            // AEffect::user for the duration of the module lifetime.
-            unsafe {
-                if effect.is_null() || (*effect).user.is_null() {
-                    48_000
-                } else {
-                    f32::from_bits(
-                        (*((*effect).user as *const Vst2HostContext))
-                            .sample_rate_bits
-                            .load(std::sync::atomic::Ordering::Relaxed),
-                    )
-                    .round() as isize
-                }
-            }
-        }
-        AUDIO_MASTER_GET_BLOCK_SIZE => {
-            // SAFETY: See the sample-rate branch above; the same host-owned
-            // context supplies the negotiated bounded block size.
-            unsafe {
-                if effect.is_null() || (*effect).user.is_null() {
-                    128
-                } else {
-                    (*((*effect).user as *const Vst2HostContext))
-                        .block_size
-                        .load(std::sync::atomic::Ordering::Relaxed) as isize
-                }
-            }
-        }
+        AUDIO_MASTER_GET_SAMPLE_RATE => context.map_or(48_000, |context| {
+            f32::from_bits(
+                context
+                    .sample_rate_bits
+                    .load(std::sync::atomic::Ordering::Relaxed),
+            )
+            .round() as isize
+        }),
+        AUDIO_MASTER_GET_BLOCK_SIZE => context.map_or(128, |context| {
+            context
+                .block_size
+                .load(std::sync::atomic::Ordering::Relaxed) as isize
+        }),
         _ => 0,
+    }
+}
+
+/// The host context of an effect, when it has one yet.
+///
+/// # Safety
+/// `effect` is null or points to a readable `AEffect`. Its `user` field is
+/// null (during the plugin's entry point, before `Vst2Library::load` sets it)
+/// or points to the `Vst2HostContext` that the owning `Vst2Library` keeps
+/// alive until after effClose and module unload.
+#[cfg(windows)]
+unsafe fn host_context_of<'a>(effect: *mut Vst2Effect) -> Option<&'a Vst2HostContext> {
+    // SAFETY: see the function contract above.
+    unsafe {
+        if effect.is_null() || (*effect).user.is_null() {
+            None
+        } else {
+            Some(&*((*effect).user as *const Vst2HostContext))
+        }
+    }
+}
+
+/// Resize the shell's editor window so its client area is `width` × `height`
+/// pixels, the size of the plugin's editor. The request is posted
+/// (`SWP_ASYNCWINDOWPOS`): the window belongs to another process whose
+/// thread may be busy. Returns whether the request was made.
+#[cfg(windows)]
+fn fit_parent_window(parent: usize, width: i32, height: i32) -> bool {
+    const GWL_STYLE: i32 = -16;
+    const GWL_EXSTYLE: i32 = -20;
+    const SWP_NOMOVE: u32 = 0x0002;
+    const SWP_NOZORDER: u32 = 0x0004;
+    const SWP_NOACTIVATE: u32 = 0x0010;
+    const SWP_ASYNCWINDOWPOS: u32 = 0x4000;
+    if !(1..=MAX_EDITOR_SIDE).contains(&width)
+        || !(1..=MAX_EDITOR_SIDE).contains(&height)
+        || !is_window_handle(parent)
+        || window_owner_process_id(parent) != Some(std::process::id())
+    {
+        return false;
+    }
+    let window = parent as *mut c_void;
+    let mut frame = NativeRect {
+        left: 0,
+        top: 0,
+        right: width,
+        bottom: height,
+    };
+    // SAFETY: the handle was just checked and is only queried and asked to
+    // resize; `frame` is a live local RECT for the synchronous call.
+    unsafe {
+        let style = GetWindowLongPtrW(window, GWL_STYLE) as u32;
+        let extended = GetWindowLongPtrW(window, GWL_EXSTYLE) as u32;
+        let dpi = match GetDpiForWindow(window) {
+            0 => 96,
+            dpi => dpi,
+        };
+        if AdjustWindowRectExForDpi(&mut frame, style, 0, extended, dpi) == 0 {
+            return false;
+        }
+        SetWindowPos(
+            window,
+            ptr::null_mut(),
+            0,
+            0,
+            frame.right - frame.left,
+            frame.bottom - frame.top,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS,
+        ) != 0
+    }
+}
+
+/// Make this worker process draw in real pixels, like the desktop shell whose
+/// window hosts the editor. Without it Windows treats the plugin's window as
+/// 96 DPI inside a per-monitor window, and editors come out the wrong size
+/// on a scaled display. Call once, before any plugin is loaded.
+#[cfg(windows)]
+pub fn enable_per_monitor_dpi_awareness() {
+    // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2.
+    const PER_MONITOR_AWARE_V2: isize = -4;
+    // SAFETY: a process-wide setting with no pointers; failure (already set,
+    // or an older Windows) leaves the previous mode and is not an error.
+    unsafe {
+        SetProcessDpiAwarenessContext(PER_MONITOR_AWARE_V2);
     }
 }
 
@@ -1299,6 +1388,35 @@ unsafe extern "system" {
     ) -> i32;
     fn TranslateMessage(message: *const NativeMessage) -> i32;
     fn DispatchMessageW(message: *const NativeMessage) -> isize;
+    fn GetWindowLongPtrW(window: *mut c_void, index: i32) -> isize;
+    fn GetDpiForWindow(window: *mut c_void) -> u32;
+    fn AdjustWindowRectExForDpi(
+        rect: *mut NativeRect,
+        style: u32,
+        menu: i32,
+        extended_style: u32,
+        dpi: u32,
+    ) -> i32;
+    fn SetWindowPos(
+        window: *mut c_void,
+        insert_after: *mut c_void,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        flags: u32,
+    ) -> i32;
+    fn SetProcessDpiAwarenessContext(context: isize) -> i32;
+}
+
+/// Win32 `RECT`.
+#[cfg(windows)]
+#[repr(C)]
+struct NativeRect {
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
 }
 
 #[cfg(windows)]
@@ -1372,6 +1490,62 @@ impl Vst2EditorAccess {
                 0.0,
             )
         }
+    }
+
+    /// The editor's size in pixels, when the plugin reports a usable one.
+    /// Some plugins only know it once their editor is open.
+    fn editor_size(&self) -> Option<(i32, i32)> {
+        let mut rect: *mut Vst2EditorRect = ptr::null_mut();
+        let result = self.dispatch(
+            EFF_EDIT_GET_RECT,
+            (&mut rect as *mut *mut Vst2EditorRect).cast(),
+        );
+        if result == 0 || rect.is_null() {
+            return None;
+        }
+        // SAFETY: a successful effEditGetRect leaves a pointer to the
+        // plugin's live ERect, copied here before any other plugin call.
+        let rect = unsafe { *rect };
+        let width = i32::from(rect.right) - i32::from(rect.left);
+        let height = i32::from(rect.bottom) - i32::from(rect.top);
+        ((1..=MAX_EDITOR_SIDE).contains(&width) && (1..=MAX_EDITOR_SIDE).contains(&height))
+            .then_some((width, height))
+    }
+
+    /// Tell the host callback which window the editor is in (0: none).
+    fn set_editor_parent(&self, parent: usize) {
+        // SAFETY: the effect is live for the access lifetime; see
+        // `host_context_of` for its host field.
+        if let Some(context) = unsafe { host_context_of(self.effect) } {
+            context
+                .editor_parent
+                .store(parent, std::sync::atomic::Ordering::Release);
+        }
+    }
+
+    /// Open the editor in `parent` and size that window to it.
+    fn open_in(&self, parent: usize) -> bool {
+        // Size the window before the editor appears where the plugin already
+        // knows its size, and again after: the size can change on opening.
+        let before = self.editor_size();
+        if let Some((width, height)) = before {
+            fit_parent_window(parent, width, height);
+        }
+        self.set_editor_parent(parent);
+        if self.dispatch(EFF_EDIT_OPEN, parent as *mut c_void) < 0 {
+            self.set_editor_parent(0);
+            return false;
+        }
+        let after = self.editor_size();
+        if let Some((width, height)) = after.filter(|size| Some(*size) != before) {
+            fit_parent_window(parent, width, height);
+        }
+        true
+    }
+
+    fn close(&self) {
+        self.dispatch(EFF_EDIT_CLOSE, ptr::null_mut());
+        self.set_editor_parent(0);
     }
 }
 
@@ -1472,8 +1646,12 @@ impl Vst2EditorThread {
             .map_err(|_| "editor UI thread stopped".to_string())
     }
 
-    /// Ask the UI thread to close the editor. Edits already live in the
-    /// processing instance, so nothing is copied back.
+    /// Ask the UI thread to close the editor. It does not wait: the worker
+    /// keeps processing audio while the plugin takes its editor down. The
+    /// desktop shell keeps its window alive until the editor has left it
+    /// (`plugin_editor_windows.rs`); destroying that window under a plugin
+    /// that was still closing crashed plugins (issue #136). Edits already
+    /// live in the processing instance, so nothing is copied back.
     pub fn close(&self) -> Result<(), String> {
         self.commands
             .send(EditorThreadCommand::Close)
@@ -1514,35 +1692,46 @@ impl Drop for Vst2EditorThread {
 
 #[cfg(windows)]
 fn editor_thread_main(access: Vst2EditorAccess, receiver: Receiver<EditorThreadCommand>) {
-    let mut open = false;
+    // The shell window the editor is open in.
+    let mut open_in: Option<usize> = None;
     loop {
         pump_editor_messages();
         match receiver.recv_timeout(Duration::from_millis(10)) {
             Ok(EditorThreadCommand::Open(parent, owner_pid)) => {
                 if access.has_editor
-                    && !open
+                    && open_in.is_none()
                     && is_window_handle(parent)
                     && window_owner_process_id(parent) == Some(owner_pid)
+                    && access.open_in(parent)
                 {
-                    open = access.dispatch(EFF_EDIT_OPEN, parent as *mut c_void) >= 0;
+                    open_in = Some(parent);
                 }
             }
             Ok(EditorThreadCommand::Close) => {
-                if open {
-                    access.dispatch(EFF_EDIT_CLOSE, ptr::null_mut());
-                    open = false;
+                if open_in.take().is_some() {
+                    access.close();
                 }
             }
             Ok(EditorThreadCommand::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => {
-                if open {
-                    access.dispatch(EFF_EDIT_CLOSE, ptr::null_mut());
+                if open_in.is_some() {
+                    access.close();
                 }
                 break;
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
-        if open {
-            access.dispatch(EFF_EDIT_IDLE, ptr::null_mut());
+        match open_in {
+            // The shell's window went away without a close request (the
+            // shell ended). Let the plugin drop its editor instead of idling
+            // on a window that no longer exists.
+            Some(parent) if !is_window_handle(parent) => {
+                access.close();
+                open_in = None;
+            }
+            Some(_) => {
+                access.dispatch(EFF_EDIT_IDLE, ptr::null_mut());
+            }
+            None => {}
         }
     }
 }
