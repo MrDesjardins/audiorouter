@@ -411,3 +411,18 @@ Open, in suggested order:
    worker (only if the census shows a need), P9 release gate and compatibility
    page, wider census corpus. (CI i686 target: added to `ci.yml` release job and `manual-release.yml` on 2026-11-14; not yet seen running on GitHub.)
 6. Before a PR: read the check annotations and ask the owner for approval.
+
+## P3 step 1 (2026-11-14): VST3 parameter-snapshot state fallback
+
+- The VST3 worker's saved state is now envelope `ARST2`: the old component and
+  controller sections plus the controller's writable parameter values. `ARST1`
+  states still restore. If a plugin rejects its own component/controller state,
+  the worker puts the snapshot values back (controller `setParamNormalized`,
+  and a parameter change at the start of the next block) instead of reporting
+  `StateUnsupported`.
+- Exercised: census round trip (save, restore, restore into a fresh worker) with
+  Dragonfly Plate Reverb and Surge XT Effects: ok, same as before.
+- **Not exercised:** the fallback itself. ZamAutoSat, the known state-rejecting
+  plugin, exposes no parameters, so there is nothing to restore and it still
+  reports `restore failed`. It needs a plugin that rejects state and has
+  parameters, or a fixture VST3; no unit test exists yet.

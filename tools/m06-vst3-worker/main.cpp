@@ -1036,13 +1036,25 @@ public:
             component_state.size() + controller_state.size() + 16 > kMaxStateBytes) {
             throw protocol_error("VST3 state exceeds the bounded contract");
         }
+        const auto snapshot = parameter_snapshot();
         std::vector<uint8_t> state;
-        state.reserve(16 + component_state.size() + controller_state.size());
-        state.insert(state.end(), {'A', 'R', 'S', 'T', '1', 0, 0, 0});
+        state.reserve(20 + component_state.size() + controller_state.size() + snapshot.size() * 12);
+        state.insert(state.end(), {'A', 'R', 'S', 'T', '2', 0, 0, 0});
         append_u32(state, static_cast<uint32_t>(component_state.size()));
         append_u32(state, static_cast<uint32_t>(controller_state.size()));
         state.insert(state.end(), component_state.begin(), component_state.end());
         state.insert(state.end(), controller_state.begin(), controller_state.end());
+        // Version 2 ends with the parameter values, a fallback for plugins that
+        // reject their own saved state (the host then restores the sliders).
+        append_u32(state, static_cast<uint32_t>(snapshot.size()));
+        for (const auto& [id, value] : snapshot) {
+            append_u32(state, id);
+            uint64_t bits = 0;
+            std::memcpy(&bits, &value, sizeof(bits));
+            append_u32(state, static_cast<uint32_t>(bits & 0xffffffffu));
+            append_u32(state, static_cast<uint32_t>(bits >> 32));
+        }
+        if (state.size() > kMaxStateBytes) throw protocol_error("VST3 state exceeds the bounded contract");
         return state;
     }
 
@@ -1052,16 +1064,37 @@ public:
         }
         std::vector<uint8_t> component_state;
         std::vector<uint8_t> controller_state;
-        if (bytes.size() >= 16 && std::equal(bytes.begin(), bytes.begin() + 8,
-                                             std::array<uint8_t, 8>{'A', 'R', 'S', 'T', '1', 0, 0, 0}.begin())) {
+        std::vector<std::pair<Vst::ParamID, double>> snapshot;
+        const bool version1 = bytes.size() >= 16 && std::equal(bytes.begin(), bytes.begin() + 8,
+                                             std::array<uint8_t, 8>{'A', 'R', 'S', 'T', '1', 0, 0, 0}.begin());
+        const bool version2 = bytes.size() >= 20 && std::equal(bytes.begin(), bytes.begin() + 8,
+                                             std::array<uint8_t, 8>{'A', 'R', 'S', 'T', '2', 0, 0, 0}.begin());
+        if (version1 || version2) {
             const auto component_size = read_u32(bytes, 8);
             const auto controller_size = read_u32(bytes, 12);
             if (component_size > kMaxStateBytes || controller_size > kMaxStateBytes ||
-                static_cast<std::size_t>(component_size) + controller_size + 16 != bytes.size()) {
+                static_cast<std::size_t>(component_size) + controller_size + 16 > bytes.size()) {
                 throw protocol_error("VST3 state envelope is malformed");
             }
+            const std::size_t sections_end = 16 + static_cast<std::size_t>(component_size) + controller_size;
+            if (version1 && sections_end != bytes.size()) throw protocol_error("VST3 state envelope is malformed");
             component_state.assign(bytes.begin() + 16, bytes.begin() + 16 + component_size);
-            controller_state.assign(bytes.begin() + 16 + component_size, bytes.end());
+            controller_state.assign(bytes.begin() + 16 + component_size, bytes.begin() + sections_end);
+            if (version2) {
+                if (sections_end + 4 > bytes.size()) throw protocol_error("VST3 state envelope is malformed");
+                const auto count = read_u32(bytes, sections_end);
+                if (count > kMaxParameters || sections_end + 4 + static_cast<std::size_t>(count) * 12 != bytes.size()) {
+                    throw protocol_error("VST3 state envelope is malformed");
+                }
+                for (uint32_t index = 0; index < count; ++index) {
+                    const auto at = sections_end + 4 + static_cast<std::size_t>(index) * 12;
+                    const uint64_t bits = static_cast<uint64_t>(read_u32(bytes, at + 4)) |
+                                          (static_cast<uint64_t>(read_u32(bytes, at + 8)) << 32);
+                    double value = 0.0;
+                    std::memcpy(&value, &bits, sizeof(value));
+                    if (std::isfinite(value)) snapshot.emplace_back(read_u32(bytes, at), std::clamp(value, 0.0, 1.0));
+                }
+            }
         } else {
             component_state = bytes;
         }
@@ -1102,6 +1135,12 @@ public:
             if (was_processing) {
                 require_notification("VST3 processor resume after rejected state", processor_->setProcessing(true));
                 processing_ = true;
+            }
+            // The plugin rejected its own state: put its parameters back from
+            // the snapshot saved beside it, when there is one.
+            if (!snapshot.empty()) {
+                apply_parameter_snapshot(snapshot);
+                return;
             }
             throw;
         }
@@ -1245,6 +1284,42 @@ public:
     }
 
 private:
+    // The controller's writable parameters and their current normalized values.
+    std::vector<std::pair<Vst::ParamID, double>> parameter_snapshot() {
+        std::vector<std::pair<Vst::ParamID, double>> values;
+        if (!controller_) return values;
+        const auto count = controller_->getParameterCount();
+        if (count < 0 || count > static_cast<int32>(kMaxScannedParameters)) return values;
+        for (int32 index = 0; index < count && values.size() < kMaxParameters; ++index) {
+            Vst::ParameterInfo info{};
+            if (controller_->getParameterInfo(index, info) != kResultOk) continue;
+            if (info.flags & (Vst::ParameterInfo::kIsReadOnly | Vst::ParameterInfo::kIsProgramChange)) continue;
+            const double value = controller_->getParamNormalized(info.id);
+            if (std::isfinite(value)) values.emplace_back(info.id, std::clamp(value, 0.0, 1.0));
+        }
+        return values;
+    }
+
+    void apply_parameter_snapshot(const std::vector<std::pair<Vst::ParamID, double>>& values) {
+        for (const auto& [id, value] : values) {
+            if (controller_) controller_->setParamNormalized(id, value);
+        }
+        pending_snapshot_ = values;
+    }
+
+    // Hands the restored values to the processor with the next block.
+    void drain_pending_snapshot() {
+        if (pending_snapshot_.empty()) return;
+        for (const auto& [id, value] : pending_snapshot_) {
+            int32 queue_index = -1;
+            auto* queue = changes_.addParameterData(id, queue_index);
+            if (!queue) break;
+            int32 point_index = -1;
+            queue->addPoint(0, value, point_index);
+        }
+        pending_snapshot_.clear();
+    }
+
     static void append_u32(std::vector<uint8_t>& output, uint32_t value) {
         output.push_back(static_cast<uint8_t>(value & 0xff));
         output.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
@@ -1463,6 +1538,7 @@ private:
     void process_segment(const std::vector<std::vector<float>>& input,
                          std::vector<std::vector<float>>& output, std::size_t start, std::size_t end,
                          const std::vector<ParameterEvent>& events, std::size_t& event_index) {
+        drain_pending_snapshot();
         while (event_index < events.size() && events[event_index].offset == start) {
             int32 queue_index = -1;
             auto* queue = changes_.addParameterData(events[event_index].id, queue_index);
@@ -1505,6 +1581,7 @@ private:
         const std::vector<std::vector<std::vector<float>>>& input,
         std::vector<std::vector<std::vector<float>>>& output, std::size_t start, std::size_t end,
         const std::vector<ParameterEvent>& events, std::size_t& event_index) {
+        drain_pending_snapshot();
         while (event_index < events.size() && events[event_index].offset == start) {
             int32 queue_index = -1;
             auto* queue = changes_.addParameterData(events[event_index].id, queue_index);
@@ -1578,6 +1655,7 @@ private:
     uint16_t plugin_input_channels_ = 0;
     uint16_t plugin_output_channels_ = 0;
     ParameterChanges changes_;
+    std::vector<std::pair<Vst::ParamID, double>> pending_snapshot_;
     bool instrument_ = false;
     Vst::IMidiMapping* midi_mapping_ = nullptr;
     EventList events_;
