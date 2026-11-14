@@ -2464,6 +2464,8 @@ const DEFAULT_MCP_TOOLS: &[&str] = &[
     "trigger_sound",
     "stop_sounds",
     "get_soundboard_status",
+    "list_midi_devices",
+    "play_notes",
     "control_audio_file",
     "control_time_shift",
     "reset_meter",
@@ -2739,6 +2741,7 @@ fn mcp_tool_annotations(name: &str) -> Value {
             | "pump_native_multi_inputs"
             | "list_sounds"
             | "get_soundboard_status"
+            | "list_midi_devices"
             | "list_presets"
             | "list_goals"
             | "list_saved_versions"
@@ -2763,6 +2766,7 @@ fn mcp_tool_annotations(name: &str) -> Value {
         "reveal_recording"
             | "call_api"
             | "trigger_sound"
+            | "play_notes"
             | "control_time_shift"
             | "undo_last_change"
             | "start_from_goal"
@@ -2800,6 +2804,8 @@ fn mcp_tools() -> Value {
         { "name": "list_sounds", "description": "List the built-in sound library for Soundboard slots: id (lib:...), title, category, tags and duration. Put an id in a Soundboard slot with change_settings {slot1MediaId: \"lib:...\"}, or a category id in slot1Set for a random sound of that category.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
         { "name": "trigger_sound", "description": "Press one slot (1-9) of a Soundboard while audio plays, like its button or a Stream Deck key. action=release ends a hold-mode press; mode overrides the slot's own mode (once, loop, toggle, hold) for this press.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Soundboard node name or ID." }, "slot": { "type": "integer", "minimum": 1, "maximum": 9 }, "action": { "type": "string", "enum": ["press", "release"] }, "mode": { "type": "string", "enum": ["once", "loop", "toggle", "hold"] } }, "required": ["node", "slot"], "additionalProperties": false } },
         { "name": "stop_sounds", "description": "Fade out one Soundboard slot, or every slot when slot is omitted.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Soundboard node name or ID." }, "slot": { "type": "integer", "minimum": 1, "maximum": 9 } }, "required": ["node"], "additionalProperties": false } },
+        { "name": "list_midi_devices", "description": "List the connected MIDI keyboards, and for each Instrument of a playing route which device it listens to (midiInput) and whether that device is connected.", "inputSchema": { "type": "object", "properties": {  }, "required": [], "additionalProperties": false } },
+        { "name": "play_notes", "description": "Play notes on a running Instrument tool (a VST synth or sampler) while audio plays, like a keyboard. Each event is noteOn (note 0-127, 60 = middle C; optional velocity 1-127 and durationMs to release it later), noteOff, controlChange (controller, value), pitchBend (bend -1 to 1), aftertouch (value) or allNotesOff. afterMs delays an event, so one call can play a short phrase (up to 64 events, 30 s). Add the Instrument itself in the AudioRouter window (it needs a plugin chosen there).", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Instrument node name or ID." }, "events": { "type": "array", "minItems": 1, "maxItems": 64, "items": { "type": "object", "properties": { "type": { "type": "string", "enum": ["noteOn", "noteOff", "controlChange", "pitchBend", "aftertouch", "allNotesOff"] }, "channel": { "type": "integer", "minimum": 1, "maximum": 16 }, "note": { "type": "integer", "minimum": 0, "maximum": 127 }, "velocity": { "type": "integer", "minimum": 1, "maximum": 127 }, "durationMs": { "type": "integer", "minimum": 0, "maximum": 30000 }, "afterMs": { "type": "integer", "minimum": 0, "maximum": 30000 }, "controller": { "type": "integer", "minimum": 0, "maximum": 127 }, "value": { "type": "integer", "minimum": 0, "maximum": 127 }, "bend": { "type": "number", "minimum": -1, "maximum": 1 } }, "required": ["type"], "additionalProperties": false } } }, "required": ["node", "events"], "additionalProperties": false } },
         { "name": "get_soundboard_status", "description": "Read which Soundboard slots have a sound and which are playing, while audio plays.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Soundboard node name or ID." } }, "required": ["node"], "additionalProperties": false } },
         { "name": "control_audio_file", "description": "Play, pause or stop one Audio file (or Test signal) source while the route plays, without stopping the rest; status reads its position.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Audio file or Test signal node name or ID." }, "action": { "type": "string", "enum": ["play", "pause", "stop", "status"] } }, "required": ["node", "action"], "additionalProperties": false } },
         { "name": "control_time_shift", "description": "Pause, resume, jump back or forward 10 s, or return to live on a Time Shift node while audio plays; status reads its buffer.", "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1, "description": "Optional; defaults to the session open in AudioRouter." }, "node": { "type": "string", "minLength": 1, "description": "Time Shift node name or ID." }, "action": { "type": "string", "enum": ["pause", "resume", "back", "forward", "live", "status"] } }, "required": ["node", "action"], "additionalProperties": false } },
@@ -2982,6 +2988,8 @@ fn mcp_tool_call(
         "check_setup" => ("system.checkSetup", Some(arguments)),
         "trigger_sound" => ("soundboard.trigger", Some(mcp_node_params(arguments))),
         "stop_sounds" => ("soundboard.stop", Some(mcp_node_params(arguments))),
+        "list_midi_devices" => ("midi.devices", None),
+        "play_notes" => ("midi.sendEvents", Some(mcp_node_params(arguments))),
         "get_soundboard_status" => ("soundboard.status", Some(mcp_node_params(arguments))),
         "control_audio_file" => ("audioSources.transport", Some(mcp_node_params(arguments))),
         "control_time_shift" => ("timeShift.transport", Some(mcp_node_params(arguments))),
@@ -3498,7 +3506,7 @@ fn mcp_generated_key(tool: &str) -> String {
     )
 }
 
-const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to an Output device whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\n8. Play is refused, the sound loops or a device seems wrong: run check_setup first. Each finding names the session, node and device and gives the fix; Windows device settings (channels, rate) are changed by the user in Windows Sound settings, not by you. A 7.1 device feeding a Surround input is correct; do not tell the user to make it stereo.\n9. Start from what the user wants: list_goals shows ready routes; start_from_goal goal=clean-mic makes a stopped session with those tools connected. Then ask which microphone and output to use and set them with change_settings parameters {endpointId: ...}; never choose a microphone yourself.\n10. Keep settings the user likes: save_my_preset kind=compressor name=\"Steady voice\" parameters={...}; apply later by passing a preset's parameters from list_my_presets to change_settings.\n11. See or return to an earlier setup: list_saved_versions, then go_back_to_version revision=N. Later versions are kept. Say which client saved a version only as reported; never guess a person.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
+const MCP_RECIPES: &str = "AudioRouter recipes (use the names shown by get_session_summary).\n1. Clean up a microphone: add_tool kind=gate after the microphone; add_tool kind=compressor after the gate; add_tool kind=limiter after the compressor. Then play, ask the user to talk, read get_levels: the gate threshold sits between room noise and voice (change_settings thresholdDb), the compressor should reduce 3-6 dB on loud words.\n2. Lower game or music while the user talks: add_tool kind=duck between the game source and its output with parameters {keyNodeId: <microphone node ID>, amountDb: 10}. Raise amountDb for more ducking; thresholdDb sets how loud the voice must be.\n3. Record a podcast or stream: add_tool kind=recorder after the node to record (often a Mixer or the voice chain). change_settings parameters {autoRecord: true} to record on every Play, {splitMinutes: 30} for a new file every 30 minutes. start_recording / stop_recording control it.\n4. Use AudioRouter as a Discord or OBS microphone: connect the processed voice chain to an Output device whose device is a virtual cable input (e.g. CABLE Input; list_devices shows IDs; change_settings parameters {endpointId: ...}). In Discord choose the matching cable output as the microphone.\n5. Switch between two sources live (host and guest, or two scenes): add_tool kind=inputSwitch, connect_nodes each source to it (first to A, second to B), then toggle_setting target=selected to switch.\n6. Quick safety: toggle_mic_mute mutes all capture immediately. control_session action=stop stops audio. play / toggle_play start it when this client may open audio devices; if play is refused, ask the user to press Play in AudioRouter.\n7. Play sound effects into a stream or call: add_tool kind=soundboard, then connect_nodes from it to the Mixer that feeds the output (a Mixer accepts several sources), or straight to an output. list_sounds shows the built-in sounds; change_settings on the Soundboard with parameters {slot1MediaId: \"lib:...\", slot1Caption: \"Applause\", slot1Mode: \"once\"} fills slot 1 (slots 1-9; a category id in slot1Set picks a random sound of that category; slot1GainDb from -24 to 6). While audio plays, trigger_sound node=<Soundboard name> slot=1 plays it, stop_sounds stops, get_soundboard_status shows what plays. The same keys work from Stream Deck.\n8. Play is refused, the sound loops or a device seems wrong: run check_setup first. Each finding names the session, node and device and gives the fix; Windows device settings (channels, rate) are changed by the user in Windows Sound settings, not by you. A 7.1 device feeding a Surround input is correct; do not tell the user to make it stereo.\n9. Start from what the user wants: list_goals shows ready routes; start_from_goal goal=clean-mic makes a stopped session with those tools connected. Then ask which microphone and output to use and set them with change_settings parameters {endpointId: ...}; never choose a microphone yourself.\n10. Keep settings the user likes: save_my_preset kind=compressor name=\"Steady voice\" parameters={...}; apply later by passing a preset's parameters from list_my_presets to change_settings.\n11. See or return to an earlier setup: list_saved_versions, then go_back_to_version revision=N. Later versions are kept. Say which client saved a version only as reported; never guess a person.\n12. Play a VST synth or sampler: the user adds an Instrument tool in the AudioRouter window (Add tool, then pick the plugin; it needs a file chosen there) and connects it to an output or Mixer. Then list_midi_devices shows keyboards; change_settings on the Instrument with parameters {midiInput: \"keyboard\"} (the on-screen keyboard and play_notes only), \"all\" (every connected keyboard) or a device name from list_midi_devices. With the route playing, play_notes node=<Instrument name> events=[{type:noteOn,note:60,durationMs:500},{type:noteOn,note:64,afterMs:500,durationMs:500}] plays a phrase; events=[{type:allNotesOff}] stops stuck notes. The instrument is silent until a note arrives; if a device is not connected, list_midi_devices says so and no other device is used.\nAlways describe what you changed to the user. Settings are validated: if a call fails, read its message (it names the problem and the allowed choices).";
 
 const NETWORK_PAIRING_RECIPE: &str = "8. Send encrypted audio between computers: update AudioRouter on both peers together. On the sending PC add_tool kind=networkSend with parameters {host: <receiving PC IP>, port: 47777}; connect its input to the audio to send. On the receiving PC add_tool kind=networkReceive with parameters {sender: <sending PC IP>, port: 47777}; connect it to an output or Mixer. Ask the user to Generate a strong Pairing key in Properties and copy it to both peers with change_settings parameters {pairingKey: <same key>}. Never repeat the key in summaries or logs. With a key, audio is encrypted and authenticated and captured packets cannot play after receiver restart. Blank keys mean unencrypted, unpaired audio. Running-audio edits and Play require Operator/device authority; an Editor can prepare the stopped graph.";
 
@@ -3886,6 +3894,70 @@ mod tests {
         assert!(playing, "the pressed slot plays");
         let stopped = tool(&mut plane, "stop_sounds", json!({ "node": "Party Board" }));
         assert_eq!(stopped["nodeId"], "board", "{stopped}");
+    }
+
+    /// The MIDI tools through `mcp_tool_call` (AUTO-18): listing keyboards is a
+    /// read, playing notes needs running-audio control (Operator), and a
+    /// refusal reaches the assistant with a reason it can act on.
+    #[test]
+    fn midi_tools_work_through_mcp_with_the_right_roles() {
+        use audiorouter_domain::{Node, NodeKind, Port, PortDirection, Session};
+        let mut plane = ControlPlane::default();
+        plane
+            .insert_session(Session {
+                id: audiorouter_domain::EntityId::new("band"),
+                name: "band".into(),
+                schema_version: 1,
+                revision: 0,
+                nodes: vec![Node {
+                    id: audiorouter_domain::EntityId::new("piano"),
+                    name: "Grand Piano".into(),
+                    kind: NodeKind::Instrument,
+                    type_version: 1,
+                    enabled: true,
+                    bypass: false,
+                    parameters: Default::default(),
+                    ports: vec![Port {
+                        name: "out".into(),
+                        direction: PortDirection::Output,
+                        channels: 2,
+                    }],
+                }],
+                edges: vec![],
+            })
+            .unwrap();
+        let call = |plane: &mut ControlPlane, role, name: &str, arguments: Value| {
+            let grant = audiorouter_control::ClientGrant::for_role(role);
+            mcp_tool_call(
+                plane,
+                "assistant",
+                &grant,
+                None,
+                &json!({ "id": 1, "params": { "name": name, "arguments": arguments } }),
+            )
+        };
+        use audiorouter_control::ClientRole::{Observer, Operator};
+        let devices = call(&mut plane, Observer, "list_midi_devices", json!({}));
+        assert_eq!(devices["result"]["isError"], false, "{devices}");
+        let listed = &devices["result"]["structuredContent"]["result"];
+        assert!(listed["devices"].is_array(), "{listed}");
+        assert_eq!(
+            mcp_tool_annotations("list_midi_devices")["readOnlyHint"],
+            true
+        );
+        let phrase = json!({ "node": "grand piano", "events": [
+            { "type": "noteOn", "note": 60, "durationMs": 400 },
+            { "type": "noteOn", "note": 64, "afterMs": 400 }
+        ] });
+        // An Observer may not play.
+        let denied = call(&mut plane, Observer, "play_notes", phrase.clone());
+        assert_eq!(denied["result"]["isError"], true, "{denied}");
+        // An Operator is refused only because nothing is playing yet, and the
+        // message says what to do (the node was resolved by its name).
+        let waiting = call(&mut plane, Operator, "play_notes", phrase);
+        assert_eq!(waiting["result"]["isError"], true, "{waiting}");
+        assert!(waiting.to_string().contains("start the route"), "{waiting}");
+        assert_eq!(mcp_tool_annotations("play_notes")["idempotentHint"], false);
     }
 
     /// `check_setup` is a read an Observer may run (UI-27); its session
@@ -6354,7 +6426,7 @@ mod tests {
         let transition_content = transition["result"]["content"][0]["text"].as_str().unwrap();
         let transition_payload: Value = serde_json::from_str(transition_content).unwrap();
         assert_eq!(transition_payload["result"]["transition"], "lock");
-        assert_eq!(mcp_tools().as_array().unwrap().len(), 99);
+        assert_eq!(mcp_tools().as_array().unwrap().len(), 101);
         // The default list is the task-level subset; every default name is a
         // real tool and every tool the recipes mention is in it.
         let all = mcp_tools();

@@ -1,5 +1,5 @@
 {
-  "backendMethods": 126,
+  "backendMethods": 128,
   "operations": [
     {
       "method": "POST",
@@ -252,6 +252,20 @@
       "operation": "soundLibrary.read",
       "permission": "Read",
       "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/midi/devices",
+      "operation": "midi.devices",
+      "permission": "Read",
+      "effect": "ReadOnly"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/midi/sendEvents",
+      "operation": "midi.sendEvents",
+      "permission": "SessionControl",
+      "effect": "Mutating"
     },
     {
       "method": "POST",

@@ -27,6 +27,7 @@ export type NodeKind =
   | "plugin"
   | "audioFile"
   | "soundboard"
+  | "instrument"
   | "volume"
   | "bassTreble"
   | "dehum"
@@ -1469,6 +1470,8 @@ export type ImplementedMethod =
   | "audioMedia.importTemporaryRecording"
   | "audioMedia.delete"
   | "audioSources.transport"
+  | "midi.devices"
+  | "midi.sendEvents"
   | "soundboard.trigger"
   | "soundboard.stop"
   | "soundboard.status"
@@ -1623,6 +1626,32 @@ export type MethodParams = {
   "audioMedia.delete": { mediaId: EntityId };
   "timeShift.transport": { sessionId?: EntityId; nodeId: EntityId; action: "pause" | "resume" | "back" | "forward" | "live" | "status" };
   "audioSources.transport": { sessionId?: EntityId; nodeId: EntityId; action: "play" | "pause" | "stop" | "status" };
+  "midi.devices": undefined;
+  "midi.sendEvents": {
+    /** Optional: the active session. `nodeId` may also be the node's exact name. */
+    sessionId?: EntityId;
+    nodeId: EntityId;
+    /** One to 64 events. Notes start at the next audio block, or `afterMs` later. */
+    events: Array<{
+      type: "noteOn" | "noteOff" | "controlChange" | "pitchBend" | "aftertouch" | "allNotesOff";
+      /** MIDI channel 1-16 (1 when omitted). */
+      channel?: number;
+      /** 0-127; 60 is middle C. */
+      note?: number;
+      /** 1-127 (100 when omitted). */
+      velocity?: number;
+      /** noteOn only: release the note after this many milliseconds (up to 30000). */
+      durationMs?: number;
+      /** Start the event this many milliseconds after the call (up to 30000). */
+      afterMs?: number;
+      /** controlChange: 0-127 (1 modulation, 64 sustain pedal). */
+      controller?: number;
+      /** controlChange or aftertouch value, 0-127. */
+      value?: number;
+      /** pitchBend: -1 (down) to 1 (up). */
+      bend?: number;
+    }>;
+  };
   "soundboard.trigger": {
     /** Optional: the active session. `nodeId` may also be the node's exact name. */
     sessionId?: EntityId;
@@ -1844,6 +1873,13 @@ export type MethodResult = {
   "audioMedia.delete": { deleted: boolean };
   "timeShift.transport": { sessionId: EntityId; nodeId: EntityId; state: "live" | "delayed" | "paused"; delaySeconds: number; bufferedSeconds: number; capacitySeconds: number };
   "audioSources.transport": { sessionId: EntityId; nodeId: EntityId; state: "playing" | "paused" | "stopped"; loop: boolean };
+  "midi.devices": {
+    /** Names of the MIDI keyboards connected now. */
+    devices: string[];
+    /** Instruments of playing routes and the device each listens to. */
+    instruments: Array<{ sessionId: EntityId; nodeId: EntityId; midiInput: string; connected: boolean }>;
+  };
+  "midi.sendEvents": { sessionId: EntityId; nodeId: EntityId; accepted: number; scheduled: number; heldNotes: number };
   "soundboard.trigger": { sessionId: EntityId; nodeId: EntityId; slot: number; accepted: boolean };
   "soundboard.stop": { sessionId: EntityId; nodeId: EntityId; stopped: boolean };
   "soundboard.status": {

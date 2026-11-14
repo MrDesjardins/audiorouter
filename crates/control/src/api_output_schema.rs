@@ -1439,6 +1439,28 @@ fn method_output_schema_impl(name: &str) -> Value {
                 "id": { "type": "string" }, "format": { "enum": ["flac"] }, "dataBase64": { "type": "string" }
             }, "required": ["id", "format", "dataBase64"], "additionalProperties": false
         }),
+        "midi.devices" => json!({
+            "type": "object", "properties": {
+                "devices": { "type": "array", "items": { "type": "string" } },
+                "instruments": { "type": "array", "items": {
+                    "type": "object", "properties": {
+                        "sessionId": { "type": "string" },
+                        "nodeId": { "type": "string" },
+                        "midiInput": { "type": "string" },
+                        "connected": { "type": "boolean" }
+                    }, "required": ["sessionId", "nodeId", "midiInput", "connected"], "additionalProperties": false
+                } }
+            }, "required": ["devices", "instruments"], "additionalProperties": false
+        }),
+        "midi.sendEvents" => json!({
+            "type": "object", "properties": {
+                "sessionId": { "type": "string" },
+                "nodeId": { "type": "string" },
+                "accepted": { "type": "integer", "minimum": 0 },
+                "scheduled": { "type": "integer", "minimum": 0 },
+                "heldNotes": { "type": "integer", "minimum": 0 }
+            }, "required": ["sessionId", "nodeId", "accepted", "scheduled", "heldNotes"], "additionalProperties": false
+        }),
         "soundboard.trigger" => json!({
             "type": "object", "properties": {
                 "sessionId": { "type": "string" },

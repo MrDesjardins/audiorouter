@@ -54,6 +54,8 @@ pub(crate) fn method_description(name: &str) -> &'static str {
         "meters.reset" => "Reset held sample peaks and clipping statistics of one prepared Meter without changing audio or the saved graph.",
         "soundLibrary.list" => "List the built-in sounds for the Soundboard picker: id, title, category, tags, duration and license.",
         "soundLibrary.read" => "Read one built-in sound as base64 FLAC, for previewing in the picker. The preview never goes to a route.",
+        "midi.devices" => "List connected MIDI keyboards, and for each Instrument tool of a playing route which device it listens to and whether that device is connected.",
+        "midi.sendEvents" => "Play notes on a running Instrument tool: note on/off (a note can last durationMs), control change (such as the sustain pedal), pitch bend, aftertouch and all-notes-off. Events start at the next audio block, or afterMs later.",
         "soundboard.trigger" => "Press (or release) one slot of a running Soundboard tool; the sound starts at the next audio block. An optional mode (once, loop, toggle, hold) replaces the slot's own for this press.",
         "soundboard.stop" => "Fade out one slot, or every slot when no slot is given, of a running Soundboard tool.",
         "soundboard.status" => "Which Soundboard slots are loaded and playing, with progress and ignored or dropped triggers.",
@@ -403,6 +405,33 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         "soundLibrary.read" => object_schema(
             json!({ "id": { "type": "string", "minLength": 1, "maxLength": audiorouter_domain::MAX_ENTITY_ID_BYTES } }),
             &["id"],
+        ),
+        "midi.devices" => object_schema(json!({}), &[]),
+        "midi.sendEvents" => object_schema(
+            json!({
+                "sessionId": target_session(),
+                "nodeId": target_node(),
+                "events": {
+                    "type": "array", "minItems": 1, "maxItems": crate::midi::MAX_SEND_EVENTS,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": { "enum": ["noteOn", "noteOff", "controlChange", "pitchBend", "aftertouch", "allNotesOff"] },
+                            "channel": { "type": "integer", "minimum": 1, "maximum": 16, "description": "MIDI channel, 1 when omitted." },
+                            "note": { "type": "integer", "minimum": 0, "maximum": 127, "description": "Note number; 60 is middle C, 69 is A 440 Hz." },
+                            "velocity": { "type": "integer", "minimum": 1, "maximum": 127, "description": "How hard a noteOn is played; 100 when omitted." },
+                            "durationMs": { "type": "integer", "minimum": 0, "maximum": crate::midi::MAX_SCHEDULE_MS, "description": "noteOn only: release the note after this long." },
+                            "afterMs": { "type": "integer", "minimum": 0, "maximum": crate::midi::MAX_SCHEDULE_MS, "description": "Start the event this long after the call." },
+                            "controller": { "type": "integer", "minimum": 0, "maximum": 127, "description": "controlChange: controller number (1 modulation, 64 sustain pedal)." },
+                            "value": { "type": "integer", "minimum": 0, "maximum": 127, "description": "controlChange or aftertouch value." },
+                            "bend": { "type": "number", "minimum": -1.0, "maximum": 1.0, "description": "pitchBend amount from -1 (down) to 1 (up)." }
+                        },
+                        "required": ["type"],
+                        "additionalProperties": false
+                    }
+                }
+            }),
+            &["nodeId", "events"],
         ),
         "soundboard.trigger" => object_schema(
             json!({

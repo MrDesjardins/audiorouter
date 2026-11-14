@@ -48,6 +48,7 @@ method_table! {
         "audioMedia.importTemporaryRecording" => dispatch_audio_media_import_temporary_recording,
         "audioMedia.delete" => dispatch_audio_media_delete,
         "soundLibrary.read" => dispatch_sound_library_read,
+        "midi.devices" => dispatch_midi_devices,
         "recorders.list" => dispatch_recorders_list,
         "recorders.create" => dispatch_recorder_create,
         "devices.setAccess" => dispatch_device_access_set,
@@ -167,6 +168,7 @@ method_table! {
     }
     target {
         "audioSources.transport" => dispatch_audio_source_transport,
+        "midi.sendEvents" => dispatch_midi_send_events,
         "soundboard.trigger" => dispatch_soundboard_trigger,
         "soundboard.stop" => dispatch_soundboard_stop,
         "soundboard.status" => dispatch_soundboard_status,

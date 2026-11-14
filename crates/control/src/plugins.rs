@@ -1243,6 +1243,18 @@ impl ControlPlane {
                 bridges.insert((session.id.clone(), id.clone()), Arc::downgrade(bridge));
             }
         }
+        // Instruments hear their MIDI device from the moment their route
+        // starts; devices of instruments that stopped are closed first.
+        self.prune_instrument_midi();
+        for (id, bridge) in &started {
+            if let Some(node) = session
+                .nodes
+                .iter()
+                .find(|node| &node.id == id && node.kind == NodeKind::Instrument)
+            {
+                self.connect_instrument_midi(&session.id, node, bridge);
+            }
+        }
         Ok(started
             .into_iter()
             .map(|(id, bridge)| (id, bridge as Arc<dyn RealtimePluginProcessor>))

@@ -866,7 +866,7 @@ fn play_applies_only_sliders_moved_since_the_state_was_captured() {
 #[ignore = "needs the built VST2 worker and the test instrument DLL"]
 fn an_instrument_node_starts_a_worker_and_plays_midi() {
     use audiorouter_domain::{Node, Port};
-    use audiorouter_plugin_host::{inspect_binary, MidiEvent};
+    use audiorouter_plugin_host::inspect_binary;
     let dll = std::path::PathBuf::from(
         std::env::var_os("AUDIOROUTER_TEST_VST2_INSTRUMENT").expect("test instrument path"),
     );
@@ -926,10 +926,41 @@ fn an_instrument_node_starts_a_worker_and_plays_midi() {
         peak
     };
     assert!(peak(40) < 1e-6, "silent until a note arrives");
-    bridge
-        .midi_queue()
-        .push(&[MidiEvent::new(0, 0x90, 69, 120).unwrap()]);
+    // Play it the way a client does: through the dispatcher, the node named
+    // rather than identified, on a session whose runtime is running.
+    let mut plane = ControlPlane::default();
+    plane.insert_session(session.clone()).unwrap();
+    let mut runtime = audiorouter_domain::FakeRuntime::default();
+    runtime.prepare(&session).unwrap();
+    runtime.start().unwrap();
+    plane.runtimes.insert(session.id.clone(), runtime);
+    plane
+        .plugin_bridges
+        .lock()
+        .unwrap()
+        .insert((session.id.clone(), id.clone()), Arc::downgrade(bridge));
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(1)),
+        method: "midi.sendEvents".into(),
+        params: Some(json!({ "nodeId": "PIANO", "events": [
+            { "type": "noteOn", "note": 69, "velocity": 120 }
+        ] })),
+    });
+    let result = response.result.expect("midi.sendEvents plays");
+    assert_eq!(result["accepted"], json!(1));
+    assert_eq!(result["heldNotes"], json!(1));
     assert!(peak(40) > 0.1, "the held note sounds");
+    // The panic button releases it and the output falls silent again.
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!(2)),
+        method: "midi.sendEvents".into(),
+        params: Some(json!({ "nodeId": "piano", "events": [{ "type": "allNotesOff" }] })),
+    });
+    assert_eq!(response.result.expect("panic")["heldNotes"], json!(0));
+    peak(20);
+    assert!(peak(40) < 1e-6, "silent after all notes off");
     // With no request for it, the instrument node starts nothing.
     assert!(start_plugin_bridges(&session, vec![], 48_000)
         .unwrap()

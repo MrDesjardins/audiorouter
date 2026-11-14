@@ -945,7 +945,7 @@ pub struct ApiMethodSpec {
     pub side_effect: SideEffectClass,
 }
 
-pub const API_METHODS: [ApiMethodSpec; 148] = [
+pub const API_METHODS: [ApiMethodSpec; 150] = [
     ApiMethodSpec {
         name: "meters.reset",
         permission: PermissionScope::SessionControl,
@@ -1131,6 +1131,16 @@ pub const API_METHODS: [ApiMethodSpec; 148] = [
         name: "soundLibrary.read",
         permission: PermissionScope::Read,
         side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "midi.devices",
+        permission: PermissionScope::Read,
+        side_effect: SideEffectClass::ReadOnly,
+    },
+    ApiMethodSpec {
+        name: "midi.sendEvents",
+        permission: PermissionScope::SessionControl,
+        side_effect: SideEffectClass::Mutating,
     },
     ApiMethodSpec {
         name: "soundboard.trigger",

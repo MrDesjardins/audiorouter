@@ -63,6 +63,7 @@ mod cable_routes;
 mod catalog;
 mod dispatch_methods;
 mod graph;
+mod midi;
 mod native_application;
 mod native_bindings;
 mod native_dispatch;
@@ -378,6 +379,9 @@ pub struct ControlPlane {
             std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>,
         >,
     >,
+    /// MIDI devices feeding running instruments, by (session, node). Closed
+    /// when the instrument's bridge is gone.
+    instrument_midi: std::sync::Mutex<HashMap<(EntityId, EntityId), midi::InstrumentMidiInputs>>,
     /// Plugin workers started only so an editor can open while the session is
     /// stopped; they hold the bridge alive until the editor closes.
     editor_only_plugins: std::sync::Mutex<
@@ -568,6 +572,7 @@ impl ControlPlane {
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
             plugin_bridges: Default::default(),
+            instrument_midi: Default::default(),
             editor_only_plugins: Default::default(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted: false,

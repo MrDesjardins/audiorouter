@@ -32,7 +32,7 @@ Encoder reply waits share one shutdown deadline. A timed-out writer is
 reported failed/recoverable; its thread keeps the file until the I/O returns,
 and shutdown does not wait indefinitely for that thread to exit.
 
-The current catalog contains 148 methods, including backend-owned quit/finalize,
+The current catalog contains 150 methods, including backend-owned quit/finalize,
 session portability, bounded WAV/MP3 media import, source transport, recorder
 lifecycle, plugin inventory/retry, and startup plan/apply methods.
 
@@ -91,6 +91,8 @@ See [network privacy and permissions](privacy-permissions.md#audio-privacy-bound
 | `recovery.clearSafeMode` | `sessionControl` | mutating; requires an idempotency key |
 | `soundLibrary.list` | `read` | read-only; bundled sound library manifest |
 | `soundLibrary.read` | `read` | read-only; one bundled sound as base64 for preview |
+| `midi.devices` | `read` | read-only; connected MIDI keyboards (by name) and, for each Instrument of a playing route, the device it listens to and whether it is connected; MCP tool `list_midi_devices` |
+| `midi.sendEvents` | `sessionControl` | mutating; plays notes on a running Instrument: up to 64 `events` (`noteOn` with optional `durationMs`, `noteOff`, `controlChange`, `pitchBend`, `aftertouch`, `allNotesOff`), each optionally `afterMs` later; no idempotency key because a repeat plays again; `sessionId` optional (active session), `nodeId` an ID or exact name; MCP tool `play_notes` |
 | `soundboard.trigger` | `sessionControl` | mutating; plays a slot, no idempotency key because a repeat press plays again; optional per-press `mode`; `sessionId` optional (active session), `nodeId` an ID or exact name |
 | `soundboard.stop` | `sessionControl` | mutating; fades out one slot or all voices; same addressing as `soundboard.trigger` |
 | `soundboard.status` | `read` | read-only; live voices per slot; same addressing as `soundboard.trigger` |

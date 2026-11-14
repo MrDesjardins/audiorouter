@@ -225,6 +225,8 @@ pub(crate) fn validate_method_params(
         "audioMedia.delete" => &["mediaId"],
         "soundLibrary.list" => &[],
         "soundLibrary.read" => &["id"],
+        "midi.devices" => &[],
+        "midi.sendEvents" => &["sessionId", "nodeId", "events"],
         "soundboard.trigger" => &["sessionId", "nodeId", "slot", "action", "mode"],
         "soundboard.stop" => &["sessionId", "nodeId", "slot"],
         "soundboard.status" => &["sessionId", "nodeId"],
