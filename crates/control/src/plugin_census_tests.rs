@@ -305,3 +305,54 @@ fn census_markdown(report: &serde_json::Value) -> String {
     }
     text
 }
+
+/// Regression (2026-11-13): an instrument whose scan metadata says nothing
+/// (Surge XT, PatchWork Synth) was listed as a supported effect. After the
+/// first load attempt, the worker's refusal must change the next scan.
+#[test]
+#[ignore = "requires AUDIOROUTER_TEST_INSTRUMENT (an instrument plugin) and the packaged workers"]
+fn an_instrument_refused_at_load_is_listed_as_an_instrument_afterwards() {
+    let path = PathBuf::from(std::env::var_os("AUDIOROUTER_TEST_INSTRUMENT").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let mut plane = ControlPlane::default();
+    let mut call = |method: &str, params: serde_json::Value| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        })
+    };
+    let compatibility = |response: &JsonRpcResponse| {
+        response.result.as_ref().unwrap()["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| {
+                entry["path"]
+                    .as_str()
+                    .is_some_and(|text| Path::new(text) == path)
+            })
+            .map(|entry| {
+                entry["identity"]["compatibility"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned()
+            })
+            .unwrap()
+    };
+    let first = call("plugins.scan", json!({ "directory": root }));
+    assert!(
+        compatibility(&first).starts_with("supported"),
+        "precondition: the scan cannot see an instrument: {}",
+        compatibility(&first)
+    );
+    let refused = call("plugins.parameters", json!({ "path": path }));
+    let message = refused
+        .error
+        .expect("the worker refuses an instrument")
+        .message;
+    assert!(message.contains("instrument"), "{message}");
+    let second = call("plugins.scan", json!({ "directory": root }));
+    assert_eq!(compatibility(&second), "unsupportedInstrument");
+}

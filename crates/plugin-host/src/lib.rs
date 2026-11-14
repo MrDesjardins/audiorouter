@@ -416,9 +416,34 @@ pub struct PluginIdentity {
     pub metadata: PluginMetadata,
 }
 
+/// Binaries (by SHA-256) a worker refused as instruments when it loaded them.
+/// A scan never runs plugin code, so a VST2 DLL (no metadata file) or a VST3
+/// module without `moduleinfo.json` only reveals that it is an instrument at
+/// load; remembering it keeps the next scan result honest.
+static LEARNED_INSTRUMENTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Record the worker's refusal text; returns whether it named an instrument.
+pub fn note_instrument_refusal(sha256: &str, message: &str) -> bool {
+    if !message.contains("is an instrument") {
+        return false;
+    }
+    if let Ok(mut learned) = LEARNED_INSTRUMENTS.lock() {
+        if !learned.iter().any(|known| known == sha256) && learned.len() < 4096 {
+            learned.push(sha256.to_owned());
+        }
+    }
+    true
+}
+
+fn learned_instrument(sha256: &str) -> bool {
+    LEARNED_INSTRUMENTS
+        .lock()
+        .is_ok_and(|learned| learned.iter().any(|known| known == sha256))
+}
+
 impl PluginIdentity {
     pub fn compatibility(&self) -> PluginCompatibility {
-        if self.metadata.instrument
+        if (self.metadata.instrument || learned_instrument(&self.sha256))
             && matches!(self.architecture, PeArchitecture::X64 | PeArchitecture::X86)
             && self.format != PluginFormat::Unknown
         {
@@ -7963,6 +7988,49 @@ mod tests {
             .iter()
             .any(|entry| entry.path.ends_with("bundle.vst3")));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    /// Regression (2026-11-13): Surge XT and PatchWork Synth were listed as
+    /// supported effects because a scan cannot see inside the binary; a worker
+    /// refusal is remembered so the next scan lists them as instruments.
+    #[test]
+    fn a_worker_refusal_makes_the_next_scan_list_an_instrument() {
+        let identity = PluginIdentity {
+            path: PathBuf::from("synth.dll"),
+            binary_path: PathBuf::from("synth.dll"),
+            format: PluginFormat::Vst2,
+            architecture: PeArchitecture::X64,
+            file_bytes: 1,
+            sha256: "ab".repeat(32),
+            metadata: Default::default(),
+        };
+        #[cfg(windows)]
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst2X64Gated
+        );
+        // Other failures are not instruments.
+        assert!(!note_instrument_refusal(&identity.sha256, "worker crashed"));
+        #[cfg(windows)]
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst2X64Gated
+        );
+        assert!(note_instrument_refusal(
+            &identity.sha256,
+            "VST2 load failed: VST2 plugin is an instrument; AudioRouter hosts audio effects only"
+        ));
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::UnsupportedInstrument
+        );
+        // Only that binary.
+        let mut other = identity.clone();
+        other.sha256 = "cd".repeat(32);
+        assert_ne!(
+            other.compatibility(),
+            PluginCompatibility::UnsupportedInstrument
+        );
     }
 
     /// Regression (2026-11-13): a 32-bit VST3 bundle keeps its binary in

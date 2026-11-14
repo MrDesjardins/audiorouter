@@ -288,7 +288,13 @@ pub(crate) fn start_plugin_bridges(
                 Instant::now(),
             )
         }
-        .map_err(|error| not_ready(format!("Plugin worker launch failed: {error}")))?;
+        .map_err(|error| {
+            let message = format!("Plugin worker launch failed: {error}");
+            if members.len() == 1 {
+                audiorouter_plugin_host::note_instrument_refusal(&members[0].0.sha256, &message);
+            }
+            not_ready(message)
+        })?;
         for (index, (_, _, _, state, _)) in members.iter().enumerate() {
             if let Some(asset) = state {
                 if members.len() > 1 {
@@ -1936,7 +1942,11 @@ impl ControlPlane {
                 Instant::now(),
             )
         }
-        .map_err(|error| ControlError::InvalidRequest(format!("plugin worker launch failed: {error:?}")))?;
+        .map_err(|error| {
+            let message = format!("plugin worker launch failed: {error:?}");
+            audiorouter_plugin_host::note_instrument_refusal(&identity.sha256, &message);
+            ControlError::InvalidRequest(message)
+        })?;
         let mut worker = worker;
         let parameters = worker
             .describe_parameters(Instant::now())
