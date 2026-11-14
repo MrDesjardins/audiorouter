@@ -73,7 +73,7 @@ The ranges below include every normative ID; each milestone must attach evidence
 | DSP-06, PLUG-01–06 | M06 | UC-02/06, pitch/worker/format evidence |
 | DSP-10–18 | M04/M05 | UC-02, DSP/engine response, latency and bounds tests; local voice-sample qualification in [active evidence](../plans/active/evidence/2026-09-27-voice-tools.md). Combination coverage and release gates remain tracked in the active plan. |
 | REC-01–08, REC-10–12 | M04/M05 | UC-08, frame/file/path tests |
-| PLUG-07 | M06 extension/M08 | Native x64 VST2 adapter, worker containment, rights, compatibility, and failure evidence |
+| PLUG-07 | M06 extension/M08 | VST2 adapter (x64/x86, effects/instruments), worker containment, rights, compatibility census, and failure evidence |
 | REC-09 | M04/M07 | UC-08, crash/disk-failure recovery |
 | UI-01–15 | M05/M07 | UC-01–10, keyboard/Narrator/usability |
 | UI-16 | M05 extension (2026-09-29) | Named visual groups, persistence, no audio changes, three-theme hit testing |
@@ -151,7 +151,7 @@ These decisions are the proposed baseline for implementation. Evidence may chang
 | DEC-05 | Per-user background engine, sign-in startup | Baseline; separate user capture from privileged driver lifecycle |
 | DEC-06 | 48 kHz float32, initial 128-frame quantum | Retained as the graph baseline; native endpoint formats and process-loopback evidence exist, but physical latency/quantum measurements are still required before making the quantum final |
 | DEC-07 | Managed persistent driver, not user-mode-only virtual microphones | Superseded for v1 by DEC-16; restored by DEC-18 (2026-10-05) for the AudioRouter cable |
-| DEC-08 | VST3 x64 plus built-ins; gated legacy VST2 x64 extension | Baseline release path remains VST3 plus built-ins; the explicitly approved PLUG-07 extension adds contained x64 VST2 effects only after ABI, rights, worker, editor, compatibility, and release evidence is complete |
+| DEC-08 | VST3 and VST2, x64 and x86, effects and instruments (revised 2026-11-13) | Owner decision 2026-11-13: support all VST2/VST3, including 32-bit and MIDI instruments, because users report plugins that fail. Each part ships only with ABI, rights, worker, editor, compatibility and release evidence; see the [full compatibility plan](../plans/active/vst-full-compatibility.md) |
 | DEC-09 | Explicit virtual desktop render route; capture-only app sources | Baseline; automatic capture-and-mute not assumed |
 | DEC-10 | Protected voice paths silence on effect failure | Baseline; deliberate user bypass is a separate action |
 | DEC-11 | SQLite + versioned portable bundle | Baseline; journal/import safety tested before recovery claims |
