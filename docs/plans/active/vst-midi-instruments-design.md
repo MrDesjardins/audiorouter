@@ -1,0 +1,107 @@
+# MIDI input and instrument plugins: design (phase P8b)
+
+Status: design for review, 2026-11-13. Part of the
+[full VST compatibility plan](vst-full-compatibility.md); owner decision D1
+(2026-11-13): instruments and MIDI are in scope. Nothing here is built yet;
+the rules in AGENTS.md (every source works in every layout, REST and MCP kept
+current, guides for new tools) decide the order.
+
+## What the owner gets
+
+A user adds an **Instrument** tool, picks a VST2 or VST3 instrument and a MIDI
+keyboard, connects it like any other source (to an output, a Mixer, several
+outputs), and plays. An on-screen keyboard and an API call can play notes too,
+so it works without hardware, from Stream Deck and from an assistant.
+
+## Constraints from the code (2026-11-13 survey)
+
+- A `Plugin` node processes through `RealtimePluginProcessor::process(&self,
+  &mut AudioBlock)`: a bounded hand-off to a worker process; the callback never
+  waits (PLUG-03). An instrument can use the same processor with an ignored
+  silent input and replace the block with the worker's output.
+- Sources (Test Signal, Audio File, Soundboard) are classified in several
+  hand-written lists (`connected_mixers.rs:82`, `engine/lib.rs:7896`, `8695`,
+  `8749`, `8816`). The AGENTS rule demands an exhaustive `match`.
+- The worker protocol is JSON over a pipe plus shared audio buffers
+  (`WorkerMessage`). Sample-accurate parameter events already ride along;
+  MIDI can use the same idea.
+- The VST2 header check refuses `effFlagsIsSynth` (phase P1) and allows no
+  instrument with zero audio inputs; the VST3 worker refuses instruments at
+  load.
+
+## Design
+
+1. **Node kind.** `NodeKind::Instrument`: a source (no input port; one output
+   port, mono or stereo). Parameters: `path`, `format`, `classId`,
+   `fingerprint`, `stateId`, `pluginParameter:N` (same as `Plugin`), and
+   `midiInput` = a MIDI device id, `"keyboard"` (the on-screen keyboard and API
+   only) or `"all"`. Classified in every source list by an exhaustive match; it
+   is added to `source_combinations.rs` (alone, fan-out, in a Mixer, in
+   connected Mixers).
+2. **Realtime path.** The instrument stage reuses the plugin processor trait:
+   the engine hands it a silent block; the processor drains a lock-free MIDI
+   queue (fixed capacity, no allocation) into the frame it posts to the worker
+   and replaces the block with the worker's output (same late-result rule as
+   effects: silence, never stale audio).
+3. **MIDI wire.** New one-way message `WorkerMessage::MidiEvents { events }`,
+   sent before the `Process*` message of the block they belong to; each event is
+   `{ sampleOffset < 2048, status, data1, data2 }`, bounded count per block.
+   The worker keeps them until the next process call. The VST3 worker's tiny
+   JSON reader gets a matching field.
+4. **VST2 worker.** Opcode `effProcessEvents` (25) with a `VstEvents` block of
+   `VstMidiEvent`s (32 bytes each, same layout 32- and 64-bit) before
+   `processReplacing`; instruments may declare 0 inputs; `audioMasterWantMidi`
+   already answers 1. Header validation gains an instrument mode chosen by the
+   node kind, not by guessing.
+5. **VST3 worker.** An `IEventList` in `ProcessData.inputEvents` with
+   `kNoteOnEvent`/`kNoteOffEvent` (plus pitch bend, CC through `IMidiMapping`
+   parameter changes); activate the event input bus and zero audio input buses;
+   `IParameterChanges` for CC and pitch bend as the SDK recommends.
+6. **MIDI input.** A `MidiInputHub` in the control crate using `winmm`
+   (`midiInGetNumDevs`, `midiInOpen` with a callback) feeding one bounded queue
+   per instrument; the callback only pushes. Device lists are read on request,
+   hot-unplug is reported (never silently switched, as for microphones).
+7. **API (AUTO-18).** New methods: `midi.devices` (read), `midi.sendEvents`
+   (note on/off, control change, pitch bend, all-notes-off for a node; used by the
+   on-screen keyboard, Stream Deck and assistants), and the Instrument kind in
+   `list_tool_kinds` with `node_parameter_schema`. Authorization: `midi.sendEvents`
+   needs session control (Operator); `midi.devices` is read-only. Default MCP
+   tools: `list_midi_devices`, `play_notes`; a `get_recipes` entry
+   ("play an instrument").
+8. **UI.** Add-tool entry for Instrument in the library; Properties: plugin
+   picker (as Plugin), MIDI device select, an on-screen keyboard (a row of keys
+   plus octave shift; reserved size, no layout shift), panic button. Guide
+   videos and the property coverage manifest per the website rule.
+9. **Failure policy.** A failed instrument worker plays silence until recovery
+   (as for effects); stuck notes are released on worker restart, route stop and
+   device removal (all-notes-off).
+
+## Order of work (each step ends with tests and a commit)
+
+1. Worker protocol: `MidiEvent`, `MidiEvents` message, validation, round-trip
+   tests (host side only).
+2. VST2 worker: instrument mode, `effProcessEvents`; test with a real VST2
+   instrument (a free one such as Cardinal's or Surge-class VST2 build).
+3. VST3 worker: event bus and `IEventList`; test with Surge XT and RipplerX
+   (installed in the census corpus).
+4. Runtime bridge: instrument processor, queue, stuck-note release; test with a
+   real worker and generated notes (output must be audible and finite).
+5. Domain + engine: `NodeKind::Instrument`, exhaustive classification, source
+   combination suite, tool combination suite.
+6. Control/API/MCP: methods, authorization, schemas, tools, recipes, drift
+   check, reachability test, `mcp_tool_call` test.
+7. MIDI hardware input (`winmm`), device list, unplug handling.
+8. UI, on-screen keyboard, guide videos, site pages; Firefox playback check.
+9. Run the built exe with a real instrument and the keyboard; a real MIDI
+   device only if the owner has one (none is assumed).
+
+## Risks and open questions
+
+- No MIDI hardware is known on this PC; steps 1-6 need none, step 7 can only
+  be unit-tested with a fake device source and checked for "no devices" on the
+  real machine.
+- A fully general VST3 event/parameter mapping (MPE, expression) is larger than
+  notes, CC and pitch bend; those three are the target.
+- Instruments differ in latency; plugin latency already feeds the route delay
+  display.
+- Guide videos need recording tooling and Firefox; they come last.

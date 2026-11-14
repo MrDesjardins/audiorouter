@@ -321,8 +321,10 @@ VST2 at load; 32-bit VST2 and VST3 hosting (workers, detection, packaging
 scripts), exercised with real 32-bit plugins; census tool plus two corpus
 runs. Not started: P8b MIDI source and instrument nodes (the largest piece),
 P2/P3 conformance gaps (opcodes and interfaces listed above), P4 layouts, P5
-sidechain, P6 stopped-session editors, P7 shared VST3 worker, P9 release gate,
-and rebuilding the desktop exe/installer with the x86 workers (not run).
+sidechain, P7 shared VST3 worker and P9 release gate. Added later the same day
+(see the sections below): P2 step 1 (VST2 host callback), P6 step 1 (editor
+before Play) and the packaging check (next section). The design for P8b is in
+[vst-midi-instruments-design.md](vst-midi-instruments-design.md).
 
 ## P2 step 1 (2026-11-13): VST2 host callback
 
@@ -361,3 +363,20 @@ and rebuilding the desktop exe/installer with the x86 workers (not run).
   has no running check, per grep, but it was not launched).
 - Still open in P6: user-resizable editors, keyboard focus, monitor/DPI moves,
   vendor dialogs owned by the editor window.
+
+## Packaging check with the x86 workers (2026-11-13)
+
+- `tools/build-desktop.ps1` (release, with the UI build) finished with exit 0
+  and verified six binaries in `src-tauri/target/release`: shell, CLI,
+  `audiorouter-plugin-worker`, `audiorouter-vst3-worker` and the two `-x86`
+  workers. SHA-256 values are in the script output (shell `F1CD195B...`,
+  x86 Rust worker `B2FD867E...`, x86 VST3 worker `F1E8236F...`).
+- The shell exe (23:20) is newer than `ui/dist/index.html` (23:19), and the
+  embedded bundle contains `supportedVst3X86`.
+- `fresh_install_shell` (`AUDIOROUTER_SHELL_EXE` = that exe, `--ignored`; new
+  database, no developer variables, no other shell running): passed. The backend
+  answered `status.get` 134 ms after launch; a raw caller is refused
+  `DeviceAdministration`, as intended.
+- Not run: the installer build (`prepare-artifacts.ps1`) and its hook test; CI
+  still needs the i686 target installed (`rust-toolchain.toml` lists it, the
+  workflows were not changed or run); the shell was not driven by eye.
