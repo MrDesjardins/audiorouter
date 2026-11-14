@@ -1,5 +1,35 @@
 # Active plan — current priorities (2026-11-04)
 
+## Publish daily quality history — 2026-11-14
+
+Owner reported that `docs/quality-history.csv` on `main` stopped updating.
+Since 2026-10-21 the nightly only uploaded proposed files because `main`
+requires a pull request and the `Quality gate`, and the proposed CSV started
+from the stale main copy, so the rows collected after 2026-10-21 never reached
+it. Requirements: ENG-01/02/04 and NFR-04/05/06.
+
+Decision (owner, 2026-11-14): publish the durable daily CSV and SVG to the
+unprotected `quality-data` branch, as `code-stats-data` and `metrics-data`
+already do, and link README there. `main` keeps no generated quality history;
+no workflow gets a branch-protection bypass.
+
+Tasks: add `quality-history.yml`, which runs after the nightly, downloads
+`quality-history-collected`, merges it with the rows already published (so a
+re-run or an evicted cache cannot duplicate or truncate history), renders the
+chart and pushes to `quality-data`; remove the artifact-only publisher and the
+stale README table; extend the quality policy tests and runbook. Rollback:
+revert this scoped commit; the branch can stay as an inert data branch.
+
+Validation on Windows 2026-11-14: `node tools/quality/verify.mjs --checks
+policy` passed 86 tests, including the new merge/chart tests, and `--checks
+docs` passed 267 files / 1,489 links. The merge and chart commands were run
+against the real `quality-history-collected` artifact of run 43585111559: 39
+rows (Oct 8-Nov 14) survived, the SVG parsed as XML, and a second merge was
+byte-identical. Actionlint 1.7.12 passed on every workflow. The branch does not
+exist yet, so the hosted publisher, README links and the next nightly remain
+unverified until the change reaches `main` and `Quality history (daily)` is
+dispatched. Next: owner approval to commit and open the PR.
+
 ## Resilience audit — 2026-11-13
 
 Owner requested a read-only investigation of resilience and fault tolerance

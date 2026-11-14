@@ -273,29 +273,16 @@ job summary. Coverage is never a gate. Run the soak locally with
 
 #### Automated quality and performance
 
-The table is refreshed after successful coverage, engine soak and startup
-runs on `main`. It links to the measured source commit and exact workflow run.
-Coverage is informational: it measures test execution, not audio quality,
-hardware compatibility, or release readiness. The badges above show current
-CI and nightly quality workflow status, including failures.
+The nightly quality run measures coverage, engine soak and fresh-install
+startup on `main` and records a row for each run, with the measured commit, in
+the [quality history](https://github.com/MrDesjardins/audiorouter/blob/quality-data/docs/quality-history.csv).
+That table and the chart below live on the unprotected `quality-data` branch so
+they can update every day; `main` requires a reviewed pull request. Coverage is
+informational: it measures test execution, not audio quality, hardware
+compatibility, or release readiness. The badges above show current CI and
+nightly quality workflow status, including failures.
 
-<!-- quality-stats:start -->
-Updated 2026-10-21 (UTC) from [`b4bbbef5`](https://github.com/MrDesjardins/audiorouter/commit/b4bbbef57f56598d50dcf3b5cabc25b7093a1e70) · [quality run #39570183964](https://github.com/MrDesjardins/audiorouter/actions/runs/39570183964).
-
-| Check | Latest result |
-| --- | --- |
-| Rust workspace coverage | 78.3% (67318/85948) lines · 71.2% (5734/8058) functions · 80.1% (104124/130012) regions |
-| Portable Rust coverage | 87.7% (36536/41659) lines · 86.6% (3265/3769) functions · 88.5% (56621/63954) regions |
-| Desktop shell coverage | 56.8% (3539/6232) lines · 52.0% (326/627) functions · 57.2% (5631/9846) regions |
-| UI (Vitest) coverage | 68.5% (5444/7947) lines · 65.7% (1743/2654) functions · 62.4% (5322/8533) branches |
-| Engine soak | PASS · p99 123 µs, p99.9 175 µs per quantum · in-process heap 0.0 KiB · process heap 0.0 MiB · 17836735 quanta |
-| Fresh-install backend readiness | 138 ms to first backend response on the hosted Windows runner; UI-ready time is not measured |
-<!-- quality-stats:end -->
-
-Historical performance (the last 90 successful runs; the full history is in
-[`docs/quality-history.csv`](docs/quality-history.csv)):
-
-![Engine timing, memory growth, and backend startup over successful nightly quality runs](docs/quality-history.svg)
+![Engine timing, memory growth, and backend startup over recorded nightly quality runs](https://raw.githubusercontent.com/MrDesjardins/audiorouter/quality-data/docs/quality-history.svg)
 
 Format with `cargo fmt --all` and
 `cargo fmt --manifest-path src-tauri/Cargo.toml`, and the UI with
