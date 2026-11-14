@@ -344,6 +344,7 @@ before Play) and the packaging check (next section). The design for P8b is in
   read) and `wantMidi`.
 - Verified: unit tests; census of the VST2 plugins in `C:\Program Files\VSTPlugins`
   (ReaPlugs, Pitchproof), Dragonfly and 32-bit ReaPlugs: no change in results.
+- P2 step 2 (2026-11-14): `effStartProcess`/`effStopProcess` bracket the mains switch (setup, format change, close) and `ioChanged` now suspends and resumes the plugin once per request (`apply_io_change`), both pinned by a recording-dispatcher test.
 - Open in P2: plugin-side opcodes (bypass, programs, `effCanDo`, shell
   plugins, `.fxp/.fxb`), acting on `io_changed`, old `process` fallback.
 

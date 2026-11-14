@@ -965,6 +965,8 @@ fn process_vst2_frame(
     let mut input_channels = vec![vec![0.0_f32; frames]; plugin.input_channels()];
     let mut output_channels = vec![vec![0.0_f32; frames]; plugin.output_channels()];
     spread_graph_to_plugin_inputs(&frame.samples, channels, &mut input_channels);
+    // A plugin that reported an I/O change is suspended and resumed first.
+    plugin.apply_io_change();
     plugin
         .set_processing_format(
             sample_rate_hz as f32,

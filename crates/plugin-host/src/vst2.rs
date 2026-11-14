@@ -630,6 +630,14 @@ mod opcode_tests {
         OPCODES.with(|codes| codes.borrow_mut().clear());
         library.set_processing_format(48_000.0, 128).unwrap();
         library.set_processing_format(44_100.0, 128).unwrap();
+        // A plugin that asks for an I/O change is suspended and resumed once.
+        assert!(!library.apply_io_change());
+        library
+            .host_context
+            .io_changed
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(library.apply_io_change());
+        assert!(!library.apply_io_change());
         drop(library);
         let seen = OPCODES.with(|codes| codes.borrow().clone());
         let (rate, block, mains, start, stop, close) = (
@@ -646,7 +654,9 @@ mod opcode_tests {
                 // First format: nothing to stop yet.
                 rate, block, mains, start,
                 // New format: stop, mains off, set up again, mains on, start.
-                stop, mains, rate, block, mains, start, // Close: stop, mains off, close.
+                stop, mains, rate, block, mains, start,
+                // ioChanged: stop, mains off, mains on, start.
+                stop, mains, mains, start, // Close: stop, mains off, close.
                 stop, mains, close,
             ]
         );
@@ -1516,6 +1526,31 @@ impl Vst2Library {
         }
         crate::WorkerLatency::new(samples as u32, sample_rate_hz)
             .map_err(|_| Vst2LibraryError::InvalidState)
+    }
+
+    /// Acts on `audioMasterIOChanged`: a plugin that changed its latency or
+    /// pins asks the host to suspend and resume it. Cycles the mains switch
+    /// (with stop/start process around it) once per request and reports
+    /// whether it did, so the caller can re-read the latency. Pin counts are
+    /// not renegotiated: a changed layout is caught by the channel checks.
+    pub fn apply_io_change(&mut self) -> bool {
+        let requested = self
+            .host_context
+            .io_changed
+            .swap(false, std::sync::atomic::Ordering::Relaxed);
+        if !requested || self.processing_format.is_none() {
+            return false;
+        }
+        // SAFETY: the effect is owned by this handle and the call is made on
+        // the worker control thread, like the other setup opcodes.
+        unsafe {
+            let dispatcher = (*self.effect).dispatcher.expect("validated dispatcher");
+            dispatcher(self.effect, EFF_STOP_PROCESS, 0, 0, ptr::null_mut(), 0.0);
+            dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 0, ptr::null_mut(), 0.0);
+            dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 1, ptr::null_mut(), 0.0);
+            dispatcher(self.effect, EFF_START_PROCESS, 0, 0, ptr::null_mut(), 0.0);
+        }
+        true
     }
 
     /// Delivers the MIDI events whose offsets lie in `start..end` to the
