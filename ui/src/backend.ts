@@ -246,6 +246,13 @@ export interface UiBackend {
   ): Promise<MethodResult["soundboard.trigger"]>;
   soundboardStop?(sessionId: string, nodeId: string, slot?: number): Promise<MethodResult["soundboard.stop"]>;
   soundboardStatus?(sessionId: string, nodeId: string): Promise<MethodResult["soundboard.status"]>;
+  /** Instrument: MIDI keyboards connected now, and the notes the on-screen keyboard sends. */
+  midiDevices?(): Promise<MethodResult["midi.devices"]>;
+  midiSendEvents?(
+    sessionId: string,
+    nodeId: string,
+    events: MethodParams["midi.sendEvents"]["events"],
+  ): Promise<MethodResult["midi.sendEvents"]>;
   /** Retry a plugin silenced for passing a recording device's audio through unchanged. */
   resumePlugin?(sessionId: string, nodeId: string): Promise<MethodResult["plugins.resume"]>;
   soundLibraryList?(): Promise<MethodResult["soundLibrary.list"]>;
@@ -909,6 +916,12 @@ export function createLiveBackend(
     },
     async soundboardStatus(currentSessionId, nodeId) {
       return client.request("soundboard.status", { sessionId: currentSessionId, nodeId });
+    },
+    async midiDevices() {
+      return client.request("midi.devices", undefined);
+    },
+    async midiSendEvents(currentSessionId, nodeId, events) {
+      return client.request("midi.sendEvents", { sessionId: currentSessionId, nodeId, events });
     },
     async resumePlugin(currentSessionId, nodeId) {
       return client.request("plugins.resume", { sessionId: currentSessionId, nodeId });

@@ -41,6 +41,7 @@ import { NetworkNodeEditor } from "./NetworkNodeEditor";
 import { EqSpectrumContext } from "./AdvancedEqEditor";
 import { writeEndpointBindingHint } from "./endpointBinding";
 import { recorderHasCaptureSource } from "./RecordingPanels";
+import { InstrumentNodeEditor } from "./InstrumentNodeEditor";
 import { PluginEditorControls, PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
 import {
   ApplicationCaptureBinding,
@@ -613,6 +614,25 @@ export function PropertiesPanel({
               recordDraftChange(removeNodeDraftParameters(draft, selectedNode.id, names), `${selectedNode.id}:remove`)
             }
           />
+        )}
+        {selectedNode.kind === "instrument" && (
+          <>
+            <PluginEditorControls
+              node={selectedNode}
+              backend={backend}
+              sessionId={session.id}
+              running={sessionRunning}
+              onStateSaved={(stateId) => changeNodeParameterOn(selectedNode.id, "stateId", stateId)}
+            />
+            <InstrumentNodeEditor
+              node={selectedNode}
+              backend={backend}
+              sessionId={session.id}
+              running={sessionRunning}
+              disabled={!backend.connected}
+              onChange={(name, value) => changeNodeParameterOn(selectedNode.id, name, value)}
+            />
+          </>
         )}
         {selectedNode.kind === "plugin" && (
           <>
