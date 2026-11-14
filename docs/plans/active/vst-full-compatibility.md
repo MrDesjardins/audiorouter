@@ -484,3 +484,30 @@ Open, in suggested order:
   as an instrument; a VST2 instrument is still only learned at its first load.
 - Also repaired: two test lines in `vst2.rs` held raw NUL bytes instead of `\0`
   (a shell heredoc had swallowed the backslash); same meaning, now plain text.
+
+## P7 decision (2026-11-14): no shared VST3 worker for now
+
+The plan makes P7 conditional: "only if the census shows latency or memory
+complaints". Neither has appeared: no user report, and the census and the UADx
+runs show each VST3 effect starting and processing in its own worker without a
+fault. One worker per VST3 plugin also keeps one plugin's crash from taking
+another's audio with it. Not built. Reopen if a route with several VST3 effects
+shows a delay or memory problem that the per-plugin worker explains; measure
+first (route delay display, worker private bytes).
+
+## P4 layouts: state (2026-11-14, read from the code and the census)
+
+No new code was needed.
+
+- VST2: the worker maps a mono or stereo node onto the plugin's own width
+  (`channel_layouts_are_mappable`, `spread_graph_to_plugin_inputs`).
+- VST3: `negotiate_main_bus` asks the plugin for the node's width with
+  `setBusArrangements`; when the plugin refuses, the worker keeps the plugin's
+  layout and adapts mono to stereo or stereo to mono itself. A main bus that is
+  neither mono nor stereo is refused with the reason "main bus is neither mono
+  nor stereo (N in, M out)".
+- Evidence: every census run drives each effect at mono and at stereo; all
+  Dragonfly (stereo plugins), Zam (mono and stereo plugins), UADx and Surge XT
+  Effects builds pass both widths. `tool_combinations.rs` passes.
+- Not done: no multichannel-only plugin is in the corpus, so the refusal text
+  was read, not seen from a real plugin.
