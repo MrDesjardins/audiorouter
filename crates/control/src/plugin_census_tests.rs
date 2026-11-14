@@ -9,7 +9,8 @@
 //!
 //! ```text
 //! AUDIOROUTER_CENSUS_DIRS="C:\Program Files\VSTPlugins;C:\Program Files\Common Files\VST3"
-//! AUDIOROUTER_CENSUS_SKIP="BC PatchWork"        (substrings; demo plugins that pop dialogs)
+//! AUDIOROUTER_CENSUS_SKIP="Name A,Name B"       (substrings, comma or semicolon separated)
+//! Blue Cat plugins are always skipped (demo windows) unless AUDIOROUTER_CENSUS_RUN_DEMOS=1.
 //! AUDIOROUTER_CENSUS_REPORT=C:\path\census.json (also writes .md beside it)
 //! cargo test -p audiorouter-control plugin_census -- --ignored --nocapture
 //! ```
@@ -227,10 +228,18 @@ fn plugin_census() {
         found.sort();
         for path in found {
             let text = path.display().to_string();
-            if skip
-                .split(',')
-                .filter(|part| !part.is_empty())
-                .any(|part| text.contains(part))
+            // Blue Cat demos open a "Limiting demo" window while the owner may
+            // be playing or on a call: they are left out unless asked for.
+            let demo = !std::env::var_os("AUDIOROUTER_CENSUS_RUN_DEMOS")
+                .is_some_and(|value| value == "1")
+                && ["BC PatchWork", "Blue Cat"]
+                    .iter()
+                    .any(|name| text.contains(name));
+            if demo
+                || skip
+                    .split([',', ';'])
+                    .filter(|part| !part.is_empty())
+                    .any(|part| text.contains(part))
             {
                 rows.push(
                     json!({ "path": text, "skipped": "left out by AUDIOROUTER_CENSUS_SKIP" }),

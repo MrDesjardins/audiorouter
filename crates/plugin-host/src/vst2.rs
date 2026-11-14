@@ -408,6 +408,14 @@ const EFF_EDIT_CLOSE: i32 = 15;
 const EFF_EDIT_IDLE: i32 = 19;
 #[cfg(windows)]
 const EFF_PROCESS_EVENTS: i32 = 25;
+/// `effStartProcess` and `effStopProcess` of the public aeffectx.h: a host
+/// tells the plugin that a run of process calls begins or ends, after the mains
+/// switch is on and before it goes off. Many plugins ignore them; some (and
+/// their licence or DSP set-up) wait for them.
+#[cfg(windows)]
+const EFF_START_PROCESS: i32 = 71;
+#[cfg(windows)]
+const EFF_STOP_PROCESS: i32 = 72;
 const EFF_GET_CHUNK: i32 = 23;
 #[cfg(windows)]
 const EFF_SET_CHUNK: i32 = 24;
@@ -562,6 +570,86 @@ mod opcode_tests {
         assert_eq!(EFF_EDIT_IDLE, 19);
         assert_eq!(EFF_GET_CHUNK, 23);
         assert_eq!(EFF_SET_CHUNK, 24);
+        assert_eq!(EFF_START_PROCESS, 71);
+        assert_eq!(EFF_STOP_PROCESS, 72);
+    }
+
+    thread_local! {
+        static OPCODES: std::cell::RefCell<Vec<i32>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    unsafe extern "C" fn recording_dispatcher(
+        _: *mut Vst2Effect,
+        opcode: i32,
+        _: i32,
+        _: isize,
+        _: *mut c_void,
+        _: f32,
+    ) -> isize {
+        OPCODES.with(|codes| codes.borrow_mut().push(opcode));
+        0
+    }
+
+    /// The host brackets processing the way a conforming host does: start after
+    /// the mains switch is on, stop before it goes off, on a format change and
+    /// at close.
+    #[test]
+    fn start_and_stop_process_bracket_the_mains_switch() {
+        let effect = Box::new(Vst2Effect {
+            magic: VST2_EFFECT_MAGIC,
+            dispatcher: Some(recording_dispatcher),
+            process: None,
+            set_parameter: None,
+            get_parameter: None,
+            num_programs: 0,
+            num_parameters: 0,
+            num_inputs: 1,
+            num_outputs: 1,
+            flags: VST2_FLAG_CAN_REPLACING,
+            reserved_1: 0,
+            reserved_2: 0,
+            initial_delay: 0,
+            real_quality: 0,
+            off_quality: 0,
+            io_ratio: 1.0,
+            object: ptr::null_mut(),
+            user: ptr::null_mut(),
+            unique_id: 0,
+            version: 0,
+            process_replacing: None,
+            future: [0; 56],
+        });
+        let mut library = Vst2Library {
+            module: ptr::null_mut(),
+            effect: Box::into_raw(effect),
+            processing_format: None,
+            editor_open: false,
+            role: Vst2Role::Effect,
+            host_context: Box::new(Vst2HostContext::default()),
+        };
+        OPCODES.with(|codes| codes.borrow_mut().clear());
+        library.set_processing_format(48_000.0, 128).unwrap();
+        library.set_processing_format(44_100.0, 128).unwrap();
+        drop(library);
+        let seen = OPCODES.with(|codes| codes.borrow().clone());
+        let (rate, block, mains, start, stop, close) = (
+            EFF_SET_SAMPLE_RATE,
+            EFF_SET_BLOCK_SIZE,
+            EFF_MAINS_CHANGED,
+            EFF_START_PROCESS,
+            EFF_STOP_PROCESS,
+            EFF_CLOSE,
+        );
+        assert_eq!(
+            seen,
+            vec![
+                // First format: nothing to stop yet.
+                rate, block, mains, start,
+                // New format: stop, mains off, set up again, mains on, start.
+                stop, mains, rate, block, mains, start, // Close: stop, mains off, close.
+                stop, mains, close,
+            ]
+        );
     }
 
     /// Regression (2026-11-13): the host answered sample rate and block size
@@ -830,7 +918,7 @@ mod opcode_tests {
             library.open_editor(1, std::process::id()),
             Err(Vst2LibraryError::InvalidEditor)
         ));
-        assert_eq!(DISPATCH_COUNT.with(Cell::get), 7);
+        assert_eq!(DISPATCH_COUNT.with(Cell::get), 10);
         assert!(matches!(
             library.close_editor(),
             Err(Vst2LibraryError::InvalidEditor)
@@ -1060,6 +1148,7 @@ impl Vst2Library {
         unsafe {
             let dispatcher = (*self.effect).dispatcher.expect("validated dispatcher");
             if self.processing_format.is_some() {
+                dispatcher(self.effect, EFF_STOP_PROCESS, 0, 0, ptr::null_mut(), 0.0);
                 dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 0, ptr::null_mut(), 0.0);
             }
             dispatcher(
@@ -1079,6 +1168,7 @@ impl Vst2Library {
                 0.0,
             );
             dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 1, ptr::null_mut(), 0.0);
+            dispatcher(self.effect, EFF_START_PROCESS, 0, 0, ptr::null_mut(), 0.0);
         }
         self.processing_format = Some((sample_rate_bits, block_size));
         Ok(())
@@ -1540,6 +1630,9 @@ impl Drop for Vst2Library {
                 if let Some(dispatcher) = (*self.effect).dispatcher {
                     if self.editor_open {
                         dispatcher(self.effect, EFF_EDIT_CLOSE, 0, 0, ptr::null_mut(), 0.0);
+                    }
+                    if self.processing_format.is_some() {
+                        dispatcher(self.effect, EFF_STOP_PROCESS, 0, 0, ptr::null_mut(), 0.0);
                     }
                     dispatcher(self.effect, EFF_MAINS_CHANGED, 0, 0, ptr::null_mut(), 0.0);
                     dispatcher(self.effect, EFF_CLOSE, 0, 0, ptr::null_mut(), 0.0);
