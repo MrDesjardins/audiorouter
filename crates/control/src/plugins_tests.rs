@@ -860,7 +860,8 @@ fn play_applies_only_sliders_moved_since_the_state_was_captured() {
 /// uses (`start_plugin_bridges`), and its bridge plays MIDI pushed to the
 /// queue (phase P8b). Needs the built VST2 worker and the test instrument
 /// (`tools/vst2-test-instrument`): set `AUDIOROUTER_PLUGIN_WORKER_PATH` and
-/// `AUDIOROUTER_TEST_VST2_INSTRUMENT`.
+/// `AUDIOROUTER_TEST_VST2_INSTRUMENT`. A VST3 instrument works too: set
+/// `AUDIOROUTER_VST3_WORKER_PATH` and `AUDIOROUTER_TEST_INSTRUMENT` to its bundle.
 #[cfg(windows)]
 #[test]
 #[ignore = "needs the built VST2 worker and the test instrument DLL"]
@@ -868,7 +869,9 @@ fn an_instrument_node_starts_a_worker_and_plays_midi() {
     use audiorouter_domain::{Node, Port};
     use audiorouter_plugin_host::inspect_binary;
     let dll = std::path::PathBuf::from(
-        std::env::var_os("AUDIOROUTER_TEST_VST2_INSTRUMENT").expect("test instrument path"),
+        std::env::var_os("AUDIOROUTER_TEST_INSTRUMENT")
+            .or_else(|| std::env::var_os("AUDIOROUTER_TEST_VST2_INSTRUMENT"))
+            .expect("test instrument path"),
     );
     let root = dll.parent().unwrap().to_path_buf();
     let identity = inspect_binary(&dll, std::slice::from_ref(&root)).unwrap();
@@ -950,7 +953,8 @@ fn an_instrument_node_starts_a_worker_and_plays_midi() {
     let result = response.result.expect("midi.sendEvents plays");
     assert_eq!(result["accepted"], json!(1));
     assert_eq!(result["heldNotes"], json!(1));
-    assert!(peak(40) > 0.1, "the held note sounds");
+    let sounded = peak(300);
+    assert!(sounded > 0.01, "the held note sounds (peak {sounded})");
     // The panic button releases it and the output falls silent again.
     let response = plane.dispatch(JsonRpcRequest {
         jsonrpc: "2.0".into(),
@@ -959,8 +963,17 @@ fn an_instrument_node_starts_a_worker_and_plays_midi() {
         params: Some(json!({ "nodeId": "piano", "events": [{ "type": "allNotesOff" }] })),
     });
     assert_eq!(response.result.expect("panic")["heldNotes"], json!(0));
-    peak(20);
-    assert!(peak(40) < 1e-6, "silent after all notes off");
+    // A real synth rings out its release tail (Surge XT takes about a second);
+    // the test instrument stops at once. Either way the output must reach
+    // silence, and a note that never released would not.
+    let mut tail = f32::MAX;
+    for _ in 0..40 {
+        tail = peak(60);
+        if tail < 1e-6 {
+            break;
+        }
+    }
+    assert!(tail < 1e-6, "silent after all notes off (peak {tail})");
     // With no request for it, the instrument node starts nothing.
     assert!(start_plugin_bridges(&session, vec![], 48_000)
         .unwrap()

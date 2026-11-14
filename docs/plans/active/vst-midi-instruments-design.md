@@ -126,3 +126,21 @@ so it works without hardware, from Stream Deck and from an assistant.
 - Instruments differ in latency; plugin latency already feeds the route delay
   display.
 - Guide videos need recording tooling and Firefox; they come last.
+
+## Evidence (2026-11-14)
+
+Steps 1-8 are committed on `feature/vst-plugin-experience`. What was run:
+
+| Check | Result |
+| --- | --- |
+| `an_instrument_node_starts_a_worker_and_plays_midi` with the VST2 test synth | passes: silent, then audible after `midi.sendEvents` through `ControlPlane::dispatch` (node named, not identified), silent after `allNotesOff` |
+| Same test with **Surge XT.vst3** (free, JUCE, real third-party VST3 instrument) through the C++ VST3 worker | passes; the release tail takes about a second, so the test now waits for silence instead of one fixed window |
+| Same test with licensed UADx PolyMAX (VST3) | loads, accepts notes (`heldNotes` 1), **output stays exactly 0**. The plugin's own log shows `license valid: true` but UA Connect `eState_NotLoggedIn`; treated as the UA sign-in rule recorded for UADx, not as a MIDI defect, since Surge XT plays through the same path. Not retried signed in |
+| `tool_combinations.rs`, `source_combinations.rs` | pass with Instrument |
+| UI: typecheck, lint, format, 1065 unit tests (including the keyboard editor: exact `midi.sendEvents` requests, release on unmount, disabled until Play, unplugged device kept) | pass |
+| Workspace Clippy `-D warnings` and `src-tauri` Clippy, both `cargo fmt --check` | clean |
+
+Not done yet (kept on the plan): a real hardware MIDI keyboard (none on this
+PC), the built desktop exe and packaged workers (they predate this code), the
+Instrument card on the canvas and its three-theme screenshots, guide video and
+site page, and the property coverage manifest entry.
