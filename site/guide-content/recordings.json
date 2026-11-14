@@ -1282,6 +1282,14 @@
       "description": "A silent configuration tour of Plugin Properties. It reveals Use scanned version and Start from defaults, shows Allow unchanged audio being enabled and disabled, then returns to the top. That switch weakens voice protection; this recording does not demonstrate a running plugin or perform a vendor update."
     }
   ],
+  "instrument": [
+    {
+      "title": "Every setting",
+      "video": "assets/tool-guides/instrument-overview.mp4",
+      "poster": "assets/tool-guides/instrument-overview.jpg",
+      "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
+    }
+  ],
   "group": [
     {
       "title": "Every setting",

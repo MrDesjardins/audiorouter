@@ -164,6 +164,7 @@ for (const { tool, render } of selected) {
       "audioFile",
       "networkReceive",
       "soundboard",
+      "instrument",
     ];
     const sinkKinds = ["physicalOutput", "virtualCaptureSink", "networkSend"];
     const ports = [];
@@ -265,7 +266,9 @@ for (const { tool, render } of selected) {
         localStorage.setItem("audiorouter.ui.theme", "dark");
         Object.assign(window, {
           __routeFixtureSession: session,
-          __routeFixtureRunning: audible,
+          // The Instrument keys only work while the route plays; its tour presses them
+          // against the harness, which makes no sound.
+          __routeFixtureRunning: audible || tool.kind === "instrument",
           __routeFixturePrivacyMuted: false,
           __routeFixtureProcessors: [
             {
@@ -602,6 +605,24 @@ for (const { tool, render } of selected) {
         if (frame === 60)
           await inspector.getByRole("checkbox", { name: "Allow unchanged audio", exact: true }).uncheck();
         if (frame === 76) await inspector.evaluate((e) => (e.scrollTop = 0));
+      } else if (tool.kind === "instrument") {
+        const source = inspector.getByLabel("Instrument keyboard and MIDI").getByRole("combobox");
+        const key = (name) => inspector.getByRole("button", { name, exact: true });
+        const press = async (name) => {
+          const box = await key(name).boundingBox();
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height - 6);
+          await page.mouse.down();
+        };
+        if (frame === 10) await source.scrollIntoViewIfNeeded();
+        if (frame === 20) await source.selectOption({ label: "Fixture Keystation" });
+        if (frame === 40) await press("C4");
+        if (frame === 50) await page.mouse.up();
+        if (frame === 55) await press("E4");
+        if (frame === 65) await page.mouse.up();
+        if (frame === 70) await press("G4");
+        if (frame === 80) await page.mouse.up();
+        if (frame === 90) await key("Stop all notes").click();
+        if (frame === 105) await inspector.evaluate((e) => (e.scrollTop = 0));
       } else if (tool.kind === "applicationCapture") {
         if (frame === 22) {
           await page.locator(".tool-card").filter({ hasText: "Application source" }).first().click();

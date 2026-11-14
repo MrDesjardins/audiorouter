@@ -46,7 +46,28 @@ without the owner; prepare everything else and then ask once, with one list.
 
 ### A. Must fix before any PR (small, no audio, no popups)
 
-1. **Guide catalog snapshot is stale.** `node tools/site/check-tool-guide-catalog.mjs`
+1. **Done 2026-11-14 (after this page was first written).** The Instrument
+   tool now has guide content (`site/guide-content/routing.json`,
+   `tutorials.json`), a generated page `site/tools/instrument.html`, an in-app
+   guide link (UI and shell allowlists), a silent Properties tour recorded
+   headlessly from the route harness (`instrument-overview.mp4`: picks a MIDI
+   device, presses C4, E4, G4, Stop all notes), and four manifest rows exempted
+   with a reason (a prepared recording cannot stand in for an installed
+   instrument). `check-tool-guide-catalog`, `check-tool-guide-property-coverage`
+   (only the older `plugin.recovery` row is pending, as on `main`),
+   `check-tool-guide-videos`, `site/check-guides.mjs`, the site node tests and
+   the headless Firefox playback check for `GUIDE_KIND=instrument` pass. Not
+   done: an audible recording with a real instrument (**owner**). To rerun the
+   recorder in a fresh worktree, create `target/tool-guide-tools/render-report.json`
+   and `target/tool-guide-properties/render-report.json` as `[]`, start the
+   harness (`npm --prefix ui run dev -- --host 127.0.0.1 --port 4186 --strictPort`),
+   then `GUIDE_KIND=instrument node tools/site/record-tool-guide-overviews.mjs`
+   and `GUIDE_KIND=instrument node tools/site/build-tool-guide-review.mjs`,
+   then `site/generate-catalogs.mjs`, `generate-social.mjs`, `generate-csp.mjs`
+   (the last two put back headers the guide generator drops). Also fixed: the
+   plugin window hint promised "sliders below" on an Instrument, which has none
+   (test in `InstrumentNodeEditor.test.tsx`). Original note:
+   `node tools/site/check-tool-guide-catalog.mjs`
    fails: "Discovery snapshot is stale: crates/control/src/catalog.rs". Run
    `node tools/site/export-tool-guide-catalog.mjs`, then add the Instrument
    tool to `tools/site/tool-guide-families.json` and

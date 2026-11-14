@@ -414,6 +414,22 @@
     "check": "If it faults, inspect the error and recover deliberately. Protected voice paths remain silent rather than silently bypassing a failed processor.",
     "listen": "A generic website sound cannot demonstrate an arbitrary installed plugin. This page uses a visual lifecycle explanation and teaches how to verify the real effect."
   },
+  "instrument": {
+    "route": [
+      "Notes",
+      "Chosen VST instrument",
+      "Meter → Output"
+    ],
+    "steps": [
+      "Scan your plugin folder and add the instrument from the Instruments list.",
+      "Connect its output to a Meter and an output, then Save and Play.",
+      "Press keys on the on-screen keyboard, or choose a MIDI device under Notes come from.",
+      "Use Stop all notes if anything keeps sounding."
+    ],
+    "success": "The meter moves while a key is held and falls back after you release it.",
+    "check": "No sound with a moving keyboard usually means the route is stopped, the output is not chosen, or the instrument needs its vendor licence app signed in.",
+    "listen": "A website sound cannot stand in for an instrument installed on your PC. This page shows where the controls are and how to check the real one."
+  },
   "group": {
     "route": ["Related nodes", "Visual region", "Same audio wiring"],
     "steps": [

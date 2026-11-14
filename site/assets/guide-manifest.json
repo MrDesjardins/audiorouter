@@ -261,6 +261,13 @@
       "audioRelevant": false
     },
     {
+      "kind": "instrument",
+      "title": "Instrument",
+      "path": "tools/instrument.html",
+      "propertyCount": 4,
+      "audioRelevant": false
+    },
+    {
       "kind": "group",
       "title": "Visual Group",
       "path": "tools/group.html",

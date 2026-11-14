@@ -37,6 +37,7 @@ const TOOL_GUIDES: Record<string, string> = {
   networkSend: "network-send",
   networkReceive: "network-receive",
   plugin: "plugin",
+  instrument: "instrument",
   group: "group",
 };
 export function ToolGuideLink({

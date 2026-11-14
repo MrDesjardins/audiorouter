@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Node } from "@audiorouter/contracts";
 import type { UiBackend } from "./backend";
 import { InstrumentNodeEditor, keyboardKeys, noteLabel } from "./InstrumentNodeEditor";
+import { PluginEditorControls } from "./PluginPanels";
 
 afterEach(cleanup);
 
@@ -91,5 +92,19 @@ describe("Instrument keyboard", () => {
   it("shows the on-screen keyboard choice when the node has no saved value", () => {
     const { view } = setup();
     expect((view.getByRole("combobox") as HTMLSelectElement).value).toBe("keyboard");
+  });
+
+  it("does not promise sliders in the window hint, since an Instrument has none", () => {
+    const view = render(
+      <PluginEditorControls
+        node={node()}
+        backend={{ connected: true } as unknown as UiBackend}
+        sessionId="session-1"
+        running={false}
+        onStateSaved={() => undefined}
+      />,
+    );
+    expect(view.container.textContent).toContain("play it with the keyboard below");
+    expect(view.container.textContent).not.toContain("sliders");
   });
 });

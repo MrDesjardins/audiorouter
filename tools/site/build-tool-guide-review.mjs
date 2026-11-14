@@ -198,6 +198,7 @@ const needsYourSetup = {
   networkSend: "another computer on your network",
   networkReceive: "another computer on your network",
   plugin: "a plugin installed on your PC",
+  instrument: "an instrument installed on your PC",
   recorder: "the files the Recorder saves on your PC",
 };
 const exemptionReason = (tool, property) => {
@@ -310,6 +311,8 @@ for (const tool of tools) {
       ? `A silent tour of the ${tool.title} Properties panel, including an example pairing key and the encrypted-audio note. Update both peers together. This configuration recording does not demonstrate a live network stream.`
       : tool.kind === "plugin"
         ? "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+      : tool.kind === "instrument"
+        ? "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
       : `A silent tour of the ${tool.title} Properties panel. It scrolls through every setting, then returns to the top.`,
   };
   // Clips that change one property, kept in Properties-panel order.

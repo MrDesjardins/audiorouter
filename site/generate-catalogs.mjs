@@ -69,7 +69,8 @@ const tools = [
   ["Denoise", "Cleanup", "Learn a noise profile and reduce steady background noise."],
   ["Speech Denoise", "Cleanup", "Reduce noise with spectral processing tuned for speech."],
   ["Spectral Gate", "Cleanup", "Learn a per-frequency noise floor and turn down bands beneath it."],
-  ["VST Plugin", "Plugins", "Host a compatible installed x64 VST3 effect or a qualified x64 VST2 effect in an isolated worker."],
+  ["VST Plugin", "Plugins", "Host an installed VST3 or VST2 effect, 64-bit or 32-bit, in an isolated worker."],
+  ["Instrument", "Plugins", "Play an installed VST instrument from the on-screen keyboard, a MIDI keyboard or a script."],
 ].map(([name, category, description]) => {
   // Match the tool symbols used by Workbench.tsx; Duck uses its real SVG mark.
   const appGlyphs = {
@@ -81,7 +82,7 @@ const tools = [
     "FIR Filter": "⧉", Compressor: "⤓", "Gate / Expander": "⊐", Limiter: "⊤",
     Duck: "duck", Delay: "◷", "Time Shift": "↺", Pitch: "↟", "Fun Voice Changer": "☺", Dehum: "≁",
     Declick: "⌇", Denoise: "░", "Speech Denoise": "☊", "Spectral Gate": "▥",
-    "VST Plugin": "plugin"
+    "VST Plugin": "plugin", Instrument: "♬"
   };
   return { name, category, description, icon: appGlyphs[name] ?? "◉" };
 });

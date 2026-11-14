@@ -1,6 +1,8 @@
 {
   "plugin.classId": { "property": "path", "reason": "The plugin catalog selects the exact audio-effect class within a scanned VST3 module." },
   "plugin.stateId": { "property": "recovery", "reason": "Use scanned version preserves state; Start from defaults deliberately ignores previous state through the backend recovery API." },
+  "instrument.classId": { "property": "path", "reason": "The plugin catalog selects the exact instrument class within a scanned VST3 module." },
+  "instrument.stateId": { "apiOnly": true, "reason": "Instrument settings are saved when its own window closes; Properties has no separate state control." },
   "applicationCapture.executable": { "property": "application", "reason": "The application picker supplies the executable identity." },
   "applicationCapture.executablePath": { "property": "application", "reason": "The application picker supplies the observed executable path." },
   "applicationCapture.processId": { "property": "application", "reason": "The application picker supplies the numeric process ID." },

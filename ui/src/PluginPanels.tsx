@@ -588,9 +588,13 @@ export function PluginEditorControls({
         <PanelMessage message={message} small />
       ) : (
         <small className="muted">
-          {!inShell
-            ? "The plugin's window opens only in the desktop app. You can still use the sliders below."
-            : "Open the plugin's window, or use the sliders below. Your changes are kept, even before you press Play."}
+          {node.kind === "instrument"
+            ? !inShell
+              ? "The instrument's window opens only in the desktop app. You can still play it with the keyboard below."
+              : "Open the instrument's window to change its sound. Your changes are kept, even before you press Play."
+            : !inShell
+              ? "The plugin's window opens only in the desktop app. You can still use the sliders below."
+              : "Open the plugin's window, or use the sliders below. Your changes are kept, even before you press Play."}
         </small>
       )}
     </div>

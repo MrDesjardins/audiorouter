@@ -10,7 +10,7 @@
     "site/guide-content/processing.json",
     "site/guide-content/routing.json"
   ],
-  "nodeKindCount": 37,
+  "nodeKindCount": 38,
   "sharedControls": [
     {
       "key": "enabled",
@@ -53,7 +53,8 @@
         "networkReceive",
         "duck",
         "funVoiceChanger",
-        "soundboard"
+        "soundboard",
+        "instrument"
       ],
       "recordings": [
         {
@@ -111,7 +112,8 @@
         "networkReceive",
         "duck",
         "funVoiceChanger",
-        "soundboard"
+        "soundboard",
+        "instrument"
       ],
       "recordings": [
         {
@@ -129,8 +131,8 @@
       "status": "recorded"
     }
   ],
-  "guideKindCount": 38,
-  "propertyCount": 253,
+  "guideKindCount": 39,
+  "propertyCount": 257,
   "tools": [
     {
       "kind": "gain",
@@ -7400,6 +7402,103 @@
               "video": "assets/tool-guides/plugin-overview.mp4",
               "poster": "assets/tool-guides/plugin-overview.jpg",
               "description": "A silent tour of the Plugin Properties panel. It shows Allow unchanged audio being enabled and disabled, then returns to the top. This setting weakens the protected-voice guard for this plugin or its shared VST2 chain; the recording does not demonstrate a running plugin."
+            }
+          ],
+          "status": "exempted"
+        }
+      ]
+    },
+    {
+      "kind": "instrument",
+      "title": "Instrument",
+      "sourceFile": "routing.json",
+      "fixture": "ui-only",
+      "capture": "configuration",
+      "properties": [
+        {
+          "key": "path",
+          "label": "Scanned instrument",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Scanned instrument works with an instrument installed on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "instrument--path",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/instrument-overview.mp4",
+              "poster": "assets/tool-guides/instrument-overview.jpg",
+              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "midiInput",
+          "label": "Notes come from",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "keyboard",
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Notes come from works with an instrument installed on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "instrument--midiInput",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/instrument-overview.mp4",
+              "poster": "assets/tool-guides/instrument-overview.jpg",
+              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "keyboard",
+          "label": "On-screen keyboard",
+          "type": "action",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "On-screen keyboard works with an instrument installed on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "instrument--keyboard",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/instrument-overview.mp4",
+              "poster": "assets/tool-guides/instrument-overview.jpg",
+              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
+            }
+          ],
+          "status": "exempted"
+        },
+        {
+          "key": "stopAllNotes",
+          "label": "Stop all notes",
+          "type": "action",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "options": null,
+          "dynamic": false,
+          "nonAudibleReason": "Stop all notes works with an instrument installed on your PC, which a prepared recording can't stand in for. The silent Properties tour shows where to find it.",
+          "recordingId": "instrument--stopAllNotes",
+          "recordings": [
+            {
+              "title": "Every setting",
+              "video": "assets/tool-guides/instrument-overview.mp4",
+              "poster": "assets/tool-guides/instrument-overview.jpg",
+              "description": "A silent tour of the Instrument Properties panel. It chooses a MIDI device under Notes come from, presses three keys on the on-screen keyboard, then uses Stop all notes. The recording does not play a real instrument."
             }
           ],
           "status": "exempted"

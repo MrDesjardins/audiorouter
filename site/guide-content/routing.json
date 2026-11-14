@@ -1033,6 +1033,103 @@
       ]
     },
     {
+      "kind": "instrument",
+      "title": "Instrument",
+      "purpose": "Play an installed VST instrument (a synth or sampler) as a sound source in your route.",
+      "concept": "An instrument makes sound from notes instead of changing incoming audio. It has an output and no input. Notes come from the on-screen keyboard, a connected MIDI keyboard, or a script or assistant.",
+      "signalBehavior": "The instrument runs in its own isolated worker and is silent until it receives a note. Stopping the route, or a worker restart, releases every held note.",
+      "properties": [
+        {
+          "key": "path",
+          "label": "Scanned instrument",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "increase": "",
+          "decrease": "",
+          "meaning": "Scan a plugin folder, then pick the instrument under Instruments (VST2/VST3) and add it. The exact file you picked is remembered.",
+          "example": "Scan your VST3 folder and add a synth you already own.",
+          "caution": "Some instruments are only recognised after the first attempt to use them as an effect is refused; they then move to the Instruments list."
+        },
+        {
+          "key": "midiInput",
+          "label": "Notes come from",
+          "type": "selection",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": "keyboard",
+          "increase": "",
+          "decrease": "",
+          "meaning": "Chooses the note source: the on-screen keyboard only, every connected MIDI device, or one named MIDI device. The on-screen keyboard and the API always work.",
+          "example": "Choose your MIDI keyboard by name so a second controller does not also play this instrument.",
+          "caution": "A saved device that is unplugged stays selected and is shown as not connected; the instrument is silent until it returns or you choose another source."
+        },
+        {
+          "key": "keyboard",
+          "label": "On-screen keyboard",
+          "type": "action",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "increase": "",
+          "decrease": "",
+          "meaning": "Two octaves from C4. Press a key to play a note and release it to stop. The keys work while the route plays.",
+          "example": "Press Play, then hold C4 to check the instrument reaches your output.",
+          "caution": "An instrument with a long release keeps sounding for a moment after you let go."
+        },
+        {
+          "key": "stopAllNotes",
+          "label": "Stop all notes",
+          "type": "action",
+          "unit": null,
+          "minimum": null,
+          "maximum": null,
+          "default": null,
+          "increase": "",
+          "decrease": "",
+          "meaning": "Releases every held note on this instrument at once.",
+          "example": "Use it if a note keeps sounding after a MIDI device was unplugged mid-note.",
+          "caution": ""
+        }
+      ],
+      "recipes": [
+        {
+          "title": "Play a synth to your headphones",
+          "steps": [
+            "Scan your plugin folder and add the synth from the Instruments list.",
+            "Connect Instrument → Physical Output, choose the output and Save.",
+            "Press Play, then press keys on the on-screen keyboard."
+          ]
+        },
+        {
+          "title": "Use a MIDI keyboard",
+          "steps": [
+            "Plug in the keyboard before opening Properties.",
+            "Choose it under Notes come from and Save.",
+            "Press Play and play; use Stop all notes if a note hangs."
+          ]
+        }
+      ],
+      "commonMistakes": [
+        "The keys are disabled until the route plays.",
+        "An instrument has no input: connect its output to a Mixer or an output, not after a microphone.",
+        "A licensed instrument can load and stay silent until its vendor app is signed in."
+      ],
+      "suggestedVisual": {
+        "type": "plugin",
+        "caption": "Show notes entering the isolated worker and a waveform leaving it; with no notes the output is silent."
+      },
+      "sources": [
+        "ui/src/InstrumentNodeEditor.tsx",
+        "ui/src/PluginPanels.tsx",
+        "docs/plans/active/vst-midi-instruments-design.md"
+      ]
+    },
+    {
       "kind": "group",
       "title": "Visual Group",
       "purpose": "Label and organize regions of your canvas.",

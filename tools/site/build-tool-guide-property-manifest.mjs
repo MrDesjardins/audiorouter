@@ -41,6 +41,7 @@ const configurationOnly = new Set([
   "networkSend",
   "networkReceive",
   "plugin",
+  "instrument",
   "recorder",
   "group",
 ]);
