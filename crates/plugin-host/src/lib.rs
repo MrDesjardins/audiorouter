@@ -419,20 +419,96 @@ pub struct PluginIdentity {
 /// load; remembering it keeps the next scan result honest.
 static LEARNED_INSTRUMENTS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
+/// Where the learned fingerprints are kept between runs: one lowercase SHA-256
+/// per line, in the user's own application-data folder. `AUDIOROUTER_LEARNED_INSTRUMENTS_FILE`
+/// overrides it; unit tests never touch the real file.
+fn learned_instruments_file() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os("AUDIOROUTER_LEARNED_INSTRUMENTS_FILE") {
+        return Some(PathBuf::from(path));
+    }
+    if cfg!(test) {
+        return None;
+    }
+    std::env::var_os("LOCALAPPDATA").map(|base| {
+        PathBuf::from(base)
+            .join("AudioRouter")
+            .join("learned-instruments.txt")
+    })
+}
+
+fn is_fingerprint(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+/// Fingerprints stored in `path`; a missing or unreadable file is an empty list.
+fn read_learned_fingerprints(path: &Path) -> Vec<String> {
+    // The file is tiny (a line per instrument); a hand-edited huge one is ignored.
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.len() <= 4096 * 65 => {}
+        _ => return Vec::new(),
+    }
+    fs::read_to_string(path)
+        .map(|text| {
+            text.lines()
+                .map(|line| line.trim().to_ascii_lowercase())
+                .filter(|line| is_fingerprint(line))
+                .take(4096)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Append one fingerprint; best effort, because remembering is only a convenience.
+fn append_learned_fingerprint(path: &Path, sha256: &str) {
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{sha256}");
+    }
+}
+
+/// Load the saved fingerprints once per process, before the first read or write.
+fn load_learned_instruments_once() {
+    static LOADED: std::sync::Once = std::sync::Once::new();
+    LOADED.call_once(|| {
+        let Some(path) = learned_instruments_file() else {
+            return;
+        };
+        let saved = read_learned_fingerprints(&path);
+        if let Ok(mut learned) = LEARNED_INSTRUMENTS.lock() {
+            for sha256 in saved {
+                if !learned.contains(&sha256) {
+                    learned.push(sha256);
+                }
+            }
+        }
+    });
+}
+
 /// Record the worker's refusal text; returns whether it named an instrument.
 pub fn note_instrument_refusal(sha256: &str, message: &str) -> bool {
     if !message.contains("is an instrument") {
         return false;
     }
+    load_learned_instruments_once();
+    let mut added = false;
     if let Ok(mut learned) = LEARNED_INSTRUMENTS.lock() {
         if !learned.iter().any(|known| known == sha256) && learned.len() < 4096 {
             learned.push(sha256.to_owned());
+            added = true;
+        }
+    }
+    if added && is_fingerprint(sha256) {
+        if let Some(path) = learned_instruments_file() {
+            append_learned_fingerprint(&path, &sha256.to_ascii_lowercase());
         }
     }
     true
 }
 
 fn learned_instrument(sha256: &str) -> bool {
+    load_learned_instruments_once();
     LEARNED_INSTRUMENTS
         .lock()
         .is_ok_and(|learned| learned.iter().any(|known| known == sha256))
@@ -8484,6 +8560,37 @@ mod tests {
         let mut other = identity.clone();
         other.sha256 = "cd".repeat(32);
         assert!(!other.is_instrument());
+    }
+
+    #[test]
+    fn learned_instrument_fingerprints_survive_a_restart() {
+        let dir = std::env::temp_dir().join(format!("ar-learned-{}", std::process::id()));
+        let file = dir.join("nested").join("learned.txt");
+        let _ = fs::remove_dir_all(&dir);
+        assert!(read_learned_fingerprints(&file).is_empty());
+        let first = "ab".repeat(32);
+        let second = "CD".repeat(32);
+        append_learned_fingerprint(&file, &first);
+        append_learned_fingerprint(&file, &second.to_ascii_lowercase());
+        // Junk lines (wrong length, not hex) are ignored when reading back.
+        fs::write(
+            &file,
+            format!(
+                "{first}
+not a fingerprint
+{}
+{}
+",
+                "cd".repeat(32),
+                "zz".repeat(32)
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            read_learned_fingerprints(&file),
+            vec![first, "cd".repeat(32)]
+        );
+        let _ = fs::remove_dir_all(&dir);
     }
 
     /// Regression (2026-11-13): a 32-bit VST3 bundle keeps its binary in

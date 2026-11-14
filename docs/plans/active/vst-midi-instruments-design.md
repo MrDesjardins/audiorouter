@@ -144,3 +144,26 @@ Not done yet (kept on the plan): a real hardware MIDI keyboard (none on this
 PC), the built desktop exe and packaged workers (they predate this code), the
 Instrument card on the canvas and its three-theme screenshots, guide video and
 site page, and the property coverage manifest entry.
+
+## Built-exe check and scan limitation (2026-11-14)
+
+- `tools/build-desktop.ps1` (release) finished with exit 0; the shell exe is
+  newer than `ui/dist`, and `ui/dist` holds the Instrument editor strings.
+- The built `audiorouter-cli api call` (in-process control plane, disposable
+  database) answers `midi.devices` with an empty list on this PC (no MIDI
+  hardware) and scans the Surge XT folder.
+- **Finding:** the scan reports Surge XT as `instrument: false`. The bundle has
+  no `moduleinfo.json`, and a scan never runs plugin code, so only a worker's
+  refusal reveals it. Until that has happened once, Surge XT is listed with the
+  effects; adding it as an effect then fails with "is an instrument; add it with
+  the Instrument tool", and from then on it is listed under Instruments.
+  Fix made: the learned fingerprints were kept only in memory, so every launch
+  forgot them; they are now saved in `%LOCALAPPDATA%\AudioRouter\learned-instruments.txt`
+  (`AUDIOROUTER_LEARNED_INSTRUMENTS_FILE` overrides), with a regression test for
+  the read/append/ignore-junk round trip.
+- Still open: classify a VST3 without metadata before its first failed Play
+  (needs a worker "describe" mode that reads the class category without
+  creating the plugin).
+- Not done: the shell window was not launched with an instrument (the
+  owner is using the PC; audio would play through speakers) and the shell-side
+  editor window for an instrument is untested.
