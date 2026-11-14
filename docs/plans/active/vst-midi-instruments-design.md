@@ -1,10 +1,31 @@
 # MIDI input and instrument plugins: design (phase P8b)
 
-Status: design for review, 2026-11-13. Part of the
+Status: steps 1-4 built and tested (2026-11-13); steps 5-9 open. Part of the
 [full VST compatibility plan](vst-full-compatibility.md); owner decision D1
-(2026-11-13): instruments and MIDI are in scope. Nothing here is built yet;
-the rules in AGENTS.md (every source works in every layout, REST and MCP kept
-current, guides for new tools) decide the order.
+(2026-11-13): instruments and MIDI are in scope. The rules in AGENTS.md (every
+source works in every layout, REST and MCP kept current, guides for new tools)
+decide the order.
+
+## Progress and evidence
+
+| Step | Result | Evidence |
+| --- | --- | --- |
+| 1 Wire | Done. `MidiEvent`, one-way `WorkerMessage::Midi` (not a field of the process messages: the real plugin paths are `Process` and `ProcessBuses`, and a separate message needs no change to either) | unit tests `midi_*` in `crates/plugin-host/src/lib.rs`, commit `3675f3d4d` |
+| 2 VST2 worker | Done. `--instrument`, `Vst2Role`, `effProcessEvents` (opcode 25) with the public `VstEvents`/`VstMidiEvent` layout, 0-input instruments, per-segment delivery | `crates/plugin-host/tests/vst2_instrument.rs` against `tools/vst2-test-instrument` (a dependency-free test synth): silence without MIDI, sound only after the note-on sample, silence after note-off, velocity scales level, mono route works, a bad offset ends the worker, an instrument loaded as an effect is refused with its own reason; commit `ef6058d2c` |
+| 3 VST3 worker | Done. `--instrument`, `IEventList`, event bus activation, `IMidiMapping` for pitch bend/CC/pressure, instrument class selection | opt-in `tests/vst3_instrument.rs`: real **Surge XT** peak 0 without a note and 0.276 while a note is held; Dragonfly (an effect) is refused with "effect, not an instrument"; commit `52fcf224b` |
+| 4 Bridge | Done. `MidiQueue` (bounded, held-note tracking, CC 120/123 become explicit note-offs, `release_all_notes`), `PluginRuntimeBridge::start_instrument`, `SupervisedWorkerProcess::spawn_instrument_verified` and restart | bridge tests with the real worker: silent until a note, audible while held, silent after the panic release, healthy with no MIDI; commit `5c421b43e` |
+
+Not run: the **x86** VST3 worker compiled with the instrument code but no
+instrument was played through it; the VST2 instrument was only the test synth
+(no third-party VST2 instrument was available: Cardinal is 1.1 GB and the
+others offer no VST2 build); the packaged workers in
+`src-tauri/target/release` predate this code and are rebuilt by
+`tools/build-desktop.ps1`.
+
+Known gaps carried to steps 5-6: the refusal wording of the effect workers
+still says "no MIDI input yet" and must point to the Instrument tool when it
+exists; MIDI timing is quantised to the start of the next block (about the
+pipeline depth, a few ms), which is recorded here as the accepted behaviour.
 
 ## What the owner gets
 

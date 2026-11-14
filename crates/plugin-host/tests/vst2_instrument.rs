@@ -37,14 +37,36 @@ fn instrument_dll() -> PathBuf {
         }
         let manifest =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tools/vst2-test-instrument");
-        let status = Command::new(env!("CARGO"))
+        // Its own target folder, and none of the parent's build environment:
+        // a coverage run (cargo llvm-cov) sets a target directory, compiler
+        // flags and profile files that must not reach this tiny cdylib.
+        let target = manifest.join("target");
+        let mut build = Command::new(env!("CARGO"));
+        build
             .args(["build", "--manifest-path"])
             .arg(manifest.join("Cargo.toml"))
+            .arg("--target-dir")
+            .arg(&target);
+        for (name, _) in std::env::vars_os() {
+            let name = name.to_string_lossy().into_owned();
+            if matches!(
+                name.as_str(),
+                "RUSTFLAGS"
+                    | "CARGO_ENCODED_RUSTFLAGS"
+                    | "CARGO_TARGET_DIR"
+                    | "LLVM_PROFILE_FILE"
+                    | "RUSTC_WORKSPACE_WRAPPER"
+            ) || name.starts_with("CARGO_LLVM_COV")
+            {
+                build.env_remove(name);
+            }
+        }
+        let status = build
             .status()
             .expect("run cargo build for the test instrument");
         assert!(status.success(), "the test instrument must build");
-        manifest
-            .join("target/debug/ar_test_instrument.dll")
+        target
+            .join("debug/ar_test_instrument.dll")
             .canonicalize()
             .expect("built test instrument")
     })
