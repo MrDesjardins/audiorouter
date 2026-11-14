@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { AudioRouterRpcError } from "@audiorouter/contracts";
 import { App } from "./App";
 import { createDisconnectedBackend } from "./backend";
 
@@ -38,7 +39,9 @@ describe("start-up order", () => {
           backend={{
             ...createDisconnectedBackend(),
             connected: true,
-            snapshot: vi.fn().mockRejectedValue(new Error("Worker unavailable")),
+            snapshot: vi
+              .fn()
+              .mockRejectedValue(new AudioRouterRpcError({ code: -32000, message: "Worker unavailable" })),
           }}
         />,
       );

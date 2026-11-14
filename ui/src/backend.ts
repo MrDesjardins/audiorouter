@@ -513,8 +513,12 @@ export class SnapshotCache {
       } catch (error) {
         if (generation !== this.refreshGeneration) return this.state;
         lastError = error;
-        if (options.startup ? Date.now() >= deadline : attempt >= 2) break;
-        const delay = options.startup
+        // Only a backend that has not answered yet (pipe race, integrity
+        // check) earns the long startup wait; an error it answered with is
+        // shown after the ordinary attempts.
+        const waiting = options.startup && !(error instanceof AudioRouterRpcError);
+        if (waiting ? Date.now() >= deadline : attempt >= 2) break;
+        const delay = waiting
           ? Math.min(2000, 100 * 2 ** Math.min(attempt, 5), Math.max(0, deadline - Date.now()))
           : 100 * (attempt + 1);
         await new Promise<void>((resolve) => setTimeout(resolve, delay));

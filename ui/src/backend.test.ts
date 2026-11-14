@@ -217,6 +217,22 @@ describe("UI error formatting", () => {
 });
 
 describe("snapshot cache", () => {
+  it("shows an error the backend answered at startup without the thirty-second wait", async () => {
+    vi.useFakeTimers();
+    try {
+      const cache = new SnapshotCache();
+      const backend: UiBackend = {
+        ...createDisconnectedBackend(),
+        snapshot: vi.fn().mockRejectedValue(new AudioRouterRpcError({ code: -32000, message: "Worker unavailable" })),
+      };
+      const pending = cache.refresh(backend, undefined, { startup: true });
+      await vi.advanceTimersByTimeAsync(1_000);
+      await expect(pending).resolves.toMatchObject({ stale: true, error: "Worker unavailable" });
+      expect(backend.snapshot).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("ends startup retries after thirty seconds and preserves the last error", async () => {
     vi.useFakeTimers();
     try {
