@@ -243,8 +243,12 @@ fn write_backup(
     let result = (|| {
         write(&staging)?;
         validate_backup_size(&staging)?;
+        // SQLite backups inherit the source's WAL header. Convert the private
+        // staging copy to a self-contained file before validation/publication;
+        // a read-only check otherwise leaves orphaned staging WAL/SHM files.
         let copy =
-            Connection::open_with_flags(&staging, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+            Connection::open_with_flags(&staging, rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE)?;
+        copy.pragma_update(None, "journal_mode", "DELETE")?;
         let integrity: String = copy.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
         if integrity != "ok" {
             return Err(StorageError::CorruptDatabase(integrity));
@@ -1052,6 +1056,9 @@ impl Storage {
         if full_check || needs_migration {
             storage.check_integrity()?;
         }
+        if needs_migration {
+            storage.backup_before_migration()?;
+        }
         storage.use_write_ahead_log();
         storage.migrate()?;
         storage.prune_expired_recovery()?;
@@ -1085,6 +1092,120 @@ impl Storage {
             .map_err(corrupt)?;
         validate_schema_version(version)?;
         Ok(version < MAX_SCHEMA_VERSION)
+    }
+
+    /// Isolate recovery files for each database, including disposable profiles.
+    pub fn recovery_backup_directory(database: &std::path::Path) -> std::path::PathBuf {
+        database.with_extension("backups")
+    }
+
+    /// Read-only validation for desktop recovery choices. Never migrates a
+    /// candidate or accepts an unrelated SQLite file as an application backup.
+    pub fn validate_recovery_backup(path: &std::path::Path) -> Result<(), StorageError> {
+        if !path.is_absolute()
+            || path_has_reparse_ancestor(path)
+            || !std::fs::symlink_metadata(path)?.is_file()
+            || is_reparse_point(&std::fs::symlink_metadata(path)?)
+        {
+            return Err(StorageError::InvalidBackupPath(
+                "expected a regular recovery file".into(),
+            ));
+        }
+        let bytes = std::fs::metadata(path)?.len();
+        if bytes > MAX_BACKUP_BYTES {
+            return Err(StorageError::DocumentTooLarge {
+                bytes: bytes as usize,
+                maximum: MAX_BACKUP_BYTES as usize,
+            });
+        }
+        let connection =
+            Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        connection.busy_timeout(BUSY_TIMEOUT)?;
+        let integrity: String =
+            connection.query_row("PRAGMA integrity_check", [], |row| row.get(0))?;
+        if integrity != "ok" {
+            return Err(StorageError::CorruptDatabase(integrity));
+        }
+        let version: i64 = connection.query_row(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+            [],
+            |row| row.get(0),
+        )?;
+        validate_schema_version(version)?;
+        let _: i64 = connection.query_row("SELECT COUNT(*) FROM sessions", [], |row| row.get(0))?;
+        if version < 1 {
+            return Err(StorageError::InvalidBackupPath(
+                "missing application schema".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Seal a private restored copy before publishing it. Restoring older data
+    /// cannot revive revoked clients or capture consent. Local enrollment is
+    /// created afresh by the explicitly invoked desktop recovery workflow.
+    pub fn prepare_desktop_restore(&self) -> Result<(), StorageError> {
+        let transaction = self.write_transaction()?;
+        transaction.execute_batch("DELETE FROM client_enrollments;
+            DELETE FROM graph_plans; DELETE FROM startup_plans; DELETE FROM virtual_device_plans;
+            INSERT INTO control_settings(key,value) VALUES('privacyMute','true') ON CONFLICT(key) DO UPDATE SET value='true';
+            INSERT INTO control_settings(key,value) VALUES('startupEnabled','false') ON CONFLICT(key) DO UPDATE SET value='false';
+            INSERT INTO control_settings(key,value) VALUES('deviceAccessAllowed','false') ON CONFLICT(key) DO UPDATE SET value='false';")?;
+        transaction.commit()?;
+        Ok(())
+    }
+
+    fn backup_before_migration(&self) -> Result<(), StorageError> {
+        let Some(database) = self.database_path.as_ref() else {
+            return Ok(());
+        };
+        let tables: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+            [],
+            |row| row.get(0),
+        )?;
+        if tables == 0 {
+            return Ok(());
+        }
+        let has_versions: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_migrations')",
+            [], |row| row.get(0))?;
+        let version: i64 = if has_versions {
+            self.connection.query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+                [],
+                |row| row.get(0),
+            )?
+        } else {
+            0
+        };
+        let directory = Self::recovery_backup_directory(database);
+        std::fs::create_dir_all(&directory)?;
+        let destination = directory.join(format!(
+            "audiorouter-pre-migration-{version:04}-to-{MAX_SCHEMA_VERSION:04}.sqlite"
+        ));
+        // Never overwrite an earlier pre-upgrade recovery point.
+        if !destination.try_exists()? {
+            self.backup_to(destination)?;
+        }
+        Ok(())
+    }
+
+    /// One consistent backup per UTC day. Called on a helper thread after a
+    /// successful desktop open, never on the audio or control request path.
+    pub fn ensure_daily_backup(
+        database: &std::path::Path,
+        unix_seconds: u64,
+    ) -> Result<(), StorageError> {
+        let directory = Self::recovery_backup_directory(database);
+        std::fs::create_dir_all(&directory)?;
+        let day = unix_seconds / 86_400;
+        let destination = directory.join(format!("audiorouter-backup-{day:010}.sqlite"));
+        if !destination.try_exists()? {
+            Self::backup_database(database, destination)?;
+        }
+        Self::prune_recovery_backups(directory)?;
+        Ok(())
     }
 
     /// Commits run on the backend's control thread, which also feeds running
@@ -6867,6 +6988,120 @@ mod tests {
             Err(StorageError::InvalidBackupPath(_))
         ));
         let _ = std::fs::remove_dir_all(&directory);
+    }
+
+    #[test]
+    fn desktop_daily_backups_are_idempotent_and_retain_ten_days() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-daily-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let database = directory.join("state.sqlite");
+        let storage = Storage::open(&database).unwrap();
+        for day in 1..=11 {
+            Storage::ensure_daily_backup(&database, day * 86_400).unwrap();
+            Storage::ensure_daily_backup(&database, day * 86_400 + 60).unwrap();
+        }
+        let backups = Storage::recovery_backup_directory(&database);
+        let files: Vec<_> = std::fs::read_dir(&backups)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        assert_eq!(files.len(), 10);
+        assert!(!backups
+            .join("audiorouter-backup-0000000001.sqlite")
+            .exists());
+        assert!(backups
+            .join("audiorouter-backup-0000000011.sqlite")
+            .exists());
+        for path in files {
+            Storage::backup_database(&path, directory.join("validate.sqlite")).unwrap();
+            std::fs::remove_file(directory.join("validate.sqlite")).unwrap();
+            std::fs::remove_file(path).unwrap();
+        }
+        drop(storage);
+        std::fs::remove_file(database).unwrap();
+        std::fs::remove_dir(backups).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
+    fn inspecting_an_oversized_backup_never_deletes_it() {
+        let path = std::env::temp_dir().join(format!(
+            "audiorouter-oversized-recovery-{}-{}.sqlite",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        file.set_len(MAX_BACKUP_BYTES + 1).unwrap();
+        drop(file);
+        assert!(matches!(
+            Storage::validate_recovery_backup(&path),
+            Err(StorageError::DocumentTooLarge { .. })
+        ));
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().len(),
+            MAX_BACKUP_BYTES + 1
+        );
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn migration_preserves_the_old_schema_before_any_changes() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-premigration-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let database = directory.join("state.sqlite");
+        Connection::open(&database).unwrap().execute_batch(
+            "CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO schema_migrations VALUES(1);"
+        ).unwrap();
+        let storage = Storage::open(&database).unwrap();
+        let backups = Storage::recovery_backup_directory(&database);
+        let backup = std::fs::read_dir(&backups)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let old = Connection::open(&backup).unwrap();
+        let version: i64 = old
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(version, 1);
+        let tables: i64 = old
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(tables, 1);
+        drop(old);
+        drop(storage);
+        std::fs::remove_file(backup).unwrap();
+        std::fs::remove_file(database).unwrap();
+        std::fs::remove_dir(backups).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 
     /// 2026-10-07 review P1-3: commits run on the audio service thread, and a

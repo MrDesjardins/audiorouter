@@ -91,6 +91,7 @@ export function useWorkspaceEvents({
     if (!backend.connected || !hasSnapshot) return;
     let active = true;
     let polling = false;
+    let subscriptionFailed = false;
     const poll = async () => {
       if (!active || polling) return;
       polling = true;
@@ -130,7 +131,7 @@ export function useWorkspaceEvents({
             ),
           );
         }
-        if (result.resyncRequired || result.events.length > 0) {
+        if (subscriptionFailed || result.resyncRequired || result.events.length > 0) {
           const nextState = await snapshotCache.refresh(backend, adoptedSessionId);
           if (active) {
             updateSnapshot(nextState);
@@ -151,6 +152,7 @@ export function useWorkspaceEvents({
               .catch(() => {
                 if (active) showRecorders(null);
               });
+            subscriptionFailed = nextState.stale;
             if (!nextState.stale)
               eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
           }
@@ -158,6 +160,7 @@ export function useWorkspaceEvents({
           eventCursor.current = { backendEpoch: result.backendEpoch, sequence: result.nextSequence };
         }
       } catch (error) {
+        subscriptionFailed = true;
         if (active)
           updateSnapshot((current) => ({
             ...current,

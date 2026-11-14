@@ -6,6 +6,7 @@
 
 // The discovery document's JSON schemas are large `json!` literals.
 #![recursion_limit = "256"]
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 use audiorouter_domain::{
     format_validation_errors, inspect_routes, node_registry, validate_session, ApiMethodSpec,
@@ -185,10 +186,20 @@ const STATE_CATEGORIES: [&str; 22] = [
     "application.captureStateChanged",
 ];
 const APPLICATION_SNAPSHOT_TTL: std::time::Duration = std::time::Duration::from_millis(100);
+#[allow(
+    clippy::expect_used,
+    reason = "Fixed nonzero capacities and the engine quantum are constructor constants, never request data; exercised by every control-plane construction test."
+)]
+fn default_virtual_bridges() -> VirtualBusBridgeSet {
+    VirtualBusBridgeSet::new(8, 2, audiorouter_engine::PROCESSING_QUANTUM_FRAMES)
+        .expect("valid default virtual bridge collection")
+}
 const VIRTUAL_DEVICE_PLAN_TTL: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ControlError {
+    /// A named backend invariant failed; never includes request data.
+    Internal(&'static str),
     InvalidRequest(String),
     Audio {
         code: &'static str,
@@ -365,6 +376,8 @@ pub struct ControlPlane {
     comparison: HashMap<EntityId, compare::Comparison>,
     #[cfg(test)]
     comparison_test_publications: Option<Vec<Session>>,
+    #[cfg(test)]
+    panic_on_method: Option<&'static str>,
     /// Who saved each revision and when, by session; written through to storage.
     revision_notes: HashMap<EntityId, Vec<Value>>,
     /// Named tool presets when there is no database.
@@ -559,6 +572,8 @@ impl ControlPlane {
             comparison: HashMap::new(),
             #[cfg(test)]
             comparison_test_publications: None,
+            #[cfg(test)]
+            panic_on_method: None,
             revision_notes: HashMap::new(),
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
@@ -575,12 +590,7 @@ impl ControlPlane {
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
             virtual_bus_route_revision: 0,
-            virtual_bridges: VirtualBusBridgeSet::new(
-                8,
-                2,
-                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
-            )
-            .expect("valid default virtual bridge collection"),
+            virtual_bridges: default_virtual_bridges(),
             virtual_bus_plans: HashMap::new(),
             next_virtual_bus_plan: 1,
             startup_plans: HashMap::new(),
@@ -671,8 +681,29 @@ impl ControlPlane {
                 "mutating notifications are not supported",
             );
         }
-        let result = validate_method_params(&request.method, request.params.as_ref())
-            .and_then(|_| dispatch_methods::dispatch_method(self, &request.method, request.params));
+        let read_only = API_METHODS.iter().any(|spec| {
+            spec.name == request.method
+                && spec.side_effect == audiorouter_domain::SideEffectClass::ReadOnly
+        });
+        let dispatch = || {
+            validate_method_params(&request.method, request.params.as_ref())?;
+            #[cfg(test)]
+            if self.panic_on_method == Some(request.method.as_str()) {
+                self.panic_on_method = None;
+                panic!("injected request failure");
+            }
+            dispatch_methods::dispatch_method(self, &request.method, request.params)
+        };
+        // Read-only handlers cannot partially commit graph or lifecycle changes.
+        // Keep their failures local to this request so unrelated audio survives.
+        // Mutating handlers still unwind to the supervisor: their state may be
+        // inconsistent and must never be reused after an unexpected panic.
+        let result = if read_only {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(dispatch))
+                .unwrap_or(Err(ControlError::Internal("read-only request panicked")))
+        } else {
+            dispatch()
+        };
         if mutating {
             self.refresh_siege_round_feed();
         }
@@ -956,6 +987,7 @@ impl ControlPlane {
 
 fn application_error_response(id: Option<Value>, error: ControlError) -> JsonRpcResponse {
     let code = match &error {
+        ControlError::Internal(_) => "internalError",
         ControlError::Store(error) => match error {
             audiorouter_domain::StoreError::SessionNotFound => "notFound",
             audiorouter_domain::StoreError::PlanNotFound => "notFound",
@@ -1082,6 +1114,52 @@ fn application_error_data(code: &str) -> Value {
 mod tests {
     use super::*;
     use crate::test_support::*;
+
+    #[test]
+    fn read_request_panic_returns_internal_error_without_stopping_runtime() {
+        let mut plane = ControlPlane::default();
+        let session = session();
+        plane.insert_session(session.clone()).unwrap();
+        plane.session_start(&session.id).unwrap();
+        let generation = plane.runtimes[&session.id].generation();
+        plane.panic_on_method = Some("status.get");
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("panic-read")),
+            method: "status.get".into(),
+            params: None,
+        };
+        let response = plane.dispatch_authorized_for_client(
+            request.clone(),
+            "observer",
+            &ClientGrant::read_only(),
+        );
+        assert_eq!(
+            response.error.unwrap().data.unwrap()["code"],
+            "internalError"
+        );
+        assert_eq!(plane.runtimes[&session.id].generation(), generation);
+        assert_eq!(plane.runtimes[&session.id].state(), RuntimeState::Running);
+        assert!(plane.active_idempotency_scope.is_none());
+        assert!(plane.dispatch(request).error.is_none());
+    }
+
+    #[test]
+    fn mutating_request_panic_still_unwinds_to_supervisor() {
+        let mut plane = ControlPlane {
+            panic_on_method: Some("session.stop"),
+            ..ControlPlane::default()
+        };
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!("panic-write")),
+            method: "session.stop".into(),
+            params: Some(json!({"sessionId":"session", "idempotencyKey":"stop-panic"})),
+        };
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| plane.dispatch(request)));
+        assert!(result.is_err());
+    }
 
     #[test]
     fn application_errors_include_stable_codes() {

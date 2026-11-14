@@ -497,13 +497,13 @@ export class SnapshotCache {
     return this.state;
   }
 
-  async refresh(backend: UiBackend, sessionId?: string): Promise<UiSnapshotState> {
+  async refresh(backend: UiBackend, sessionId?: string, options: { startup?: boolean } = {}): Promise<UiSnapshotState> {
     const generation = ++this.refreshGeneration;
-    let lastError: unknown = undefined;
-    // The native shell may still be creating its per-user pipe/backend when
-    // the WebView finishes loading. Retry briefly without blocking the UI or
-    // hiding a previously valid snapshot.
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    let lastError: unknown;
+    // A full integrity check can delay the startup pipe. Keep the initial
+    // loading state while retrying; ordinary refreshes retain their short bound.
+    const deadline = Date.now() + 30_000;
+    for (let attempt = 0; ; attempt += 1) {
       if (generation !== this.refreshGeneration) return this.state;
       try {
         const snapshot = await backend.snapshot(sessionId);
@@ -513,9 +513,11 @@ export class SnapshotCache {
       } catch (error) {
         if (generation !== this.refreshGeneration) return this.state;
         lastError = error;
-        if (attempt < 2) {
-          await new Promise<void>((resolve) => setTimeout(resolve, 100 * (attempt + 1)));
-        }
+        if (options.startup ? Date.now() >= deadline : attempt >= 2) break;
+        const delay = options.startup
+          ? Math.min(2000, 100 * 2 ** Math.min(attempt, 5), Math.max(0, deadline - Date.now()))
+          : 100 * (attempt + 1);
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
       }
     }
     if (generation !== this.refreshGeneration) return this.state;

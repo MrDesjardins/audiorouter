@@ -467,6 +467,10 @@ impl MultiInputWorkerHandle {
     }
 
     /// Run `f` with the worker while holding the slot.
+    #[allow(
+        clippy::expect_used,
+        reason = "The owning handle keeps this slot attached until consuming detach or Drop; the audio thread never removes workers, and the slot lock spans access."
+    )]
     pub(crate) fn with<R>(&self, f: impl FnOnce(&NativeMultiInputWorker) -> R) -> R {
         let slot = self.shared.lock();
         f(&slot
@@ -477,6 +481,10 @@ impl MultiInputWorkerHandle {
     }
 
     /// Run `f` with the worker mutably while holding the slot.
+    #[allow(
+        clippy::expect_used,
+        reason = "The owning handle keeps this slot attached until consuming detach or Drop; the audio thread never removes workers, and the slot lock spans access."
+    )]
     pub(crate) fn with_mut<R>(&self, f: impl FnOnce(&mut NativeMultiInputWorker) -> R) -> R {
         let mut slot = self.shared.lock();
         f(&mut slot

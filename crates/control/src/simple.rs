@@ -334,7 +334,7 @@ fn insert_on_edge(
         .edges
         .iter_mut()
         .find(|edge| edge.id == after)
-        .unwrap();
+        .ok_or(ControlError::Internal("inserted downstream edge missing"))?;
     if downstream.matrix.len() == original.matrix.len() {
         downstream.matrix.clone_from(&original.matrix);
     } else {
@@ -344,7 +344,7 @@ fn insert_on_edge(
             .edges
             .iter_mut()
             .find(|edge| edge.id == before)
-            .unwrap();
+            .ok_or(ControlError::Internal("inserted upstream edge missing"))?;
         if upstream.matrix.len() == original.matrix.len() {
             upstream.matrix.clone_from(&original.matrix);
         } else {
@@ -359,7 +359,7 @@ fn insert_on_edge(
                 .ports
                 .iter()
                 .find(|port| port.direction == PortDirection::Output)
-                .unwrap()
+                .ok_or(ControlError::Internal("inserted tool output missing"))?
                 .channels;
             let conversion = channel_matrix(tool_channels, source_channels);
             let rows = original.matrix.len() / usize::from(source_channels);
@@ -378,7 +378,7 @@ fn insert_on_edge(
                 .edges
                 .iter_mut()
                 .find(|edge| edge.id == after)
-                .unwrap()
+                .ok_or(ControlError::Internal("inserted downstream edge missing"))?
                 .matrix = matrix;
         }
     }
@@ -432,7 +432,11 @@ fn bridge_edges(
         Some(&incoming.source_port),
         Some(&outgoing.destination_port),
     )?;
-    let bridge = session.edges.iter_mut().find(|edge| edge.id == id).unwrap();
+    let bridge = session
+        .edges
+        .iter_mut()
+        .find(|edge| edge.id == id)
+        .ok_or(ControlError::Internal("replacement bridge edge missing"))?;
     bridge.matrix = matrix;
     bridge.enabled = incoming.enabled && outgoing.enabled;
     move_mixer_volume(
@@ -499,7 +503,10 @@ impl ControlPlane {
         let result = match method {
             "nodes.catalog" => Ok(self.simple_catalog()),
             "safety.togglePrivacyMute" => {
-                let key = &operation.as_ref().expect("mutating").2;
+                let key = &operation
+                    .as_ref()
+                    .ok_or(ControlError::Internal("mutation operation missing"))?
+                    .2;
                 self.dispatch_privacy_mute(Some(json!({ "muted": !self.privacy_muted, "idempotencyKey": format!("toggle:{key}") })))
             }
             _ => {
@@ -519,7 +526,10 @@ impl ControlPlane {
                         method,
                         &session_id,
                         &params,
-                        &operation.as_ref().expect("mutating").2,
+                        &operation
+                            .as_ref()
+                            .ok_or(ControlError::Internal("mutation operation missing"))?
+                            .2,
                     ),
                 }
             }
@@ -712,7 +722,7 @@ impl ControlPlane {
                     .nodes
                     .iter_mut()
                     .find(|node| node.id == node_id)
-                    .expect("resolved");
+                    .ok_or(ControlError::Internal("resolved task node missing"))?;
                 let mut changed = false;
                 if let Some(parameters) = params.get("parameters") {
                     let parameters = parameters.as_object().ok_or_else(|| {
@@ -763,7 +773,7 @@ impl ControlPlane {
                     .nodes
                     .iter_mut()
                     .find(|node| node.id == node_id)
-                    .expect("resolved");
+                    .ok_or(ControlError::Internal("resolved task node missing"))?;
                 let value = match target {
                     "enabled" => {
                         node.enabled = !node.enabled;

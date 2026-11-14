@@ -718,7 +718,7 @@ impl ControlPlane {
                 #[cfg(windows)]
                 let driver_instance_id = self.provision_virtual_bus_device_unpersisted(
                     &EntityId::new(bus_id),
-                    instance_id.expect("provision instance id"),
+                    instance_id.ok_or(ControlError::Internal("provision instance ID missing"))?,
                 )?;
                 #[cfg(not(windows))]
                 let driver_instance_id = return Err(ControlError::InvalidRequest(

@@ -217,6 +217,72 @@ describe("UI error formatting", () => {
 });
 
 describe("snapshot cache", () => {
+  it("ends startup retries after thirty seconds and preserves the last error", async () => {
+    vi.useFakeTimers();
+    try {
+      const cache = new SnapshotCache();
+      const backend: UiBackend = {
+        ...createDisconnectedBackend(),
+        snapshot: vi.fn().mockRejectedValue(new Error("backend unavailable")),
+      };
+      const pending = cache.refresh(backend, undefined, { startup: true });
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(cache.current().error).toBeNull();
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toMatchObject({ stale: true, error: "backend unavailable" });
+      const calls = vi.mocked(backend.snapshot).mock.calls.length;
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(backend.snapshot).toHaveBeenCalledTimes(calls);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("abandons startup retries when a newer refresh succeeds", async () => {
+    vi.useFakeTimers();
+    try {
+      const cache = new SnapshotCache();
+      const snapshot = await createDisconnectedBackend().snapshot();
+      const backend: UiBackend = {
+        ...createDisconnectedBackend(),
+        snapshot: vi.fn().mockRejectedValueOnce(new Error("starting")).mockResolvedValue(snapshot),
+      };
+      const startup = cache.refresh(backend, undefined, { startup: true });
+      await vi.advanceTimersByTimeAsync(0);
+      await cache.refresh(backend);
+      await vi.advanceTimersByTimeAsync(30_000);
+      await expect(startup).resolves.toMatchObject({ stale: false, snapshot });
+      expect(backend.snapshot).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps startup pending while a healthy backend takes two seconds to open", async () => {
+    vi.useFakeTimers();
+    try {
+      const cache = new SnapshotCache();
+      const base = createDisconnectedBackend();
+      const expected = await base.snapshot();
+      const started = Date.now();
+      const backend: UiBackend = {
+        ...base,
+        connected: true,
+        snapshot: vi.fn(async () => {
+          if (Date.now() - started < 2000) throw new Error("pipe is starting");
+          return expected;
+        }),
+      };
+      const pending = cache.refresh(backend, undefined, { startup: true });
+      await vi.advanceTimersByTimeAsync(1900);
+      expect(cache.current().error).toBeNull();
+      await vi.advanceTimersByTimeAsync(2000);
+      await expect(pending).resolves.toMatchObject({ stale: false, error: null, snapshot: expected });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("retries a startup pipe race with bounded asynchronous attempts", async () => {
     const cache = new SnapshotCache();
     const disconnected = createDisconnectedBackend();

@@ -1,6 +1,7 @@
 import { optionalLocalStorage, readPresentationJson, writePresentationJson } from "./presentationStorage";
 import { Icon } from "./icons";
 import { CopyErrorButton } from "./CopyErrorButton";
+import { StartupRecovery } from "./StartupRecovery";
 import { keepNativeContextMenu } from "./contextMenuPolicy";
 import { SessionSwitchDialog } from "./SessionSwitchDialog";
 import {
@@ -628,7 +629,9 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               () => null,
             );
       if (backendActive) backendActiveSessionRef.current = backendActive;
-      const first = await snapshotCache.refresh(backend, rememberedSessionId ?? backendActive ?? undefined);
+      const first = await snapshotCache.refresh(backend, rememberedSessionId ?? backendActive ?? undefined, {
+        startup: true,
+      });
       if (!first.error || !rememberedSessionId) return first;
       // The remembered route may be gone (removed by a script, or an older database
       // restored). Only the list can say so; any other failure keeps it and offers Reconnect.
@@ -3210,6 +3213,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
               Reconnect
             </button>
           )}
+          <StartupRecovery onRestored={reconnect} />
         </main>
       </div>
     );

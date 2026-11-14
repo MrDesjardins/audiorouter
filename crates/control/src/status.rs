@@ -144,7 +144,7 @@ impl ControlPlane {
         if self.native_endpoint_session_is_attached(session_id) {
             let sample_rate_hz = self
                 .native_endpoint_worker_for_session(session_id)
-                .expect("attached above")
+                .ok_or(ControlError::Internal("attached native worker missing"))?
                 .bridge()
                 .sample_rate_hz();
             self.activate_native_graph_candidate_with_flags(
@@ -172,7 +172,7 @@ impl ControlPlane {
             let worker = self
                 .native_multi_input_worker
                 .as_ref()
-                .expect("attached above");
+                .ok_or(ControlError::Internal("attached native worker missing"))?;
             let current = self.get_session(session_id)?;
             for (index, node_id) in worker.input_node_ids().iter().enumerate() {
                 if current.nodes.iter().any(|node| {
@@ -199,7 +199,7 @@ impl ControlPlane {
                 let worker = self
                     .native_multi_input_worker
                     .as_ref()
-                    .expect("attached above");
+                    .ok_or(ControlError::Internal("attached native worker missing"))?;
                 normalize_live_path_flags(
                     &mut session,
                     &worker.input_node_ids(),
@@ -247,7 +247,7 @@ impl ControlPlane {
             }
             self.native_multi_input_worker
                 .as_mut()
-                .expect("attached above")
+                .ok_or(ControlError::Internal("attached native worker missing"))?
                 .replace_path_set(compiled)
                 .map_err(|_| {
                     ControlError::InvalidRequest(

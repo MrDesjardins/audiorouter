@@ -177,7 +177,7 @@ impl ControlPlane {
             let monitor = self
                 .endpoint_monitor
                 .as_mut()
-                .expect("endpoint monitor initialized above");
+                .ok_or(ControlError::Internal("endpoint monitor missing"))?;
             let endpoint_changes = monitor.poll_changes().map_err(audio_control_error)?;
             let endpoints = monitor.snapshot().to_vec();
             (endpoint_changes, endpoints)
@@ -304,7 +304,11 @@ impl ControlPlane {
                     audiorouter_windows_audio::EndpointState::Unplugged => "unplugged",
                     audiorouter_windows_audio::EndpointState::NotPresent => "notPresent",
                     audiorouter_windows_audio::EndpointState::Unknown(_) => "unknown",
-                    audiorouter_windows_audio::EndpointState::Active => unreachable!(),
+                    audiorouter_windows_audio::EndpointState::Active => {
+                        return Err(ControlError::Internal(
+                            "active endpoint reported unavailable",
+                        ))
+                    }
                 };
                 devices.push(json!({
                     "id": endpoint.id,
@@ -578,26 +582,32 @@ impl ControlPlane {
         let bindings = decoded
             .iter()
             .zip(resolved_endpoints.iter())
-            .map(|(source, endpoint)| match source {
-                DecodedMultiInputSource::Generated => NativeMultiInputSourceBinding::Generated,
-                DecodedMultiInputSource::Physical(_) => NativeMultiInputSourceBinding::Physical(
-                    endpoint.as_ref().expect("physical source resolved above"),
-                ),
-                DecodedMultiInputSource::Application {
-                    process_id,
-                    executable,
-                    executable_path,
-                    creation_time_100ns,
-                    mode,
-                } => NativeMultiInputSourceBinding::Application {
-                    process_id: *process_id,
-                    expected_executable: executable,
-                    expected_executable_path: executable_path.as_deref(),
-                    expected_creation_time_100ns: *creation_time_100ns,
-                    mode: *mode,
-                },
+            .map(|(source, endpoint)| {
+                Ok(match source {
+                    DecodedMultiInputSource::Generated => NativeMultiInputSourceBinding::Generated,
+                    DecodedMultiInputSource::Physical(_) => {
+                        NativeMultiInputSourceBinding::Physical(
+                            endpoint.as_ref().ok_or(ControlError::Internal(
+                                "resolved physical source missing",
+                            ))?,
+                        )
+                    }
+                    DecodedMultiInputSource::Application {
+                        process_id,
+                        executable,
+                        executable_path,
+                        creation_time_100ns,
+                        mode,
+                    } => NativeMultiInputSourceBinding::Application {
+                        process_id: *process_id,
+                        expected_executable: executable,
+                        expected_executable_path: executable_path.as_deref(),
+                        expected_creation_time_100ns: *creation_time_100ns,
+                        mode: *mode,
+                    },
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, ControlError>>()?;
         self.prepare_native_multi_input_worker(session_id, generation, &bindings, 0, 3, 100)
     }
 
@@ -811,7 +821,7 @@ impl ControlPlane {
             let worker = self
                 .native_multi_input_worker
                 .as_ref()
-                .expect("worker attached above");
+                .ok_or(ControlError::Internal("attached native worker missing"))?;
             (worker.output_node_ids().to_vec(), worker.path_count())
         };
         let render_endpoint_ids = branch_node_ids

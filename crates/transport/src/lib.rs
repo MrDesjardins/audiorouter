@@ -4,6 +4,7 @@
 //! audio endpoint. Native server pipes use an owner-only ACL and validate the
 //! connected process SID before reading requests; method-level grants remain a
 //! separate authorization boundary in the control plane.
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 #[cfg(windows)]
 mod client_credentials;
@@ -1240,6 +1241,11 @@ mod windows_pipe {
     ) -> Result<(), TransportError> {
         let mut empty_since = None;
         while !output.is_empty() {
+            if std::time::Instant::now() >= deadline {
+                return Err(TransportError::Protocol(
+                    "pipe frame deadline exceeded".into(),
+                ));
+            }
             let mut available = 0_u32;
             // SAFETY: `handle` is a valid connected pipe handle owned by the caller.
             // No buffer is passed, so nothing is copied; the call writes one u32
@@ -1491,6 +1497,21 @@ mod windows_pipe {
 
     /// Connect to a local named pipe and exchange one framed message.
     pub fn round_trip(name: &str, request: &[u8]) -> Result<Vec<u8>, TransportError> {
+        round_trip_with_timeout(name, request, std::time::Duration::from_secs(60))
+    }
+
+    /// Bound the complete response, including a peer that drips partial bytes.
+    /// The client owns the only reader of this synchronous pipe handle.
+    pub fn round_trip_with_timeout(
+        name: &str,
+        request: &[u8],
+        timeout: std::time::Duration,
+    ) -> Result<Vec<u8>, TransportError> {
+        if timeout.is_zero() || timeout > std::time::Duration::from_secs(300) {
+            return Err(TransportError::Protocol(
+                "pipe response timeout is out of bounds".into(),
+            ));
+        }
         check_name(name)?;
         if request.len() < 4 || request.len() > MAX_FRAME_BYTES + 4 {
             return Err(TransportError::Protocol("invalid request frame".into()));
@@ -1498,7 +1519,10 @@ mod windows_pipe {
         let name = wide(name);
         let handle = connect_client(&name)?;
         write_all(handle.0, request)?;
-        read_frame(handle.0)
+        let deadline = std::time::Instant::now() + timeout;
+        read_frame_with(handle.0, |handle, output| {
+            read_exact_by(handle, output, deadline)
+        })
     }
 
     /// Exchange one request frame and read exactly `responses` response frames.
@@ -1628,9 +1652,9 @@ mod windows_pipe {
 #[cfg(windows)]
 pub use windows_pipe::{
     acquire_server_singleton, client_is_same_user, client_user_sid, current_user_sid, echo_handler,
-    round_trip, round_trip_many, round_trip_session, round_trip_session_many, send_oneway,
-    serve_connections, serve_once, serve_once_with_client, serve_once_with_client_optional,
-    serve_session, ServerSingleton, SERVER_PIPE_INSTANCES,
+    round_trip, round_trip_many, round_trip_session, round_trip_session_many,
+    round_trip_with_timeout, send_oneway, serve_connections, serve_once, serve_once_with_client,
+    serve_once_with_client_optional, serve_session, ServerSingleton, SERVER_PIPE_INSTANCES,
 };
 
 #[cfg(windows)]
@@ -2076,6 +2100,15 @@ where
 
 #[cfg(not(windows))]
 pub fn send_oneway(_: &str, _: &[u8]) -> Result<(), TransportError> {
+    Err(TransportError::UnsupportedPlatform)
+}
+
+#[cfg(not(windows))]
+pub fn round_trip_with_timeout(
+    _: &str,
+    _: &[u8],
+    _: std::time::Duration,
+) -> Result<Vec<u8>, TransportError> {
     Err(TransportError::UnsupportedPlatform)
 }
 
@@ -2605,6 +2638,32 @@ mod tests {
             "dropped at the deadline: {elapsed:?}"
         );
         drop(pipe);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn native_pipe_client_bounds_an_unresponsive_server() {
+        let name = format!(
+            r"\\.\pipe\audiorouter-response-deadline-{}",
+            std::process::id()
+        );
+        let server_name = name.clone();
+        let server = std::thread::spawn(move || {
+            serve_once(&server_name, |_| {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                echo_handler(&[])
+            })
+        });
+        let request = encode_frame(&serde_json::json!({"method": "status.get"})).unwrap();
+        let started = std::time::Instant::now();
+        let result =
+            round_trip_with_timeout(&name, &request, std::time::Duration::from_millis(100));
+        assert!(
+            matches!(result, Err(TransportError::Protocol(_))),
+            "{result:?}"
+        );
+        assert!(started.elapsed() < std::time::Duration::from_millis(450));
+        let _ = server.join().unwrap();
     }
 
     #[cfg(windows)]
