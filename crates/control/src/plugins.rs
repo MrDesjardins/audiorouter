@@ -207,14 +207,20 @@ pub(crate) fn start_plugin_bridges(
     for group in plugin_chain_groups(session, &eligible) {
         let members = group
             .iter()
-            .map(|id| prepared.get(id).expect("prepared plugin group"))
-            .collect::<Vec<_>>();
-        let (verified, configured_root, channels, _, _) = members[0];
+            .map(|id| {
+                prepared
+                    .get(id)
+                    .ok_or(ControlError::Internal("prepared plugin group missing"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let (verified, configured_root, channels, _, _) = members
+            .first()
+            .ok_or(ControlError::Internal("prepared plugin group empty"))?;
         let node = session
             .nodes
             .iter()
-            .find(|node| node.id == group[0])
-            .expect("prepared plugin node");
+            .find(|node| Some(&node.id) == group.first())
+            .ok_or(ControlError::Internal("prepared plugin node missing"))?;
         let not_ready = |message: String| ControlError::NodeNotReady {
             node_id: node.id.as_str().to_owned(),
             message: format!("\"{}\" cannot play: {message}", node.name),

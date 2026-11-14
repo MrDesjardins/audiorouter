@@ -242,7 +242,7 @@ impl ControlPlane {
             let next_cursor = has_more.then(|| ids.last().cloned()).flatten();
             return Ok(json!({ "items": items, "nextCursor": next_cursor }));
         }
-        let recording_id = recording_id.expect("recording ID checked above");
+        let recording_id = recording_id.ok_or(ControlError::Internal("recording ID missing"))?;
         let Some(checkpoint) = storage
             .load_recording_checkpoint(&recording_id)
             .map_err(storage_error)?

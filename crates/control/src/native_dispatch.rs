@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// Device-loss recoveries allowed in ten minutes before a flapping device
+/// leaves the route stopped (RES-3).
+#[cfg(windows)]
+pub(crate) const MAX_DEVICE_RECOVERY_ARMS: usize = 5;
+
 impl ControlPlane {
     #[cfg(windows)]
     /// Pump bounded capture, graph, and prepared branch work for the exact
@@ -177,7 +182,7 @@ impl ControlPlane {
             let monitor = self
                 .endpoint_monitor
                 .as_mut()
-                .expect("endpoint monitor initialized above");
+                .ok_or(ControlError::Internal("endpoint monitor missing"))?;
             let endpoint_changes = monitor.poll_changes().map_err(audio_control_error)?;
             let endpoints = monitor.snapshot().to_vec();
             (endpoint_changes, endpoints)
@@ -304,7 +309,11 @@ impl ControlPlane {
                     audiorouter_windows_audio::EndpointState::Unplugged => "unplugged",
                     audiorouter_windows_audio::EndpointState::NotPresent => "notPresent",
                     audiorouter_windows_audio::EndpointState::Unknown(_) => "unknown",
-                    audiorouter_windows_audio::EndpointState::Active => unreachable!(),
+                    audiorouter_windows_audio::EndpointState::Active => {
+                        return Err(ControlError::Internal(
+                            "active endpoint reported unavailable",
+                        ))
+                    }
                 };
                 devices.push(json!({
                     "id": endpoint.id,
@@ -578,26 +587,32 @@ impl ControlPlane {
         let bindings = decoded
             .iter()
             .zip(resolved_endpoints.iter())
-            .map(|(source, endpoint)| match source {
-                DecodedMultiInputSource::Generated => NativeMultiInputSourceBinding::Generated,
-                DecodedMultiInputSource::Physical(_) => NativeMultiInputSourceBinding::Physical(
-                    endpoint.as_ref().expect("physical source resolved above"),
-                ),
-                DecodedMultiInputSource::Application {
-                    process_id,
-                    executable,
-                    executable_path,
-                    creation_time_100ns,
-                    mode,
-                } => NativeMultiInputSourceBinding::Application {
-                    process_id: *process_id,
-                    expected_executable: executable,
-                    expected_executable_path: executable_path.as_deref(),
-                    expected_creation_time_100ns: *creation_time_100ns,
-                    mode: *mode,
-                },
+            .map(|(source, endpoint)| {
+                Ok(match source {
+                    DecodedMultiInputSource::Generated => NativeMultiInputSourceBinding::Generated,
+                    DecodedMultiInputSource::Physical(_) => {
+                        NativeMultiInputSourceBinding::Physical(
+                            endpoint.as_ref().ok_or(ControlError::Internal(
+                                "resolved physical source missing",
+                            ))?,
+                        )
+                    }
+                    DecodedMultiInputSource::Application {
+                        process_id,
+                        executable,
+                        executable_path,
+                        creation_time_100ns,
+                        mode,
+                    } => NativeMultiInputSourceBinding::Application {
+                        process_id: *process_id,
+                        expected_executable: executable,
+                        expected_executable_path: executable_path.as_deref(),
+                        expected_creation_time_100ns: *creation_time_100ns,
+                        mode: *mode,
+                    },
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, ControlError>>()?;
         self.prepare_native_multi_input_worker(session_id, generation, &bindings, 0, 3, 100)
     }
 
@@ -811,7 +826,7 @@ impl ControlPlane {
             let worker = self
                 .native_multi_input_worker
                 .as_ref()
-                .expect("worker attached above");
+                .ok_or(ControlError::Internal("attached native worker missing"))?;
             (worker.output_node_ids().to_vec(), worker.path_count())
         };
         let render_endpoint_ids = branch_node_ids
@@ -1389,6 +1404,7 @@ impl ControlPlane {
                     ))
                 })?;
                 invalidated = true;
+                self.arm_device_loss_recovery();
             }
         }
         if !invalidated {
@@ -1397,6 +1413,45 @@ impl ControlPlane {
         self.events
             .append(0, None, "devices.bindingInvalidated", None);
         Ok(())
+    }
+
+    /// After a device of the running multi-path route changed, restart the
+    /// exact saved route when its devices are back (RES-3). Not armed for a
+    /// recording session (recordings never resume) or a route with a failed
+    /// plugin: a failed processor stays silent until the user restarts it.
+    #[cfg(windows)]
+    pub(crate) fn arm_device_loss_recovery(&mut self) {
+        let Some(id) = self.native_multi_input_worker_session.clone() else {
+            return;
+        };
+        if self.session_is_recording(&id) || self.session_has_failed_plugin(&id) {
+            return;
+        }
+        let Ok(revision) = self.get_session(&id).map(|session| session.revision) else {
+            return;
+        };
+        let now = Instant::now();
+        let window = std::time::Duration::from_secs(10 * 60);
+        self.device_recovery_arms
+            .retain(|armed| now.saturating_duration_since(*armed) <= window);
+        if self.device_recovery_arms.len() >= MAX_DEVICE_RECOVERY_ARMS {
+            // The device keeps dropping out: leave the route stopped and
+            // let the user restart it, as before automatic recovery.
+            return;
+        }
+        self.device_recovery_arms.push_back(now);
+        self.sleep_route_recovery = Some(super::safety::SleepRouteRecovery::after_device_loss(
+            id, revision, now,
+        ));
+    }
+
+    /// Whether a plugin worker of this session has stopped.
+    pub(crate) fn session_has_failed_plugin(&self, id: &EntityId) -> bool {
+        self.plugin_bridges.lock().is_ok_and(|bridges| {
+            bridges.iter().any(|((session, _), bridge)| {
+                session == id && bridge.upgrade().is_some_and(|bridge| bridge.failed())
+            })
+        })
     }
 
     /// Poll endpoint notifications from a mutating native lifecycle boundary.

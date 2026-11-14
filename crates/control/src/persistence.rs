@@ -258,6 +258,8 @@ impl ControlPlane {
             comparison: HashMap::new(),
             #[cfg(test)]
             comparison_test_publications: None,
+            #[cfg(test)]
+            panic_on_method: None,
             revision_notes: HashMap::new(),
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
@@ -271,15 +273,13 @@ impl ControlPlane {
             os_suspended_native_sessions: Vec::new(),
             #[cfg(windows)]
             sleep_route_recovery: None,
+            #[cfg(windows)]
+            device_recovery_arms: std::collections::VecDeque::new(),
+            running_witness: None,
             virtual_buses,
             virtual_bus_routes,
             virtual_bus_route_revision,
-            virtual_bridges: VirtualBusBridgeSet::new(
-                8,
-                2,
-                audiorouter_engine::PROCESSING_QUANTUM_FRAMES,
-            )
-            .expect("valid default virtual bridge collection"),
+            virtual_bridges: default_virtual_bridges(),
             virtual_bus_plans,
             next_virtual_bus_plan: 1,
             startup_plans,

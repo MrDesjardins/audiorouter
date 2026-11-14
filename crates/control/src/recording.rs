@@ -617,7 +617,9 @@ impl ControlPlane {
             let recorder = self
                 .recorder_node_states
                 .get(node_id)
-                .expect("recorder node state inserted above");
+                .ok_or(ControlError::Internal(
+                    "inserted recorder node state missing",
+                ))?;
             let checkpoint = recorder.checkpoint();
             let state = recorder_state_name(recorder.state());
             let parts = checkpoint
@@ -1198,7 +1200,9 @@ impl ControlPlane {
         let recorder = self
             .recorders
             .get(&session_id)
-            .expect("recorder candidate inserted above");
+            .ok_or(ControlError::Internal(
+                "inserted recorder candidate missing",
+            ))?;
         let checkpoint = recorder.checkpoint();
         let result = json!({
             "sessionId": session_id,

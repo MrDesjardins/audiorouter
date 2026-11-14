@@ -1,5 +1,20 @@
 # Active plan — current priorities (2026-11-04)
 
+## Resilience audit — 2026-11-13
+
+Owner requested a read-only investigation of resilience and fault tolerance
+in the UI and backend. See the [findings](resilience-audit-2026-11-13.md):
+eleven findings (three high: no backups in the desktop app, a handler panic
+stops audio with no resume, no reconnect after device loss or sleep), covering
+STATE-02/07/10/11/12 and CAP-11/12. No code changed; nothing was compiled or
+run. Next: owner selects findings to repair and answers the two decisions
+(RES-3, RES-10).
+
+Owner authorized all high/medium repairs and a version bump on 2026-11-13.
+Implementation is on `fix/resilience`; see the
+[execution plan](resilience-implementation.md) for scope, recovery boundaries,
+regression evidence and next action. The original audit remains the baseline.
+
 ## CI speed — 2026-11-12
 
 Owner approved all phases of affected-area selection, daily full CI, four

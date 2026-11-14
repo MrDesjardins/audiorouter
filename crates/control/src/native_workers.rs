@@ -588,9 +588,10 @@ impl ControlPlane {
                 "native endpoint worker generation is stale".into(),
             ));
         }
-        let mut session = candidate
-            .cloned()
-            .unwrap_or_else(|| self.get_session(session_id).expect("loaded above").clone());
+        let mut session = match candidate {
+            Some(candidate) => candidate.clone(),
+            None => self.get_session(session_id)?.clone(),
+        };
         session = self.with_comparison(session);
         session = audiorouter_engine::prune_unfed_upstream(&session).into_owned();
         let recorder_node_ids = session
@@ -743,7 +744,9 @@ impl ControlPlane {
         })?;
         self.native_render_source_worker
             .as_mut()
-            .expect("worker presence checked above")
+            .ok_or(ControlError::Internal(
+                "native render-source worker missing",
+            ))?
             .publish_graph(graph);
         self.native_render_source_taps = Some(taps);
         Ok(())

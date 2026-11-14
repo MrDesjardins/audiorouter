@@ -289,6 +289,25 @@ describe("slow plugin requests", () => {
     expect(requestTimeoutMs("status.get", 5000)).toBe(5000);
   });
 
+  it("never gives up on a state change before the backend's own deadlines (RES-6)", async () => {
+    const { requestTimeoutMs, SLOW_REQUEST_TIMEOUT_MS } = await import("./host");
+    // Recorder finalization is allowed 10 s; bundles and setup checks can be slow.
+    for (const method of [
+      "session.stop",
+      "recorders.stop",
+      "sessions.importFile",
+      "sessions.exportFile",
+      "audioMedia.finishUpload",
+      "system.checkSetup",
+      "virtualDevices.provision",
+    ])
+      expect(requestTimeoutMs(method, 5000)).toBe(SLOW_REQUEST_TIMEOUT_MS);
+    // Reads and 1 Hz polls stay short so a hung backend is noticed.
+    for (const method of ["status.get", "events.subscribe", "timeShift.transport", "nativeMultiInputs.pump"])
+      expect(requestTimeoutMs(method, 5000)).toBe(5000);
+    expect(requestTimeoutMs("not.a.method", 5000)).toBe(SLOW_REQUEST_TIMEOUT_MS);
+  });
+
   it("keeps a slow plugin scan pending past the ordinary transport timeout", async () => {
     vi.useFakeTimers();
     try {

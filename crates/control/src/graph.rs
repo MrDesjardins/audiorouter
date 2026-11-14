@@ -469,7 +469,10 @@ impl ControlPlane {
                 .ok_or_else(|| {
                     ControlError::InvalidRequest("committed session not found".into())
                 })?;
-            let runtime = self.runtimes.get_mut(&result.session_id).unwrap();
+            let runtime = self
+                .runtimes
+                .get_mut(&result.session_id)
+                .ok_or(ControlError::Internal("committed session runtime missing"))?;
             runtime.prepare(&session).map_err(|error| match error {
                 RuntimeError::InvalidGraph(errors) => ControlError::InvalidRequest(format!(
                     "invalid graph: {}",

@@ -16,8 +16,10 @@ use tauri::{
 
 #[cfg(windows)]
 mod api_token;
+mod backend_state;
 mod backend_supervisor;
 mod cowork_plugin;
+mod database_recovery;
 mod http_accept;
 mod http_api;
 #[cfg(windows)]
@@ -29,6 +31,7 @@ mod mcp_tunnel;
 mod os_transition_windows;
 #[cfg(windows)]
 mod plugin_editor_windows;
+mod process_run;
 #[cfg(windows)]
 mod session_file_dialog;
 mod shell_settings;
@@ -47,6 +50,18 @@ const DEFAULT_DATABASE_DIRECTORY: &str = "AudioRouter";
 const DEFAULT_DATABASE_FILE: &str = "state.sqlite";
 const DESKTOP_SESSION_ID: &str = "desktop-session";
 const DIAGNOSTIC_LOG_LIMIT_BYTES: u64 = 5 * 1024 * 1024;
+static PREVIOUS_PROCESS_INTERRUPTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+static OWNED_BACKEND_RUNNING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+static RESTORE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct BackendLiveness;
+impl Drop for BackendLiveness {
+    fn drop(&mut self) {
+        OWNED_BACKEND_RUNNING.store(false, std::sync::atomic::Ordering::Release);
+    }
+}
 /// WebView2 arguments: wry's defaults (setting any arguments replaces them)
 /// plus a 256 MB V8 old-space cap. While audio plays the UI makes short-lived
 /// garbage continuously; uncapped, V8 deferred full collection on a PC with
@@ -251,7 +266,7 @@ fn write_shell_rpc_log_with(
                 let summary = match request.method.as_str() {
                     "graph.commit" => result.map(audiorouter_transport::graph_activation_log_summary),
                     "devices.list" => result.map(audiorouter_transport::device_inventory_log_summary),
-                    "shell.panic" => result.cloned(),
+                    "shell.panic" | "shell.backendState" => result.cloned(),
                     "sessions.get" => result.map(|value| serde_json::json!({
                         "revision": value.get("revision"),
                         "nodes": value.get("nodes").and_then(serde_json::Value::as_array).map(Vec::len),
@@ -772,14 +787,102 @@ fn rpc_request(
             write_probe_marker(path, &contents)?;
         }
     }
-    response
+    response.map_err(|error| {
+        let status = backend_state::get();
+        if status.phase == backend_state::Phase::Stopped {
+            status.message.to_owned()
+        } else {
+            error
+        }
+    })
+}
+
+#[tauri::command]
+fn backend_state() -> backend_state::BackendState {
+    backend_state::get()
+}
+
+fn require_corruption_recovery() -> Result<(), String> {
+    let state = backend_state::get();
+    if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_some()
+        || OWNED_BACKEND_RUNNING.load(std::sync::atomic::Ordering::Acquire)
+        || state.phase != backend_state::Phase::Stopped
+        || state.reason != backend_state::Reason::CorruptDatabase
+    {
+        return Err("Backup restoration is available only after the owned backend stops for database corruption.".into());
+    }
+    Ok(())
+}
+
+#[tauri::command(async)]
+fn recovery_backups(
+    state: State<'_, ShellState>,
+) -> Result<Vec<database_recovery::BackupChoice>, String> {
+    require_corruption_recovery()?;
+    database_recovery::choices(&state.database_path)
+}
+
+#[tauri::command(async)]
+fn restore_recovery_backup(name: String, state: State<'_, ShellState>) -> Result<(), String> {
+    let _lock = RESTORE_LOCK
+        .try_lock()
+        .map_err(|_| "Backup restoration is already in progress.")?;
+    require_corruption_recovery()?;
+    database_recovery::restore(&state.database_path, &name)?;
+    PREVIOUS_PROCESS_INTERRUPTED.store(true, std::sync::atomic::Ordering::Relaxed);
+    start_owned_backend(&state.pipe_name)?;
+    Ok(())
+}
+
+fn publish_backend_state(state: backend_state::BackendState) {
+    backend_state::set(state.clone());
+    let request = JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: None,
+        method: "shell.backendState".into(),
+        params: None,
+    };
+    log_shell_rpc(
+        &request,
+        &Ok(JsonRpcResponse::success(
+            None,
+            serde_json::to_value(state).unwrap_or_default(),
+        )),
+    );
 }
 
 /// The window's Quit button: the same backend finalization as the tray's
 /// "Quit and stop audio" (stop audio, finish recordings), then exit. A refused
 /// quit leaves everything running and returns the reason to the window.
-#[tauri::command]
-fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), String> {
+///
+/// `force` is the window's "Quit anyway", offered only after the backend did
+/// not answer (RES-4): the shell exits without finalization. It is a
+/// deliberate quit, so the run marker is removed as on any exit and the next
+/// launch does not count a crash; an unfinished recording is found by the
+/// usual recording recovery.
+#[tauri::command(async)]
+fn quit_app(
+    app: tauri::AppHandle,
+    state: State<'_, ShellState>,
+    force: Option<bool>,
+) -> Result<(), String> {
+    if force == Some(true) {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!("window-quit")),
+            method: "shell.quitForced".into(),
+            params: None,
+        };
+        log_shell_rpc(
+            &request,
+            &Ok(JsonRpcResponse::success(
+                request.id.clone(),
+                serde_json::json!({"state": "forced"}),
+            )),
+        );
+        app.exit(0);
+        return Ok(());
+    }
     // A fresh key per click: a refused quit must not replay on retry.
     let key = format!(
         "window-quit-{}",
@@ -795,7 +898,35 @@ fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), S
     };
     let response = forward_rpc_request(&request, &state.pipe_name);
     log_shell_rpc(&request, &response);
-    let response = response?;
+    match quit_outcome(response) {
+        QuitOutcome::Exit => {
+            app.exit(0);
+            Ok(())
+        }
+        QuitOutcome::Refused(reason) => Err(reason),
+        QuitOutcome::Unresponsive(reason) => Err(format!("{QUIT_UNRESPONSIVE_PREFIX}{reason}")),
+    }
+}
+
+/// Prefix of a Quit error the window answers with "Quit anyway": the
+/// backend never answered, as opposed to answering with a refusal.
+const QUIT_UNRESPONSIVE_PREFIX: &str = "backendUnresponsive: ";
+
+#[derive(Debug, PartialEq, Eq)]
+enum QuitOutcome {
+    Exit,
+    /// The backend answered and kept running (for example a recording that
+    /// cannot be finalized); quitting anyway would lose that answer.
+    Refused(String),
+    /// No answer: the pipe failed or the deadline passed.
+    Unresponsive(String),
+}
+
+fn quit_outcome(response: Result<JsonRpcResponse, String>) -> QuitOutcome {
+    let response = match response {
+        Ok(response) => response,
+        Err(reason) => return QuitOutcome::Unresponsive(reason),
+    };
     if response
         .result
         .as_ref()
@@ -803,13 +934,36 @@ fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), S
         .and_then(serde_json::Value::as_str)
         == Some("stopped")
     {
-        app.exit(0);
-        return Ok(());
+        return QuitOutcome::Exit;
     }
-    Err(response
-        .error
-        .map(|error| error.message)
-        .unwrap_or_else(|| "backend finalization failed".into()))
+    QuitOutcome::Refused(
+        response
+            .error
+            .map(|error| error.message)
+            .unwrap_or_else(|| "backend finalization failed".into()),
+    )
+}
+
+#[test]
+fn quit_offers_quit_anyway_only_when_the_backend_did_not_answer() {
+    assert_eq!(
+        quit_outcome(Ok(JsonRpcResponse::success(
+            None,
+            serde_json::json!({"state": "stopped"})
+        ))),
+        QuitOutcome::Exit
+    );
+    assert!(matches!(
+        quit_outcome(Ok(JsonRpcResponse::success(
+            None,
+            serde_json::json!({"state": "running"})
+        ))),
+        QuitOutcome::Refused(_)
+    ));
+    assert_eq!(
+        quit_outcome(Err("control pipe request failed: timed out".into())),
+        QuitOutcome::Unresponsive("control pipe request failed: timed out".into())
+    );
 }
 
 /// Whether the editor page holds route edits that are not saved yet. The
@@ -1149,8 +1303,16 @@ fn forward_rpc_request_correlated(
     .map_err(|error| format!("request encoding failed: {error}"))?;
 
     #[cfg(windows)]
-    let response_frame = audiorouter_transport::round_trip(pipe_name, &frame)
-        .map_err(|error| format!("control pipe request failed: {error}"))?;
+    let response_frame = audiorouter_transport::round_trip_with_timeout(
+        pipe_name,
+        &frame,
+        std::time::Duration::from_secs(match request.method.as_str() {
+            "status.get" | "events.subscribe" => 2,
+            "system.quit" => 15,
+            _ => 60,
+        }),
+    )
+    .map_err(|error| format!("control pipe request failed: {error}"))?;
     #[cfg(not(windows))]
     let response_frame = {
         return Err("native shell transport is only available on Windows".into());
@@ -1765,10 +1927,26 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                 .map_err(|error| format!("backend database directory creation failed: {error}"))?;
         }
         let pipe_name = pipe_name.to_owned();
+        publish_backend_state(backend_state::BackendState::new(
+            backend_state::Phase::Starting,
+            backend_state::Reason::None,
+            0,
+        ));
         let handle = std::thread::Builder::new()
             .name("audiorouter-control".into())
             .spawn(move || {
+                OWNED_BACKEND_RUNNING.store(true, std::sync::atomic::Ordering::Release);
+                let _liveness = BackendLiveness;
+                publish_backend_state(backend_state::BackendState::new(
+                    backend_state::Phase::Starting, backend_state::Reason::None, 0));
                 let mut supervisor = BackendSupervisor::default();
+                // The control plane writes its playing, non-recording sessions
+                // here; it survives the plane's panic (RES-2).
+                let running_witness =
+                    std::sync::Arc::new(std::sync::Mutex::new(Vec::<EntityId>::new()));
+                if PREVIOUS_PROCESS_INTERRUPTED.load(std::sync::atomic::Ordering::Relaxed) {
+                    let _ = record_backend_failure(&database);
+                }
                 let mut safe_mode = recovery_safe_mode(&database).unwrap_or(false);
                 if safe_mode {
                     eprintln!("AudioRouter control backend starting in durable safe mode; routes remain stopped");
@@ -1776,6 +1954,7 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                 // The full page scan runs once per app start; a restart after
                 // a backend failure reopens without it (review 2026-11-01, P2-9).
                 let mut integrity_checked = false;
+                let mut backup_helper_started = false;
                 loop {
                     // A panic is a backend failure like any other: count it and
                     // restart, never leave the tray running with no backend.
@@ -1787,9 +1966,24 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                     } else {
                         Storage::open_checked(&database)
                     }
-                    .inspect_err(|error| log_storage_failure("backendOpen", error))
+                    .inspect_err(|error| {
+                        log_storage_failure("backendOpen", error);
+                        publish_backend_state(backend_state::BackendState::storage_failure(error));
+                    })
                     .map_err(database_open_error)?;
                     integrity_checked = true;
+                    if !backup_helper_started {
+                        let backup_database = database.clone();
+                        std::thread::Builder::new().name("audiorouter-daily-backup".into())
+                            .spawn(move || loop {
+                                let now = audiorouter_protocol::diagnostics::unix_time_ms() / 1000;
+                                if let Err(error) = Storage::ensure_daily_backup(&backup_database, now) {
+                                    log_storage_failure("dailyBackup", &error);
+                                }
+                                std::thread::sleep(std::time::Duration::from_secs(60));
+                            }).map_err(|_| "daily backup helper could not start".to_owned())?;
+                        backup_helper_started = true;
+                    }
                     let sid = audiorouter_transport::current_user_sid().map_err(|error| {
                         format!("current user identity lookup failed: {error:?}")
                     })?;
@@ -1797,9 +1991,12 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                         .load_client_enrollment(&sid)
                         .map_err(|error| format!("backend enrollment lookup failed: {error:?}"))?;
                     if enrollment.as_ref().is_some_and(|(_, revoked)| *revoked) {
+                        publish_backend_state(backend_state::BackendState::new(
+                            backend_state::Phase::Stopped, backend_state::Reason::EnrollmentRevoked, 0));
                         return Err("the current user enrollment is revoked".into());
                     }
                     let mut plane = ControlPlane::with_storage("desktop-shell", storage);
+                    plane.set_running_witness(running_witness.clone());
                     if enrollment.is_none() {
                         // The shell is the user's authenticated local editor:
                         // grant graph/session control on first launch. Device
@@ -1858,6 +2055,9 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             .map_err(|error| format!("current user enrollment lookup failed: {error:?}"))?
                             .ok_or_else(|| "current user is not enrolled".to_owned())?,
                     };
+                        publish_backend_state(backend_state::BackendState::new(
+                            if safe_mode { backend_state::Phase::SafeMode } else { backend_state::Phase::Running },
+                            backend_state::Reason::None, supervisor.failure_count(std::time::Instant::now())));
                         audiorouter_transport::serve_control_connections_forever_with_grant(
                             &pipe_name, plane, grant,
                         )
@@ -1865,10 +2065,22 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                     }))
                     .unwrap_or_else(|_| Err("control backend panicked".into()));
                     match result {
-                        Ok(()) => break,
+                        Ok(()) => {
+                            publish_backend_state(backend_state::BackendState::new(
+                                backend_state::Phase::Stopped, backend_state::Reason::None, 0));
+                            break;
+                        },
                         Err(error) => {
+                            // Preserve actionable storage failures instead of
+                            // hiding them behind repeated connection retries.
+                            if backend_state::get().phase == backend_state::Phase::Stopped {
+                                break;
+                            }
                             if safe_mode {
                                 if recovery_safe_mode(&database) != Some(false) {
+                                    publish_backend_state(backend_state::BackendState::new(
+                                        backend_state::Phase::Stopped, backend_state::Reason::RepeatedFailures,
+                                        supervisor.failure_count(std::time::Instant::now())));
                                     eprintln!(
                                         "AudioRouter safe-mode control backend stopped: {error}; backend thread exiting"
                                     );
@@ -1881,6 +2093,11 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                             let now = std::time::Instant::now();
                             let durable_failures = record_backend_failure(&database);
                             let decision = supervisor.record_failure(now);
+                            let count = durable_failures.unwrap_or_else(|| supervisor.failure_count(now));
+                            publish_backend_state(backend_state::BackendState::new(
+                                if count >= 3 { backend_state::Phase::SafeMode } else { backend_state::Phase::Restarting },
+                                if count >= 3 { backend_state::Reason::RepeatedFailures } else { backend_state::Reason::BackendFailure },
+                                count));
                             if durable_failures.is_some_and(|count| count >= 3) {
                                 eprintln!(
                                     "AudioRouter control backend stopped: {error}; entering durable safe mode with routes stopped"
@@ -1896,6 +2113,22 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                                         delay.as_millis(),
                                         supervisor.failure_count(now),
                                     );
+                                    let witnessed = running_witness
+                                        .lock()
+                                        .map(|mut slot| std::mem::take(&mut *slot))
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .map(|id| id.as_str().to_owned())
+                                        .collect();
+                                    let restore = backend_supervisor::sessions_to_restore(
+                                        safe_mode,
+                                        supervisor.failure_count(now),
+                                        durable_failures,
+                                        witnessed,
+                                    );
+                                    if !restore.is_empty() {
+                                        spawn_route_restore(pipe_name.clone(), restore);
+                                    }
                                     std::thread::sleep(delay);
                                 }
                                 BackendRestartDecision::StopSafeMode => {
@@ -1912,6 +2145,43 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
             })
             .map_err(|error| format!("backend thread creation failed: {error}"))?;
         Ok(Some(handle))
+    }
+}
+
+/// Play the witnessed routes again once the restarted backend answers
+/// (RES-2). Runs beside the supervisor, which is about to serve again.
+#[cfg(windows)]
+fn spawn_route_restore(pipe_name: String, session_ids: Vec<String>) {
+    let spawned = std::thread::Builder::new()
+        .name("audiorouter-route-restore".into())
+        .spawn(move || {
+            let outcome = tray_playback::restore_after_restart(
+                &mut backend_call(&pipe_name),
+                &session_ids,
+                40,
+                std::time::Duration::from_millis(250),
+            );
+            let request = JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(serde_json::json!("route-restore")),
+                method: "shell.routeRestore".into(),
+                params: None,
+            };
+            let state = if outcome.is_ok() {
+                "restored"
+            } else {
+                "notRestored"
+            };
+            log_shell_rpc(
+                &request,
+                &Ok(JsonRpcResponse::success(
+                    request.id.clone(),
+                    serde_json::json!({"state": state, "routes": session_ids.len()}),
+                )),
+            );
+        });
+    if spawned.is_err() {
+        eprintln!("AudioRouter route restore thread could not start");
     }
 }
 
@@ -2219,7 +2489,45 @@ fn main() {
         probe_file: std::env::var_os("AUDIOROUTER_SHELL_PROBE_FILE").map(std::path::PathBuf::from),
         database_path,
     };
+    let process_run = if std::env::var_os("AUDIOROUTER_CONTROL_PIPE").is_none()
+        && state.database_path.is_absolute()
+    {
+        match process_run::ProcessRun::begin(&state.database_path) {
+            Ok(run) => {
+                PREVIOUS_PROCESS_INTERRUPTED
+                    .store(run.interrupted, std::sync::atomic::Ordering::Relaxed);
+                if run.interrupted {
+                    let request = JsonRpcRequest {
+                        jsonrpc: "2.0".into(),
+                        id: None,
+                        method: "shell.previousProcessInterrupted".into(),
+                        params: None,
+                    };
+                    log_shell_rpc(
+                        &request,
+                        &Ok(JsonRpcResponse::success(
+                            None,
+                            serde_json::json!({"state": "interrupted", "generation": 1}),
+                        )),
+                    );
+                }
+                Some(run)
+            }
+            Err(_) => {
+                // If crash evidence cannot be written, do not risk an autoplay loop.
+                PREVIOUS_PROCESS_INTERRUPTED.store(true, std::sync::atomic::Ordering::Relaxed);
+                None
+            }
+        }
+    } else {
+        None
+    };
     let _backend = start_owned_backend(&state.pipe_name).unwrap_or_else(|error| {
+        publish_backend_state(backend_state::BackendState::new(
+            backend_state::Phase::Stopped,
+            backend_state::Reason::StorageUnavailable,
+            0,
+        ));
         eprintln!("AudioRouter backend unavailable: {error}");
         None
     });
@@ -2232,6 +2540,9 @@ fn main() {
         .manage(UiUnsaved::default())
         .manage(mcp_tunnel::McpTunnelService::default())
         .invoke_handler(tauri::generate_handler![
+            backend_state,
+            recovery_backups,
+            restore_recovery_backup,
             rpc_request,
             quit_app,
             set_ui_unsaved,
@@ -2359,31 +2670,24 @@ fn main() {
             // shell reattaching to a persistent backend) — the icon and the
             // true state silently disagreed until a second toggle. Falls
             // back to unmuted if the backend isn't reachable yet at startup.
-            let initial_muted = forward_rpc_request(
-                &JsonRpcRequest {
-                    jsonrpc: "2.0".into(),
-                    id: Some(serde_json::json!("tray-privacy-initial")),
-                    method: "status.get".into(),
-                    params: None,
-                },
-                &pipe_name,
-            )
-            .ok()
-            .and_then(|response| tray_privacy_muted(&response))
-            .unwrap_or(false);
             let _tray = TrayIconBuilder::with_id("audiorouter")
-                .icon(audio_router_tray_icon(initial_muted))
+                .icon(audio_router_tray_icon(false))
                 .menu(&menu)
                 .tooltip("AudioRouter")
                 .on_menu_event(move |app, event| {
                     // The editor window may have been released (closed to
                     // the tray); every action works without it.
-                    match event.id().as_ref() {
-                        "open" => {
-                            if let Err(error) = open_main_window(app) {
-                                eprintln!("AudioRouter window could not open: {error}");
-                            }
+                    if event.id().as_ref() == "open" {
+                        if let Err(error) = open_main_window(app) {
+                            eprintln!("AudioRouter window could not open: {error}");
                         }
+                        return;
+                    }
+                    let app = app.clone();
+                    let event_id = event.id().as_ref().to_owned();
+                    let pipe_name = pipe_name.clone();
+                    let items_for_handler = items_for_handler.clone();
+                    std::thread::spawn(move || match event_id.as_str() {
                         // Play/stop the selected session without the window.
                         "playback" => {
                             // Ask the backend now: the label may be older than the state.
@@ -2432,7 +2736,7 @@ fn main() {
                             }
                         }
                         _ => {}
-                    }
+                    });
                 })
                 // Refresh just before the menu opens, so it never shows stale state.
                 .on_tray_icon_event(move |_tray, event| {
@@ -2442,11 +2746,26 @@ fn main() {
                         ..
                     } = event
                     {
-                        refresh_tray_status(&items_for_icon, &pipe_for_icon);
+                        let items = items_for_icon.clone();
+                        let pipe = pipe_for_icon.clone();
+                        std::thread::spawn(move || refresh_tray_status(&items, &pipe));
                     }
                 })
                 .build(app)?;
-            refresh_tray_status(&tray_items, &tray_pipe_name);
+            let initial_app = app.handle().clone();
+            let initial_items = tray_items.clone();
+            let initial_pipe = tray_pipe_name.clone();
+            std::thread::spawn(move || {
+                let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: None,
+                    method: "status.get".into(), params: None };
+                if let Some(muted) = forward_rpc_request(&request, &initial_pipe).ok()
+                    .and_then(|response| tray_privacy_muted(&response)) {
+                    if let Some(tray) = initial_app.tray_by_id("audiorouter") {
+                        let _ = tray.set_icon(Some(audio_router_tray_icon(muted)));
+                    }
+                }
+                refresh_tray_status(&initial_items, &initial_pipe);
+            });
             app.manage(MainWindowScript(session_script.clone()));
             // A second launch of this program shows this window instead.
             #[cfg(windows)]
@@ -2479,7 +2798,8 @@ fn main() {
                 Ok(None) => {}
                 Err(reason) => eprintln!("local API did not start: {reason}"),
             }
-            if shell_settings::load(&shell_settings::path_beside(&database_path)).auto_play {
+            if !PREVIOUS_PROCESS_INTERRUPTED.load(std::sync::atomic::Ordering::Relaxed)
+                && shell_settings::load(&shell_settings::path_beside(&database_path)).auto_play {
                 let (items, pipe) = (tray_items.clone(), tray_pipe_name.clone());
                 std::thread::spawn(move || {
                     let outcome = tray_playback::autoplay(&mut backend_call(&pipe), 40, std::time::Duration::from_millis(500));
@@ -2512,7 +2832,16 @@ fn main() {
         })
         .build(tauri::generate_context!())
         .expect("error while building AudioRouter shell")
-        .run(|_app, event| {
+        .run(move |_app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                if let Some(run) = &process_run {
+                    if run.finish().is_err() {
+                        let request = JsonRpcRequest { jsonrpc: "2.0".into(), id: None,
+                            method: "shell.processMarkerCleanup".into(), params: None };
+                        log_shell_rpc(&request, &Err("marker cleanup failed".into()));
+                    }
+                }
+            }
             if let tauri::RunEvent::ExitRequested { code, api, .. } = event {
                 if !allow_exit(code) {
                     api.prevent_exit();

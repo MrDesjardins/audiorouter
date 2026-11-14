@@ -581,7 +581,7 @@ impl ControlPlane {
                     let monitor = self
                         .endpoint_monitor
                         .as_mut()
-                        .expect("endpoint monitor initialized above");
+                        .ok_or(ControlError::Internal("endpoint monitor missing"))?;
                     // The multi-path graph runs at 48 kHz; a 44.1/96 kHz device
                     // is resampled by the Windows audio engine as it opens.
                     let _ = buffer_duration_100ns;
@@ -737,7 +737,7 @@ impl ControlPlane {
             "branchNodeIds": self
                 .native_multi_input_worker
                 .as_ref()
-                .expect("worker attached above")
+                .ok_or(ControlError::Internal("attached native worker missing"))?
                 .output_node_ids(),
         }))
     }
@@ -906,7 +906,7 @@ impl ControlPlane {
         let binding = self
             .native_render_source_bindings
             .remove(bus_id)
-            .expect("binding was checked above");
+            .ok_or(ControlError::Internal("native binding missing"))?;
         self.deactivate_virtual_bridge(bus_id);
         let worker = audiorouter_windows_audio::NativeBridgeInputWorker::from_render_source_binding(
             binding, render, bridge,
@@ -959,7 +959,7 @@ impl ControlPlane {
         let monitor = self
             .endpoint_monitor
             .as_mut()
-            .expect("endpoint monitor initialized above");
+            .ok_or(ControlError::Internal("endpoint monitor missing"))?;
         let capture_client =
             audiorouter_windows_audio::SharedCapture::open_refreshed_bound_with_retry(
                 monitor,

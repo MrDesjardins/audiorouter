@@ -633,7 +633,7 @@ impl ControlPlane {
                 let branch_node_ids = self
                     .native_multi_input_worker
                     .as_ref()
-                    .expect("multi-input worker is attached")
+                    .ok_or(ControlError::Internal("multi-input worker missing"))?
                     .output_node_ids()
                     .to_vec();
                 let capture_bus_ids = session_virtual_capture_bus_ids(&session);
@@ -652,7 +652,7 @@ impl ControlPlane {
             if native_endpoint_attached {
                 let sample_rate_hz = self
                     .native_endpoint_worker_for_session(id)
-                    .expect("native_attached implies an endpoint worker")
+                    .ok_or(ControlError::Internal("attached endpoint worker missing"))?
                     .bridge()
                     .sample_rate_hz();
                 let activated = if candidate.is_some() {
@@ -676,7 +676,7 @@ impl ControlPlane {
                 let application_waiting = false;
                 if !application_waiting {
                     self.native_endpoint_worker_for_session_mut(id)
-                        .expect("native_attached implies an endpoint worker")
+                        .ok_or(ControlError::Internal("attached endpoint worker missing"))?
                         .start()
                         .map_err(audio_control_error)?;
                     #[cfg(windows)]
@@ -712,7 +712,9 @@ impl ControlPlane {
                 let sample_rate_hz = self
                     .native_render_source_worker
                     .as_ref()
-                    .expect("native render-source worker is attached")
+                    .ok_or(ControlError::Internal(
+                        "native render-source worker missing",
+                    ))?
                     .bridge()
                     .sample_rate_hz();
                 self.activate_native_render_source_graph(id, generation, sample_rate_hz)?;
@@ -871,7 +873,9 @@ impl ControlPlane {
                 let checkpoint = self
                     .recorders
                     .get(id)
-                    .expect("recorder candidate inserted above")
+                    .ok_or(ControlError::Internal(
+                        "inserted recorder candidate missing",
+                    ))?
                     .checkpoint();
                 if let Some(storage) = &self.storage {
                     storage
