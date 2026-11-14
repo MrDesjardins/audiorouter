@@ -511,3 +511,54 @@ No new code was needed.
   Effects builds pass both widths. `tool_combinations.rs` passes.
 - Not done: no multichannel-only plugin is in the corpus, so the refusal text
   was read, not seen from a real plugin.
+
+## Census run 3 (2026-11-14): the wide corpus, with instruments
+
+The census now also starts each instrument in stereo, checks it is quiet, holds
+one note for 150 blocks and checks that the note is audible
+(`census_instrument` in `crates/control/src/plugin_census_tests.rs`). The report
+is published as [plugin-census.md](../../operations/plugin-census.md), generated
+by `tools/plugin-census-report.mjs` from the JSON report; only file names are
+published.
+
+Corpus: `C:\Program Files\VSTPlugins`, `C:\Program Files\Common Files\VST3`,
+and the free folders under `C:\Users\miste\AppData\Local\Temp\vstcorpus`
+(Dragonfly 64/32, ReaPlugs 32, Airwindows, Dexed, DPF 64/32, FILT-R, Gate-12,
+MasterMe, Reevr, RipplerX, Surge XT, TIME-12, WolfShaper, Zam 64/32). Debug
+x64 workers and the release x86 workers; 343 candidate files, 231 s.
+
+Result: 190 effects, 172 clean at both widths (load, 100 blocks of tone, save,
+restore in place and in a fresh worker); 4 instruments, 3 play a note (Dexed,
+RipplerX, Surge XT); Blue Cat skipped as always. The 18 recorded effect rows:
+
+- 8 are the correct refusal (Kars and Nekobi, VST2 and VST3, x64 and x86):
+  "it is an instrument; add it with the Instrument tool". Their scan-time
+  classification still says effect, so the refusal comes at load (P1 limit).
+- 4 are AmplitudeImposer (Airwindows, VST2 and VST3, x64 and x86): it loads,
+  runs and keeps state, but its output is silent with the default settings.
+- 4 are ProM and ZamAutoSat (x64 and x86): each rejects its own saved state
+  (`StateUnsupported`); the route keeps running.
+- 2 are ReaControlMIDI (x64 and x86): it saves state, then **crashes its
+  worker** (0xC0000005) when the saved state is restored. The worker boundary
+  contained it; the control plane stayed up and the next worker worked. A
+  plugin's own state can always crash it, so this stays a recorded limitation
+  (ReaPlugs are REAPER builds; their chunk is not a portable VST2 state).
+- PolyMAX is an instrument and stays silent: its licence app (UA Connect) is
+  not signed in on this PC, the known case.
+
+## Review and build (2026-11-14)
+
+- Repaired a test left uncompilable by the previous session: the new
+  "old accumulating process call" test had been inserted into `opcode_tests`,
+  where its `valid_effect()` helper is not in scope; it now lives in `mod
+  tests` in `vst2.rs`, and `Vst2HeaderError::ReplacingUnsupported` plus
+  `MissingReplacingProcessor` share the plain reason.
+- Full local gate from the handoff page: `cargo fmt --all -- --check`,
+  `cargo fmt --manifest-path src-tauri/Cargo.toml -- --check`, both Clippy
+  runs, `cargo test --workspace`, `source_combinations` +
+  `tool_combinations`, `npm --prefix contracts run check:drift`,
+  `npm --prefix ui run format:check`, `lint`, `test` and
+  `check-tool-guide-catalog.mjs`: all exit 0 (`target/validate.log`).
+- Not done: sidechain (P5) and the automatic Mixer when a second source is
+  connected to an occupied plugin input both remain as the issue plan
+  describes; the work here fixes hosting, the editor lifecycle and instruments.

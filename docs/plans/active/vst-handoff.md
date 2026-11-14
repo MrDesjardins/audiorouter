@@ -33,15 +33,32 @@ apply in full; the ones that bit this work are repeated under "Rules" below.
 | --- | --- | --- |
 | P1 instrument detection | VST2 at load (`effFlagsIsSynth`), VST3 from `moduleinfo.json`, learned refusals saved to `%LOCALAPPDATA%\AudioRouter\learned-instruments.txt` | unit tests |
 | P8a 32-bit | x86 Rust and C++ workers, routing by bitness, packaging scripts, CI installs `i686-pc-windows-msvc` | real 32-bit ReaPlugs, Pitchproof, Dragonfly, Zam |
-| P0 census | `plugin_census` tool, two corpus runs (about 75 plugin builds) | reports in the plan |
+| P0 census | `plugin_census` tool, three corpus runs (about 75 plugin builds each; run 3 is 343 files, 190 effects and 4 instruments); the wide results are published as [plugin-census.md](../../operations/plugin-census.md) | reports in the plan |
 | P8b instruments and MIDI | `NodeKind::Instrument`, both workers, `midi.devices`, `midi.sendEvents`, MCP `list_midi_devices` and `play_notes`, hardware MIDI input (winmm), UI picker group and Properties keyboard, docs | VST2 test synth and Surge XT (VST3) play through `ControlPlane::dispatch`; browser test in three themes |
 | P2 (part) | host callback opcodes fixed and filled; `effStartProcess`/`effStopProcess`; `ioChanged` suspends and resumes | pinned-opcode unit tests |
 | P3 (part) | `ARST2` state envelope with parameter snapshot fallback | round trip, and the fallback itself with Dragonfly Plate Reverb (`vst3_state_fallback`) |
 | P6 (part) | editor opens on a stopped session | Pitchproof, Dragonfly through dispatch |
 
-## What is open, in the order to do it
+## Review session (2026-11-14, later)
 
-Each item says what "done" needs. Items marked **owner** cannot be finished
+- Full local gate passed (all 11 steps exit 0, `target/validate.log`), and a
+  wide census ran with the corpus listed in the plan: 172 of 190 effects clean,
+  Dexed, RipplerX and Surge XT play a note, PolyMAX silent (UA Connect signed
+  out), Blue Cat skipped. The published page is
+  [plugin-census.md](../../operations/plugin-census.md). Recorded limitations:
+  ReaControlMIDI crashes its own worker when restoring its state (contained),
+  ProM and ZamAutoSat reject their state, Kars and Nekobi are recognised as
+  instruments at load rather than at scan.
+- A test left uncompilable by the previous session was moved into `mod tests`
+  in `vst2.rs`; the refusal reason for the old `process` call is now its own
+  sentence.
+- The release build (`tools/build-desktop.ps1`, with the six workers) and the
+  `fresh_install_shell` run are redone in this session. The built exe is the
+  one to try; nothing is pushed and there is still no PR.
+- Still open, unchanged: sidechain (E/P5), the automatic Mixer on an occupied
+  plugin input, resizable editors and keyboard/DPI work (F/P6).
+
+## What is open, in the order to do itEach item says what "done" needs. Items marked **owner** cannot be finished
 without the owner; prepare everything else and then ask once, with one list.
 
 ### A. Must fix before any PR (small, no audio, no popups)
