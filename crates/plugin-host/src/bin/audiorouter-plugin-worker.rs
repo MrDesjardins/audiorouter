@@ -29,6 +29,20 @@ type WorkerArguments = (
     Option<WorkerAudioBusLayout>,
 );
 
+/// The worker's stderr line is what the supervisor shows after a failed
+/// load: say "instrument" plainly instead of printing the enum.
+#[cfg(windows)]
+fn load_failure_text(
+    prefix: &str,
+    error: &audiorouter_plugin_host::vst2::Vst2LibraryError,
+) -> String {
+    use audiorouter_plugin_host::vst2::Vst2LibraryError;
+    match error {
+        Vst2LibraryError::InvalidEffect(header) => format!("{prefix}: {}", header.user_message()),
+        other => format!("{prefix}: {other:?}"),
+    }
+}
+
 fn main() -> ExitCode {
     suppress_windows_fault_reporting_ui();
     // Before any plugin is loaded: editors then draw in real pixels and
@@ -185,7 +199,7 @@ fn run() -> Result<(), String> {
         .clone()
         .map(|path| Vst2EditorThread::spawn_loading(&path))
         .transpose()
-        .map_err(|error| format!("VST2 load failed: {error:?}"))?;
+        .map_err(|error| load_failure_text("VST2 load failed", &error))?;
     #[cfg(windows)]
     let (first_plugin, first_editor) = loaded.map_or((None, None), |(plugin, editor)| {
         (Some(plugin), Some(editor))
@@ -307,7 +321,9 @@ fn run() -> Result<(), String> {
                     for member in &plugins {
                         // Loaded on its editor's UI thread (see `spawn_loading`).
                         let (plugin, editor) = Vst2EditorThread::spawn_loading(&member.path)
-                            .map_err(|error| format!("chain member load failed: {error:?}"))?;
+                            .map_err(|error| {
+                                load_failure_text("chain member load failed", &error)
+                            })?;
                         vst2_plugins.push(plugin);
                         vst2_editors.push(editor);
                     }

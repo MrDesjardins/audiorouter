@@ -28,6 +28,9 @@ pub const VST2_FLAG_CAN_REPLACING: i32 = 1 << 4;
 pub const VST2_FLAG_PROGRAM_CHUNKS: i32 = 1 << 5;
 /// `effFlagsHasEditor`: the plugin exposes a native editor.
 pub const VST2_FLAG_HAS_EDITOR: i32 = 1 << 0;
+/// `effFlagsIsSynth`: the plugin is an instrument (needs MIDI input). Value
+/// from the public `aeffect.h` (`effFlagsIsSynth = 1 << 8`; also vestige/FST).
+pub const VST2_FLAG_IS_SYNTH: i32 = 1 << 8;
 pub const VST2_MAX_AUDIO_CHANNELS: i32 = 64;
 pub const VST2_MAX_INPUT_CHANNELS: i32 = 64;
 pub const VST2_MAX_PARAMETERS: i32 = 65536;
@@ -113,12 +116,40 @@ pub enum Vst2HeaderError {
     MissingReplacingProcessor,
     MissingParameterSetter,
     MissingParameterGetter,
-    InvalidChannels { inputs: i32, outputs: i32 },
+    InvalidChannels {
+        inputs: i32,
+        outputs: i32,
+    },
     TooManyParameters,
     ReplacingUnsupported,
+    /// The plugin declares `effFlagsIsSynth`. Instruments need a MIDI source,
+    /// which the graph does not have yet (see the full-compatibility plan).
+    Instrument,
+}
+
+impl Vst2HeaderError {
+    /// Plain wording for the user; the worker prints it so the supervisor
+    /// can show it ("plugin is an instrument ...").
+    pub fn user_message(self) -> &'static str {
+        match self {
+            Self::Instrument => {
+                "VST2 plugin is an instrument; AudioRouter hosts audio effects only (no MIDI input yet)"
+            }
+            Self::InvalidChannels { .. } => {
+                "VST2 plugin has an audio channel layout AudioRouter cannot use"
+            }
+            _ => "VST2 plugin header is not a usable audio effect",
+        }
+    }
 }
 
 impl Vst2Effect {
+    /// Whether the header declares an instrument. Readable without calling
+    /// plugin code.
+    pub fn is_instrument(&self) -> bool {
+        self.flags & VST2_FLAG_IS_SYNTH != 0
+    }
+
     /// Validate only fields that can be checked without invoking plugin code.
     /// The returned header is still untrusted until the worker owns its
     /// lifetime and applies the callback/audio-buffer policy.
@@ -137,6 +168,11 @@ impl Vst2Effect {
         }
         if self.get_parameter.is_none() {
             return Err(Vst2HeaderError::MissingParameterGetter);
+        }
+        // Before the channel rules: an instrument often has no inputs, and
+        // "is an instrument" is the useful reason.
+        if self.is_instrument() {
+            return Err(Vst2HeaderError::Instrument);
         }
         if !(1..=VST2_MAX_INPUT_CHANNELS).contains(&self.num_inputs)
             || !(1..=VST2_MAX_AUDIO_CHANNELS).contains(&self.num_outputs)
@@ -223,6 +259,27 @@ mod tests {
     }
 
     #[test]
+    fn an_instrument_header_is_refused_with_its_own_reason() {
+        // Regression (2026-11-13): BC PatchWork Synth loaded as an effect
+        // because only its (empty) scan metadata was checked.
+        let mut effect = valid_effect();
+        effect.flags |= VST2_FLAG_IS_SYNTH;
+        assert_eq!(
+            effect.validate_audio_effect(),
+            Err(Vst2HeaderError::Instrument)
+        );
+        // The reason wins over a missing-input layout too.
+        effect.num_inputs = 0;
+        assert_eq!(
+            effect.validate_audio_effect(),
+            Err(Vst2HeaderError::Instrument)
+        );
+        assert!(Vst2HeaderError::Instrument
+            .user_message()
+            .contains("instrument"));
+    }
+
+    #[test]
     fn rejects_headers_that_cannot_be_used_as_bounded_audio_effects() {
         let mut effect = valid_effect();
         effect.magic = 0;
@@ -301,6 +358,7 @@ mod opcode_tests {
         assert_eq!(VST2_FLAG_HAS_EDITOR, 1);
         assert_eq!(VST2_FLAG_CAN_REPLACING, 1 << 4);
         assert_eq!(VST2_FLAG_PROGRAM_CHUNKS, 1 << 5);
+        assert_eq!(VST2_FLAG_IS_SYNTH, 256);
         assert_eq!(EFF_SET_SAMPLE_RATE, 10);
         assert_eq!(EFF_SET_BLOCK_SIZE, 11);
         assert_eq!(EFF_MAINS_CHANGED, 12);

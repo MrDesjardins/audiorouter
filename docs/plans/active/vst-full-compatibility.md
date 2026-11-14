@@ -39,7 +39,8 @@ not run.
 | --- | --- |
 | #136 fixes + chain matrix | committed `268fa0146` |
 | Spec revision (D3) | done in the same change as this page |
-| P1 instrument detection | next |
+| P1 instrument detection | load-time refusal done (`effFlagsIsSynth`, unit tests pass, Clippy clean); not run against the real BC Synth (demo popup); scan-time classification via a per-fingerprint cache and the VST3 worker unchanged |
+| P8a 32-bit | audit of worker protocol in progress |
 | everything else | not started |
 
 Related: [issue #136 plan](issue-136-vst-experience.md),
