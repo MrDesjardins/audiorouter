@@ -425,7 +425,12 @@ Open, in suggested order:
   `StateUnsupported`.
 - Exercised: census round trip (save, restore, restore into a fresh worker) with
   Dragonfly Plate Reverb and Surge XT Effects: ok, same as before.
-- **Not exercised:** the fallback itself. ZamAutoSat, the known state-rejecting
-  plugin, exposes no parameters, so there is nothing to restore and it still
-  reports `restore failed`. It needs a plugin that rejects state and has
-  parameters, or a fixture VST3; no unit test exists yet.
+- **Fallback exercised (2026-11-14, later):** `crates/plugin-host/tests/vst3_state_fallback.rs`
+  (opt-in) sets a parameter on Dragonfly Plate Reverb (0.8 to 0.125), saves,
+  then gives a fresh worker a state whose component section is damaged. With no
+  values beside it the worker reports the state-unsupported limitation; with
+  the saved values the restore succeeds and the parameter reads 0.125 again.
+  Passed with the debug worker. The same test fails its "really refuses" step on
+  Surge XT Effects, because that JUCE plugin accepts a damaged state without an
+  error; use a plugin that refuses (DPF plugins do). ZamAutoSat still reports
+  `restore failed`: it has no parameters to fall back on.

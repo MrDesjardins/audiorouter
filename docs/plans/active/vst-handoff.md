@@ -36,7 +36,7 @@ apply in full; the ones that bit this work are repeated under "Rules" below.
 | P0 census | `plugin_census` tool, two corpus runs (about 75 plugin builds) | reports in the plan |
 | P8b instruments and MIDI | `NodeKind::Instrument`, both workers, `midi.devices`, `midi.sendEvents`, MCP `list_midi_devices` and `play_notes`, hardware MIDI input (winmm), UI picker group and Properties keyboard, docs | VST2 test synth and Surge XT (VST3) play through `ControlPlane::dispatch`; browser test in three themes |
 | P2 (part) | host callback opcodes fixed and filled; `effStartProcess`/`effStopProcess`; `ioChanged` suspends and resumes | pinned-opcode unit tests |
-| P3 (part) | `ARST2` state envelope with parameter snapshot fallback | round trip only; the fallback path is **untested** |
+| P3 (part) | `ARST2` state envelope with parameter snapshot fallback | round trip, and the fallback itself with Dragonfly Plate Reverb (`vst3_state_fallback`) |
 | P6 (part) | editor opens on a stopped session | Pitchproof, Dragonfly through dispatch |
 
 ## What is open, in the order to do it
@@ -75,7 +75,8 @@ without the owner; prepare everything else and then ask once, with one list.
    "Stop all notes"), and run `check-tool-guide-property-coverage.mjs`,
    `site/generate-catalogs.mjs`, `site/check-guides.mjs`. A property may be
    recorded or carry a written exemption; say which.
-2. **Snapshot fallback test (P3).** Add a "reject restore" switch to a test
+2. **Done 2026-11-14:** `crates/plugin-host/tests/vst3_state_fallback.rs`, run
+   with Dragonfly Plate Reverb (see the plan, P3 step 1). Original note: Add a "reject restore" switch to a test
    path so a plugin with parameters refuses its state, and assert the
    parameters come back. Simplest: an environment variable read only by the
    VST3 worker in debug builds, or a small fixture VST3. Without this the
@@ -227,6 +228,7 @@ Real-plugin tests (set the worker paths to `target/debug/*.exe` first:
 | `plugin_census` (`crates/control/src/plugin_census_tests.rs`) | `AUDIOROUTER_CENSUS_DIRS`, `AUDIOROUTER_CENSUS_SKIP` (`,` or `;`), `AUDIOROUTER_CENSUS_REPORT` |
 | `an_instrument_node_starts_a_worker_and_plays_midi` | `AUDIOROUTER_TEST_INSTRUMENT` or `AUDIOROUTER_TEST_VST2_INSTRUMENT` |
 | `the_editor_opens_while_the_session_is_stopped` | `AUDIOROUTER_TEST_PLUGIN` (opens a window: ask first) |
+| `vst3_state_fallback` (`crates/plugin-host/tests`) | `AUDIOROUTER_TEST_VST3_WORKER`, `AUDIOROUTER_TEST_VST3_EFFECT` (a plugin that refuses a damaged state, e.g. Dragonfly) |
 | `vst2_chain_matrix` (`crates/plugin-host/tests`) | `AUDIOROUTER_CHAIN_WORKER`, `AUDIOROUTER_CHAIN_FILTER`, `AUDIOROUTER_CHAIN_SKIP` |
 | `ui/e2e/instrument-editor.pw.ts` | none (route harness) |
 
