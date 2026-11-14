@@ -409,5 +409,5 @@ Open, in suggested order:
    scale, restart flags, parameter-snapshot state fallback; Steinberg validator).
 5. P5 sidechain, P6 remainder (resizable editors, focus, DPI), P7 shared VST3
    worker (only if the census shows a need), P9 release gate and compatibility
-   page, wider census corpus, CI needing the i686 target.
+   page, wider census corpus. (CI i686 target: added to `ci.yml` release job and `manual-release.yml` on 2026-11-14; not yet seen running on GitHub.)
 6. Before a PR: read the check annotations and ask the owner for approval.
