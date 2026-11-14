@@ -203,13 +203,19 @@ fn backup_connection(
         });
     }
     write_backup(destination, |path| {
-        connection
-            .backup(
-                rusqlite::MAIN_DB,
-                path,
-                None::<fn(rusqlite::backup::Progress)>,
-            )
-            .map_err(StorageError::Sql)
+        // One step copies every page inside a single read transaction: a
+        // consistent snapshot that WAL lets the backend keep writing beside.
+        // Copying in small steps restarted the copy after every commit from
+        // the backend's own connection, so a large library might never finish.
+        let mut copy = Connection::open(path)?;
+        let backup = rusqlite::backup::Backup::new(connection, &mut copy)?;
+        match backup.step(-1)? {
+            rusqlite::backup::StepResult::Done => Ok(()),
+            _ => Err(StorageError::Sql(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_BUSY),
+                Some("the database stayed busy during the backup".into()),
+            ))),
+        }
     })
 }
 
@@ -6914,6 +6920,39 @@ mod tests {
         assert_eq!(count, 0);
         drop(storage);
         std::fs::remove_file(path).unwrap();
+    }
+
+    /// RES-1: the daily backup runs beside the backend's own connection. It
+    /// must finish while that connection writes, holding committed data only.
+    #[test]
+    fn a_backup_completes_beside_an_open_write_and_holds_committed_data() {
+        let directory = std::env::temp_dir().join(format!(
+            "audiorouter-storage-backup-beside-write-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        let source = directory.join("source.sqlite");
+        let backup = directory.join("backup.sqlite");
+        let restored = directory.join("restored.sqlite");
+        let writer = Storage::open(&source).unwrap();
+        writer
+            .store_audio_media("committed", "committed.wav", "wav", &[1, 2, 3], None)
+            .unwrap();
+        // An uncommitted write of the backend's connection is in progress.
+        writer.connection.execute_batch("BEGIN IMMEDIATE;").unwrap();
+        writer
+            .store_audio_media("uncommitted", "uncommitted.wav", "wav", &[4, 5, 6], None)
+            .unwrap();
+        Storage::backup_database(&source, &backup).unwrap();
+        writer.connection.execute_batch("ROLLBACK;").unwrap();
+        drop(writer);
+        Storage::restore_backup(&backup, &restored).unwrap();
+        let storage = Storage::open(&restored).unwrap();
+        assert!(storage.load_audio_media("committed").unwrap().is_some());
+        assert!(storage.load_audio_media("uncommitted").unwrap().is_none());
+        drop(storage);
+        let _ = std::fs::remove_dir_all(&directory);
     }
 
     /// Review 2026-11-01, P2-7: imported audio lives in the database, so a
