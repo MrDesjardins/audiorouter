@@ -21,6 +21,7 @@ const pluginEntry: PluginScanEntry = {
     version: "1.0.0",
     classIds: [],
     compatibility: "supportedVst3X64",
+    instrument: false,
   },
   error: null,
   errorCode: null,

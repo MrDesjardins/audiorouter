@@ -546,6 +546,16 @@ const previewBackend: UiBackend = {
     sequence += 1;
     return { sessionId, nodeId, state: sourceStates.get(nodeId) ?? "stopped", loop: false };
   },
+  // Offline MIDI: one fake keyboard, and notes are only recorded for the e2e to read back.
+  async midiDevices() {
+    return { devices: ["Fixture Keystation"], instruments: [] };
+  },
+  async midiSendEvents(sessionId: string, nodeId: string, events: Array<{ type: string; note?: number }>) {
+    if (!running || sessionId !== committed.id) throw new Error("Fixture route is stopped");
+    const sent = ((window as unknown as { __routeFixtureMidi?: unknown[] }).__routeFixtureMidi ??= []);
+    sent.push(...events);
+    return { sessionId, nodeId, accepted: events.length, scheduled: 0, heldNotes: 1 };
+  },
   // The offline harness has no worker to recover, so Retry always stays silenced.
   async resumePlugin(sessionId: string, nodeId: string) {
     return { sessionId, nodeId, resumed: false };
