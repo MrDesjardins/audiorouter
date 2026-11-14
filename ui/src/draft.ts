@@ -11,6 +11,14 @@ import type { UiBackend } from "./backend";
 import { sameJsonValue } from "./sessionInventory";
 import { cableEndpointName } from "./virtualCableStatus";
 
+/** Scan results a plugin can be added from (32-bit ones run in a 32-bit worker). */
+export const SUPPORTED_PLUGIN_COMPATIBILITY: readonly string[] = [
+  "supportedVst2X64Gated",
+  "supportedVst3X64",
+  "supportedVst2X86",
+  "supportedVst3X86",
+];
+
 export type DraftChange = {
   path: `/nodes/${number}/${"enabled" | "bypass"}` | `/nodes/${number}/parameters/${string}`;
   value: boolean | number | string;
@@ -1045,7 +1053,7 @@ export function setVirtualBusDraftCable(
  */
 export function appendPluginPlaceholderNode(session: Session, entry: PluginScanEntry): Session {
   const identity = entry.identity;
-  if (!identity || !["supportedVst2X64Gated", "supportedVst3X64"].includes(identity.compatibility)) {
+  if (!identity || !SUPPORTED_PLUGIN_COMPATIBILITY.includes(identity.compatibility)) {
     throw new Error("Only a supported x64 scan result can be added to the graph");
   }
   let suffix = 1;
@@ -1694,7 +1702,7 @@ export function pluginCatalog(
   for (const inventory of inventories) {
     for (const entry of inventory.entries) {
       const identity = entry.identity;
-      if (!identity || !["supportedVst2X64Gated", "supportedVst3X64"].includes(identity.compatibility)) continue;
+      if (!identity || !SUPPORTED_PLUGIN_COMPATIBILITY.includes(identity.compatibility)) continue;
       const key = `${identity.sha256}:${identity.binaryPath.toLowerCase()}`;
       if (seen.has(key)) continue;
       seen.add(key);

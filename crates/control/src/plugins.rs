@@ -9,6 +9,9 @@ use super::*;
 pub(crate) enum PluginWorkerKind {
     Vst2,
     Vst3,
+    /// The 32-bit builds of the two workers, for x86 plugins.
+    Vst2X86,
+    Vst3X86,
 }
 
 impl PluginWorkerKind {
@@ -19,12 +22,30 @@ impl PluginWorkerKind {
         }
     }
 
+    /// The worker for a scanned plugin: its format and its bitness (a 32-bit
+    /// plugin cannot load into a 64-bit process).
+    pub(crate) fn for_identity(
+        format: audiorouter_plugin_host::PluginFormat,
+        architecture: audiorouter_plugin_host::PeArchitecture,
+    ) -> Self {
+        let x86 = architecture == audiorouter_plugin_host::PeArchitecture::X86;
+        match (Self::for_format(format), x86) {
+            (Self::Vst3, true) => Self::Vst3X86,
+            (_, true) => Self::Vst2X86,
+            (kind, false) => kind,
+        }
+    }
+
     pub(crate) fn file_name(self) -> &'static str {
         match (self, cfg!(windows)) {
             (Self::Vst2, true) => "audiorouter-plugin-worker.exe",
             (Self::Vst2, false) => "audiorouter-plugin-worker",
             (Self::Vst3, true) => "audiorouter-vst3-worker.exe",
             (Self::Vst3, false) => "audiorouter-vst3-worker",
+            (Self::Vst2X86, true) => "audiorouter-plugin-worker-x86.exe",
+            (Self::Vst2X86, false) => "audiorouter-plugin-worker-x86",
+            (Self::Vst3X86, true) => "audiorouter-vst3-worker-x86.exe",
+            (Self::Vst3X86, false) => "audiorouter-vst3-worker-x86",
         }
     }
 
@@ -32,6 +53,8 @@ impl PluginWorkerKind {
         match self {
             Self::Vst2 => "AUDIOROUTER_PLUGIN_WORKER_PATH",
             Self::Vst3 => "AUDIOROUTER_VST3_WORKER_PATH",
+            Self::Vst2X86 => "AUDIOROUTER_PLUGIN_WORKER_X86_PATH",
+            Self::Vst3X86 => "AUDIOROUTER_VST3_WORKER_X86_PATH",
         }
     }
 }
@@ -196,6 +219,9 @@ pub(crate) fn start_plugin_bridges(
         .iter()
         .filter(|(id, (identity, _, _, _, _))| {
             identity.format == audiorouter_plugin_host::PluginFormat::Vst2
+                // A chain is one process, so it cannot mix bitness; each 32-bit
+                // plugin runs in its own 32-bit worker.
+                && identity.architecture == audiorouter_plugin_host::PeArchitecture::X64
                 && session
                     .nodes
                     .iter()
@@ -219,8 +245,9 @@ pub(crate) fn start_plugin_bridges(
             node_id: node.id.as_str().to_owned(),
             message: format!("\"{}\" cannot play: {message}", node.name),
         };
-        let worker_executable = require_plugin_worker(PluginWorkerKind::for_format(
+        let worker_executable = require_plugin_worker(PluginWorkerKind::for_identity(
             verified.format,
+            verified.architecture,
         ))
         .map_err(|error| match error {
             ControlError::InvalidRequest(message) => not_ready(message),
@@ -1361,6 +1388,8 @@ impl ControlPlane {
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst3X86 => "supportedVst3X86",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst2X86 => "supportedVst2X86",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => "unsupportedInstrument",
                     }
@@ -1479,6 +1508,8 @@ impl ControlPlane {
                     "compatibility": match identity.compatibility() {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X64 => "supportedVst3X64",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X64Gated => "supportedVst2X64Gated",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst3X86 => "supportedVst3X86",
+                        audiorouter_plugin_host::PluginCompatibility::SupportedVst2X86 => "supportedVst2X86",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => "unsupportedInstrument",
                     }
@@ -1873,7 +1904,10 @@ impl ControlPlane {
                 })?;
             identity.metadata.class_ids.swap(0, index);
         }
-        let executable = require_plugin_worker(PluginWorkerKind::for_format(identity.format))?;
+        let executable = require_plugin_worker(PluginWorkerKind::for_identity(
+            identity.format,
+            identity.architecture,
+        ))?;
         let worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
             #[cfg(windows)]
             {

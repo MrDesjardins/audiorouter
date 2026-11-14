@@ -16,6 +16,7 @@
 //!     -- --ignored --nocapture
 //!
 //! Environment:
+//! - `AUDIOROUTER_CHAIN_WORKER`: path of the worker exe (the 32-bit build for 32-bit plugins).
 //! - `AUDIOROUTER_CHAIN_PLUGINS`: `KEY=path;KEY=path` replaces the default
 //!   plugin paths. Keys: BC (Blue Cat PatchWork), PP (Pitchproof x64),
 //!   RC (ReaComp), EQ (ReaEQ).
@@ -76,6 +77,10 @@ unsafe extern "system" {
 }
 
 fn worker_path() -> String {
+    // AUDIOROUTER_CHAIN_WORKER selects the 32-bit worker for 32-bit plugins.
+    if let Ok(path) = std::env::var("AUDIOROUTER_CHAIN_WORKER") {
+        return path;
+    }
     std::env::var("CARGO_BIN_EXE_audiorouter_plugin_worker").unwrap_or_else(|_| {
         std::env::current_exe()
             .expect("test path")
@@ -246,9 +251,12 @@ fn roots_of(path: &std::path::Path) -> Vec<PathBuf> {
 fn discover(key: &'static str, path: PathBuf) -> Result<Plugin, String> {
     let roots = roots_of(&path);
     let identity = inspect_binary(&path, &roots).map_err(|error| format!("inspect: {error:?}"))?;
-    if identity.compatibility() != PluginCompatibility::SupportedVst2X64Gated {
+    if !matches!(
+        identity.compatibility(),
+        PluginCompatibility::SupportedVst2X64Gated | PluginCompatibility::SupportedVst2X86
+    ) {
         return Err(format!(
-            "not a supported x64 VST2 effect: {:?}",
+            "not a supported VST2 effect: {:?}",
             identity.compatibility()
         ));
     }

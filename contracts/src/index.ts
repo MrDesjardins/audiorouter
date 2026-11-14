@@ -115,6 +115,8 @@ export interface PluginScanEntry {
     compatibility:
       | "supportedVst3X64"
       | "supportedVst2X64Gated"
+      | "supportedVst3X86"
+      | "supportedVst2X86"
       | "unsupportedFormat"
       | "unsupportedInstrument";
   } | null;

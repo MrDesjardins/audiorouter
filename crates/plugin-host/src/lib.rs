@@ -144,6 +144,9 @@ pub enum PluginFormat {
 pub enum PluginCompatibility {
     SupportedVst3X64,
     SupportedVst2X64Gated,
+    /// A 32-bit plugin, hosted by the 32-bit worker process.
+    SupportedVst3X86,
+    SupportedVst2X86,
     UnsupportedFormat,
     /// An x64 plugin whose metadata declares an instrument; AudioRouter has
     /// no MIDI input, so it is listed with its reason but cannot be added.
@@ -416,20 +419,21 @@ pub struct PluginIdentity {
 impl PluginIdentity {
     pub fn compatibility(&self) -> PluginCompatibility {
         if self.metadata.instrument
-            && self.architecture == PeArchitecture::X64
+            && matches!(self.architecture, PeArchitecture::X64 | PeArchitecture::X86)
             && self.format != PluginFormat::Unknown
         {
             return PluginCompatibility::UnsupportedInstrument;
         }
-        if self.format == PluginFormat::Vst3 && self.architecture == PeArchitecture::X64 {
-            PluginCompatibility::SupportedVst3X64
-        } else if cfg!(windows)
-            && self.format == PluginFormat::Vst2
-            && self.architecture == PeArchitecture::X64
-        {
-            PluginCompatibility::SupportedVst2X64Gated
-        } else {
-            PluginCompatibility::UnsupportedFormat
+        match (self.format, self.architecture) {
+            (PluginFormat::Vst3, PeArchitecture::X64) => PluginCompatibility::SupportedVst3X64,
+            (PluginFormat::Vst3, PeArchitecture::X86) => PluginCompatibility::SupportedVst3X86,
+            (PluginFormat::Vst2, PeArchitecture::X64) if cfg!(windows) => {
+                PluginCompatibility::SupportedVst2X64Gated
+            }
+            (PluginFormat::Vst2, PeArchitecture::X86) if cfg!(windows) => {
+                PluginCompatibility::SupportedVst2X86
+            }
+            _ => PluginCompatibility::UnsupportedFormat,
         }
     }
 
@@ -607,7 +611,7 @@ fn inspect_binary_with_control(
         }
     }
     let architecture = parse_pe_architecture(&bytes).ok_or(InspectionError::NotPe)?;
-    if architecture != PeArchitecture::X64 {
+    if !matches!(architecture, PeArchitecture::X64 | PeArchitecture::X86) {
         return Err(InspectionError::UnsupportedArchitecture);
     }
     if format == PluginFormat::Unknown
@@ -1037,10 +1041,14 @@ fn pe_export_exists(bytes: &[u8], wanted: &[u8]) -> Option<bool> {
         return Some(false);
     };
     let optional = pe_offset.checked_add(24)?;
-    if read_u16(bytes, optional)? != 0x20b {
-        return Some(false);
-    }
-    let export_rva = read_u32(bytes, optional.checked_add(112)?)?;
+    // PE32+ (x64) keeps the export directory 112 bytes into the optional
+    // header, PE32 (x86) 96 bytes in.
+    let directory_offset = match read_u16(bytes, optional)? {
+        0x20b => 112,
+        0x10b => 96,
+        _ => return Some(false),
+    };
+    let export_rva = read_u32(bytes, optional.checked_add(directory_offset)?)?;
     if export_rva == 0 {
         return Some(false);
     }
@@ -1461,7 +1469,10 @@ impl WorkerSupervisor {
         if identity.format == PluginFormat::Vst2 {
             #[cfg(windows)]
             {
-                if identity.architecture != PeArchitecture::X64 {
+                if !matches!(
+                    identity.architecture,
+                    PeArchitecture::X64 | PeArchitecture::X86
+                ) {
                     return Err(WorkerStartError::UnsupportedPlugin);
                 }
             }
@@ -1472,7 +1483,10 @@ impl WorkerSupervisor {
             }
         }
         if !matches!(identity.format, PluginFormat::Vst3 | PluginFormat::Vst2)
-            || identity.architecture != PeArchitecture::X64
+            || !matches!(
+                identity.architecture,
+                PeArchitecture::X64 | PeArchitecture::X86
+            )
         {
             return Err(WorkerStartError::UnsupportedPlugin);
         }
@@ -7723,6 +7737,57 @@ mod tests {
         bytes
     }
 
+    /// A 32-bit (PE32) DLL exporting `name`: its optional header is smaller
+    /// and its export directory sits at a different offset than in PE32+.
+    fn pe_x86_with_export(name: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![0; 0x600];
+        bytes[0..2].copy_from_slice(b"MZ");
+        bytes[0x3c..0x40].copy_from_slice(&(0x80u32).to_le_bytes());
+        bytes[0x80..0x84].copy_from_slice(b"PE\0\0");
+        bytes[0x84..0x86].copy_from_slice(&0x014cu16.to_le_bytes());
+        bytes[0x86..0x88].copy_from_slice(&1u16.to_le_bytes());
+        bytes[0x94..0x96].copy_from_slice(&0xe0u16.to_le_bytes());
+        bytes[0x98..0x9a].copy_from_slice(&0x10bu16.to_le_bytes());
+        bytes[0x98 + 96..0x98 + 100].copy_from_slice(&0x1000u32.to_le_bytes());
+        let section = 0x98 + 0xe0;
+        bytes[section + 8..section + 12].copy_from_slice(&0x200u32.to_le_bytes());
+        bytes[section + 12..section + 16].copy_from_slice(&0x1000u32.to_le_bytes());
+        bytes[section + 16..section + 20].copy_from_slice(&0x200u32.to_le_bytes());
+        bytes[section + 20..section + 24].copy_from_slice(&0x400u32.to_le_bytes());
+        bytes[0x400 + 24..0x400 + 28].copy_from_slice(&1u32.to_le_bytes());
+        bytes[0x400 + 32..0x400 + 36].copy_from_slice(&0x1040u32.to_le_bytes());
+        bytes[0x440..0x444].copy_from_slice(&0x1050u32.to_le_bytes());
+        bytes[0x450..0x450 + name.len()].copy_from_slice(name);
+        bytes[0x450 + name.len()] = 0;
+        bytes
+    }
+
+    /// Regression (2026-11-13): a 32-bit VST2 DLL was classified `Unknown`
+    /// because the export walk only understood PE32+ headers, so every x86
+    /// plugin showed as unsupported even after the 32-bit worker existed.
+    #[test]
+    fn classifies_a_32_bit_vst2_dll_from_its_pe32_exports() {
+        let root = temp_root();
+        for export in [&b"VSTPluginMain"[..], &b"main"[..]] {
+            let path = root.join("x86-effect.dll");
+            fs::write(&path, pe_x86_with_export(export)).unwrap();
+            let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+            assert_eq!(identity.format, PluginFormat::Vst2);
+            assert_eq!(identity.architecture, PeArchitecture::X86);
+            #[cfg(windows)]
+            assert_eq!(
+                identity.compatibility(),
+                PluginCompatibility::SupportedVst2X86
+            );
+        }
+        // A 32-bit DLL without a VST entry point stays unrecognized.
+        let path = root.join("x86-plain.dll");
+        fs::write(&path, pe_x86_with_export(b"DllMain")).unwrap();
+        let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+        assert_eq!(identity.format, PluginFormat::Unknown);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn inspects_x64_vst3_and_fingerprints_it() {
         let root = temp_root();
@@ -8725,7 +8790,19 @@ mod tests {
             identity.compatibility(),
             PluginCompatibility::UnsupportedFormat
         );
+        // 32-bit plugins are supported since 2026-11-13 (own 32-bit worker).
         identity.architecture = PeArchitecture::X86;
+        #[cfg(windows)]
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst2X86
+        );
+        identity.format = PluginFormat::Vst3;
+        assert_eq!(
+            identity.compatibility(),
+            PluginCompatibility::SupportedVst3X86
+        );
+        identity.architecture = PeArchitecture::Arm64;
         assert_eq!(
             identity.compatibility(),
             PluginCompatibility::UnsupportedFormat

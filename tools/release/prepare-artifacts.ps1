@@ -124,6 +124,16 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "native VST3 worker release build failed with exit code $LASTEXITCODE"
     }
+    # 32-bit workers for 32-bit plugins (full VST compatibility plan, 2026-11-13).
+    & cargo build --release --locked -p audiorouter-plugin-host --bin audiorouter-plugin-worker --target i686-pc-windows-msvc --target-dir (Join-Path $workspace "target-x86")
+    if ($LASTEXITCODE -ne 0) {
+        throw "32-bit plugin worker release build failed with exit code $LASTEXITCODE"
+    }
+    Copy-Item -LiteralPath (Join-Path $workspace "target-x86/i686-pc-windows-msvc/release/audiorouter-plugin-worker.exe") -Destination (Join-Path $workspace "target/release/audiorouter-plugin-worker-x86.exe") -Force
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace "tools/m06-vst3-worker/build.ps1") -Release -Arch x86 -Output (Join-Path $workspace "target/release/audiorouter-vst3-worker-x86.exe")
+    if ($LASTEXITCODE -ne 0) {
+        throw "32-bit VST3 worker release build failed with exit code $LASTEXITCODE"
+    }
     if (-not $AppOnly) {
         & cargo build --release --locked -p audiorouter-driver-helper
         if ($LASTEXITCODE -ne 0) { throw "elevated driver helper release build failed with exit code $LASTEXITCODE" }
@@ -169,7 +179,9 @@ try {
         (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe"),
         (Join-Path $workspace "target/release/audiorouter-cli.exe"),
         (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe"),
-        (Join-Path $workspace "target/release/audiorouter-vst3-worker.exe")
+        (Join-Path $workspace "target/release/audiorouter-vst3-worker.exe"),
+        (Join-Path $workspace "target/release/audiorouter-plugin-worker-x86.exe"),
+        (Join-Path $workspace "target/release/audiorouter-vst3-worker-x86.exe")
     )) { $null = @(Assert-PortableVmTool -Path $binary -MaxBytes 64MB) }
     $uiLock = Join-Path $workspace "ui/package-lock.json"
     if (-not (Test-Path -LiteralPath $uiLock -PathType Leaf)) {
@@ -214,6 +226,8 @@ try {
         @{ Name = "audiorouter-cli.exe"; Source = (Join-Path $workspace "target/release/audiorouter-cli.exe") }
         @{ Name = "audiorouter-plugin-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker.exe") }
         @{ Name = "audiorouter-vst3-worker.exe"; Source = (Join-Path $workspace "target/release/audiorouter-vst3-worker.exe") }
+        @{ Name = "audiorouter-plugin-worker-x86.exe"; Source = (Join-Path $workspace "target/release/audiorouter-plugin-worker-x86.exe") }
+        @{ Name = "audiorouter-vst3-worker-x86.exe"; Source = (Join-Path $workspace "target/release/audiorouter-vst3-worker-x86.exe") }
         @{ Name = "audiorouter-shell.exe"; Source = (Join-Path $workspace "src-tauri/target/release/audiorouter-shell.exe") }
     )
     if (-not $AppOnly) {

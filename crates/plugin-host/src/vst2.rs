@@ -1345,8 +1345,8 @@ fn fit_parent_window(parent: usize, width: i32, height: i32) -> bool {
     // SAFETY: the handle was just checked and is only queried and asked to
     // resize; `frame` is a live local RECT for the synchronous call.
     unsafe {
-        let style = GetWindowLongPtrW(window, GWL_STYLE) as u32;
-        let extended = GetWindowLongPtrW(window, GWL_EXSTYLE) as u32;
+        let style = window_long(window, GWL_STYLE) as u32;
+        let extended = window_long(window, GWL_EXSTYLE) as u32;
         let dpi = match GetDpiForWindow(window) {
             0 => 96,
             dpi => dpi,
@@ -1433,6 +1433,23 @@ pub fn pump_owner_messages() {
 }
 
 #[cfg(windows)]
+/// # Safety
+/// `window` must be a handle that may be queried (a null or stale handle
+/// makes the call return 0).
+#[cfg(windows)]
+unsafe fn window_long(window: *mut c_void, index: i32) -> isize {
+    #[cfg(target_pointer_width = "64")]
+    // SAFETY: forwarded caller contract; a plain query.
+    unsafe {
+        GetWindowLongPtrW(window, index)
+    }
+    #[cfg(target_pointer_width = "32")]
+    // SAFETY: forwarded caller contract; a plain query.
+    unsafe {
+        GetWindowLongW(window, index) as isize
+    }
+}
+
 #[link(name = "user32")]
 unsafe extern "system" {
     fn IsWindow(window: *mut c_void) -> i32;
@@ -1446,7 +1463,11 @@ unsafe extern "system" {
     ) -> i32;
     fn TranslateMessage(message: *const NativeMessage) -> i32;
     fn DispatchMessageW(message: *const NativeMessage) -> isize;
+    #[cfg(target_pointer_width = "64")]
     fn GetWindowLongPtrW(window: *mut c_void, index: i32) -> isize;
+    // 32-bit user32 has no GetWindowLongPtrW export (it is a macro there).
+    #[cfg(target_pointer_width = "32")]
+    fn GetWindowLongW(window: *mut c_void, index: i32) -> i32;
     fn GetDpiForWindow(window: *mut c_void) -> u32;
     fn AdjustWindowRectExForDpi(
         rect: *mut NativeRect,

@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 function Assert-PluginWorkerResources($Configuration) {
-    foreach ($worker in @('audiorouter-plugin-worker.exe', 'audiorouter-vst3-worker.exe')) {
+    foreach ($worker in @('audiorouter-plugin-worker.exe', 'audiorouter-vst3-worker.exe', 'audiorouter-plugin-worker-x86.exe', 'audiorouter-vst3-worker-x86.exe')) {
         $resource = $Configuration.bundle.resources.PSObject.Properties["../target/release/$worker"]
         if ($null -eq $resource -or $resource.Value -ne $worker) { throw "NSIS resources omit the packaged plugin worker $worker." }
     }

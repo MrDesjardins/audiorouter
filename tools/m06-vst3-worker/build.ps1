@@ -2,7 +2,10 @@ param(
     [string]$SdkInclude = (Join-Path $PSScriptRoot '..\..\third_party\vst3sdk'),
     [string]$Output = (Join-Path $PSScriptRoot 'm06-vst3-worker.exe'),
     # Optimized build for packaging (target\release\audiorouter-vst3-worker.exe).
-    [switch]$Release
+    [switch]$Release,
+    # x86 builds the 32-bit worker that hosts 32-bit VST3 plugins.
+    [ValidateSet('x64', 'x86')]
+    [string]$Arch = 'x64'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,9 +14,9 @@ $installation = (& $vswhere -latest -products '*' -requires Microsoft.VisualStud
 if (-not $installation) { throw 'No Visual Studio installation with the native C++ workload was found' }
 $msvcRoot = Get-ChildItem -LiteralPath (Join-Path $installation 'VC\Tools\MSVC') -Directory |
     Sort-Object Name -Descending | Select-Object -First 1
-$cl = Join-Path $msvcRoot.FullName 'bin\Hostx64\x64\cl.exe'
+$cl = Join-Path $msvcRoot.FullName "bin\Hostx64\$Arch\cl.exe"
 $vcInclude = Join-Path $msvcRoot.FullName 'include'
-$vcLib = Join-Path $msvcRoot.FullName 'lib\x64'
+$vcLib = Join-Path $msvcRoot.FullName "lib\$Arch"
 $sdkInclude = [System.IO.Path]::GetFullPath($SdkInclude)
 $kits = 'C:\Program Files (x86)\Windows Kits\10'
 $kitRoot = Get-ChildItem -LiteralPath (Join-Path $kits 'Include') -Directory |
@@ -21,8 +24,8 @@ $kitRoot = Get-ChildItem -LiteralPath (Join-Path $kits 'Include') -Directory |
     Sort-Object Name -Descending | Select-Object -First 1
 $include = $kitRoot.FullName
 $version = $kitRoot.Name
-$umLib = Join-Path $kits "Lib/$version/um/x64"
-$ucrtLib = Join-Path $kits "Lib/$version/ucrt/x64"
+$umLib = Join-Path $kits "Lib/$version/um/$Arch"
+$ucrtLib = Join-Path $kits "Lib/$version/ucrt/$Arch"
 $source = Join-Path $PSScriptRoot 'main.cpp'
 $iidSource = Join-Path $sdkInclude 'public.sdk\source\vst\vstinitiids.cpp'
 $output = [System.IO.Path]::GetFullPath($Output)

@@ -3,7 +3,7 @@ import { ToolGuideLink } from "./ToolGuideLink";
 import { useEffect, useRef, useState } from "react";
 import type { Node } from "@audiorouter/contracts";
 import { formatUiError, type UiBackend } from "./backend";
-import { pluginCatalog, STANDARD_PLUGIN_FOLDERS } from "./draft";
+import { pluginCatalog, STANDARD_PLUGIN_FOLDERS, SUPPORTED_PLUGIN_COMPATIBILITY } from "./draft";
 import { uiIdempotencyKey } from "./idempotency";
 import { PanelMessage } from "./PanelMessage";
 import { BooleanField } from "./BooleanField";
@@ -149,11 +149,7 @@ export function PluginScanPanel({
     setMessage("Selected the discovered path; inspect it explicitly when ready.");
   };
   const addToDraft = (entry: import("@audiorouter/contracts").PluginScanEntry) => {
-    if (
-      entry.identity &&
-      ["supportedVst2X64Gated", "supportedVst3X64"].includes(entry.identity.compatibility) &&
-      onAddPlaceholder
-    ) {
+    if (entry.identity && SUPPORTED_PLUGIN_COMPATIBILITY.includes(entry.identity.compatibility) && onAddPlaceholder) {
       onAddPlaceholder(entry);
     }
   };
@@ -196,9 +192,7 @@ export function PluginScanPanel({
             <li className="muted">No VST3, VST2, or other DLL candidates found.</li>
           ) : (
             result.entries.map((entry) => {
-              const supported =
-                entry.identity?.compatibility === "supportedVst2X64Gated" ||
-                entry.identity?.compatibility === "supportedVst3X64";
+              const supported = SUPPORTED_PLUGIN_COMPATIBILITY.includes(entry.identity?.compatibility ?? "");
               return (
                 <li key={entry.path}>
                   <strong>{entry.path}</strong>{" "}

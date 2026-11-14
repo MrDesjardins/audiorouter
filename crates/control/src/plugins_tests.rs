@@ -154,19 +154,21 @@ fn installed_effect_describes_processes_and_restores_state() {
                 .is_empty());
         }
     }
-    let kind = PluginWorkerKind::for_format(identity.format);
+    let kind = PluginWorkerKind::for_identity(identity.format, identity.architecture);
     let executable = require_plugin_worker(kind).unwrap();
     for channels in [1, 2] {
         let spawn = || match kind {
-            PluginWorkerKind::Vst2 => SupervisedWorkerProcess::spawn_verified_with_sample_rate(
-                &executable,
-                &identity,
-                std::slice::from_ref(&root),
-                channels,
-                48_000,
-                Instant::now(),
-            ),
-            PluginWorkerKind::Vst3 => {
+            PluginWorkerKind::Vst2 | PluginWorkerKind::Vst2X86 => {
+                SupervisedWorkerProcess::spawn_verified_with_sample_rate(
+                    &executable,
+                    &identity,
+                    std::slice::from_ref(&root),
+                    channels,
+                    48_000,
+                    Instant::now(),
+                )
+            }
+            PluginWorkerKind::Vst3 | PluginWorkerKind::Vst3X86 => {
                 SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(
                     &executable,
                     &identity,
@@ -278,6 +280,46 @@ fn missing_plugin_worker_error_names_search_paths_and_repair_action() {
     assert!(message.contains(&root.join("resources").join(worker).display().to_string()));
     assert!(message.contains("rebuild the complete AudioRouter package"));
     assert!(message.contains("AUDIOROUTER_PLUGIN_WORKER_PATH"));
+}
+
+/// A 32-bit plugin cannot load into a 64-bit process, so it gets the 32-bit
+/// build of its format's worker (2026-11-13, full VST compatibility plan).
+#[test]
+fn x86_plugins_resolve_the_32_bit_workers() {
+    use audiorouter_plugin_host::{PeArchitecture, PluginFormat};
+    for (format, architecture, kind) in [
+        (
+            PluginFormat::Vst2,
+            PeArchitecture::X64,
+            PluginWorkerKind::Vst2,
+        ),
+        (
+            PluginFormat::Vst3,
+            PeArchitecture::X64,
+            PluginWorkerKind::Vst3,
+        ),
+        (
+            PluginFormat::Vst2,
+            PeArchitecture::X86,
+            PluginWorkerKind::Vst2X86,
+        ),
+        (
+            PluginFormat::Vst3,
+            PeArchitecture::X86,
+            PluginWorkerKind::Vst3X86,
+        ),
+    ] {
+        assert_eq!(PluginWorkerKind::for_identity(format, architecture), kind);
+    }
+    assert_ne!(
+        PluginWorkerKind::Vst2.file_name(),
+        PluginWorkerKind::Vst2X86.file_name()
+    );
+    assert!(PluginWorkerKind::Vst3X86.file_name().contains("x86"));
+    assert_ne!(
+        PluginWorkerKind::Vst2.override_variable(),
+        PluginWorkerKind::Vst2X86.override_variable()
+    );
 }
 
 /// VST3 effects run in their own native worker, never the VST2-only one

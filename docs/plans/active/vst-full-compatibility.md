@@ -40,7 +40,7 @@ not run.
 | #136 fixes + chain matrix | committed `268fa0146` |
 | Spec revision (D3) | done in the same change as this page |
 | P1 instrument detection | load-time refusal done (`effFlagsIsSynth`, unit tests pass, Clippy clean); not run against the real BC Synth (demo popup); scan-time classification via a per-fingerprint cache and the VST3 worker unchanged |
-| P8a 32-bit | audit of worker protocol in progress |
+| P8a 32-bit | done for VST2 (exercised with real 32-bit ReaPlugs); VST3 x86 worker built but untested; see P8a results |
 | everything else | not started |
 
 Related: [issue #136 plan](issue-136-vst-experience.md),
@@ -217,3 +217,49 @@ bitness; (4) install the i686 target and build the x86 Rust worker; (5) build th
 x86 VST3 worker; (6) update `build-desktop.ps1`, the release workflow, the
 installer and `instance_windows.rs`; (7) run a real 32-bit plugin (needs one
 installed; the census corpus should include a 32-bit VST2 and VST3).
+
+## P8a results (2026-11-13): 32-bit plugins
+
+Done and exercised on this PC (Windows 11, release x86 worker built with the
+pinned 1.96.0 toolchain plus the `i686-pc-windows-msvc` target, now listed in
+`rust-toolchain.toml`):
+
+- `PluginCompatibility` gains `SupportedVst2X86` / `SupportedVst3X86`
+  (`supportedVst2X86` / `supportedVst3X86` in the API schema, `contracts`, and
+  the UI's `SUPPORTED_PLUGIN_COMPATIBILITY`). Contract drift check passes.
+- Defect found by the first real 32-bit run: the PE export walk only
+  understood PE32+ headers, so every 32-bit VST2 DLL was `Unknown` ->
+  unsupported. Fixed with a PE32 branch; regression
+  `classifies_a_32_bit_vst2_dll_from_its_pe32_exports`.
+- Defect found by the first 32-bit link: `GetWindowLongPtrW` is not exported
+  by 32-bit user32. Wrapped in `window_long` (cfg by pointer width).
+- Worker choice by bitness: `PluginWorkerKind::for_identity`; files
+  `audiorouter-plugin-worker-x86.exe` and `audiorouter-vst3-worker-x86.exe`
+  (override variables `AUDIOROUTER_PLUGIN_WORKER_X86_PATH`,
+  `AUDIOROUTER_VST3_WORKER_X86_PATH`). A chain never mixes bitness: x86 VST2
+  plugins each get their own 32-bit worker.
+- Packaging: `tools/build-desktop.ps1`, `tools/release/prepare-artifacts.ps1`,
+  both Tauri resource lists, `tools/m06-vst3-worker/build.ps1 -Arch x86`; the
+  packaging fixture tests pass.
+- Evidence: the ReaPlugs 2.36 **32-bit** build (free, installed to a temp
+  folder; PE machine 0x14c) through `vst2_chain_matrix` with
+  `AUDIOROUTER_CHAIN_WORKER` pointing at the x86 worker: 6 plugins (ReaComp,
+  ReaEQ, ReaGate, ReaDelay, ReaXcomp, ReaFIR), 22 combinations of one to three
+  plugins, mono and stereo, 44 runs: start, audio, configure, state, editor
+  open/close with audio running, restore all passed; problems: none (227 s).
+  The dispatcher path (`plugins.scan`, `plugins.parameters`) also ran with the
+  x86 worker.
+
+Not done / not proven:
+
+- No 32-bit **VST3** plugin was available, so the x86 VST3 worker is built
+  (PE machine 0x14c, 390 KB) but has never loaded a plugin.
+- The release exe was not rebuilt or run with these changes; the NSIS bundle
+  was not built; CI has to install the i686 target (the toolchain file now
+  asks for it).
+- A shell-level run by eye (editor of a 32-bit plugin inside the real window)
+  is open.
+- 32-bit VST2 chains in one worker work in the test but production groups
+  only x64 plugins; each x86 plugin runs in its own worker.
+- Instrument classification for x86 VST3/UA bundles uses the same metadata
+  path as x64.

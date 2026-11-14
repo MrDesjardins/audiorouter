@@ -1159,7 +1159,7 @@ fn method_output_schema_impl(name: &str) -> Value {
                         "vendor": { "type": ["string", "null"], "maxLength": 128 },
                         "version": { "type": ["string", "null"], "maxLength": 128 },
                         "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat", "unsupportedInstrument"] }
+                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "supportedVst3X86", "supportedVst2X86", "unsupportedFormat", "unsupportedInstrument"] }
                     },
                     "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
                     "additionalProperties": false
@@ -2420,7 +2420,7 @@ fn plugin_scan_output_schema() -> Value {
                                 "vendor": { "type": ["string", "null"], "maxLength": 128 },
                                 "version": { "type": ["string", "null"], "maxLength": 128 },
                                 "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                                "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "unsupportedFormat", "unsupportedInstrument"] }
+                                "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "supportedVst3X86", "supportedVst2X86", "unsupportedFormat", "unsupportedInstrument"] }
                             },
                             "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
                             "additionalProperties": false
