@@ -262,6 +262,7 @@ impl ControlPlane {
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
             plugin_bridges: Default::default(),
+            editor_only_plugins: Default::default(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted,
             startup_enabled,

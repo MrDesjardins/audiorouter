@@ -378,6 +378,11 @@ pub struct ControlPlane {
             std::sync::Weak<audiorouter_plugin_host::PluginRuntimeBridge>,
         >,
     >,
+    /// Plugin workers started only so an editor can open while the session is
+    /// stopped; they hold the bridge alive until the editor closes.
+    editor_only_plugins: std::sync::Mutex<
+        HashMap<(EntityId, EntityId), Arc<dyn audiorouter_engine::RealtimePluginProcessor>>,
+    >,
     plugin_inventory_order: VecDeque<String>,
     privacy_muted: bool,
     startup_enabled: bool,
@@ -563,6 +568,7 @@ impl ControlPlane {
             tool_presets: Vec::new(),
             plugin_inventories: HashMap::new(),
             plugin_bridges: Default::default(),
+            editor_only_plugins: Default::default(),
             plugin_inventory_order: VecDeque::new(),
             privacy_muted: false,
             startup_enabled: false,

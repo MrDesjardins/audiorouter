@@ -356,3 +356,174 @@ fn an_instrument_refused_at_load_is_listed_as_an_instrument_afterwards() {
     let second = call("plugins.scan", json!({ "directory": root }));
     assert_eq!(compatibility(&second), "unsupportedInstrument");
 }
+
+/// A window on a message-pumping thread, like the desktop shell's editor host.
+mod host_window {
+    use std::ffi::c_void;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn CreateWindowExW(
+            extended_style: u32,
+            class_name: *const u16,
+            window_name: *const u16,
+            style: u32,
+            x: i32,
+            y: i32,
+            width: i32,
+            height: i32,
+            parent: *mut c_void,
+            menu: *mut c_void,
+            instance: *mut c_void,
+            parameter: *mut c_void,
+        ) -> *mut c_void;
+        fn DestroyWindow(window: *mut c_void) -> i32;
+        fn PeekMessageW(
+            message: *mut [usize; 6],
+            window: *mut c_void,
+            minimum: u32,
+            maximum: u32,
+            remove: u32,
+        ) -> i32;
+        fn TranslateMessage(message: *const [usize; 6]) -> i32;
+        fn DispatchMessageW(message: *const [usize; 6]) -> isize;
+    }
+
+    pub struct HostWindow {
+        pub handle: u64,
+        stop: Arc<AtomicBool>,
+        thread: Option<std::thread::JoinHandle<()>>,
+    }
+
+    impl HostWindow {
+        pub fn open() -> Self {
+            let stop = Arc::new(AtomicBool::new(false));
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let thread_stop = Arc::clone(&stop);
+            let thread = std::thread::spawn(move || {
+                let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+                let title: Vec<u16> = "census editor host\0".encode_utf16().collect();
+                // SAFETY: NUL-terminated buffers outlive the synchronous call.
+                let window = unsafe {
+                    CreateWindowExW(
+                        0,
+                        class.as_ptr(),
+                        title.as_ptr(),
+                        0,
+                        100,
+                        100,
+                        800,
+                        600,
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                    )
+                };
+                sender.send(window as usize).expect("send window");
+                let mut message = [0_usize; 6];
+                while !thread_stop.load(Ordering::Acquire) {
+                    // SAFETY: non-blocking pump of this thread's windows.
+                    unsafe {
+                        while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, 1) != 0 {
+                            TranslateMessage(&message);
+                            DispatchMessageW(&message);
+                        }
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(5));
+                }
+                // SAFETY: created on this thread.
+                unsafe { DestroyWindow(window) };
+            });
+            let handle = receiver.recv().expect("host window") as u64;
+            assert_ne!(handle, 0, "host window creation failed");
+            Self {
+                handle,
+                stop,
+                thread: Some(thread),
+            }
+        }
+    }
+
+    impl Drop for HostWindow {
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::Release);
+            if let Some(thread) = self.thread.take() {
+                let _ = thread.join();
+            }
+        }
+    }
+}
+
+/// Owner report (issue #136): the plugin window could only open after Play.
+/// With the session stopped, `plugins.openEditor` starts that one plugin's
+/// worker, opens its editor, and `plugins.closeEditor` ends the worker again.
+#[test]
+#[ignore = "requires AUDIOROUTER_TEST_PLUGIN (an effect with an editor) and the packaged workers"]
+fn the_editor_opens_while_the_session_is_stopped() {
+    use crate::test_support::session;
+    use audiorouter_domain::{Node, Port};
+    let path = PathBuf::from(std::env::var_os("AUDIOROUTER_TEST_PLUGIN").unwrap());
+    let root = path.parent().unwrap().to_path_buf();
+    let identity = inspect_binary(&path, std::slice::from_ref(&root)).unwrap();
+    let state_root =
+        std::env::temp_dir().join(format!("audiorouter-stopped-editor-{}", std::process::id()));
+    std::fs::create_dir_all(&state_root).unwrap();
+    let storage = audiorouter_storage::Storage::open(state_root.join("state.sqlite")).unwrap();
+    let mut plane = ControlPlane::with_storage("stopped-editor", storage);
+    let mut saved = session();
+    saved.nodes.push(Node {
+        id: EntityId::new("effect"),
+        name: "Effect".into(),
+        kind: NodeKind::Plugin,
+        type_version: 1,
+        enabled: true,
+        bypass: false,
+        parameters: serde_json::from_value(json!({
+            "path": identity.path, "format": if identity.format == PluginFormat::Vst3 { "vst3" } else { "vst2" },
+            "classId": "default", "fingerprint": identity.sha256
+        }))
+        .unwrap(),
+        ports: vec![
+            Port { name: "in".into(), direction: PortDirection::Input, channels: 2 },
+            Port { name: "out".into(), direction: PortDirection::Output, channels: 2 },
+        ],
+    });
+    plane.insert_session(saved.clone()).unwrap();
+    plane.active_session_id = Some(saved.id.clone());
+    let mut call = |method: &str, params: serde_json::Value| {
+        plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(1)),
+            method: method.into(),
+            params: Some(params),
+        })
+    };
+    let scan = call("plugins.scan", json!({ "directory": root }));
+    assert!(scan.error.is_none(), "{:?}", scan.error);
+    let window = host_window::HostWindow::open();
+    let node = json!({ "sessionId": saved.id.as_str(), "nodeId": "effect" });
+    // Nothing is playing: before this change the answer was "available while
+    // its route is playing".
+    let mut open = node.clone();
+    open["parentWindow"] = json!(window.handle);
+    open["ownerProcessId"] = json!(std::process::id());
+    let opened = call("plugins.openEditor", open);
+    assert!(
+        opened.error.is_none(),
+        "stopped-session editor: {:?}",
+        opened.error
+    );
+    assert_eq!(opened.result.unwrap()["state"], "open");
+    let closed = call("plugins.closeEditor", node);
+    assert!(closed.error.is_none(), "{:?}", closed.error);
+    assert!(
+        plane.editor_only_plugins.lock().unwrap().is_empty(),
+        "the editor-only worker must end with its editor"
+    );
+    drop(window);
+    drop(plane);
+    let _ = std::fs::remove_dir_all(state_root);
+}

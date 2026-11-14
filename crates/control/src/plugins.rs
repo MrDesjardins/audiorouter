@@ -993,21 +993,65 @@ impl ControlPlane {
         session: &Session,
         sample_rate_hz: u32,
     ) -> Result<HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>, ControlError> {
-        let session = audiorouter_engine::prune_unfed_upstream(session);
-        let session = session.as_ref();
-        if !session
-            .nodes
-            .iter()
-            .any(|node| node.enabled && node.kind == NodeKind::Plugin)
-        {
+        // A route is starting: workers kept alive only for a stopped-session
+        // editor would duplicate its plugins.
+        self.release_editor_only_plugins(&session.id);
+        self.prepare_plugin_stages_for(session, sample_rate_hz, None)
+    }
+
+    /// Start one plugin node's worker without a route, so its editor can open
+    /// while the session is stopped. The worker stays until the editor is
+    /// closed or the route starts.
+    fn start_editor_only_plugin(
+        &mut self,
+        session: &Session,
+        node_id: &EntityId,
+    ) -> Result<(), ControlError> {
+        let started = self.prepare_plugin_stages_for(
+            session,
+            audiorouter_engine::INTERNAL_SAMPLE_RATE_HZ,
+            Some(node_id),
+        )?;
+        if let Ok(mut held) = self.editor_only_plugins.lock() {
+            for (id, processor) in started {
+                held.insert((session.id.clone(), id), processor);
+            }
+        }
+        Ok(())
+    }
+
+    /// Drop the workers kept only for stopped-session editors of a session.
+    pub(crate) fn release_editor_only_plugins(&self, session_id: &EntityId) {
+        if let Ok(mut held) = self.editor_only_plugins.lock() {
+            held.retain(|(session, _), _| session != session_id);
+        }
+    }
+
+    fn prepare_plugin_stages_for(
+        &mut self,
+        session: &Session,
+        sample_rate_hz: u32,
+        only: Option<&EntityId>,
+    ) -> Result<HashMap<EntityId, Arc<dyn RealtimePluginProcessor>>, ControlError> {
+        let pruned;
+        let session = if only.is_some() {
+            session
+        } else {
+            pruned = audiorouter_engine::prune_unfed_upstream(session);
+            pruned.as_ref()
+        };
+        let wanted = |node: &&audiorouter_domain::Node| {
+            node.kind == NodeKind::Plugin
+                && match only {
+                    Some(id) => &node.id == id,
+                    None => node.enabled,
+                }
+        };
+        if !session.nodes.iter().any(|node| wanted(&node)) {
             return Ok(HashMap::new());
         }
         let mut requests = Vec::new();
-        for node in session
-            .nodes
-            .iter()
-            .filter(|node| node.enabled && node.kind == NodeKind::Plugin)
-        {
+        for node in session.nodes.iter().filter(wanted) {
             let path = node
                 .parameters
                 .get("path")
@@ -1840,7 +1884,21 @@ impl ControlPlane {
         open: bool,
     ) -> Result<Value, ControlError> {
         let (session_id, node_id) = Self::plugin_node_request(&params)?;
+        let started_here = open && self.plugin_bridge(&session_id, &node_id).is_err();
+        if started_here {
+            // Stopped session: start only this plugin, without audio.
+            let session = self.get_session(&session_id)?.clone();
+            self.start_editor_only_plugin(&session, &node_id)?;
+        }
         let bridge = self.plugin_bridge(&session_id, &node_id)?;
+        // A worker started only for this editor must not outlive a failed open.
+        let release_if_started_here = |plane: &Self| {
+            if started_here {
+                if let Ok(mut held) = plane.editor_only_plugins.lock() {
+                    held.remove(&(session_id.clone(), node_id.clone()));
+                }
+            }
+        };
         if open {
             let number = |name: &str| {
                 params
@@ -1849,17 +1907,27 @@ impl ControlPlane {
                     .and_then(Value::as_u64)
                     .filter(|value| *value > 0)
             };
-            let parent_window = number("parentWindow")
-                .ok_or_else(|| ControlError::InvalidRequest("parentWindow is required".into()))?;
-            let owner_process_id = number("ownerProcessId")
-                .and_then(|value| u32::try_from(value).ok())
-                .ok_or_else(|| ControlError::InvalidRequest("ownerProcessId is required".into()))?;
+            let (Some(parent_window), Some(owner_process_id)) = (
+                number("parentWindow"),
+                number("ownerProcessId").and_then(|value| u32::try_from(value).ok()),
+            ) else {
+                drop(bridge);
+                release_if_started_here(self);
+                return Err(ControlError::InvalidRequest(
+                    "parentWindow and ownerProcessId are required".into(),
+                ));
+            };
             let authorization = editor_authorization_issuer()
                 .issue(parent_window, owner_process_id)
                 .map_err(|error| {
                     ControlError::InvalidRequest(format!("editor authorization failed: {error:?}"))
                 })?;
-            bridge.open_editor(authorization).map_err(|error| {
+            let opened = bridge.open_editor(authorization);
+            drop(bridge);
+            if opened.is_err() {
+                release_if_started_here(self);
+            }
+            opened.map_err(|error| {
                 ControlError::InvalidRequest(if error.contains("editorUnavailable") || error.contains("UnsupportedFeature") {
                     "this plugin has no editor window AudioRouter can open; use its parameters in Properties".into()
                 } else {
@@ -1874,6 +1942,10 @@ impl ControlPlane {
             // Keep what the user set in the editor for the next Play.
             if let Err(error) = self.capture_plugin_state(&session_id, &node_id, true) {
                 eprintln!("AudioRouter plugin state capture after editor close failed: {error:?}");
+            }
+            // A worker started only for this editor ends with it.
+            if let Ok(mut held) = self.editor_only_plugins.lock() {
+                held.remove(&(session_id.clone(), node_id.clone()));
             }
         }
         Ok(

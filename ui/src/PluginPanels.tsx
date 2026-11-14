@@ -545,13 +545,11 @@ export function PluginEditorControls({
       <div className="actions">
         <button
           type="button"
-          disabled={busy || !running || !inShell}
+          disabled={busy || !inShell}
           title={
             !inShell
               ? "The plugin's window opens only in the desktop app."
-              : !running
-                ? "Press Play first."
-                : "Open the plugin's own window"
+              : "Open the plugin's own window (no need to press Play first)"
           }
           onClick={() => void openEditor()}
         >
@@ -577,9 +575,7 @@ export function PluginEditorControls({
         <small className="muted">
           {!inShell
             ? "The plugin's window opens only in the desktop app. You can still use the sliders below."
-            : !running
-              ? "Press Play to open the plugin's window, or use the sliders below. Your changes are kept."
-              : "Open the plugin's window, or use the sliders below. Your changes are kept."}
+            : "Open the plugin's window, or use the sliders below. Your changes are kept, even before you press Play."}
         </small>
       )}
     </div>

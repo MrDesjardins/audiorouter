@@ -343,3 +343,21 @@ and rebuilding the desktop exe/installer with the x86 workers (not run).
   (ReaPlugs, Pitchproof), Dragonfly and 32-bit ReaPlugs: no change in results.
 - Open in P2: plugin-side opcodes (bypass, programs, `effCanDo`, shell
   plugins, `.fxp/.fxb`), acting on `io_changed`, old `process` fallback.
+
+## P6 step 1 (2026-11-13): editor before Play
+
+- `plugins.openEditor` on a stopped session starts that one plugin's worker
+  without a route (`start_editor_only_plugin`, held in `editor_only_plugins`),
+  opens its editor, and `plugins.closeEditor` captures the state and ends the
+  worker; starting the route releases any such worker first; a failed open
+  releases it too. No new API method, so no schema or MCP change.
+- The UI's "Open plugin window" no longer waits for Play (still needs the
+  desktop app, which owns the window).
+- Exercised through `ControlPlane::dispatch` with real workers and a
+  message-pumping parent window: Pitchproof (VST2) and Dragonfly Plate Reverb
+  (VST3), `the_editor_opens_while_the_session_is_stopped` (opt-in).
+- Not run: the desktop shell's own window by eye; the shell's
+  `open_plugin_editor` command path with the stopped session (the shell code
+  has no running check, per grep, but it was not launched).
+- Still open in P6: user-resizable editors, keyboard focus, monitor/DPI moves,
+  vendor dialogs owned by the editor window.

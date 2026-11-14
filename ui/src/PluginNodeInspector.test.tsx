@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { DiagnosticsSnapshot, Node } from "@audiorouter/contracts";
-import { PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
+import { PluginEditorControls, PluginNodeInspector, PluginRecoveryControls } from "./PluginPanels";
 
 afterEach(cleanup);
 
@@ -195,5 +195,51 @@ describe("PluginNodeInspector unchanged-audio guard", () => {
     expect(variant(/^Audio passes through unchanged$/).style.visibility).toBe("visible");
     // A hidden status must not show through: an explicit "visible" child overrides a hidden parent.
     expect(screen.getByText(/probably not licensed/).style.visibility).toBe("hidden");
+  });
+});
+
+// Owner report (issue #136): "I want to open and configure the plugin before
+// I press Play". The button used to be disabled until the route ran.
+describe("PluginEditorControls before Play", () => {
+  it("lets the plugin window open while the route is stopped, in the desktop app", async () => {
+    const invoke = vi.fn().mockResolvedValue({ error: null });
+    (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = { invoke };
+    try {
+      render(
+        <PluginEditorControls
+          node={plugin()}
+          backend={{} as never}
+          sessionId="route"
+          running={false}
+          onStateSaved={() => undefined}
+        />,
+      );
+      const open = screen.getByRole("button", { name: "Open plugin window" }) as HTMLButtonElement;
+      expect(open.disabled).toBe(false);
+      expect(open.title).not.toMatch(/Press Play first/);
+      fireEvent.click(open);
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith("open_plugin_editor", {
+          sessionId: "route",
+          nodeId: plugin().id,
+          title: plugin().name,
+        }),
+      );
+    } finally {
+      delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+    }
+  });
+
+  it("still needs the desktop app, because the window belongs to the shell", () => {
+    render(
+      <PluginEditorControls
+        node={plugin()}
+        backend={{} as never}
+        sessionId="route"
+        running={false}
+        onStateSaved={() => undefined}
+      />,
+    );
+    expect((screen.getByRole("button", { name: "Open plugin window" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
