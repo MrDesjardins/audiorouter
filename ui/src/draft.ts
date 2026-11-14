@@ -539,6 +539,7 @@ const ROUTE_SOURCE_KINDS = new Set([
   "endpointLoopback",
   "virtualRenderSource",
   "soundboard",
+  "instrument",
   "testSignal",
   "audioFile",
   "networkReceive",
@@ -586,6 +587,7 @@ function isChainProcessor(kind: NodeKind): boolean {
     case "recorder":
     case "audioFile":
     case "soundboard":
+    case "instrument":
     case "inputSwitch":
     case "outputSwitch":
     case "networkSend":
@@ -767,7 +769,10 @@ export function needsNativePaths(session: Session): boolean {
  */
 function mixesFileOrBoardWithAnotherSource(nodes: Session["nodes"]): boolean {
   const sources = nodes.filter((node) => node.enabled && ROUTE_SOURCE_KINDS.has(node.kind));
-  return sources.length > 1 && sources.some((node) => node.kind === "audioFile" || node.kind === "soundboard");
+  return (
+    sources.length > 1 &&
+    sources.some((node) => node.kind === "audioFile" || node.kind === "soundboard" || node.kind === "instrument")
+  );
 }
 
 /**
@@ -1056,11 +1061,13 @@ export function appendPluginPlaceholderNode(session: Session, entry: PluginScanE
   if (!identity || !SUPPORTED_PLUGIN_COMPATIBILITY.includes(identity.compatibility)) {
     throw new Error("Only a supported x64 scan result can be added to the graph");
   }
+  const isInstrument = identity.instrument === true;
+  const prefix = isInstrument ? "instrument" : "plugin";
   let suffix = 1;
-  let id = `plugin-${suffix}`;
+  let id = `${prefix}-${suffix}`;
   while (session.nodes.some((node) => node.id === id)) {
     suffix += 1;
-    id = `plugin-${suffix}`;
+    id = `${prefix}-${suffix}`;
   }
   const fileName = (entry.path.split(/[\\/]/).pop() ?? "").replace(/\.(vst3|dll)$/i, "");
   return {
@@ -1069,7 +1076,7 @@ export function appendPluginPlaceholderNode(session: Session, entry: PluginScanE
       ...session.nodes,
       {
         id,
-        kind: "plugin",
+        kind: isInstrument ? "instrument" : "plugin",
         typeVersion: 1,
         name: fileName ? `${fileName} ${suffix}` : `${identity.vendor ?? "Plugin"} ${suffix}`,
         enabled: true,
@@ -1079,11 +1086,15 @@ export function appendPluginPlaceholderNode(session: Session, entry: PluginScanE
           format: identity.format,
           fingerprint: identity.sha256,
           classId: identity.classIds[0] ?? "default",
+          ...(isInstrument ? { midiInput: "keyboard" } : {}),
         },
-        ports: [
-          { name: "in", direction: "input", channels: 1 },
-          { name: "out", direction: "output", channels: 1 },
-        ],
+        // An instrument makes sound from MIDI, so it has no audio input.
+        ports: isInstrument
+          ? [{ name: "out", direction: "output", channels: 2 }]
+          : [
+              { name: "in", direction: "input", channels: 1 },
+              { name: "out", direction: "output", channels: 1 },
+            ],
       },
     ],
   };
@@ -1373,6 +1384,8 @@ export function insertDraftProcessor(session: Session, edgeId: EntityId, kind: I
  * fail-closed default; the dry signal passes through unaffected until it is
  * bound to an isolated worker and explicitly enabled. */
 export function insertDraftPluginProcessor(session: Session, edgeId: EntityId, entry: PluginScanEntry): Session {
+  if (entry.identity?.instrument === true)
+    throw new Error("An instrument makes sound; it cannot sit inside a connection.");
   const edge = session.edges.find((candidate) => candidate.id === edgeId);
   if (!edge) throw new Error(`Unknown draft connection: ${edgeId}`);
   const sourceNode = session.nodes.find((node) => node.id === edge.sourceNode);
@@ -1688,7 +1701,14 @@ export const STANDARD_PLUGIN_FOLDERS = [
 ];
 
 /** A plugin that can be added to the graph, from any remembered scan. */
-export type PluginCatalogEntry = { entry: PluginScanEntry; name: string; format: "VST3" | "VST2"; folder: string };
+export type PluginCatalogEntry = {
+  entry: PluginScanEntry;
+  name: string;
+  format: "VST3" | "VST2";
+  folder: string;
+  /** True when the scan knows the plugin makes sound from MIDI (a synth or sampler). */
+  instrument: boolean;
+};
 
 /**
  * Supported x64 plugins from all remembered scans, one per binary (the same
@@ -1719,6 +1739,7 @@ export function pluginCatalog(
           name: file.replace(/\.(vst3|dll)$/i, "") + (classes.length > 1 ? ` (${classId})` : ""),
           format: identity.format === "vst3" ? "VST3" : "VST2",
           folder: inventory.directory,
+          instrument: identity.instrument === true,
         });
       }
     }

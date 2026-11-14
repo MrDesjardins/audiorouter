@@ -343,62 +343,77 @@ export function PluginToolsGroup({
       !query ||
       `${item.name} ${item.format} ${item.entry.identity?.vendor ?? ""} plugin vst`.toLocaleLowerCase().includes(query),
   );
-  return (
-    <div className="tool-plugin-group" aria-label="Plugins">
-      <div className="tool-library-entry">
-        <h4>Plugins (VST2/VST3)</h4>
-        <ToolGuideLink kind="plugin" compact toolName="VST plugin" />
-      </div>
-      {catalog.map((item) => {
-        const help = `${item.format}${item.entry.identity?.vendor ? ` · ${item.entry.identity.vendor}` : ""} · ${item.folder}`;
-        return (
-          <div
-            className="tool-library-entry"
-            key={`${item.entry.identity?.sha256}-${item.entry.path}-${item.entry.identity?.classIds?.[0] ?? "default"}`}
-          >
-            <button
-              className="tool-card"
-              type="button"
-              disabled={!connected}
-              title={help}
-              aria-description={help}
-              // Click adds the plugin; drag places it where it is dropped on the canvas.
-              draggable={connected}
-              onDragStart={(event) => startPluginDrag(event, item.entry, item.name)}
-              onDragEnd={endLibraryDrag}
-              onClick={() => onAdd(item.entry)}
-            >
-              <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">
-                {item.format === "VST3" ? "V3" : "V2"}
-              </span>
-              <span>
-                <strong>{item.name}</strong>
-                <small>{help}</small>
-              </span>
-            </button>
-            {/* No per-row guide: every row opened the same generic VST guide under
-                the plugin's own name, beside the section's "?" (owner, 2026-11-07). */}
-          </div>
-        );
-      })}
-      {catalog.length === 0 && !query && (
-        <p className="muted">No plugins found yet. Scan Windows' standard plugin folders, or pick another folder.</p>
-      )}
-      <div className="actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={!connected || busy}
-          onClick={() => void scanStandardFolders()}
+  const renderRows = (items: typeof catalog) =>
+    items.map((item) => {
+      const help = `${item.format}${item.entry.identity?.vendor ? ` · ${item.entry.identity.vendor}` : ""} · ${item.folder}`;
+      return (
+        <div
+          className="tool-library-entry"
+          key={`${item.entry.identity?.sha256}-${item.entry.path}-${item.entry.identity?.classIds?.[0] ?? "default"}`}
         >
-          {busy ? "Scanning…" : "Scan standard folders"}
-        </button>
-        <button type="button" className="secondary" disabled={!connected} onClick={onOpenPicker}>
-          Scan another folder…
-        </button>
+          <button
+            className="tool-card"
+            type="button"
+            disabled={!connected}
+            title={help}
+            aria-description={help}
+            // Click adds the plugin; drag places it where it is dropped on the canvas.
+            draggable={connected}
+            onDragStart={(event) => startPluginDrag(event, item.entry, item.name)}
+            onDragEnd={endLibraryDrag}
+            onClick={() => onAdd(item.entry)}
+          >
+            <span className="tool-card-icon tool-card-plugin-badge" aria-hidden="true">
+              {item.format === "VST3" ? "V3" : "V2"}
+            </span>
+            <span>
+              <strong>{item.name}</strong>
+              <small>{help}</small>
+            </span>
+          </button>
+          {/* No per-row guide: every row opened the same generic VST guide under
+                the plugin's own name, beside the section's "?" (owner, 2026-11-07). */}
+        </div>
+      );
+    });
+  const effects = catalog.filter((item) => !item.instrument);
+  const instruments = catalog.filter((item) => item.instrument);
+  return (
+    <>
+      {instruments.length > 0 && (
+        <div className="tool-plugin-group" aria-label="Instruments">
+          <div className="tool-library-entry">
+            <h4>Instruments (VST2/VST3)</h4>
+            <ToolGuideLink kind="instrument" compact toolName="Instrument" />
+          </div>
+          {renderRows(instruments)}
+        </div>
+      )}
+      <div className="tool-plugin-group" aria-label="Plugins">
+        <div className="tool-library-entry">
+          <h4>Plugins (VST2/VST3)</h4>
+          <ToolGuideLink kind="plugin" compact toolName="VST plugin" />
+        </div>
+        {renderRows(effects)}
+        {effects.length === 0 && !query && (
+          <p className="muted">No plugins found yet. Scan Windows' standard plugin folders, or pick another folder.</p>
+        )}
+        <div className="actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={!connected || busy}
+            onClick={() => void scanStandardFolders()}
+          >
+            {busy ? "Scanning…" : "Scan standard folders"}
+          </button>
+          <button type="button" className="secondary" disabled={!connected} onClick={onOpenPicker}>
+            Scan another folder…
+          </button>
+        </div>
+        {message && <PanelMessage message={message} small />}
       </div>
-      {message && <PanelMessage message={message} small />}
-    </div>
+    </>
   );
 }
 

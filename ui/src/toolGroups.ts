@@ -14,6 +14,7 @@ export const TOOL_GROUP_OF: Record<NodeKind, ToolGroupId> = {
   applicationCapture: "input",
   audioFile: "input",
   soundboard: "input",
+  instrument: "input",
   testSignal: "input",
   networkReceive: "input",
   virtualRenderSource: "input",

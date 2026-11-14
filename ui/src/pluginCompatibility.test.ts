@@ -12,6 +12,5 @@ describe("plugin compatibility", () => {
 
   it("never lists a refusal", () => {
     expect(SUPPORTED_PLUGIN_COMPATIBILITY).not.toContain("unsupportedFormat");
-    expect(SUPPORTED_PLUGIN_COMPATIBILITY).not.toContain("unsupportedInstrument");
   });
 });
