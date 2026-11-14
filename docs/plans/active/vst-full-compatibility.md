@@ -381,3 +381,32 @@ before Play) and the packaging check (next section). The design for P8b is in
 - Not run: the installer build (`prepare-artifacts.ps1`) and its hook test; CI
   still needs the i686 target installed (`rust-toolchain.toml` lists it, the
   workflows were not changed or run); the shell was not driven by eye.
+
+## State at end of 2026-11-14 session
+
+Committed on `feature/vst-plugin-experience` (nothing pushed, no PR): all of
+P8b except the items below. Evidence is in
+[vst-midi-instruments-design.md](vst-midi-instruments-design.md). Workspace
+tests, both Clippy runs, both `cargo fmt --check`, the contract drift check,
+UI typecheck, lint, format and 1065 unit tests, and the Instrument browser test
+in three themes all pass. P4 note: the VST2 worker already adapts mono/stereo
+graphs to plugins of other widths (`channel_layouts_are_mappable`,
+`spread_graph_to_plugin_inputs`), so P4 is mostly VST3 verification and the
+multichannel refusal reason, not new code.
+
+Open, in suggested order:
+
+1. P8b: guide video, site page, property coverage manifest and Firefox check for
+   the Instrument tool (AGENTS.md "Static website writing"); run the shell exe
+   by eye with an instrument and the editor window; a real MIDI keyboard.
+2. P1 follow-up: recognise a VST3 without `moduleinfo.json` before its first
+   failed Play (needs a worker describe mode; weigh against "a scan never runs
+   plugin code").
+3. P2 remainder (plugin-side VST2 opcodes: bypass, programs, `effCanDo`, shell
+   plugins, `.fxp/.fxb`, act on `io_changed`, old `process` fallback).
+4. P3 VST3 conformance (`IComponentHandler2`, units and programs, content
+   scale, restart flags, parameter-snapshot state fallback; Steinberg validator).
+5. P5 sidechain, P6 remainder (resizable editors, focus, DPI), P7 shared VST3
+   worker (only if the census shows a need), P9 release gate and compatibility
+   page, wider census corpus, CI needing the i686 target.
+6. Before a PR: read the check annotations and ask the owner for approval.
