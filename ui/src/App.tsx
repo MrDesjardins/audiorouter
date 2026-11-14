@@ -1331,6 +1331,7 @@ function AppContent({ backend = defaultBackend }: { backend?: UiBackend } = {}) 
     setRecordingsError,
     setRecorderStatuses,
     setRecorderStatusAvailable,
+    reconnecting,
   });
   useDiagnosticsRefresh({
     backend,

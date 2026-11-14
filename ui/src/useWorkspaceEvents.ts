@@ -53,6 +53,7 @@ export function useWorkspaceEvents({
   setRecordingsError,
   setRecorderStatuses,
   setRecorderStatusAvailable,
+  reconnecting = false,
 }: {
   backend: UiBackend;
   hasSnapshot: boolean;
@@ -70,8 +71,11 @@ export function useWorkspaceEvents({
   setRecordingsError: Dispatch<SetStateAction<string | null>>;
   setRecorderStatuses: Dispatch<SetStateAction<RecorderStatus[]>>;
   setRecorderStatusAvailable: Dispatch<SetStateAction<boolean>>;
+  /** A user reconnect is running; the poll must not supersede its snapshot request. */
+  reconnecting?: boolean;
 }) {
   // Callbacks from the caller: always the latest, never a reason to restart polling.
+  const reconnectRunning = useEffectEvent(() => reconnecting);
   const follow = useEffectEvent((sessionId: string) => followBackendActiveSession(sessionId));
   const showMessage = useEffectEvent((message: string) => setActionMessage(message));
   const updateSnapshot = useEffectEvent((update: SetStateAction<UiSnapshotState>) => setSnapshotState(update));
@@ -95,7 +99,7 @@ export function useWorkspaceEvents({
     let polling = false;
     let subscriptionFailed = false;
     const poll = async () => {
-      if (!active || polling) return;
+      if (!active || polling || reconnectRunning()) return;
       polling = true;
       try {
         const result = await backend.subscribe(

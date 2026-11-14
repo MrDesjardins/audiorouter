@@ -117,3 +117,52 @@ it("reports an automatic route recovery and its failure", async () => {
     vi.useRealTimers();
   }
 });
+
+it("does not poll while a user reconnect is running, so it cannot supersede that snapshot", async () => {
+  vi.useFakeTimers();
+  const base = createDisconnectedBackend();
+  const snapshot = await base.snapshot();
+  const backend = {
+    ...base,
+    connected: true,
+    snapshot: vi.fn().mockResolvedValue(snapshot),
+    subscribe: vi.fn().mockResolvedValue({ backendEpoch: 1, nextSequence: 0, events: [], resyncRequired: true }),
+  };
+  const cache = new SnapshotCache();
+  const hook = renderHook(
+    ({ reconnecting }) =>
+      useWorkspaceEvents({
+        backend,
+        hasSnapshot: true,
+        session: demoSession,
+        snapshotCache: cache,
+        eventCursor: { current: { backendEpoch: 1, sequence: 0 } },
+        setSnapshotState: vi.fn(),
+        followBackendActiveSession: () => false,
+        setActionMessage: vi.fn(),
+        refreshApplications: vi.fn(),
+        refreshDevices: vi.fn(),
+        refreshSessions: async () => [],
+        setRecordings: vi.fn(),
+        setRecordingsError: vi.fn(),
+        setRecorderStatuses: vi.fn(),
+        setRecorderStatusAvailable: vi.fn(),
+        reconnecting,
+      }),
+    { initialProps: { reconnecting: true } },
+  );
+  try {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(backend.subscribe).not.toHaveBeenCalled();
+    hook.rerender({ reconnecting: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(backend.subscribe).toHaveBeenCalled();
+  } finally {
+    hook.unmount();
+    vi.useRealTimers();
+  }
+});
