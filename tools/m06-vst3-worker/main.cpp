@@ -677,11 +677,31 @@ static std::atomic<bool> g_latency_restart_failed{false};
 // re-activation itself, not for a UI thread busy elsewhere.
 static std::mutex g_processing_mutex;
 
-class ComponentHandler final : public Vst::IComponentHandler {
+// Which restart requests need the component switched off and on again. A
+// latency change must be re-read after re-activation (SDK rule); an I/O change
+// and a reload request get the same treatment so the plugin can rebuild its
+// processing. Bus counts and layouts are fixed when the worker starts, so a
+// plugin that changes them keeps the layout it was given.
+static bool restart_needs_reactivation(int32 flags) {
+    return (flags & (Vst::kLatencyChanged | Vst::kIoChanged | Vst::kReloadComponent)) != 0;
+}
+
+class ComponentHandler final : public Vst::IComponentHandler, public Vst::IComponentHandler2 {
 public:
     tresult PLUGIN_API queryInterface(const TUID iid, void** object) override {
+        if (object && FUnknownPrivate::iidEqual(iid, Vst::IComponentHandler2_iid)) {
+            *object = static_cast<Vst::IComponentHandler2*>(this);
+            return kResultOk;
+        }
         return host_query<Vst::IComponentHandler>(this, iid, object, Vst::IComponentHandler_iid);
     }
+    // IComponentHandler2. The route's saved state is taken when the editor
+    // closes or the user saves, so "dirty" needs no action; group edits arrive
+    // as ordinary edits; the host opens editors only on the user's request.
+    tresult PLUGIN_API setDirty(TBool) override { return kResultOk; }
+    tresult PLUGIN_API requestOpenEditor(FIDString) override { return kResultFalse; }
+    tresult PLUGIN_API startGroupEdit() override { return kResultOk; }
+    tresult PLUGIN_API finishGroupEdit() override { return kResultOk; }
     uint32 PLUGIN_API addRef() override { return 1; }
     uint32 PLUGIN_API release() override { return 1; }
     tresult PLUGIN_API beginEdit(Vst::ParamID) override { return kResultOk; }
@@ -690,11 +710,12 @@ public:
         return kResultOk;
     }
     tresult PLUGIN_API endEdit(Vst::ParamID) override { return kResultOk; }
-    // Called by the controller, usually on the UI thread. Only a latency
-    // change needs host action; the SDK requires a re-activation before the
-    // new value applies, done between quanta by the next Latency request.
+    // Called by the controller, usually on the UI thread. The re-activation
+    // is done between quanta by the next Latency request. kParamValuesChanged
+    // needs nothing: the worker keeps no copy of the values, it reads them from
+    // the controller when it saves.
     tresult PLUGIN_API restartComponent(int32 flags) override {
-        if (flags & Vst::kLatencyChanged) g_latency_restart_pending.store(true, std::memory_order_release);
+        if (restart_needs_reactivation(flags)) g_latency_restart_pending.store(true, std::memory_order_release);
         return kResultOk;
     }
 };
@@ -2445,6 +2466,22 @@ static int self_test_host() {
     ComponentHandler handler;
     if (handler.queryInterface(Vst::IComponentHandler_iid, &queried) != kResultOk) throw std::runtime_error("handler QI regression");
     static_cast<Vst::IComponentHandler*>(queried)->release();
+    if (handler.queryInterface(Vst::IComponentHandler2_iid, &queried) != kResultOk || !queried) throw std::runtime_error("handler2 QI regression");
+    auto* handler2 = static_cast<Vst::IComponentHandler2*>(queried);
+    if (handler2->setDirty(1) != kResultOk || handler2->startGroupEdit() != kResultOk ||
+        handler2->finishGroupEdit() != kResultOk || handler2->requestOpenEditor(Vst::ViewType::kEditor) != kResultFalse) {
+        throw std::runtime_error("handler2 answers regression");
+    }
+    if (!restart_needs_reactivation(Vst::kLatencyChanged) || !restart_needs_reactivation(Vst::kIoChanged) ||
+        !restart_needs_reactivation(Vst::kReloadComponent) || restart_needs_reactivation(Vst::kParamValuesChanged) ||
+        restart_needs_reactivation(Vst::kParamTitlesChanged) || restart_needs_reactivation(0)) {
+        throw std::runtime_error("restart flag regression");
+    }
+    g_latency_restart_pending.store(false);
+    handler.restartComponent(Vst::kParamValuesChanged);
+    if (g_latency_restart_pending.load()) throw std::runtime_error("a value change must not restart the component");
+    handler.restartComponent(Vst::kIoChanged);
+    if (!g_latency_restart_pending.exchange(false)) throw std::runtime_error("an I/O change must schedule a re-activation");
     require_notification("optional notification", kResultFalse);
     const TUID sample_class{0x01, 0x23, 0x45, 0x67, char(0x89), char(0xAB), char(0xCD), char(0xEF),
                             0x10, 0x32, 0x54, 0x76, char(0x98), char(0xBA), char(0xDC), char(0xFE)};

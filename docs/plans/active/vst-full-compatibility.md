@@ -444,3 +444,24 @@ Open, in suggested order:
   Surge XT Effects, because that JUCE plugin accepts a damaged state without an
   error; use a plugin that refuses (DPF plugins do). ZamAutoSat still reports
   `restore failed`: it has no parameters to fall back on.
+
+## P3 step 2 (2026-11-14): component handler
+
+- The VST3 worker's handler now also answers `IComponentHandler2` (`setDirty`,
+  group edits: accepted; `requestOpenEditor`: declined, the host opens editors
+  only when the user asks).
+- `restartComponent`: `kIoChanged` and `kReloadComponent` now get the same
+  off-and-on re-activation as `kLatencyChanged`. `kParamValuesChanged` needs no
+  action (the worker keeps no copy of the values). Limit: bus counts and layouts
+  are fixed when the worker starts, so a plugin that changes them keeps the
+  layout it was given; a full reload (terminate, initialise, restore state) is
+  not done.
+- Already present, found while reading: `IPlugViewContentScaleSupport` is sent
+  the window's DPI scale when the editor is attached.
+- Checked: `audiorouter-vst3-worker.exe --self-test-host` (new assertions for
+  the second interface and each restart flag); census of Dragonfly (VST2 and
+  VST3) and Surge XT Effects with the rebuilt debug worker: same results as
+  before. Not checked: a real plugin that sends `kIoChanged` (none in the corpus
+  is known to); the x86 and release workers are not rebuilt.
+- Open in P3: units and program lists, multi-class modules beyond the first
+  class check, 64-bit-only plugins, the Steinberg validator run.

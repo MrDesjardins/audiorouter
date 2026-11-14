@@ -118,12 +118,11 @@ The opcode numbers below are from memory: check each against the public
 File: `tools/m06-vst3-worker/main.cpp`, build with
 `tools/m06-vst3-worker/build.ps1 -Output <path>` (add `-Arch x86` for 32-bit).
 
-- Restart flags in `IComponentHandler::restartComponent`: `kLatencyChanged`,
-  `kIoChanged` (deactivate, re-read buses, reactivate), `kParamValuesChanged`
-  (re-read cache), `kReloadComponent`.
-- `IComponentHandler2` (`setDirty`, `requestOpenEditor`, group edits),
-  `IUnitInfo`/program lists (read only), context menu stub.
-- `IPlugViewContentScaleSupport`: send the monitor scale before `attached`.
+- Done 2026-11-14 (plan, "P3 step 2"): `IComponentHandler2`, restart flags
+  (re-activation for latency, I/O change and reload; bus layouts are not
+  re-negotiated), and content scale was already there.
+- Open: `IUnitInfo`/program lists (read only), context menu stub, re-negotiating
+  buses after `kIoChanged`.
 - Multi-class modules: list every audio effect class at scan, load by class ID
   (the identity already carries `classIds`). Surge XT Effects and Zam are
   single class; check a multi-class bundle from the corpus.
