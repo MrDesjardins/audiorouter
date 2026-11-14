@@ -854,8 +854,35 @@ fn publish_backend_state(state: backend_state::BackendState) {
 /// The window's Quit button: the same backend finalization as the tray's
 /// "Quit and stop audio" (stop audio, finish recordings), then exit. A refused
 /// quit leaves everything running and returns the reason to the window.
+///
+/// `force` is the window's "Quit anyway", offered only after the backend did
+/// not answer (RES-4): the shell exits without finalization. It is a
+/// deliberate quit, so the run marker is removed as on any exit and the next
+/// launch does not count a crash; an unfinished recording is found by the
+/// usual recording recovery.
 #[tauri::command(async)]
-fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), String> {
+fn quit_app(
+    app: tauri::AppHandle,
+    state: State<'_, ShellState>,
+    force: Option<bool>,
+) -> Result<(), String> {
+    if force == Some(true) {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(serde_json::json!("window-quit")),
+            method: "shell.quitForced".into(),
+            params: None,
+        };
+        log_shell_rpc(
+            &request,
+            &Ok(JsonRpcResponse::success(
+                request.id.clone(),
+                serde_json::json!({"state": "forced"}),
+            )),
+        );
+        app.exit(0);
+        return Ok(());
+    }
     // A fresh key per click: a refused quit must not replay on retry.
     let key = format!(
         "window-quit-{}",
@@ -871,7 +898,35 @@ fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), S
     };
     let response = forward_rpc_request(&request, &state.pipe_name);
     log_shell_rpc(&request, &response);
-    let response = response?;
+    match quit_outcome(response) {
+        QuitOutcome::Exit => {
+            app.exit(0);
+            Ok(())
+        }
+        QuitOutcome::Refused(reason) => Err(reason),
+        QuitOutcome::Unresponsive(reason) => Err(format!("{QUIT_UNRESPONSIVE_PREFIX}{reason}")),
+    }
+}
+
+/// Prefix of a Quit error the window answers with "Quit anyway": the
+/// backend never answered, as opposed to answering with a refusal.
+const QUIT_UNRESPONSIVE_PREFIX: &str = "backendUnresponsive: ";
+
+#[derive(Debug, PartialEq, Eq)]
+enum QuitOutcome {
+    Exit,
+    /// The backend answered and kept running (for example a recording that
+    /// cannot be finalized); quitting anyway would lose that answer.
+    Refused(String),
+    /// No answer: the pipe failed or the deadline passed.
+    Unresponsive(String),
+}
+
+fn quit_outcome(response: Result<JsonRpcResponse, String>) -> QuitOutcome {
+    let response = match response {
+        Ok(response) => response,
+        Err(reason) => return QuitOutcome::Unresponsive(reason),
+    };
     if response
         .result
         .as_ref()
@@ -879,13 +934,36 @@ fn quit_app(app: tauri::AppHandle, state: State<'_, ShellState>) -> Result<(), S
         .and_then(serde_json::Value::as_str)
         == Some("stopped")
     {
-        app.exit(0);
-        return Ok(());
+        return QuitOutcome::Exit;
     }
-    Err(response
-        .error
-        .map(|error| error.message)
-        .unwrap_or_else(|| "backend finalization failed".into()))
+    QuitOutcome::Refused(
+        response
+            .error
+            .map(|error| error.message)
+            .unwrap_or_else(|| "backend finalization failed".into()),
+    )
+}
+
+#[test]
+fn quit_offers_quit_anyway_only_when_the_backend_did_not_answer() {
+    assert_eq!(
+        quit_outcome(Ok(JsonRpcResponse::success(
+            None,
+            serde_json::json!({"state": "stopped"})
+        ))),
+        QuitOutcome::Exit
+    );
+    assert!(matches!(
+        quit_outcome(Ok(JsonRpcResponse::success(
+            None,
+            serde_json::json!({"state": "running"})
+        ))),
+        QuitOutcome::Refused(_)
+    ));
+    assert_eq!(
+        quit_outcome(Err("control pipe request failed: timed out".into())),
+        QuitOutcome::Unresponsive("control pipe request failed: timed out".into())
+    );
 }
 
 /// Whether the editor page holds route edits that are not saved yet. The
