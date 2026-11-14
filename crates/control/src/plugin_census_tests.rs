@@ -230,8 +230,8 @@ fn plugin_census() {
             let text = path.display().to_string();
             // Blue Cat demos open a "Limiting demo" window while the owner may
             // be playing or on a call: they are left out unless asked for.
-            let demo = !std::env::var_os("AUDIOROUTER_CENSUS_RUN_DEMOS")
-                .is_some_and(|value| value == "1")
+            let demo = std::env::var_os("AUDIOROUTER_CENSUS_RUN_DEMOS")
+                .is_none_or(|value| value != "1")
                 && ["BC PatchWork", "Blue Cat"]
                     .iter()
                     .any(|name| text.contains(name));
