@@ -1216,6 +1216,7 @@ pub enum WorkerMessageError {
     InvalidBusFrames(WorkerAudioBusFramesError),
     InvalidParameter(ParameterEventError),
     InvalidParameterDescriptor(ParameterDescriptorError),
+    InvalidMidi(MidiEventError),
     InvalidEditor,
     InvalidProtocolVersion,
     InvalidPluginHash,
@@ -2177,6 +2178,76 @@ pub struct ParameterEvent {
     pub sample_offset: usize,
 }
 
+/// Most MIDI events one audio block may carry to a worker.
+pub const MAX_MIDI_EVENTS_PER_BLOCK: usize = 256;
+
+/// One MIDI channel-voice message for an instrument worker, placed at a
+/// sample offset inside the block it travels with.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MidiEvent {
+    pub sample_offset: u32,
+    /// Status byte: `0x80..=0xEF` (note off/on, aftertouch, control change,
+    /// program change, channel pressure, pitch bend), channel in the low nibble.
+    pub status: u8,
+    pub data1: u8,
+    pub data2: u8,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MidiEventError {
+    /// Only channel-voice messages are carried; system messages are not.
+    NotChannelVoice,
+    /// A data byte has its high bit set.
+    DataByteOutOfRange,
+    OffsetOutOfRange,
+    TooMany,
+}
+
+impl MidiEvent {
+    pub fn new(
+        sample_offset: u32,
+        status: u8,
+        data1: u8,
+        data2: u8,
+    ) -> Result<Self, MidiEventError> {
+        if !(0x80..=0xEF).contains(&status) {
+            return Err(MidiEventError::NotChannelVoice);
+        }
+        if data1 > 0x7F || data2 > 0x7F {
+            return Err(MidiEventError::DataByteOutOfRange);
+        }
+        if sample_offset as usize >= MAX_WORKER_FRAMES {
+            return Err(MidiEventError::OffsetOutOfRange);
+        }
+        Ok(Self {
+            sample_offset,
+            status,
+            data1,
+            data2,
+        })
+    }
+}
+
+/// Validates the events of one block against its frame count.
+pub fn validate_midi_events_for_frame(
+    events: &[MidiEvent],
+    frame_count: usize,
+) -> Result<(), WorkerMessageError> {
+    if events.len() > MAX_MIDI_EVENTS_PER_BLOCK {
+        return Err(WorkerMessageError::InvalidMidi(MidiEventError::TooMany));
+    }
+    for event in events {
+        MidiEvent::new(event.sample_offset, event.status, event.data1, event.data2)
+            .map_err(WorkerMessageError::InvalidMidi)?;
+        if event.sample_offset as usize >= frame_count {
+            return Err(WorkerMessageError::InvalidMidi(
+                MidiEventError::OffsetOutOfRange,
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ParameterDescriptor {
     pub parameter_id: u32,
@@ -2325,6 +2396,12 @@ pub enum WorkerMessage {
         channels: u16,
         frames: u32,
         parameters: Vec<ParameterEvent>,
+    },
+    /// One-way: MIDI events for the next process message of an instrument
+    /// worker. Sent only when there are events, so effects never see it; the
+    /// worker keeps them until that block is processed. No response.
+    Midi {
+        events: Vec<MidiEvent>,
     },
     Processed {
         frame: WorkerFrame,
@@ -2525,6 +2602,7 @@ impl WorkerSession {
             (
                 WorkerSessionState::Active,
                 WorkerMessage::ProcessedShared { .. }
+                | WorkerMessage::Midi { .. }
                 | WorkerMessage::StateSave
                 | WorkerMessage::StateRestore { .. },
             ) => Ok(None),
@@ -3833,6 +3911,21 @@ impl SupervisedWorkerProcess {
                 Err(error)
             }
         }
+    }
+
+    /// MIDI for the next block of an instrument worker (see
+    /// `WorkerProcess::send_midi`). A failed write ends the worker like any
+    /// other protocol failure.
+    pub fn send_midi(
+        &mut self,
+        events: Vec<MidiEvent>,
+        now: Instant,
+    ) -> Result<(), WorkerProcessError> {
+        self.ensure_running()?;
+        self.process.send_midi(events).inspect_err(|_| {
+            terminate_child(&mut self.process.child);
+            self.supervisor.record_failure(now);
+        })
     }
 
     /// Process one multi-bus quantum while refreshing supervision only after
@@ -6140,6 +6233,16 @@ impl WorkerProcess {
     fn write(&mut self, message: &WorkerMessage) -> Result<(), WorkerMessageError> {
         write_worker_message(&mut self.writer, message)
     }
+
+    /// Hands MIDI events to an instrument worker for the block sent next. A
+    /// block without events sends nothing, so effect workers never see MIDI.
+    pub fn send_midi(&mut self, events: Vec<MidiEvent>) -> Result<(), WorkerProcessError> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        self.write(&WorkerMessage::Midi { events })
+            .map_err(WorkerProcessError::Message)
+    }
 }
 
 fn receive_worker_message(
@@ -6408,6 +6511,11 @@ fn validate_worker_message(message: &WorkerMessage) -> Result<(), WorkerMessageE
         } => {
             validate_shared_frame_shape(*sequence, *deadline_tick, *channels, *frames)?;
             validate_parameter_events_for_frame(parameters, *frames as usize)?;
+        }
+        WorkerMessage::Midi { events } => {
+            // Offsets are checked against the block length by the worker when
+            // it applies them; here only the protocol-wide bounds.
+            validate_midi_events_for_frame(events, MAX_WORKER_FRAMES)?;
         }
         WorkerMessage::Processed { frame } => {
             WorkerFrame::new(
@@ -9211,6 +9319,82 @@ mod tests {
                 ParameterEventError::OffsetOutOfRange
             ))
         ));
+    }
+
+    #[test]
+    fn midi_events_are_bounded_channel_voice_messages_inside_the_block() {
+        assert_eq!(
+            MidiEvent::new(0, 0x90, 60, 100),
+            Ok(MidiEvent {
+                sample_offset: 0,
+                status: 0x90,
+                data1: 60,
+                data2: 100
+            })
+        );
+        assert_eq!(
+            MidiEvent::new(0, 0xF8, 0, 0),
+            Err(MidiEventError::NotChannelVoice)
+        );
+        assert_eq!(
+            MidiEvent::new(0, 0x7F, 0, 0),
+            Err(MidiEventError::NotChannelVoice)
+        );
+        assert_eq!(
+            MidiEvent::new(0, 0x90, 128, 0),
+            Err(MidiEventError::DataByteOutOfRange)
+        );
+        assert_eq!(
+            MidiEvent::new(MAX_WORKER_FRAMES as u32, 0x90, 60, 1),
+            Err(MidiEventError::OffsetOutOfRange)
+        );
+        let message = |events: Vec<MidiEvent>| WorkerMessage::Midi { events };
+        assert!(
+            validate_worker_message(&message(vec![MidiEvent::new(3, 0x90, 60, 90).unwrap()]))
+                .is_ok()
+        );
+        // A forged event past the protocol-wide block bound is refused.
+        let forged = MidiEvent {
+            sample_offset: MAX_WORKER_FRAMES as u32,
+            status: 0x90,
+            data1: 60,
+            data2: 90,
+        };
+        assert_eq!(
+            validate_worker_message(&message(vec![forged])),
+            Err(WorkerMessageError::InvalidMidi(
+                MidiEventError::OffsetOutOfRange
+            ))
+        );
+        let crowd = vec![MidiEvent::new(0, 0x90, 60, 90).unwrap(); MAX_MIDI_EVENTS_PER_BLOCK + 1];
+        assert_eq!(
+            validate_worker_message(&message(crowd)),
+            Err(WorkerMessageError::InvalidMidi(MidiEventError::TooMany))
+        );
+        // The check a worker applies against the real length of its block.
+        let late = [MidiEvent::new(4, 0x90, 60, 90).unwrap()];
+        assert_eq!(
+            validate_midi_events_for_frame(&late, 4),
+            Err(WorkerMessageError::InvalidMidi(
+                MidiEventError::OffsetOutOfRange
+            ))
+        );
+    }
+
+    #[test]
+    fn midi_message_round_trips_and_a_session_accepts_it_while_active() {
+        let message = WorkerMessage::Midi {
+            events: vec![
+                MidiEvent::new(10, 0x90, 64, 80).unwrap(),
+                MidiEvent::new(90, 0x80, 64, 0).unwrap(),
+            ],
+        };
+        let decoded = decode_worker_message(&encode_worker_message(&message).unwrap()).unwrap();
+        assert_eq!(decoded, message);
+        let mut session = WorkerSession::new("0".repeat(64), 2).unwrap();
+        session.hello_sent().unwrap();
+        session.accept(&WorkerMessage::Ready, 0).unwrap();
+        assert_eq!(session.accept(&message, 0), Ok(None));
     }
 
     #[test]
