@@ -22,8 +22,8 @@
 
 use super::*;
 use audiorouter_plugin_host::{
-    inspect_binary, worker_clock_tick, PluginCompatibility, PluginFormat, SupervisedWorkerProcess,
-    WorkerFrame,
+    inspect_binary, worker_clock_tick, MidiEvent, PluginCompatibility, PluginFormat,
+    SupervisedWorkerProcess, WorkerFrame,
 };
 use std::path::{Path, PathBuf};
 
@@ -164,6 +164,82 @@ fn census_width(
     })
 }
 
+/// An instrument is played, not fed: start it in stereo, check it is quiet,
+/// hold middle C and measure what comes out, then release the note.
+fn census_instrument(
+    identity: &audiorouter_plugin_host::PluginIdentity,
+    root: &Path,
+) -> serde_json::Value {
+    let kind = PluginWorkerKind::for_identity(identity.format, identity.architecture);
+    let executable = match require_plugin_worker(kind) {
+        Ok(path) => path,
+        Err(error) => return json!({ "failed": format!("no worker: {error:?}") }),
+    };
+    let mut worker = match SupervisedWorkerProcess::spawn_instrument_verified(
+        &executable,
+        identity,
+        std::slice::from_ref(&root.to_path_buf()),
+        2,
+        48_000,
+        Instant::now(),
+    ) {
+        Ok(worker) => worker,
+        Err(error) => return json!({ "failed": format!("start: {error:?}") }),
+    };
+    let mut sequence = 0_u64;
+    let mut non_finite = false;
+    let mut run = |worker: &mut SupervisedWorkerProcess, blocks: u64| -> Result<f32, String> {
+        let mut peak = 0.0_f32;
+        for _ in 0..blocks {
+            sequence += 1;
+            let frame = WorkerFrame::new(
+                sequence,
+                worker_clock_tick().saturating_add(10_000),
+                2,
+                vec![0.0; 256],
+            )
+            .map_err(|error| format!("frame: {error:?}"))?;
+            let output = worker
+                .process(frame, vec![], Instant::now())
+                .map_err(|error| format!("process: {error:?}"))?;
+            for sample in output.samples {
+                non_finite |= !sample.is_finite();
+                peak = peak.max(sample.abs());
+            }
+        }
+        Ok(peak)
+    };
+    let played = (|| {
+        let quiet = run(&mut worker, 8)?;
+        worker
+            .send_midi(
+                vec![MidiEvent::new(0, 0x90, 60, 110).map_err(|error| format!("{error:?}"))?],
+                Instant::now(),
+            )
+            .map_err(|error| format!("note on: {error:?}"))?;
+        let held = run(&mut worker, 150)?;
+        worker
+            .send_midi(
+                vec![MidiEvent::new(0, 0x80, 60, 0).map_err(|error| format!("{error:?}"))?],
+                Instant::now(),
+            )
+            .map_err(|error| format!("note off: {error:?}"))?;
+        run(&mut worker, 4)?;
+        Ok::<_, String>((quiet, held))
+    })();
+    let exit_ok = worker.shutdown().map(|status| status.success()).ok();
+    match played {
+        Ok((quiet, held)) => json!({
+            "quietPeak": quiet,
+            "heldPeak": held,
+            "sounds": held > 0.001 && held > quiet * 10.0,
+            "nonFinite": non_finite,
+            "cleanExit": exit_ok,
+        }),
+        Err(error) => json!({ "failed": error, "cleanExit": exit_ok }),
+    }
+}
+
 fn census_one(path: &Path, root: &Path, plane: &mut ControlPlane) -> serde_json::Value {
     let identity = match inspect_binary(path, std::slice::from_ref(&root.to_path_buf())) {
         Ok(identity) => identity,
@@ -184,6 +260,10 @@ fn census_one(path: &Path, root: &Path, plane: &mut ControlPlane) -> serde_json:
             | PluginCompatibility::SupportedVst2X86
     ) {
         result["skipped"] = json!("not a supported effect");
+        return result;
+    }
+    if identity.is_instrument() {
+        result["instrument"] = census_instrument(&identity, root);
         return result;
     }
     let response = plane.dispatch(JsonRpcRequest {
@@ -271,6 +351,24 @@ fn census_markdown(report: &serde_json::Value) -> String {
             .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
         if let Some(reason) = row["refused"].as_str().or_else(|| row["skipped"].as_str()) {
             text.push_str(&format!("| {name} | - | - | - | - | - | {reason} |\n"));
+            continue;
+        }
+        if row["instrument"].is_object() {
+            let instrument = &row["instrument"];
+            let outcome = if let Some(failed) = instrument["failed"].as_str() {
+                format!("FAILED {failed}")
+            } else if instrument["nonFinite"] == true {
+                "non-finite".into()
+            } else if instrument["sounds"] == true {
+                "plays a note".into()
+            } else {
+                "silent with a note held".into()
+            };
+            text.push_str(&format!(
+                "| {name} | {} | {} | - | - | {outcome} | instrument |\n",
+                row["format"].as_str().unwrap_or("?"),
+                row["architecture"].as_str().unwrap_or("?"),
+            ));
             continue;
         }
         let width = |index: usize| -> String {
