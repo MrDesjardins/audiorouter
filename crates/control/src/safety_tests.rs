@@ -835,3 +835,42 @@ fn device_recovery_silences_the_route_then_gives_up_when_the_device_never_return
         .any(|category| category == "runtime.recoveryFailed"));
     assert!(plane.get_session(&session_id).is_ok());
 }
+
+#[test]
+fn the_running_witness_lists_playing_sessions_without_recordings() {
+    let witness = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut plane = ControlPlane::default();
+    let mut playing = session();
+    playing.id = EntityId::new("playing");
+    let mut recording = session();
+    recording.id = EntityId::new("recording");
+    plane.insert_session(playing).unwrap();
+    plane.insert_session(recording).unwrap();
+    plane.set_running_witness(witness.clone());
+    for id in ["playing", "recording"] {
+        let response = plane.dispatch(JsonRpcRequest {
+            jsonrpc: "2.0".into(),
+            id: Some(json!(id)),
+            method: "session.start".into(),
+            params: Some(json!({"sessionId": id, "idempotencyKey": format!("start-{id}")})),
+        });
+        assert!(response.error.is_none(), "{:?}", response.error);
+    }
+    assert_eq!(
+        *witness.lock().unwrap(),
+        vec![EntityId::new("playing"), EntityId::new("recording")]
+    );
+    // A recording session is never restored after a crash (STATE-10).
+    let mut recorder = RecorderController::new();
+    recorder.arm().unwrap();
+    recorder.start(0).unwrap();
+    plane.recorders.insert(EntityId::new("recording"), recorder);
+    let response = plane.dispatch(JsonRpcRequest {
+        jsonrpc: "2.0".into(),
+        id: Some(json!("stop")),
+        method: "session.stop".into(),
+        params: Some(json!({"sessionId": "playing", "idempotencyKey": "stop-playing"})),
+    });
+    assert!(response.error.is_none(), "{:?}", response.error);
+    assert!(witness.lock().unwrap().is_empty());
+}

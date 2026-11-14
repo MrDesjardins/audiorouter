@@ -1940,6 +1940,10 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                 publish_backend_state(backend_state::BackendState::new(
                     backend_state::Phase::Starting, backend_state::Reason::None, 0));
                 let mut supervisor = BackendSupervisor::default();
+                // The control plane writes its playing, non-recording sessions
+                // here; it survives the plane's panic (RES-2).
+                let running_witness =
+                    std::sync::Arc::new(std::sync::Mutex::new(Vec::<EntityId>::new()));
                 if PREVIOUS_PROCESS_INTERRUPTED.load(std::sync::atomic::Ordering::Relaxed) {
                     let _ = record_backend_failure(&database);
                 }
@@ -1992,6 +1996,7 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                         return Err("the current user enrollment is revoked".into());
                     }
                     let mut plane = ControlPlane::with_storage("desktop-shell", storage);
+                    plane.set_running_witness(running_witness.clone());
                     if enrollment.is_none() {
                         // The shell is the user's authenticated local editor:
                         // grant graph/session control on first launch. Device
@@ -2108,6 +2113,22 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
                                         delay.as_millis(),
                                         supervisor.failure_count(now),
                                     );
+                                    let witnessed = running_witness
+                                        .lock()
+                                        .map(|mut slot| std::mem::take(&mut *slot))
+                                        .unwrap_or_default()
+                                        .into_iter()
+                                        .map(|id| id.as_str().to_owned())
+                                        .collect();
+                                    let restore = backend_supervisor::sessions_to_restore(
+                                        safe_mode,
+                                        supervisor.failure_count(now),
+                                        durable_failures,
+                                        witnessed,
+                                    );
+                                    if !restore.is_empty() {
+                                        spawn_route_restore(pipe_name.clone(), restore);
+                                    }
                                     std::thread::sleep(delay);
                                 }
                                 BackendRestartDecision::StopSafeMode => {
@@ -2124,6 +2145,43 @@ fn start_owned_backend(pipe_name: &str) -> Result<Option<std::thread::JoinHandle
             })
             .map_err(|error| format!("backend thread creation failed: {error}"))?;
         Ok(Some(handle))
+    }
+}
+
+/// Play the witnessed routes again once the restarted backend answers
+/// (RES-2). Runs beside the supervisor, which is about to serve again.
+#[cfg(windows)]
+fn spawn_route_restore(pipe_name: String, session_ids: Vec<String>) {
+    let spawned = std::thread::Builder::new()
+        .name("audiorouter-route-restore".into())
+        .spawn(move || {
+            let outcome = tray_playback::restore_after_restart(
+                &mut backend_call(&pipe_name),
+                &session_ids,
+                40,
+                std::time::Duration::from_millis(250),
+            );
+            let request = JsonRpcRequest {
+                jsonrpc: "2.0".into(),
+                id: Some(serde_json::json!("route-restore")),
+                method: "shell.routeRestore".into(),
+                params: None,
+            };
+            let state = if outcome.is_ok() {
+                "restored"
+            } else {
+                "notRestored"
+            };
+            log_shell_rpc(
+                &request,
+                &Ok(JsonRpcResponse::success(
+                    request.id.clone(),
+                    serde_json::json!({"state": state, "routes": session_ids.len()}),
+                )),
+            );
+        });
+    if spawned.is_err() {
+        eprintln!("AudioRouter route restore thread could not start");
     }
 }
 

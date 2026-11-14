@@ -408,6 +408,9 @@ pub struct ControlPlane {
     /// from restarting the route without end.
     #[cfg(windows)]
     device_recovery_arms: VecDeque<Instant>,
+    /// Shared with the shell's backend supervisor: the sessions playing
+    /// without a recording, so a restarted backend can restore them (RES-2).
+    running_witness: Option<std::sync::Arc<std::sync::Mutex<Vec<EntityId>>>>,
     virtual_buses: VirtualBusRegistry,
     virtual_bus_routes: VirtualBusRouteRegistry,
     virtual_bus_route_revision: u64,
@@ -595,6 +598,7 @@ impl ControlPlane {
             sleep_route_recovery: None,
             #[cfg(windows)]
             device_recovery_arms: VecDeque::new(),
+            running_witness: None,
             virtual_buses: VirtualBusRegistry::default(),
             virtual_bus_routes: VirtualBusRouteRegistry::default(),
             virtual_bus_route_revision: 0,
@@ -714,6 +718,7 @@ impl ControlPlane {
         };
         if mutating {
             self.refresh_siege_round_feed();
+            self.publish_running_witness();
         }
         match result {
             Ok(value) => JsonRpcResponse::success(id, value),

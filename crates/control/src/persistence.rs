@@ -275,6 +275,7 @@ impl ControlPlane {
             sleep_route_recovery: None,
             #[cfg(windows)]
             device_recovery_arms: std::collections::VecDeque::new(),
+            running_witness: None,
             virtual_buses,
             virtual_bus_routes,
             virtual_bus_route_revision,

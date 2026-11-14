@@ -43,6 +43,36 @@ impl SleepRouteRecovery {
 }
 
 impl ControlPlane {
+    /// Share the list of playing, non-recording sessions with a supervisor
+    /// that outlives this control plane (RES-2, STATE-10). The list is
+    /// rewritten after every mutating request and recovery step; a panic
+    /// leaves the last value in place for the supervisor to read.
+    pub fn set_running_witness(
+        &mut self,
+        witness: std::sync::Arc<std::sync::Mutex<Vec<EntityId>>>,
+    ) {
+        self.running_witness = Some(witness);
+        self.publish_running_witness();
+    }
+
+    pub(crate) fn publish_running_witness(&self) {
+        let Some(witness) = &self.running_witness else {
+            return;
+        };
+        let mut running = self
+            .runtimes
+            .iter()
+            .filter(|(id, runtime)| {
+                runtime.state() == RuntimeState::Running && !self.session_is_recording(id)
+            })
+            .map(|(id, _)| id.clone())
+            .collect::<Vec<_>>();
+        running.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+        if let Ok(mut slot) = witness.lock() {
+            *slot = running;
+        }
+    }
+
     #[cfg(windows)]
     pub(crate) fn cancel_sleep_route_recovery(&mut self, id: &EntityId) {
         if self
@@ -108,6 +138,8 @@ impl ControlPlane {
             self.session_start(id)?;
             Ok::<(), ControlError>(())
         })();
+        // Started, or stopped above: either way the playing set changed.
+        self.publish_running_witness();
         if let Err(error) = result {
             // A partially started worker must be stopped before the next attempt.
             if self
