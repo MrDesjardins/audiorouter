@@ -177,6 +177,11 @@ impl Vst2HeaderError {
             Self::InvalidChannels { .. } => {
                 "VST2 plugin has an audio channel layout AudioRouter cannot use"
             }
+            // Decision (2026-11-14): the pre-2.4 accumulating `process` call is
+            // not used. No plugin in the census needed it; the refusal says why.
+            Self::ReplacingUnsupported | Self::MissingReplacingProcessor => {
+                "VST2 plugin only offers the old accumulating process call, which AudioRouter does not use"
+            }
             _ => "VST2 plugin header is not a usable audio effect",
         }
     }
@@ -349,6 +354,19 @@ mod tests {
             synth.validate(Vst2Role::Instrument),
             Err(Vst2HeaderError::InvalidChannels { .. })
         ));
+    }
+
+    /// A plugin that only has the pre-2.4 accumulating call is refused with
+    /// that reason, not the generic header message.
+    #[test]
+    fn a_plugin_without_process_replacing_is_refused_with_its_own_reason() {
+        let mut old = valid_effect();
+        old.flags &= !VST2_FLAG_CAN_REPLACING;
+        let error = old.validate_audio_effect().unwrap_err();
+        assert_eq!(error, Vst2HeaderError::ReplacingUnsupported);
+        assert!(error
+            .user_message()
+            .contains("old accumulating process call"));
     }
 
     #[test]
