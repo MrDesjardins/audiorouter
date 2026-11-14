@@ -482,5 +482,5 @@ Open, in suggested order:
   So Surge XT is listed under Instruments from the first scan.
 - Limits: a module with both an effect class and an instrument class is listed
   as an instrument; a VST2 instrument is still only learned at its first load.
-- Also repaired: two test lines in `vst2.rs` held raw NUL bytes instead of ` `
+- Also repaired: two test lines in `vst2.rs` held raw NUL bytes instead of `\0`
   (a shell heredoc had swallowed the backslash); same meaning, now plain text.
