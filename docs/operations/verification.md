@@ -117,21 +117,25 @@ collaborator. Require PRs, resolved blocking threads and current checks; owner
 review remains necessary, but a mandatory independent approval would prevent
 owner-authored PRs from merging. Do not add a bot bypass to hide that limitation.
 
-The nightly quality job publishes proposed README/history files as the
-`quality-history-update` artifact from the measured SHA. Download, inspect and
-submit those files in a reviewed documentation PR. It no longer pushes to main.
-Coverage and short soak metrics remain reports with their existing measured
-scope; they do not waive release gates in [M08](../milestones/M08-release.md).
+The nightly quality job records coverage, soak and startup metrics on `main` and
+keeps no generated copy in the repository. A separate `quality-history` workflow
+runs when the nightly finishes, downloads the `quality-history-collected`
+artifact, merges it with the rows already published, and commits the CSV and SVG
+to the unprotected `quality-data` branch. README links to that branch. `main`
+requires a pull request and the `Quality gate`, and no workflow gets a bypass, so
+the data branch is the publication target rather than a direct push. Coverage
+and short soak metrics remain reports with their existing measured scope; they
+do not waive release gates in [M08](../milestones/M08-release.md).
 
-Daily collection runs at 03:17 UTC (GitHub may delay scheduled starts), separately
-from publication of the reviewed repository snapshot. The trend job records
-available coverage, soak and startup metrics even when another measurement job
-fails; missing values remain empty. It carries cumulative history through the
-Actions cache and uploads `quality-history-collected` for 90 days on each run.
-The proposed `quality-history-update` snapshot is also retained for 90 days.
-Download retained history before it expires; cache eviction can break continuity,
-and neither cache nor artifacts are permanent archival storage. A stale
-`docs/quality-history.csv` does not mean daily collection stopped.
+Daily collection runs at 03:17 UTC (GitHub may delay scheduled starts). The
+trend job records available coverage, soak and startup metrics even when another
+measurement job fails; missing values remain empty. It carries cumulative
+history through the Actions cache and uploads `quality-history-collected` for
+90 days on each run. The publisher merges that artifact into the branch, so an
+evicted cache or a re-run cannot truncate or duplicate published rows. Download
+retained history before it expires; neither cache nor artifacts are permanent
+archival storage. If the branch is stale, run `Quality history (daily)` with a
+specific quality run ID to republish.
 
 Rollback: revert a scoped tooling/workflow commit. Before changing rules, save
 the existing ruleset; retain working protections until the replacement check
