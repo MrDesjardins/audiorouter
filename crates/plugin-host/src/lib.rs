@@ -3167,6 +3167,8 @@ pub struct SupervisedWorkerProcess {
     shared_transport: bool,
     bus_layout: Option<WorkerAudioBusLayout>,
     plugin_path: Option<PathBuf>,
+    /// An instrument played with MIDI (see `spawn_instrument_verified`).
+    instrument: bool,
     #[cfg(feature = "test-fixtures")]
     fixture_mode: Option<String>,
 }
@@ -3304,6 +3306,7 @@ impl SupervisedWorkerProcess {
             channels,
             sample_rate_hz,
             shared_transport: false,
+            instrument: false,
             bus_layout: None,
             plugin_path: None,
             #[cfg(feature = "test-fixtures")]
@@ -3414,6 +3417,7 @@ impl SupervisedWorkerProcess {
             channels,
             sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
             shared_transport: false,
+            instrument: false,
             bus_layout: None,
             plugin_path: None,
             fixture_mode: Some(mode.to_owned()),
@@ -3463,6 +3467,7 @@ impl SupervisedWorkerProcess {
                     .unwrap_or(channels),
                 sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
                 shared_transport: false,
+                instrument: false,
                 bus_layout: layout.cloned(),
                 plugin_path: None,
                 fixture_mode: Some(mode.to_owned()),
@@ -3584,6 +3589,7 @@ impl SupervisedWorkerProcess {
             channels: layout.input_buses().first().copied().unwrap_or(0),
             sample_rate_hz: DEFAULT_WORKER_SAMPLE_RATE_HZ,
             shared_transport: false,
+            instrument: false,
             bus_layout: Some(layout.clone()),
             plugin_path: None,
             fixture_mode: Some(mode.unwrap_or("echo").to_owned()),
@@ -3640,6 +3646,7 @@ impl SupervisedWorkerProcess {
                 channels: layout.input_buses()[0],
                 sample_rate_hz,
                 shared_transport: false,
+                instrument: false,
                 bus_layout: Some(layout.clone()),
                 plugin_path: plugin_path.map(Path::to_path_buf),
                 #[cfg(feature = "test-fixtures")]
@@ -3736,8 +3743,100 @@ impl SupervisedWorkerProcess {
                 channels,
                 sample_rate_hz,
                 shared_transport: false,
+                instrument: false,
                 bus_layout: None,
                 plugin_path: plugin_path.map(Path::to_path_buf),
+                #[cfg(feature = "test-fixtures")]
+                fixture_mode: None,
+            }),
+            Err(error) => {
+                supervisor.record_failure(now);
+                Err((error, supervisor))
+            }
+        }
+    }
+
+    /// Spawn a worker that hosts a VST2 or VST3 *instrument* after
+    /// revalidating the scanned plugin. The worker is played with
+    /// `send_midi`; its audio input is ignored.
+    pub fn spawn_instrument_verified(
+        executable: impl AsRef<Path>,
+        identity: &PluginIdentity,
+        configured_roots: &[PathBuf],
+        channels: u16,
+        sample_rate_hz: u32,
+        now: Instant,
+    ) -> Result<Self, WorkerProcessError> {
+        identity
+            .verify_current(configured_roots)
+            .map_err(WorkerProcessError::PluginIdentity)?;
+        Self::spawn_instrument_with_supervisor(
+            executable.as_ref().to_path_buf(),
+            identity,
+            channels,
+            sample_rate_hz,
+            WorkerSupervisor::new(),
+            now,
+        )
+        .map_err(|(error, _)| error)
+    }
+
+    fn spawn_instrument_with_supervisor(
+        executable: PathBuf,
+        identity: &PluginIdentity,
+        channels: u16,
+        sample_rate_hz: u32,
+        mut supervisor: WorkerSupervisor,
+        now: Instant,
+    ) -> Result<Self, (WorkerProcessError, WorkerSupervisor)> {
+        let executable = match validate_worker_executable(&executable) {
+            Ok(path) => path,
+            Err(error) => {
+                supervisor.record_failure(now);
+                return Err((WorkerProcessError::Spawn(error), supervisor));
+            }
+        };
+        if let Err(error) = supervisor.start(identity, now) {
+            if error == WorkerStartError::Quarantined {
+                return Err((WorkerProcessError::Quarantined, supervisor));
+            }
+            return Err((
+                WorkerProcessError::Protocol(format!("worker start rejected: {error:?}")),
+                supervisor,
+            ));
+        }
+        let process_result = match identity.format {
+            PluginFormat::Vst2 => WorkerProcess::spawn_vst2_instrument(
+                &executable,
+                &identity.binary_path,
+                &identity.sha256,
+                channels,
+                sample_rate_hz,
+            ),
+            PluginFormat::Vst3 => WorkerProcess::spawn_vst3_instrument(
+                &executable,
+                &identity.binary_path,
+                &identity.sha256,
+                identity.metadata.class_ids.first().map(String::as_str),
+                channels,
+                sample_rate_hz,
+            ),
+            PluginFormat::Unknown => Err(WorkerProcessError::Protocol(
+                "plugin format is unknown".into(),
+            )),
+        };
+        match process_result {
+            Ok(process) => Ok(Self {
+                process,
+                supervisor,
+                executable,
+                identity: identity.clone(),
+                channels,
+                sample_rate_hz,
+                shared_transport: false,
+                instrument: true,
+                bus_layout: None,
+                plugin_path: Some(identity.binary_path.clone()),
                 #[cfg(feature = "test-fixtures")]
                 fixture_mode: None,
             }),
@@ -3837,6 +3936,7 @@ impl SupervisedWorkerProcess {
                 channels,
                 sample_rate_hz,
                 shared_transport: true,
+                instrument: false,
                 bus_layout: None,
                 plugin_path: None,
                 #[cfg(feature = "test-fixtures")]
@@ -4175,6 +4275,7 @@ impl SupervisedWorkerProcess {
             shared_transport: _shared_transport,
             bus_layout: _bus_layout,
             plugin_path: _plugin_path,
+            instrument: _instrument,
             #[cfg(feature = "test-fixtures")]
                 fixture_mode: _fixture_mode,
         } = self;
@@ -4204,6 +4305,7 @@ impl SupervisedWorkerProcess {
             shared_transport,
             bus_layout,
             plugin_path,
+            instrument,
             #[cfg(feature = "test-fixtures")]
             fixture_mode,
         } = self;
@@ -4226,6 +4328,16 @@ impl SupervisedWorkerProcess {
                 channels,
                 bus_layout.as_ref(),
                 mode,
+                supervisor,
+                now,
+            );
+        }
+        if instrument {
+            return Self::spawn_instrument_with_supervisor(
+                executable,
+                &identity,
+                channels,
+                sample_rate_hz,
                 supervisor,
                 now,
             );
@@ -4330,6 +4442,112 @@ struct PluginQuantum {
 /// `SupervisedWorkerProcess` exchange. The one-quantum pipeline is
 /// fail-closed: a late result, full queue, or worker failure produces silence
 /// for that callback and never waits for recovery.
+/// MIDI waiting for an instrument's next block. The producers are the control
+/// plane and MIDI input threads; the consumer is the bridge's own runtime
+/// thread, never the audio callback, so a short lock is fine. The queue is
+/// bounded (the oldest events go first) and remembers which notes are held so
+/// a panic or a lost device can release them.
+pub struct MidiQueue {
+    pending: Mutex<std::collections::VecDeque<MidiEvent>>,
+    /// Held notes per channel, one bit per note number.
+    held: Mutex<[u128; 16]>,
+}
+
+impl Default for MidiQueue {
+    fn default() -> Self {
+        Self {
+            pending: Mutex::new(std::collections::VecDeque::new()),
+            held: Mutex::new([0; 16]),
+        }
+    }
+}
+
+impl MidiQueue {
+    /// Most events kept waiting; older ones are dropped beyond it.
+    pub const CAPACITY: usize = 1024;
+
+    /// Queues channel-voice messages (their sample offsets are ignored: they
+    /// take effect at the start of the next block). Returns how many were
+    /// accepted; a malformed message is skipped.
+    pub fn push(&self, events: &[MidiEvent]) -> usize {
+        let (Ok(mut pending), Ok(mut held)) = (self.pending.lock(), self.held.lock()) else {
+            return 0;
+        };
+        let mut accepted = 0;
+        for event in events {
+            let Ok(event) = MidiEvent::new(0, event.status, event.data1, event.data2) else {
+                continue;
+            };
+            let channel = usize::from(event.status & 0x0F);
+            let kind = event.status & 0xF0;
+            let bit = 1_u128 << event.data1;
+            if kind == 0x90 && event.data2 > 0 {
+                held[channel] |= bit;
+            } else if kind == 0x80 || kind == 0x90 {
+                held[channel] &= !bit;
+            } else if kind == 0xB0 && matches!(event.data1, 120 | 123) {
+                // All sound off / all notes off: make the release explicit,
+                // because plugins differ in whether they honour the controller.
+                Self::release_channel(&mut pending, &mut held, channel as u8);
+            }
+            pending.push_back(event);
+            accepted += 1;
+            while pending.len() > Self::CAPACITY {
+                pending.pop_front();
+            }
+        }
+        accepted
+    }
+
+    fn release_channel(
+        pending: &mut std::collections::VecDeque<MidiEvent>,
+        held: &mut [u128; 16],
+        channel: u8,
+    ) {
+        for note in 0..128_u8 {
+            if held[usize::from(channel)] & (1_u128 << note) != 0 {
+                pending.push_back(MidiEvent {
+                    sample_offset: 0,
+                    status: 0x80 | channel,
+                    data1: note,
+                    data2: 0,
+                });
+            }
+        }
+        held[usize::from(channel)] = 0;
+    }
+
+    /// Releases every held note on every channel (a panic button, a route
+    /// stop, an unplugged keyboard). Returns how many notes were released.
+    pub fn release_all_notes(&self) -> usize {
+        let (Ok(mut pending), Ok(mut held)) = (self.pending.lock(), self.held.lock()) else {
+            return 0;
+        };
+        let before = pending.len();
+        for channel in 0..16_u8 {
+            Self::release_channel(&mut pending, &mut held, channel);
+        }
+        pending.len() - before
+    }
+
+    /// Number of notes currently held.
+    pub fn held_notes(&self) -> usize {
+        self.held.lock().map_or(0, |held| {
+            held.iter().map(|bits| bits.count_ones() as usize).sum()
+        })
+    }
+
+    /// Events waiting for the next block (runtime thread). At most one
+    /// block's worth leaves per call; the rest wait for the following block.
+    fn take_block(&self) -> Vec<MidiEvent> {
+        let Ok(mut pending) = self.pending.lock() else {
+            return Vec::new();
+        };
+        let count = pending.len().min(MAX_MIDI_EVENTS_PER_BLOCK);
+        pending.drain(..count).collect()
+    }
+}
+
 pub struct PluginRuntimeBridge {
     free: Arc<ArrayQueue<PluginQuantum>>,
     input: Arc<ArrayQueue<PluginQuantum>>,
@@ -4364,6 +4582,8 @@ pub struct PluginRuntimeBridge {
     /// [`PluginRuntimeBridge::resume_after_unchanged`] or by lifting the policy.
     silenced_unchanged: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
+    /// MIDI for an instrument bridge (always present; empty for effects).
+    midi: Arc<MidiQueue>,
     /// Frames per pipeline quantum, for reporting pipeline delay.
     quantum_frames: usize,
     instance_index: usize,
@@ -4553,6 +4773,27 @@ impl PluginRuntimeBridge {
         Self::start_internal(worker, channels, frames, depth, 1)
     }
 
+    /// Start the bridge for an instrument worker (spawned with
+    /// `SupervisedWorkerProcess::spawn_instrument_verified`). Notes pushed to
+    /// `midi_queue()` reach the plugin at the start of its next block; the
+    /// audio handed to `process` is ignored and replaced by the instrument's.
+    pub fn start_instrument(
+        worker: SupervisedWorkerProcess,
+        channels: usize,
+        frames: usize,
+        depth: usize,
+    ) -> Result<Arc<Self>, PluginRuntimeBridgeError> {
+        if worker.process.chain_members > 0 || !worker.instrument {
+            return Err(PluginRuntimeBridgeError::InvalidDepth);
+        }
+        Self::start_internal(worker, channels, frames, depth, 1)
+    }
+
+    /// The MIDI queue of this bridge (used by instruments).
+    pub fn midi_queue(&self) -> Arc<MidiQueue> {
+        Arc::clone(&self.midi)
+    }
+
     pub fn start_chain(
         worker: SupervisedWorkerProcess,
         channels: usize,
@@ -4587,6 +4828,7 @@ impl PluginRuntimeBridge {
                 silence_unchanged: Arc::clone(&head.silence_unchanged),
                 silenced_unchanged: Arc::clone(&head.silenced_unchanged),
                 worker: None,
+                midi: Arc::clone(&head.midi),
                 quantum_frames: frames,
                 instance_index,
                 owner: Some(Arc::clone(&head)),
@@ -4680,6 +4922,9 @@ impl PluginRuntimeBridge {
         let thread_input = Arc::clone(&input);
         let thread_output = Arc::clone(&output);
         let thread_parameters = Arc::clone(&parameters);
+        let instrument = worker.instrument;
+        let midi = Arc::new(MidiQueue::default());
+        let thread_midi = Arc::clone(&midi);
         let worker_thread = std::thread::Builder::new()
             .name("audiorouter-plugin-runtime".into())
             .spawn(move || {
@@ -4847,11 +5092,21 @@ impl PluginRuntimeBridge {
                     } else if !active_now[0] {
                         Ok(frame)
                     } else {
-                        worker.process(
-                            frame,
-                            parameters.into_iter().next().unwrap_or_default(),
-                            Instant::now(),
-                        )
+                        let now = Instant::now();
+                        // An instrument gets its MIDI first; a failed hand-off
+                        // ends the worker like any protocol failure.
+                        let sent = if instrument {
+                            worker.send_midi(thread_midi.take_block(), now)
+                        } else {
+                            Ok(())
+                        };
+                        sent.and_then(|()| {
+                            worker.process(
+                                frame,
+                                parameters.into_iter().next().unwrap_or_default(),
+                                now,
+                            )
+                        })
                     };
                     match result {
                         Ok(result)
@@ -4859,7 +5114,7 @@ impl PluginRuntimeBridge {
                                 && result.frame_count() == frames
                                 && quantum.block.copy_from_interleaved(&result.samples).is_ok() =>
                         {
-                            if processing {
+                            if processing && !instrument {
                                 if let Some(unchanged) =
                                     unchanged_watch.observe(&input_copy, &result.samples)
                                 {
@@ -4974,6 +5229,7 @@ impl PluginRuntimeBridge {
             silence_unchanged,
             silenced_unchanged,
             worker: Some(worker_thread),
+            midi,
             quantum_frames: frames,
             instance_index: 0,
             owner: None,
@@ -5697,6 +5953,33 @@ impl WorkerProcess {
             class_id,
             true,
         )
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_vst2_instrument(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: u16,
+        _: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST2 loading requires Windows".into(),
+        ))
+    }
+
+    #[cfg(not(windows))]
+    pub fn spawn_vst3_instrument(
+        _: impl AsRef<Path>,
+        _: impl AsRef<Path>,
+        _: &str,
+        _: Option<&str>,
+        _: u16,
+        _: u32,
+    ) -> Result<Self, WorkerProcessError> {
+        Err(WorkerProcessError::Protocol(
+            "VST3 loading requires Windows".into(),
+        ))
     }
 
     #[allow(clippy::too_many_arguments)]

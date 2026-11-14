@@ -172,3 +172,115 @@ fn an_instrument_is_refused_when_loaded_as_an_effect() {
     };
     assert!(message.to_lowercase().contains("instrument"), "{message}");
 }
+
+mod through_the_runtime_bridge {
+    use super::*;
+    use audiorouter_engine::{AudioBlock, RealtimePluginProcessor};
+    use audiorouter_plugin_host::{PluginRuntimeBridge, SupervisedWorkerProcess};
+    use std::time::{Duration, Instant};
+
+    const QUANTUM: usize = 128;
+
+    fn start_bridge() -> std::sync::Arc<PluginRuntimeBridge> {
+        let dll = instrument_dll();
+        let root = dll.parent().unwrap().to_path_buf();
+        let identity = inspect_binary(&dll, std::slice::from_ref(&root)).unwrap();
+        let worker = SupervisedWorkerProcess::spawn_instrument_verified(
+            worker_path(),
+            &identity,
+            std::slice::from_ref(&root),
+            2,
+            SAMPLE_RATE,
+            Instant::now(),
+        )
+        .expect("start the supervised instrument worker");
+        PluginRuntimeBridge::start_instrument(worker, 2, QUANTUM, 2).expect("start bridge")
+    }
+
+    /// Runs the engine-side processor for a while and returns the peak.
+    fn run_for(bridge: &PluginRuntimeBridge, quanta: usize) -> f32 {
+        let mut peak = 0.0_f32;
+        let mut samples = vec![0.0_f32; QUANTUM * 2];
+        for _ in 0..quanta {
+            // The engine hands an instrument a silent block.
+            let mut block = AudioBlock::new(2, QUANTUM).unwrap();
+            bridge.process(&mut block);
+            block.copy_to_interleaved(&mut samples).unwrap();
+            peak = samples
+                .iter()
+                .fold(peak, |peak, sample| peak.max(sample.abs()));
+            std::thread::sleep(Duration::from_millis(3));
+        }
+        peak
+    }
+
+    #[test]
+    fn notes_pushed_to_the_queue_are_heard_and_released_by_a_panic() {
+        let bridge = start_bridge();
+        let queue = bridge.midi_queue();
+        assert!(run_for(&bridge, 40) < 1e-6, "silent until a note arrives");
+
+        queue.push(&[MidiEvent::new(0, 0x90, 69, 120).unwrap()]);
+        assert_eq!(queue.held_notes(), 1);
+        assert!(run_for(&bridge, 40) > 0.1, "the held note sounds");
+
+        // The panic button: release everything, then the output falls silent.
+        assert_eq!(queue.release_all_notes(), 1);
+        assert_eq!(queue.held_notes(), 0);
+        run_for(&bridge, 20);
+        assert!(run_for(&bridge, 40) < 1e-6, "silent after the release");
+        assert!(!bridge.failed(), "{:?}", bridge.failure_reason());
+    }
+
+    #[test]
+    fn a_route_without_midi_stays_silent_and_healthy() {
+        let bridge = start_bridge();
+        assert!(run_for(&bridge, 60) < 1e-6);
+        assert!(!bridge.failed());
+        assert_eq!(
+            bridge.health().state,
+            audiorouter_engine::PluginWorkerState::Running
+        );
+    }
+}
+
+mod the_midi_queue {
+    use audiorouter_plugin_host::{MidiEvent, MidiQueue};
+
+    #[test]
+    fn it_tracks_held_notes_and_turns_all_notes_off_into_explicit_releases() {
+        let queue = MidiQueue::default();
+        queue.push(&[
+            MidiEvent::new(0, 0x90, 60, 100).unwrap(),
+            MidiEvent::new(0, 0x90, 64, 100).unwrap(),
+            MidiEvent::new(0, 0x91, 67, 100).unwrap(),
+        ]);
+        assert_eq!(queue.held_notes(), 3);
+        // A note-on with velocity zero is a note-off.
+        queue.push(&[MidiEvent::new(0, 0x90, 64, 0).unwrap()]);
+        assert_eq!(queue.held_notes(), 2);
+        // CC 123 on channel 0 releases that channel only.
+        queue.push(&[MidiEvent::new(0, 0xB0, 123, 0).unwrap()]);
+        assert_eq!(queue.held_notes(), 1);
+        assert_eq!(queue.release_all_notes(), 1);
+        assert_eq!(queue.held_notes(), 0);
+        assert_eq!(queue.release_all_notes(), 0);
+    }
+
+    #[test]
+    fn it_is_bounded_and_skips_malformed_messages() {
+        let queue = MidiQueue::default();
+        let bad = MidiEvent {
+            sample_offset: 0,
+            status: 0xF8,
+            data1: 0,
+            data2: 0,
+        };
+        assert_eq!(queue.push(&[bad]), 0);
+        let note = MidiEvent::new(0, 0x90, 60, 90).unwrap();
+        let burst = vec![note; MidiQueue::CAPACITY * 2];
+        assert_eq!(queue.push(&burst), MidiQueue::CAPACITY * 2);
+        // Held-note tracking is unaffected by dropped events.
+        assert_eq!(queue.held_notes(), 1);
+    }
+}
