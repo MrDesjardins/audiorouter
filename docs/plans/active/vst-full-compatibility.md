@@ -177,3 +177,43 @@ census is test-only code.
 ## Next action
 
 Owner answers D1-D4. Then start phase 0 on a new branch.
+
+## P8a audit: is the worker protocol bitness-neutral? (2026-11-13, read-only)
+
+Findings from the code; nothing built or run.
+
+- **Audio transport is neutral.** `SharedAudioTransport` is a file-backed
+  `memmap2` region with a fixed byte layout (`u16/u32` fields, `f32` samples, no
+  pointers or `usize` on the wire). A 32-bit worker can map the same files.
+- **Control messages are neutral.** Frames are `u32`-length-prefixed
+  little-endian messages (`lib.rs:2532`, `2556`) over the worker's pipes.
+- **ABI declarations are already correct for x86.** VST2 callbacks are
+  `extern "C"` (cdecl, what VST2 uses on x86) and every Win32 import is
+  `extern "system"` (stdcall on x86). `AEffect` uses pointer-sized Rust types,
+  so recompiling for `i686-pc-windows-msvc` gives the 32-bit layout.
+- **Host editor handle.** The editor parent is an HWND carried as `usize`; a
+  64-bit shell's top-level HWND is a 32-bit-safe value, so a 32-bit worker can
+  parent to it (Windows guarantees this for HWNDs). Check with a test anyway.
+- **Everything that refuses x86 today** (the places to change):
+  `inspect_plugin` returns `UnsupportedArchitecture` (`lib.rs:610`);
+  `PluginIdentity::compatibility` requires `X64` (`lib.rs:419-428`);
+  `verify_current` and the chain check repeat the x64 test (`lib.rs:1464`,
+  `1475`); the worker file names are chosen in `control/src/plugins.rs:24-27`
+  with no architecture; `instance_windows.rs:356` lists the workers by name;
+  `PluginCompatibility` has no x86 value in the API schema
+  (`api_output_schema.rs:1162`, `2423`), so adding `supportedVst2X86`/
+  `supportedVst3X86` needs contract drift handling.
+- **Toolchain.** Only `x86_64-pc-windows-msvc` is installed; Visual Studio 18
+  has the x86 libraries. `rustup target add i686-pc-windows-msvc` is needed for
+  the pinned 1.96.0, and the C++ VST3 worker needs an x86 CMake build of
+  `tools/m06-vst3-worker`. A toolchain target is an install, not a version bump.
+- **Chains.** A chain worker is one process, so members must share a bitness;
+  the grouping rule splits by architecture.
+
+Next steps for P8a, in order: (1) add the x86 values to the compatibility enum,
+schema and UI badge text; (2) route `inspect_plugin` and the worker-file choice
+by architecture, with a fake worker name in tests; (3) split chain grouping by
+bitness; (4) install the i686 target and build the x86 Rust worker; (5) build the
+x86 VST3 worker; (6) update `build-desktop.ps1`, the release workflow, the
+installer and `instance_windows.rs`; (7) run a real 32-bit plugin (needs one
+installed; the census corpus should include a 32-bit VST2 and VST3).
