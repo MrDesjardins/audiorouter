@@ -3,6 +3,9 @@
 Status: **approved 2026-11-13, in progress.** Owner request: "support ALL VST2
 and 3".
 
+**Taking over this work? Start with [the handoff page](vst-handoff.md):** what
+is done, what is open in order, how to check, and what needs the owner.
+
 ## Decision record (owner, 2026-11-13)
 
 - D1 instruments and MIDI: **in scope**, "we need both to be working".
