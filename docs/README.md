@@ -48,6 +48,9 @@ adapters, usable-canvas readiness, uncaught errors and retained evidence.
 The [verification runbook](operations/verification.md) documents shared local/CI
 profiles, check selection, evidence, guarded audio and merge-gate rollout.
 
+The [plugin census](operations/plugin-census.md) lists the plugins the isolated
+workers actually ran, with the recorded quirk of each failure.
+
 The [development quickstart](operations/quickstart.md) gives the safe toolchain,
 acceptance, CLI, UI, MCP, and troubleshooting path for the current repository
 state.

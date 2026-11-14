@@ -8,8 +8,13 @@ apply in full; the ones that bit this work are repeated under "Rules" below.
 ## Where the work is
 
 - Worktree: `C:\Users\miste\.t3\worktrees\audiorouter\feature-vst-plugin-expe-f8a7ad7c0183990c`
-- Branch: `feature/vst-plugin-experience`, 34 commits ahead of `main`, head
-  `dc8e3fa5b` plus the commit that adds this page. Working tree clean.
+- Branch: `feature/vst-plugin-experience`, 45 commits ahead of `main`, head
+  `2483c6010` plus the commit that adds this line. Working tree clean.
+- The release build is at `src-tauri/target/release` (shell, CLI and the four
+  workers; the x86 pair is beside them), SHA-256 values in
+  `target/build-desktop2.out.log`. That exe passed `fresh_install_shell`
+  (backend answered 62 ms after launch; a raw caller was denied device
+  administration).
 - **Nothing is pushed. There is no PR.** Both need the owner's explicit approval.
 - The main checkout `C:\code\audiorouter` is on another branch (`fix/resilience`)
   owned by another session. Do not work there.
