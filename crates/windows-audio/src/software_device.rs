@@ -287,8 +287,7 @@ impl ManagedSoftwareDeviceInventory {
             return Err(SoftwareDeviceError::InventoryFull);
         }
         let handle = provisioner.create(instance_id)?;
-        self.devices.insert(bus_id.to_owned(), handle);
-        Ok(self.devices.get(bus_id).expect("inserted managed device"))
+        Ok(self.devices.entry(bus_id.to_owned()).or_insert(handle))
     }
 
     pub fn remove(&mut self, bus_id: &str) -> Result<(), SoftwareDeviceError> {

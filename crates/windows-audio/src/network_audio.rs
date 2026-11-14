@@ -161,9 +161,9 @@ pub fn open_network_packet<'a>(
     let header = NetworkPacketHeader {
         channels: datagram[5],
         frames: u16::from_le_bytes([datagram[6], datagram[7]]),
-        sample_rate_hz: u32::from_le_bytes(datagram[8..12].try_into().expect("4 bytes")),
-        stream_id: u32::from_le_bytes(datagram[12..16].try_into().expect("4 bytes")),
-        sequence: u32::from_le_bytes(datagram[16..20].try_into().expect("4 bytes")),
+        sample_rate_hz: u32::from_le_bytes([datagram[8], datagram[9], datagram[10], datagram[11]]),
+        stream_id: u32::from_le_bytes([datagram[12], datagram[13], datagram[14], datagram[15]]),
+        sequence: u32::from_le_bytes([datagram[16], datagram[17], datagram[18], datagram[19]]),
     };
     let channels = usize::from(header.channels);
     let frames = usize::from(header.frames);
@@ -1182,7 +1182,7 @@ fn receive_loop(socket: &UdpSocket, shared: &ReceiverShared) {
             .iter_mut()
             .zip(payload.chunks_exact(4))
         {
-            let value = f32::from_le_bytes(bytes.try_into().expect("4 bytes"));
+            let value = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
             *sample = if value.is_finite() {
                 value.clamp(-4.0, 4.0)
             } else {

@@ -5,6 +5,8 @@
 //! provide bounded, caller-owned shared-mode stream I/O for the native audio
 //! milestone. Streams are never opened implicitly by metadata discovery; a
 //! caller must explicitly select an endpoint and invoke the stream methods.
+// A panic here stops the user's audio and restarts the backend (RES-9).
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 use std::fmt;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -1428,10 +1430,7 @@ impl NativeBridgeController {
     }
 
     pub fn heartbeat(&mut self) -> Result<(), NativeBridgeControllerError> {
-        let session = self
-            .session
-            .as_ref()
-            .expect("native bridge session remains owned until close");
+        let session = self.live();
         if let Some(section) = &self.section {
             self.client
                 .heartbeat_with_mapping(
@@ -1445,44 +1444,43 @@ impl NativeBridgeController {
                 .heartbeat(session.hello())
                 .map_err(NativeBridgeControllerError::Windows)?;
         }
-        self.session
-            .as_mut()
-            .expect("native bridge session remains owned until close")
+        self.live_mut()
             .heartbeat()
             .map_err(NativeBridgeControllerError::Session)
     }
 
     fn lease_ms(&self) -> u32 {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
-            .hello()
-            .lease_ms
+        self.live().hello().lease_ms
     }
 
     pub fn generation(&self) -> u64 {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
-            .hello()
-            .generation
+        self.live().hello().generation
     }
 
     fn bus_id(&self) -> audiorouter_domain::EntityId {
-        audiorouter_domain::EntityId::new(
-            self.session
-                .as_ref()
-                .expect("native bridge session remains owned until close")
-                .hello()
-                .bus_id
-                .clone(),
-        )
+        audiorouter_domain::EntityId::new(self.live().hello().bus_id.clone())
     }
 
-    pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeControllerError> {
+    /// The bridge session. It is `None` only inside `close` (which consumes
+    /// the controller) and `Drop`, so every other method can rely on it;
+    /// those two paths read the `Option` directly and never call this.
+    #[allow(clippy::expect_used)]
+    fn live(&self) -> &NativeBridgeSession {
+        self.session
+            .as_ref()
+            .expect("native bridge session remains owned until close")
+    }
+
+    /// Mutable form of [`Self::live`], with the same invariant.
+    #[allow(clippy::expect_used)]
+    fn live_mut(&mut self) -> &mut NativeBridgeSession {
         self.session
             .as_mut()
             .expect("native bridge session remains owned until close")
+    }
+
+    pub fn write(&mut self, samples: &[f32]) -> Result<u64, NativeBridgeControllerError> {
+        self.live_mut()
             .write(samples)
             .map_err(NativeBridgeControllerError::Session)
     }
@@ -1491,9 +1489,7 @@ impl NativeBridgeController {
         &self,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
+        self.live()
             .read_into(samples)
             .map_err(NativeBridgeControllerError::Session)
     }
@@ -1503,18 +1499,14 @@ impl NativeBridgeController {
         minimum_sequence: u64,
         samples: &mut [f32],
     ) -> Result<audiorouter_protocol::AudioBridgeBlockHeader, NativeBridgeControllerError> {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
+        self.live()
             .read_into_after(minimum_sequence, samples)
             .map_err(NativeBridgeControllerError::Session)
     }
 
     /// Publish float64 samples without narrowing (capture-sink leases).
     pub fn write_f64(&mut self, samples: &[f64]) -> Result<u64, NativeBridgeControllerError> {
-        self.session
-            .as_mut()
-            .expect("native bridge session remains owned until close")
+        self.live_mut()
             .write_f64(samples)
             .map_err(NativeBridgeControllerError::Session)
     }
@@ -1525,35 +1517,24 @@ impl NativeBridgeController {
         minimum_sequence: u64,
         samples: &mut [f64],
     ) -> Result<NativeBridgeFloat64BlockHeader, NativeBridgeControllerError> {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
+        self.live()
             .read_into_f64_after(minimum_sequence, samples)
             .map_err(NativeBridgeControllerError::Session)
     }
 
     /// Driver-written stream counters for this lease (17 §5.2).
     pub fn counters(&self) -> NativeBridgeStreamCounters {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
-            .counters()
+        self.live().counters()
     }
 
     /// Driver-written `SetWritePacket` outcomes for this lease (17 §5.2).
     pub fn packet_counters(&self) -> NativeBridgePacketCounters {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
-            .packet_counters()
+        self.live().packet_counters()
     }
 
     /// Last block sequence the driver consumed (capture-sink flow control).
     pub fn consumer_sequence(&self) -> u64 {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
-            .consumer_sequence()
+        self.live().consumer_sequence()
     }
 
     /// The driver's capability report, read over this controller's handle.
@@ -1570,9 +1551,7 @@ impl NativeBridgeController {
     pub fn realtime_writer(
         &self,
     ) -> Result<NativeBridgeRealtimeWriter, NativeBridgeControllerError> {
-        self.session
-            .as_ref()
-            .expect("native bridge session remains owned until close")
+        self.live()
             .realtime_writer()
             .map_err(NativeBridgeControllerError::Session)
     }
@@ -1584,26 +1563,14 @@ impl NativeBridgeController {
         if self.closed {
             return Ok(());
         }
-        let section = self.section.as_ref();
-        let close_result = if let Some(section) = section {
+        let hello = self.live().hello();
+        let close_result = if let Some(section) = self.section.as_ref() {
             self.client
-                .close_with_mapping(
-                    self.session
-                        .as_ref()
-                        .expect("native bridge session remains owned until close")
-                        .hello(),
-                    section.raw_handle(),
-                    section.mapping_bytes(),
-                )
+                .close_with_mapping(hello, section.raw_handle(), section.mapping_bytes())
                 .map_err(NativeBridgeControllerError::Windows)
         } else {
             self.client
-                .close(
-                    self.session
-                        .as_ref()
-                        .expect("native bridge session remains owned until close")
-                        .hello(),
-                )
+                .close(hello)
                 .map_err(NativeBridgeControllerError::Windows)
         };
         close_result?;
@@ -1617,10 +1584,10 @@ impl NativeBridgeController {
     pub fn close(mut self) -> Result<(), NativeBridgeControllerError> {
         self.deactivate()?;
         self.section.take();
-        let mut session = self
-            .session
-            .take()
-            .expect("native bridge session remains owned until close");
+        // Only `close` (which consumes `self`) and `Drop` take the session.
+        let Some(mut session) = self.session.take() else {
+            return Ok(());
+        };
         let flush_result = session
             .flush()
             .map_err(NativeBridgeControllerError::Session);
@@ -1643,22 +1610,17 @@ impl Drop for NativeBridgeController {
             }
             return;
         }
+        let Some(session) = self.session.as_ref() else {
+            return;
+        };
         if let Some(section) = &self.section {
             let _ = self.client.close_with_mapping(
-                self.session
-                    .as_ref()
-                    .expect("native bridge session remains owned until close")
-                    .hello(),
+                session.hello(),
                 section.raw_handle(),
                 section.mapping_bytes(),
             );
         } else {
-            let _ = self.client.close(
-                self.session
-                    .as_ref()
-                    .expect("native bridge session remains owned until close")
-                    .hello(),
-            );
+            let _ = self.client.close(session.hello());
         }
     }
 }

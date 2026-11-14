@@ -31,8 +31,10 @@ pub fn decode_interleaved_float32(
                 source[offset + 2],
                 source[offset + 3],
             ]);
-            destination.channel_mut(channel).expect("validated channel")[frame] =
-                if sample.is_finite() { sample } else { 0.0 };
+            let Some(samples) = destination.channel_mut(channel) else {
+                return Err(AudioError::InvalidFrameSize);
+            };
+            samples[frame] = if sample.is_finite() { sample } else { 0.0 };
         }
     }
     Ok(())
@@ -59,7 +61,10 @@ pub fn encode_interleaved_float32(
     }
     for frame in 0..source.frames() {
         for channel in 0..source.channels() {
-            let sample = source.channel(channel).expect("validated channel")[frame];
+            let Some(samples) = source.channel(channel) else {
+                return Err(AudioError::InvalidFrameSize);
+            };
+            let sample = samples[frame];
             let offset = (frame * source.channels() + channel) * std::mem::size_of::<f32>();
             destination[offset..offset + 4].copy_from_slice(&sample.to_ne_bytes());
         }
