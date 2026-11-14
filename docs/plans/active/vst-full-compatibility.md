@@ -465,3 +465,22 @@ Open, in suggested order:
   is known to); the x86 and release workers are not rebuilt.
 - Open in P3: units and program lists, multi-class modules beyond the first
   class check, 64-bit-only plugins, the Steinberg validator run.
+
+## P1 follow-up (2026-11-14): VST3 instruments without metadata
+
+- A VST3 bundle that lists no audio classes in `moduleinfo.json` (or has no such
+  file) is now classified from the class category string in its binary: a string
+  that starts with `Instrument|` and a sub-category, such as `Instrument|Synth`.
+  No plugin code runs. The bare word "Instrument" is ignored (JUCE and UA effects
+  contain it) and so is `Fx|Instrument`. A class list in the metadata is still
+  trusted over the search.
+- Measured on this PC: Surge XT, RipplerX and PolyMAX contain the string; 30
+  effects (Dragonfly, Zam, Surge XT Effects, FILT-R, TIME-12, eight UADx) do not.
+- Checked: unit test `a_vst3_without_metadata_is_classified_from_its_category_string`;
+  the real files through `inspect_binary` in `vst3_instrument.rs` (Surge XT is an
+  instrument, Surge XT Effects is not, and both still load in their own role).
+  So Surge XT is listed under Instruments from the first scan.
+- Limits: a module with both an effect class and an instrument class is listed
+  as an instrument; a VST2 instrument is still only learned at its first load.
+- Also repaired: two test lines in `vst2.rs` held raw NUL bytes instead of ` `
+  (a shell heredoc had swallowed the backslash); same meaning, now plain text.

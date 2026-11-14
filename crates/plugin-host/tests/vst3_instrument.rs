@@ -44,6 +44,11 @@ fn a_vst3_instrument_sounds_when_it_gets_a_note_and_not_before() {
     let plugin = env_path("AUDIOROUTER_TEST_VST3_INSTRUMENT");
     let root = plugin.parent().expect("plugin folder").to_path_buf();
     let identity = inspect_binary(&plugin, std::slice::from_ref(&root)).expect("inspect");
+    // The scan itself says what it is, before any worker has refused it.
+    assert!(
+        identity.metadata.instrument,
+        "inspection must classify the instrument without loading it"
+    );
     let mut process = WorkerProcess::spawn_vst3_instrument(
         &worker,
         &plugin,
@@ -94,6 +99,10 @@ fn a_vst3_effect_is_refused_as_an_instrument_with_its_own_reason() {
     let plugin = env_path("AUDIOROUTER_TEST_VST3_EFFECT");
     let root = plugin.parent().expect("plugin folder").to_path_buf();
     let identity = inspect_binary(&plugin, std::slice::from_ref(&root)).expect("inspect");
+    assert!(
+        !identity.metadata.instrument,
+        "inspection must not call an effect an instrument"
+    );
     let result = WorkerProcess::spawn_vst3_instrument(
         &worker,
         &plugin,

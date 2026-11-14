@@ -726,11 +726,17 @@ fn inspect_binary_with_control(
         format = PluginFormat::Vst2;
     }
     let digest = Sha256::digest(&bytes);
-    let plugin_metadata = if format == PluginFormat::Vst3 && canonical.is_dir() {
-        read_plugin_metadata(&canonical)
-    } else {
-        PluginMetadata::default()
-    };
+    let (mut plugin_metadata, classes_listed) =
+        if format == PluginFormat::Vst3 && canonical.is_dir() {
+            read_plugin_metadata(&canonical)
+        } else {
+            (PluginMetadata::default(), false)
+        };
+    // No class list in the metadata (many JUCE builds ship without
+    // `moduleinfo.json`): read the class category from the binary's own bytes.
+    if format == PluginFormat::Vst3 && !plugin_metadata.instrument && !classes_listed {
+        plugin_metadata.instrument = binary_declares_vst3_instrument(&bytes);
+    }
     Ok(PluginIdentity {
         path: canonical,
         binary_path,
@@ -742,10 +748,41 @@ fn inspect_binary_with_control(
     })
 }
 
-fn read_plugin_metadata(bundle: &Path) -> PluginMetadata {
-    let mut metadata = read_module_info(bundle);
+/// Whether a VST3 binary holds an instrument class category such as
+/// `Instrument|Synth`. A VST3 class declares its sub-categories as one plain
+/// string in the module, so this needs no plugin code to run. The bare word
+/// "Instrument" is not enough (frameworks embed it in effects too), and
+/// `Fx|Instrument` is an effect, so the match must start a string and be
+/// followed by a sub-category. Measured on 2026-11-14: Surge XT, RipplerX and
+/// PolyMAX match; 30 effects (Dragonfly, Zam, Surge XT Effects, tiagolr, UADx)
+/// do not. A module with both an effect and an instrument class is listed as an
+/// instrument.
+fn binary_declares_vst3_instrument(bytes: &[u8]) -> bool {
+    const NEEDLE: &[u8] = b"Instrument|";
+    let mut from = 0;
+    while let Some(offset) = bytes[from..]
+        .windows(NEEDLE.len())
+        .position(|window| window == NEEDLE)
+    {
+        let at = from + offset;
+        let starts_string = at == 0 || bytes[at - 1] == 0;
+        let has_sub_category = bytes
+            .get(at + NEEDLE.len())
+            .is_some_and(u8::is_ascii_alphabetic);
+        if starts_string && has_sub_category {
+            return true;
+        }
+        from = at + 1;
+    }
+    false
+}
+
+/// The bundle's metadata, and whether it listed its audio classes (when it
+/// did, their categories are trusted and the binary is not searched).
+fn read_plugin_metadata(bundle: &Path) -> (PluginMetadata, bool) {
+    let (mut metadata, classes_listed) = read_module_info(bundle);
     metadata.instrument = metadata.instrument || bundle_manifest_declares_synth(bundle);
-    metadata
+    (metadata, classes_listed)
 }
 
 /// Read a bounded JSON metadata file from `Contents/Resources` of a bundle.
@@ -772,13 +809,13 @@ fn bundle_manifest_declares_synth(bundle: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn read_module_info(bundle: &Path) -> PluginMetadata {
+fn read_module_info(bundle: &Path) -> (PluginMetadata, bool) {
     let path = bundle
         .join("Contents")
         .join("Resources")
         .join("moduleinfo.json");
     let Ok(file) = fs::File::open(path) else {
-        return PluginMetadata::default();
+        return (PluginMetadata::default(), false);
     };
     let mut bytes = Vec::new();
     if file
@@ -787,11 +824,11 @@ fn read_module_info(bundle: &Path) -> PluginMetadata {
         .is_err()
         || bytes.len() as u64 > MAX_PLUGIN_METADATA_BYTES
     {
-        return PluginMetadata::default();
+        return (PluginMetadata::default(), false);
     }
     let normalized = strip_json_trailing_commas(&bytes);
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(&normalized) else {
-        return PluginMetadata::default();
+        return (PluginMetadata::default(), false);
     };
     let vendor = value
         .get("Factory Info")
@@ -863,12 +900,15 @@ fn read_module_info(bundle: &Path) -> PluginMetadata {
         .collect::<Vec<_>>();
     let instrument = !audio_sub_categories.is_empty()
         && audio_sub_categories.iter().all(|instrument| *instrument);
-    PluginMetadata {
-        instrument,
-        vendor,
-        version,
-        class_ids,
-    }
+    (
+        PluginMetadata {
+            instrument,
+            vendor,
+            version,
+            class_ids,
+        },
+        !audio_sub_categories.is_empty(),
+    )
 }
 
 fn strip_json_trailing_commas(bytes: &[u8]) -> Vec<u8> {
@@ -8784,6 +8824,53 @@ not a fingerprint
             "uaudio_effect.vst3",
             "manifest.json",
             br#"{ "is_synth": false }"#
+        ));
+    }
+
+    #[test]
+    fn a_vst3_without_metadata_is_classified_from_its_category_string() {
+        assert!(binary_declares_vst3_instrument(b"\0Instrument|Synth\0"));
+        assert!(binary_declares_vst3_instrument(b"Instrument|Sampler\0"));
+        // Frameworks embed the bare word in effects; an effect usable as an
+        // instrument insert is still an effect.
+        assert!(!binary_declares_vst3_instrument(b"\0Instrument\0"));
+        assert!(!binary_declares_vst3_instrument(
+            b"\0Fx|Instrument|External\0"
+        ));
+        assert!(!binary_declares_vst3_instrument(b"\0Instrument|\0"));
+        assert!(!binary_declares_vst3_instrument(
+            b"an Instrument|Synth label"
+        ));
+        assert!(!binary_declares_vst3_instrument(b""));
+
+        let inspect = |name: &str, tail: &[u8], module_info: Option<&[u8]>| {
+            let root = temp_root();
+            let bundle = root.join(name);
+            let binary_dir = bundle.join("Contents").join("x86_64-win");
+            fs::create_dir_all(&binary_dir).unwrap();
+            let mut binary = pe_x64();
+            binary.extend_from_slice(tail);
+            fs::write(binary_dir.join(name), binary).unwrap();
+            if let Some(json) = module_info {
+                let resources = bundle.join("Contents").join("Resources");
+                fs::create_dir_all(&resources).unwrap();
+                fs::write(resources.join("moduleinfo.json"), json).unwrap();
+            }
+            let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
+            let instrument = identity.is_instrument();
+            fs::remove_dir_all(root).unwrap();
+            instrument
+        };
+        assert!(inspect("synth.vst3", b"\0Instrument|Synth\0", None));
+        assert!(!inspect("effect.vst3", b"\0Fx|Reverb\0", None));
+        // A class list in the metadata is trusted over the byte search.
+        let effect_classes = br#"{ "Classes": [
+            { "CID": "0123456789ABCDEF0123456789ABCDEF", "Category": "Audio Module Class", "Sub Categories": "Fx|Dynamics" }
+        ] }"#;
+        assert!(!inspect(
+            "listed.vst3",
+            b"\0Instrument|Synth\0",
+            Some(effect_classes)
         ));
     }
 

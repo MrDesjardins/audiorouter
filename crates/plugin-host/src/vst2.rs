@@ -866,13 +866,13 @@ mod opcode_tests {
             call(AUDIO_MASTER_GET_VENDOR_STRING, buffer.as_mut_ptr().cast()),
             1
         );
-        assert_eq!(&buffer[..12], b"AudioRouter ");
+        assert_eq!(&buffer[..12], b"AudioRouter\0");
         let mut product = [0xffu8; 64];
         assert_eq!(
             call(AUDIO_MASTER_GET_PRODUCT_STRING, product.as_mut_ptr().cast()),
             1
         );
-        assert_eq!(&product[..12], b"AudioRouter ");
+        assert_eq!(&product[..12], b"AudioRouter\0");
         assert_eq!(call(AUDIO_MASTER_GET_VENDOR_STRING, ptr::null_mut()), 0);
         let ask = |text: &[u8]| {
             let mut c = text.to_vec();

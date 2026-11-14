@@ -130,7 +130,9 @@ File: `tools/m06-vst3-worker/main.cpp`, build with
   only does `kSample64` is refused with a reason.
 - Steinberg validator: run it against the corpus as extra evidence. Remember
   the validated lesson: validator success is not AudioRouter evidence.
-- P1 follow-up: a worker "describe" mode that reads the class category
+- Done 2026-11-14 without running plugin code (plan, "P1 follow-up"): the scan
+  reads the `Instrument|…` category string from the binary. The idea below is
+  no longer needed. Original note: a worker "describe" mode that reads the class category
   (`Instrument`) from the factory without creating the component, so a VST3
   without `moduleinfo.json` (Surge XT) is listed as an instrument from the
   first scan. This runs plugin code during a scan, so it must be in the
