@@ -132,6 +132,28 @@ pub enum Vst2HeaderError {
     /// The plugin does not declare `effFlagsIsSynth` but was loaded as an
     /// instrument.
     NotInstrument,
+    /// The instrument answered "no" to both MIDI questions of `effCanDo`, so
+    /// notes could never reach it.
+    RefusesMidi,
+}
+
+/// A plugin's answer to `effCanDo`. Many plugins answer "don't know" (0) for
+/// features they do support, so only an explicit "no" is treated as a refusal.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Vst2CanDo {
+    Yes,
+    No,
+    Unknown,
+}
+
+impl Vst2CanDo {
+    fn from_answer(answer: isize) -> Self {
+        match answer {
+            1.. => Self::Yes,
+            0 => Self::Unknown,
+            _ => Self::No,
+        }
+    }
 }
 
 /// How the worker uses a VST2 plugin: an effect processes the route's audio;
@@ -151,6 +173,7 @@ impl Vst2HeaderError {
                 "VST2 plugin is an instrument; add it with the Instrument tool to play it with MIDI"
             }
             Self::NotInstrument => "VST2 plugin is an effect, not an instrument",
+            Self::RefusesMidi => "VST2 instrument reports that it does not accept MIDI notes",
             Self::InvalidChannels { .. } => {
                 "VST2 plugin has an audio channel layout AudioRouter cannot use"
             }
@@ -413,6 +436,8 @@ const EFF_PROCESS_EVENTS: i32 = 25;
 /// switch is on and before it goes off. Many plugins ignore them; some (and
 /// their licence or DSP set-up) wait for them.
 #[cfg(windows)]
+/// `effCanDo`: asks the plugin whether it supports a named feature.
+const EFF_CAN_DO: i32 = 51;
 const EFF_START_PROCESS: i32 = 71;
 #[cfg(windows)]
 const EFF_STOP_PROCESS: i32 = 72;
@@ -588,6 +613,108 @@ mod opcode_tests {
     ) -> isize {
         OPCODES.with(|codes| codes.borrow_mut().push(opcode));
         0
+    }
+
+    thread_local! {
+        static CAN_DO: std::cell::RefCell<Vec<(String, isize)>> = const { std::cell::RefCell::new(Vec::new()) };
+        static CAN_DO_ASKED: std::cell::RefCell<Vec<(i32, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    /// Answers `effCanDo` from the table in `CAN_DO` and records each question.
+    unsafe extern "C" fn can_do_dispatcher(
+        _: *mut Vst2Effect,
+        opcode: i32,
+        _: i32,
+        _: isize,
+        pointer: *mut c_void,
+        _: f32,
+    ) -> isize {
+        if pointer.is_null() {
+            return 0;
+        }
+        let feature = std::ffi::CStr::from_ptr(pointer as *const std::ffi::c_char)
+            .to_string_lossy()
+            .into_owned();
+        CAN_DO_ASKED.with(|asked| asked.borrow_mut().push((opcode, feature.clone())));
+        CAN_DO.with(|table| {
+            table
+                .borrow()
+                .iter()
+                .find(|(name, _)| *name == feature)
+                .map_or(0, |(_, answer)| *answer)
+        })
+    }
+
+    /// `effCanDo` is opcode 51 in the public `aeffectx.h`; an instrument is
+    /// refused only when it says an explicit "no" to both MIDI questions.
+    #[test]
+    fn an_instrument_is_refused_only_when_it_says_no_to_both_midi_questions() {
+        assert_eq!(EFF_CAN_DO, 51);
+        let mut effect = Vst2Effect {
+            magic: VST2_EFFECT_MAGIC,
+            dispatcher: Some(can_do_dispatcher),
+            process: None,
+            set_parameter: None,
+            get_parameter: None,
+            num_programs: 0,
+            num_parameters: 0,
+            num_inputs: 0,
+            num_outputs: 2,
+            flags: VST2_FLAG_CAN_REPLACING | VST2_FLAG_IS_SYNTH,
+            reserved_1: 0,
+            reserved_2: 0,
+            initial_delay: 0,
+            real_quality: 0,
+            off_quality: 0,
+            io_ratio: 1.0,
+            object: ptr::null_mut(),
+            user: ptr::null_mut(),
+            unique_id: 0,
+            version: 0,
+            process_replacing: None,
+            future: [0; 56],
+        };
+        let mut accepts = |answers: &[(&str, isize)]| {
+            CAN_DO.with(|table| {
+                *table.borrow_mut() = answers
+                    .iter()
+                    .map(|(name, answer)| ((*name).to_owned(), *answer))
+                    .collect();
+            });
+            // SAFETY: `effect` is a live local with a valid dispatcher.
+            unsafe { instrument_accepts_midi(&mut effect) }
+        };
+        // Most plugins answer "don't know" (0) to everything.
+        assert!(accepts(&[]));
+        assert!(accepts(&[
+            ("receiveVstEvents", 1),
+            ("receiveVstMidiEvent", 1)
+        ]));
+        // One "no" is not enough: plugins disagree on which name they answer.
+        assert!(accepts(&[("receiveVstEvents", -1)]));
+        assert!(accepts(&[
+            ("receiveVstEvents", -1),
+            ("receiveVstMidiEvent", 1)
+        ]));
+        CAN_DO_ASKED.with(|asked| asked.borrow_mut().clear());
+        assert!(!accepts(&[
+            ("receiveVstEvents", -1),
+            ("receiveVstMidiEvent", -1)
+        ]));
+        assert_eq!(
+            CAN_DO_ASKED.with(|asked| asked.borrow().clone()),
+            vec![
+                (51, "receiveVstEvents".to_owned()),
+                (51, "receiveVstMidiEvent".to_owned())
+            ]
+        );
+        assert_eq!(Vst2CanDo::from_answer(1), Vst2CanDo::Yes);
+        assert_eq!(Vst2CanDo::from_answer(0), Vst2CanDo::Unknown);
+        assert_eq!(Vst2CanDo::from_answer(-1), Vst2CanDo::No);
+        assert_eq!(
+            Vst2HeaderError::RefusesMidi.user_message(),
+            "VST2 instrument reports that it does not accept MIDI notes"
+        );
     }
 
     /// The host brackets processing the way a conforming host does: start after
@@ -1032,6 +1159,34 @@ pub enum Vst2LibraryError {
     NonFiniteOutput,
 }
 
+/// Sends `effCanDo` for one feature name.
+///
+/// # Safety
+/// `effect` must point to a validated, opened effect that stays alive for the
+/// call. `feature` is NUL-terminated and outlives the call; the plugin only
+/// reads it.
+unsafe fn can_do(effect: *mut Vst2Effect, feature: &std::ffi::CStr) -> Vst2CanDo {
+    let dispatcher = (*effect).dispatcher.expect("validated dispatcher");
+    Vst2CanDo::from_answer(dispatcher(
+        effect,
+        EFF_CAN_DO,
+        0,
+        0,
+        feature.as_ptr() as *mut c_void,
+        0.0,
+    ))
+}
+
+/// Whether an instrument can receive notes: false only when it answers an
+/// explicit "no" to both MIDI questions.
+///
+/// # Safety
+/// Same contract as [`can_do`].
+unsafe fn instrument_accepts_midi(effect: *mut Vst2Effect) -> bool {
+    can_do(effect, c"receiveVstEvents") != Vst2CanDo::No
+        || can_do(effect, c"receiveVstMidiEvent") != Vst2CanDo::No
+}
+
 #[cfg(windows)]
 pub struct Vst2Library {
     module: *mut c_void,
@@ -1120,6 +1275,25 @@ impl Vst2Library {
                 0.0,
             )
         };
+        // SAFETY: the effect was opened just above and is still owned here.
+        if role == Vst2Role::Instrument && !unsafe { instrument_accepts_midi(effect) } {
+            // SAFETY: close the opened effect before unloading its module; neither
+            // is used again.
+            unsafe {
+                ((*effect).dispatcher.expect("validated dispatcher"))(
+                    effect,
+                    EFF_CLOSE,
+                    0,
+                    0,
+                    ptr::null_mut(),
+                    0.0,
+                );
+                free_library(module);
+            }
+            return Err(Vst2LibraryError::InvalidEffect(
+                Vst2HeaderError::RefusesMidi,
+            ));
+        }
         Ok(Self {
             module,
             effect,
@@ -1128,6 +1302,12 @@ impl Vst2Library {
             role,
             host_context,
         })
+    }
+
+    /// Asks the plugin whether it supports a named feature (`effCanDo`).
+    pub fn can_do(&mut self, feature: &std::ffi::CStr) -> Vst2CanDo {
+        // SAFETY: the effect is owned by this handle; see `can_do`.
+        unsafe { can_do(self.effect, feature) }
     }
 
     pub fn set_processing_format(

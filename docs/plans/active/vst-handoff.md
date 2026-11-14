@@ -96,11 +96,9 @@ literal number (pattern: `start_and_stop_process_bracket_the_mains_switch`,
 The opcode numbers below are from memory: check each against the public
 `aeffectx.h` before use (two host opcodes were wrong for months).
 
-- `effCanDo` (51): ask `bypass`, `receiveVstEvents`, `receiveVstMidiEvent`;
-  record the answers.
-- `effSetBypass` (44): use it for node bypass when the plugin says it can
-  `bypass`; keep the host's dry path otherwise. Check the privacy rule: a
-  failed plugin on a voice path stays silent.
+- Done 2026-11-14: `effCanDo` (51), used to refuse an instrument that says no
+  to both MIDI questions. `effSetBypass` is deliberately not used (decision in
+  the plan, P2 step 3).
 - Programs: `effGetProgram`/`effSetProgram` (3, 2), `effGetProgramNameIndexed`
   (29). Needs an API surface (list and select a preset): full AUTO-18 if added.
   If the owner does not want presets yet, record that as a decision.

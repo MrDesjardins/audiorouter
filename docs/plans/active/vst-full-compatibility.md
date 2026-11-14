@@ -348,8 +348,18 @@ before Play) and the packaging check (next section). The design for P8b is in
 - Verified: unit tests; census of the VST2 plugins in `C:\Program Files\VSTPlugins`
   (ReaPlugs, Pitchproof), Dragonfly and 32-bit ReaPlugs: no change in results.
 - P2 step 2 (2026-11-14): `effStartProcess`/`effStopProcess` bracket the mains switch (setup, format change, close) and `ioChanged` now suspends and resumes the plugin once per request (`apply_io_change`), both pinned by a recording-dispatcher test.
-- Open in P2: plugin-side opcodes (bypass, programs, `effCanDo`, shell
-  plugins, `.fxp/.fxb`), acting on `io_changed`, old `process` fallback.
+- P2 step 3 (2026-11-14): `effCanDo` (51). The host asks an instrument
+  `receiveVstEvents` and `receiveVstMidiEvent` when it loads; it refuses the
+  plugin ("reports that it does not accept MIDI notes") only when both answers
+  are an explicit no, because most plugins answer "don't know" to features they
+  support. Unit test with a table-driven dispatcher pins the opcode and the
+  rule; the real VST2 instrument worker test still passes (the test synth
+  answers "don't know").
+- **Decision, `effSetBypass` (44): not used.** Node bypass is done by the host:
+  a bypassed plugin is not processed at all, which works for every plugin and
+  cannot be defeated by a plugin that ignores the request. Asking the plugin to
+  bypass itself would put the protected-voice rule in the plugin's hands.
+- Open in P2: programs, shell plugins, `.fxp/.fxb`, old `process` fallback.
 
 ## P6 step 1 (2026-11-13): editor before Play
 
