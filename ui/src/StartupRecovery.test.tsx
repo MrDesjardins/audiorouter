@@ -57,3 +57,11 @@ it("does not expose recovery controls outside the desktop shell", () => {
   render(<StartupRecovery onRestored={async () => undefined} />);
   expect(screen.queryByRole("button")).toBeNull();
 });
+
+it("tells the startup screen once saved data is damaged, so it stops saying Loading", async () => {
+  shell();
+  const onDamaged = vi.fn();
+  render(<StartupRecovery onRestored={async () => undefined} onDamaged={onDamaged} />);
+  await screen.findByRole("option", { name: `${backup.name} (1 MiB)` });
+  expect(onDamaged).toHaveBeenCalledTimes(1);
+});

@@ -170,8 +170,70 @@ remain. No finding is declared fully complete yet. No commits or PR created.
   injection field was added before proceeding. No warning has been waived
   without a code-local reason.
 
-Next action: finish Windows bridge ownership (RES-9), then implement bounded
-post-crash route restoration (RES-2) and exact-endpoint/OS recovery (RES-3).
-RES-6 measurements/catalog and RES-4 Quit-anyway remain. Qualify startup
-recovery in three themes and through isolated built-shell commands; perform
-the process-kill/relaunch exercise for RES-8. Goal remains active.
+### Remaining recovery and timeouts
+
+- RES-2: the backend now preserves a bounded witness of playing, non-recording
+  sessions and the shell may restore it after the first eligible restart. The
+  existing `session.start` path revalidates devices; restoration never clears
+  privacy mute, resumes a recorder, or runs in safe mode. Shell policy and
+  portable control tests pass. An attended live-route crash/restart test is not
+  run here.
+- RES-3: device and sleep recovery uses bounded retries and exact saved endpoint
+  identities, cancels on deliberate Stop, and refuses recording routes. Fake
+  clock/control tests cover endpoint return, replacement identity, exhaustion,
+  flapping and cancellation. Native unplug/replug and actual suspend/resume were
+  not performed; those Windows audio gates remain open.
+- RES-6: `METHOD_DEADLINES` in the generated contract catalog classifies every
+  discovered method and the UI uses a 60-second deadline for slow/state-changing
+  methods. Contract drift passes. No production duration measurements on large
+  imports or plugin/recorder fixtures were made, and this change does not add an
+  operation-status poll for a mutation whose reply is still lost after its
+  deadline. That reconciliation remains follow-up work if measurements show a
+  real operation can exceed the bound.
+- RES-9: control, transport and `windows-audio` request/native paths were
+  converted to typed errors or ownership-safe access, with strict Clippy checks
+  enabled for control/transport and targeted worker regressions. The remaining
+  bridge accessors have documented ownership invariants; the workspace's
+  all-target Clippy gate passes.
+
+### Final Windows verification — 2026-11-14
+
+- UI: `npm test` — 119 files, 1,067 tests passed; `npm run format:check`,
+  `npm run lint`, `npm run typecheck:all`, and `npm run build` passed. The
+  production UI build retains the existing 629.93 kB main-chunk advisory.
+  Focused startup/recovery visual and built-shell recovery exercised dark,
+  light and high-contrast themes.
+- Rust: `cargo test --workspace --locked` passed; `cargo test --manifest-path
+  src-tauri/Cargo.toml --locked` passed 109 tests / 4 explicit ignores. Both
+  strict Clippy commands (`cargo clippy --workspace --all-targets
+  --all-features -- -D warnings` and the same command with the shell manifest)
+  pass. Both Rust formatting `--check` commands pass.
+- Contracts/docs: `npm --prefix contracts run check:drift` passes (148 methods,
+  37 node kinds, 20 processors, 24 event categories); docs acceptance passes
+  (267 Markdown files / 1,491 links); `git diff --check` passes.
+- Isolated release shell (0.0.30, custom protocol; disposable database and
+  WebView profile): hard kill left the synced `.running` marker; relaunch logged
+  `shell.previousProcessInterrupted` with `state: interrupted`, and no session
+  start was observed. The database was then corrupted in the fixture: all three
+  themes offered the validated backup; confirming restore with the final build
+  preserved the damaged database under a new archive and returned to the
+  workspace. The final restore log had zero backend errors. Recovery
+  instructions keep routes stopped/muted and clients/device consent reset.
+  No owner database, active route, device, driver or recording was changed.
+- `cargo test --workspace --locked` was first interrupted at the 120-second
+  command limit while the long ordered-processor test was still running; the
+  same command was rerun with a ten-minute limit and completed successfully.
+
+## Next action and gates
+
+Source changes and automated local software checks for RES-1 through RES-9 are
+implemented. RES-6's expanded contract-driven deadlines are in place, but
+production timings for large imports/exports and explicit status reconciliation
+after a mutation reply exceeds the 60-second bound remain unverified; qualify
+that piece with representative measurements before calling RES-6 fully closed.
+No commit or PR is authorized. Remaining release/qualification gates are live
+native endpoint unplug/reconnect and sleep/resume (RES-3), attended recovery
+through the owner's normal route, the RES-6 measurement/reconciliation check,
+and fresh hosted CI. Do not claim hardware/audio qualification from these
+portable and isolated-shell results. RES-10/11 remain outside the authorized
+scope.

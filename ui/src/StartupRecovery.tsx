@@ -1,9 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 
 type Backup = { name: string; bytes: number };
 
 /** These shell commands remain reachable when no backend can open storage. */
-export function StartupRecovery({ onRestored }: { onRestored: () => Promise<unknown> }) {
+export function StartupRecovery({
+  onRestored,
+  onDamaged,
+}: {
+  onRestored: () => Promise<unknown>;
+  /** Told once the backend has stopped because it cannot read saved data. */
+  onDamaged?: () => void;
+}) {
   const invoke = window.__TAURI_INTERNALS__?.invoke;
   const [message, setMessage] = useState("Checking the audio service…");
   const [backups, setBackups] = useState<Backup[]>([]);
@@ -12,11 +19,13 @@ export function StartupRecovery({ onRestored }: { onRestored: () => Promise<unkn
   const [busy, setBusy] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const [needsRecovery, setNeedsRecovery] = useState(false);
+  const reportDamaged = useEffectEvent(() => onDamaged?.());
   useEffect(() => {
     if (!invoke) return;
     let active = true;
     let polling = false;
     let listed = false;
+    let reportedDamage = false;
     const poll = async () => {
       if (polling) return;
       polling = true;
@@ -27,6 +36,10 @@ export function StartupRecovery({ onRestored }: { onRestored: () => Promise<unkn
         if (!listed && typeof status.message === "string") setMessage(status.message);
         if (!listed && status.phase === "stopped" && status.reason === "corruptDatabase") {
           setNeedsRecovery(true);
+          if (!reportedDamage) {
+            reportedDamage = true;
+            reportDamaged();
+          }
           const result = await invoke("recovery_backups");
           if (
             !Array.isArray(result) ||
@@ -107,7 +120,7 @@ export function StartupRecovery({ onRestored }: { onRestored: () => Promise<unkn
             ))}
           </select>
         </label>
-        <p className="muted" style={{ minHeight: "4.5rem" }}>
+        <p className="muted" style={{ minHeight: "4.5rem", marginBottom: "1rem" }}>
           Restoration keeps the damaged database, replaces saved configuration, turns privacy mute on, and resets client
           access and capture consent. Recordings do not resume.
         </p>
