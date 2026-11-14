@@ -377,6 +377,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
           toolchain: 1.96.0
+          # The x86 plugin workers are built by tools/build-desktop.ps1.
+          targets: i686-pc-windows-msvc
       - run: npm ci --prefix ui
       - name: Test release tooling
         run: node tools/quality/verify.mjs --checks release-tests

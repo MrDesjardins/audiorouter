@@ -39,6 +39,7 @@ jobs:
         with:
           toolchain: 1.96.0
           components: rustfmt, clippy
+          targets: i686-pc-windows-msvc
 
       - name: Validate and check out reviewed tag
         shell: pwsh
