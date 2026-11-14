@@ -498,7 +498,7 @@ mod opcode_tests {
         );
         assert_eq!(&product[..12], b"AudioRouter ");
         assert_eq!(call(AUDIO_MASTER_GET_VENDOR_STRING, ptr::null_mut()), 0);
-        let mut ask = |text: &[u8]| {
+        let ask = |text: &[u8]| {
             let mut c = text.to_vec();
             c.push(0);
             call(AUDIO_MASTER_CAN_DO, c.as_mut_ptr().cast())
