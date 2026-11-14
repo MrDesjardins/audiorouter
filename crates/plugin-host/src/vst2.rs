@@ -148,7 +148,7 @@ impl Vst2HeaderError {
     pub fn user_message(self) -> &'static str {
         match self {
             Self::Instrument => {
-                "VST2 plugin is an instrument; AudioRouter hosts audio effects only (no MIDI input yet)"
+                "VST2 plugin is an instrument; add it with the Instrument tool to play it with MIDI"
             }
             Self::NotInstrument => "VST2 plugin is an effect, not an instrument",
             Self::InvalidChannels { .. } => {

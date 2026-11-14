@@ -354,7 +354,20 @@ fn an_instrument_refused_at_load_is_listed_as_an_instrument_afterwards() {
         .message;
     assert!(message.contains("instrument"), "{message}");
     let second = call("plugins.scan", json!({ "directory": root }));
-    assert_eq!(compatibility(&second), "unsupportedInstrument");
+    // The instrument stays hostable; the scan now says what kind it is.
+    assert!(compatibility(&second).starts_with("supported"));
+    let entry = second.result.as_ref().unwrap()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| {
+            entry["path"]
+                .as_str()
+                .is_some_and(|text| Path::new(text) == path)
+        })
+        .unwrap()
+        .clone();
+    assert_eq!(entry["identity"]["instrument"], json!(true), "{entry}");
 }
 
 /// A window on a message-pumping thread, like the desktop shell's editor host.

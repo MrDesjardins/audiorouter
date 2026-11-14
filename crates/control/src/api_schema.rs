@@ -707,7 +707,8 @@ pub(crate) fn method_input_schema(name: &str) -> Value {
         "plugins.parameters" => object_schema(
             json!({
                 "path": { "type": "string", "minLength": 1 },
-                "classId": { "type": "string", "minLength": 1, "description": "Optional audio-effect class ID from the scan; selects an effect in a multi-effect VST3 module." }
+                "classId": { "type": "string", "minLength": 1, "description": "Optional audio-effect class ID from the scan; selects an effect in a multi-effect VST3 module." },
+                "instrument": { "type": "boolean", "description": "Load the plugin as an instrument (a synth or sampler, for the Instrument tool) instead of an effect. false when omitted." }
             }),
             &["path"],
         ),

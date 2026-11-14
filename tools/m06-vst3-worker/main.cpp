@@ -879,7 +879,7 @@ public:
             }
             if (!instrument && !found_audio_class && found_instrument) {
                 throw std::runtime_error(
-                    "VST3 plugin is an instrument; AudioRouter hosts audio effects only (no MIDI input yet)");
+                    "VST3 plugin is an instrument; add it with the Instrument tool to play it with MIDI");
             }
             if (!found_audio_class && !instrument) {
                 throw std::runtime_error("VST3 factory has no audio effect class");

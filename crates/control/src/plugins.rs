@@ -1039,6 +1039,31 @@ impl ControlPlane {
                     "plugin placeholder requires a current explicit scan result".into(),
                 ));
             }
+            // A scan that knows the plugin is an instrument keeps it out of
+            // the effect tool; the Instrument tool plays it. (A VST2 file is
+            // unknown until a load attempt, and the worker refuses it then.)
+            let known_instrument = node.kind == NodeKind::Plugin
+                && self.plugin_inventories.values().any(|inventory| {
+                    inventory
+                        .get("entries")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flatten()
+                        .any(|entry| {
+                            scan_entry_matches_path(entry, path)
+                                && entry
+                                    .get("identity")
+                                    .and_then(|identity| identity.get("instrument"))
+                                    .and_then(Value::as_bool)
+                                    == Some(true)
+                        })
+                });
+            if known_instrument {
+                return Err(ControlError::InvalidRequest(format!(
+                    "\"{}\" is an instrument (a synth or sampler); add it with the Instrument tool to play it with MIDI",
+                    node.name
+                )));
+            }
         }
         Ok(())
     }
@@ -1522,8 +1547,8 @@ impl ControlPlane {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X86 => "supportedVst3X86",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X86 => "supportedVst2X86",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
-                        audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => "unsupportedInstrument",
-                    }
+                    },
+                    "instrument": identity.is_instrument()
                 }));
                 json!({
                     "path": entry.path,
@@ -1642,8 +1667,8 @@ impl ControlPlane {
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst3X86 => "supportedVst3X86",
                         audiorouter_plugin_host::PluginCompatibility::SupportedVst2X86 => "supportedVst2X86",
                         audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => "unsupportedFormat",
-                        audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => "unsupportedInstrument",
-                    }
+                    },
+                    "instrument": identity.is_instrument()
                 },
                 "error": null,
                 "errorCode": null
@@ -1698,18 +1723,15 @@ impl ControlPlane {
                 "plugin fingerprint changed since scan".into(),
             ));
         }
-        match identity.compatibility() {
-            audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat => {
-                return Err(ControlError::InvalidRequest(
-                    "plugin format or architecture is unsupported".into(),
-                ));
-            }
-            audiorouter_plugin_host::PluginCompatibility::UnsupportedInstrument => {
-                return Err(ControlError::InvalidRequest(
-                    "plugin is an instrument; AudioRouter hosts audio effects only".into(),
-                ));
-            }
-            _ => {}
+        // Effects and instruments are both hostable; each tool checks the
+        // kind where it adds the plugin (`validate_plugin_placeholders`)
+        // and the worker refuses the wrong role with its own reason.
+        if identity.compatibility()
+            == audiorouter_plugin_host::PluginCompatibility::UnsupportedFormat
+        {
+            return Err(ControlError::InvalidRequest(
+                "plugin format or architecture is unsupported".into(),
+            ));
         }
         Ok((identity, root))
     }
@@ -2067,7 +2089,21 @@ impl ControlPlane {
             identity.format,
             identity.architecture,
         ))?;
-        let worker = if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
+        let as_instrument = params
+            .as_ref()
+            .and_then(|value| value.get("instrument"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let worker = if as_instrument {
+            audiorouter_plugin_host::SupervisedWorkerProcess::spawn_instrument_verified(
+                &executable,
+                &identity,
+                std::slice::from_ref(&root),
+                2,
+                48_000,
+                Instant::now(),
+            )
+        } else if identity.format == audiorouter_plugin_host::PluginFormat::Vst3 {
             #[cfg(windows)]
             {
                 audiorouter_plugin_host::SupervisedWorkerProcess::spawn_verified_native_vst3_with_sample_rate(

@@ -1159,9 +1159,10 @@ fn method_output_schema_impl(name: &str) -> Value {
                         "vendor": { "type": ["string", "null"], "maxLength": 128 },
                         "version": { "type": ["string", "null"], "maxLength": 128 },
                         "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "supportedVst3X86", "supportedVst2X86", "unsupportedFormat", "unsupportedInstrument"] }
+                        "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "supportedVst3X86", "supportedVst2X86", "unsupportedFormat"] },
+                        "instrument": { "type": "boolean", "description": "True when the plugin is a synth or sampler (play it with the Instrument tool); a VST2 file only shows as one after a load attempt." }
                     },
-                    "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
+                    "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility", "instrument"],
                     "additionalProperties": false
                 },
                 "error": { "type": ["string", "null"] },
@@ -2442,9 +2443,10 @@ fn plugin_scan_output_schema() -> Value {
                                 "vendor": { "type": ["string", "null"], "maxLength": 128 },
                                 "version": { "type": ["string", "null"], "maxLength": 128 },
                                 "classIds": { "type": "array", "maxItems": 256, "items": { "type": "string", "maxLength": 32 } },
-                                "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "supportedVst3X86", "supportedVst2X86", "unsupportedFormat", "unsupportedInstrument"] }
+                                "compatibility": { "enum": ["supportedVst3X64", "supportedVst2X64Gated", "supportedVst3X86", "supportedVst2X86", "unsupportedFormat"] },
+                                "instrument": { "type": "boolean", "description": "True when the plugin is a synth or sampler (play it with the Instrument tool); a VST2 file only shows as one after a load attempt." }
                             },
-                            "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility"],
+                            "required": ["path", "binaryPath", "format", "architecture", "fileBytes", "sha256", "vendor", "version", "classIds", "compatibility", "instrument"],
                             "additionalProperties": false
                         },
                         "error": { "type": ["string", "null"] },

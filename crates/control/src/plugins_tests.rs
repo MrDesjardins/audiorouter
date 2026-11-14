@@ -783,7 +783,7 @@ fn plugin_inspect_discovery_has_typed_identity_schema() {
             .as_array()
             .unwrap()
             .len(),
-        10
+        11
     );
     assert_eq!(
         method["outputSchema"]["properties"]["identity"]["properties"]["fileBytes"]["maximum"],

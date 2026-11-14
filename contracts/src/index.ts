@@ -118,8 +118,9 @@ export interface PluginScanEntry {
       | "supportedVst2X64Gated"
       | "supportedVst3X86"
       | "supportedVst2X86"
-      | "unsupportedFormat"
-      | "unsupportedInstrument";
+      | "unsupportedFormat";
+    /** A synth or sampler: add it with the Instrument tool. A VST2 file only shows as one after a load attempt. */
+    instrument: boolean;
   } | null;
   error: string | null;
   errorCode:
@@ -1751,7 +1752,7 @@ export type MethodParams = {
   "plugins.resume": { sessionId?: EntityId; nodeId: EntityId };
   "plugins.retry": { directory: string; idempotencyKey: string };
   "plugins.inspect": { path: string };
-  "plugins.parameters": { path: string; classId?: string };
+  "plugins.parameters": { path: string; classId?: string; instrument?: boolean };
   "plugins.prepareUpdate": { sessionId?: EntityId; nodeId: EntityId; resetState?: boolean };
   "virtualDevices.list": { cursor?: string; limit?: number } | undefined;
   "virtualDevices.plan": { operation: VirtualDeviceOperation };

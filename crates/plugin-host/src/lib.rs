@@ -148,9 +148,6 @@ pub enum PluginCompatibility {
     SupportedVst3X86,
     SupportedVst2X86,
     UnsupportedFormat,
-    /// An x64 plugin whose metadata declares an instrument; AudioRouter has
-    /// no MIDI input, so it is listed with its reason but cannot be added.
-    UnsupportedInstrument,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -442,13 +439,20 @@ fn learned_instrument(sha256: &str) -> bool {
 }
 
 impl PluginIdentity {
-    pub fn compatibility(&self) -> PluginCompatibility {
-        if (self.metadata.instrument || learned_instrument(&self.sha256))
+    /// Whether this plugin is an instrument (a synth or sampler played with
+    /// MIDI): its metadata says so, or a worker refused it as an effect once.
+    /// A VST2 DLL carries no metadata, so it only shows as an instrument after
+    /// a load attempt reveals it; until then it is listed without a kind.
+    pub fn is_instrument(&self) -> bool {
+        (self.metadata.instrument || learned_instrument(&self.sha256))
             && matches!(self.architecture, PeArchitecture::X64 | PeArchitecture::X86)
             && self.format != PluginFormat::Unknown
-        {
-            return PluginCompatibility::UnsupportedInstrument;
-        }
+    }
+
+    /// Whether the plugin can be hosted at all. Instruments and effects share
+    /// the same rules; the Instrument tool and the effect tool each check the
+    /// kind where they add the plugin.
+    pub fn compatibility(&self) -> PluginCompatibility {
         match (self.format, self.architecture) {
             (PluginFormat::Vst3, PeArchitecture::X64) => PluginCompatibility::SupportedVst3X64,
             (PluginFormat::Vst3, PeArchitecture::X86) => PluginCompatibility::SupportedVst3X86,
@@ -8464,21 +8468,22 @@ mod tests {
             identity.compatibility(),
             PluginCompatibility::SupportedVst2X64Gated
         );
+        assert!(!identity.is_instrument());
         assert!(note_instrument_refusal(
             &identity.sha256,
-            "VST2 load failed: VST2 plugin is an instrument; AudioRouter hosts audio effects only"
+            "VST2 load failed: VST2 plugin is an instrument; play it with the Instrument tool"
         ));
+        assert!(identity.is_instrument());
+        // An instrument is still a hostable plugin: the Instrument tool plays it.
+        #[cfg(windows)]
         assert_eq!(
             identity.compatibility(),
-            PluginCompatibility::UnsupportedInstrument
+            PluginCompatibility::SupportedVst2X64Gated
         );
         // Only that binary.
         let mut other = identity.clone();
         other.sha256 = "cd".repeat(32);
-        assert_ne!(
-            other.compatibility(),
-            PluginCompatibility::UnsupportedInstrument
-        );
+        assert!(!other.is_instrument());
     }
 
     /// Regression (2026-11-13): a 32-bit VST3 bundle keeps its binary in
@@ -8639,44 +8644,40 @@ mod tests {
             let resources = bundle.join("Contents").join("Resources");
             fs::create_dir_all(&resources).unwrap();
             fs::write(resources.join(file), json).unwrap();
-            let compatibility = inspect_binary(&bundle, std::slice::from_ref(&root))
-                .unwrap()
-                .compatibility();
+            let identity = inspect_binary(&bundle, std::slice::from_ref(&root)).unwrap();
+            // An instrument is hostable like an effect; only its kind differs.
+            assert_eq!(
+                identity.compatibility(),
+                PluginCompatibility::SupportedVst3X64
+            );
+            let instrument = identity.is_instrument();
             fs::remove_dir_all(root).unwrap();
-            compatibility
+            instrument
         };
         // Standard VST3 module info: every audio class is an instrument.
         let synth_classes = br#"{ "Classes": [
             { "CID": "A", "Category": "Audio Module Class", "Sub Categories": ["Instrument", "Synth"] }
         ] }"#;
-        assert_eq!(
-            bundle_with("synth.vst3", "moduleinfo.json", synth_classes),
-            PluginCompatibility::UnsupportedInstrument
-        );
+        assert!(bundle_with("synth.vst3", "moduleinfo.json", synth_classes));
         let effect_classes = br#"{ "Classes": [
             { "CID": "A", "Category": "Audio Module Class", "Sub Categories": "Fx|Dynamics" }
         ] }"#;
-        assert_eq!(
-            bundle_with("effect.vst3", "moduleinfo.json", effect_classes),
-            PluginCompatibility::SupportedVst3X64
-        );
+        assert!(!bundle_with(
+            "effect.vst3",
+            "moduleinfo.json",
+            effect_classes
+        ));
         // Universal Audio's own bundle manifest.
-        assert_eq!(
-            bundle_with(
-                "uaudio_synth.vst3",
-                "manifest.json",
-                br#"{ "is_synth": true }"#
-            ),
-            PluginCompatibility::UnsupportedInstrument
-        );
-        assert_eq!(
-            bundle_with(
-                "uaudio_effect.vst3",
-                "manifest.json",
-                br#"{ "is_synth": false }"#
-            ),
-            PluginCompatibility::SupportedVst3X64
-        );
+        assert!(bundle_with(
+            "uaudio_synth.vst3",
+            "manifest.json",
+            br#"{ "is_synth": true }"#
+        ));
+        assert!(!bundle_with(
+            "uaudio_effect.vst3",
+            "manifest.json",
+            br#"{ "is_synth": false }"#
+        ));
     }
 
     #[test]
